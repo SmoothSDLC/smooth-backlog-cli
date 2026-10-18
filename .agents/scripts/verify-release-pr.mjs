@@ -19,7 +19,12 @@ export async function verifyReleasePullRequest({ repository, commit, token, requ
   const pr = pulls.find(pr => pr.merged_at && pr.base.ref === 'main' && pr.base.repo.full_name === repository && pr.merge_commit_sha === commit);
   assert.ok(pr, 'Publication requires a merged pull request targeting main for this exact commit; direct pushes cannot publish');
   const result = await request(`${base}/actions/workflows/ci.yml/runs?event=pull_request&head_sha=${pr.head.sha}&per_page=100`, token);
-  const runs = result.workflow_runs.filter(run => run.head_sha === pr.head.sha && run.event === 'pull_request' && run.pull_requests.some(pull => pull.number === pr.number));
+  const runs = result.workflow_runs.filter(run => {
+    if (run.head_sha !== pr.head.sha || run.event !== 'pull_request') return false;
+    if (run.pull_requests?.length) return run.pull_requests.some(pull => pull.number === pr.number);
+    // GitHub clears PR links after merge; retain the exact source identity check.
+    return Boolean(pr.head.ref && pr.head.repo?.id != null && run.head_branch === pr.head.ref && run.head_repository?.id === pr.head.repo.id);
+  });
   runs.sort((a, b) => b.run_number - a.run_number);
   const latest = runs[0];
   assert.ok(latest?.status === 'completed' && latest.conclusion === 'success', `Publication requires successful CI for the final head of PR #${pr.number}`);

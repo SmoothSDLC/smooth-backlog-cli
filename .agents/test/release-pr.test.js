@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { verifyReleasePullRequest } from '../scripts/verify-release-pr.mjs';
 
 const repository = 'SmoothSDLC/smooth-backlog-cli', commit = 'a'.repeat(40), head = 'b'.repeat(40);
-const pr = { number: 1, merged_at: '2026-10-16T12:00:00Z', merge_commit_sha: commit, base: { ref: 'main', repo: { full_name: repository } }, head: { sha: head } };
+const pr = { number: 1, merged_at: '2026-10-16T12:00:00Z', merge_commit_sha: commit, base: { ref: 'main', repo: { full_name: repository } }, head: { sha: head, ref: 'fix/release', repo: { id: 42 } } };
 const success = { run_number: 1, event: 'pull_request', head_sha: head, pull_requests: [{ number: 1 }], status: 'completed', conclusion: 'success' };
 const verify = (pulls, runs = [success]) => verifyReleasePullRequest({ repository, commit, request: async path => path.includes('/pulls?') ? pulls : { workflow_runs: runs } });
 
@@ -28,4 +28,16 @@ test('release eligibility checks use the exact main commit and final PR head and
   assert.ok(paths[0].includes(`/commits/${commit}/pulls?`));
   assert.ok(paths[1].includes(`/actions/workflows/ci.yml/runs?event=pull_request&head_sha=${head}&`));
   await assert.rejects(verifyReleasePullRequest({ repository, commit, request: async () => { throw new Error('API unavailable'); } }), /API unavailable/);
+});
+
+test('merged PR CI remains valid when GitHub clears its PR links after merge', async () => {
+  const mergedRun = { ...success, pull_requests: [], head_branch: pr.head.ref, head_repository: { id: pr.head.repo.id } };
+  assert.equal(await verify([pr], [mergedRun]), 1);
+  for (const run of [
+    { ...mergedRun, head_branch: 'unrelated' },
+    { ...mergedRun, head_repository: { id: 99 } },
+    { ...mergedRun, head_repository: null },
+    { ...mergedRun, conclusion: 'failure' },
+    { ...mergedRun, head_sha: 'c'.repeat(40) },
+  ]) await assert.rejects(verify([pr], [run]), /successful CI/);
 });

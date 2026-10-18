@@ -118,9 +118,14 @@ test('unsafe symlink destinations fail without modifying their target', t => {
 });
 test('parallel writers preserve every GUID and normalize priorities', async t => {
   const f = fixture(t); f.cli('init');
-  const items = await Promise.all(Array.from({ length: 12 }, (_, i) => f.asyncCli(['new', `Item ${i}`, '--description', 'd', '--ac', 'a'])));
-  assert.equal(new Set(items.map(x => x.id)).size, 12);
-  assert.deepEqual(f.cli('list').map(x => x.priority), Array.from({ length: 12 }, (_, i) => i));
+  const items = [];
+  for (let round = 0; round < 3; round++) {
+    items.push(...await Promise.all(Array.from({ length: 12 }, (_, i) => f.asyncCli(['new', `Item ${round}-${i}`, '--description', 'd', '--ac', 'a']))));
+    const stored = f.cli('list');
+    assert.equal(new Set(items.map(x => x.id)).size, items.length);
+    assert.deepEqual(new Set(stored.map(x => x.id)), new Set(items.map(x => x.id)));
+    assert.deepEqual(stored.map(x => x.priority), Array.from({ length: items.length }, (_, i) => i));
+  }
 });
 test('ask without a terminal fails; invalid input does not change data', t => {
   const f = fixture(t); f.cli('init'); f.fail(['new', '--ask']);

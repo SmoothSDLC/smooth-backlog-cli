@@ -1,6 +1,7 @@
 {
   "name": "@smoothsdlc/smooth-backlog-cli",
-  "version": "1.0.1",
+  "version": "0.0.0-development",
+  "private": true,
   "description": "Keep your backlog beside your code. Manage branch-specific work, priorities, and progress from the CLI, with built-in skills for developers and coding agents.",
   "type": "module",
   "bin": {

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix intermittent permission errors when concurrent commands acquire locks on Windows.
+- Preserve existing backlog data and lock coordination after the project rename.
+- Refresh package documentation and repository references for npm registry installation.
+
 ## 1.0.1
 
 - Correct GitHub Packages login instructions for npm 9 and later by using

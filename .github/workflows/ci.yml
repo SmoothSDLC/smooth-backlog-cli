@@ -1,7 +1,10 @@
 name: CI
 on:
   push:
+    branches-ignore: [master]
+    tags-ignore: ['**']
   pull_request:
+    branches-ignore: [master]
   workflow_call:
 permissions:
   contents: read

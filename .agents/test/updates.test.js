@@ -151,7 +151,7 @@ test('unsupported schema/runtime releases fail before activation and staging enf
     if (args[0] === 'view') return '["1.0.0","1.1.0"]';
     if (args[0] === 'install') { assert.ok(args.includes('--engine-strict')); await runtimePackage(join(args[args.indexOf('--prefix') + 1], 'node_modules/@smoothsdlc/smooth-backlog-cli'), '1.1.0', { backlogSchemaVersion: 2 }); return ''; }
   };
-  const u = updater({ packageRoot: root, configPath: join(f.dir, 'user.json'), runner, notice: () => {} });
+  const u = updater({ packageRoot: root, version: '1.0.0', configPath: join(f.dir, 'user.json'), runner, notice: () => {} });
   await assert.rejects(u.command('auto'), /schema|migration/i);
   const { spawnSync } = await import('node:child_process'); assert.equal(spawnSync(process.execPath, [join(root, 'bin/backlog.js'), '--version'], { encoding: 'utf8' }).stdout.trim(), '1.0.0');
 });
@@ -174,7 +174,7 @@ test('an incompatible Node floor is rejected even if a controlled staging runner
     if (args[0] === 'view') return '["1.0.0","1.1.0"]';
     if (args[0] === 'install') { await runtimePackage(join(args[args.indexOf('--prefix') + 1], 'node_modules/@smoothsdlc/smooth-backlog-cli'), '1.1.0', { engines: { node: '>=999' } }); return ''; }
   };
-  await assert.rejects(updater({ packageRoot: root, configPath: join(f.dir, 'user.json'), runner, notice: () => {} }).command('auto'), /Node.js runtime/);
+  await assert.rejects(updater({ packageRoot: root, version: '1.0.0', configPath: join(f.dir, 'user.json'), runner, notice: () => {} }).command('auto'), /Node.js runtime/);
   const { spawnSync } = await import('node:child_process'); assert.equal(spawnSync(process.execPath, [join(root, 'bin/backlog.js'), '--version'], { encoding: 'utf8' }).stdout.trim(), '1.0.0');
 });
 test('a complete CLI upgrade runs the new runtime and refreshes repository integrations', async t => {

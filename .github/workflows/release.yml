@@ -1,0 +1,34 @@
+name: Tag merged main release
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: release-main
+  queue: single
+  cancel-in-progress: false
+permissions:
+  contents: write
+  actions: write
+  pull-requests: read
+  packages: read
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://npm.pkg.github.com
+          scope: '@smoothsdlc'
+      - name: Require a merged pull request with successful CI
+        run: node .agents/scripts/verify-release-pr.mjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assign a version, create its tag, and dispatch publishing at that tag
+        run: node .agents/scripts/release.mjs tag-main
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

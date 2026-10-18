@@ -25,8 +25,13 @@ export async function locked(path, callback) {
   await fs.mkdir(dirname(path), { recursive: true });
   const started = Date.now(); let handle;
   for (;;) {
-    try { handle = await fs.open(path, 'wx', 0o600); await handle.writeFile(JSON.stringify({ pid: process.pid })); break; }
+    try { handle = await fs.open(path, 'wx', 0o600); break; }
     catch (e) {
+      // Windows can report EPERM while a previous owner's unlink is still pending.
+      if (process.platform === 'win32' && e.code === 'EPERM') {
+        if (Date.now() - started > 10000) throw e;
+        await delay(20 + Math.random() * 25); continue;
+      }
       if (e.code !== 'EEXIST') throw e;
       try {
         const record = JSON.parse(await fs.readFile(path, 'utf8'));
@@ -45,13 +50,14 @@ export async function locked(path, callback) {
           let stat; try { stat = await fs.stat(path); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
           if (Date.now() - stat.mtimeMs > 30000) throw new BacklogError('STALE_LOCK', `Incomplete lock ${path}. Verify no backlog process is running, remove this lock, and rerun to recover its journal.`, 1);
         }
-        if (!(error instanceof SyntaxError)) throw error;
+        if (!(error instanceof SyntaxError) && !(process.platform === 'win32' && error.code === 'EPERM')) throw error;
       }
       if (Date.now() - started > 10000) throw new BacklogError('LOCKED', `Backlog is locked by another process: ${path}. Retry after it finishes.`, 1);
       await delay(20 + Math.random() * 25);
     }
   }
-  try { return await callback(); } finally { await handle.close(); await fs.rm(path, { force: true }); }
+  try { await handle.writeFile(JSON.stringify({ pid: process.pid })); return await callback(); }
+  finally { await handle.close(); await fs.rm(path, { force: true }); }
 }
 export async function repositoryLocked(root, callback) {
   const filename = '.smooth-backlog-cli.lock';

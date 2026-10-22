@@ -18,7 +18,8 @@ const DEFAULT_HOME = '~/git/smoothsdlc-backlog'; // lib_db.py:36
 export function repoIdFromUrl(url) {
   let u = String(url ?? '').trim().replace(/\/+$/, '');
   if (u.endsWith('.git')) u = u.slice(0, -4);
-  const parts = u.split(/[/:]/).filter(Boolean);
+  // Also splits on \ (beyond the oracle) so a Windows local-path origin (C:\srv\Owner\name.git) works.
+  const parts = u.split(/[/\\:]/).filter(Boolean);
   return parts.length >= 2 ? parts.slice(-2).join('/') : '';
 }
 

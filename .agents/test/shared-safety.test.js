@@ -35,6 +35,7 @@ test('repoIdFromUrl: https, scp-style and local-path URLs (lib_db.py:58-64)', ()
   assert.equal(repoIdFromUrl('https://github.com/SmoothSDLC/smoothsdlc-backlog'), 'SmoothSDLC/smoothsdlc-backlog');
   assert.equal(repoIdFromUrl('git@github.com:SmoothSDLC/smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
   assert.equal(repoIdFromUrl('/srv/SmoothSDLC/smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
+  assert.equal(repoIdFromUrl('C:\\srv\\SmoothSDLC\\smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
   assert.equal(repoIdFromUrl('  https://github.com/SmoothSDLC/smoothsdlc-backlog.git  '), 'SmoothSDLC/smoothsdlc-backlog');
   // a token in the URL changes nothing (last two parts win)
   assert.equal(repoIdFromUrl('https://u:ghp_x@github.com/SmoothSDLC/smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');

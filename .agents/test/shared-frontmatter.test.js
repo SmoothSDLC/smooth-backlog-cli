@@ -1,0 +1,208 @@
+// Shared-mode front-matter codec tests for src/shared/frontmatter.js (cli-parity job 4, CODEC).
+//
+// Fixtures under fixtures/shared/ were made once (2026-10-22, PyYAML 6.0.3 / CPython 3.14.4)
+// with the pinned oracle's write_doc (lib_db.py:182-184 per contract v3); each .json is
+// json.dumps(yaml.safe_load(<that dump>)) of the same front matter. The generating command:
+//
+//   python3 - <<'PY'
+//   import json, sys
+//   from pathlib import Path
+//   sys.path.insert(0, str(Path.home()/'.qwen/skills/backlog/scripts'))
+//   import yaml, lib_db
+//   out = Path('.agents/test/fixtures/shared'); out.mkdir(parents=True, exist_ok=True)
+//   def make(name, fm, body):
+//       lib_db.write_doc(out/f'{name}.md', fm, body)
+//       (out/f'{name}.json').write_text(json.dumps(yaml.safe_load(yaml.safe_dump(fm, sort_keys=False, allow_unicode=True)), indent=2)+'\n')
+//   obj = 'Read the item files PyYAML writes and write files PyYAML reads, without a dependency. The codec keeps the shared-mode format byte-for-byte per oracle.'
+//   assert len(obj) == 150
+//   make('item-realistic', {'phase': '004-cli-parity-job-4-front-matter-codec-compatible-with-pyyaml', 'seq': 4, 'name': 'cli-parity job 4: front-matter codec compatible with PyYAML', 'objective': obj, 'status': 'in_progress', 'work_class': ['app-code','tests'], 'review_classes': ['code','tests','data'], 'created': '2026-10-22T03:39:31Z', 'location': ''}, '# Phase 004 - front-matter codec\n\nThe body markdown of the item file stays exactly as written.\n')
+//   make('item-scalars', {'name': "job with 'single' and \"double\" quotes in the name", 'simple': 'plain words', 'unicode': '日本語の項目 - café ünïcode', 'colon': 'a: b', 'empty': '', 'dash': '- leading dash', 'quote_first': '"starts with a double quote" and ends plain', 'apostrophe_first': "'starts with an apostrophe'", 'tab': 'a\tb', 'long_tab': 'a\tb ' + 'the quick brown fox jumps over the lazy dog. ' * 2, 'long': "a 'single' and \"double\" quoted string, long enough to fold over a line break at the eighty column boundary, with words continuing after the fold point"}, '# scalars\n\nQuoting styles as written by PyYAML.\n')
+//   make('item-shapes', {'seq': 7, 'negative': -15, 'big': 123456789, 'flag_true': True, 'flag_false': False, 'nothing': None, 'empty_list': [], 'numbers': [1,2,3]}, '# shapes\n\nLists, integers, booleans and null.\n')
+//   PY
+//
+// Cited source: the pinned oracle at commit ec5b254e (contract v3 lines) — lib_db.py:171-179
+// (_FM_RE + parse_front_matter) and 182-184 (write_doc); the oracle copies at
+// ~/.qwen/skills/backlog/scripts/ are content-identical for these functions.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parse, dump } from '../../src/shared/frontmatter.js';
+
+const FIX = join(fileURLToPath(new URL('./fixtures/shared/', import.meta.url)));
+const FIXTURES = ['item-realistic', 'item-scalars', 'item-shapes'];
+
+function readFixture(name) {
+  return readFileSync(join(FIX, `${name}.md`), 'utf8');
+}
+function fixtureJson(name) {
+  return JSON.parse(readFileSync(join(FIX, `${name}.json`), 'utf8'));
+}
+
+// --- the item's test 1: every fixture parses to its .json ---
+for (const name of FIXTURES) {
+  test(`fixture ${name} parses to its .json`, () => {
+    const fm = parse(readFixture(name)).fm;
+    assert.deepEqual(fm, fixtureJson(name));
+  });
+}
+
+// --- the item's test 2: dump then parse is identity ---
+for (const name of FIXTURES) {
+  test(`fixture ${name}: dump then parse is identity`, () => {
+    const { fm, body } = parse(readFixture(name));
+    const again = parse(dump(fm, body));
+    assert.deepEqual(again.fm, fm);
+    assert.equal(again.body, body);
+  });
+}
+
+function pyYamlAvailable() {
+  try {
+    return spawnSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }).status === 0;
+  } catch {
+    return false;
+  }
+}
+
+// --- the item's test 3: with python3 and PyYAML present, yaml.safe_load of dump() equals the input ---
+for (const name of FIXTURES) {
+  test(`fixture ${name}: PyYAML reads our dump (safe_load of the dumped front matter equals the input)`, (t) => {
+    const { fm, body } = parse(readFixture(name));
+    if (!pyYamlAvailable()) {
+      t.skip('python3 with PyYAML is not on PATH');
+      return;
+    }
+    const dir = mkdtempSync(join(tmpdir(), 'codec-'));
+    try {
+      const file = join(dir, 'roundtrip.md');
+      writeFileSync(file, dump(fm, body));
+      const out = spawnSync('python3', ['-c',
+        "import json, re, sys, yaml\n" +
+        "text = open(sys.argv[1], encoding='utf-8').read()\n" +
+        "m = re.match(r'^---\\n(.*?)\\n---', text, re.S)\n" +
+        "sys.stdout.write(json.dumps(yaml.safe_load(m.group(1))))\n",
+        file]);
+      assert.equal(out.status, 0, `python3 failed: ${out.stderr.toString('utf8')}`);
+      assert.deepEqual(JSON.parse(out.stdout.toString('utf8')), fm);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+// --- parse: the split of lib_db.py:171-179 ---
+
+test('parse: a text without a front-matter header returns {} and the whole text', () => {
+  assert.deepEqual(parse('body only'), { fm: {}, body: 'body only' });
+});
+
+test('parse: an empty front-matter mapping passes through as {}', () => {
+  assert.deepEqual(parse('---\n{}\n---\nbody'), { fm: {}, body: 'body' });
+});
+
+test('parse: the body keeps everything after the closing --- line', () => {
+  assert.deepEqual(parse('---\nphase: x\n---\nline one\nline two'), {
+    fm: { phase: 'x' },
+    body: 'line one\nline two',
+  });
+});
+
+// --- parse: the YAML subset, value by value ---
+
+test('parse: plain scalar values, including unicode', () => {
+  const { fm } = parse('---\na: hello world\nb: 日本語\n---\n');
+  assert.equal(fm.a, 'hello world');
+  assert.equal(fm.b, '日本語');
+});
+
+test('parse: a plain scalar folds over a continuation line (PyYAML width-80 wrap)', () => {
+  const { fm } = parse('---\nobjective: the first part of a long\n  value continues on the next line\nnext: k\n---\n');
+  assert.equal(fm.objective, 'the first part of a long value continues on the next line');
+  assert.equal(fm.next, 'k');
+});
+
+test('parse: typed plain scalars (ints, negative, null, ~, booleans)', () => {
+  const { fm } = parse('---\na: 4\nb: -15\nc: null\nd: ~\ne: true\nf: false\n---\n');
+  assert.deepEqual(fm, { a: 4, b: -15, c: null, d: null, e: true, f: false });
+});
+
+test('parse: a bare key with nothing after it is null', () => {
+  const { fm } = parse('---\nkey:\nother: v\n---\n');
+  assert.deepEqual(fm, { key: null, other: 'v' });
+});
+
+test('parse: single-quoted scalars (colon inside, apostrophe escape, empty)', () => {
+  const { fm } = parse("---\na: 'a: b'\nb: 'it''s'\nc: ''\n---\n");
+  assert.equal(fm.a, 'a: b');
+  assert.equal(fm.b, "it's");
+  assert.equal(fm.c, '');
+});
+
+test('parse: double-quoted scalars with escapes (\" \\ \\n)', () => {
+  const { fm } = parse('---\na: "x \\"y\\""\nb: "a\\\\b"\nc: "line\\nbreak"\n---\n');
+  assert.equal(fm.a, 'x "y"');
+  assert.equal(fm.b, 'a\\b');
+  assert.equal(fm.c, 'line\nbreak');
+});
+
+test('parse: a double-quoted scalar folds over a continuation line', () => {
+  const { fm } = parse('---\nlong: "the first half of a long\n  double-quoted string"\n---\n');
+  assert.equal(fm.long, 'the first half of a long double-quoted string');
+});
+
+test('parse: a double-quoted scalar with an escaped line break (PyYAML wrap of a tab string)', () => {
+  const text = '---\n'
+    + 't: "a\\tb the quick brown fox jumps\\\n'
+    + '  \\ over the lazy dog."\n'
+    + '---\n';
+  const { fm } = parse(text);
+  assert.equal(fm.t, 'a\tb the quick brown fox jumps over the lazy dog.');
+});
+
+test('parse: a block list of scalars', () => {
+  const { fm } = parse('---\nwork_class:\n- app-code\n- tests\n---\n');
+  assert.deepEqual(fm, { work_class: ['app-code', 'tests'] });
+});
+
+test('parse: an empty flow list is []; a flow list decodes its items', () => {
+  const { fm } = parse('---\na: []\nb: [a, b]\nc: [1, 2]\n---\n');
+  assert.deepEqual(fm, { a: [], b: ['a', 'b'], c: [1, 2] });
+});
+
+test('parse: anything outside the subset is a clear error, never a guess', () => {
+  assert.throws(() => parse('---\nk: &a x\n---\n'), /anchor/);
+  assert.throws(() => parse('---\nk: *a\n---\n'), /alias/);
+  assert.throws(() => parse('---\nk: !!str x\n---\n'), /tag/);
+  assert.throws(() => parse('---\nk: {a: b}\n---\n'), /flow map/);
+  assert.throws(() => parse('---\nk:\n  nested: x\n---\n'), /nested/);
+  assert.throws(() => parse('---\njust a word\n---\n'), /key/);
+});
+
+test('parse: a list line after a key with an inline value is a clear error', () => {
+  assert.throws(() => parse('---\nk: v\n- x\n---\n'), /k/);
+});
+
+// --- dump: keys in the given order, the oracle write_doc shape ---
+
+test('dump: keys in the given order, strings as JSON double-quoted, body unchanged', () => {
+  assert.equal(dump({ b: 'x "y"', a: 1 }, 'BODY'), '---\n' + 'b: ' + String.raw`"x \"y\""` + '\na: 1\n---\nBODY');
+});
+
+test('dump: null, booleans, empty and block lists', () => {
+  const out = dump({ a: null, b: true, c: false, d: [], e: [1, 'x'] }, '');
+  assert.equal(out, '---\na: null\nb: true\nc: false\nd: []\ne:\n- 1\n- "x"\n---\n');
+});
+
+test('dump: an empty front matter writes {} like the oracle write_doc', () => {
+  assert.equal(dump({}, 'body'), '---\n{}\n---\nbody');
+});
+
+test('dump: unsupported value types and non-identifier keys are clear errors', () => {
+  assert.throws(() => dump({ a: 1.5 }, ''), /unsupported/);
+  assert.throws(() => dump({ a: { b: 1 } }, ''), /unsupported/);
+  assert.throws(() => dump({ 'a b': 1 }, ''), /key/);
+});

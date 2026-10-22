@@ -5,8 +5,9 @@
 // Model: the Python skill's tests/conftest.py:1-60.
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, join, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 export const BACKLOG_OWNER = 'SmoothSDLC';
 export const BACKLOG_NAME = 'smoothsdlc-backlog';
@@ -113,7 +114,7 @@ export function py(script, args = [], opts = {}) {
 
 // Runs node bin/backlog.js (this repository's CLI) from a consumer checkout.
 export function cli(args = [], opts = {}) {
-  const bin = resolve(join(__dirname, '..', '..', 'bin', 'backlog.js'));
+  const bin = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'));
   const p = spawnSync(process.execPath, [bin, ...args], {
     cwd: opts.cwd,
     env: { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },

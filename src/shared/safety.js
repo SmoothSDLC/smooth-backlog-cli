@@ -6,7 +6,7 @@
 // reuses safePath (src/storage.js:8-17).
 import { execFile } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, parse, relative, resolve } from 'node:path';
 import { safePath } from '../storage.js';
 
 const BACKLOG_ORIGIN = 'SmoothSDLC/smoothsdlc-backlog'; // lib_db.py:34
@@ -28,12 +28,16 @@ export function repoIdFromUrl(url) {
 // symlinks like Python's Path.resolve()), no symlink on the path (item, via
 // safePath), origin SmoothSDLC/smoothsdlc-backlog case-insensitive (95-97),
 // branch main (98-100). Returns the resolved home path or throws the message.
+// native: expands Windows 8.3 short names (RUNNER~1) the way git reports them;
+// Windows paths compare case-insensitively.
+const realPath = p => { const r = realpathSync.native(p); return process.platform === 'win32' ? r.toLowerCase() : r; };
+
 export async function validateHome(path) {
   if (!isAbsolute(path)) throw new Error(`${path} is not an absolute path; use the absolute path to a clone of ${BACKLOG_ORIGIN}`);
   if (!existsSync(path)) throw new Error(`BACKLOG_HOME=${path} does not exist; expected a clone of ${BACKLOG_ORIGIN} on main (unset BACKLOG_HOME to use ${DEFAULT_HOME})`);
   const top = (await git(['rev-parse', '--show-toplevel'], path)).stdout.trim();
-  if (!top || realpathSync(top) !== realpathSync(path)) throw new Error(`${path} is not the top folder of a git repository; expected a clone of ${BACKLOG_ORIGIN} on main`);
-  await safePath('/', path);
+  if (!top || realPath(top) !== realPath(path)) throw new Error(`${path} is not the top folder of a git repository; expected a clone of ${BACKLOG_ORIGIN} on main`);
+  await safePath(parse(resolve(path)).root, path);
   const origin = repoIdFromUrl((await git(['remote', 'get-url', 'origin'], path)).stdout);
   if (origin.toLowerCase() !== BACKLOG_ORIGIN.toLowerCase()) throw new Error(`${path} has origin '${origin || 'none'}'; expected ${BACKLOG_ORIGIN}`);
   const branch = (await git(['branch', '--show-current'], path)).stdout.trim();

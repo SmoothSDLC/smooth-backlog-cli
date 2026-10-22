@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs';
-import { join, relative, resolve, dirname, sep } from 'node:path';
+import { join, relative, resolve, dirname, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { operation, BacklogError } from './errors.js';
@@ -7,7 +7,8 @@ import { validateStore } from './schema.js';
 export const exists = async path => { try { await fs.lstat(path); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; } };
 export async function safePath(root, target) {
   const rel = relative(resolve(root), resolve(target));
-  operation(rel !== '..' && !rel.startsWith(`..${sep}`) && !resolve(target).startsWith(`${resolve(root)}${sep}..${sep}`), `Unsafe path: ${target}.`);
+  // isAbsolute: on Windows relative() across drives returns the target itself.
+  operation(!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`) && !resolve(target).startsWith(`${resolve(root)}${sep}..${sep}`), `Unsafe path: ${target}.`);
   let current = resolve(root);
   for (const part of rel.split(sep).filter(Boolean)) {
     current = join(current, part);

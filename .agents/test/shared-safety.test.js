@@ -8,7 +8,7 @@
 // (safePath) is the symlink check the item says to reuse.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -23,7 +23,9 @@ import {
 Object.assign(process.env, GIT_IDENTITY);
 
 function tmp(t) {
-  const dir = mkdtempSync(join(tmpdir(), 'safety-'));
+  // realpath: macOS tmpdir() is under the /var symlink, which validateHome refuses by design;
+  // the JS (non-native) realpath keeps Windows 8.3 short names, so that path form stays tested.
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'safety-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
@@ -104,7 +106,7 @@ test('validateHome: a directory that is not the top folder of a git repository (
   const sub = join(home, 'subdir');
   mkdirSync(sub);
   await assert.rejects(validateHome(sub),
-    new RegExp(`${d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/home/subdir is not the top folder of a git repository; expected a clone of SmoothSDLC/smoothsdlc-backlog on main`));
+    new RegExp(`${sub.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} is not the top folder of a git repository; expected a clone of SmoothSDLC/smoothsdlc-backlog on main`));
 });
 
 test('validateHome: a symlinked home is refused (item: no symlink on the path, via src/storage.js:8-17)', async () => {
@@ -198,7 +200,8 @@ test('git: runs git with an argv array and returns {stdout, stderr, code} (lib_d
   const home = sharedBacklog(d);
   const ok = await git(['rev-parse', '--show-toplevel'], home);
   assert.equal(ok.code, 0);
-  assert.equal(ok.stdout.trim(), home);
+  // git prints the long, forward-slash real path (Windows) or the resolved path (macOS)
+  assert.equal(realpathSync.native(ok.stdout.trim()), realpathSync.native(home));
   assert.equal(typeof ok.stderr, 'string');
   const bad = await git(['rev-parse', '--verify', 'no-such-ref'], home);
   assert.notEqual(bad.code, 0);

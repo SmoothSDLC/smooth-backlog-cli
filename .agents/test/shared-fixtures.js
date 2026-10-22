@@ -17,7 +17,7 @@ export const GIT_IDENTITY = {
 };
 
 function git(cwd, ...args) {
-  const p = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
   if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${(p.stderr || '').trim()}`);
   return p.stdout.trim();
 }

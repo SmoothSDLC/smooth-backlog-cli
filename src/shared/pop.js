@@ -24,6 +24,7 @@ const narrower = (a, b) => (RANK[a] <= RANK[b] ? a : b);
 const repr = s => redact(s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}'`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const say = text => process.stdout.write(`${redact(text)}\n`); // the agent and the branch are echoed input
+const clean = v => (typeof v === 'string' ? redact(v) : Array.isArray(v) ? v.map(clean) : v !== null && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)])) : v);
 // Python json.dumps(): ", " and ": " separators, every non-ASCII UTF-16 unit escaped.
 const dumps = v => (v !== null && typeof v === 'object'
   ? (Array.isArray(v) ? `[${v.map(dumps).join(', ')}]` : `{${Object.entries(v).map(([k, x]) => `${dumps(k)}: ${dumps(x)}`).join(', ')}}`)
@@ -119,7 +120,10 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   if (act?.name === 'claim' && a['claim-now']) {
     const bin = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
     const c = spawnSync(process.execPath, [bin, 'update', act.r.slug, '--claim', me], { encoding: 'utf8' });
-    if (c.status) { process.stdout.write(c.stdout + c.stderr); return c.status ?? 1; }
+    if (c.status !== 0) { // a nonzero exit, a signal or a process that did not start is no claim
+      process.stdout.write(redact((c.stdout ?? '') + (c.stderr ?? '')));
+      return c.status ?? die(`claim of ${act.r.slug} failed: ${c.error ? c.error.message : `the claim process ended by ${c.signal}`}`, 1);
+    }
     const fm = store.load(folder).find(i => i.path === act.r.path)?.fm ?? {};
     act = { ...act, say: `claimed for ${me}: start the work and record each step in the item${dod(fm)}` };
   }
@@ -145,12 +149,12 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   const { name, r, f } = act;
   if (a.json) {
-    say(dumps({
+    process.stdout.write(`${dumps(clean({ // redact the values before they are escaped: a cut in the escaped text breaks the JSON
       action: name, item: r ? r.slug : null, ...(name === 'refine' ? { missing: incomplete.get(r.id) } : {}), seq: r ? r.seq : null,
       repository: f, branch: r ? r.branch : branch, instruction: act.say, claimed: name === 'claim' && Boolean(a['claim-now']),
       blocked: blocked.map(b => ({ item: b.slug, waiting_on: b.text !== undefined ? [b.text] : waitingOn(b.undone) })),
       held: held.map(h => ({ item: h.slug, seq: h.fm.seq, state: h.state })),
-    }));
+    }))}\n`);
   } else {
     say(r ? `${name} ${r.slug}` : name);
     say(`   ${act.say}`);

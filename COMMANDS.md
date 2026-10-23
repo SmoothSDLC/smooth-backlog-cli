@@ -549,6 +549,11 @@ Exit codes:
      message says.
   4  The backlog repository is not set up; the printed question must be answered by the user.
 
+With --pop, and with --next and --agent, the exit codes are those of backlog pop (see backlog pop --help): 0 the command
+answered with an action, 3 the action is idle (3 is also used when the local clone could not be updated before the answer, or a --claim-now claim could not be pushed),
+1 a --claim-now claim was refused or could not run, 2 the arguments or the place were wrong, 4 the backlog repository is
+not set up.
+
 Example:
   backlog query --status --branch main
 ```
@@ -592,6 +597,11 @@ Exit codes:
      change was committed in the local clone but could not be pushed: then it is not recorded until it is pushed, as the
      message says.
   4  The backlog repository is not set up; the printed question must be answered by the user.
+
+With --pop, and with --next and --agent, the exit codes are those of backlog pop (see backlog pop --help): 0 the command
+answered with an action, 3 the action is idle (3 is also used when the local clone could not be updated before the answer, or a --claim-now claim could not be pushed),
+1 a --claim-now claim was refused or could not run, 2 the arguments or the place were wrong, 4 the backlog repository is
+not set up.
 
 Example:
   backlog next --json
@@ -659,8 +669,11 @@ Options:
 Exit codes:
   0  The command answered with an action.
   3  The action is idle: nothing is left for the agent. The same code is used when the local clone of the backlog
-     repository could not be updated from its origin before the answer (nothing was read; the message is on standard error).
-  1  A --claim-now claim was refused: its refusal is printed on standard output.
+     repository could not be updated from its origin before the answer (nothing was read; the message is on standard error),
+     and when a --claim-now claim was committed in the local clone but could not be pushed (it is not recorded until it is
+     pushed, as the message says).
+  1  A --claim-now claim was refused or could not be run (its process failed or was interrupted): its output, or the failure, is
+     shown and nothing is claimed.
   2  The arguments or the place were wrong: the message is on standard error.
   4  The backlog repository is not set up; the printed question must be answered by the user.
 

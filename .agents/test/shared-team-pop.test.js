@@ -10,6 +10,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
+import * as store from '../../src/shared/store.js';
+import { HELP } from '../../src/help.js';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
@@ -400,4 +402,71 @@ test('--claim-now after the oracle claimed: the held item is continued, not clai
   const n = cli(['pop', '--agent', 'cody', '--classes', 'app-code', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(JSON.parse(n.stdout).action, 'continue');
   assert.equal(JSON.parse(n.stdout).claimed, false);
+});
+
+test('credentials in a wait are redacted in the text and the JSON of the pop (blocked and held)', () => {
+  const f = fixture();
+  git(f.cons, 'checkout', '-q', '-b', 'pop-secret');
+  const held = make(f, 'js', f.cons, 'pop waits on a url', ['--work-class', 'app-code']);
+  ok(f, held, '--claim', 'cody');
+  const { fm, body } = item(f, held);
+  store.write({ path: join(f.folder, 'phases', `${held}.md`), fm: { ...fm, wait_on: 'https://user:hunter2secret@host/run' }, body }, f.folder);
+  for (const args of [[], ['--json']]) {
+    for (const cmd of [['query', '--pop'], ['pop']]) {
+      const r = cli([...cmd, '--agent', 'cody', '--classes', 'app-code', ...args], { cwd: f.cons, tmp: f.t });
+      assert.equal(r.status, 3, r.stdout + r.stderr); // idle: it only waits
+      assert.ok(r.stdout.includes('https://host/run'), r.stdout); // the wait is still named
+      assert.ok(!(r.stdout + r.stderr).includes('hunter2secret'), `${cmd.join(' ')} ${args}: ${r.stdout}${r.stderr}`);
+    }
+  }
+});
+
+// A preload that makes the `update` subprocess of --claim-now fail (the pop itself is argv[2] pop or query).
+function claimOutcome(kind) {
+  const f = fixture();
+  git(f.cons, 'checkout', '-q', '-b', `pop-${kind}`);
+  const job = make(f, 'js', f.cons, 'pop claim fails', ['--work-class', 'app-code']);
+  const hook = join(f.t, 'hook.cjs');
+  writeFileSync(hook, kind === 'killed'
+    ? "if (process.argv[2] === 'update') process.kill(process.pid, 'SIGTERM');\n"
+    : "if (process.argv[2] === 'update') { process.stderr.write('fatal: https://user:hunter2secret@host/x\\n'); process.exit(1); }\n");
+  const env = { NODE_OPTIONS: `--require=${hook}` };
+  const r = cli(['pop', '--agent', 'cody', '--classes', 'app-code', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env });
+  return { f, job, r };
+}
+
+test('--claim-now: an interrupted claim process is a failure, not a claim', () => {
+  const { f, job, r } = claimOutcome('killed');
+  assert.notEqual(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!r.stdout.includes('"claimed": true'), r.stdout);
+  assert.match(r.stderr, /claim of .* failed/);
+  assert.ok(!item(f, job).fm.claimed_by);
+});
+
+test('--claim-now: the diagnostics of a failed claim are forwarded with its exit code and without credentials', () => {
+  const { r } = claimOutcome('exits');
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.ok((r.stdout + r.stderr).includes('fatal: https://host/x'), r.stdout + r.stderr);
+  assert.ok(!(r.stdout + r.stderr).includes('hunter2secret'), r.stdout + r.stderr);
+});
+
+test('the exit codes of query --pop and next --agent are described: 3 is idle, 1 a claim that failed', () => {
+  for (const command of ['query', 'next']) {
+    assert.match(HELP[command], /With --pop[^]*exit codes are those of backlog pop[^]*3 the action is idle[^]*1 a --claim-now claim was refused or could not run/, command);
+  }
+  assert.match(HELP.pop, /1 {2}A --claim-now claim was refused or could not be run/);
+});
+
+test('the JSON of the pop stays valid when a credential follows a non-ASCII character (redaction before serialization)', () => {
+  const f = fixture();
+  git(f.cons, 'checkout', '-q', '-b', 'pop-unicode');
+  make(f, 'js', f.cons, 'pop unicode agent', ['--work-class', 'app-code']);
+  const agent = 'https://\u00e9user:review_dummy@host/path';
+  for (const cmd of [['query', '--pop'], ['pop']]) {
+    const r = cli([...cmd, '--agent', agent, '--classes', 'docs', '--json'], { cwd: f.cons, tmp: f.t });
+    assert.equal(r.status, 3, r.stdout + r.stderr);
+    const out = JSON.parse(r.stdout); // invalid JSON if the escape \u00e9 was cut
+    assert.ok(out.instruction.includes('host/path'), r.stdout);
+    assert.ok(!(r.stdout + r.stderr).includes('review_dummy'), r.stdout + r.stderr);
+  }
 });

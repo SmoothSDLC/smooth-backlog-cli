@@ -154,6 +154,8 @@ test('exit code 3 is described for both cases: the update before the command fai
   }
   assert.match(backlog('move', '--help').stdout, /3 the update of the local clone failed before\nthe move \(nothing was changed\), or the move was committed locally but not pushed/);
   assert.match(backlog('pop', '--help').stdout, /^ {2}3 {2}The action is idle: nothing is left for the agent\. The same code is used when the local clone/m);
+  assert.match(backlog('pop', '--help').stdout, /--claim-now claim was committed in the local clone but could not be pushed/);
+  for (const command of ['query', 'next']) assert.match(backlog(command, '--help').stdout, /a --claim-now claim could not be pushed/, command);
   // the build does what the text says: an origin that cannot be reached fails the update, exit 3, and nothing is read
   const broken = mkdtempSync(join(tmpdir(), 'help-exit3-'));
   dirs.push(broken);

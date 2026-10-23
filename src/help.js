@@ -13,7 +13,10 @@ const EXIT = `Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
   2  The arguments or the place were wrong: the message is on standard error.
-  3  The change was committed locally but could not be pushed to the origin of the backlog repository.
+  3  The local clone of the backlog repository could not be synchronised with its origin. Either the update before the
+     command failed: then nothing was read or changed, and the command can be run again once the cause is fixed. Or the
+     change was committed in the local clone but could not be pushed: then it is not recorded until it is pushed, as the
+     message says.
   4  The backlog repository is not set up; the printed question must be answered by the user.`;
 
 const DB = `  --db DB
@@ -81,7 +84,7 @@ ${DB}
       Required: the item numbers or slugs that must be done first, comma-separated, or the word none. The command
       refuses when a named item is not in this backlog.
   --estimate MINUTES
-      The estimated minutes of work, an integer. Required for team work.
+      The estimated minutes of work, an integer (the front matter key estimate_min). Required for team work.
   --complexity {low,medium,high}
       The estimated complexity of the item.
   --layer {1,2,3,4,5,process}
@@ -147,24 +150,28 @@ ${DB}
   --note NOTE
       The note for the event log. Without it the log records which fields were set.
   --claim AGENT
-      Take the item for an agent: it becomes in progress and claimed by that agent (team session).
+      Take the item for an agent (team session). The command refuses when another agent holds the item or when an item
+      in its depends_on is not done; otherwise the item becomes in progress and claimed by that agent.
   --force
       Together with --claim: claim although the agent already holds active items.
   --waiting WHAT
-      Record that the holder of the item waits for something asynchronous (team session).
+      Record that the holder of the item (named with --by) waits for something asynchronous, for example a workflow run or a
+      deployment. The wait is cleared by the next --note, --review, --close or --request-review of the item, or by
+      --waiting-done (team session).
   --waiting-done
       Clear the wait of the item (team session).
   --set-review-refs PATHS
-      Set the review references of the item, as comma-separated paths; they must cover every review class (team session).
+      Set the review_refs of the item (its definition of done), as comma-separated paths in the cody-coding-model repository.
+      They must cover every review class: one path per class, references/review/<class>.md (team session).
   --set-work-class CLASSES
       Replace the work classes of the item, as comma-separated classes from: ${CLASSES}.
   --set-review-classes CLASSES
       Replace the review classes of the item, as comma-separated classes from the work classes above plus code.
   --set-depends-on IDS
-      Replace the dependencies of the item, as item numbers or slugs, or the word none. The command refuses when a
+      Replace the depends_on of the item, as item numbers or slugs, or the word none. The command refuses when a
       named item is not in this backlog.
   --set-estimate MINUTES
-      Replace the estimated minutes of work. It must be greater than 0.
+      Replace the estimate_min of the item, the estimated minutes of work. It must be greater than 0.
   --set-complexity {low,medium,high}
       Replace the estimated complexity of the item.
   --set-layer {1,2,3,4,5,process}
@@ -174,15 +181,16 @@ ${DB}
   --request-review AGENT|any
       Ask an agent, or any agent, for a review; --note says what to review (team session).
   --start-review
-      Record that the reviewer starts the requested review (team session).
+      Record that the agent named by --by starts the requested review (review_state in_review, reviewer and review_started are
+      set). Other agents skip it unless the review was started more than 20 minutes ago (team session).
   --review {pass,changes}
-      Record a review verdict (team session).
+      Record a review verdict; it needs --by and --comments (team session).
   --by AGENT
-      The agent that reviews or closes the item (team session).
+      The agent that reviews (--start-review, --review) or closes (--close) the item (team session).
   --comments COMMENTS
-      The findings of a review; they must cite one of the review references of the item (team session).
+      The review findings (--review); they must cite one of the review references of the item (team session).
   --close
-      Complete the item after a passing review; --summary says what was delivered (team session).
+      Complete the item; --summary says what was delivered. It needs a passing review when the item has review_classes (team session).
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
 ${HELP_FLAG}
@@ -244,30 +252,33 @@ ${DB}
   --blocked
       Open items that wait for dependencies that are not done, with the status and holder of each dependency (team session).
   --classes CLASSES
-      The classes the agent covers, comma-separated: work classes for --claimable, review classes for --reviewable (team session).
+      The classes the agent covers, comma-separated: work classes for --claimable, review classes for --reviewable; with --pop
+      they are the work classes of the agent (team session).
   --pop
-      The one next action of the agent named by --agent: continue, review, claim, refine, chunk or idle (team session).
+      The one next action of the agent named by --agent: continue, review, claim, refine, chunk or idle (exit code 3, with the
+      blockers named) (team session).
       It is the same as backlog pop; see backlog pop --help. With --next, --agent does the same.
   --agent AGENT
       The agent that asks. With --claimable or --reviewable it also switches to team rules: an incomplete item is not offered
       and the agent never reviews its own work. With --pop it is the agent whose next action is answered (team session).
   --plan
-      Not in this build. The dispatch plan of the team for this branch (team session).
+      Not in this build. The dispatch plan of the team for this branch: one action per member (respond, close, review or claim),
+      each item to one member, with the reason; it needs --roster (team session).
   --lead LEAD
-      With --pop: the team lead, who alone refines incomplete items. The default is the environment variable TEAM_LEAD,
+      With --pop or --plan: the team lead, who alone refines incomplete items. The default is the environment variable TEAM_LEAD,
       else cody (team session).
   --agents AGENTS
-      Not in this build. The team members present (team session).
+      Not in this build. With --plan: the team members present, comma-separated; the default is the whole roster (team session).
   --review-classes REVIEW_CLASSES
       With --pop: the review classes the agent covers, comma-separated (team session).
   --claim-now
       With --pop: claim the item when the next action is to claim (team session).
   --roster ROSTER
-      The team roster as a JSON file {agent: {work_classes, review_classes}}; the default is the file named by TEAM_ROSTER.
-      Any member but the author may review: holders of a review class of the item at once, the others after
+      With --pop or --reviewable: the team roster as a JSON file {agent: {work_classes, review_classes}}; the default is the file
+      named by TEAM_ROSTER. Any member but the author may review: holders of a review class of the item at once, the others after
       TEAM_REVIEW_HOLDER_PRIORITY_MIN (5) minutes, or at once when no other roster member holds one (team session).
   --scope {branch,repo,all}
-      How far the team views and --pop look: this branch (the default), every branch of this repository, or also the chunk and docs items
+      With --pop, --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk and docs items
       of every repository. The widest scope for chunk and docs items is capped by the line refinement_scope: off|branch|repo|all
       in the file backlog.scope of the folder of this repository (default branch).
   --headless
@@ -325,7 +336,7 @@ and that nobody holds), refine (the team lead only: an incomplete item that lack
 of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or for a run is not
 continued, and the agent claims a new item only when every item it holds waits. A review request older than
 BACKLOG_REVIEW_FIRST_SECONDS (300) is answered before the agent's own work. Incomplete items are never claimed or
-reviewed. When nothing is left the action is idle, the blockers are named, and the command exits with 3.
+reviewed. When nothing is left the action is idle, the blockers are named, and the command exits with 3 (see the exit codes below).
 
 Without --json the first line is the action and the item, the second line says what to do, and one line per blocked item
 follows. With --json the command prints one object with the keys action, item, seq, repository, branch, instruction,
@@ -346,6 +357,8 @@ Options:
       The team lead, who alone refines incomplete items. The default is the environment variable TEAM_LEAD, else cody.
   --roster ROSTER
       The team roster as a JSON file {agent: {work_classes, review_classes}}; the default is the file named by TEAM_ROSTER.
+      Any member but the author may review: holders of a review class of the item at once, the others after
+      TEAM_REVIEW_HOLDER_PRIORITY_MIN (5) minutes, or at once when no other roster member holds one.
   --scope {branch,repo,all}
       How far the agent looks: this branch (the default), every branch of this repository, or also the chunk and docs items
       of every repository. The widest scope for chunk and docs items is capped by the line refinement_scope: off|branch|repo|all
@@ -364,7 +377,8 @@ ${HELP_FLAG}
 
 Exit codes:
   0  The command answered with an action.
-  3  The action is idle: nothing is left for the agent.
+  3  The action is idle: nothing is left for the agent. The same code is used when the local clone of the backlog
+     repository could not be updated from its origin before the answer (nothing was read; the message is on standard error).
   1  A --claim-now claim was refused: its refusal is printed on standard output.
   2  The arguments or the place were wrong: the message is on standard error.
   4  The backlog repository is not set up; the printed question must be answered by the user.
@@ -405,7 +419,8 @@ Options:
 ${HELP_FLAG}
 
 Exit codes for this command: 0 moved and pushed, 1 refused (for example the item does not exist), 2 wrong place or
-wrong arguments (for example neither --to-branch nor --to-repository), 3 moved locally but not pushed.
+wrong arguments (for example neither --to-branch nor --to-repository), 3 the update of the local clone failed before
+the move (nothing was changed), or the move was committed locally but not pushed.
 
 Example:
   backlog move 18 --to-branch team-cli-parity-1

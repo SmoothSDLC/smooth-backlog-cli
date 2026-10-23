@@ -4,7 +4,7 @@
 // SMOOTH_BACKLOG_SCRIPTS the oracle comparison is skipped with that reason. Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, py, sharedBacklog } from './shared-fixtures.js';
@@ -47,6 +47,48 @@ for (const [command, script] of Object.entries(SCRIPT)) {
   });
 }
 
+// The flag descriptions of an argparse --help: { '--flag': description text } (wrapped lines joined).
+function oracleDescriptions(text) {
+  const out = {}; let flag = null;
+  for (const line of text.split('\n')) {
+    const m = /^ {2}(--[\w-]+)(?: \S+)?(?: {2,}(\S.*))?$/.exec(line);
+    if (m) { flag = m[1]; out[flag] = m[2] ?? ''; } else if (flag && /^ {20,}\S/.test(line)) out[flag] += ` ${line.trim()}`;
+    else if (!/^ {2}-/.test(line)) flag = null;
+  }
+  return out;
+}
+// What a description must keep, in any wording: numbers, quoted words, identifiers (snake_case, ENV_NAMES, paths), --flags.
+const IGNORED = /\.py$|^SKILL\.md$|^--db$|^slugs\/ids$|^e\.g$|^folder>/;
+const tokensOf = d => [...new Set([...d.replace(/See SKILL\.md '[^']*'\./, '').matchAll(/'([^']+)'|(--[a-z][\w-]*)|(\b[A-Za-z][\w.<>/-]*[_/.][\w.<>/-]*\b)|(\b\d+\b)/g)].map(m => m[1] ?? m[2] ?? m[3] ?? m[4]).filter(x => !IGNORED.test(x) && !/^'?SKILL/.test(x)))];
+
+for (const [command, script] of Object.entries(SCRIPT)) {
+  test(`backlog ${command} --help keeps the description of every flag of ${script} --help (numbers, defaults, rules, shapes)`, ctx => {
+    const o = py(script, ['--help'], { cwd: cons, tmp: t, env: { COLUMNS: '1000' } });
+    if (!o) return ctx.skip('oracle not configured (python3 with PyYAML and SMOOTH_BACKLOG_SCRIPTS): descriptions not compared');
+    const text = backlog(command, '--help').stdout;
+    const missing = [];
+    for (const [flag, d] of Object.entries(oracleDescriptions(o.stdout))) {
+      const mine = block(text, flag.slice(2));
+      for (const token of tokensOf(d)) if (!(mine?.includes(token) || mine?.includes(token.replaceAll('_', ' ')) || mine?.includes(token.replaceAll('/', ' and ')))) missing.push(`${flag}: ${token}`);
+    }
+    assert.deepEqual(missing, [], `${command}: tokens of the oracle descriptions missing from the help`);
+  });
+}
+
+test('backlog update --claim keeps its refusal conditions, query --roster the shape, default and reviewer rules (update.py:117-118, query.py:397-399)', () => {
+  const claim = block(backlog('update', '--help').stdout, 'claim');
+  assert.match(claim, /refuses when another agent holds the item/);
+  assert.match(claim, /depends_on\s+is not done/);
+  assert.match(claim, /in progress/);
+  for (const command of ['query', 'pop']) {
+    const roster = block(backlog(command, '--help').stdout, 'roster');
+    assert.match(roster, /\{agent: \{work_classes, review_classes\}\}/, command);
+    assert.match(roster, /TEAM_ROSTER/, command);
+    assert.match(roster, /Any member but the author may review/, command);
+    assert.match(roster, /TEAM_REVIEW_HOLDER_PRIORITY_MIN \(5\) minutes/, command);
+  }
+});
+
 for (const [command, flags] of Object.entries(REFUSED)) {
   test(`backlog ${command} --help marks exactly the refused flags "Not in this build"`, () => {
     const text = backlog(command, '--help').stdout;
@@ -58,13 +100,73 @@ for (const [command, flags] of Object.entries(REFUSED)) {
   });
 }
 
-test('every refused flag is refused by the command (the help does not promise more than the build does)', () => {
-  for (const [command, flags] of Object.entries(REFUSED)) {
-    for (const flag of flags.filter(f => command !== 'archive')) {
-      const args = command === 'update' ? ['update', 'x', `--${flag}`, 'x'] : [command, `--${flag}`, 'x'];
-      const r = backlog(...args);
-      assert.notEqual(r.status, 0, `${command} --${flag} was accepted: ${r.stdout}`);
-    }
+test('every refused flag is refused with its own diagnostic and exit 2, on an invocation that is otherwise valid', () => {
+  const made = backlog('new', '--name', 'Help fixture', '--depends-on', 'none');
+  assert.equal(made.status, 0, made.stdout + made.stderr);
+  const roster = join(t, 'roster.json');
+  writeFileSync(roster, '{"x": {"work_classes": ["app-code"], "review_classes": ["code"]}}');
+  const unknown = /unrecognized arguments: --db/;
+  const plan = (flag, what = 'the team dispatch plan') => new RegExp(`^--${flag}: ${what} is not in this build$`);
+  const cases = [
+    [['new', '--name', 'n', '--depends-on', 'none', '--db', 'x.db'], unknown],
+    [['update', '1', '--note', 'n', '--db', 'x.db'], unknown],
+    [['archive', '1', '--force', '--dry-run', '--db', 'x.db'], unknown],
+    [['query', '--status', '--db', 'x.db'], unknown],
+    [['query', '--plan', '--roster', roster], plan('plan')],
+    [['query', '--agents', 'x', '--roster', roster], plan('agents')],
+    [['query', '--headless'], /^--headless is not in this build$/],
+    [['pop', '--agent', 'x', '--plan'], plan('plan')],
+    [['pop', '--agent', 'x', '--agents', 'x'], plan('agents')],
+    [['pop', '--agent', 'x', '--headless'], /^--headless is not in this build$/],
+    [['pop', '--agent', 'x', '--db', 'x.db'], unknown],
+  ];
+  for (const [args, diagnostic] of cases) {
+    const r = backlog(...args);
+    assert.equal(r.status, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
+    assert.equal(r.stdout, '', args.join(' '));
+    assert.match(r.stderr.replace(/^❌ backlog: /, '').trimEnd(), diagnostic, args.join(' '));
+  }
+  // the same invocations without the refused flag are accepted, and the refusals changed nothing
+  for (const args of [['archive', '1', '--force', '--dry-run'], ['query', '--status'], ['update', '1', '--note', 'n', '--dry-run']]) {
+    const r = backlog(...args);
+    assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
+  }
+  assert.match(backlog('query', '--phase', '1', '--json').stdout, /"status": "pending"/);
+});
+
+test('every command of the router has a help text, the shared section of backlog --help and a block in COMMANDS.md', async () => {
+  const { TABLE } = await import('../../src/shared/router.js');
+  assert.deepEqual(Object.keys(TABLE).sort(), [...COMMANDS].sort());
+  assert.deepEqual(Object.keys(HELP).sort(), [...COMMANDS].sort());
+  const top = cli(['--help'], { cwd: cons, tmp: t }).stdout;
+  for (const command of Object.keys(TABLE)) {
+    assert.match(top, new RegExp(`^ {2}backlog ${command}( |$)`, 'm'), `${command}: backlog --help`);
+    assert.equal(backlog(command, '--help').stdout, HELP[command], `${command}: --help`);
+  }
+});
+
+test('exit code 3 is described for both cases: the update before the command failed, and the change was not pushed', () => {
+  for (const command of ['new', 'update', 'query', 'next', 'archive']) {
+    const text = backlog(command, '--help').stdout;
+    assert.match(text, /^ {2}3 {2}The local clone of the backlog repository could not be synchronised with its origin\./m, command);
+    assert.match(text, /update before the\s+command failed: then nothing was read or changed/, command);
+    assert.match(text, /committed\s+in the local clone but could not be pushed/, command);
+  }
+  assert.match(backlog('move', '--help').stdout, /3 the update of the local clone failed before\nthe move \(nothing was changed\), or the move was committed locally but not pushed/);
+  assert.match(backlog('pop', '--help').stdout, /^ {2}3 {2}The action is idle: nothing is left for the agent\. The same code is used when the local clone/m);
+  // the build does what the text says: an origin that cannot be reached fails the update, exit 3, and nothing is read
+  const broken = mkdtempSync(join(tmpdir(), 'help-exit3-'));
+  dirs.push(broken);
+  sharedBacklog(broken);
+  const demo = consumer(broken, 'acme', 'demo', 'main');
+  mkdirSync(join(broken, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(broken, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  renameSync(join(broken, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), join(broken, 'origin-gone.git'));
+  for (const args of [['query', '--status'], ['pop', '--agent', 'x']]) {
+    const r = cli(args, { cwd: demo, tmp: broken });
+    assert.equal(r.status, 3, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
+    assert.equal(r.stdout, '');
+    assert.match(r.stderr, /nothing was read or changed/);
   }
 });
 

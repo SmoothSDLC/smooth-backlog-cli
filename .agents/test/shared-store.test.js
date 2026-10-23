@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
+  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
@@ -215,7 +215,7 @@ test('nextSeq after Python-created items (oracle)', t => {
 
 // ---------------------------------------------------------------- reflow / reorder
 
-test('reflow (oracle): a no-op keeps Python priorities and rewrites no file; a move re-densifies and Python reads it back', t => {
+test('reflow (oracle): a no-op keeps Python priorities and rewrites no file; a move re-densifies and Python reads our files back (update.py --note only rescans)', t => {
   const f = fixturePair(t);
   const s = threeItems(t, f);
   if (!s) return;
@@ -316,4 +316,172 @@ test('now(): second-precision UTC with a Z suffix', () => {
   const n = store.now();
   assert.match(n, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
   assert.ok(Math.abs(Date.now() - new Date(n).getTime()) < 5000);
+});
+
+// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 5)
+
+function link(t, target, path) {
+  try { symlinkSync(target, path); } catch (e) { t.skip(`cannot create a symlink here: ${e.code}`); return false; }
+  return true;
+}
+
+test('review P1: a symlinked phases/ folder, archive subfolder or item file is refused by load, reflow, nextSeq and write; nothing outside is touched', t => {
+  const d = scratch(t);
+  const folder = join(d, 'acme', 'demo');
+  const outside = join(d, 'outside');
+  putItem(outside, item(1, { priority: 5 }), '001-i1.md');
+  const victim = join(outside, '001-i1.md');
+  const before = sha256File(victim);
+  mkdirSync(folder, { recursive: true });
+  if (!link(t, outside, join(folder, 'phases'))) return;
+  assert.throws(() => store.load(folder), /Symlink/);
+  assert.throws(() => store.reflow(folder), /Symlink/);
+  assert.throws(() => store.reorder(folder, ['1']), /Symlink/);
+  assert.throws(() => store.nextSeq(folder), /Symlink/);
+  assert.throws(() => store.findings(folder), /Symlink/);
+  assert.throws(() => store.write({ path: join(folder, 'phases', '002-new.md'), fm: item(2), body: '' }), /Symlink/);
+  assert.throws(() => store.write({ path: victim, fm: item(1), body: '' }, folder), /Unsafe path/, 'an explicit root still contains the path');
+  assert.equal(sha256File(victim), before, 'the file outside the backlog is unchanged');
+  assert.deepEqual(readdirSync(outside), ['001-i1.md'], 'nothing was created outside');
+
+  // archive/<sub> symlinked, and an item file symlinked inside a real phases/
+  const folder2 = join(d, 'acme', 'demo2');
+  mkdirSync(join(folder2, 'phases'), { recursive: true });
+  mkdirSync(join(folder2, 'archive'), { recursive: true });
+  if (!link(t, outside, join(folder2, 'archive', 'phases'))) return;
+  assert.throws(() => store.load(folder2), /Symlink/);
+  rmSync(join(folder2, 'archive', 'phases'));
+  if (!link(t, victim, join(folder2, 'phases', '001-i1.md'))) return;
+  assert.throws(() => store.load(folder2), /Symlink/);
+  assert.throws(() => store.write({ path: join(folder2, 'phases', '001-i1.md'), fm: item(1), body: 'x' }), /Symlink/);
+  assert.equal(sha256File(victim), before);
+});
+
+test('review P1: only a missing folder reads as empty; any other listing failure propagates (a file where a folder belongs stands in for a denied read: tests run as root)', t => {
+  const d = scratch(t);
+  const folder = join(d, 'acme', 'demo');
+  putItem(folder, item(7, { phase: '007-i7' }), 'archive/phases/007-i7.md'); // the number a swallowed phases/ error would let nextSeq reuse
+  writeFileSync(join(folder, 'phases'), 'not a folder');
+  assert.throws(() => store.load(folder), { code: 'ENOTDIR' });
+  assert.throws(() => store.nextSeq(folder), { code: 'ENOTDIR' });
+  assert.throws(() => store.reflow(folder), { code: 'ENOTDIR' });
+  rmSync(join(folder, 'phases'));
+  mkdirSync(join(folder, 'phases'));
+  rmSync(join(folder, 'archive'), { recursive: true });
+  writeFileSync(join(folder, 'archive'), 'not a folder');
+  assert.throws(() => store.load(folder), { code: 'ENOTDIR' });
+  assert.throws(() => store.nextSeq(folder), { code: 'ENOTDIR' });
+  rmSync(join(folder, 'archive'));
+  assert.deepEqual(store.load(folder), [], 'both folders missing is an empty result');
+  assert.equal(store.nextSeq(folder), 1);
+});
+
+function mirrorDb(folder, rows) {
+  mkdirSync(folder, { recursive: true });
+  const db = new DatabaseSync(join(folder, 'backlog.db'));
+  db.exec('CREATE TABLE phase (id INTEGER PRIMARY KEY, slug TEXT, seq INTEGER, status TEXT, path TEXT, repository TEXT, branch TEXT)');
+  const ins = db.prepare('INSERT INTO phase (slug, seq, status, path, repository, branch) VALUES (?, ?, ?, ?, ?, ?)');
+  for (const r of rows) ins.run(r.slug, r.seq, r.status, r.path, 'acme/demo', 'main');
+  db.close();
+}
+
+test('review P2: findings reports ghost rows (a non-archived mirror row whose file is gone) without modifying the database', t => {
+  const d = scratch(t);
+  const folder = join(d, 'acme', 'demo');
+  putItem(folder, item(1));
+  mirrorDb(folder, [
+    { slug: '001-i1', seq: 1, status: 'pending', path: 'phases/001-i1.md' },
+    { slug: '002-gone', seq: 2, status: 'in_progress', path: 'phases/002-gone.md' },
+    { slug: '003-gone-archived', seq: 3, status: 'archived', path: 'archive/phases/003-gone-archived.md' },
+    { slug: '004-null-status', seq: 4, status: null, path: 'phases/004-null-status.md' },
+  ]);
+  const dbBefore = sha256File(join(folder, 'backlog.db'));
+  const files = readdirSync(folder).sort();
+  assert.deepEqual(store.findings(folder).ghost.map(r => r.slug), ['002-gone']);
+  assert.equal(store.findings(folder).ghost[0].path, 'phases/002-gone.md');
+  assert.equal(sha256File(join(folder, 'backlog.db')), dbBefore, 'the database is read-only here');
+  assert.deepEqual(readdirSync(folder).sort(), files, 'no journal or other file appears');
+  assert.deepEqual(store.findings(join(d, 'acme', 'none')).ghost, [], 'no database, no ghosts');
+});
+
+test('review P2 (oracle): findings.ghost matches query.py --status for a deleted item file', t => {
+  const f = fixturePair(t);
+  const s = threeItems(t, f);
+  if (!s) return;
+  rmSync(join(f.folder, 'phases', s.files[1]));
+  const py_ = JSON.parse(oracle(t, f, 'query.py', ['--status', '--json']).stdout).findings;
+  assert.deepEqual(py_.ghost.map(r => r.slug), [s.slugs[1]], 'Python reports the gone file');
+  assert.deepEqual(store.findings(f.folder).ghost.map(r => r.slug), [s.slugs[1]]);
+});
+
+test('review P2: an explicit status: null is kept (not defaulted to pending): the item is neither ranked, rewritten nor flagged', t => {
+  const d = scratch(t);
+  const folder = join(d, 'acme', 'demo');
+  putItem(folder, item(1, { priority: 4 }));
+  putItem(folder, item(2, { status: null, priority: 9 }));
+  const untaggedNull = item(3, { status: null }); delete untaggedNull.branch;
+  putItem(folder, untaggedNull);
+  putItem(folder, { phase: '004-i4', seq: 4, name: 'I4', repository: 'acme/demo', branch: 'main' }); // absent status and priority: the mirror defaults
+  const nullSha = sha256File(join(folder, 'phases/002-i2.md'));
+  assert.deepEqual(store.reflow(folder), [['001-i1', 0], ['004-i4', 1]]);
+  assert.deepEqual(store.reorder(folder, ['002-i2', '004-i4']), [['004-i4', 0], ['001-i1', 1]]);
+  assert.equal(sha256File(join(folder, 'phases/002-i2.md')), nullSha, 'the null-status item is not rewritten');
+  assert.deepEqual(store.findings(folder).untagged.map(i => i.fm.phase), [], 'NOT IN (...) never matches a NULL status');
+});
+
+test('review P2: a quoted numeric priority already at its rank is left alone (int(priority) comparison)', t => {
+  const d = scratch(t);
+  const folder = join(d, 'acme', 'demo');
+  putItem(folder, item(1, { priority: '0' }));
+  putItem(folder, item(2, { priority: ' 1 ' }));
+  putItem(folder, item(3, { priority: '9' }));
+  const sha = rel => sha256File(join(folder, rel));
+  const [a, b, c] = ['phases/001-i1.md', 'phases/002-i2.md', 'phases/003-i3.md'].map(sha);
+  assert.deepEqual(store.reflow(folder), [['001-i1', 0], ['002-i2', 1], ['003-i3', 2]]);
+  assert.equal(sha('phases/001-i1.md'), a, '"0" at rank 0: same bytes');
+  assert.equal(sha('phases/002-i2.md'), b, '" 1 " at rank 1: same bytes');
+  assert.notEqual(sha('phases/003-i3.md'), c, '"9" at rank 2 is rewritten');
+  assert.match(readItem(folder, 'phases/003-i3.md'), /^priority: 2$/m);
+});
+
+// Two identical Python-built fixtures with scrambled priorities (ties, a done item, a pending item with a higher priority
+// than its seq): one is changed by the oracle's own replan / move, the other by store.reorder / store.reflow.
+function scrambled(t) {
+  const f = fixturePair(t);
+  for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon']) {
+    if (!oracle(t, f, 'new_phase.py', ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'])) return null;
+  }
+  const files = readdirSync(join(f.folder, 'phases')).filter(x => x.endsWith('.md')).sort();
+  const edits = [['priority: 7', null], ['priority: 3', null], ['priority: 3', 'done'], ['priority: 9', null], ['priority: 3', null]];
+  files.forEach((x, i) => {
+    const p = join(f.folder, 'phases', x);
+    let text = readFileSync(p, 'utf8').replace(/^priority: .*$/m, edits[i][0]);
+    if (edits[i][1]) text = text.replace(/^status: .*$/m, `status: "${edits[i][1]}"`);
+    writeFileSync(p, text);
+  });
+  if (!oracle(t, f, 'scan.py', [])) return null;
+  return { f, files, slugs: files.map(x => x.replace(/\.md$/, '')) };
+}
+const prioritiesOf = (folder, files) => Object.fromEntries(files.map(x => [x, parse(readItem(folder, `phases/${x}`)).fm.priority]));
+
+test('reorder and reflow (oracle): the same operations on identical fixtures give the same priorities in Node and Python', t => {
+  const a = scrambled(t); // the oracle's fixture
+  if (!a) return;
+  const b = scrambled(t); // Node's fixture
+  assert.deepEqual(prioritiesOf(b.f.folder, b.files), prioritiesOf(a.f.folder, a.files), 'identical starting point');
+  const { slugs, files } = a;
+  const start = prioritiesOf(a.f.folder, files);
+  // replan: item number 5, then a slug, lead; the rest keeps (priority, seq) order; the done item is not ranked
+  oracle(t, a.f, 'update.py', ['--replan', `5,${slugs[3]},999`]);
+  store.reorder(b.f.folder, ['5', slugs[3], '999']);
+  assert.deepEqual(prioritiesOf(b.f.folder, files), prioritiesOf(a.f.folder, files), 'reorder');
+  assert.notDeepEqual(prioritiesOf(a.f.folder, files), start, 'the replan changed something');
+  assert.equal(prioritiesOf(a.f.folder, files)[files[2]], 3, 'the done item keeps its priority');
+  // move the first item to rank 2, then the last past the end
+  oracle(t, a.f, 'update.py', [slugs[0], '--priority', '2']);
+  store.reflow(b.f.folder, { slug: slugs[0], target: 2 });
+  assert.deepEqual(prioritiesOf(b.f.folder, files), prioritiesOf(a.f.folder, files), 'reflow move to rank 2');
+  oracle(t, a.f, 'update.py', [slugs[4], '--priority', '99']);
+  store.reflow(b.f.folder, { slug: slugs[4], target: 99 });
+  assert.deepEqual(prioritiesOf(b.f.folder, files), prioritiesOf(a.f.folder, files), 'reflow clamps the target');
 });

@@ -4,9 +4,10 @@
 // The surface is synchronous (spawnSync, tmp + rename) so sync and async callers can use it.
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { operation } from '../errors.js';
 import { dump, parse } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
 
@@ -85,8 +86,25 @@ function atomicWrite(path, text) { // the semantics of src/storage.js atomicWrit
   } finally { rmSync(temp, { force: true }); }
 }
 
+// src/storage.js safePath, synchronously: target lies inside root and no component below root is a symlink.
+// shortcut: check-then-write, so a symlink swapped in between is not caught; fine for a single-user clone.
+function assertNoSymlinks(root, target) {
+  const rel = relative(resolve(root), resolve(target));
+  operation(!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`), `Unsafe path: ${target}.`);
+  let current = resolve(root);
+  for (const part of rel.split(sep).filter(Boolean)) {
+    current = join(current, part);
+    let link;
+    try { link = lstatSync(current).isSymbolicLink(); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
+    operation(!link, `Symlink destination is unsupported: ${current}. Resolve it before using backlog.`);
+  }
+}
+
 // lib_db.py:182-184. item.path is absolute (the caller joins the folder and the load-relative path).
-export function write(item) {
+// root is the repository folder; without it, the folder is what precedes the first phases/ or archive/ segment.
+export function write(item, root) {
+  const inferred = /^(.*?)[/\\](?:phases|archive)[/\\]/.exec(item.path)?.[1];
+  assertNoSymlinks(root ?? (inferred || dirname(item.path)), item.path);
   atomicWrite(item.path, dump(item.fm, item.body));
 }
 
@@ -94,10 +112,12 @@ export function write(item) {
 export function load(dir) {
   const items = [];
   const walk = (rel, deep) => {
+    assertNoSymlinks(dir, join(dir, rel));
     let entries;
-    try { entries = readdirSync(join(dir, rel), { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1)); } catch { return; }
+    try { entries = readdirSync(join(dir, rel), { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1)); } catch (e) { if (e.code === 'ENOENT') return; throw e; }
     for (const e of entries) {
       const path = `${rel}/${e.name}`;
+      if (e.isSymbolicLink()) assertNoSymlinks(dir, join(dir, path));
       if (e.isDirectory() && deep) walk(path, deep);
       else if (e.isFile() && e.name.endsWith('.md')) {
         const text = readFileSync(join(dir, path), 'utf8');
@@ -111,40 +131,44 @@ export function load(dir) {
   return items;
 }
 
+// The mirror database <dir>/backlog.db, opened read-only (never modified): fn(db) when it has a phase table, else null.
+function withMirror(dir, fn) {
+  const dbFile = join(dir, 'backlog.db');
+  if (!existsSync(dbFile)) return null;
+  // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr.
+  const emit = process.emitWarning;
+  process.emitWarning = (w, ...a) => { if (!/sqlite/i.test(String(w))) emit.call(process, w, ...a); };
+  let sqlite;
+  try { sqlite = process.getBuiltinModule('node:sqlite'); } finally { process.emitWarning = emit; }
+  const db = new sqlite.DatabaseSync(dbFile, { readOnly: true });
+  try {
+    return db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='phase'").get() ? fn(db) : null;
+  } finally { db.close(); }
+}
+
 // new_phase.py:23-25 with contract section 3: 1 + max(seq of phases/ and archive/, MAX(seq) of backlog.db).
 export function nextSeq(dir) {
-  let max = Math.max(0, ...load(dir).map(i => Number(i.fm.seq) || 0));
-  const dbFile = join(dir, 'backlog.db');
-  if (existsSync(dbFile)) {
-    // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr.
-    const emit = process.emitWarning;
-    process.emitWarning = (w, ...a) => { if (!/sqlite/i.test(String(w))) emit.call(process, w, ...a); };
-    let sqlite;
-    try { sqlite = process.getBuiltinModule('node:sqlite'); } finally { process.emitWarning = emit; }
-    const db = new sqlite.DatabaseSync(dbFile, { readOnly: true });
-    try {
-      if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='phase'").get()) {
-        max = Math.max(max, Number(db.prepare('SELECT COALESCE(MAX(seq), 0) AS m FROM phase').get().m));
-      }
-    } finally { db.close(); }
-  }
-  return max + 1;
+  const max = Math.max(0, ...load(dir).map(i => Number(i.fm.seq) || 0));
+  return Math.max(max, withMirror(dir, db => Number(db.prepare('SELECT COALESCE(MAX(seq), 0) AS m FROM phase').get().m)) ?? 0) + 1;
 }
 
 const slugOf = i => i.fm.phase || basename(i.path, '.md'); // lib_db.py:ingest_phase slug
 
 // lib_db.py:523-530 over the files: pending/in_progress items of phases/ (all branches), priority then seq.
-// Missing keys read as the mirror database defaults (status pending, priority 50, seq 0).
+// Absent keys read as the mirror database defaults (status pending, priority 50, seq 0); an explicit null stays null.
+const statusOf = i => (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending');
 function actionable(dir) {
   return load(dir)
-    .filter(i => i.path.startsWith('phases/') && ACTIONABLE.includes(i.fm.status ?? 'pending'))
+    .filter(i => i.path.startsWith('phases/') && ACTIONABLE.includes(statusOf(i)))
     .sort((a, b) => ((a.fm.priority ?? 50) - (b.fm.priority ?? 50)) || ((a.fm.seq ?? 0) - (b.fm.seq ?? 0)));
 }
 
 // lib_db.py:541-556: rank i onto the i-th item; only a file whose priority changes is rewritten.
+// int(priority): a quoted "0" equals rank 0.
+const asInt = p => (typeof p === 'string' && /^\s*[+-]?\d+\s*$/.test(p) ? Number(p) : p);
 function applyDense(dir, items) {
   return items.map((i, rank) => {
-    if ((i.fm.priority ?? -1) !== rank) write({ path: join(dir, i.path), fm: { ...i.fm, priority: rank, updated: now() }, body: i.body });
+    if (asInt(i.fm.priority ?? -1) !== rank) write({ path: join(dir, i.path), fm: { ...i.fm, priority: rank, updated: now() }, body: i.body }, dir);
     return [slugOf(i), rank];
   });
 }
@@ -178,16 +202,18 @@ export function reorder(dir, idents) {
 // lib_db.py:296-299
 export const inQueue = (item, repo, branchName) => (item.fm.repository || '') === repo && (item.fm.branch || '') === branchName;
 
-// lib_db.py:302-313. The folder repository is the folder's last two path parts. Archived items are out
-// of every finding; ghost (a database row whose file is gone) needs the mirror database (job 9).
+// lib_db.py:302-313. The folder repository is the folder's last two path parts. Archived items (and a NULL status,
+// which NOT IN never matches) are out of every finding; ghost is a non-archived mirror row whose file is gone.
 export function findings(dir) {
   const out = { foreign: [], untagged: [], ghost: [] };
   const folderRepo = resolve(dir).split(sep).slice(-2).join('/');
   for (const i of load(dir)) {
-    if (!i.path.startsWith('phases/') || (i.fm.status ?? 'pending') === 'archived') continue;
+    if (!i.path.startsWith('phases/') || statusOf(i) === null || statusOf(i) === 'archived') continue;
     if (!i.fm.repository || !i.fm.branch) out.untagged.push(i);
     else if (i.fm.repository !== folderRepo) out.foreign.push(i);
   }
+  out.ghost = withMirror(dir, db => db.prepare("SELECT * FROM phase WHERE status NOT IN ('archived')").all()
+    .filter(r => !existsSync(join(dir, String(r.path ?? '')))).map(r => ({ ...r }))) ?? [];
   return out;
 }
 

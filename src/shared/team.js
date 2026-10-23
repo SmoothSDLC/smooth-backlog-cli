@@ -1,12 +1,14 @@
 // Team metadata rules for the shared backlog (cli-parity job 15): port of lib_db.py:205-211, 528-621, 645-707, 745-749.
-// The oracle reads the mirror database; these read the item files of the repository folder, which the database mirrors.
+// Like the oracle, identity and status come from the rows of the mirror database (backlog.db); the item files give only
+// the metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join, posix } from 'node:path';
+import { join, posix, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
+import { connect } from './db.js';
+import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
-import { load } from './store.js';
 
 // lib_db.py:601-606 (skills: owner 2026-10-22)
 export const WORK_CLASSES = ['app-code', 'ui', 'api', 'tests', 'iac', 'network', 'identity', 'security', 'data', 'delivery', 'verify', 'docs', 'contract', 'chunk', 'skills'];
@@ -48,31 +50,46 @@ export function outsideTeam(fm) {
   return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with query.py --scope, never claim or change them`;
 }
 
-// The items of the folder as the mirror rows: slug, status (an archive/ item is 'archived'), the file's front matter.
-const rows = folder => load(folder).map(i => ({
-  slug: i.fm.phase || basename(i.path, '.md'), path: i.path, fm: i.fm,
-  status: i.path.startsWith('archive/') ? 'archived' : (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending'),
-}));
-
-// lib_db.py:587-595: by number (a live item before an archived one) or by slug.
-function byIdent(all, ident) {
+// lib_db.py:587-595 phase_by_ident over the mirror rows: by number (a live row before an archived one) or by slug.
+function byIdent(rows, ident) {
   const sel = itemSelector(ident);
   if (!sel) return null;
-  const hits = all.filter(r => (sel.number !== undefined ? Number(r.fm.seq) === sel.number : r.slug === sel.slug));
+  const hits = rows.filter(r => (sel.number !== undefined ? Number(r.seq) === sel.number : r.slug === sel.slug));
   return hits.find(r => r.status !== 'archived') ?? hits[0] ?? null;
 }
 
-// lib_db.py:648-655: [{id as written, item or null, fm}] for each depends_on entry that is not done or archived.
-export function undoneDependencies(folder, fm) {
-  const all = rows(folder);
-  return asList(fm.depends_on).map(id => ({ id, item: byIdent(all, id) })).filter(d => !d.item || !DONE_STATES.includes(d.item.status))
-    .map(d => ({ ...d, fm: d.item?.fm ?? {} }));
+// lib_db.py:621 item_fm: the front matter of the row's file, {} when it is gone (or outside the folder). The rows give
+// identity and status; the files only the metadata the rows do not hold.
+function itemFm(folder, row) {
+  try {
+    const file = realpathSync(resolve(folder, String(row.path)));
+    return file.startsWith(realpathSync(folder) + sep) ? parse(readFileSync(file, 'utf8')).fm : {};
+  } catch { return {}; }
 }
 
-// lib_db.py:658-670: the open items agent holds, on every branch, by number. state: awaiting-review, waiting:<what>, active.
+// All rows of the folder's backlog.db, in id order (connect writes nothing to an up-to-date db).
+export function mirrorRows(folder) {
+  const con = connect(folder);
+  try { return con.prepare('SELECT * FROM phase ORDER BY id').all().map(r => ({ ...r })); } finally { con.close(); }
+}
+
+// lib_db.py:648-655: [{id as written, item: the row or null, fm}] for each depends_on entry that is not done or archived.
+// rows = the mirror rows of folder (the default), or those of another repository's backlog read by the caller.
+export function undoneDependencies(folder, fm, rows = mirrorRows(folder)) {
+  return asList(fm.depends_on).map(id => ({ id, item: byIdent(rows, id) })).filter(d => !d.item || !DONE_STATES.includes(d.item.status))
+    .map(d => ({ ...d, fm: d.item ? itemFm(folder, d.item) : {} }));
+}
+
+// lib_db.py:658-670: the open rows of the active handoff whose file says agent holds them, on every branch, by number.
+// state: awaiting-review, waiting:<what>, active.
 export function heldItems(folder, agent) {
-  return rows(folder).filter(r => r.path.startsWith('phases/') && ACTIONABLE.includes(r.status) && r.fm.claimed_by === agent)
-    .sort((a, b) => (a.fm.seq ?? 0) - (b.fm.seq ?? 0))
+  const con = connect(folder);
+  let rows;
+  try {
+    const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
+    rows = con.prepare(`SELECT * FROM phase WHERE handoff_id=? AND status IN (${ACTIONABLE.map(() => '?')}) ORDER BY seq`).all(hid, ...ACTIONABLE).map(r => ({ ...r }));
+  } finally { con.close(); }
+  return rows.map(r => ({ ...r, fm: itemFm(folder, r) })).filter(r => r.fm.claimed_by === agent)
     .map(r => ({ ...r, state: ['requested', 'in_review'].includes(r.fm.review_state) ? 'awaiting-review' : r.fm.wait_on ? `waiting:${r.fm.wait_on}` : 'active' }));
 }
 

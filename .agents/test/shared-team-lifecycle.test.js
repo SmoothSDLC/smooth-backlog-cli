@@ -158,24 +158,60 @@ test('team.js: roster and fallback review', () => {
   assert.deepEqual(team.fallbackReview({ claimed_by: 'cody' }, roster), []);
 });
 
-test('team.js: held items, the claim rule, undone dependencies on a folder', () => {
-  const f = fixture();
+// Item files of a folder, then the mirror database scanned from them (the rules read the rows, the files only for metadata).
+function seed(f) {
   const put = (seq, name, extra) => store.write({
     path: join(f.folder, `phases/${String(seq).padStart(3, '0')}-${name}.md`),
     fm: { phase: `${String(seq).padStart(3, '0')}-${name}`, seq, name, status: 'pending', priority: seq - 1, depends_on: [], claimed_by: '', ...extra },
     body: '\n',
   }, f.folder);
+  const scan = () => { const con = db.connect(f.folder); try { db.scan(con, f.folder); } finally { con.close(); } };
+  return { put, scan };
+}
+
+test('team.js: held items, the claim rule, undone dependencies on a folder', () => {
+  const f = fixture();
+  const { put, scan } = seed(f);
   put(1, 'a', { status: 'in_progress', claimed_by: 'cody' });
   put(2, 'b', { status: 'in_progress', claimed_by: 'cody', review_state: 'requested' });
   put(3, 'c', { status: 'in_progress', claimed_by: 'cody', wait_on: 'run 5' });
   put(4, 'd', { status: 'done', claimed_by: 'cody' });
   put(5, 'e', { status: 'in_progress', claimed_by: 'archy' });
   put(6, 'f', { depends_on: [1, '004-d', 'nothing', 5] });
+  scan();
   assert.deepEqual(team.heldItems(f.folder, 'cody').map(h => [h.slug, h.state]), [['001-a', 'active'], ['002-b', 'awaiting-review'], ['003-c', 'waiting:run 5']]);
   assert.equal(team.claimRefusal(f.folder, 'cody'), 'cody holds 1 active item(s): 001-a; pull new work only when every item you hold waits (review requested, or update.py <item> --waiting "<what>" --by cody); --force overrides');
   assert.equal(team.claimRefusal(f.folder, 'nobody'), null);
   const undone = team.undoneDependencies(f.folder, { depends_on: [1, '004-d', 'nothing', 5] });
   assert.deepEqual(undone.map(d => team.describeDependency(d)), ['001-a (status in_progress, claimed by cody)', 'nothing (no such item in this backlog)', '005-e (status in_progress, claimed by archy)']);
+});
+
+test('team.js: status and identity come from the mirror rows, the files give only the metadata (drift cases, lib_db.py:648-680)', () => {
+  const f = fixture();
+  const { put, scan } = seed(f);
+  put(1, 'a', { status: 'in_progress', claimed_by: 'cody' });
+  put(2, 'b', { status: 'done' });
+  put(3, 'c', { status: 'pending' });
+  put(4, 'd', { status: 'done', claimed_by: 'archy' });
+  scan();
+  const deps = ids => team.undoneDependencies(f.folder, { depends_on: ids }).map(d => team.describeDependency(d));
+  assert.deepEqual(deps([2, 3, 4]), ['003-c (status pending, claimed by nobody)']);
+  // a file changed to done before it is scanned: its row still says pending, so the dependency still blocks
+  put(3, 'c', { status: 'done' });
+  assert.deepEqual(deps([3]), ['003-c (status pending, claimed by nobody)']);
+  // a file changed back to pending while its row says done: the dependency is done
+  put(2, 'b', { status: 'pending' });
+  assert.deepEqual(deps([2, '002-b']), []);
+  // a done row whose file is gone is still done (a ghost), not "no such item"
+  rmSync(join(f.folder, 'phases', '004-d.md'));
+  assert.deepEqual(deps([4, '004-d']), []);
+  // an active holding whose file now says done is still held while its row is open
+  put(1, 'a', { status: 'done', claimed_by: 'cody' });
+  assert.deepEqual(team.heldItems(f.folder, 'cody').map(h => [h.slug, h.state]), [['001-a', 'active']]);
+  assert.match(team.claimRefusal(f.folder, 'cody'), /^cody holds 1 active item\(s\): 001-a;/);
+  // and a done row is not held even when its file claims to be open
+  put(2, 'b', { status: 'in_progress', claimed_by: 'cody' });
+  assert.deepEqual(team.heldItems(f.folder, 'cody').map(h => h.slug), ['001-a']);
 });
 
 test('twin parity: every lifecycle step prints, refuses and records as update.py', t => {

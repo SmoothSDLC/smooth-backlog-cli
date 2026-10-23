@@ -1,4 +1,5 @@
-import { parse } from './args.js';
+import { parse, modeOptions, sharedCommand } from './args.js';
+import { getMode } from './shared/store.js';
 import { gitContext } from './context.js';
 import { withStore } from './storage.js';
 import { initialize, refreshIntegrations } from './integrations.js';
@@ -11,7 +12,16 @@ const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.me
 export async function run({ installationRoot } = {}) {
   let json = process.argv.includes('--json');
   try {
-    const parsed = parse(process.argv.slice(2)); json = Boolean(parsed.flags.json);
+    const argv = process.argv.slice(2);
+    const mode = modeOptions(argv);
+    // Shared mode (contract section 1) skips init, withStore and refreshIntegrations: the router owns the command.
+    const shared = mode ? null : getMode() === 'shared' ? sharedCommand(argv) : null;
+    if (mode || shared) {
+      const router = await import('./shared/router.js');
+      process.exitCode = mode ? await router.switchMode(mode) : await router.run(shared.command, shared.argv);
+      return;
+    }
+    const parsed = parse(argv); json = Boolean(parsed.flags.json);
     if (parsed.command === 'help' || parsed.command === 'version') {
       const data = parsed.command === 'help' ? help : packageInfo.version;
       process.stdout.write(json ? JSON.stringify({ ok: true, data }) + '\n' : data + '\n');

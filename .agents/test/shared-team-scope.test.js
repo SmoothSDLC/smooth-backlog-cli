@@ -6,7 +6,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
@@ -206,4 +206,76 @@ test('parity with query.py: --claimable, --reviewable and --blocked print, refus
   const up = cli(['query', '--claimable', '--classes', 'docs'], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: '../x' } });
   assert.equal(up.status, 2);
   assert.match(up.stderr, /^❌ backlog: not an owner\/name repository id: \.\.\/x/);
+});
+
+// --scope all reads other repositories' backlogs and backlog.scope: nothing below the home may be a link to outside it.
+function otherChunk() {
+  const f = fixture();
+  make(f, 'js', f.cons, 'scope own impl', ['--work-class', 'app-code']); // the folder of acme/demo exists
+  const chunk = make(f, 'js', f.other, 'scope chunk other repository', ['--work-class', 'chunk']);
+  writeFileSync(f.cfg, 'refinement_scope: all\n');
+  const all = () => cli(['query', '--claimable', '--classes', 'chunk,docs', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t });
+  assert.deepEqual(JSON.parse(all().stdout).map(x => x.slug), [chunk]); // visible when nothing is linked
+  return { f, chunk, all };
+}
+
+test('--scope all does not open another repository\'s backlog.db through a symlink', () => {
+  const { f, chunk, all } = otherChunk();
+  const db = join(f.home, 'other', 'thing', 'backlog.db');
+  mkdirSync(join(f.t, 'outside'));
+  copyFileSync(db, join(f.t, 'outside', 'backlog.db')); // a database outside the home that holds the chunk item
+  rmSync(db);
+  symlinkSync(join(f.t, 'outside', 'backlog.db'), db);
+  const r = all();
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!r.stdout.includes(chunk), r.stdout);
+  assert.match(r.stderr, /ℹ️  other\/thing: backlog not read \(Symlink destination is unsupported/);
+});
+
+test('the refinement cap file backlog.scope is not followed through a symlink', () => {
+  const f = fixture();
+  make(f, 'js', f.cons, 'scope own impl', ['--work-class', 'app-code']);
+  const chunk = make(f, 'js', f.other, 'scope chunk other repository', ['--work-class', 'chunk']);
+  mkdirSync(join(f.t, 'outside'));
+  writeFileSync(join(f.t, 'outside', 'scope'), 'refinement_scope: all\n'); // would widen the cap to all
+  symlinkSync(join(f.t, 'outside', 'scope'), f.cfg);
+  const r = cli(['query', '--claimable', '--classes', 'chunk,docs', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.ok(!r.stdout.includes(chunk) && r.stderr.includes('Symlink destination is unsupported'), r.stdout + r.stderr);
+});
+
+test('the diagnostic of an unreadable backlog of another repository does not print credentials', () => {
+  const { f } = otherChunk();
+  const odd = join(f.home, 'user:review_dummy@host', 'thing');
+  mkdirSync(odd, { recursive: true });
+  writeFileSync(join(odd, 'backlog.db'), 'this is not a database'.repeat(100));
+  const r = cli(['query', '--claimable', '--classes', 'chunk,docs', '--scope', 'all'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stderr, /backlog not read/); // the diagnostic is still there
+  assert.ok(!(r.stdout + r.stderr).includes('review_dummy'), r.stdout + r.stderr);
+});
+
+test('a reviewer without a matching class is offered the item when no other member holds the class, and after the holder window', () => {
+  const f = fixture();
+  const job = make(f, 'js', f.cons, 'reviewed by fallback', ['--work-class', 'docs', '--review-classes', 'code']);
+  const up = (...a) => { const r = cli(['update', job, ...a], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
+  up('--claim', 'cody');
+  up('--request-review', 'any', '--note', 'ready');
+  const roster = (members) => { const p = join(f.t, 'roster.json'); writeFileSync(p, JSON.stringify(members)); return p; };
+  const view = (agent, r, env) => {
+    const o = cli(['query', '--reviewable', '--classes', 'ui', '--agent', agent, '--roster', r, '--json'], { cwd: f.cons, tmp: f.t, env });
+    assert.equal(o.status, 0, o.stdout + o.stderr);
+    return JSON.parse(o.stdout).map(x => x.slug);
+  };
+  // only the author (cody) holds code: eve and archy (ui) may review it at once
+  const alone = roster({ cody: { review_classes: ['code'] }, archy: { review_classes: ['ui'] }, eve: { review_classes: [] } });
+  assert.deepEqual(view('eve', alone), [job]);
+  assert.deepEqual(view('archy', alone), [job]);
+  assert.deepEqual(view('cody', alone), []); // never the author
+  // dan also holds code: eve waits for the holder window, dan is offered at once
+  const held = roster({ cody: { review_classes: ['code'] }, dan: { review_classes: ['code'] }, eve: { review_classes: [] } });
+  assert.deepEqual(view('eve', held), []);
+  const dan = cli(['query', '--reviewable', '--classes', 'code', '--agent', 'dan', '--roster', held, '--json'], { cwd: f.cons, tmp: f.t });
+  assert.deepEqual(JSON.parse(dan.stdout).map(x => x.slug), [job]);
+  assert.deepEqual(view('eve', held, { TEAM_REVIEW_HOLDER_PRIORITY_MIN: '0' }), [job]); // the window has passed
 });

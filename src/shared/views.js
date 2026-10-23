@@ -1,12 +1,12 @@
 // Shared-mode team views (cli-parity job 16): `backlog query --claimable | --reviewable | --blocked` with --classes,
 // --agent, --roster and --scope. Port of query.py:76-153 (scopes, refinement cap, team_rows) and :330-372 (the views),
-// lib_db.py:731-742 (review_offer) and :621-624 (job_fields). Rows come from the backlog.db mirror as in query.js; the
-// front matter and the dependencies come from the item files of the repository folder (team.js), which the mirror copies.
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+// lib_db.py:731-742 (review_offer) and :621-624 (job_fields). Rows and dependencies come from the backlog.db mirror as
+// in query.js (team.js); the item files of the repository folder give only the front matter the rows do not hold.
+import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { BacklogError } from '../errors.js';
+import { BacklogError, operation } from '../errors.js';
 import { missingFields } from './lifecycle.js';
-import { redact } from './safety.js';
+import { assertInside, redact } from './safety.js';
 import * as store from './store.js';
 import * as team from './team.js';
 
@@ -23,7 +23,9 @@ const dirs = dir => { try { return readdirSync(dir, { withFileTypes: true }).fil
 // query.py:80-90: refinement_scope from <folder>/backlog.scope, one line 'refinement_scope: off|branch|repo|all' (default branch).
 export function refinementCap(folder, repr) {
   const p = join(folder, 'backlog.scope');
-  const m = existsSync(p) && statSync(p).isFile() ? /^\s*refinement_scope:\s*(\S+)/m.exec(readFileSync(p, 'utf8')) : null;
+  let st; try { st = lstatSync(p); } catch { st = null; }
+  operation(!st?.isSymbolicLink(), `Symlink destination is unsupported: ${p}. Resolve it before using backlog.`); // never read outside the home
+  const m = st?.isFile() ? /^\s*refinement_scope:\s*(\S+)/m.exec(readFileSync(p, 'utf8')) : null;
   const v = m ? m[1] : 'branch';
   if (!['off', ...SCOPES].includes(v)) throw new BacklogError('INVALID_INPUT', `${p}: refinement_scope ${repr(v)}; use one of off, branch, repo, all`);
   return v;
@@ -41,17 +43,17 @@ export function reviewOffer(fm, agent, mine, roster) {
 
 // query.py:93-129 team_rows: [{r, fm, undone, f}] of the open items within scope, in priority order. branch = the caller's
 // repository and branch, repo = every branch of it, all = also the chunk/docs items of every other repository folder.
-// shortcut: undoneDependencies reads the folder once per open item; fine for a backlog of hundreds, cache it beyond that.
-export function teamRows({ open, scope, cap, every, excluded, repo, branch, folder, home }) {
+export async function teamRows({ open, scope, cap, every, excluded, repo, branch, folder, home }) {
   const ref = RANK[scope] <= RANK[cap] ? scope : cap;
   const mine = files(folder);
+  const mirror = team.mirrorRows(folder);
   const out = [];
   for (const r of open) {
     if (excluded.has(r.id)) continue;
     if (!every && !((r.repository || '') === repo && (scope !== 'branch' || r.branch === branch))) continue;
     const fm = mine.get(r.path)?.fm ?? {};
     if (!every && refinement(fm) && ['off', 'branch'].includes(ref) && r.branch !== branch) continue; // the cap
-    out.push({ r, fm, undone: team.undoneDependencies(folder, fm), f: repo });
+    out.push({ r, fm, undone: team.undoneDependencies(folder, fm, mirror), f: repo });
   }
   if (scope !== 'all' || ref !== 'all' || every) return out;
   const { DatabaseSync } = process.getBuiltinModule('node:sqlite'); // loaded (and its warning kept off stderr) by db.connect
@@ -59,16 +61,20 @@ export function teamRows({ open, scope, cap, every, excluded, repo, branch, fold
     for (const name of dirs(join(home, owner))) {
       const f = `${owner}/${name}`; const dir = join(home, owner, name);
       if (f === repo || !existsSync(join(dir, 'backlog.db'))) continue;
-      let rows; // another repository's backlog: read, never write
-      try {
+      try { // another repository's backlog: read, never write; nothing on the way from the home may be a link
+        await assertInside(home, join(dir, 'backlog.db'));
         const con = new DatabaseSync(join(dir, 'backlog.db'), { readOnly: true });
-        try { rows = con.prepare(OPEN).all(con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null).map(x => ({ ...x })); } finally { con.close(); }
-      } catch (e) { process.stderr.write(`ℹ️  ${f}: backlog not read (${e.message})\n`); continue; }
-      const theirs = rows.some(r => r.repository === f) ? files(dir) : new Map();
-      for (const r of rows) {
-        const fm = r.repository === f ? theirs.get(r.path)?.fm ?? {} : {};
-        if (refinement(fm)) out.push({ r, fm, undone: team.undoneDependencies(dir, fm), f });
-      }
+        let rows; let theirRows;
+        try {
+          rows = con.prepare(OPEN).all(con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null).map(x => ({ ...x }));
+          theirRows = con.prepare('SELECT * FROM phase ORDER BY id').all().map(x => ({ ...x }));
+        } finally { con.close(); }
+        const theirs = rows.some(r => r.repository === f) ? files(dir) : new Map();
+        for (const r of rows) {
+          const fm = r.repository === f ? theirs.get(r.path)?.fm ?? {} : {};
+          if (refinement(fm)) out.push({ r, fm, undone: team.undoneDependencies(dir, fm, theirRows), f });
+        }
+      } catch (e) { process.stderr.write(redact(`ℹ️  ${f}: backlog not read (${e.message})`) + '\n'); }
     }
   }
   return out;
@@ -80,7 +86,7 @@ const jobFields = fm => [['estimate', fm.estimate_min], ['complexity', fm.comple
 export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d.item.slug : null, status: d.item ? d.item.status : 'missing', claimed_by: d.fm.claimed_by || '' }));
 
 // query.py:330-372. io = {say, dump, die, repr} of query.js; hid = the active handoff of the mirror, all = its row reader.
-export function teamView(a, { all, hid, excluded, repo, branch, folder, home, io }) {
+export async function teamView(a, { all, hid, excluded, repo, branch, folder, home, io }) {
   const { say, dump, die, repr } = io;
   try {
     if ((a.claimable || a.reviewable) && !a.classes) return die('--claimable and --reviewable need --classes <the classes this agent covers>');
@@ -92,7 +98,7 @@ export function teamView(a, { all, hid, excluded, repo, branch, folder, home, io
     }
     const inTeam = Boolean(team.teamScope().repo || a.agent);
     const own = files(folder);
-    const found = teamRows({ open: all(OPEN, hid), scope, cap: refinementCap(folder, repr), every: a.all, excluded, repo, branch, folder, home })
+    const found = (await teamRows({ open: all(OPEN, hid), scope, cap: refinementCap(folder, repr), every: a.all, excluded, repo, branch, folder, home }))
       .filter(({ r, fm, undone, f }) => {
         if (inTeam && f === repo) { // an incomplete item is never claimed or reviewed in team mode
           const file = own.get(r.path);
@@ -111,7 +117,7 @@ export function teamView(a, { all, hid, excluded, repo, branch, folder, home, io
     const where = a.all ? '(all)' : scope === 'branch' ? redact(branch) : `(scope ${scope})`;
     say(`📋 ${found.length} ${a.claimable ? 'claimable' : a.reviewable ? 'reviewable' : 'blocked'} item(s) — ${repo}, branch ${where}, P0 = next:`);
     for (const { r, fm, undone, f } of found) {
-      say(`   P${String(r.priority).padEnd(3)} ${r.slug} (${r.status}) — ${r.name}${f === repo ? '' : `  [repository ${f}]`}`);
+      say(`   P${String(r.priority).padEnd(3)} ${r.slug} (${r.status}) — ${r.name}${f === repo ? '' : `  [repository ${redact(f)}]`}`);
       say(`        work_class=${team.asList(fm.work_class).join(',') || '-'} review_classes=${team.asList(fm.review_classes).join(',') || '-'} `
         + `claimed_by=${fm.claimed_by || '-'} review=${fm.review_state || 'none'}${fm.reviewer ? ` reviewer=${fm.reviewer}` : ''}${jobFields(fm)}`);
       for (const dep of undone) say(`        waits on ${team.describeDependency(dep)}`);

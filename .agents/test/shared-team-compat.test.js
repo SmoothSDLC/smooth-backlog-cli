@@ -122,3 +122,15 @@ test('--claimable and --reviewable need --classes; the text view lists the item 
   const waiting = JSON.parse(run(f, 'query', ['--blocked', '--json']).stdout)[0].waiting_on;
   assert.deepEqual(waiting, [{ id: String(Number(a.split('-')[0])), slug: a, status: 'pending', claimed_by: '' }]);
 });
+
+test('a completed dependency whose file is gone does not hold the dependent item back (the row decides, lib_db.py:648-655)', () => {
+  const f = fixture();
+  const dep = make(f, 'ghost dependency');
+  const job = make(f, 'waits for the ghost', ['--depends-on', dep.split('-')[0]]);
+  assert.ok(q(f, '--blocked').includes(job) && !q(f, '--claimable', '--classes', 'docs').includes(job));
+  ok(f, dep, '--status', 'done');
+  rmSync(join(f.folder, 'phases', `${dep}.md`)); // the row stays done; only the file is missing
+  assert.ok(!q(f, '--blocked').includes(job), 'blocked by a done dependency');
+  assert.ok(q(f, '--claimable', '--classes', 'docs').includes(job), 'not claimable although its dependency is done');
+  assert.deepEqual(JSON.parse(run(f, 'query', ['--blocked', '--json']).stdout).map(x => x.slug), []);
+});

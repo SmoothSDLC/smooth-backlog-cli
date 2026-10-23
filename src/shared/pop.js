@@ -85,7 +85,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const scope = a.scope || 'branch'; const cap = refinementCap(folder, repr);
   const rows = (s, every) => teamRows({ open, scope: s, cap, every, excluded, repo, branch, folder, home });
   // continue/review/claim stay in the caller's repository: --scope all widens only the chunk search
-  const own = rows(narrower(scope, 'repo'), a.all);
+  const own = await rows(narrower(scope, 'repo'), a.all);
   const held = team.heldItems(folder, me);
   const reviews = [];
   for (const x of own) {
@@ -130,7 +130,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     }
   }
   if (!act && cap !== 'off') {
-    const chunks = rows(scope, a.all).filter(({ r, fm, undone }) => team.asList(fm.work_class).includes('chunk') && r.status === 'pending' && !fm.claimed_by && !undone.length);
+    const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone }) => team.asList(fm.work_class).includes('chunk') && r.status === 'pending' && !fm.claimed_by && !undone.length);
     if (chunks.length || work.includes('chunk')) {
       const { r, f } = chunks[0] ?? { r: null, f: repo };
       const where = f === repo ? '' : ` (repository ${f}: work from its clone)`;

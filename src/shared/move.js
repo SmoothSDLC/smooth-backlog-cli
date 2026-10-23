@@ -105,6 +105,7 @@ async function move(a, con, { home, repo, folder, close }) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target file is named from it`); // mirror data: no path in it
 
   // move.py:32-64
+  await assertInside(home, join(tdir, 'backlog.db')); // no symlink between the home and the target db: db.connect checks only below the owner, after the item is written
   const src = join(folder, r.path);
   await assertInside(folder, src);
   const { fm, body } = parseDoc(readFileSync(src, 'utf8'));

@@ -6,7 +6,8 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
@@ -286,6 +287,23 @@ test('review P1: a symlink at archive/ or archive/phases/ refuses the archive be
     assert.deepEqual(readdirSync(outside), [], 'nothing was written outside the repository');
     assert.equal(readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8'), source, 'the source file stays as it was, unstamped');
   }
+});
+
+test('review P2: a target backlog.db that is a symlink to a valid database refuses the move before the target item is written', t => {
+  const f = seed();
+  const real = join(f.t, 'real.db');
+  renameSync(join(f.other, 'backlog.db'), real);
+  try { symlinkSync(real, join(f.other, 'backlog.db')); } catch (e) { t.skip(`cannot create a symlink here: ${e.code}`); return; }
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'linked target db'); git(f.home, 'push', '-q');
+  const sha = p => createHash('sha256').update(readFileSync(p)).digest('hex');
+  const [src, dbSha, target, status] = [snapshotFolder(f.folder), sha(real), names(f.other, 'phases'), git(f.home, 'status', '--porcelain')];
+  const r = run(f, 'move', ['7', '--to-repository']);
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout + r.stderr, /Symlink destination is unsupported/);
+  assert.deepEqual(names(f.other, 'phases'), target, 'no item was created in the target');
+  assert.deepEqual(snapshotFolder(f.folder), src, 'the source folder is unchanged');
+  assert.equal(sha(real), dbSha, 'the linked database is unchanged');
+  assert.equal(git(f.home, 'status', '--porcelain'), status, 'no uncommitted file is left behind');
 });
 
 test('review P1: a database slug that leaves phases/ ("007-../../001-first") is refused before the target is written', () => {

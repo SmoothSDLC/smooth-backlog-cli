@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync,
+  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
@@ -442,6 +442,33 @@ test('review P2: a quoted numeric priority already at its rank is left alone (in
   assert.equal(sha('phases/002-i2.md'), b, '" 1 " at rank 1: same bytes');
   assert.notEqual(sha('phases/003-i3.md'), c, '"9" at rank 2 is rewritten');
   assert.match(readItem(folder, 'phases/003-i3.md'), /^priority: 2$/m);
+});
+
+// lib_db.py:523-553 ranks the mirror rows: a row whose file was moved to archive/ outside the CLI is unchanged, so it keeps its rank.
+function archivedOutside(t) {
+  const f = fixturePair(t);
+  const s = threeItems(t, f);
+  if (!s) return null;
+  mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
+  renameSync(join(f.folder, 'phases', s.files[1]), join(f.folder, 'archive', 'phases', s.files[1]));
+  return { f, s };
+}
+
+test('review P2: reflow keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
+  const x = archivedOutside(t);
+  if (!x) return;
+  const { f, s } = x;
+  const live = sha256File(join(f.folder, 'phases', s.files[2]));
+  assert.deepEqual(store.reflow(f.folder), s.slugs.map((n, i) => [n, i]), 'the archived item still holds P1: the last item stays P2');
+  assert.equal(sha256File(join(f.folder, 'phases', s.files[2])), live, 'no live file is rewritten');
+});
+
+test('review P2: reorder keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
+  const x = archivedOutside(t);
+  if (!x) return;
+  const { f, s } = x;
+  assert.deepEqual(store.reorder(f.folder, [s.slugs[2]]), [s.slugs[2], s.slugs[0], s.slugs[1]].map((n, i) => [n, i]));
+  assert.match(readItem(f.folder, `phases/${s.files[0]}`), /^priority: 1$/m);
 });
 
 // Two identical Python-built fixtures with scrambled priorities (ties, a done item, a pending item with a higher priority

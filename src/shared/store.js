@@ -173,8 +173,9 @@ const slugOf = i => i.fm.phase || basename(i.path, '.md'); // lib_db.py:ingest_p
 const statusOf = i => (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending');
 function actionable(dir) {
   const items = load(dir);
-  const files = items.filter(i => i.path.startsWith('phases/') && ACTIONABLE.includes(statusOf(i)));
-  const slugs = new Set(items.map(slugOf));
+  const live = items.filter(i => i.path.startsWith('phases/'));
+  const files = live.filter(i => ACTIONABLE.includes(statusOf(i)));
+  const slugs = new Set(live.map(slugOf)); // a file moved to archive/ outside the CLI leaves its row unchanged: still ranked
   const ghosts = withMirror(dir, db => db.prepare("SELECT slug, seq, priority, path FROM phase WHERE status IN ('pending', 'in_progress') AND handoff_id = (SELECT id FROM handoff WHERE status = 'active' LIMIT 1)").all()
     .filter(r => !slugs.has(r.slug) && !existsSync(join(dir, String(r.path ?? '')))).map(r => ({ ghost: true, path: r.path, fm: { phase: r.slug, seq: r.seq, priority: r.priority } }))) ?? [];
   return [...files, ...ghosts].sort((a, b) => ((a.fm.priority ?? 50) - (b.fm.priority ?? 50)) || ((a.fm.seq ?? 0) - (b.fm.seq ?? 0)));

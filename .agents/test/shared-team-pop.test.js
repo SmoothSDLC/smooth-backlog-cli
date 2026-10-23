@@ -429,6 +429,8 @@ function claimOutcome(kind) {
   const hook = join(f.t, 'hook.cjs');
   writeFileSync(hook, kind === 'killed'
     ? "if (process.argv[2] === 'update') process.kill(process.pid, 'SIGTERM');\n"
+    : kind === 'late' // the claim is saved in the item file; the process is stopped before its commit
+    ? "const cp = require('node:child_process'); const run = cp.execFile;\ncp.execFile = function (file, args) { if (process.argv[2] === 'update' && file === 'git' && args.includes('commit')) process.kill(process.pid, 'SIGTERM'); return run.apply(this, arguments); };\n"
     : "if (process.argv[2] === 'update') { process.stderr.write('fatal: https://user:hunter2secret@host/x\\n'); process.exit(1); }\n");
   const env = { NODE_OPTIONS: `--require=${hook}` };
   const r = cli(['pop', '--agent', 'cody', '--classes', 'app-code', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env });
@@ -441,6 +443,16 @@ test('--claim-now: an interrupted claim process is a failure, not a claim', () =
   assert.ok(!r.stdout.includes('"claimed": true'), r.stdout);
   assert.match(r.stderr, /claim of .* failed/);
   assert.ok(!item(f, job).fm.claimed_by);
+});
+
+test('--claim-now: a claim interrupted after it was saved is reported as a failure but is not undone, and the help does not promise otherwise', () => {
+  const { f, job, r } = claimOutcome('late');
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /claim of .* failed/);
+  assert.equal(item(f, job).fm.claimed_by, 'cody', 'the saved claim stays in the item file');
+  assert.doesNotMatch(HELP.pop, /nothing is claimed/);
+  assert.match(HELP.pop, /check the item/);
+  assert.doesNotMatch(readFileSync(new URL('../../COMMANDS.md', import.meta.url), 'utf8'), /nothing is claimed/);
 });
 
 test('--claim-now: the diagnostics of a failed claim are forwarded with its exit code and without credentials', () => {

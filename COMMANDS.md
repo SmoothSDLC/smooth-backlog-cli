@@ -673,7 +673,7 @@ Exit codes:
      and when a --claim-now claim was committed in the local clone but could not be pushed (it is not recorded until it is
      pushed, as the message says).
   1  A --claim-now claim was refused or could not be run (its process failed or was interrupted): its output, or the failure, is
-     shown and nothing is claimed.
+     shown. After an interruption the claim may already be saved, or even pushed: check the item before running pop again.
   2  The arguments or the place were wrong: the message is on standard error.
   4  The backlog repository is not set up; the printed question must be answered by the user.
 

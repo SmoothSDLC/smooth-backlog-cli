@@ -2,11 +2,11 @@
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the backlog.db mirror,
 // the oracle's order: pull, no-backlog check, branch, connect, findings. Output strings and --json match query.py.
 // Never writes an item (the db is opened as lib_db.connect does). Team views (views.js, pop.js) and --headless are refused.
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, realpathSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
-import { git, itemSelector } from './safety.js';
+import { assertInside, git, itemSelector, redact } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 
@@ -33,20 +33,26 @@ function parse(argv) {
   return a;
 }
 
-const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${message}\n`); return code; };
+const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const say = text => process.stdout.write(`${text}\n`);
 // Python json.dumps(indent=2): ensure_ascii escapes every non-ASCII UTF-16 unit.
-const dump = v => say(JSON.stringify(v, null, 2).replace(/[\u0080-￿]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`));
+const dump = v => say(JSON.stringify(v, null, 2).replace(/[\u007f-￿]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`));
 const sha7 = r => String(r.commit_sha ?? '').slice(0, 7);
 const pad = (v, n) => String(v).padStart(n);
-const repr = s => (s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}'`);
+const repr = s => redact(s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}'`);
+
+// A row's file exists only when it resolves inside the repository folder (no .., absolute path or symlink out).
+// The oracle follows such a path; here it counts as gone, since the row is mirror data and not to be trusted.
+function present(folder, path) {
+  try { return realpathSync(resolve(folder, String(path))).startsWith(realpathSync(folder) + sep); } catch { return false; }
+}
 
 // lib_db.py:302-313 over the mirror rows: the file of a row is looked up in the repository folder.
 function findings(rows, folder, repo) {
   const out = { foreign: [], untagged: [], ghost: [] };
   for (const r of rows) {
     if (r.status === 'archived') continue;
-    if (!existsSync(join(folder, r.path))) out.ghost.push(r);
+    if (!present(folder, r.path)) out.ghost.push(r);
     else if (!r.repository || !r.branch) out.untagged.push(r);
     else if (r.repository !== repo) out.foreign.push(r);
   }
@@ -125,6 +131,7 @@ export async function run(argv) {
   const plain = a.phase || a.events !== undefined || a['by-branch'] || a.critical;
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
+  await assertInside(home, join(folder, 'backlog.db')); // no symlink between the home and the db (db.connect checks only below the owner)
   const con = db.connect(folder);
   try {
     const all = (sql, ...p) => con.prepare(sql).all(...p).map(r => ({ ...r }));

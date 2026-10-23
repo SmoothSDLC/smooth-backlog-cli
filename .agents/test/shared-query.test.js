@@ -5,7 +5,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
@@ -237,4 +237,80 @@ test('an unknown flag is exit 2', () => {
   const n = cli(['query', '--bogus'], { cwd: f.cons, tmp: f.t });
   assert.equal(n.status, 2);
   assert.match(n.stderr, /unrecognized arguments: --bogus/);
+});
+
+// --- review fixes (job 12) ---
+for (const link of ['repo', 'db', 'owner']) test(`review P1: a symlink at ${{ repo: '<home>/<owner>/<repo>', db: 'backlog.db', owner: '<home>/<owner>' }[link]} is refused and the outside database is not touched`, () => {
+  {
+    const f = build(false);
+    if (f.noOracle) return;
+    const outside = join(f.t, 'outside');
+    const target = link === 'owner' ? join(f.home, 'acme') : link === 'repo' ? f.folder : join(f.folder, 'backlog.db');
+    cpSync(target, outside, { recursive: true });
+    rmSync(target, { recursive: true, force: true });
+    symlinkSync(outside, target);
+    const dbFile = link === 'db' ? outside : join(outside, ...(link === 'owner' ? ['demo'] : []), 'backlog.db');
+    const before = readFileSync(dbFile);
+    const n = cli(['query', '--status', '--json'], { cwd: f.cons, tmp: f.t });
+    assert.notEqual(n.status, 0, link);
+    assert.match(n.stdout + n.stderr, /Symlink destination is unsupported|Unsafe path/, link);
+    assert.deepEqual(readFileSync(dbFile), before, link);
+  }
+});
+
+// Points the 001-alpha row (queue head) at `path` and returns the Node view of --next --json / --status --json.
+function withRowPath(f, path) {
+  const con = db.connect(f.folder);
+  con.prepare("UPDATE phase SET path=?, priority=-1 WHERE slug='001-alpha'").run(path);
+  con.close();
+  return {
+    next: JSON.parse(cli(['query', '--next', '--json'], { cwd: f.cons, tmp: f.t }).stdout),
+    status: JSON.parse(cli(['query', '--status', '--json'], { cwd: f.cons, tmp: f.t }).stdout),
+  };
+}
+
+test('review P2: a row path that leaves the folder (.. or absolute) is a ghost, not an existing file', () => {
+  const f = build(false);
+  if (f.noOracle) return;
+  const secret = join(f.t, 'secret.md');
+  writeFileSync(secret, 'outside\n');
+  for (const path of ['../../../secret.md', secret, '../../../../../../../../../etc/passwd']) {
+    const r = withRowPath(f, path);
+    assert.notEqual(r.next.slug, '001-alpha', path);
+    assert.deepEqual(r.status.findings.ghost.map(x => x.slug), ['001-alpha'], path);
+  }
+});
+
+test('review P2: a row path through a symlink to a file outside the folder is a ghost', () => {
+  const f = build(false);
+  if (f.noOracle) return;
+  writeFileSync(join(f.t, 'secret.md'), 'outside\n');
+  symlinkSync(join(f.t, 'secret.md'), join(f.folder, 'phases', 'link.md'));
+  const r = withRowPath(f, 'phases/link.md');
+  assert.notEqual(r.next.slug, '001-alpha');
+  assert.deepEqual(r.status.findings.ghost.map(x => x.slug), ['001-alpha']);
+  // a file inside the folder is still found
+  assert.deepEqual(withRowPath(f, 'phases/002-beta.md').status.findings.ghost, []);
+});
+
+test('review P2: input echoed in a diagnostic is redacted (flags, missing items)', () => {
+  const f = build(false);
+  if (f.noOracle) return;
+  const url = 'https://user:review_dummy@host/path';
+  for (const args of [[`--bogus=${url}`], ['--phase', url], ['--events', url], [`--branch=${url}`, '--bogus']]) {
+    const n = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
+    assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));
+    assert.notEqual(n.status, 0, args.join(' '));
+  }
+  assert.match(cli(['query', '--phase', url], { cwd: f.cons, tmp: f.t }).stdout, /^❌ no phase 'https:\/\/host\/path'/);
+});
+
+test('review P3: --json escapes U+007F like json.dumps', t => {
+  const f = build(false);
+  if (f.noOracle) return t.skip('oracle not configured');
+  const con = db.connect(f.folder);
+  con.prepare("UPDATE phase SET name=? WHERE slug='001-alpha'").run('a\x7fb \x80 é');
+  con.close();
+  const r = same(t, f, ['--phase', '1', '--json']);
+  assert.match(r.n.stdout, /"name": "a\\u007fb \\u0080 \\u00e9"/);
 });

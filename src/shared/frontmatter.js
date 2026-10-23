@@ -14,6 +14,8 @@ const err = (msg) => new Error(redact(msg));
 
 const FM_SPLIT = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/; // port of _FM_RE (lib_db.py:171-179)
 const KEY_LINE = /^([^\s:#][^:]*):(?:[ \t]+(.*))?$/; // top-level 'key:' or 'key: value'
+// YAML separation is space and tab only; JS trim()/\s also take NBSP and other Unicode spaces, which are scalar content.
+const trim = (s) => s.replace(/^[ \t]+|[ \t]+$/g, '');
 const IDENT = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 export function parse(text) {
@@ -31,12 +33,12 @@ function parseFm(block) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    if (line.trim() === '') { i += 1; continue; }
+    if (trim(line) === '') { i += 1; continue; }
     const m = KEY_LINE.exec(line);
     if (!m) throw err(`front matter line ${i + 1} is not a 'key: value' pair: ${line}`);
-    const key = m[1].trim();
+    const key = trim(m[1]);
     if (!IDENT.test(key)) throw err(`front matter key ${JSON.stringify(key)} is not a plain identifier`);
-    const inline = (m[2] ?? '').trimStart();
+    const inline = trim(m[2] ?? '');
     if (inline === '') {
       const next = lines[i + 1];
       if (next !== undefined && /^- /.test(next)) {
@@ -44,7 +46,7 @@ function parseFm(block) {
         let j = i + 1;
         while (j < lines.length && /^- /.test(lines[j])) {
           const end = continuation(lines, j + 1); // PyYAML wraps long items over indented lines
-          const chunk = [lines[j].slice(2).trim(), ...lines.slice(j + 1, end).map((l) => l.trim())];
+          const chunk = [trim(lines[j].slice(2)), ...lines.slice(j + 1, end).map(trim)];
           items.push(decodeValue(`a list item of '${key}'`, chunk, true));
           j = end;
         }
@@ -58,7 +60,7 @@ function parseFm(block) {
       }
     } else {
       const j = continuation(lines, i + 1);
-      const chunk = [inline, ...lines.slice(i + 1, j).map((l) => l.trim())];
+      const chunk = [inline, ...lines.slice(i + 1, j).map(trim)];
       fm[key] = decodeValue(`the value of '${key}'`, chunk, false);
       i = j;
     }
@@ -72,9 +74,9 @@ function continuation(lines, from) {
   for (;;) {
     const l = lines[j];
     if (l === undefined) return j;
-    if (l.trim() === '') {
+    if (trim(l) === '') {
       let k = j;
-      while (k < lines.length && lines[k].trim() === '') k += 1;
+      while (k < lines.length && trim(lines[k]) === '') k += 1;
       if (k < lines.length && /^[ \t]/.test(lines[k])) j += 1;
       else return j;
     } else if (/^[ \t]/.test(l)) {
@@ -93,9 +95,9 @@ function decodeValue(label, chunk, inList) {
   if (head.startsWith('"') || head.startsWith("'")) return decodeQuoted(chunk, head[0], label);
   if (head.startsWith('[') && !inList) {
     if (chunk.length !== 1 || !head.endsWith(']')) throw err(`front matter ${label} is a flow list that wraps over a line, which the shared-mode subset does not support`);
-    const inner = head.slice(1, -1).trim();
+    const inner = trim(head.slice(1, -1));
     if (inner === '') return [];
-    return splitFlow(inner).map((part) => decodeScalar(part.trim(), `an item of ${label}`));
+    return splitFlow(inner).map((part) => decodeScalar(trim(part), `an item of ${label}`));
   }
   const text = foldBreaks(chunk.join('\n'));
   if (text === '') throw err(`front matter ${label} is empty`);
@@ -107,15 +109,18 @@ function splitFlow(inner) {
   const parts = [];
   let start = 0;
   let quote = '';
+  let first = true; // a quote opens a string only as the first character of an item
   for (let i = 0; i < inner.length; i += 1) {
     const c = inner[i];
+    const atStart = first;
+    if (c !== ' ' && c !== '\t') first = c === ',';
     if (quote === '"') {
       if (c === '\\') i += 1;
       else if (c === '"') quote = '';
     } else if (quote === "'") {
       if (c === "'" && inner[i + 1] === "'") i += 1;
       else if (c === "'") quote = '';
-    } else if (c === '"' || c === "'") quote = c;
+    } else if (atStart && (c === '"' || c === "'")) quote = c;
     else if (c === ',') { parts.push(inner.slice(start, i)); start = i + 1; }
   }
   parts.push(inner.slice(start));
@@ -184,9 +189,9 @@ function decodePlain(s) {
   if (s.startsWith('{')) throw bad('is a flow map');
   if (s.startsWith('[')) throw bad('is a flow list');
   if (/^[|>]/.test(s)) throw bad('is a block scalar');
-  if (/^#|\s#/.test(s)) throw bad('has a comment');
-  if (/^[%@`,\]}]/.test(s) || /^\?(\s|$)/.test(s)) throw bad('starts with a YAML indicator');
-  if (/:(\s|$)/.test(s)) throw bad('is a mapping');
+  if (/^#|[ \t\r\n]#/.test(s)) throw bad('has a comment');
+  if (/^[%@`,\]}]/.test(s) || /^\?([ \t\r\n]|$)/.test(s)) throw bad('starts with a YAML indicator');
+  if (/:([ \t\r\n]|$)/.test(s)) throw bad('is a mapping');
   return s;
 }
 

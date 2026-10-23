@@ -314,3 +314,45 @@ test('review P2: integers outside the JavaScript safe range are errors in both d
     assert.throws(() => parse(`---\na: ${v}\n---\n`), /safe|range/, v);
   }
 });
+
+// --- second review (job 4) ---
+test('second review P2: a quote inside a plain flow-list item is content, not a delimiter (PyYAML reads the same)', () => {
+  const cases = {
+    "k: [it's, c]": ["it's", 'c'],
+    'k: [say "hi", ok]': ['say "hi"', 'ok'],
+    "k: [a'b, c'd, e]": ["a'b", "c'd", 'e'],
+    "k: [it's, 'q, r', \"s, t\", u\"v]": ["it's", 'q, r', 's, t', 'u"v'],
+  };
+  for (const [line, want] of Object.entries(cases)) {
+    const text = `---\n${line}\n---\n`;
+    assert.deepEqual(parse(text).fm, { k: want }, line);
+    const py = pyLoad(text);
+    if (py !== undefined) assert.deepEqual(py, { k: want }, `PyYAML: ${line}`);
+  }
+});
+
+test('second review P2: only YAML separation characters (space, tab, line breaks) count in the comment and mapping checks', () => {
+  // PyYAML (allow_unicode) writes these as plain scalars; every Unicode space except space/tab is scalar content.
+  const cases = ['see\u00a0#123', 'a:\u00a0b', 'x\u2003#y', 'a:\u3000b', 'b:\u2003', '\u00a0:x', '\u00a0lead', 'trail\u00a0', '\u00a0', '\u2003a', 'a\u200b\u00a0#b', 'a\ufeff', "it's, c"];
+  if (!pyYamlAvailable()) return;
+  const py = spawnSync('python3', ['-I', '-c',
+    "import json, sys, yaml\n" +
+    "cases = json.loads(sys.stdin.read())\n" +
+    "fm = {'objective': cases[0], 'cases': cases}\n" +
+    "fm.update({'k%d' % i: c for i, c in enumerate(cases)})\n" +
+    "text = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True)\n" +
+    "assert yaml.safe_load(text) == fm\n" +
+    "json.dump({'text': text}, sys.stdout)\n"], { input: JSON.stringify(cases) });
+  assert.equal(py.status, 0, py.stderr.toString('utf8'));
+  const { text } = JSON.parse(py.stdout.toString('utf8'));
+  const want = { objective: cases[0], cases, ...Object.fromEntries(cases.map((c, i) => [`k${i}`, c])) };
+  assert.deepEqual(parse(`---\n${text.trim()}\n---\n`).fm, want);
+  assert.equal(parse('---\nobjective: see\u00a0#123\n---\n').fm.objective, 'see\u00a0#123');
+  const flow = '---\nk: [see\u00a0#123, a:\u00a0b, \u00a0x]\n---\n';
+  assert.deepEqual(parse(flow).fm, { k: ['see\u00a0#123', 'a:\u00a0b', '\u00a0x'] });
+  assert.deepEqual(pyLoad(flow), { k: ['see\u00a0#123', 'a:\u00a0b', '\u00a0x'] });
+  // a real space or tab still makes a comment or a mapping
+  assert.throws(() => parse('---\nk: see #123\n---\n'), /comment/);
+  assert.throws(() => parse('---\nk: a:\tb\n---\n'), /mapping/);
+  assert.throws(() => parse('---\nk: [a: b]\n---\n'), /mapping/);
+});

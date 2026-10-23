@@ -7,6 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -45,15 +46,29 @@ function step(f, tool, script, args) {
 const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
 const doc = text => { const { fm, body } = parse(text); return { keys: Object.keys(fm), fm: JSON.parse(JSON.stringify(fm).replace(TS, 'TS').replace(/[0-9a-f]{40}/g, 'SHA')), body }; };
 
+// Right after a changing step the change is committed and pushed, not left for the next command to publish: the working
+// home is clean, its HEAD is the bare's main, the bare has one more commit, and the committed item file is as expected.
+function published(f, label, commits, file, expect) {
+  assert.equal(git(f.home, 'status', '--porcelain'), '', `${label}: the working home has uncommitted changes`);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'), `${label}: the commit is not on the bare`);
+  assert.equal(git(f.bare, 'rev-list', '--count', 'main'), String(commits), `${label}: commits on the bare`);
+  expect(parse(git(f.bare, 'show', `main:acme/demo/phases/${file}.md`)), label);
+}
+
 // Runs the scenario with tool `a` as the first, third and query side and `b` as the second and fourth. Returns what the
 // bare origin holds afterwards, read from a fresh clone of it.
 function scenario(t, a, b) {
   const f = fixture(t);
   const sub = ['--name', 'Interop first', '--objective', 'obj Café ☕', '--summary', 'sum first', '--depends-on', 'none'];
+  const first = '001-interop-first';
   step(f, a, 'new', sub);
+  published(f, 'new', 2, first, ({ fm }, l) => assert.ok(fm.status === 'pending' && fm.seq === 1, l));
   step(f, b, 'update', ['1', '--append', 'Appended by the second tool.\n- [ ] extra']);
+  published(f, 'append', 3, first, ({ fm, body }, l) => assert.ok(fm.status === 'pending' && body.includes('Appended by the second tool.\n- [ ] extra'), l));
   step(f, a, 'update', ['1', '--status', 'in_progress']);
+  published(f, 'status', 4, first, ({ fm }, l) => assert.equal(fm.status, 'in_progress', l));
   step(f, b, 'new', ['--name', 'Interop second', '--objective', 'obj two', '--summary', 'sum second', '--depends-on', '1']);
+  published(f, 'second new', 5, '002-interop-second', ({ fm }, l) => assert.ok(fm.status === 'pending' && fm.depends_on.join() === '1', l));
 
   const qa = step(f, a, 'query', ['--status', '--json']);
   const qb = step(f, b, 'query', ['--status', '--json']);
@@ -78,7 +93,11 @@ function scenario(t, a, b) {
   assert.ok(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').includes('acme/demo/backlog.db'), 'backlog.db is not committed');
   const con = db.connect(folder);
   try {
-    const rows = con.prepare('SELECT seq, slug, status, priority FROM phase ORDER BY seq').all().map(r => ({ ...r }));
+    const stored = con.prepare('SELECT seq, slug, status, priority, path, sha FROM phase ORDER BY seq').all().map(r => ({ ...r }));
+    for (const r of stored) { // the stored hash is that of the committed file (lib_db.py:452 sha256_file), whichever tool wrote it
+      assert.equal(r.sha, createHash('sha256').update(readFileSync(join(folder, r.path))).digest('hex'), `${r.slug}: sha`);
+    }
+    const rows = stored.map(({ path, sha, ...r }) => r);
     assert.deepEqual(rows, [
       { seq: 1, slug: '001-interop-first', status: 'in_progress', priority: 0 },
       { seq: 2, slug: '002-interop-second', status: 'pending', priority: 1 },

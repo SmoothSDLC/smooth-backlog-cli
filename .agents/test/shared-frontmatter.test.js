@@ -20,6 +20,10 @@
 //   make('item-shapes', {'seq': 7, 'negative': -15, 'big': 123456789, 'flag_true': True, 'flag_false': False, 'nothing': None, 'empty_list': [], 'numbers': [1,2,3]}, '# shapes\n\nLists, integers, booleans and null.\n')
 //   PY
 //
+// Review-fix fixtures (2026-10-23) came from the same make() with: item-multiline (strings with \n,
+// blank-line breaks and a trailing \n), item-escapes (\0 \e \a \v \b \f, \x7F, \x9F, \uFEFF, tab, CR)
+// and item-wrapped-lists (block-list items PyYAML wraps: plain, double-quoted with \t / \0, multiline).
+//
 // Cited source: the pinned oracle at commit ec5b254e (contract v3 lines) — lib_db.py:171-179
 // (_FM_RE + parse_front_matter) and 182-184 (write_doc); the oracle copies at
 // ~/.qwen/skills/backlog/scripts/ are content-identical for these functions.
@@ -33,7 +37,7 @@ import { fileURLToPath } from 'node:url';
 import { parse, dump } from '../../src/shared/frontmatter.js';
 
 const FIX = join(fileURLToPath(new URL('./fixtures/shared/', import.meta.url)));
-const FIXTURES = ['item-realistic', 'item-scalars', 'item-shapes'];
+const FIXTURES = ['item-realistic', 'item-scalars', 'item-shapes', 'item-multiline', 'item-escapes', 'item-wrapped-lists'];
 
 function readFixture(name) {
   return readFileSync(join(FIX, `${name}.md`), 'utf8');
@@ -205,4 +209,108 @@ test('dump: unsupported value types and non-identifier keys are clear errors', (
   assert.throws(() => dump({ a: 1.5 }, ''), /unsupported/);
   assert.throws(() => dump({ a: { b: 1 } }, ''), /unsupported/);
   assert.throws(() => dump({ 'a b': 1 }, ''), /key/);
+});
+
+// --- review fixes (Codex review 2026-10-23, job 4) ---
+
+// Runs PyYAML's safe_load over a dumped front matter; returns the parsed JSON (null when PyYAML is missing).
+function pyLoad(text) {
+  if (!pyYamlAvailable()) return undefined;
+  const out = spawnSync('python3', ['-I', '-c',
+    "import json, re, sys, yaml\n" +
+    "m = re.match(r'^---\\n(.*?)\\n---', sys.stdin.read(), re.S)\n" +
+    "sys.stdout.write(json.dumps(yaml.safe_load(m.group(1))))\n"], { input: text });
+  assert.equal(out.status, 0, `python3 failed: ${out.stderr.toString('utf8')}`);
+  return JSON.parse(out.stdout.toString('utf8'));
+}
+
+test('review P1: a quoted scalar keeps blank-line breaks (PyYAML folding: n breaks -> n-1 newlines)', () => {
+  assert.equal(parse("---\na: 'first line\n\n  second line'\n---\n").fm.a, 'first line\nsecond line');
+  assert.equal(parse("---\na: 'x\n\n\n  y'\n---\n").fm.a, 'x\n\ny');
+  assert.equal(parse('---\na: "x\n\n  y"\n---\n').fm.a, 'x\ny');
+  assert.equal(parse("---\na: 'x\n  y'\n---\n").fm.a, 'x y', 'a single break still folds to a space');
+  assert.equal(parse("---\na: 'ends\n\n  '\n---\n").fm.a, 'ends\n');
+});
+
+test('review P1: credentials in a URL never appear in a parse or dump error', () => {
+  const bad = [
+    '---\nsee https://user:token@example.com/x y\n---\n',
+    '---\nk: &https://user:token@example.com/x\n---\n',
+    '---\nk: *user:token@example.com\n---\n',
+    '---\nk: a: https://user:token@example.com/x\n---\n',
+    '---\nk:\n- {a: https://user:token@example.com/x}\n---\n',
+    '---\nk: "https://user:token@example.com/x" tail\n---\n',
+    '---\nk: "https://user:token@example.com/x \\q"\n---\n',
+    '---\nuser:token@example.com bad key: v\n---\n',
+  ];
+  for (const text of bad) {
+    let err;
+    try { parse(text); } catch (e) { err = e; }
+    assert.ok(err, `expected an error for ${JSON.stringify(text)}`);
+    assert.doesNotMatch(err.message, /token/, text);
+  }
+  assert.throws(() => dump({ 'user:token@example.com': 1 }, ''), (e) => !/token/.test(e.message));
+});
+
+test('review P1: unsupported constructs are rejected in every scalar context, never guessed', () => {
+  const cases = [
+    ['k:\n- {a: b}', /flow map/],
+    ['k: |\n  x', /block scalar/],
+    ['k: >\n  x', /block scalar/],
+    ['k:\n- |\n  x', /block scalar/],
+    ['k:\n- >\n  x', /block scalar/],
+    ['k:\n- [a, b]', /flow list/],
+    ['k:\n- &a x', /anchor/],
+    ['k:\n- *a', /alias/],
+    ['k:\n- !!str x', /tag/],
+    ['k:\n- a: b', /mapping/],
+    ['k:\n- - a', /block-list marker/],
+    ['k: a: b', /mapping/],
+    ['k: [{a: b}]', /flow map/],
+    ['k: [|]', /block scalar/],
+    ['k: # comment', /comment/],
+    ['k: a # comment', /comment/],
+  ];
+  for (const [fm, re] of cases) assert.throws(() => parse(`---\n${fm}\n---\n`), re, fm);
+  assert.deepEqual(parse('---\nk: 2026-10-22T03:39:31Z\n---\n').fm, { k: '2026-10-22T03:39:31Z' }, 'colon and # inside a word stay plain');
+  assert.deepEqual(parse('---\nk: a#b\n---\n').fm, { k: 'a#b' });
+});
+
+test('review P2: block-list items that PyYAML wraps over lines decode whole', () => {
+  const text = '---\nk:\n- "tab\\there the quick brown fox\\\n  \\ jumps over"\n- plain wrapped\n  words\n- \'one\n\n  two\'\n- next\n---\n';
+  assert.deepEqual(parse(text).fm, { k: ['tab\there the quick brown fox jumps over', 'plain wrapped words', 'one\ntwo', 'next'] });
+});
+
+test('review P2: a flow list splits only outside quotes', () => {
+  assert.deepEqual(parse('---\nk: ["a, b", c]\n---\n').fm, { k: ['a, b', 'c'] });
+  assert.deepEqual(parse("---\nk: ['a, b', \"c\\\", d\", 'it''s, ok']\n---\n").fm, { k: ['a, b', 'c", d', "it's, ok"] });
+  assert.throws(() => parse('---\nk: ["a, b]\n---\n'), /not closed/);
+  assert.throws(() => parse('---\nk: [a, ]\n---\n'), /empty/);
+});
+
+test('review P2: the double-quoted decoder reads every escape PyYAML emits', () => {
+  const fm = parse('---\nk: "\\0 \\a \\b \\t \\n \\v \\f \\r \\e \\  \\" \\/ \\\\ \\N \\_ \\L \\P \\x41 \\x7F \\u00e9 \\U0001F600"\n---\n').fm;
+  assert.equal(fm.k, '\0 \x07 \b \t \n \x0b \f \r \x1b   " / \\ \x85 \xa0 \u2028 \u2029 A \x7f é 😀');
+  assert.throws(() => parse('---\nk: "\\xZ1"\n---\n'), /escape/);
+  assert.throws(() => parse('---\nk: "\\U0011FFFF"\n---\n'), /escape/);
+  assert.throws(() => parse('---\nk: "\\q"\n---\n'), /escape/);
+});
+
+test('review P2: dump escapes characters YAML forbids or reads as line breaks; PyYAML reads back the exact string', () => {
+  const s = 'a\x7fb\x85c\u2028d\u2029e\x9ff\ufffeg\uffffh\x00i';
+  const text = dump({ s, list: [s] }, '');
+  assert.doesNotMatch(text, /[\x7f-\x9f\u2028\u2029\ufffe\uffff]/, 'no raw forbidden character reaches the file');
+  assert.deepEqual(parse(text).fm, { s, list: [s] });
+  const py = pyLoad(text);
+  if (py !== undefined) assert.deepEqual(py, { s, list: [s] });
+});
+
+test('review P2: integers outside the JavaScript safe range are errors in both directions', () => {
+  assert.equal(dump({ a: Number.MAX_SAFE_INTEGER, b: -Number.MAX_SAFE_INTEGER }, ''), '---\na: 9007199254740991\nb: -9007199254740991\n---\n');
+  assert.deepEqual(parse('---\na: 9007199254740991\nb: -9007199254740991\n---\n').fm, { a: 9007199254740991, b: -9007199254740991 });
+  for (const v of [1e21, 2 ** 53, -(2 ** 53), Infinity, NaN]) assert.throws(() => dump({ a: v }, ''), /unsupported/, String(v));
+  assert.throws(() => dump({ a: [2 ** 53] }, ''), /unsupported/);
+  for (const v of ['9007199254740992', '9007199254740993', '-9007199254740992', '1' + '0'.repeat(30)]) {
+    assert.throws(() => parse(`---\na: ${v}\n---\n`), /safe|range/, v);
+  }
 });

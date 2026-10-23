@@ -7,6 +7,11 @@
 // ints, null/~, true/false. Anything outside the subset is a clear error,
 // never a guess. dump writes that subset back, keys in the given order.
 
+import { redact } from './safety.js';
+
+// Diagnostics echo parts of the source: strip user:token@ credentials from every message.
+const err = (msg) => new Error(redact(msg));
+
 const FM_SPLIT = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/; // port of _FM_RE (lib_db.py:171-179)
 const KEY_LINE = /^([^\s:#][^:]*):(?:[ \t]+(.*))?$/; // top-level 'key:' or 'key: value'
 const IDENT = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
@@ -28,9 +33,9 @@ function parseFm(block) {
     const line = lines[i];
     if (line.trim() === '') { i += 1; continue; }
     const m = KEY_LINE.exec(line);
-    if (!m) throw new Error(`front matter line ${i + 1} is not a 'key: value' pair: ${line}`);
+    if (!m) throw err(`front matter line ${i + 1} is not a 'key: value' pair: ${line}`);
     const key = m[1].trim();
-    if (!IDENT.test(key)) throw new Error(`front matter key ${JSON.stringify(key)} is not a plain identifier`);
+    if (!IDENT.test(key)) throw err(`front matter key ${JSON.stringify(key)} is not a plain identifier`);
     const inline = (m[2] ?? '').trimStart();
     if (inline === '') {
       const next = lines[i + 1];
@@ -38,104 +43,127 @@ function parseFm(block) {
         const items = [];
         let j = i + 1;
         while (j < lines.length && /^- /.test(lines[j])) {
-          const raw = lines[j].slice(2).trim();
-          items.push(decodeScalar(raw, `a list item of '${key}'`));
-          j += 1;
+          const end = continuation(lines, j + 1); // PyYAML wraps long items over indented lines
+          const chunk = [lines[j].slice(2).trim(), ...lines.slice(j + 1, end).map((l) => l.trim())];
+          items.push(decodeValue(`a list item of '${key}'`, chunk, true));
+          j = end;
         }
         fm[key] = items;
         i = j;
       } else if (next !== undefined && /^[ \t]/.test(next)) {
-        throw new Error(`front matter key '${key}' has a nested block, which the shared-mode subset does not support`);
+        throw err(`front matter key '${key}' has a nested block, which the shared-mode subset does not support`);
       } else {
         fm[key] = null;
         i += 1;
       }
     } else {
-      let j = i + 1;
-      for (;;) {
-        const l = lines[j];
-        if (l === undefined) break;
-        if (l.trim() === '') {
-          let k = j;
-          while (k < lines.length && lines[k].trim() === '') k += 1;
-          if (k < lines.length && /^[ \t]/.test(lines[k])) j += 1;
-          else break;
-        } else if (/^[ \t]/.test(l)) {
-          j += 1;
-        } else {
-          break;
-        }
-      }
+      const j = continuation(lines, i + 1);
       const chunk = [inline, ...lines.slice(i + 1, j).map((l) => l.trim())];
-      fm[key] = decodeValue(key, chunk);
+      fm[key] = decodeValue(`the value of '${key}'`, chunk, false);
       i = j;
     }
   }
   return fm;
 }
 
-function decodeValue(key, chunk) {
-  const head = chunk[0];
-  if (head.startsWith('"') || head.startsWith("'")) return decodeQuoted(chunk, head[0], `the value of '${key}'`);
-  if (head.startsWith('[')) {
-    if (chunk.length !== 1 || !head.endsWith(']')) throw new Error(`front matter key '${key}' has a flow list that wraps over a line, which the shared-mode subset does not support`);
-    const inner = head.slice(1, -1).trim();
-    if (inner === '') return [];
-    return inner.split(',').map((part) => decodeScalar(part.trim(), `an item of '${key}'`));
+// The end of the indented lines (and blank lines followed by indented ones) that continue the value on lines[from-1].
+function continuation(lines, from) {
+  let j = from;
+  for (;;) {
+    const l = lines[j];
+    if (l === undefined) return j;
+    if (l.trim() === '') {
+      let k = j;
+      while (k < lines.length && lines[k].trim() === '') k += 1;
+      if (k < lines.length && /^[ \t]/.test(lines[k])) j += 1;
+      else return j;
+    } else if (/^[ \t]/.test(l)) {
+      j += 1;
+    } else {
+      return j;
+    }
   }
-  if (head.startsWith('{')) throw new Error(`front matter key '${key}' has a flow map, which the shared-mode subset does not support`);
-  return decodePlain(chunk.filter((p) => p !== '').join(' '));
 }
 
-const DQUOTE_ESCAPES = { '"': '"', '\\': '\\', n: '\n', t: '\t', r: '\r', b: '\b', f: '\f' };
+// YAML line folding of a flow scalar: one break is a space, n breaks are n-1 newlines.
+const foldBreaks = (s) => s.replace(/\n+/g, (b) => (b.length === 1 ? ' ' : '\n'.repeat(b.length - 1)));
+
+function decodeValue(label, chunk, inList) {
+  const head = chunk[0];
+  if (head.startsWith('"') || head.startsWith("'")) return decodeQuoted(chunk, head[0], label);
+  if (head.startsWith('[') && !inList) {
+    if (chunk.length !== 1 || !head.endsWith(']')) throw err(`front matter ${label} is a flow list that wraps over a line, which the shared-mode subset does not support`);
+    const inner = head.slice(1, -1).trim();
+    if (inner === '') return [];
+    return splitFlow(inner).map((part) => decodeScalar(part.trim(), `an item of ${label}`));
+  }
+  const text = foldBreaks(chunk.join('\n'));
+  if (text === '') throw err(`front matter ${label} is empty`);
+  return decodePlain(text);
+}
+
+// Split a flow list body at the commas outside quotes (escapes respected).
+function splitFlow(inner) {
+  const parts = [];
+  let start = 0;
+  let quote = '';
+  for (let i = 0; i < inner.length; i += 1) {
+    const c = inner[i];
+    if (quote === '"') {
+      if (c === '\\') i += 1;
+      else if (c === '"') quote = '';
+    } else if (quote === "'") {
+      if (c === "'" && inner[i + 1] === "'") i += 1;
+      else if (c === "'") quote = '';
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === ',') { parts.push(inner.slice(start, i)); start = i + 1; }
+  }
+  parts.push(inner.slice(start));
+  return parts;
+}
+
+// YAML double-quoted escapes (PyYAML ESCAPE_REPLACEMENTS) plus \xNN, \uNNNN, \UNNNNNNNN.
+const DQUOTE_ESCAPES = {
+  '0': '\0', a: '\x07', b: '\b', t: '\t', '\t': '\t', n: '\n', v: '\x0b', f: '\f', r: '\r', e: '\x1b',
+  ' ': ' ', '"': '"', '/': '/', '\\': '\\', N: '\x85', _: '\xa0', L: ' ', P: ' ',
+};
+const HEX_ESCAPES = { x: 2, u: 4, U: 8 };
 
 function decodeQuoted(chunk, quote, label) {
-  let raw = chunk.join('\n');
+  const raw = chunk.join('\n');
   let close = -1;
   for (let i = 1; i < raw.length; i += 1) {
+    if (quote === '"' && raw[i] === '\\') { i += 1; continue; } // an escape pair never closes the string
     if (raw[i] !== quote) continue;
-    if (quote === '"') {
-      let run = 0;
-      for (let k = i - 1; k >= 0 && raw[k] === '\\'; k -= 1) run += 1;
-      if (run % 2 === 0) { close = i; break; }
-    } else {
-      if (i + 1 < raw.length && raw[i + 1] === "'") i += 1; // '' is one escaped quote: skip the pair
-      else { close = i; break; }
-    }
+    if (quote === "'" && raw[i + 1] === "'") i += 1; // '' is one escaped quote: skip the pair
+    else { close = i; break; }
   }
-  if (close === -1) throw new Error(`front matter ${label} is not closed`);
-  if (!/^[ \t]*$/.test(raw.slice(close + 1))) throw new Error(`front matter ${label} has text after the closing quote`);
-  let content = raw.slice(1, close);
-  if (content.endsWith('\n')) content = content.slice(0, -1);
-  if (quote === "'") {
-    let out = '';
-    for (let i = 0; i < content.length; i += 1) {
-      if (content[i] === '\n') { out += ' '; continue; }
-      if (content[i] === "'") {
-        if (i + 1 < content.length && content[i + 1] === "'") { out += "'"; i += 1; }
-        else out += "'";
-      } else out += content[i];
-    }
-    return out;
-  }
+  if (close === -1) throw err(`front matter ${label} is not closed`);
+  if (!/^[ \t]*$/.test(raw.slice(close + 1))) throw err(`front matter ${label} has text after the closing quote`);
+  const content = raw.slice(1, close);
+  if (quote === "'") return foldBreaks(content).replaceAll("''", "'");
   let out = '';
   for (let i = 0; i < content.length; i += 1) {
     const c = content[i];
-    if (c === '\\') {
-      const nxt = content[i + 1];
-      if (nxt === '\n') { i += 1; continue; } // escaped line break: nothing
-      if (nxt === ' ') { out += ' '; i += 1; continue; } // escaped space: a single space
-      if (nxt === undefined) throw new Error(`front matter ${label} ends on a backslash`);
-      if (nxt in DQUOTE_ESCAPES) { out += DQUOTE_ESCAPES[nxt]; i += 1; continue; }
-      if (nxt === 'u') {
-        const hex = content.slice(i + 2, i + 6);
-        if (!/^[0-9a-fA-F]{4}$/.test(hex)) throw new Error(`front matter ${label} has a bad \\u escape`);
-        out += String.fromCharCode(parseInt(hex, 16)); i += 5; continue;
-      }
-      throw new Error(`front matter ${label} has an unknown escape \\${nxt}`);
+    if (c === '\n') { // plain line break: fold
+      let n = 1;
+      while (content[i + n] === '\n') n += 1;
+      out += n === 1 ? ' ' : '\n'.repeat(n - 1);
+      i += n - 1;
+      continue;
     }
-    if (c === '\n') { out += ' '; continue; } // plain line break: fold
-    out += c;
+    if (c !== '\\') { out += c; continue; }
+    const nxt = content[i + 1];
+    if (nxt === undefined) throw err(`front matter ${label} ends on a backslash`);
+    if (nxt === '\n') { i += 1; continue; } // escaped line break: nothing
+    if (nxt in DQUOTE_ESCAPES) { out += DQUOTE_ESCAPES[nxt]; i += 1; continue; }
+    if (nxt in HEX_ESCAPES) {
+      const hex = content.slice(i + 2, i + 2 + HEX_ESCAPES[nxt]);
+      const code = parseInt(hex, 16);
+      if (hex.length !== HEX_ESCAPES[nxt] || !/^[0-9a-fA-F]+$/.test(hex) || code > 0x10ffff) throw err(`front matter ${label} has a bad \\${nxt} escape`);
+      out += String.fromCodePoint(code); i += 1 + HEX_ESCAPES[nxt]; continue;
+    }
+    throw err(`front matter ${label} has an unknown escape \\${nxt}`);
   }
   return out;
 }
@@ -144,17 +172,27 @@ function decodePlain(s) {
   if (s === 'null' || s === '~') return null;
   if (s === 'true') return true;
   if (s === 'false') return false;
-  if (/^-?\d+$/.test(s)) return parseInt(s, 10);
-  if (s.startsWith('- ')) throw new Error(`front matter value ${JSON.stringify(s)} starts with a block-list marker`);
-  if (/^[&!]/.test(s)) throw new Error(`front matter value ${JSON.stringify(s)} uses an anchor or tag, which the shared-mode subset does not support`);
-  if (s.startsWith('*')) throw new Error(`front matter value ${JSON.stringify(s)} is an alias, which the shared-mode subset does not support`);
+  if (/^-?\d+$/.test(s)) {
+    const n = Number(s);
+    if (!Number.isSafeInteger(n)) throw err(`front matter integer ${s} is outside the safe range of ±${Number.MAX_SAFE_INTEGER}`);
+    return n;
+  }
+  const bad = (what) => err(`front matter value ${JSON.stringify(s)} ${what}, which the shared-mode subset does not support`);
+  if (s.startsWith('- ')) throw err(`front matter value ${JSON.stringify(s)} starts with a block-list marker`);
+  if (/^[&!]/.test(s)) throw bad('uses an anchor or tag');
+  if (s.startsWith('*')) throw bad('is an alias');
+  if (s.startsWith('{')) throw bad('is a flow map');
+  if (s.startsWith('[')) throw bad('is a flow list');
+  if (/^[|>]/.test(s)) throw bad('is a block scalar');
+  if (/^#|\s#/.test(s)) throw bad('has a comment');
+  if (/^[%@`,\]}]/.test(s) || /^\?(\s|$)/.test(s)) throw bad('starts with a YAML indicator');
+  if (/:(\s|$)/.test(s)) throw bad('is a mapping');
   return s;
 }
 
 function decodeScalar(s, label) {
-  if (s === '') throw new Error(`${label} is empty`);
+  if (s === '') throw err(`${label} is empty`);
   if (s[0] === '"' || s[0] === "'") return decodeQuoted([s], s[0], label);
-  if (s[0] === '[') throw new Error(`${label} uses a flow list, which the shared-mode subset does not support`);
   return decodePlain(s);
 }
 
@@ -162,7 +200,7 @@ function decodeScalar(s, label) {
 export function dump(fm, body) {
   const lines = [];
   for (const [key, value] of Object.entries(fm)) {
-    if (!IDENT.test(key)) throw new Error(`front matter key ${JSON.stringify(key)} is not a plain identifier`);
+    if (!IDENT.test(key)) throw err(`front matter key ${JSON.stringify(key)} is not a plain identifier`);
     if (Array.isArray(value)) {
       if (value.length === 0) {
         lines.push(`${key}: []`);
@@ -183,9 +221,11 @@ function encodeScalar(value) {
   if (value === true) return 'true';
   if (value === false) return 'false';
   if (typeof value === 'number') {
-    if (!Number.isInteger(value)) throw new Error(`unsupported front matter value type: number ${value}`);
+    // Beyond 2^53 a JavaScript number is no longer the integer YAML would read back (1e21 dumps as 1e+21, a string).
+    if (!Number.isSafeInteger(value)) throw err(`unsupported front matter value type: number ${value}`);
     return String(value);
   }
-  if (typeof value === 'string') return JSON.stringify(value);
-  throw new Error(`unsupported front matter value type: ${typeof value}`);
+  // JSON escapes cover the C0 controls; YAML also forbids DEL and C1 (a literal U+0085/2028/2029 reads as a line break) and U+FFFE/FFFF.
+  if (typeof value === 'string') return JSON.stringify(value).replace(/[\x7f-\x9f\u2028\u2029\ufffe\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  throw err(`unsupported front matter value type: ${typeof value}`);
 }

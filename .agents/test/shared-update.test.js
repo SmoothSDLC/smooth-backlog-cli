@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
+import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
@@ -282,4 +283,79 @@ test('a repository without a backlog yet: no phase, exit 1', () => {
   const r = run(f, ['1', '--status', 'done']);
   assert.equal(r.status, 1);
   assert.match(r.stdout, /^❌ no phase '1' \(run scan\.py, or new_phase\.py to create it\)\n$/);
+});
+
+// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 11)
+
+test('review P1: update holds the per-repository run lock from the pull to the push (a held lock makes it wait)', async () => {
+  const f = seed();
+  const watch = () => fm(f, '002-beta.md').fm.summary;
+  const { during, result, before } = await waitsForRunLock(f, ['update', '2', '--summary', 'locked change'], watch);
+  assert.deepEqual(during, { exited: false, same: true }, 'the command must wait while another command holds the lock');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(before, 'sum beta');
+  assert.equal(watch(), 'locked change');
+  assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
+});
+
+test('review P1: a renumbering during the commit is followed by a rescan that is committed and pushed (db and working tree current)', () => {
+  const f = seed();
+  numberClash(f);
+  const r = run(f, ['2', '--summary', 'with a clash']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /renumbered 008 -> 009/);
+  assert.equal(git(f.home, 'status', '--porcelain'), '', 'the rescanned backlog.db is committed');
+  assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
+  const pushed = pushedState(f);
+  assert.ok(pushed.slugs.includes('009-local') && !pushed.slugs.includes('008-local'), pushed.slugs.join());
+  assert.ok(pushed.files.includes('phases/009-local.md') && !pushed.files.includes('phases/008-local.md'));
+});
+
+test('review P2: --summary="two words" and --append="extra text" are options with a value, not positionals (argparse)', () => {
+  const f = seed();
+  const a = run(f, ['2', '--summary=two words']);
+  assert.equal(a.status, 0, a.stderr);
+  assert.equal(fm(f, '002-beta.md').fm.summary, 'two words');
+  const b = run(f, ['2', '--append=extra text']);
+  assert.equal(b.status, 0, b.stderr);
+  assert.match(fm(f, '002-beta.md').body, /\n\nextra text\n$/);
+  assert.equal(run(f, ['--summary=two words', '2']).status, 0); // the option may come first
+  assert.equal(run(f, ['an item', '--bogus x']).status, 2);       // an unknown option with a space is a positional: two of them are an error
+});
+
+// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 15)
+
+// An item that a team can claim: work class, review class and covering ref, estimate and a definition of done.
+function claimable(f) {
+  const r = run(f, ['2', '--set-work-class', 'app-code', '--set-review-classes', 'tests', '--set-review-refs', 'references/review/tests.md', '--set-estimate', '10', '--append', '## Definition of done\n- [ ] x']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+}
+
+test('review P1 (job 15): two processes cannot both claim an unclaimed item; a claim waits for the run lock', async () => {
+  const f = seed();
+  claimable(f);
+  const w = await waitsForRunLock(f, ['update', '2', '--claim', 'cody'], () => fm(f, '002-beta.md').fm.claimed_by);
+  assert.deepEqual(w.during, { exited: false, same: true }, 'the claim waits while another command holds the lock');
+  assert.equal(w.result.status, 0, w.result.stdout + w.result.stderr);
+  const g = seed();
+  claimable(g);
+  const both = await Promise.all(['cody', 'amy'].map(who => cliAsync(['update', '2', '--claim', who], { cwd: g.cons, tmp: g.t }).done));
+  assert.deepEqual(both.map(r => r.status).sort(), [0, 1], both.map(r => r.stdout + r.stderr).join('\n'));
+  const winner = both[0].status === 0 ? 'cody' : 'amy';
+  assert.equal(fm(g, '002-beta.md').fm.claimed_by, winner);
+  assert.equal(git(g.home, 'status', '--porcelain'), '');
+  assert.equal(git(g.home, 'rev-parse', 'origin/main'), git(g.home, 'rev-parse', 'HEAD'));
+});
+
+test('review P2 (job 15): --set-review-refs goes through checkRefs: an absolute or ..-crossing ref is refused and nothing is written', () => {
+  const f = seed();
+  const before = readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8');
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  for (const ref of ['../../outside/tests.md', '/outside/tests.md']) {
+    const r = run(f, ['5', '--set-review-refs', ref]);
+    assert.notEqual(r.status, 0, ref);
+    assert.match(r.stdout + r.stderr, /review ref .* (is absolute|contains '\.\.')/);
+  }
+  assert.equal(readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8'), before);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });

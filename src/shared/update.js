@@ -2,14 +2,14 @@
 // (update.py:327-332) in the oracle's order: pull, resolve the item, change, write the file, log the event, scan into
 // backlog.db, planning event (--priority move, completion, --replan), commit and push. The item is found by number
 // (seq) or slug, never by database row id. The team flags (update.py:27-104) go to lifecycle.js (job 15).
-// shortcut: argparse's unique-prefix abbreviations (--stat) are not accepted; no per-folder run lock around the command.
+// shortcut: argparse's unique-prefix abbreviations (--stat) are not accepted.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { closeNow, headline, missingFields, step } from './lifecycle.js';
-import { assertInside, itemSelector, redact } from './safety.js';
+import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { teamScope, uncoveredReviewClasses } from './team.js';
@@ -60,12 +60,13 @@ function parse(argv) {
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
     if (!past && tok === '--') { past = true; continue; }
-    if (past || valueLike(tok)) {
+    const [flag, eq] = tok.startsWith('--') ? tok.slice(2).split(/=(.*)/s) : [null];
+    const known = [...BOOL, ...TEAM_BOOL, ...VALUE, ...TEAM_VALUE].includes(flag); // argparse: an option, even with a space in its =value
+    if (past || (!known && valueLike(tok))) {
       if (a.phase !== undefined) throw usage(`unrecognized arguments: ${tok}`);
       a.phase = tok;
       continue;
     }
-    const [flag, eq] = tok.startsWith('--') ? tok.slice(2).split(/=(.*)/s) : [null];
     if ([...BOOL, ...TEAM_BOOL].includes(flag)) {
       if (eq !== undefined) throw usage(`argument --${flag}: ignored explicit argument ${pyStr(eq)}`);
       a[flag] = true;
@@ -104,23 +105,20 @@ export async function run(argv) {
 async function update(argv) {
   const a = parse(argv);
   const { home } = store.resolveHome();
-  await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
   let repo; let folder;
   try { repo = teamScope().repo || store.repoId(process.cwd()); folder = store.folder(home, repo); } catch (e) { return die(e.message); } // lib_db.py:122-129
-  await assertInside(home, join(folder, 'backlog.db')); // no symlink between the home and the db
-  const con = db.connect(folder);
-  let open = true;
-  const close = () => { if (open) { open = false; con.close(); } };
-  let code;
-  try { code = await change(a, con, folder, repo); } finally { close(); }
-  if (code || a['dry-run']) return code;
-  // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed
-  const renumbered = await sync.commit(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '));
-  if (renumbered.length) {
-    const again = db.connect(folder);
-    try { db.scan(again, folder, renumbered); } finally { again.close(); }
-  }
-  return 0;
+  return store.runLocked(home, repo, async () => { // update.py's run_lock: from the pull to the push
+    await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
+    const con = db.connect(folder); // refuses a link at the owner or the repository folder
+    let open = true;
+    const close = () => { if (open) { open = false; con.close(); } };
+    let code;
+    try { code = await change(a, con, folder, repo); } finally { close(); }
+    if (code || a['dry-run']) return code;
+    // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
+    await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '));
+    return 0;
+  });
 }
 
 async function change(a, con, folder, repo) {
@@ -180,6 +178,7 @@ async function change(a, con, folder, repo) {
   }
   if (a['set-review-refs'] !== undefined) {
     const refs = asList(a['set-review-refs']);
+    checkRefs(refs); // before the coverage check and any assignment
     const missing = uncoveredReviewClasses(asList(fm.review_classes), refs);
     if (missing.length) return refuse(`${row.slug}: no review ref covers ${missing.join(', ')} (references/review/<class>.md or <class>.example.md in cody-coding-model)`);
     fm.review_refs = refs;

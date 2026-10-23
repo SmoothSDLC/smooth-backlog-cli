@@ -356,3 +356,14 @@ test('second review P2: only YAML separation characters (space, tab, line breaks
   assert.throws(() => parse('---\nk: a:\tb\n---\n'), /mapping/);
   assert.throws(() => parse('---\nk: [a: b]\n---\n'), /mapping/);
 });
+
+// Review fix (third review): U+0085, U+2028 and U+2029 are YAML line breaks, so a comment or mapping after one is rejected like after \n.
+for (const [cp, name] of [['\u0085', 'U+0085'], [' ', 'U+2028'], [' ', 'U+2029']]) {
+  test(`parse: ${name} in a plain continuation line starts a comment or mapping like a newline`, () => {
+    assert.throws(() => parse(`---\nk: first\n  x${cp}#123\n---\n`), /comment/);
+    assert.throws(() => parse(`---\nk: first\n  a:${cp}b\n---\n`), /mapping/);
+    assert.throws(() => parse(`---\nk: a${cp}#b\n---\n`)); // U+2028/9 end the line for KEY_LINE already
+    assert.throws(() => parse(`---\nk: a:${cp}b\n---\n`));
+    assert.throws(() => parse(`---\nk:\n- first\n  x${cp}#123\n---\n`), /comment/);
+  });
+}

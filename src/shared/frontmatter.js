@@ -189,9 +189,10 @@ function decodePlain(s) {
   if (s.startsWith('{')) throw bad('is a flow map');
   if (s.startsWith('[')) throw bad('is a flow list');
   if (/^[|>]/.test(s)) throw bad('is a block scalar');
-  if (/^#|[ \t\r\n]#/.test(s)) throw bad('has a comment');
-  if (/^[%@`,\]}]/.test(s) || /^\?([ \t\r\n]|$)/.test(s)) throw bad('starts with a YAML indicator');
-  if (/:([ \t\r\n]|$)/.test(s)) throw bad('is a mapping');
+  // YAML breaks lines at \n, \r, U+0085, U+2028 and U+2029 (PyYAML), so all of them separate like a space.
+  if (/^#|[ \t\r\n\x85\u2028\u2029]#/.test(s)) throw bad('has a comment');
+  if (/^[%@`,\]}]/.test(s) || /^\?([ \t\r\n\x85\u2028\u2029]|$)/.test(s)) throw bad('starts with a YAML indicator');
+  if (/:([ \t\r\n\x85\u2028\u2029]|$)/.test(s)) throw bad('is a mapping');
   return s;
 }
 

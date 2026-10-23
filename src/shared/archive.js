@@ -1,0 +1,134 @@
+// Shared-mode `backlog archive` (cli-parity job 17). Port of archive.py:22-110 and its commit tail (archive.py:112-117) in the
+// oracle's order: pull, resolve the item, git mv under archive/, stamp status, mirror row and event, scan, reflow, commit and
+// push. The item is found by number (seq) or slug, never by database row id. The helpers at the top are shared with move.js.
+// shortcut: argparse's unique-prefix abbreviations (--for) are not accepted; no per-folder run lock around the command.
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import { BacklogError } from '../errors.js';
+import * as db from './db.js';
+import { assertInside, git, itemSelector, redact } from './safety.js';
+import * as store from './store.js';
+import * as sync from './sync.js';
+
+// Python repr of a str, for the oracle's `{x!r}`.
+export function pyStr(s) {
+  const q = s.includes("'") && !s.includes('"') ? '"' : "'";
+  let out = '';
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    if (ch === q || ch === '\\') out += `\\${ch}`;
+    else if (ch === '\n') out += '\\n';
+    else if (ch === '\r') out += '\\r';
+    else if (ch === '\t') out += '\\t';
+    else if (ch !== ' ' && /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Z}]/u.test(ch)) {
+      out += c < 0x100 ? `\\x${c.toString(16).padStart(2, '0')}` : c < 0x10000 ? `\\u${c.toString(16).padStart(4, '0')}` : `\\U${c.toString(16).padStart(8, '0')}`;
+    } else out += ch;
+  }
+  return q + out + q;
+}
+export const usage = message => new BacklogError('INVALID_INPUT', message); // argparse errors: exit 2
+// A token that argparse takes as a value or positional: no leading dash, a lone dash, a negative number, or a space inside.
+export const valueLike = s => s !== undefined && (!s.startsWith('-') || s === '-' || /^-(\d+|\d*\.\d+)$/.test(s) || s.includes(' '));
+export const say = text => process.stdout.write(`${redact(text)}\n`);
+export const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
+export const refuse = message => { say(`❌ ${message}`); return 1; }; // the scripts' refusals: stdout, exit 1
+
+// lib_db.py:587-595
+export function find(con, text) {
+  const sel = itemSelector(text);
+  const row = sel && (sel.number !== undefined
+    ? con.prepare("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id").get(sel.number)
+    : con.prepare('SELECT * FROM phase WHERE slug=?').get(sel.slug));
+  return row ? { ...row } : null;
+}
+
+// Pull, resolve the consuming repository's folder, open its mirror db and run fn(con, {home, repo, folder, close}); then, when fn
+// answers 0 and `tail` (the commit message: script name + first two arguments, archive.py:112-117) is given, commit and push the folder.
+export async function withBacklog(fn, tail) {
+  const { home } = store.resolveHome();
+  await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
+  let repo;
+  try { repo = store.repoId(process.cwd()); } catch (e) { return die(e.message); }
+  const folder = store.folder(home, repo);
+  await assertInside(home, join(folder, 'backlog.db')); // no symlink between the home and the db
+  const con = db.connect(folder);
+  let open = true;
+  const close = () => { if (open) { open = false; con.close(); } };
+  let code;
+  try { code = await fn(con, { home, repo, folder, close }); } finally { close(); }
+  if (code === 0 && tail) await commitFolder(home, folder, tail);
+  return code;
+}
+
+export async function commitFolder(home, folder, message) {
+  const renumbered = await sync.commit(home, folder, message);
+  if (renumbered.length) {
+    const again = db.connect(folder);
+    try { db.scan(again, folder, renumbered); } finally { again.close(); }
+  }
+}
+
+function parse(argv) { // archive.py:54-57 argparse
+  const a = {}; let past = false;
+  for (const tok of argv) {
+    if (!past && tok === '--') { past = true; continue; }
+    if (past || valueLike(tok)) {
+      if (a.phase !== undefined) throw usage(`unrecognized arguments: ${tok}`);
+      a.phase = tok;
+    } else if (tok === '--force' || tok === '--dry-run') a[tok.slice(2)] = true;
+    else throw usage(`unrecognized arguments: ${tok}`);
+  }
+  if (a.phase === undefined) throw usage('the following arguments are required: phase');
+  return a;
+}
+
+export async function run(argv) {
+  try {
+    const a = parse(argv);
+    return await withBacklog((con, ctx) => archive(a, con, ctx), a['dry-run'] ? null : ['archive.py', ...argv.slice(0, 2)].join(' '));
+  } catch (e) { return die(e.message, e instanceof BacklogError ? e.exitCode : 1); }
+}
+
+// archive.py:22-37: `status: archived` into the FRONT MATTER text of the moved file, everything else untouched.
+function stamp(path) {
+  const text = readFileSync(path, 'utf8');
+  if (!text.startsWith('---')) return;
+  const end = text.indexOf('---', 3); // text.split("---", 2)
+  if (end < 0) return;
+  const head = text.slice(3, end);
+  if (!/(?<![^\n])status:/.test(head)) return;
+  writeFileSync(path, `---${head.replace(/(?<![^\n])status:[^\n]*/, 'status: archived')}${text.slice(end)}`);
+}
+
+async function archive(a, con, { folder, close }) {
+  const row = find(con, a.phase);
+  if (!row) return refuse(`no phase ${pyStr(a.phase)}`);
+  if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived (${row.path})`); return 0; }
+  if (row.status !== 'done' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'done' — finish it or pass --force`);
+
+  const src = join(folder, row.path);
+  await assertInside(folder, src); // the row is mirror data: it names a file inside the folder, no symlink on the way
+  const from = relative(folder, resolve(src)).split('\\').join('/');
+  const to = `archive/${from}`; // the same path under archive/ (archive.py:76-77)
+  if (a['dry-run']) { say(`ℹ️  [dry-run] would git mv ${from} -> ${to} and mark ${row.slug} archived`); return 0; }
+
+  mkdirSync(join(folder, to, '..'), { recursive: true });
+  if ((await git(['mv', '--', from, to], folder)).code) { // archive.py:39-49: a file git does not track yet moves plainly
+    try { renameSync(src, join(folder, to)); } catch { return refuse(`could not move ${src}`); }
+  }
+  stamp(join(folder, to));
+  db.markArchived(con, row.slug, to);
+  const s = db.scan(con, folder); // rescan the whole stack after the lifecycle event
+  // archiving removes an item from the backlog -> planning event: re-densify the remainder to 0..M-1
+  const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
+  const order = hid === null ? [] : store.reflow(folder);
+  if (order.length) {
+    db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `archived ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
+    db.scan(con, folder);
+  }
+  close();
+  say(`📦 ${row.slug} archived -> ${to}`);
+  say(`   rescan: ${s.changed} (re)ingested, ${s.missing} missing`);
+  if (order.length) say(`   📋 planning event: backlog re-densified to ${order.length} item(s) (P0..P${order.length - 1})`);
+  return 0;
+}

@@ -58,13 +58,12 @@ function byIdent(rows, ident) {
   return hits.find(r => r.status !== 'archived') ?? hits[0] ?? null;
 }
 
-// lib_db.py:621 item_fm: the front matter of the row's file, {} when it is gone (or outside the folder). The rows give
+// lib_db.py:643 item_fm: the front matter of the row's file, {} when it is gone (or outside the folder); a parse or I/O error propagates. The rows give
 // identity and status; the files only the metadata the rows do not hold.
 function itemFm(folder, row) {
-  try {
-    const file = realpathSync(resolve(folder, String(row.path)));
-    return file.startsWith(realpathSync(folder) + sep) ? parse(readFileSync(file, 'utf8')).fm : {};
-  } catch { return {}; }
+  let file;
+  try { file = realpathSync(resolve(folder, String(row.path))); } catch (e) { if (e.code === 'ENOENT') return {}; throw e; } // only a missing file is {}
+  return file.startsWith(realpathSync(folder) + sep) ? parse(readFileSync(file, 'utf8')).fm : {};
 }
 
 // All rows of the folder's backlog.db, in id order (connect writes nothing to an up-to-date db).

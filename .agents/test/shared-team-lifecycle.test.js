@@ -7,6 +7,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -212,6 +213,25 @@ test('team.js: status and identity come from the mirror rows, the files give onl
   // and a done row is not held even when its file claims to be open
   put(2, 'b', { status: 'in_progress', claimed_by: 'cody' });
   assert.deepEqual(team.heldItems(f.folder, 'cody').map(h => h.slug), ['001-a']);
+});
+
+test('review P2: a holder whose item file has malformed front matter still blocks a second claim: the error propagates and nothing is written', () => {
+  const f = fixture();
+  const a = make(f, 'js', 'held job', ['--work-class', 'app-code']);
+  const b = make(f, 'js', 'second job', ['--work-class', 'app-code']);
+  assert.equal(update(f, [a, '--claim', 'cody']).status, 0);
+  const held = join(f.folder, 'phases', `${a}.md`);
+  writeFileSync(held, readFileSync(held, 'utf8').replace(/^claimed_by:/m, 'not a pair\nclaimed_by:'));
+  assert.throws(() => team.heldItems(f.folder, 'cody'), /not a 'key: value' pair/);
+  const files = () => readdirSync(join(f.folder, 'phases')).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8'));
+  const events = () => { const d = new DatabaseSync(join(f.folder, 'backlog.db'), { readOnly: true }); try { return d.prepare('SELECT * FROM event ORDER BY id').all().map(r => ({ ...r })); } finally { d.close(); } };
+  const [before, evBefore] = [files(), events()];
+  const out = update(f, [b, '--claim', 'cody']);
+  assert.notEqual(out.status, 0, out.stdout + out.stderr);
+  assert.deepEqual(files(), before, 'no item file changed');
+  assert.deepEqual(events(), evBefore, 'no event was logged');
+  rmSync(held);
+  assert.deepEqual(team.heldItems(f.folder, 'cody'), [], 'a genuinely missing file is {} (item_fm: p.exists() else {})');
 });
 
 test('twin parity: every lifecycle step prints, refuses and records as update.py', t => {

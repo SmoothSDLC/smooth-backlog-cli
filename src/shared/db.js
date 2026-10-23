@@ -3,14 +3,20 @@
 // its next number from MAX(seq) here) see what Node wrote. Oracle: lib_db.py SCHEMA/connect/
 // _migrate, ensure_handoff_anchor, ingest_phase, scan_stack, log_event and archive.py:89-93.
 // Synchronous like store.js. The caller closes the handle.
-import { existsSync, mkdirSync } from 'node:fs';
-import { basename, join } from 'node:path';
-import { load, now } from './store.js';
+import { createHash } from 'node:crypto';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { operation } from '../errors.js';
+import { parse } from './frontmatter.js';
+import { now } from './store.js';
 
 // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr (as store.nextSeq does).
 function sqlite() {
   const emit = process.emitWarning;
-  process.emitWarning = (w, ...a) => { if (!/sqlite/i.test(String(w))) emit.call(process, w, ...a); };
+  process.emitWarning = (w, ...a) => {
+    const type = typeof a[0] === 'string' ? a[0] : a[0]?.type ?? w?.name;
+    if (!(type === 'ExperimentalWarning' && /sqlite/i.test(String(w?.message ?? w)))) emit.call(process, w, ...a);
+  };
   try { return process.getBuiltinModule('node:sqlite'); } finally { process.emitWarning = emit; }
 }
 
@@ -37,8 +43,36 @@ CREATE TABLE IF NOT EXISTS event (
 );
 `;
 
+// store.js assertNoSymlinks (private there): target lies inside root and no component below root is a symlink.
+function assertNoSymlinks(root, target) {
+  const rel = relative(resolve(root), resolve(target));
+  operation(!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`), `Unsafe path: ${target}.`);
+  let current = resolve(root);
+  for (const part of rel.split(sep).filter(Boolean)) {
+    current = join(current, part);
+    let link;
+    try { link = lstatSync(current).isSymbolicLink(); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
+    operation(!link, `Symlink destination is unsupported: ${current}. Resolve it before using backlog.`);
+  }
+}
+
+// store.load over phases/ only: scan_stack never reads archive/, so archive content cannot block a scan.
+function loadPhases(folder) {
+  assertNoSymlinks(folder, join(folder, 'phases'));
+  let names;
+  try { names = readdirSync(join(folder, 'phases')).filter(n => n.endsWith('.md')).sort(); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+  return names.map(n => {
+    const path = `phases/${n}`;
+    assertNoSymlinks(folder, join(folder, path));
+    const text = readFileSync(join(folder, path), 'utf8');
+    const sha256 = createHash('sha256').update(text).digest('hex'); // lib_db.py:163-164
+    return { path, ...parse(text), sha256, sha: sha256 };
+  });
+}
+
 // lib_db.py connect + _migrate; the busy timeout is Python's 30 s. Opening an up-to-date db writes nothing.
 export function connect(folder) {
+  assertNoSymlinks(dirname(resolve(folder)), join(folder, 'backlog.db')); // the folder and the db file
   mkdirSync(folder, { recursive: true });
   const db = new (sqlite().DatabaseSync)(join(folder, 'backlog.db'), { timeout: 30000 });
   db.exec(SCHEMA);
@@ -91,7 +125,7 @@ export function ingest(db, item, hid = ensureAnchor(db)) {
 // lib_db.py scan_stack over phases/*.md (archive/ is not scanned): ingest what is new or changed, log
 // file_missing for every non-archived row without a file. One transaction, so a failed scan leaves the db as it was.
 // renumbered = the [old, new] pairs sync.commit returned: a row of the old number whose file is gone is the stale
-// row of a renumbered item, and is dropped (as remove.py does) so it is not reported as a ghost.
+// row of a renumbered item, and is renamed in place to the new number so it is not reported as a ghost.
 export function scan(db, folder, renumbered = []) {
   const summary = { handoff: 0, phases: 0, changed: 0, missing: 0 };
   db.exec('BEGIN');
@@ -100,12 +134,17 @@ export function scan(db, folder, renumbered = []) {
     for (const [old, next] of renumbered) {
       for (const r of db.prepare("SELECT id, slug, path, branch, commit_sha FROM phase WHERE handoff_id=? AND seq=? AND status != 'archived'").all(hid, Number(old))) {
         if (existsSync(join(folder, r.path))) continue;
-        db.prepare('DELETE FROM phase WHERE id=?').run(r.id);
+        // in place, keeping the id: the row's events stay its own (a deleted id can be reused by another item).
+        // The ingest below then sees the sha drift and logs 'reingested'.
+        const num = String(next).padStart(3, '0');
+        const slug = num + r.slug.replace(/^\d+/, '');
+        if (db.prepare('SELECT 1 FROM phase WHERE handoff_id=? AND slug=?').get(hid, slug)) continue; // unique slug: leave it to file_missing
+        db.prepare('UPDATE phase SET slug=?, seq=?, path=? WHERE id=?').run(slug, next, r.path.replace(/[^/]*$/, f => num + f.replace(/^\d+/, '')), r.id);
         logEvent(db, 'renumbered', { handoffId: hid, phaseId: Number(r.id), branch: r.branch, commitSha: r.commit_sha, note: `${r.slug} renumbered to ${String(next).padStart(3, '0')}` });
       }
     }
     const seen = new Set();
-    for (const item of load(folder).filter(i => i.path.startsWith('phases/'))) {
+    for (const item of loadPhases(folder)) {
       summary.phases += 1;
       summary.changed += Number(ingest(db, item, hid).changed);
       seen.add(item.fm.phase || basename(item.path, '.md'));
@@ -122,6 +161,7 @@ export function scan(db, folder, renumbered = []) {
 
 // archive.py:89-93: the row becomes archived at its new folder-relative path. null when the slug has no row.
 export function markArchived(db, slug, location) {
+  operation(!isAbsolute(location) && !location.split(/[/\\]/).includes('..'), `Unsafe path: ${location}.`); // folder-relative, no escape
   const r = db.prepare('SELECT * FROM phase WHERE slug=?').get(slug);
   if (!r) return null;
   db.prepare("UPDATE phase SET status='archived', path=?, updated_at=? WHERE id=?").run(location, now(), r.id);

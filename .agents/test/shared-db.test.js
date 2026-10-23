@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -281,4 +281,101 @@ test('scan(db, folder, renumbered): rows of renumbered items are replaced by the
   con = db.connect(folder2);
   assert.deepEqual(rows(con, 'SELECT slug FROM phase ORDER BY seq').map(r => r.slug), ['001-alpha', '002-beta']);
   con.close();
+});
+
+// ---------------------------------------------------------------- review fixes (job 9)
+
+test('connect: refuses a symlinked folder and a symlinked backlog.db, and writes nothing through them', t => {
+  const d = scratch(t);
+  mkdirSync(join(d, 'outside'));
+  symlinkSync(join(d, 'outside'), join(d, 'linked'));
+  assert.throws(() => db.connect(join(d, 'linked')), /Symlink destination is unsupported/);
+  assert.equal(existsSync(join(d, 'outside', 'backlog.db')), false);
+  mkdirSync(join(d, 'real'));
+  writeFileSync(join(d, 'elsewhere.db'), '');
+  symlinkSync(join(d, 'elsewhere.db'), join(d, 'real', 'backlog.db'));
+  assert.throws(() => db.connect(join(d, 'real')), /Symlink destination is unsupported/);
+  assert.equal(readFileSync(join(d, 'elsewhere.db')).length, 0);
+});
+
+test('markArchived: refuses an absolute or ..-crossing location and leaves the row alone', t => {
+  const d = scratch(t);
+  putItem(d, 1, 'a');
+  const con = db.connect(d);
+  db.scan(con, d);
+  for (const bad of ['../../outside.md', '/etc/outside.md', 'archive/../../outside.md', 'archive\\..\\..\\x.md']) {
+    assert.throws(() => db.markArchived(con, '001-a', bad), /Unsafe path/, bad);
+  }
+  assert.deepEqual(rows(con, 'SELECT status, path FROM phase'), [{ status: 'pending', path: 'phases/001-a.md' }]);
+  assert.equal(rows(con, "SELECT * FROM event WHERE event='archived'").length, 0);
+  con.close();
+});
+
+test('scan(db, folder, renumbered): the renumbered row keeps its id and its earlier events; no other item inherits them', async t => {
+  const dir = scratch(t);
+  const home = sharedBacklog(dir);
+  const bare = join(dir, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  const home2 = join(dir, 'home2');
+  git(dir, 'clone', '-q', bare, home2);
+  const folder = join(home, 'acme', 'demo'); const folder2 = join(home2, 'acme', 'demo');
+  putItem(folder2, 1, 'alpha');
+  await sync.commit(home2, folder2, 'new_phase.py --name alpha');
+  putItem(folder, 1, 'beta');
+  let con = db.connect(folder);
+  db.scan(con, folder);
+  const betaId = rows(con, "SELECT id FROM phase WHERE slug='001-beta'")[0].id;
+  con.close();
+  const renumbered = await sync.commit(home, folder, 'new_phase.py --name beta');
+  con = db.connect(folder); // the rebase replaced the tracked db file
+  db.scan(con, folder, renumbered);
+  assert.deepEqual(rows(con, "SELECT id, seq, path FROM phase WHERE slug='002-beta'"), [{ id: betaId, seq: 2, path: 'phases/002-beta.md' }]);
+  const alphaId = rows(con, "SELECT id FROM phase WHERE slug='001-alpha'")[0].id;
+  assert.notEqual(alphaId, betaId);
+  const evOf = id => rows(con, 'SELECT event FROM event WHERE phase_id=? ORDER BY id', id).map(e => e.event);
+  assert.deepEqual(evOf(alphaId), ['ingested']);
+  assert.deepEqual(evOf(betaId), ['ingested', 'renumbered', 'reingested']);
+  con.close();
+});
+
+test('scan: unsupported archive front matter cannot block the scan of the active items', t => {
+  const d = scratch(t);
+  putItem(d, 1, 'a');
+  mkdirSync(join(d, 'archive', 'phases'), { recursive: true });
+  writeFileSync(join(d, 'archive', 'phases', '002-bad.md'), '---\nphase: 002-bad\nnested:\n  key: 1\n---\nbody\n');
+  scanned(d, (con, s) => {
+    assert.deepEqual(s, { handoff: 0, phases: 1, changed: 1, missing: 0 });
+    assert.deepEqual(rows(con, 'SELECT slug FROM phase').map(r => r.slug), ['001-a']);
+  });
+});
+
+test('scan: an active item that is a symlink is still refused', t => {
+  const d = scratch(t);
+  mkdirSync(join(d, 'phases'), { recursive: true });
+  writeFileSync(join(d, 'outside.md'), '---\nphase: x\n---\n');
+  symlinkSync(join(d, 'outside.md'), join(d, 'phases', '001-x.md'));
+  const con = db.connect(d);
+  assert.throws(() => db.scan(con, d), /Symlink destination is unsupported/);
+  con.close();
+});
+
+test('node:sqlite warning filter drops only an ExperimentalWarning that mentions SQLite; other warnings stay visible', () => {
+  const d = mkdtempSync(join(tmpdir(), 'db-warn-'));
+  try {
+    const script = `
+      const seen = [];
+      process.emitWarning = (w, ...a) => seen.push([typeof w === 'string' ? w : w.message, typeof a[0] === 'string' ? a[0] : a[0]?.type]);
+      const real = process.getBuiltinModule;
+      process.getBuiltinModule = id => {
+        process.emitWarning('SQLite is an experimental feature', 'ExperimentalWarning');
+        process.emitWarning('sqlite thing is deprecated', 'DeprecationWarning');
+        process.emitWarning('another experimental feature', 'ExperimentalWarning');
+        return real.call(process, id);
+      };
+      const m = await import(process.argv[1]);
+      m.connect(process.argv[2]).close();
+      console.log(JSON.stringify(seen));`;
+    const r = spawnSync(process.execPath, ['-e', script, DB, d], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), [['sqlite thing is deprecated', 'DeprecationWarning'], ['another experimental feature', 'ExperimentalWarning']]);
+  } finally { rmSync(d, { recursive: true, force: true }); }
 });

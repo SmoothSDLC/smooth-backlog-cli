@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -177,9 +177,9 @@ function gate(f) {
 }
 const scripts = process.env.SMOOTH_BACKLOG_SCRIPTS || join(process.env.HOME || '', 'git', 'smoothsdlc-backlog', 'skill', 'backlog', 'scripts');
 const oracle = () => existsSync(join(scripts, 'new_phase.py')) && spawnSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }).status === 0;
-const pyNewPhase = (f, home, cons) => new Promise(done => { // async: new_phase.py runs while Node is mid-commit
+const pyNewPhase = (f, home, cons) => new Promise(done => { // async: new_phase.py runs while Node is mid-commit; it needs a resolved BACKLOG_HOME (lib_db.py:453)
   const p = spawn('python3', [join(scripts, 'new_phase.py'), '--name', 'Pyitem', '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
-    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: home }, stdio: ['ignore', 'pipe', 'pipe'] });
+    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: realpathSync(home) }, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; p.stdout.on('data', c => { out += c; }); p.stderr.on('data', c => { out += c; });
   p.on('close', status => done({ status, out }));
 });

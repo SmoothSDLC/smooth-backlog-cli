@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,7 +20,8 @@ const unbuilt = name => !existsSync(join(SRC, 'shared', name));
 function pair(t) {
   const tmp = mkdtempSync(join(tmpdir(), 'mode-test-'));
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
-  return { tmp, home: sharedBacklog(tmp), cons: consumer(tmp, 'acme', 'demo', 'main') };
+  // realpath: the home record holds the resolved path (set_home.py), and macOS tmpdir() is under the /var symlink
+  return { tmp, home: realpathSync(sharedBacklog(tmp)), cons: consumer(tmp, 'acme', 'demo', 'main') };
 }
 const recordFile = tmp => join(tmp, 'config', 'smoothsdlc-backlog', 'home');
 const modeFile = tmp => join(tmp, 'config', 'smooth-backlog-cli', 'mode.json');

@@ -4,7 +4,7 @@
 // The surface is synchronous (spawnSync, tmp + rename) so sync and async callers can use it.
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { operation } from '../errors.js';
@@ -25,7 +25,8 @@ export function resolveHome() {
     try { home = readFileSync(join(configDir(), 'smoothsdlc-backlog', 'home'), 'utf8').trim(); } catch { /* no record */ }
   }
   home = resolve(expand(home || '~/git/smoothsdlc-backlog'));
-  if (existsSync(home)) return { home, ask: null };
+  // Symlinks above the home (macOS /var, a linked ~) are resolved once here; a link AT the home is kept for validateHome to refuse.
+  if (existsSync(home)) return { home: join(realpathSync(dirname(home)), basename(home)), ask: null };
   const sh = join(process.env.SMOOTH_BACKLOG_SCRIPTS || join(homedir(), 'git', 'smoothsdlc-backlog', 'skill', 'backlog', 'scripts'), 'set_home.py');
   return {
     home,

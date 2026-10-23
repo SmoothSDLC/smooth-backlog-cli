@@ -3,7 +3,7 @@
 // clones under <tmp>, with BACKLOG_HOME and XDG_CONFIG_HOME inside the test's
 // temp dir - never the real backlog repository or ~/.config.
 // Model: the Python skill's tests/conftest.py:1-60.
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -104,7 +104,8 @@ export function py(script, args = [], opts = {}) {
   if (!existsSync(scriptPath) || !pyyamlAvailable()) return null;
   const p = spawnSync('python3', [scriptPath, ...args], {
     cwd: opts.cwd,
-    env: { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
+    // The oracle compares Path.resolve() with an unresolved BACKLOG_HOME (lib_db.py:453), so it gets the real path of a symlinked tmp (macOS /var).
+    env: { ...process.env, ...(opts.tmp ? env(realpathSync(opts.tmp)) : {}), ...opts.env },
     stdin: 'ignore',
     encoding: 'utf8',
     timeout: opts.timeout ?? 300000,

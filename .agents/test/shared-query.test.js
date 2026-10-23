@@ -5,7 +5,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
@@ -196,7 +196,7 @@ test('a read view pulls first: an item pushed from another clone is shown, and n
   if (f.noOracle) return t.skip('oracle not configured');
   const home2 = join(f.t, 'home2');
   git(f.t, 'clone', '-q', join(f.t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2);
-  const r = py('new_phase.py', ['--name', 'Pushed', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_HOME: home2 } });
+  const r = py('new_phase.py', ['--name', 'Pushed', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_HOME: realpathSync(home2) } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const before = git(f.home, 'rev-parse', 'HEAD');
   const n = cli(['query', '--status', '--json'], { cwd: f.cons, tmp: f.t });

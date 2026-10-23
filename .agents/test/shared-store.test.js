@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync,
+  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
@@ -77,10 +77,10 @@ test('resolveHome: BACKLOG_HOME > home record > ~/git/smoothsdlc-backlog; a miss
   mkdirSync(homeA); mkdirSync(homeB);
   mkdirSync(join(d, 'config', 'smoothsdlc-backlog'), { recursive: true });
   withEnv(t, { HOME: join(d, 'home'), XDG_CONFIG_HOME: join(d, 'config'), BACKLOG_HOME: homeA, SMOOTH_BACKLOG_SCRIPTS: '/scripts' });
-  assert.deepEqual(store.resolveHome(), { home: homeA, ask: null });
+  assert.deepEqual(store.resolveHome(), { home: realpathSync(homeA), ask: null });
   delete process.env.BACKLOG_HOME;
   writeFileSync(join(d, 'config', 'smoothsdlc-backlog', 'home'), `${homeB}\n`);
-  assert.deepEqual(store.resolveHome(), { home: homeB, ask: null });
+  assert.deepEqual(store.resolveHome(), { home: realpathSync(homeB), ask: null });
   rmSync(join(d, 'config', 'smoothsdlc-backlog', 'home'));
   const dflt = join(d, 'home', 'git', 'smoothsdlc-backlog');
   const missing = store.resolveHome();
@@ -92,7 +92,7 @@ test('resolveHome: BACKLOG_HOME > home record > ~/git/smoothsdlc-backlog; a miss
     + `'python3 /scripts/set_home.py --clone [<path>]', and run this command again.`, 'lib_db.py:81-85');
   assert.equal(existsSync(dflt), false, 'never clones');
   mkdirSync(dflt, { recursive: true });
-  assert.deepEqual(store.resolveHome(), { home: dflt, ask: null });
+  assert.deepEqual(store.resolveHome(), { home: realpathSync(dflt), ask: null });
 });
 
 // ---------------------------------------------------------------- getMode / setMode

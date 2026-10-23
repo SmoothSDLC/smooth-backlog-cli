@@ -160,7 +160,7 @@ export async function run(argv) {
     if (a.next) {
       const r = all(OPEN, hid).find(x => !excluded.has(x.id) && (a.all || ((x.repository || '') === repo && (x.branch || '') === branch)));
       if (!r) {
-        say(a.json ? '{}' : `ℹ️  no actionable item for ${repo}${a.all ? '' : `, branch ${branch}; --all shows every branch`}`);
+        say(a.json ? '{}' : `ℹ️  no actionable item for ${repo}${a.all ? '' : `, branch ${redact(branch)}; --all shows every branch`}`);
         return 0;
       }
       if (a.json) { dump(r); return 0; }
@@ -226,11 +226,11 @@ export async function run(argv) {
       }
     }
     if (a.json) {
-      dump({ handoff: h, repository: repo, branch, phases: rows, gone_branch_items: gone, findings: bad });
+      dump({ handoff: h, repository: repo, branch: redact(branch), phases: rows, gone_branch_items: gone, findings: bad });
       return 0;
     }
     criticalBanner(critical());
-    say(`📋 ${repo} — branch ${a.all ? '(all)' : branch} — ${folder}`);
+    say(`📋 ${repo} — branch ${a.all ? '(all)' : redact(branch)} — ${folder}`);
     say(`   objective: ${h.objective}`);
     say(`   phases (${rows.length}) — work queue order, P0 = next:`);
     for (const r of rows) {

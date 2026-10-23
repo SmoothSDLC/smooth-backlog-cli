@@ -23,7 +23,7 @@ const narrower = (a, b) => (RANK[a] <= RANK[b] ? a : b);
 
 const repr = s => redact(s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}'`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
-const say = text => process.stdout.write(`${text}\n`);
+const say = text => process.stdout.write(`${redact(text)}\n`); // the agent and the branch are echoed input
 // Python json.dumps(): ", " and ": " separators, every non-ASCII UTF-16 unit escaped.
 const dumps = v => (v !== null && typeof v === 'object'
   ? (Array.isArray(v) ? `[${v.map(dumps).join(', ')}]` : `{${Object.entries(v).map(([k, x]) => `${dumps(k)}: ${dumps(x)}`).join(', ')}}`)

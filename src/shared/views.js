@@ -6,6 +6,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { missingFields } from './lifecycle.js';
+import { redact } from './safety.js';
 import * as store from './store.js';
 import * as team from './team.js';
 
@@ -107,7 +108,7 @@ export function teamView(a, { all, hid, excluded, repo, branch, folder, home, io
       dump(found.map(({ r, fm, undone }) => ({ ...r, ...Object.fromEntries(JSON_FIELDS.map(k => [k, fm[k] ?? null])), waiting_on: waitingOn(undone) })));
       return 0;
     }
-    const where = a.all ? '(all)' : scope === 'branch' ? branch : `(scope ${scope})`;
+    const where = a.all ? '(all)' : scope === 'branch' ? redact(branch) : `(scope ${scope})`;
     say(`📋 ${found.length} ${a.claimable ? 'claimable' : a.reviewable ? 'reviewable' : 'blocked'} item(s) — ${repo}, branch ${where}, P0 = next:`);
     for (const { r, fm, undone, f } of found) {
       say(`   P${String(r.priority).padEnd(3)} ${r.slug} (${r.status}) — ${r.name}${f === repo ? '' : `  [repository ${f}]`}`);

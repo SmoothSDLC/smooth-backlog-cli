@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +30,8 @@ function scratch(t) {
   for (const [k, v] of Object.entries(GIT_IDENTITY)) { const old = process.env[k]; process.env[k] = v; t.after(() => { if (old === undefined) delete process.env[k]; else process.env[k] = old; }); }
   return dir;
 }
+// A folder in the <home>/<owner>/<name> layout, as the containment check of connect expects.
+const inHome = t => { const d = join(scratch(t), 'acme', 'demo'); mkdirSync(d, { recursive: true }); return d; };
 // The shared home, a consumer (origin acme/demo, branch main) and the item folder.
 function fixture(t) {
   const dir = scratch(t);
@@ -77,7 +79,7 @@ test('connect: creates <folder>/backlog.db with the schema of lib_db.py SCHEMA (
 });
 
 test('connect: opening an existing database writes nothing (the tracked file stays byte-identical)', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   db.connect(d).close();
   const before = readFileSync(join(d, 'backlog.db'));
   db.connect(d).close();
@@ -97,7 +99,7 @@ test('connect: migrates a committed database that lacks severity and repository 
 });
 
 test('ensureAnchor: one synthetic BACKLOG row, created once, id returned each time', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   const con = db.connect(d);
   const id = db.ensureAnchor(con);
   assert.equal(db.ensureAnchor(con), id);
@@ -109,7 +111,7 @@ test('ensureAnchor: one synthetic BACKLOG row, created once, id returned each ti
 // ---------------------------------------------------------------- ingest / scan
 
 test('ingest: new file -> row (integers stay integers) and an "ingested" event; same sha -> nothing; changed sha -> "reingested"', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   const con = db.connect(d);
   putItem(d, 3, 'x', { size_score: 2, completed: '2026-10-23T01:00:00Z' });
   const it = store.load(d)[0];
@@ -135,7 +137,7 @@ test('ingest: new file -> row (integers stay integers) and an "ingested" event; 
 });
 
 test('ingest: missing keys take the lib_db.py defaults (seq 0, status pending, priority 50, slug from the file name)', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   const con = db.connect(d);
   store.write({ path: join(d, 'phases', '009-bare.md'), fm: { name: 'Bare' }, body: 'x\n' });
   db.ingest(con, store.load(d)[0]);
@@ -145,7 +147,7 @@ test('ingest: missing keys take the lib_db.py defaults (seq 0, status pending, p
 });
 
 test('scan: ingests phases/*.md only (archive/ is not scanned), reports the summary, is idempotent', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   putItem(d, 1, 'a'); putItem(d, 2, 'b');
   putItem(d, 3, 'old', { status: 'archived' }, 'archive/phases/003-old.md');
   scanned(d, (con, s) => {
@@ -157,7 +159,7 @@ test('scan: ingests phases/*.md only (archive/ is not scanned), reports the summ
 });
 
 test('scan: a row whose file is gone logs file_missing on every scan; an archived row does not', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   putItem(d, 1, 'a'); putItem(d, 2, 'b');
   scanned(d);
   rmSync(join(d, 'phases', '001-a.md'));
@@ -172,7 +174,7 @@ test('scan: a row whose file is gone logs file_missing on every scan; an archive
 });
 
 test('markArchived: status archived, new path, updated_at, an "archived" event; an unknown slug changes nothing', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   putItem(d, 1, 'a', { commit: 'c0ffee1' });
   const con = db.connect(d);
   db.scan(con, d);
@@ -188,7 +190,7 @@ test('markArchived: status archived, new path, updated_at, an "archived" event; 
 test('node:sqlite prints no ExperimentalWarning to stderr', () => {
   const d = mkdtempSync(join(tmpdir(), 'db-warn-'));
   try {
-    const r = spawnSync(process.execPath, ['-e', 'const m = await import(process.argv[1]); const c = m.connect(process.argv[2]); m.scan(c, process.argv[2]); c.close();', DB, d], { encoding: 'utf8' });
+    const r = spawnSync(process.execPath, ['-e', 'const m = await import(process.argv[1]); const c = m.connect(process.argv[2]); m.scan(c, process.argv[2]); c.close();', DB, join(d, 'acme', 'demo')], { encoding: 'utf8' });
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stderr, '');
   } finally { rmSync(d, { recursive: true, force: true }); }
@@ -299,7 +301,7 @@ test('connect: refuses a symlinked folder and a symlinked backlog.db, and writes
 });
 
 test('markArchived: refuses an absolute or ..-crossing location and leaves the row alone', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   putItem(d, 1, 'a');
   const con = db.connect(d);
   db.scan(con, d);
@@ -338,7 +340,7 @@ test('scan(db, folder, renumbered): the renumbered row keeps its id and its earl
 });
 
 test('scan: unsupported archive front matter cannot block the scan of the active items', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   putItem(d, 1, 'a');
   mkdirSync(join(d, 'archive', 'phases'), { recursive: true });
   writeFileSync(join(d, 'archive', 'phases', '002-bad.md'), '---\nphase: 002-bad\nnested:\n  key: 1\n---\nbody\n');
@@ -349,7 +351,7 @@ test('scan: unsupported archive front matter cannot block the scan of the active
 });
 
 test('scan: an active item that is a symlink is still refused', t => {
-  const d = scratch(t);
+  const d = inHome(t);
   mkdirSync(join(d, 'phases'), { recursive: true });
   writeFileSync(join(d, 'outside.md'), '---\nphase: x\n---\n');
   symlinkSync(join(d, 'outside.md'), join(d, 'phases', '001-x.md'));
@@ -374,8 +376,17 @@ test('node:sqlite warning filter drops only an ExperimentalWarning that mentions
       const m = await import(process.argv[1]);
       m.connect(process.argv[2]).close();
       console.log(JSON.stringify(seen));`;
-    const r = spawnSync(process.execPath, ['-e', script, DB, d], { encoding: 'utf8' });
+    const r = spawnSync(process.execPath, ['-e', script, DB, join(d, 'acme', 'demo')], { encoding: 'utf8' });
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(JSON.parse(r.stdout), [['sqlite thing is deprecated', 'DeprecationWarning'], ['another experimental feature', 'ExperimentalWarning']]);
   } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+test('review P1: connect refuses a symlinked owner folder (<home>/<owner>) before any database is created or migrated outside', t => {
+  const d = scratch(t);
+  mkdirSync(join(d, 'home'));
+  mkdirSync(join(d, 'outside'));
+  symlinkSync(join(d, 'outside'), join(d, 'home', 'acme'));
+  assert.throws(() => db.connect(join(d, 'home', 'acme', 'demo')), /Symlink destination is unsupported/);
+  assert.deepEqual(readdirSync(join(d, 'outside')), [], 'no folder and no database outside the backlog clone');
 });

@@ -4,11 +4,12 @@
 // _migrate, ensure_handoff_anchor, ingest_phase, scan_stack, log_event and archive.py:89-93.
 // Synchronous like store.js. The caller closes the handle.
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { basename, isAbsolute, join } from 'node:path';
 import { operation } from '../errors.js';
 import { parse } from './frontmatter.js';
-import { now } from './store.js';
+import { assertFolder, assertNoSymlinks, now } from './store.js';
+import { commit } from './sync.js';
 
 // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr (as store.nextSeq does).
 function sqlite() {
@@ -43,19 +44,6 @@ CREATE TABLE IF NOT EXISTS event (
 );
 `;
 
-// store.js assertNoSymlinks (private there): target lies inside root and no component below root is a symlink.
-function assertNoSymlinks(root, target) {
-  const rel = relative(resolve(root), resolve(target));
-  operation(!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`), `Unsafe path: ${target}.`);
-  let current = resolve(root);
-  for (const part of rel.split(sep).filter(Boolean)) {
-    current = join(current, part);
-    let link;
-    try { link = lstatSync(current).isSymbolicLink(); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
-    operation(!link, `Symlink destination is unsupported: ${current}. Resolve it before using backlog.`);
-  }
-}
-
 // store.load over phases/ only: scan_stack never reads archive/, so archive content cannot block a scan.
 function loadPhases(folder) {
   assertNoSymlinks(folder, join(folder, 'phases'));
@@ -72,7 +60,8 @@ function loadPhases(folder) {
 
 // lib_db.py connect + _migrate; the busy timeout is Python's 30 s. Opening an up-to-date db writes nothing.
 export function connect(folder) {
-  assertNoSymlinks(dirname(resolve(folder)), join(folder, 'backlog.db')); // the folder and the db file
+  assertFolder(folder); // <home>/<owner>/<name>: no link at the owner or the name
+  assertNoSymlinks(folder, join(folder, 'backlog.db'));
   mkdirSync(folder, { recursive: true });
   const db = new (sqlite().DatabaseSync)(join(folder, 'backlog.db'), { timeout: 30000 });
   db.exec(SCHEMA);
@@ -167,4 +156,16 @@ export function markArchived(db, slug, location) {
   db.prepare("UPDATE phase SET status='archived', path=?, updated_at=? WHERE id=?").run(location, now(), r.id);
   logEvent(db, 'archived', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch, commitSha: r.commit_sha, note: `${r.slug} -> ${location}` });
   return { id: Number(r.id), slug };
+}
+
+// sync.commit, then scan and commit again until no renumbering remains (a rescan after the push would leave the db dirty).
+// Resolves to every [old, new] pair renumbered on the way.
+export async function commitSettled(home, folder, message) {
+  const all = [];
+  for (let pairs = await commit(home, folder, message); pairs.length; pairs = await commit(home, folder, message)) {
+    all.push(...pairs);
+    const again = connect(folder);
+    try { scan(again, folder, pairs); } finally { again.close(); }
+  }
+  return all;
 }

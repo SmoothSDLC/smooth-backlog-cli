@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
@@ -89,7 +89,7 @@ test('refusal: a dependency that is in the backlog passes, a split source that i
   assert.equal(node(f, [...BASE, '--depends-on', '001-alpha-job, none']).status, 1); // 'none' inside a list is a slug nobody has
 });
 
-test('refusal: the item file exists without --force (a mirror row that hides the number), --force replaces it', t => {
+test('a stale mirror cannot hand out a used number: nextSeq looks at the files too', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0);
   const second = node(f, NONE);
@@ -260,4 +260,55 @@ git -C "${other}" add -A && git -C "${other}" commit -q -m bravo && git -C "${ot
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   assert.deepEqual(rows(f, 'SELECT slug, seq FROM phase ORDER BY seq'), [{ slug: '001-bravo', seq: 1 }, { slug: '002-alpha-job', seq: 2 }]); // the stale 001 row moved on to 002, no ghost
   assert.deepEqual(store.findings(f.folder).ghost, []);
+});
+
+// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 10)
+
+test('review P1: a symlinked owner folder in the home is refused before any database or item write', t => {
+  const f = fixture(t);
+  const outside = join(f.dir, 'outside');
+  mkdirSync(outside);
+  try { symlinkSync(outside, join(f.home, 'acme')); } catch (e) { t.skip(`cannot create a symlink here: ${e.code}`); return; }
+  const r = node(f, NONE);
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout + r.stderr, /Symlink destination is unsupported/);
+  assert.deepEqual(readdirSync(outside), [], 'nothing was written outside the backlog clone');
+});
+
+test('review P2: review refs go through checkRefs: an absolute or ..-crossing ref is refused and nothing is persisted', t => {
+  const f = fixture(t);
+  for (const ref of ['../../outside/code.md', '/outside/code.md']) {
+    const r = node(f, [...NONE, '--review-classes', 'code', '--review-refs', ref, '--body', '## Definition of done\n- [ ] x']);
+    assert.equal(r.status, 2, ref);
+    assert.match(r.stderr, /review ref .* (is absolute|contains '\.\.')/);
+  }
+  assert.deepEqual(items(f), []);
+  assert.ok(!existsSync(join(f.folder, 'backlog.db')), 'the database is not even opened');
+});
+
+test('review P2: a file with the name of the next item is a collision: refused without --force and left intact, replaced with --force', t => {
+  const f = fixture(t);
+  const path = join(f.folder, 'phases', '001-alpha-job.md');
+  mkdirSync(join(f.folder, 'phases'), { recursive: true });
+  const seeded = '---\nphase: 001-alpha-job\n---\nSEEDED BODY\n'; // no seq and no mirror row: the number 1 is handed out again
+  writeFileSync(path, seeded);
+  const refused = node(f, NONE);
+  assert.equal(refused.status, 1, refused.stderr);
+  assert.equal(refused.stdout, '❌ phases/001-alpha-job.md exists (pass --force)\n');
+  assert.equal(readFileSync(path, 'utf8'), seeded);
+  const forced = node(f, [...NONE, '--force']);
+  assert.equal(forced.status, 0, forced.stderr);
+  const [item] = items(f);
+  assert.equal(item.fm.seq, 1);
+  assert.ok(!item.body.includes('SEEDED BODY'));
+});
+
+test('review P2: the skills class is accepted as work class and review class, with a covering skills.md ref; the fields are persisted', t => {
+  const f = fixture(t);
+  const r = node(f, [...NONE, '--work-class', 'skills', '--review-classes', 'skills', '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const [item] = items(f);
+  assert.deepEqual([item.fm.work_class, item.fm.review_classes, item.fm.review_refs], [['skills'], ['skills'], ['references/review/skills.md']]);
+  const o = oracle(t, fixture(t, 'new-oracle-'), [...NONE, '--work-class', 'skills', '--review-classes', 'skills', '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
+  if (o) assert.equal(o.status, 0, o.stdout + o.stderr);
 });

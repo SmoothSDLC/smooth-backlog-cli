@@ -3,12 +3,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { input } from '../errors.js';
-import { locked } from '../storage.js';
-import { connect, ensureAnchor, logEvent, scan } from './db.js';
+import { commitSettled, connect, ensureAnchor, logEvent, scan } from './db.js';
 import { parse } from './frontmatter.js';
-import { assertInside, git, itemSelector, redact, slugify } from './safety.js';
-import { branch as callerBranch, folder as repoFolder, nextSeq, now, reflow, repoId, resolveHome, write } from './store.js';
-import { commit, pull } from './sync.js';
+import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
+import { branch as callerBranch, folder as repoFolder, nextSeq, now, reflow, repoId, resolveHome, runLocked, write } from './store.js';
+import { pull } from './sync.js';
 import { teamScope } from './team.js';
 
 const WORK_CLASSES = ['app-code', 'ui', 'api', 'tests', 'iac', 'network', 'identity', 'security', 'data', 'delivery', 'verify', 'docs', 'contract', 'chunk', 'skills']; // lib_db.py:601
@@ -86,8 +85,7 @@ export async function run(argv) {
     const team = teamScope();
     const repo = team.repo || repoId(process.cwd());
     const folder = repoFolder(home, repo);
-    // one changing command at a time per repository folder (lib_db.py:341-345); a name of its own, Python's lock is a flock
-    return await locked(join(home, '.git', `smooth-backlog-cli-run-${repo.replace('/', '__')}.lock`), async () => {
+    return await runLocked(home, repo, async () => {
       await pull(home);
       return await create(argv, { home, folder, repo, team });
     });
@@ -106,6 +104,7 @@ async function create(argv, { home, folder, repo, team }) {
   const work = parseClasses(a.workClass, WORK_CLASSES, '--work-class');
   const review = parseClasses(a.reviewClasses, REVIEW_CLASSES, '--review-classes');
   const refs = asList(a.reviewRefs);
+  checkRefs(refs); // before the coverage check and before any database access
   const missing = uncovered(review, refs);
   if (missing.length) return refuse(`--review-refs must cover every review class; uncovered: ${missing.join(', ')} (e.g. references/review/${missing[0]}.md in cody-coding-model)`);
   if (!hasDefinitionOfDone(a.body) && (team.repo || review.length)) {
@@ -172,12 +171,8 @@ async function create(argv, { home, folder, repo, team }) {
 
   // every change is committed and pushed at once (new_phase.py:187-192); a file renumbered on the way is scanned and committed again
   const message = ['new', ...argv.slice(0, 2)].join(' ');
-  let renumbered = await commit(home, folder, message);
-  while (renumbered.length) {
-    for (const [old, next] of renumbered) if (old === seq) { seq = next; slug = pad(next) + slug.replace(/^\d+/, ''); rel = `phases/${slug}.md`; }
-    const again = connect(folder);
-    try { scan(again, folder, renumbered); } finally { again.close(); }
-    renumbered = await commit(home, folder, message);
+  for (const [old, next] of await commitSettled(home, folder, message)) {
+    if (old === seq) { seq = next; slug = pad(next) + slug.replace(/^\d+/, ''); rel = `phases/${slug}.md`; }
   }
 
   if (severity === 'critical') {

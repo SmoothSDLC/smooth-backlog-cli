@@ -485,3 +485,26 @@ test('reorder and reflow (oracle): the same operations on identical fixtures giv
   store.reflow(b.f.folder, { slug: slugs[4], target: 99 });
   assert.deepEqual(prioritiesOf(b.f.folder, files), prioritiesOf(a.f.folder, files), 'reflow clamps the target');
 });
+
+// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 5, second review)
+
+test('review P1: a symlinked repository folder or owner folder is refused from the home by load, reflow, nextSeq, findings and write; nothing outside is touched', t => {
+  for (const owner of [true, false]) {
+    const d = scratch(t);
+    const outside = join(d, 'outside');
+    putItem(outside, item(1, { priority: 5 }), owner ? 'demo/phases/001-i1.md' : 'phases/001-i1.md');
+    const victim = join(outside, owner ? 'demo/phases/001-i1.md' : 'phases/001-i1.md');
+    const before = sha256File(victim);
+    mkdirSync(join(d, 'home', 'acme'), { recursive: true });
+    if (!link(t, outside, join(d, 'home', owner ? 'acme-link' : 'acme/demo'))) return;
+    const folder = owner ? join(d, 'home', 'acme-link', 'demo') : join(d, 'home', 'acme', 'demo');
+    assert.throws(() => store.load(folder), /Symlink/);
+    assert.throws(() => store.reflow(folder), /Symlink/);
+    assert.throws(() => store.reorder(folder, ['1']), /Symlink/);
+    assert.throws(() => store.nextSeq(folder), /Symlink/);
+    assert.throws(() => store.findings(folder), /Symlink/);
+    assert.throws(() => store.write({ path: join(folder, 'phases', '002-new.md'), fm: item(2), body: '' }, folder), /Symlink/);
+    assert.equal(sha256File(victim), before, 'the file outside the backlog is unchanged');
+    assert.deepEqual(readdirSync(join(outside, owner ? 'demo/phases' : 'phases')), ['001-i1.md'], 'nothing was created outside');
+  }
+});

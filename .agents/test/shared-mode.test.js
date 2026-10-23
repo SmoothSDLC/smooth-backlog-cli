@@ -5,12 +5,13 @@
 // test's temp dir. Parity tests run the oracle and skip without SMOOTH_BACKLOG_SCRIPTS or PyYAML.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cli, consumer, env, py, sharedBacklog } from './shared-fixtures.js';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { fixture } from './helpers.js';
 
 const SRC = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src'));
@@ -76,14 +77,108 @@ test('--use-backlog-repo refuses a missing path (exit 2) and a clone that cannot
   assert.equal(read(modeFile(f.tmp)), null);
 });
 
-test('mode options need a value, exclude each other and stand alone: exit 2', t => {
+test('mode options need a value and exclude each other: exit 2', t => {
   const f = pair(t);
-  for (const argv of [['--use-backlog-repo'], ['--use-backlog-repo', f.home, '--use-local-repo'], ['--use-local-repo', 'next'], ['--use-backlog-repo', f.home, 'next']]) {
+  for (const argv of [['--use-backlog-repo'], ['--use-backlog-repo', f.home, '--use-local-repo']]) {
     const r = cli(argv, { cwd: f.cons, tmp: f.tmp });
     assert.equal(r.status, 2, argv.join(' '));
     assert.match(r.stderr, /^INVALID_INPUT: /);
   }
   assert.equal(read(modeFile(f.tmp)), null);
+});
+
+test('global mode options before a command switch first, then run the command (contract section 1)', t => {
+  const f = pair(t);
+  const r = cli(['--use-backlog-repo', f.home, 'query', '--status'], { cwd: f.cons, tmp: f.tmp });
+  assert.doesNotMatch(r.stderr, /INVALID_INPUT/);
+  assert.equal(read(modeFile(f.tmp)), '{"mode":"shared"}');
+  assert.equal(read(recordFile(f.tmp)), `${f.home}\n`);
+  if (unbuilt('query.js')) assert.equal(r.stderr.split('\n').filter(l => /^❌ backlog: not built yet/.test(l)).join(), '❌ backlog: not built yet: query');
+  const bad = cli(['--use-backlog-repo', join(f.tmp, 'nope'), 'query', '--status'], { cwd: f.cons, tmp: f.tmp }); // a failed switch runs no command
+  assert.equal(bad.status, 2);
+  assert.doesNotMatch(bad.stderr, /not built yet/);
+});
+
+test('--use-local-repo before a local command switches back, then runs it', t => {
+  const f = fixture(t);
+  const e = { ...f.env, BACKLOG_HOME: sharedBacklog(f.dir) };
+  assert.equal(f.raw(['--use-backlog-repo', e.BACKLOG_HOME], { env: e }).status, 0);
+  const r = f.raw(['--use-local-repo', '--json', 'init'], { env: e });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).ok, true); // stdout holds the command's JSON only
+  assert.match(r.stderr, /^✅ local mode/);
+  assert.equal(existsSync(join(f.root, '.backlog')), true);
+  assert.equal(readFileSync(join(f.dir, 'config', 'smooth-backlog-cli', 'mode.json'), 'utf8'), '{"mode":"local"}');
+});
+
+test('a leading --json is a global flag: the command after it is still found, the flag reaches the module', async t => {
+  const { sharedCommand } = await import('../../src/args.js');
+  assert.deepEqual(sharedCommand(['--json', 'query', '--status']), { command: 'query', argv: ['--json', '--status'] });
+  assert.deepEqual(sharedCommand(['--json', 'pop', '--agent', 'alice']), { command: 'pop', argv: ['--json', '--agent', 'alice'] });
+  assert.deepEqual(sharedCommand(['--json']), { command: 'next', argv: ['--json'] });
+  assert.deepEqual(sharedCommand(['--status']), { command: 'next', argv: ['--status'] });
+  const f = pair(t);
+  setShared(f.tmp);
+  const r = cli(['--json', 'pop', '--agent', 'alice'], { cwd: f.cons, tmp: f.tmp }); // through main.run
+  assert.doesNotMatch(r.stderr, /not built yet: next/);
+  if (unbuilt('pop.js')) assert.equal(r.stderr, '❌ backlog: not built yet: pop\n');
+});
+
+test('the home record is written without following a planted <record>.tmp symlink', t => {
+  const f = pair(t);
+  mkdirSync(dirname(recordFile(f.tmp)), { recursive: true });
+  const victim = join(f.tmp, 'victim'); writeFileSync(victim, 'precious');
+  symlinkSync(victim, `${recordFile(f.tmp)}.tmp`);
+  const r = cli(['--use-backlog-repo', f.home], { cwd: f.cons, tmp: f.tmp });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(read(victim), 'precious');
+  assert.equal(read(recordFile(f.tmp)), `${f.home}\n`);
+});
+
+test('a home record that is a symlink, or lives under one, is refused (exit 2) and nothing is written', t => {
+  const f = pair(t);
+  const victim = join(f.tmp, 'victim'); writeFileSync(victim, 'precious');
+  mkdirSync(dirname(recordFile(f.tmp)), { recursive: true });
+  symlinkSync(victim, recordFile(f.tmp));
+  const r = cli(['--use-backlog-repo', f.home], { cwd: f.cons, tmp: f.tmp });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /^❌ backlog: Symlink destination is unsupported/);
+  assert.equal(read(victim), 'precious');
+  assert.equal(read(modeFile(f.tmp)), null);
+  rmSync(dirname(recordFile(f.tmp)), { recursive: true });
+  const elsewhere = join(f.tmp, 'elsewhere'); mkdirSync(elsewhere);
+  symlinkSync(elsewhere, dirname(recordFile(f.tmp)));
+  assert.equal(cli(['--use-backlog-repo', f.home], { cwd: f.cons, tmp: f.tmp }).status, 2);
+  assert.deepEqual(readdirSync(elsewhere), []);
+});
+
+const cliAsync = (args, f) => new Promise(done => {
+  const p = spawn(process.execPath, [join(SRC, '..', 'bin', 'backlog.js'), ...args], { cwd: f.cons, env: { ...process.env, ...env(f.tmp) } });
+  let stderr = ''; p.stderr.on('data', c => { stderr += c; });
+  p.on('close', status => done({ status, stderr }));
+});
+
+test('concurrent mode switches all succeed and leave one complete record and no temporary file', async t => {
+  const f = pair(t);
+  const runs = await Promise.all(Array.from({ length: 8 }, () => cliAsync(['--use-backlog-repo', f.home], f)));
+  assert.deepEqual(runs.map(r => r.status), Array(8).fill(0), runs.map(r => r.stderr).join());
+  assert.equal(read(recordFile(f.tmp)), `${f.home}\n`);
+  assert.deepEqual(readdirSync(dirname(recordFile(f.tmp))), ['home']);
+});
+
+test('the mode switch waits for the shared lock held by another operation, then proceeds', async t => {
+  const f = pair(t);
+  const lock = join(f.home, '.git', 'smooth-backlog-cli.lock');
+  writeFileSync(lock, JSON.stringify({ pid: process.pid })); // a live owner
+  const started = Date.now();
+  const run = cliAsync(['--use-backlog-repo', f.home], f);
+  await sleep(1500);
+  assert.equal(read(recordFile(f.tmp)), null, 'nothing is written while the lock is held');
+  rmSync(lock);
+  const r = await run;
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(Date.now() - started >= 1400);
+  assert.equal(read(recordFile(f.tmp)), `${f.home}\n`);
 });
 
 test('--use-local-repo switches back, leaves the home record untouched, and the local commands work', t => {

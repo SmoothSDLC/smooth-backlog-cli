@@ -1,10 +1,12 @@
 // Shared-mode mode switch and command router (cli-parity job 6). Contract sections 1, 2 and 5.
 // Both return the exit code; failures print the die() line of lib_db.py:39-42 on stderr.
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { redact, git, validateHome } from './safety.js';
+import { assertInside, validateHome } from './safety.js';
+import { atomicWrite } from '../storage.js';
 import { resolveHome, setMode } from './store.js';
+import { pull } from './sync.js';
 
 // command -> [module relative to this file, ...arguments put in front of the user's argv]
 export const TABLE = {
@@ -15,21 +17,21 @@ export const TABLE = {
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${message}\n`); return code; };
 
 // `backlog --use-backlog-repo <path>` (lib_db.py:77-109, set_home.py:33-35) and `backlog --use-local-repo`.
-export async function switchMode({ backlogRepo }) {
-  if (backlogRepo === undefined) { setMode('local'); process.stdout.write('✅ local mode: the repo-local .backlog store is in use\n'); return 0; }
+export async function switchMode({ backlogRepo, rest = [] }) {
+  const out = rest.length ? process.stderr : process.stdout; // a command follows: keep its stdout clean
+  if (backlogRepo === undefined) { setMode('local'); out.write('✅ local mode: the repo-local .backlog store is in use\n'); return 0; }
   let home;
   try { home = await validateHome(resolve(backlogRepo)); } catch (error) { return die(error.message); }
-  // shortcut: no lock around the pull; the lock and exit-3 retry rules belong to sync.js (job 8), switch to sync.pull(home) then.
-  const pull = await git(['pull', '-q', '--rebase', '--autostash'], home);
-  if (pull.code) {
-    await git(['rebase', '--abort'], home);
-    return die(`could not update ${home} from origin/main (${redact(pull.stderr).trim().slice(0, 300)}); nothing was read or changed, because the local copy may be stale. Fix the cause, then run the command again`, 3);
-  }
-  const record = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'smoothsdlc-backlog', 'home');
-  mkdirSync(dirname(record), { recursive: true });
-  writeFileSync(`${record}.tmp`, `${home}\n`); renameSync(`${record}.tmp`, record);
+  try { await pull(home); } catch (error) { return die(error.message, error.exitCode ?? 2); } // lock, abort, exit 3 and redaction are sync.js's
+  const config = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
+  const record = join(config, 'smoothsdlc-backlog', 'home');
+  try {
+    await assertInside(config, record); // no symlink on the way to the record
+    mkdirSync(dirname(record), { recursive: true });
+    await atomicWrite(record, `${home}\n`);
+  } catch (error) { return die(error.message); }
   setMode('shared');
-  process.stdout.write(`✅ shared backlog mode: ${home} (${record})\n`);
+  out.write(`✅ shared backlog mode: ${home} (${record})\n`);
   return 0;
 }
 

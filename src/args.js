@@ -33,7 +33,8 @@ export function parse(argv) {
   return { command, args, flags };
 }
 // Global mode options (shared mode, job 6). Only the leading options count (before the command name);
-// they stand alone. Returns null when absent, else { backlogRepo?: path, local?: true }.
+// the rest of argv (the command, if any, and other global flags) is returned as `rest`.
+// Returns null when absent, else { backlogRepo?: path, local: boolean, rest }.
 export function modeOptions(argv) {
   const rest = [...argv]; let backlogRepo, local = false;
   for (let i = 0; i < rest.length && rest[i].startsWith('--');) {
@@ -48,12 +49,13 @@ export function modeOptions(argv) {
   }
   if (backlogRepo === undefined && !local) return null;
   input(backlogRepo === undefined || !local, '--use-backlog-repo and --use-local-repo exclude each other.');
-  input(!rest.length, 'The mode options stand alone; run the command in a second call.');
-  return { backlogRepo, local };
+  return { backlogRepo, local, rest };
 }
 // Shared mode skips the local grammar: the first word is the command, the rest is the module's own argv.
+// Leading global flags (--json) are passed on to the module and do not hide the command.
 // null for --help/--version, which stay with the local path.
 export function sharedCommand(argv) {
   if (['--help', '--version'].includes(argv[0])) return null;
-  return argv[0] && !argv[0].startsWith('-') ? { command: argv[0], argv: argv.slice(1) } : { command: 'next', argv };
+  let at = 0; while (argv[at] === '--json') at++;
+  return argv[at] && !argv[at].startsWith('-') ? { command: argv[at], argv: [...argv.slice(0, at), ...argv.slice(at + 1)] } : { command: 'next', argv };
 }

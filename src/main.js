@@ -12,15 +12,16 @@ const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.me
 export async function run({ installationRoot } = {}) {
   let json = process.argv.includes('--json');
   try {
-    const argv = process.argv.slice(2);
+    let argv = process.argv.slice(2);
     const mode = modeOptions(argv);
-    // Shared mode (contract section 1) skips init, withStore and refreshIntegrations: the router owns the command.
-    const shared = mode ? null : getMode() === 'shared' ? sharedCommand(argv) : null;
-    if (mode || shared) {
-      const router = await import('./shared/router.js');
-      process.exitCode = mode ? await router.switchMode(mode) : await router.run(shared.command, shared.argv);
-      return;
+    if (mode) {
+      const code = await (await import('./shared/router.js')).switchMode(mode);
+      if (code || !mode.rest.length) { process.exitCode = code; return; }
+      argv = mode.rest; // the command after the mode options runs in the mode just switched to
     }
+    // Shared mode (contract section 1) skips init, withStore and refreshIntegrations: the router owns the command.
+    const shared = getMode() === 'shared' ? sharedCommand(argv) : null;
+    if (shared) { process.exitCode = await (await import('./shared/router.js')).run(shared.command, shared.argv); return; }
     const parsed = parse(argv); json = Boolean(parsed.flags.json);
     if (parsed.command === 'help' || parsed.command === 'version') {
       const data = parsed.command === 'help' ? help : packageInfo.version;

@@ -4,11 +4,13 @@
 // XDG_CONFIG_HOME inside the test's temp dir — never the real backlog repository or ~/.config.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
+import { consumer, env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
 
@@ -125,7 +127,7 @@ test('renumber: the later pusher gets nextSeq in file name, phase, seq and headi
   assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-alpha.md', seq: 1 }, { file: '002-beta.md', seq: 2 }]);
 });
 
-test('renumber: collides with an archived item too, and skips numbers already taken', async t => {
+test('renumber: skips numbers already taken', async t => {
   const f = fixture(t);
   store.write({ path: join(f.folder, 'archive', 'phases', '001-old.md'), fm: { phase: '001-old', seq: 1, name: 'old', status: 'archived' }, body: 'b\n' });
   store.write({ path: join(f.folder, 'phases', '002-two.md'), fm: { phase: '002-two', seq: 2, name: 'two', status: 'pending' }, body: 'b\n' });
@@ -137,6 +139,22 @@ test('renumber: collides with an archived item too, and skips numbers already ta
   assert.equal(out, 'renumbered 003 -> 004\n');
 });
 
+test('renumber: a stale creation that collides only with an ARCHIVED item is renumbered', async t => {
+  const f = fixture(t);
+  store.write({ path: join(f.folder, 'archive', 'phases', '001-old.md'), fm: { phase: '001-old', seq: 1, name: 'old', status: 'archived' }, body: 'b\n' });
+  await sync.commit(f.home, f.folder, 'archive old'); // home2 was cloned before this
+  putItem(f.folder2, 1, 'delta'); // the stale clone picked 1
+  const { result, out } = await captureStdout(() => sync.commit(f.home2, f.folder2, 'new delta'));
+  assert.equal(out, 'renumbered 001 -> 002\n');
+  assert.deepEqual(result, [[1, 2]]);
+  const delta = store.load(f.folder2).find(i => i.fm.name === 'delta');
+  assert.equal(delta.path, 'phases/002-delta.md');
+  assert.equal(delta.fm.phase, '002-delta'); assert.equal(delta.fm.seq, 2);
+  assert.match(delta.body, /^\n# Phase 002 — delta\n/);
+  assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main'), 'acme/demo/archive/phases/001-old.md\nacme/demo/phases/002-delta.md');
+  assert.equal(git(f.bare, 'log', '-1', '--format=%s', 'main'), 'acme/demo: new delta');
+});
+
 test('a distinct number is left alone: no renumber, nothing printed', async t => {
   const f = fixture(t);
   putItem(f.folder, 1, 'alpha'); putItem(f.folder2, 2, 'beta');
@@ -145,16 +163,56 @@ test('a distinct number is left alone: no renumber, nothing printed', async t =>
   assert.deepEqual(result, []); assert.equal(out, '');
 });
 
-test('Node and Python new_phase.py at once end with distinct numbers', async t => {
+// --- genuinely overlapping Node and Python (new_phase.py) writers, ordered by a gate in the bare's pre-receive hook:
+// the first push to arrive blocks until the test releases it; every later push passes.
+function gate(f) {
+  const dir = join(f.dir, 'gate'); mkdirSync(dir);
+  const hook = join(f.bare, 'hooks', 'pre-receive');
+  writeFileSync(hook, `#!/bin/sh\nif mkdir ${JSON.stringify(join(dir, 'entered'))} 2>/dev/null; then\n  while [ ! -e ${JSON.stringify(join(dir, 'release'))} ]; do sleep 0.05; done\nfi\nexit 0\n`);
+  chmodSync(hook, 0o755);
+  return {
+    async entered() { for (let i = 0; i < 400 && !existsSync(join(dir, 'entered')); i++) await sleep(25); assert.ok(existsSync(join(dir, 'entered')), 'a push reached the gate'); },
+    release() { writeFileSync(join(dir, 'release'), ''); },
+  };
+}
+const scripts = process.env.SMOOTH_BACKLOG_SCRIPTS || join(process.env.HOME || '', 'git', 'smoothsdlc-backlog', 'skill', 'backlog', 'scripts');
+const oracle = () => existsSync(join(scripts, 'new_phase.py')) && spawnSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }).status === 0;
+const pyNewPhase = (f, home, cons) => new Promise(done => { // async: new_phase.py runs while Node is mid-commit
+  const p = spawn('python3', [join(scripts, 'new_phase.py'), '--name', 'Pyitem', '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
+    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: home }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = ''; p.stdout.on('data', c => { out += c; }); p.stderr.on('data', c => { out += c; });
+  p.on('close', status => done({ status, out }));
+});
+
+test('Python first, overlapping: Node (stale clone) is held at its push while new_phase.py creates and pushes 1; Node ends renumbered to 2', async t => {
   const f = fixture(t);
+  if (!oracle()) { t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing'); return; }
   const cons = consumer(f.dir, 'acme', 'demo', 'main');
-  const args = ['--name', 'Pyitem', '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
-  putItem(f.folder2, 1, 'nodeitem'); // Node picked 1 from a stale clone ...
-  const r = py('new_phase.py', args, { cwd: cons, tmp: f.dir }); // ... while Python created and pushed 1
-  if (!r) { t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing'); return; }
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  await sync.commit(f.home2, f.folder2, 'new nodeitem');
+  const g = gate(f);
+  putItem(f.folder2, 1, 'nodeitem');
+  const node = sync.commit(f.home2, f.folder2, 'new nodeitem');
+  await g.entered(); // Node has committed locally and is inside its first push
+  const r = await pyNewPhase(f, f.home, cons);
+  assert.equal(r.status, 0, r.out);
+  g.release();
+  assert.deepEqual(await node, [[1, 2]]);
   assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-pyitem.md', seq: 1 }, { file: '002-nodeitem.md', seq: 2 }]);
+});
+
+test('Node first, overlapping: Node has scanned backlog.db and is held at its push while new_phase.py takes the next number', async t => {
+  const f = fixture(t);
+  if (!oracle()) { t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing'); return; }
+  const cons = consumer(f.dir, 'acme', 'demo', 'main');
+  const g = gate(f);
+  putItem(f.folder, 1, 'nodeitem');
+  const mirror = db.connect(f.folder); try { db.scan(mirror, f.folder); } finally { mirror.close(); } // Python numbers from MAX(seq) of backlog.db
+  const node = sync.commit(f.home, f.folder, 'new nodeitem');
+  await g.entered();
+  const r = await pyNewPhase(f, f.home, cons);
+  assert.equal(r.status, 0, r.out);
+  g.release();
+  assert.deepEqual(await node, []);
+  assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-nodeitem.md', seq: 1 }, { file: '002-pyitem.md', seq: 2 }]);
 });
 
 test('a bare that refuses pushes: exit 3 with the committed-but-not-pushed message; the change stays committed; a token URL is never printed', async t => {
@@ -182,4 +240,91 @@ test('an index.lock held for a moment is retried', async t => {
 test('a folder outside the home is refused before git runs', async t => {
   const f = fixture(t);
   await assert.rejects(sync.commit(f.home, join(f.dir, 'elsewhere'), 'm'));
+});
+
+// --- review fixes (job 8)
+const withFakeGit = (t, dir, failCommand, nth = 1) => { // `git <failCommand>` fails from its nth call on; everything else runs the real git
+  if (process.platform === 'win32') return false;
+  const bin = join(dir, 'fakebin'); mkdirSync(bin);
+  const real = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\nif [ "$1" = "${failCommand}" ]; then\n  n=$(cat "${dir}/count" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "${dir}/count"\n  if [ "$n" -ge ${nth} ]; then echo "boom" >&2; exit 1; fi\nfi\nexec "${real}" "$@"\n`);
+  chmodSync(join(bin, 'git'), 0o755);
+  const old = process.env.PATH; process.env.PATH = `${bin}:${old}`; t.after(() => { process.env.PATH = old; });
+  return true;
+};
+
+test('commit: a folder with wildcard characters stages only itself, not the sibling folders it would match', async t => {
+  const f = fixture(t);
+  const star = join(f.home, 'acme', '*');
+  putItem(star, 1, 'alpha');
+  putItem(f.folder, 1, 'sibling'); // acme/demo: changed, but not this commit's folder
+  await sync.commit(f.home, star, 'm');
+  assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main'), 'acme/*/phases/001-alpha.md');
+  assert.equal(git(f.home, 'ls-files', '--others', '--exclude-standard'), 'acme/demo/phases/001-sibling.md');
+});
+
+test('commit: a failing git add is an error (exit 3), not a silent push without the change', async t => {
+  const f = fixture(t);
+  putItem(f.folder, 1, 'alpha');
+  if (!withFakeGit(t, f.dir, 'add')) return t.skip('needs a POSIX shell');
+  await rejects3(sync.commit(f.home, f.folder, 'new alpha'), /could not stage acme\/demo in .*boom/s);
+  assert.equal(git(f.bare, 'rev-list', '--count', 'main'), '1');
+});
+
+test('renumber: a failing git mv, or a failing git add of the renamed file, is an error (exit 3)', async t => {
+  for (const [command, nth, pattern] of [['mv', 1, /could not move .*boom/s], ['add', 2, /could not stage .*boom/s]]) {
+    const path = process.env.PATH; t.after(() => { process.env.PATH = path; }); // one fake git per round
+    process.env.PATH = path;
+    const f = fixture(t);
+    putItem(f.folder, 1, 'alpha'); putItem(f.folder2, 1, 'beta');
+    await sync.commit(f.home, f.folder, 'new alpha');
+    if (!withFakeGit(t, f.dir, command, nth)) return t.skip('needs a POSIX shell');
+    await rejects3(sync.commit(f.home2, f.folder2, 'new beta'), pattern);
+    assert.equal(git(f.bare, 'rev-list', '--count', 'main'), '2', command); // beta never reached the bare
+    process.env.PATH = path;
+  }
+});
+
+test('add/add: two clones create the same numbered file name with different bodies; both reach the bare, the later one renumbered', async t => {
+  const f = fixture(t);
+  const make = (folder, body) => store.write({ path: join(folder, 'phases', '001-alpha.md'), fm: { phase: '001-alpha', seq: 1, name: 'alpha', status: 'pending', repository: 'acme/demo', branch: 'main' }, body });
+  make(f.folder, '\n# Phase 001 — alpha\n\nfirst body\n');
+  make(f.folder2, '\n# Phase 001 — alpha\n\nsecond body\n');
+  await sync.commit(f.home, f.folder, 'new alpha');
+  const { result, out } = await captureStdout(() => sync.commit(f.home2, f.folder2, 'new alpha again'));
+  assert.equal(out, 'renumbered 001 -> 002\n');
+  assert.deepEqual(result, [[1, 2]]);
+  const clone = mkdtempSync(join(f.dir, 'verify-')); git(f.dir, 'clone', '-q', f.bare, clone);
+  const items = store.load(join(clone, 'acme', 'demo'));
+  assert.deepEqual(items.map(i => [i.path, i.fm.seq, i.fm.phase]), [['phases/001-alpha.md', 1, '001-alpha'], ['phases/002-alpha.md', 2, '002-alpha']]);
+  assert.match(items[0].body, /first body/); assert.doesNotMatch(items[0].body, /second body/);
+  assert.match(items[1].body, /^\n# Phase 002 — alpha\n\nsecond body\n/);
+  assert.equal(git(f.bare, 'log', '-1', '--format=%s', 'main'), 'acme/demo: new alpha again');
+  assert.equal(existsSync(join(f.home2, '.git', 'rebase-merge')) || existsSync(join(f.home2, '.git', 'rebase-apply')), false);
+});
+
+test('add/add: a conflict on anything else still aborts the rebase and exits 3', async t => {
+  const f = fixture(t);
+  mkdirSync(f.folder2, { recursive: true }); mkdirSync(f.folder, { recursive: true });
+  writeFileSync(join(f.folder, 'README'), 'a\n'); writeFileSync(join(f.folder2, 'README'), 'b\n');
+  await sync.commit(f.home, f.folder, 'a');
+  await rejects3(sync.commit(f.home2, f.folder2, 'b'), /NOT on origin\/main \(pull --rebase failed/);
+  assert.equal(existsSync(join(f.home2, '.git', 'rebase-merge')) || existsSync(join(f.home2, '.git', 'rebase-apply')), false);
+});
+
+test('pull: repairs a sequence collision with an outstanding local commit (message on stderr, stdout stays clean)', async t => {
+  const f = fixture(t);
+  putItem(f.folder2, 1, 'alpha'); await sync.commit(f.home2, f.folder2, 'new alpha'); // another writer's creation, on the bare
+  putItem(f.folder, 1, 'beta');
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'acme/demo: new beta'); // committed locally, never pushed
+  const write = process.stderr.write; let err = '';
+  process.stderr.write = c => { err += c; return true; };
+  let captured;
+  try { captured = await captureStdout(() => sync.pull(f.home)); } finally { process.stderr.write = write; }
+  assert.equal(captured.out, ''); assert.equal(err, 'renumbered 001 -> 002\n');
+  const beta = store.load(f.folder).find(i => i.fm.name === 'beta');
+  assert.equal(beta.path, 'phases/002-beta.md'); assert.equal(beta.fm.seq, 2);
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+  await sync.commit(f.home, f.folder, 'nothing more'); // the outstanding commit is pushed with its repaired number
+  assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-alpha.md', seq: 1 }, { file: '002-beta.md', seq: 2 }]);
 });

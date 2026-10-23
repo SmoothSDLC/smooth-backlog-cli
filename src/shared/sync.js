@@ -8,6 +8,7 @@ import { join, posix, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
+import { parse } from './frontmatter.js';
 import * as store from './store.js';
 
 const PULL = ['pull', '-q', '--rebase', '--autostash'];
@@ -26,9 +27,14 @@ async function g(home, args) {
   return { ...r, stderr: redact(r.stderr).trim() };
 }
 
+// Git pathspecs are globs: ":(literal)" keeps a folder name such as acme/* from matching its siblings.
+const lit = path => `:(literal)${path}`;
+const fail = (home, what, r) => new BacklogError('SYNC_FAILED', `could not ${what} in ${home} (${r.stderr.slice(0, 300)}); the change is not recorded`, 3);
+const must = async (home, args, what) => { const r = await g(home, args); if (r.code) throw fail(home, what, r); return r; };
+
 async function pullLocked(home) {
   const r = await g(home, PULL);
-  if (!r.code) return;
+  if (!r.code) { await renumber(home, process.stderr); return; } // stderr: a read command's stdout may be JSON
   await g(home, ['rebase', '--abort']);
   throw new BacklogError('SYNC_FAILED', `could not update ${home} from origin/main (${r.stderr.slice(0, 300)}); nothing was read or changed, `
     + 'because the local copy may be stale. Fix the cause, then run the command again', 3); // lib_db.py:106-109
@@ -36,29 +42,63 @@ async function pullLocked(home) {
 
 export const pull = home => locked(lockFile(home), () => pullLocked(home));
 
-// Files this branch added to <name>/phases or <name>/archive since origin, renumbered when their
+const targetOf = (path, next) => posix.join(posix.dirname(path), pad(next) + posix.basename(path).replace(/^\d+/, ''));
+const retagged = (item, next) => ({ // the item with its number changed in the phase/seq keys and the body heading
+  fm: { ...item.fm, seq: next, ...(item.fm.phase && { phase: pad(next) + String(item.fm.phase).replace(/^\d+/, '') }) },
+  body: item.body.replace(/^# Phase \d+/m, `# Phase ${pad(next)}`),
+});
+
+// Files the unpushed commits added to any <owner>/<name>/phases or archive folder, renumbered when their
 // seq is already held by another file of the folder: git mv, phase/seq keys, body heading, amend.
-async function renumber(home, folder, name) {
+async function renumber(home, stream) {
   const out = [];
-  const added = (await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=A', '@{u}', 'HEAD', '--', `${name}/phases`, `${name}/archive`]))
-    .stdout.split('\0').filter(f => f.endsWith('.md')).map(f => f.slice(name.length + 1));
-  for (const path of added) {
+  const added = (await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=A', '@{u}', 'HEAD']))
+    .stdout.split('\0').filter(f => /^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(f));
+  for (const file of added) {
+    const [owner, repo, ...rest] = file.split('/'); const name = `${owner}/${repo}`; const path = rest.join('/');
+    const folder = join(home, owner, repo);
     const items = store.load(folder);
     const mine = items.find(i => i.path === path);
     if (!mine || !items.some(i => i !== mine && Number(i.fm.seq) === Number(mine.fm.seq))) continue;
     const old = Number(mine.fm.seq); const next = store.nextSeq(folder);
-    const target = posix.join(posix.dirname(path), pad(next) + posix.basename(path).replace(/^\d+/, ''));
-    await g(home, ['mv', `${name}/${path}`, `${name}/${target}`]);
-    mine.fm.seq = next;
-    if (mine.fm.phase) mine.fm.phase = pad(next) + String(mine.fm.phase).replace(/^\d+/, '');
-    store.write({ path: join(folder, target), fm: mine.fm, body: mine.body.replace(/^# Phase \d+/m, `# Phase ${pad(next)}`) });
-    await g(home, ['add', '--', `${name}/${target}`]);
+    const target = targetOf(path, next);
+    await must(home, ['mv', `${name}/${path}`, `${name}/${target}`], `move ${path} to ${target}`);
+    store.write({ path: join(folder, target), ...retagged(mine, next) });
+    await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
     const r = await g(home, ['commit', '-q', '--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
-    process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
+    stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
     out.push([old, next]);
   }
   return out;
+}
+
+// A pull --rebase that stopped on add/add conflicts only, all in this folder's item files: two clones created
+// the same file name. The upstream file stays; the replayed local creation moves to nextSeq, and the rebase goes on.
+// false (the caller aborts) when anything else is in conflict or a step fails.
+async function repairAddAdd(home, folder, name, renumbered) {
+  try {
+    for (let round = 0; round < 20; round++) {
+      const stages = new Map();
+      for (const e of (await must(home, ['ls-files', '-u', '-z'], 'list conflicts')).stdout.split('\0').filter(Boolean)) {
+        const [meta, path] = e.split('\t'); stages.set(path, `${stages.get(path) ?? ''}${meta.split(' ')[2]}`);
+      }
+      if (!stages.size || [...stages].some(([path, st]) => st !== '23' || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || !path.startsWith(`${name}/`))) return false;
+      for (const path of stages.keys()) {
+        const rel = path.slice(name.length + 1);
+        const mine = parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout);
+        await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
+        await must(home, ['add', '--', lit(path)], `stage ${path}`);
+        const old = Number(mine.fm.seq); const next = store.nextSeq(folder); const target = targetOf(rel, next);
+        store.write({ path: join(folder, target), ...retagged(mine, next) });
+        await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
+        process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
+        renumbered.push([old, next]);
+      }
+      if (!(await g(home, ['-c', 'core.editor=true', 'rebase', '--continue'])).code) return true;
+    }
+  } catch { /* fall through: the caller aborts the rebase */ }
+  return false;
 }
 
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
@@ -66,19 +106,20 @@ async function renumber(home, folder, name) {
 export async function commit(home, folder, message) {
   const name = (await assertInside(home, folder)).split(sep).join('/');
   return locked(lockFile(home), async () => {
-    await g(home, ['add', '-A', '--', name]);
+    await must(home, ['add', '-A', '--', lit(name)], `stage ${name}`);
     if ((await g(home, ['diff', '--cached', '--quiet'])).code) {
       const c = await g(home, ['commit', '-q', '-m', `${name}: ${message}`]);
       if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
     }
     const renumbered = []; let err = '';
     for (let i = 0; i < 3; i++) {
-      const pr = await g(home, PULL);
+      let pr = await g(home, PULL);
+      if (pr.code && await repairAddAdd(home, folder, name, renumbered)) pr = { code: 0 };
       if (pr.code) {
         await g(home, ['rebase', '--abort']);
         err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;
       } else {
-        renumbered.push(...await renumber(home, folder, name));
+        renumbered.push(...await renumber(home, process.stdout));
         const ps = await g(home, ['push', '-q']);
         if (!ps.code) return renumbered;
         err = `push failed: ${ps.stderr.slice(0, 300)}`;

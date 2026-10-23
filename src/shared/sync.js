@@ -51,9 +51,21 @@ const retagged = (item, next) => ({ // the item with its number changed in the p
 // Files the unpushed commits added to any <owner>/<name>/phases or archive folder, renumbered when their
 // seq is already held by another file of the folder: git mv, phase/seq keys, body heading, amend.
 async function renumber(home, stream) {
-  const out = [];
   const added = (await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=A', '@{u}', 'HEAD']))
     .stdout.split('\0').filter(f => /^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(f));
+  // Working edits (restored by the autostash) stay out of the repair, which stages and amends: stash them, pop them afterwards.
+  const stashed = added.length > 0 && (await g(home, ['status', '--porcelain', '--untracked-files=no'])).stdout.trim() !== '';
+  if (stashed) await must(home, ['stash', 'push', '-q'], 'set your working edits aside');
+  try { return await renumberFiles(home, stream, added); } finally {
+    if (stashed) {
+      const r = await g(home, ['stash', 'pop', '-q']);
+      if (r.code) throw new BacklogError('SYNC_FAILED', `could not restore your working edits in ${home} (${r.stderr.slice(0, 300)}); they are kept in 'git -C ${home} stash'`, 3);
+    }
+  }
+}
+
+async function renumberFiles(home, stream, added) {
+  const out = [];
   for (const file of added) {
     const [owner, repo, ...rest] = file.split('/'); const name = `${owner}/${repo}`; const path = rest.join('/');
     const folder = join(home, owner, repo);
@@ -84,11 +96,15 @@ async function repairAddAdd(home, folder, name, renumbered) {
         const [meta, path] = e.split('\t'); stages.set(path, `${stages.get(path) ?? ''}${meta.split(' ')[2]}`);
       }
       if (!stages.size || [...stages].some(([path, st]) => st !== '23' || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || !path.startsWith(`${name}/`))) return false;
+      // Every upstream file is restored before a number is allocated: nextSeq loads all items, and a file still holding conflict markers would not parse.
+      const mines = new Map();
       for (const path of stages.keys()) {
-        const rel = path.slice(name.length + 1);
-        const mine = parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout);
+        mines.set(path, parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout));
         await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
         await must(home, ['add', '--', lit(path)], `stage ${path}`);
+      }
+      for (const [path, mine] of mines) {
+        const rel = path.slice(name.length + 1);
         const old = Number(mine.fm.seq); const next = store.nextSeq(folder); const target = targetOf(rel, next);
         store.write({ path: join(folder, target), ...retagged(mine, next) });
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);

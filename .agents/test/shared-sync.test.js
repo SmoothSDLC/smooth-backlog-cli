@@ -328,3 +328,31 @@ test('pull: repairs a sequence collision with an outstanding local commit (messa
   await sync.commit(f.home, f.folder, 'nothing more'); // the outstanding commit is pushed with its repaired number
   assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-alpha.md', seq: 1 }, { file: '002-beta.md', seq: 2 }]);
 });
+
+// Review fixes (second review).
+test('add/add: several conflicting additions whose front matter differs are all repaired (markers in another file do not stop the numbering)', async t => {
+  const f = fixture(t);
+  const make = (folder, seq, name, objective) => store.write({ path: join(folder, 'phases', `${pad(seq)}-${name}.md`), fm: { phase: `${pad(seq)}-${name}`, seq, name, objective, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: `\n# Phase ${pad(seq)} — ${name}\n` });
+  for (const [folder, who] of [[f.folder, 'first'], [f.folder2, 'second']]) { make(folder, 1, 'alpha', `${who} alpha`); make(folder, 2, 'beta', `${who} beta`); }
+  await sync.commit(f.home, f.folder, 'new alpha and beta');
+  const { out } = await captureStdout(() => sync.commit(f.home2, f.folder2, 'new alpha and beta again'));
+  assert.equal(out, 'renumbered 001 -> 003\nrenumbered 002 -> 004\n');
+  const clone = mkdtempSync(join(f.dir, 'verify-')); git(f.dir, 'clone', '-q', f.bare, clone);
+  assert.deepEqual(store.load(join(clone, 'acme', 'demo')).map(i => [i.path, i.fm.seq, i.fm.objective]), [
+    ['phases/001-alpha.md', 1, 'first alpha'], ['phases/002-beta.md', 2, 'first beta'], ['phases/003-alpha.md', 3, 'second alpha'], ['phases/004-beta.md', 4, 'second beta']]);
+});
+
+test('pull: a collision repair keeps an unstaged working edit uncommitted (and in the working tree)', async t => {
+  const f = fixture(t);
+  putItem(f.folder2, 1, 'alpha'); await sync.commit(f.home2, f.folder2, 'new alpha');
+  putItem(f.folder, 1, 'beta');
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'acme/demo: new beta'); // committed locally, never pushed
+  const file = join(f.folder, 'phases', '001-beta.md');
+  writeFileSync(file, readFileSync(file, 'utf8') + '\nworking edit, not yet committed\n');
+  const write = process.stderr.write; process.stderr.write = () => true;
+  try { await sync.pull(f.home); } finally { process.stderr.write = write; }
+  assert.equal(git(f.home, 'show', 'HEAD:acme/demo/phases/002-beta.md').includes('working edit'), false, 'the edit must not be in the commit');
+  assert.equal(git(f.home, 'status', '--porcelain'), 'M acme/demo/phases/002-beta.md');
+  assert.match(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), /seq: 2[\s\S]*working edit, not yet committed/);
+  assert.equal(git(f.home, 'stash', 'list'), '');
+});

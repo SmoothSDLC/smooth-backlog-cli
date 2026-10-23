@@ -23,12 +23,12 @@ writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"sh
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
 const SCRIPT = { new: 'new_phase.py', update: 'update.py', query: 'query.py', move: 'move.py', archive: 'archive.py' };
-const COMMANDS = ['new', 'update', 'query', 'next', 'move', 'archive'];
-// Flags this build refuses (query.js TEAM and --headless); --db is internal to the Python scripts (contract section 2).
+const COMMANDS = ['new', 'update', 'query', 'next', 'pop', 'move', 'archive'];
+// Flags this build refuses (query.js TEAM, pop.js and --headless); --db is internal to the Python scripts (contract section 2).
 const REFUSED = {
   update: ['db'],
-  query: ['pop', 'plan', 'lead', 'agents', 'review-classes', 'claim-now', 'headless', 'db'],
-  new: ['db'], move: [], archive: ['db'],
+  query: ['plan', 'agents', 'headless', 'db'],
+  new: ['db'], move: [], archive: ['db'], pop: [],
 };
 const flagsOf = text => [...new Set((text.match(/--[a-z][\w-]*/g) ?? []).filter(f => !f.endsWith('-')))];
 // The block of one flag: its header line `  --flag ...` and the lines indented by six spaces below it.

@@ -233,7 +233,7 @@ Either option may be followed by a command, which then runs in that mode. `--use
 path is a clone of the backlog repository on its `main` branch and pulls it. In shared mode nothing is written into
 the consuming repository. Only the commands below exist in this mode; each pulls the backlog repository first, and a
 command that changes an item commits and pushes the change before it exits. An item is named by its number or its
-slug. With `--json`, the shared-mode commands print the data itself and not the `{"ok","data"}` envelope of the local mode. The team flags of `update` and the team views of `query` work; `--pop`, `--plan` and the other
+slug. With `--json`, the shared-mode commands print the data itself and not the `{"ok","data"}` envelope of the local mode. The team flags of `update`, the team views of `query` and `pop` work; `--plan` and the other
 flags that a list below marks "Not in this build" are refused. In shared mode `backlog update` changes an item, while in local mode
 it updates the CLI itself. The text of each command below is what `backlog <command> --help` prints.
 
@@ -445,8 +445,9 @@ Usage:
   backlog query [--status] [--all] [--branch <name>] [--json]
   backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
   backlog query --claimable | --reviewable | --blocked [--classes <classes>] [--agent <name>] [--roster <file>] [--scope branch|repo|all] [--json]
+  backlog query --pop --agent <name> [--classes <classes>] [--review-classes <classes>] [--lead <name>] [--roster <file>] [--scope branch|repo|all] [--claim-now] [--json]
 
-Reads the backlog and never changes it. Without a view option it prints the full stack of the branch: the open
+Reads the backlog and never changes it, except that --pop with --claim-now claims an item. Without a view option it prints the full stack of the branch: the open
 items in queue order (priority 0 is next), then the finished ones. Items that are not on the queue because their file
 is gone, or because they name another repository or no branch, are reported as findings above the queue.
 With --json the command prints the data itself, without any wrapper.
@@ -492,26 +493,28 @@ Options:
   --classes CLASSES
       The classes the agent covers, comma-separated: work classes for --claimable, review classes for --reviewable (team session).
   --pop
-      Not in this build. The one next action of an agent (team session).
+      The one next action of the agent named by --agent: continue, review, claim, refine, chunk or idle (team session).
+      It is the same as backlog pop; see backlog pop --help. With --next, --agent does the same.
   --agent AGENT
       The agent that asks. With --claimable or --reviewable it also switches to team rules: an incomplete item is not offered
-      and the agent never reviews its own work (team session).
+      and the agent never reviews its own work. With --pop it is the agent whose next action is answered (team session).
   --plan
       Not in this build. The dispatch plan of the team for this branch (team session).
   --lead LEAD
-      Not in this build. The team lead (team session).
+      With --pop: the team lead, who alone refines incomplete items. The default is the environment variable TEAM_LEAD,
+      else cody (team session).
   --agents AGENTS
       Not in this build. The team members present (team session).
   --review-classes REVIEW_CLASSES
-      Not in this build. The review classes an agent covers (team session).
+      With --pop: the review classes the agent covers, comma-separated (team session).
   --claim-now
-      Not in this build. Claim the item when the next action is to claim (team session).
+      With --pop: claim the item when the next action is to claim (team session).
   --roster ROSTER
       The team roster as a JSON file {agent: {work_classes, review_classes}}; the default is the file named by TEAM_ROSTER.
       Any member but the author may review: holders of a review class of the item at once, the others after
       TEAM_REVIEW_HOLDER_PRIORITY_MIN (5) minutes, or at once when no other roster member holds one (team session).
   --scope {branch,repo,all}
-      How far the team views look: this branch (the default), every branch of this repository, or also the chunk and docs items
+      How far the team views and --pop look: this branch (the default), every branch of this repository, or also the chunk and docs items
       of every repository. The widest scope for chunk and docs items is capped by the line refinement_scope: off|branch|repo|all
       in the file backlog.scope of the folder of this repository (default branch).
   --headless
@@ -520,7 +523,7 @@ Options:
   --help
       Print this text and exit. Nothing is read or changed.
 
-The options --pop, --plan, --lead, --agents, --review-classes, --claim-now and --headless are refused with exit code 2 in this build.
+The options --plan, --agents and --headless are refused with exit code 2 in this build.
 
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
@@ -544,8 +547,8 @@ Usage:
 Prints the open item with the lowest priority on the branch that is checked out here, with its objective, summary,
 file and progress, followed by the instruction to hand the decision about the next step back to the user. It is
 the same as backlog query --next and reads the backlog without changing it. When the queue is empty it says so
-(with --json it prints {}). Critical items are announced in a banner first. The other options of backlog query
-are described in backlog query --help; the team options are not in this build.
+(with --json it prints {}). Critical items are announced in a banner first. With --agent <name> it is the pop of
+that agent instead, see backlog pop --help. The other options of backlog query are described in backlog query --help.
 
 In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
@@ -572,6 +575,74 @@ Exit codes:
 
 Example:
   backlog next --json
+```
+
+### backlog pop
+
+```text
+backlog pop — ask what one agent does next: the one next action, first match wins
+
+Usage:
+  backlog pop --agent <name> [--classes <classes>] [--review-classes <classes>] [--lead <name>] [--roster <file>]
+              [--scope branch|repo|all] [--all] [--branch <name>] [--claim-now] [--json]
+
+Answers with exactly one action for the agent, the first that applies: continue (an item the agent holds and can work
+on; when its review passed, close it), review (an item another agent asks to have reviewed, or a review the agent
+started), claim (the open item with the lowest priority whose work classes the agent covers, whose dependencies are done
+and that nobody holds), refine (the team lead only: an incomplete item that lacks required fields), chunk (a small piece
+of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or for a run is not
+continued, and the agent claims a new item only when every item it holds waits. A review request older than
+BACKLOG_REVIEW_FIRST_SECONDS (300) is answered before the agent's own work. Incomplete items are never claimed or
+reviewed. When nothing is left the action is idle, the blockers are named, and the command exits with 3.
+
+Without --json the first line is the action and the item, the second line says what to do, and one line per blocked item
+follows. With --json the command prints one object with the keys action, item, seq, repository, branch, instruction,
+claimed, blocked and held (and missing when the action is refine). backlog next --agent <name> and backlog query --pop
+print the same.
+
+In shared backlog repository mode the command first updates the local clone of the backlog repository
+(git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
+Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
+from the origin of that repository.
+
+Options:
+  --agent AGENT
+      The agent that asks. Required.
+  --classes CLASSES
+      The work classes the agent covers, comma-separated (app-code, ui, api, tests, iac, network, identity, security, data, delivery, verify, docs, contract, chunk, skills).
+  --review-classes REVIEW_CLASSES
+      The review classes the agent covers, comma-separated. A member that does not hold a review class of the item reviews it
+      after TEAM_REVIEW_HOLDER_PRIORITY_MIN (5) minutes, or at once when no other roster member holds one.
+  --lead LEAD
+      The team lead, who alone refines incomplete items. The default is the environment variable TEAM_LEAD, else cody.
+  --roster ROSTER
+      The team roster as a JSON file {agent: {work_classes, review_classes}}; the default is the file named by TEAM_ROSTER.
+  --scope {branch,repo,all}
+      How far the agent looks: this branch (the default), every branch of this repository, or also the chunk and docs items
+      of every repository. The widest scope for chunk and docs items is capped by the line refinement_scope: off|branch|repo|all
+      in the file backlog.scope of the folder of this repository (default branch).
+  --all
+      Look at every branch, not only the current one.
+  --branch BRANCH
+      The branch whose queue to use. The default is the branch that is checked out here. A team session bound by
+      TEAM_BRANCH can only use that branch.
+  --claim-now
+      When the action is claim, claim the item now (as backlog update <item> --claim <agent>). If that claim is refused,
+      the refusal is printed and its exit code is returned.
+  --json
+      Print one machine-readable object.
+  --help
+      Print this text and exit. Nothing is read or changed.
+
+Exit codes:
+  0  The command answered with an action.
+  3  The action is idle: nothing is left for the agent.
+  1  A --claim-now claim was refused: its refusal is printed on standard output.
+  2  The arguments or the place were wrong: the message is on standard error.
+  4  The backlog repository is not set up; the printed question must be answered by the user.
+
+Example:
+  backlog pop --agent cody --classes app-code,tests --review-classes code --json
 ```
 
 ### backlog move

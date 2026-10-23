@@ -12,7 +12,7 @@ export class Rejected extends Error {}
 const reject = message => { throw new Rejected(message); };
 const NO_SELF_REVIEW = by => `${by} claimed this item and cannot review its own work; another agent reviews it`;
 // lib_db.py:258-260
-const REFINE_HOW = 'update.py <item> --set-work-class <c,..> / --set-review-classes <c,..> / --set-review-refs references/review/<class>.md,.. / '
+export const REFINE_HOW = 'update.py <item> --set-work-class <c,..> / --set-review-classes <c,..> / --set-review-refs references/review/<class>.md,.. / '
   + '--set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / '
   + "--append '## Definition of done\\n- [ ] <checkable line>'";
 

@@ -1,6 +1,6 @@
 // Tests for the team views of src/shared/query.js (src/shared/views.js) - cli-parity job 16 (VIEWS), part 2.
 // Port of tests/test_team_scope.py (--scope branch|repo|all and the refinement cap of <folder>/backlog.scope; its --pop
-// assertions belong to job 20, where --pop stays refused), plus parity with query.py --claimable/--reviewable/--blocked:
+// assertions are in shared-team-pop.test.js), plus parity with query.py --claimable/--reviewable/--blocked:
 // the same fixture is read by the oracle and by the CLI, and stdout, stderr and exit status must be identical. Parity
 // tests skip when SMOOTH_BACKLOG_SCRIPTS is not configured or PyYAML is missing. Local bare repos only.
 import test, { after } from 'node:test';
@@ -89,10 +89,10 @@ test('test_scopes_and_refinement_cap: --scope and the refinement_scope cap of ba
   } finally { rmSync(f.cfg, { force: true }); }
 });
 
-test('--pop and --plan stay refused (job 20)', () => {
+test('--plan stays refused (--pop is shared-team-pop.test.js)', () => {
   const f = fixture();
   make(f, 'js', f.cons, 'x', ['--work-class', 'docs']);
-  for (const args of [['--pop', '--agent', 't'], ['--plan'], ['--next', '--agent', 't'], ['--lead', 'x', '--claimable', '--classes', 'docs']]) {
+  for (const args of [['--plan'], ['--agents', 'a,b', '--claimable', '--classes', 'docs']]) {
     const r = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 2, args.join(' '));
     assert.equal(r.stdout, '');

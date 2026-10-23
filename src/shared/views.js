@@ -12,7 +12,7 @@ import * as team from './team.js';
 export const SCOPES = ['branch', 'repo', 'all'];
 const REFINEMENT = ['chunk', 'docs']; // the only work another repository's agents may pick up (--scope all)
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
-const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
+export const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
 const JSON_FIELDS = ['work_class', 'review_classes', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'estimate_min', 'complexity', 'layer'];
 
 const refinement = fm => { const wc = team.asList(fm.work_class); return wc.length > 0 && wc.every(c => REFINEMENT.includes(c)); };
@@ -20,7 +20,7 @@ const files = dir => new Map(store.load(dir).map(i => [i.path, i]));
 const dirs = dir => { try { return readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch { return []; } };
 
 // query.py:80-90: refinement_scope from <folder>/backlog.scope, one line 'refinement_scope: off|branch|repo|all' (default branch).
-function refinementCap(folder, repr) {
+export function refinementCap(folder, repr) {
   const p = join(folder, 'backlog.scope');
   const m = existsSync(p) && statSync(p).isFile() ? /^\s*refinement_scope:\s*(\S+)/m.exec(readFileSync(p, 'utf8')) : null;
   const v = m ? m[1] : 'branch';
@@ -30,7 +30,7 @@ function refinementCap(folder, repr) {
 
 // lib_db.py:731-742: null = not offered to agent now; [] = offered as a class holder; the item's review classes = offered
 // to a non-holder, after TEAM_REVIEW_HOLDER_PRIORITY_MIN minutes (5) or at once when no other roster member holds one.
-function reviewOffer(fm, agent, mine, roster) {
+export function reviewOffer(fm, agent, mine, roster) {
   if ((fm.claimed_by ?? null) === (agent ?? null) || !team.reviewOpenTo(fm, agent)) return null;
   const classes = team.asList(fm.review_classes);
   if (classes.some(c => mine.includes(c))) return [];
@@ -41,7 +41,7 @@ function reviewOffer(fm, agent, mine, roster) {
 // query.py:93-129 team_rows: [{r, fm, undone, f}] of the open items within scope, in priority order. branch = the caller's
 // repository and branch, repo = every branch of it, all = also the chunk/docs items of every other repository folder.
 // shortcut: undoneDependencies reads the folder once per open item; fine for a backlog of hundreds, cache it beyond that.
-function teamRows({ open, scope, cap, every, excluded, repo, branch, folder, home }) {
+export function teamRows({ open, scope, cap, every, excluded, repo, branch, folder, home }) {
   const ref = RANK[scope] <= RANK[cap] ? scope : cap;
   const mine = files(folder);
   const out = [];
@@ -76,7 +76,7 @@ function teamRows({ open, scope, cap, every, excluded, repo, branch, folder, hom
 // lib_db.py:621-624
 const jobFields = fm => [['estimate', fm.estimate_min], ['complexity', fm.complexity], ['layer', fm.layer]]
   .filter(([, v]) => v != null && v !== '').map(([k, v]) => ` ${k}=${v}${k === 'estimate' ? 'm' : ''}`).join('');
-const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d.item.slug : null, status: d.item ? d.item.status : 'missing', claimed_by: d.fm.claimed_by || '' }));
+export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d.item.slug : null, status: d.item ? d.item.status : 'missing', claimed_by: d.fm.claimed_by || '' }));
 
 // query.py:330-372. io = {say, dump, die, repr} of query.js; hid = the active handoff of the mirror, all = its row reader.
 export function teamView(a, { all, hid, excluded, repo, branch, folder, home, io }) {

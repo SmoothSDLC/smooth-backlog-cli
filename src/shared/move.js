@@ -3,12 +3,12 @@
 // number (seq) or slug, never by database row id.
 // Beyond the oracle (item 017): a target branch must exist on the origin of the consuming repository, and a target repository
 // must be a plain owner/name (the oracle joins any text onto the home).
-// shortcut: argparse's unique-prefix abbreviations are not accepted; no per-folder run lock around the command; the target number
+// shortcut: argparse's unique-prefix abbreviations are not accepted; the target number
 // comes from store.nextSeq (phases/, archive/ and the db) where move.py:35-37 ignores archive/.
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { commitFolder, die, find, pyStr, refuse, say, usage, valueLike, withBacklog } from './archive.js';
+import { die, find, pyStr, refuse, say, usage, valueLike, withBacklog } from './archive.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { assertInside, git, redact } from './safety.js';
@@ -21,12 +21,12 @@ function parse(argv) { // move.py:67-74 argparse; --to-repository takes an optio
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
     if (!past && tok === '--') { past = true; continue; }
-    if (past || valueLike(tok)) {
+    const [flag, eq] = tok.startsWith('--') ? tok.slice(2).split(/=(.*)/s) : [null];
+    if (past || (!VALUE.includes(flag) && flag !== 'to-repository' && valueLike(tok))) { // argparse: a known option wins, even with a space in its =value
       if (a.phase !== undefined) throw usage(`unrecognized arguments: ${tok}`);
       a.phase = tok;
       continue;
     }
-    const [flag, eq] = tok.startsWith('--') ? tok.slice(2).split(/=(.*)/s) : [null];
     if (VALUE.includes(flag)) {
       const v = eq ?? (valueLike(argv[i + 1]) ? argv[++i] : undefined);
       if (v === undefined) throw usage(`argument --${flag}: expected one argument`);
@@ -102,7 +102,7 @@ async function move(a, con, { home, repo, folder, close }) {
   if (!target || target === repo) return refuse(`${r.slug} already belongs to ${repo}; name the target repository`);
   let tdir;
   try { tdir = store.folder(home, target); } catch (e) { throw usage(e.message); } // owner/name only: the target is the user's text or a file's data
-  await assertInside(home, join(tdir, 'backlog.db'));
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target file is named from it`); // mirror data: no path in it
 
   // move.py:32-64
   const src = join(folder, r.path);
@@ -128,7 +128,7 @@ async function move(a, con, { home, repo, folder, close }) {
   db.logEvent(con, 'moved_out', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
   db.scan(con, folder);
   close();
-  await commitFolder(home, tdir, `move.py ${r.slug} in from ${repo}`);
+  await db.commitSettled(home, tdir, `move.py ${r.slug} in from ${repo}`);
   say(`✅ ${r.slug} moved to ${target} as ${slug}`);
   return 0;
 }

@@ -6,10 +6,11 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
+import { numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
@@ -266,4 +267,85 @@ test('diagnostics that echo the input are redacted', () => {
     assert.equal(u.status, 2);
     assert.doesNotMatch(u.stdout + u.stderr, /s3cret/);
   }
+});
+
+// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 17)
+
+test('review P1: a symlink at archive/ or archive/phases/ refuses the archive before anything is moved or stamped', t => {
+  for (const nested of [false, true]) {
+    const f = seed();
+    const outside = join(f.t, 'outside');
+    mkdirSync(outside);
+    try {
+      if (nested) { mkdirSync(join(f.folder, 'archive')); symlinkSync(outside, join(f.folder, 'archive', 'phases')); } else symlinkSync(outside, join(f.folder, 'archive'));
+    } catch (e) { t.skip(`cannot create a symlink here: ${e.code}`); return; }
+    const source = readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8');
+    const r = run(f, 'archive', ['5']);
+    assert.notEqual(r.status, 0, r.stdout);
+    assert.match(r.stdout + r.stderr, /Symlink destination is unsupported/);
+    assert.deepEqual(readdirSync(outside), [], 'nothing was written outside the repository');
+    assert.equal(readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8'), source, 'the source file stays as it was, unstamped');
+  }
+});
+
+test('review P1: a database slug that leaves phases/ ("007-../../001-first") is refused before the target is written', () => {
+  const f = seed();
+  const con = db.connect(f.folder); con.exec("UPDATE phase SET slug='007-../../001-first' WHERE seq=7"); con.close();
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'evil slug'); git(f.home, 'push', '-q');
+  const victim = join(f.other, 'phases', '001-first.md');
+  const before = readFileSync(victim, 'utf8');
+  const r = run(f, 'move', ['7', '--to-repository']);
+  assert.notEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout + r.stderr, /plain item name/);
+  assert.equal(readFileSync(victim, 'utf8'), before, 'the existing item of the target is unchanged');
+  assert.deepEqual(names(f.other, 'phases'), ['001-first.md']);
+  assert.ok(existsSync(join(f.folder, 'phases', '007-eta.md')), 'the source item stays');
+});
+
+test('review P1: archive and move hold the per-repository run lock from the pull to the push', async () => {
+  const f = seed();
+  const a = await waitsForRunLock(f, ['archive', '5'], () => existsSync(join(f.folder, 'phases', '005-epsilon.md')));
+  assert.deepEqual(a.during, { exited: false, same: true }, 'archive waits while another command holds the lock');
+  assert.equal(a.result.status, 0, a.result.stderr);
+  assert.ok(!existsSync(join(f.folder, 'phases', '005-epsilon.md')) && existsSync(join(f.folder, 'archive', 'phases', '005-epsilon.md')));
+  const m = await waitsForRunLock(f, ['move', '2', '--to-branch', 'release'], () => fm(f.folder, 'phases/002-beta.md').fm.branch);
+  assert.deepEqual(m.during, { exited: false, same: true }, 'move waits while another command holds the lock');
+  assert.equal(m.result.status, 0, m.result.stderr);
+  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'release');
+});
+
+for (const [title, script, args] of [['archive', 'archive', ['5']], ['move --to-branch', 'move', ['2', '--to-branch', 'release']]]) {
+  test(`review P1: ${title} commits and pushes the rescan after a renumbering (checked from a fresh clone)`, () => {
+    const f = seed();
+    numberClash(f);
+    const r = run(f, script, args);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.match(r.stdout, /renumbered 008 -> 009/);
+    assert.equal(git(f.home, 'status', '--porcelain'), '', 'the rescanned backlog.db is committed');
+    assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
+    const pushed = pushedState(f);
+    assert.ok(pushed.slugs.includes('009-local') && !pushed.slugs.includes('008-local'), pushed.slugs.join());
+    assert.ok(pushed.files.includes('phases/009-local.md'));
+  });
+}
+
+test('review P2: archive with a ghost row (a pending mirror row whose file is gone) ranks it like archive.py: the survivors keep their ranks', t => {
+  const ghost = f => { git(f.home, 'rm', '-q', 'acme/demo/phases/001-alpha.md'); git(f.home, 'commit', '-q', '-m', 'file gone'); git(f.home, 'push', '-q'); };
+  const f = seed(); ghost(f);
+  const r = run(f, 'archive', ['5']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.priority, 1, 'the ghost still holds P0');
+  assert.deepEqual(['003-gamma', '004-delta', '007-eta'].map(n => fm(f.folder, `phases/${n}.md`).fm.priority), [2, 3, 4]);
+  assert.match(r.stdout, /re-densified to 5 item\(s\) \(P0\.\.P4\)/, 'the ghost row is counted');
+  const w = twins(t);
+  if (!w) return;
+  ghost(w[0]); ghost(w[1]);
+  pair(t, ...w, 'archive', ['5']);
+});
+
+test('review P2: move accepts --note="two words" (an option with a value, not a positional)', () => {
+  const f = seed();
+  const r = run(f, 'move', ['2', '--to-branch=release', '--note=because it is ready']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'release');
 });

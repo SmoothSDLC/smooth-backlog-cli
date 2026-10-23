@@ -1,7 +1,7 @@
 // Shared-mode `backlog archive` (cli-parity job 17). Port of archive.py:22-110 and its commit tail (archive.py:112-117) in the
 // oracle's order: pull, resolve the item, git mv under archive/, stamp status, mirror row and event, scan, reflow, commit and
 // push. The item is found by number (seq) or slug, never by database row id. The helpers at the top are shared with move.js.
-// shortcut: argparse's unique-prefix abbreviations (--for) are not accepted; no per-folder run lock around the command.
+// shortcut: argparse's unique-prefix abbreviations (--for) are not accepted.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
@@ -42,30 +42,24 @@ export function find(con, text) {
   return row ? { ...row } : null;
 }
 
-// Pull, resolve the consuming repository's folder, open its mirror db and run fn(con, {home, repo, folder, close}); then, when fn
-// answers 0 and `tail` (the commit message: script name + first two arguments, archive.py:112-117) is given, commit and push the folder.
+// Resolve the consuming repository, take its run lock, pull, open its mirror db and run fn(con, {home, repo, folder, close}); then, when
+// fn answers 0 and `tail` (the commit message: script name + first two arguments, archive.py:112-117) is given, commit and push the folder.
+// The lock is held from the pull to the push (archive.py's run_lock).
 export async function withBacklog(fn, tail) {
   const { home } = store.resolveHome();
-  await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
   let repo;
   try { repo = store.repoId(process.cwd()); } catch (e) { return die(e.message); }
-  const folder = store.folder(home, repo);
-  await assertInside(home, join(folder, 'backlog.db')); // no symlink between the home and the db
-  const con = db.connect(folder);
-  let open = true;
-  const close = () => { if (open) { open = false; con.close(); } };
-  let code;
-  try { code = await fn(con, { home, repo, folder, close }); } finally { close(); }
-  if (code === 0 && tail) await commitFolder(home, folder, tail);
-  return code;
-}
-
-export async function commitFolder(home, folder, message) {
-  const renumbered = await sync.commit(home, folder, message);
-  if (renumbered.length) {
-    const again = db.connect(folder);
-    try { db.scan(again, folder, renumbered); } finally { again.close(); }
-  }
+  return store.runLocked(home, repo, async () => {
+    await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
+    const folder = store.folder(home, repo);
+    const con = db.connect(folder); // refuses a link at the owner or the repository folder
+    let open = true;
+    const close = () => { if (open) { open = false; con.close(); } };
+    let code;
+    try { code = await fn(con, { home, repo, folder, close }); } finally { close(); }
+    if (code === 0 && tail) await db.commitSettled(home, folder, tail);
+    return code;
+  });
 }
 
 function parse(argv) { // archive.py:54-57 argparse
@@ -110,6 +104,7 @@ async function archive(a, con, { folder, close }) {
   await assertInside(folder, src); // the row is mirror data: it names a file inside the folder, no symlink on the way
   const from = relative(folder, resolve(src)).split('\\').join('/');
   const to = `archive/${from}`; // the same path under archive/ (archive.py:76-77)
+  store.assertNoSymlinks(folder, join(folder, to)); // a link at archive/ or archive/phases/ would take the move outside
   if (a['dry-run']) { say(`ℹ️  [dry-run] would git mv ${from} -> ${to} and mark ${row.slug} archived`); return 0; }
 
   mkdirSync(join(folder, to, '..'), { recursive: true });

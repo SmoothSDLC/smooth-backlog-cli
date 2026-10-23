@@ -1,0 +1,231 @@
+// Shared-mode `backlog update` (cli-parity job 11), non-team flags. Port of update.py:88-257 and its commit tail
+// (update.py:327-332) in the oracle's order: pull, resolve the item, change, write the file, log the event, scan into
+// backlog.db, planning event (--priority move, completion, --replan), commit and push. The item is found by number
+// (seq) or slug, never by database row id. The team flags (update.py:27-104) are refused: jobs 15 and later add them.
+// shortcut: argparse's unique-prefix abbreviations (--stat) are not accepted; no per-folder run lock around the command.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BacklogError } from '../errors.js';
+import * as db from './db.js';
+import { parse as parseDoc } from './frontmatter.js';
+import { assertInside, itemSelector, redact } from './safety.js';
+import * as store from './store.js';
+import * as sync from './sync.js';
+
+const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
+const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-work-class', 'set-review-classes', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on'];
+const BOOL = ['dry-run'];
+const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments'];
+const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close'];
+// lib_db.py:601-606
+const WORK_CLASSES = ['app-code', 'ui', 'api', 'tests', 'iac', 'network', 'identity', 'security', 'data', 'delivery', 'verify', 'docs', 'contract', 'chunk', 'skills'];
+const REVIEW_CLASSES = [...WORK_CLASSES, 'code'];
+const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'] };
+
+// Python str.strip()/rstrip() whitespace (not JS's: \x1c-\x1f and \x85 count, ﻿ does not).
+const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
+const rstrip = s => s.replace(new RegExp(`[${WS}]+$`), '');
+const strip = s => rstrip(s).replace(new RegExp(`^[${WS}]+`), '');
+const pyInt = s => (/^\s*[+-]?\d+\s*$/.test(s) ? Number(s) : null);
+// Python repr of a str, for the oracle's `{x!r}` and dict/list prints.
+function pyStr(s) {
+  const q = s.includes("'") && !s.includes('"') ? '"' : "'";
+  let out = '';
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    if (ch === q || ch === '\\') out += `\\${ch}`;
+    else if (ch === '\n') out += '\\n';
+    else if (ch === '\r') out += '\\r';
+    else if (ch === '\t') out += '\\t';
+    else if (ch !== ' ' && /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Z}]/u.test(ch)) {
+      out += c < 0x100 ? `\\x${c.toString(16).padStart(2, '0')}` : c < 0x10000 ? `\\u${c.toString(16).padStart(4, '0')}` : `\\U${c.toString(16).padStart(8, '0')}`;
+    } else out += ch;
+  }
+  return q + out + q;
+}
+const pyVal = v => (typeof v === 'number' ? String(v) : pyStr(v));
+// lib_db.py as_list: missing, empty or 'none' is []; a comma-separated string or a list of items.
+const asList = v => (v == null || (typeof v === 'string' && ['', 'none'].includes(strip(v).toLowerCase())) ? []
+  : (Array.isArray(v) ? v : String(v).split(',')).map(x => strip(String(x))).filter(Boolean));
+
+const usage = message => new BacklogError('INVALID_INPUT', message); // argparse errors: exit 2
+// A token that argparse takes as a value or positional: no leading dash, a lone dash, a negative number, or a space inside.
+const valueLike = s => s !== undefined && (!s.startsWith('-') || s === '-' || /^-(\d+|\d*\.\d+)$/.test(s) || s.includes(' '));
+
+// update.py:107-140 argparse. Returns the values plus `team`, the first team flag on the command line.
+function parse(argv) {
+  const a = {}; let past = false;
+  for (let i = 0; i < argv.length; i++) {
+    const tok = argv[i];
+    if (!past && tok === '--') { past = true; continue; }
+    if (past || valueLike(tok)) {
+      if (a.phase !== undefined) throw usage(`unrecognized arguments: ${tok}`);
+      a.phase = tok;
+      continue;
+    }
+    const [flag, eq] = tok.startsWith('--') ? tok.slice(2).split(/=(.*)/s) : [null];
+    if ([...BOOL, ...TEAM_BOOL].includes(flag)) {
+      if (eq !== undefined) throw usage(`argument --${flag}: ignored explicit argument ${pyStr(eq)}`);
+      a[flag] = true;
+    } else if ([...VALUE, ...TEAM_VALUE].includes(flag)) {
+      const v = eq ?? (valueLike(argv[i + 1]) ? argv[++i] : undefined);
+      if (v === undefined) throw usage(`argument --${flag}: expected one argument`);
+      if (flag === 'set-estimate' && pyInt(v) === null) throw usage(`argument --${flag}: invalid int value: ${pyStr(v)}`);
+      if (CHOICES[flag] && !CHOICES[flag].includes(v)) throw usage(`argument --${flag}: invalid choice: ${pyStr(v)} (choose from ${CHOICES[flag].join(', ')})`);
+      a[flag] = v;
+    } else throw usage(`unrecognized arguments: ${tok}`);
+    if ([...TEAM_VALUE, ...TEAM_BOOL].includes(flag)) a.team ??= flag;
+  }
+  return a;
+}
+
+const say = text => process.stdout.write(`${redact(text)}\n`);
+const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
+const refuse = message => { say(`❌ ${message}`); return 1; }; // update.py's refusals: stdout, exit 1
+const classes = (text, allowed, flag) => { // lib_db.py:634-640
+  const vals = asList(text); const bad = vals.filter(v => !allowed.includes(v));
+  if (bad.length) throw usage(`${flag}: unknown class ${bad.join(', ')}; the vocabulary is: ${allowed.join(', ')}`);
+  return vals;
+};
+// lib_db.py:587-595
+function find(con, text) {
+  const sel = itemSelector(text);
+  const row = sel && (sel.number !== undefined
+    ? con.prepare("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id").get(sel.number)
+    : con.prepare('SELECT * FROM phase WHERE slug=?').get(sel.slug));
+  return row ? { ...row } : null;
+}
+
+export async function run(argv) {
+  try { return await update(argv); } catch (e) { return die(e.message, e instanceof BacklogError ? e.exitCode : 1); }
+}
+
+async function update(argv) {
+  const a = parse(argv);
+  if (a.team) return die(`--${a.team} is not in this build (the team flags come with jobs 15 and later)`);
+  if ((process.env.TEAM_REPOSITORY ?? '').trim()) return die('TEAM_REPOSITORY is set: team sessions are not in this build (jobs 15 and later)');
+
+  const { home } = store.resolveHome();
+  await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
+  let repo;
+  try { repo = store.repoId(process.cwd()); } catch (e) { return die(e.message); }
+  const folder = store.folder(home, repo);
+  await assertInside(home, join(folder, 'backlog.db')); // no symlink between the home and the db
+  const con = db.connect(folder);
+  let open = true;
+  const close = () => { if (open) { open = false; con.close(); } };
+  let code;
+  try { code = await change(a, con, folder); } finally { close(); }
+  if (code || a['dry-run']) return code;
+  // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed
+  const renumbered = await sync.commit(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '));
+  if (renumbered.length) {
+    const again = db.connect(folder);
+    try { db.scan(again, folder, renumbered); } finally { again.close(); }
+  }
+  return 0;
+}
+
+async function change(a, con, folder) {
+  const one = (sql, ...p) => { const r = con.prepare(sql).get(...p); return r ? { ...r } : null; };
+  const hid = one("SELECT id FROM handoff WHERE status='active' LIMIT 1")?.id ?? null;
+
+  // --- pure planning event: explicit replan of the whole backlog (update.py:150-166)
+  if (a.replan) {
+    const idents = a.replan.split(',').map(strip).filter(Boolean);
+    if (a['dry-run']) { say(`ℹ️  [dry-run] would replan backlog leading order: [${idents.map(pyStr).join(', ')}]`); return 0; }
+    const order = store.reorder(folder, idents);
+    db.logEvent(con, 'planning_event', { handoffId: hid, note: a.note || `replan -> ${order.map(([s]) => s).join(', ')}` });
+    db.scan(con, folder);
+    say('📋 PLANNING EVENT — backlog re-prioritized (P0 = next):');
+    for (const [s, i] of order) say(`   P${i}  ${s}`);
+    return 0;
+  }
+
+  if (!a.phase) return refuse('phase is required (or use --replan "id,id,...")');
+  const row = find(con, a.phase);
+  if (!row) return refuse(`no phase ${pyStr(a.phase)} (run scan.py, or new_phase.py to create it)`);
+
+  const path = join(folder, row.path);
+  await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way
+  const { fm, body: text } = parseDoc(readFileSync(path, 'utf8'));
+  let body = text;
+  const changes = {};
+  let moveTarget = null; // --priority is a move-to-rank, applied via reflow (stays dense)
+  for (const k of SETTABLE) {
+    const v = a[k];
+    if (v === undefined) continue;
+    if (k === 'branch') return refuse('--branch is not changed by update.py; use move.py to move an item to another branch'); // identity field (owner rule 2026-10-11)
+    if (k === 'commit' && !strip(v)) return refuse('--commit cannot be cleared');
+    let n;
+    if (['priority', 'seq', 'size_score'].includes(k) && (n = pyInt(v)) === null) throw new BacklogError('INVALID_INPUT', `invalid literal for int() with base 10: ${pyStr(v)}`, 1);
+    if (k === 'priority') { moveTarget = n; continue; }
+    fm[k] = k === 'seq' || k === 'size_score' ? n : v;
+    changes[k] = v;
+  }
+  if (a['set-work-class'] !== undefined) { fm.work_class = classes(a['set-work-class'], WORK_CLASSES, '--set-work-class'); changes.work_class = fm.work_class.join(','); }
+  if (a['set-review-classes'] !== undefined) { fm.review_classes = classes(a['set-review-classes'], REVIEW_CLASSES, '--set-review-classes'); changes.review_classes = fm.review_classes.join(','); }
+  for (const [k, v] of [['estimate_min', a['set-estimate'] === undefined ? undefined : pyInt(a['set-estimate'])], ['complexity', a['set-complexity']], ['layer', a['set-layer']]]) {
+    if (v === undefined) continue;
+    if (k === 'estimate_min' && v <= 0) return refuse('--set-estimate: minutes must be > 0');
+    fm[k] = v;
+    changes[k] = v;
+  }
+  if (a['set-depends-on'] !== undefined) {
+    const deps = [];
+    for (const d of asList(a['set-depends-on'])) {
+      if (!find(con, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in this backlog`);
+      deps.push(/^\d+$/.test(d) ? Number(d) : d);
+    }
+    fm.depends_on = deps;
+    changes.depends_on = deps.join(',') || 'none';
+  }
+  const note = a.note ?? '';
+  if (fm.wait_on && strip(note)) { // the holder's next step on the item ends its wait (update.py:262-264)
+    fm.wait_on = '';
+    body = `${rstrip(body)}\n\nWAIT DONE ${store.now()} (next step on the item)\n`;
+  }
+  if (a.status === 'done' && asList(fm.review_classes).length && fm.review_state !== 'passed') { // reviewed items finish through --close only
+    return refuse(`${row.slug}: has review_classes and review_state ${fm.review_state || 'none'}; use --request-review, then --close after a passing review`);
+  }
+  const completing = a.status === 'done';
+  if (completing && !fm.completed) fm.completed = store.now();
+  fm.updated = store.now();
+  if (a.append) body = `${rstrip(body)}\n\n${a.append}\n`;
+
+  if (a['dry-run']) {
+    const set = Object.keys(changes).length ? `{${Object.entries(changes).map(([k, v]) => `${pyStr(k)}: ${pyVal(v)}`).join(', ')}}` : '(no field changes)';
+    say(`ℹ️  [dry-run] ${row.slug}: would set ${set}${a.append ? '; append body' : ''}${moveTarget !== null ? `; move to P${moveTarget}` : ''}${completing ? '; COMPLETE -> re-prioritize backlog' : ''}`);
+    return 0;
+  }
+
+  store.write({ path, fm, body }, folder);
+  db.logEvent(con, 'state_change', {
+    handoffId: row.handoff_id, phaseId: row.id, branch: fm.branch || '', commitSha: fm.commit || '',
+    note: a.note || `set ${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ')}`,
+  });
+  db.scan(con, folder); // rescan -> the db follows the file
+
+  // --- the planning event: a move-to-rank, or completion re-densifying the remaining backlog (update.py:288-306)
+  let order = null;
+  if (moveTarget !== null) {
+    order = store.reflow(folder, { slug: row.slug, target: moveTarget });
+    changes.priority = `P${new Map(order).get(row.slug) ?? 'None'}`;
+    db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
+  } else if (completing) {
+    order = store.reflow(folder); // the done item leaves the backlog; the rest re-densify
+    db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `completed ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
+  }
+  if (order) db.scan(con, folder);
+
+  say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
+  if (completing) {
+    say('   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).');
+    if (order.length) say(`      backlog now ${order.length} item(s), P0..P${order.length - 1}; next = P0 ${order[0][0]}`);
+    else say('      backlog now empty — no actionable phase remains.');
+    say('      RE-EVALUATE the order now (it is a planning step even if nothing changes):');
+    say('        update.py <phase> --priority <rank>      # promote/demote one');
+    say('        update.py --replan "<id,id,id,...>"       # set the leading order');
+  }
+  return 0;
+}

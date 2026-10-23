@@ -263,29 +263,6 @@ test('a refusal and a dry run make no commit', () => {
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), head);
 });
 
-test('team flags exit 2 "not in this build" and change nothing', () => {
-  const f = seed();
-  const head = git(f.home, 'rev-parse', 'HEAD');
-  const before = fm(f, '002-beta.md');
-  for (const args of [['--claim', 'a'], ['--force'], ['--waiting', 'x'], ['--waiting-done'], ['--set-review-refs', 'a.md'], ['--release', 'a'],
-    ['--request-review', 'a'], ['--start-review'], ['--review', 'pass'], ['--by', 'a'], ['--comments', 'c'], ['--close']]) {
-    const r = run(f, ['2', ...args]);
-    assert.equal(r.status, 2, args.join(' '));
-    assert.equal(r.stderr, `❌ backlog: ${args[0]} is not in this build (the team flags come with jobs 15 and later)\n`);
-    assert.equal(r.stdout, '');
-  }
-  assert.deepEqual(fm(f, '002-beta.md'), before);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
-});
-
-test('a team session (TEAM_REPOSITORY) is refused: exit 2, nothing changed', () => {
-  const f = seed();
-  const r = cli(['update', '2', '--status', 'done'], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: 'acme/demo' } });
-  assert.equal(r.status, 2);
-  assert.match(r.stderr, /TEAM_REPOSITORY/);
-  assert.equal(fm(f, '002-beta.md').fm.status, 'pending');
-});
-
 test('diagnostics that echo the input are redacted', () => {
   const f = seed();
   const r = run(f, ['https://user:s3cret@host/x']);

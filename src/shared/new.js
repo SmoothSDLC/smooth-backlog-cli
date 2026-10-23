@@ -9,6 +9,7 @@ import { parse } from './frontmatter.js';
 import { assertInside, git, itemSelector, redact, slugify } from './safety.js';
 import { branch as callerBranch, folder as repoFolder, nextSeq, now, reflow, repoId, resolveHome, write } from './store.js';
 import { commit, pull } from './sync.js';
+import { teamScope } from './team.js';
 
 const WORK_CLASSES = ['app-code', 'ui', 'api', 'tests', 'iac', 'network', 'identity', 'security', 'data', 'delivery', 'verify', 'docs', 'contract', 'chunk', 'skills']; // lib_db.py:601
 const REVIEW_CLASSES = [...WORK_CLASSES, 'code'];
@@ -68,13 +69,6 @@ export function hasDefinitionOfDone(text) {
     if ((next ? rest.slice(0, next.index) : rest).replace(/^[ \t\r\n:*]+|[ \t\r\n:*]+$/g, '')) return true;
   }
   return false;
-}
-
-// lib_db.py:205-211: a team session is bound to a repository and a branch by the environment.
-function teamScope() {
-  const repo = (process.env.TEAM_REPOSITORY || '').trim();
-  input(!repo || /^[\w.-]+\/[\w.-]+$/.test(repo), `TEAM_REPOSITORY='${repo}': expected owner/name`);
-  return { repo, branch: (process.env.TEAM_BRANCH || '').trim() };
 }
 
 // lib_db.py:587-595: by number (a live item before an archived one) or by slug; the mirror database is the lookup.

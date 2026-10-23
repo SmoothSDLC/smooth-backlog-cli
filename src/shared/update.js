@@ -1,16 +1,18 @@
 // Shared-mode `backlog update` (cli-parity job 11), non-team flags. Port of update.py:88-257 and its commit tail
 // (update.py:327-332) in the oracle's order: pull, resolve the item, change, write the file, log the event, scan into
 // backlog.db, planning event (--priority move, completion, --replan), commit and push. The item is found by number
-// (seq) or slug, never by database row id. The team flags (update.py:27-104) are refused: jobs 15 and later add them.
+// (seq) or slug, never by database row id. The team flags (update.py:27-104) go to lifecycle.js (job 15).
 // shortcut: argparse's unique-prefix abbreviations (--stat) are not accepted; no per-folder run lock around the command.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
+import { closeNow, headline, missingFields, step } from './lifecycle.js';
 import { assertInside, itemSelector, redact } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
+import { teamScope, uncoveredReviewClasses } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-work-class', 'set-review-classes', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on'];
@@ -20,7 +22,7 @@ const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close'];
 // lib_db.py:601-606
 const WORK_CLASSES = ['app-code', 'ui', 'api', 'tests', 'iac', 'network', 'identity', 'security', 'data', 'delivery', 'verify', 'docs', 'contract', 'chunk', 'skills'];
 const REVIEW_CLASSES = [...WORK_CLASSES, 'code'];
-const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'] };
+const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'] };
 
 // Python str.strip()/rstrip() whitespace (not JS's: \x1c-\x1f and \x85 count, ﻿ does not).
 const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
@@ -52,7 +54,7 @@ const usage = message => new BacklogError('INVALID_INPUT', message); // argparse
 // A token that argparse takes as a value or positional: no leading dash, a lone dash, a negative number, or a space inside.
 const valueLike = s => s !== undefined && (!s.startsWith('-') || s === '-' || /^-(\d+|\d*\.\d+)$/.test(s) || s.includes(' '));
 
-// update.py:107-140 argparse. Returns the values plus `team`, the first team flag on the command line.
+// update.py:107-140 argparse.
 function parse(argv) {
   const a = {}; let past = false;
   for (let i = 0; i < argv.length; i++) {
@@ -74,7 +76,6 @@ function parse(argv) {
       if (CHOICES[flag] && !CHOICES[flag].includes(v)) throw usage(`argument --${flag}: invalid choice: ${pyStr(v)} (choose from ${CHOICES[flag].join(', ')})`);
       a[flag] = v;
     } else throw usage(`unrecognized arguments: ${tok}`);
-    if ([...TEAM_VALUE, ...TEAM_BOOL].includes(flag)) a.team ??= flag;
   }
   return a;
 }
@@ -102,20 +103,16 @@ export async function run(argv) {
 
 async function update(argv) {
   const a = parse(argv);
-  if (a.team) return die(`--${a.team} is not in this build (the team flags come with jobs 15 and later)`);
-  if ((process.env.TEAM_REPOSITORY ?? '').trim()) return die('TEAM_REPOSITORY is set: team sessions are not in this build (jobs 15 and later)');
-
   const { home } = store.resolveHome();
   await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
-  let repo;
-  try { repo = store.repoId(process.cwd()); } catch (e) { return die(e.message); }
-  const folder = store.folder(home, repo);
+  let repo; let folder;
+  try { repo = teamScope().repo || store.repoId(process.cwd()); folder = store.folder(home, repo); } catch (e) { return die(e.message); } // lib_db.py:122-129
   await assertInside(home, join(folder, 'backlog.db')); // no symlink between the home and the db
   const con = db.connect(folder);
   let open = true;
   const close = () => { if (open) { open = false; con.close(); } };
   let code;
-  try { code = await change(a, con, folder); } finally { close(); }
+  try { code = await change(a, con, folder, repo); } finally { close(); }
   if (code || a['dry-run']) return code;
   // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed
   const renumbered = await sync.commit(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '));
@@ -126,7 +123,7 @@ async function update(argv) {
   return 0;
 }
 
-async function change(a, con, folder) {
+async function change(a, con, folder, repo) {
   const one = (sql, ...p) => { const r = con.prepare(sql).get(...p); return r ? { ...r } : null; };
   const hid = one("SELECT id FROM handoff WHERE status='active' LIMIT 1")?.id ?? null;
 
@@ -163,6 +160,7 @@ async function change(a, con, folder) {
     fm[k] = k === 'seq' || k === 'size_score' ? n : v;
     changes[k] = v;
   }
+  const incomplete = missingFields(fm, body); // as the item is before this call
   if (a['set-work-class'] !== undefined) { fm.work_class = classes(a['set-work-class'], WORK_CLASSES, '--set-work-class'); changes.work_class = fm.work_class.join(','); }
   if (a['set-review-classes'] !== undefined) { fm.review_classes = classes(a['set-review-classes'], REVIEW_CLASSES, '--set-review-classes'); changes.review_classes = fm.review_classes.join(','); }
   for (const [k, v] of [['estimate_min', a['set-estimate'] === undefined ? undefined : pyInt(a['set-estimate'])], ['complexity', a['set-complexity']], ['layer', a['set-layer']]]) {
@@ -180,15 +178,28 @@ async function change(a, con, folder) {
     fm.depends_on = deps;
     changes.depends_on = deps.join(',') || 'none';
   }
-  const note = a.note ?? '';
-  if (fm.wait_on && strip(note)) { // the holder's next step on the item ends its wait (update.py:262-264)
+  if (a['set-review-refs'] !== undefined) {
+    const refs = asList(a['set-review-refs']);
+    const missing = uncoveredReviewClasses(asList(fm.review_classes), refs);
+    if (missing.length) return refuse(`${row.slug}: no review ref covers ${missing.join(', ')} (references/review/<class>.md or <class>.example.md in cody-coding-model)`);
+    fm.review_refs = refs;
+    changes.review_refs = refs.join(',');
+  }
+  const todo = step(a, { fm, slug: row.slug, folder, repo, incomplete, given: SETTABLE.filter(k => a[k] !== undefined) }); // update.py:181-241
+  if (todo.refuse) return refuse(todo.refuse);
+  const { event } = todo;
+  if (todo.text) {
+    changes[event] = headline(todo.text);
+    body = `${rstrip(body)}\n\n${todo.text}\n`;
+  }
+  if (fm.wait_on && event !== 'waiting' && (strip(a.note ?? '') || ['review_requested', 'reviewed', 'closed'].includes(event))) { // the holder's next step on the item ends its wait
     fm.wait_on = '';
     body = `${rstrip(body)}\n\nWAIT DONE ${store.now()} (next step on the item)\n`;
   }
-  if (a.status === 'done' && asList(fm.review_classes).length && fm.review_state !== 'passed') { // reviewed items finish through --close only
+  if (a.status === 'done' && event !== 'closed' && asList(fm.review_classes).length && fm.review_state !== 'passed') { // reviewed items finish through --close only
     return refuse(`${row.slug}: has review_classes and review_state ${fm.review_state || 'none'}; use --request-review, then --close after a passing review`);
   }
-  const completing = a.status === 'done';
+  const completing = a.status === 'done' || event === 'closed';
   if (completing && !fm.completed) fm.completed = store.now();
   fm.updated = store.now();
   if (a.append) body = `${rstrip(body)}\n\n${a.append}\n`;
@@ -200,7 +211,7 @@ async function change(a, con, folder) {
   }
 
   store.write({ path, fm, body }, folder);
-  db.logEvent(con, 'state_change', {
+  db.logEvent(con, event, {
     handoffId: row.handoff_id, phaseId: row.id, branch: fm.branch || '', commitSha: fm.commit || '',
     note: a.note || `set ${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ')}`,
   });
@@ -219,6 +230,7 @@ async function change(a, con, folder) {
   if (order) db.scan(con, folder);
 
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
+  if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug, a.by));
   if (completing) {
     say('   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).');
     if (order.length) say(`      backlog now ${order.length} item(s), P0..P${order.length - 1}; next = P0 ${order[0][0]}`);

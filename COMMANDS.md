@@ -233,8 +233,8 @@ Either option may be followed by a command, which then runs in that mode. `--use
 path is a clone of the backlog repository on its `main` branch and pulls it. In shared mode nothing is written into
 the consuming repository. Only the commands below exist in this mode; each pulls the backlog repository first, and a
 command that changes an item commits and pushes the change before it exits. An item is named by its number or its
-slug. With `--json`, the shared-mode commands print the data itself and not the `{"ok","data"}` envelope of the local mode. The team flags (claim, review, close, waiting, pop and the team views of `query`) are not in this build; every
-flag list below marks them "Not in this build". In shared mode `backlog update` changes an item, while in local mode
+slug. With `--json`, the shared-mode commands print the data itself and not the `{"ok","data"}` envelope of the local mode. The team flags of `update` and the team views of `query` work; `--pop`, `--plan` and the other
+flags that a list below marks "Not in this build" are refused. In shared mode `backlog update` changes an item, while in local mode
 it updates the CLI itself. The text of each command below is what `backlog <command> --help` prints.
 
 ### backlog new
@@ -380,15 +380,15 @@ Options:
   --note NOTE
       The note for the event log. Without it the log records which fields were set.
   --claim AGENT
-      Not in this build. Take the item for an agent (team session).
+      Take the item for an agent: it becomes in progress and claimed by that agent (team session).
   --force
-      Not in this build. Together with --claim: claim although the agent already holds active items.
+      Together with --claim: claim although the agent already holds active items.
   --waiting WHAT
-      Not in this build. Record that the holder of the item waits for something asynchronous (team session).
+      Record that the holder of the item waits for something asynchronous (team session).
   --waiting-done
-      Not in this build. Clear the wait of the item (team session).
+      Clear the wait of the item (team session).
   --set-review-refs PATHS
-      Not in this build. Set the review references of the item (team session).
+      Set the review references of the item, as comma-separated paths; they must cover every review class (team session).
   --set-work-class CLASSES
       Replace the work classes of the item, as comma-separated classes from: app-code, ui, api, tests, iac, network, identity, security, data, delivery, verify, docs, contract, chunk, skills.
   --set-review-classes CLASSES
@@ -403,25 +403,26 @@ Options:
   --set-layer {1,2,3,4,5,process}
       Replace the layer of the item: 1 to 5, or the word process.
   --release AGENT
-      Not in this build. Give the item back, pending and unclaimed (team session).
+      Give the item back, pending and unclaimed (team session).
   --request-review AGENT|any
-      Not in this build. Ask an agent, or any agent, for a review (team session).
+      Ask an agent, or any agent, for a review; --note says what to review (team session).
   --start-review
-      Not in this build. Record that the reviewer starts the requested review (team session).
+      Record that the reviewer starts the requested review (team session).
   --review {pass,changes}
-      Not in this build. Record a review verdict (team session).
+      Record a review verdict (team session).
   --by AGENT
-      Not in this build. The agent that reviews or closes the item (team session).
+      The agent that reviews or closes the item (team session).
   --comments COMMENTS
-      Not in this build. The findings of a review (team session).
+      The findings of a review; they must cite one of the review references of the item (team session).
   --close
-      Not in this build. Complete the item after a passing review (team session).
+      Complete the item after a passing review; --summary says what was delivered (team session).
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
   --help
       Print this text and exit. Nothing is read or changed.
 
-The team flags above, and a session with TEAM_REPOSITORY set, are refused with exit code 2 in this build.
+A call takes at most one team step (--claim, --release, --request-review, --start-review, --review, --close, --waiting, --waiting-done).
+A session with TEAM_REPOSITORY (and TEAM_BRANCH) set works only on items of that repository and branch.
 On success the command prints a line that starts with a check mark, the slug and the fields it set.
 
 Exit codes:
@@ -443,6 +444,7 @@ backlog query — read the backlog of this repository: the queue, one item, the 
 Usage:
   backlog query [--status] [--all] [--branch <name>] [--json]
   backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
+  backlog query --claimable | --reviewable | --blocked [--classes <classes>] [--agent <name>] [--roster <file>] [--scope branch|repo|all] [--json]
 
 Reads the backlog and never changes it. Without a view option it prints the full stack of the branch: the open
 items in queue order (priority 0 is next), then the finished ones. Items that are not on the queue because their file
@@ -481,17 +483,19 @@ Options:
       The branch whose queue to show. The default is the branch that is checked out here; a detached HEAD needs
       this option or --all.
   --claimable
-      Not in this build. Open, unclaimed items whose dependencies are done (team session).
+      Open, unclaimed items whose dependencies are all done and whose work classes are within --classes, in priority order
+      (team session).
   --reviewable
-      Not in this build. Items with a requested review (team session).
+      Items with a requested review that --agent may start or continue and whose review classes meet --classes (team session).
   --blocked
-      Not in this build. Open items that wait for dependencies that are not done (team session).
+      Open items that wait for dependencies that are not done, with the status and holder of each dependency (team session).
   --classes CLASSES
-      Not in this build. The classes an agent covers (team session).
+      The classes the agent covers, comma-separated: work classes for --claimable, review classes for --reviewable (team session).
   --pop
       Not in this build. The one next action of an agent (team session).
   --agent AGENT
-      Not in this build. The agent that asks for its next action (team session).
+      The agent that asks. With --claimable or --reviewable it also switches to team rules: an incomplete item is not offered
+      and the agent never reviews its own work (team session).
   --plan
       Not in this build. The dispatch plan of the team for this branch (team session).
   --lead LEAD
@@ -503,16 +507,20 @@ Options:
   --claim-now
       Not in this build. Claim the item when the next action is to claim (team session).
   --roster ROSTER
-      Not in this build. The team roster (team session).
+      The team roster as a JSON file {agent: {work_classes, review_classes}}; the default is the file named by TEAM_ROSTER.
+      Any member but the author may review: holders of a review class of the item at once, the others after
+      TEAM_REVIEW_HOLDER_PRIORITY_MIN (5) minutes, or at once when no other roster member holds one (team session).
   --scope {branch,repo,all}
-      Not in this build. How far the team views look: this branch, this repository, or every repository.
+      How far the team views look: this branch (the default), every branch of this repository, or also the chunk and docs items
+      of every repository. The widest scope for chunk and docs items is capped by the line refinement_scope: off|branch|repo|all
+      in the file backlog.scope of the folder of this repository (default branch).
   --headless
       Not in this build. Record the next-step decision without asking a question. BACKLOG_HEADLESS=1 is refused
       the same way by the human-readable --next view.
   --help
       Print this text and exit. Nothing is read or changed.
 
-The team options above are refused with exit code 2 in this build.
+The options --pop, --plan, --lead, --agents, --review-classes, --claim-now and --headless are refused with exit code 2 in this build.
 
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.

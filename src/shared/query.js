@@ -1,7 +1,7 @@
 // Shared-mode read views (cli-parity job 12): `backlog query` and `backlog next`. Port of query.py:361-619
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the backlog.db mirror,
 // the oracle's order: pull, no-backlog check, branch, connect, findings. Output strings and --json match query.py.
-// Never writes an item (the db is opened as lib_db.connect does). Team views (views.js, pop.js) and --headless are refused.
+// Never writes an item (the db is opened as lib_db.connect does). The team views are views.js; --pop and --plan (pop.js) and --headless are refused.
 import { existsSync, realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
@@ -9,11 +9,13 @@ import * as db from './db.js';
 import { assertInside, git, itemSelector, redact } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
+import { teamScope } from './team.js';
+import { SCOPES, teamView } from './views.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'pop', 'plan', 'claim-now', 'headless'];
 const VALUE = ['phase', 'by-branch', 'branch', 'classes', 'agent', 'lead', 'agents', 'review-classes', 'roster', 'scope'];
-// Flags of jobs 16 (views.js) and 20 (pop.js): refused until those modules exist.
-const TEAM = new Set(['claimable', 'reviewable', 'blocked', 'pop', 'plan', 'classes', 'agent', 'lead', 'agents', 'review-classes', 'claim-now', 'roster', 'scope']);
+// Flags of --pop and --plan (job 20, pop.js): refused until that module exists.
+const TEAM = new Set(['pop', 'plan', 'lead', 'agents', 'review-classes', 'claim-now']);
 const ACTIONABLE = ['pending', 'in_progress'];
 const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
 
@@ -26,6 +28,7 @@ function parse(argv) {
     else if (VALUE.includes(flag)) {
       const v = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('-') ? undefined : argv[++i]);
       if (v === undefined) throw new BacklogError('INVALID_INPUT', `argument --${flag}: expected one argument`);
+      if (flag === 'scope' && !SCOPES.includes(v)) throw new BacklogError('INVALID_INPUT', `argument --scope: invalid choice: ${repr(v)} (choose from ${SCOPES.map(repr).join(', ')})`);
       a[flag] = v;
     } else if (flag === 'events') a.events = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('-') ? '*' : argv[++i]);
     else throw new BacklogError('INVALID_INPUT', `unrecognized arguments: ${argv[i]}`);
@@ -115,19 +118,20 @@ export async function run(argv) {
   if (a.pop && !a.agent) return die('--pop needs --agent <your name>');
   if (a.headless) return die('--headless is not in this build');
   const team = Object.keys(a).find(k => TEAM.has(k));
-  if (team) return die(`--${team}: the team views are not built yet (views.js, pop.js)`);
+  if (team) return die(`--${team}: the team agent views are not built yet (pop.js)`);
 
   const cwd = process.cwd();
   let repo;
-  try { repo = store.repoId(cwd); } catch (e) { return die(e.message); }
+  try { repo = teamScope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }
   const { home } = store.resolveHome();
   try { await sync.pull(home); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
-  const folder = store.folder(home, repo);
+  let folder;
+  try { folder = store.folder(home, repo); } catch (e) { return die(e.message); } // TEAM_REPOSITORY=../x passes the owner/name pattern; the folder must stay inside the home
   if (!existsSync(join(folder, 'backlog.db'))) {
     say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet (no folder ${folder})`);
     return 0;
   }
-  const branch = a.branch || (await git(['branch', '--show-current'], cwd)).stdout.trim();
+  const branch = a.branch || teamScope().branch || (await git(['branch', '--show-current'], cwd)).stdout.trim(); // lib_db.git_branch: TEAM_BRANCH wins
   const plain = a.phase || a.events !== undefined || a['by-branch'] || a.critical;
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
@@ -149,6 +153,8 @@ export async function run(argv) {
       else if (!criticalBanner(crit)) say('✅ no open CRITICAL items on the backlog');
       return 0;
     }
+
+    if (a.claimable || a.reviewable || a.blocked) return teamView(a, { all, hid, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
 
     if (a.next) {
       const r = all(OPEN, hid).find(x => !excluded.has(x.id) && (a.all || ((x.repository || '') === repo && (x.branch || '') === branch)));

@@ -219,9 +219,9 @@ test('a failed pull stops the read: exit 3 and nothing printed on stdout', t => 
   assert.match(n.stderr, /^❌ backlog: could not update .* from origin\/main/);
 });
 
-test('team views and --headless are refused with exit 2 until their modules exist', t => {
+test('--pop, --plan and --headless are refused with exit 2 until their modules exist (the team views are views.js)', t => {
   const f = fx();
-  for (const args of [['--claimable', '--classes', 'tests'], ['--reviewable', '--classes', 'code'], ['--blocked'], ['--pop', '--agent', 'a'], ['--next', '--agent', 'a'], ['--plan'], ['--next', '--headless']]) {
+  for (const args of [['--pop', '--agent', 'a'], ['--next', '--agent', 'a'], ['--plan'], ['--next', '--headless']]) {
     const n = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
     assert.equal(n.status, 2, args.join(' '));
     assert.equal(n.stdout, '');

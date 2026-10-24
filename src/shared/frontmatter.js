@@ -19,10 +19,12 @@ const trim = (s) => s.replace(/^[ \t]+|[ \t]+$/g, '');
 const IDENT = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 // False for a text that does not start with a front-matter block (store.load skips such files in phases/: they are not items).
-export const hasFrontMatter = text => FM_SPLIT.test(String(text ?? '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'));
+// [bom, rest]: the leading byte-order mark every reader of a front-matter file ignores, and the text after it. Text-level edits keep the mark.
+export const splitBom = text => (String(text).startsWith('\uFEFF') ? ['\uFEFF', String(text).slice(1)] : ['', String(text)]);
+export const hasFrontMatter = text => FM_SPLIT.test(splitBom(text ?? '')[1].replace(/\r\n?/g, '\n'));
 
 export function parse(text) {
-  const source = String(text ?? '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'); // a BOM is not content: it hid the front matter // python's text mode reads CRLF and lone CR as \n (beyond strict parity: safe direction)
+  const source = splitBom(text ?? '')[1].replace(/\r\n?/g, '\n'); // a BOM is not content: it hid the front matter // python's text mode reads CRLF and lone CR as \n (beyond strict parity: safe direction)
   const m = FM_SPLIT.exec(source);
   if (!m) return { fm: {}, body: source };
   return { fm: parseFm(m[1]), body: m[2] };

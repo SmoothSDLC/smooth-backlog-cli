@@ -112,7 +112,7 @@ test('audit t6: a BOM file keeps its front matter; a phases/ file without front 
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
   const alpha = join(s.folder, 'phases', '001-alpha-job.md');
-  writeFileSync(alpha, `﻿${readFileSync(alpha, 'utf8')}`); // saved by an editor that adds a BOM
+  writeFileSync(alpha, `\uFEFF${readFileSync(alpha, 'utf8')}`); // saved by an editor that adds a BOM
   const readme = join(s.folder, 'phases', 'README.md'); const note = '\nnotes for humans\n\n## not front matter\n';
   writeFileSync(readme, note);
   const r = s.run(NEW('beta job', '--priority', '0'));
@@ -123,4 +123,17 @@ test('audit t6: a BOM file keeps its front matter; a phases/ file without front 
   assert.ok(existsSync(join(s.folder, 'phases', '002-beta-job.md')));
   const q = s.run(['query', '--all']);
   assert.equal(q.status, 0, out(q)); assert.match(q.stdout, /phases\/README\.md has no front matter/);
+});
+
+test('review: archive stamps the status of a file that starts with a BOM and keeps the BOM', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0);
+  assert.equal(s.run(NEW('beta job')).status, 0);
+  const path = join(s.folder, 'phases', '001-alpha-job.md');
+  writeFileSync(path, `\uFEFF${readFileSync(path, 'utf8')}`);
+  const r = s.run(['archive', '1', '--force']);
+  assert.equal(r.status, 0, out(r));
+  const moved = readFileSync(join(s.folder, 'archive', 'phases', '001-alpha-job.md'), 'utf8');
+  assert.ok(moved.startsWith('\uFEFF---\n')); assert.match(moved, /^status: archived$/m);
+  assert.doesNotMatch(moved, /status: "pending"/);
 });

@@ -7,6 +7,7 @@ import { join, relative, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { assertInside, git, itemSelector, redact } from './safety.js';
+import { splitBom } from './frontmatter.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { outsideTeam, teamScope } from './team.js';
@@ -103,13 +104,13 @@ export async function run(argv) {
 // Beyond the oracle (text.split("---", 2) stops at a --- inside a name or summary): the closing delimiter is a line of its own,
 // as in the front-matter parser (frontmatter.js FM_SPLIT).
 function stamp(path) {
-  const text = readFileSync(path, 'utf8');
+  const [bom, text] = splitBom(readFileSync(path, 'utf8')); // parse() accepts a BOM; the file keeps it
   // CRLF and lone CR delimiters, as frontmatter.parse reads them; the file keeps its own line endings
   const m = /^(---(\r\n?|\n))([\s\S]*?)(?:\r\n?|\n)---(?=\r\n?|\n|$)/.exec(text);
   if (!m) return;
   const fmText = /(?<![^\r\n])status:/.test(m[3]) ? m[3].replace(/(?<![^\r\n])status:[^\r\n]*/, 'status: archived')
     : `${m[3]}${m[3] === '' ? '' : m[2]}status: archived`; // no status key: the item reads as pending, so the key is added
-  writeFileSync(path, `${m[1]}${fmText}${text.slice(m[1].length + m[3].length)}`);
+  writeFileSync(path, `${bom}${m[1]}${fmText}${text.slice(m[1].length + m[3].length)}`);
 }
 
 async function archive(a, con, { folder, close }) {

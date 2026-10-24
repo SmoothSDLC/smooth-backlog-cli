@@ -179,3 +179,18 @@ test('review: releasing a claim after --request-review does not let the author r
   const other = s.run(['update', '1', '--review', 'pass', '--by', 'bob', '--comments', 'checked against references/review/docs.md']);
   assert.equal(other.status, 0, out(other)); // another agent still can
 });
+
+test('review: a clone whose upstream is origin/side and push.default=upstream still publishes to origin/main', t => {
+  const s = solo(t);
+  const bare = join(s.tmp, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  gitIn(s.home, 'push', '-q', 'origin', 'HEAD:refs/heads/side');
+  gitIn(s.home, 'fetch', '-q', 'origin');
+  gitIn(s.home, 'branch', '--set-upstream-to=origin/side');
+  gitIn(s.home, 'config', 'push.default', 'upstream');
+  const side = gitIn(bare, 'rev-parse', 'side');
+  const r = s.run(NEW('alpha job'));
+  assert.equal(r.status, 0, out(r));
+  assert.match(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main'), /acme\/demo\/phases\/001-alpha-job\.md/);
+  assert.equal(gitIn(bare, 'rev-parse', 'side'), side, 'side is untouched');
+  assert.equal(s.run(['update', '1', '--summary', 'again']).status, 0); // later pulls follow main too
+});

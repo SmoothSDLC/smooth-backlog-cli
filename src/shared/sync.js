@@ -14,7 +14,7 @@ import { parse } from './frontmatter.js';
 import { connect, scan } from './db.js';
 import * as store from './store.js';
 
-const PULL = ['pull', '-q', '--rebase', '--autostash'];
+const PULL = ['pull', '-q', '--rebase', '--autostash', 'origin', 'main']; // explicit: the clone's tracking branch and push.default are the user's, not ours
 const pad = n => String(n).padStart(3, '0');
 // A renumbering is [old, new] of one repository folder: a number is only taken in its own folder, so a caller applies it to that folder alone.
 const pairOf = (old, next, folder) => Object.defineProperty([old, next], 'folder', { value: resolve(folder) });
@@ -109,7 +109,7 @@ const changedBy = async (home, range) => (await g(home, ['diff', '-z', '--no-ren
 // Files the unpushed commits added to any <owner>/<name>/phases or archive folder, renumbered when their
 // seq is already held by another file of the folder: git mv, phase/seq keys, body heading, amend.
 async function renumber(home, stream, mirror = false) {
-  const added = (await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=A', '@{u}', 'HEAD']))
+  const added = (await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=A', 'origin/main', 'HEAD']))
     .stdout.split('\0').filter(f => /^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(f));
   // Working edits (restored by the autostash) stay out of the repair, which stages and amends: stash them, pop them afterwards.
   const stashed = added.length > 0 && (await g(home, ['status', '--porcelain', '--untracked-files=no'])).stdout.trim() !== '';
@@ -148,7 +148,7 @@ async function renumberFiles(home, stream, added, mirror) {
     moves.push({ folder: name, old, slug: String(mine.fm.phase), next, newSlug: pad(next) + String(mine.fm.phase).replace(/^\d+/, '') });
   }
   if (moves.length) { // the local dependents of the renumbered items follow them
-    const touched = await remapLocal(home, moves, await changedBy(home, ['@{u}', 'HEAD']), '@{u}', new Set());
+    const touched = await remapLocal(home, moves, await changedBy(home, ['origin/main', 'HEAD']), 'origin/main', new Set());
     if (touched.length) {
       if (mirror) {
         for (const name of new Set(touched.map(f => f.split('/').slice(0, 2).join('/')))) {
@@ -181,7 +181,7 @@ async function parkConflict(home) {
   await g(home, ['rebase', '--abort']);
   if (!unmerged.length) return '';
   const branch = `backlog-unmerged-${new Date().toISOString().replace(/[-:]|\.\d+/g, '')}`;
-  if ((await g(home, ['branch', branch, 'HEAD'])).code || (await g(home, ['reset', '-q', '--keep', '@{u}'])).code) return '';
+  if ((await g(home, ['branch', branch, 'HEAD'])).code || (await g(home, ['reset', '-q', '--keep', 'origin/main'])).code) return '';
   return `it conflicts with origin/main in ${unmerged.slice(0, 3).join(', ')}${unmerged.length > 3 ? ', ...' : ''}; the local commit is parked on branch ${branch} `
     + `(git -C ${home} log ${branch}) and the clone is reset to origin/main, so later commands work. Redo the change on top of the current backlog`;
 }
@@ -279,7 +279,7 @@ export async function commit(home, folders, message) {
       } else {
         await refuseConflicts(home);
         renumbered.push(...await renumber(home, process.stdout));
-        const ps = await g(home, ['push', '-q']);
+        const ps = await g(home, ['push', '-q', 'origin', 'HEAD:refs/heads/main']);
         if (!ps.code) return renumbered;
         err = `push failed: ${ps.stderr.slice(0, 300)}`;
       }

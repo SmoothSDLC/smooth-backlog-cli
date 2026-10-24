@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { operation } from '../errors.js';
-import { parse } from './frontmatter.js';
+import { hasFrontMatter, parse } from './frontmatter.js';
 import { assertFolder, assertNoSymlinks, journalled, note, now, reflow } from './store.js';
 import { commit } from './sync.js';
 
@@ -54,8 +54,8 @@ function loadPhases(folder) {
     assertNoSymlinks(folder, join(folder, path));
     const text = readFileSync(join(folder, path), 'utf8');
     const sha256 = createHash('sha256').update(text).digest('hex'); // lib_db.py:163-164
-    return { path, ...parse(text), sha256, sha: sha256 };
-  });
+    return { path, text, ...parse(text), sha256, sha: sha256 };
+  }).filter(i => hasFrontMatter(i.text)).map(({ text, ...item }) => item); // a README or note is no item: same rule as store.load
 }
 
 // lib_db.py connect + _migrate; the busy timeout is Python's 30 s. Opening an up-to-date db writes nothing.

@@ -137,3 +137,18 @@ test('review: archive stamps the status of a file that starts with a BOM and kee
   assert.ok(moved.startsWith('\uFEFF---\n')); assert.match(moved, /^status: archived$/m);
   assert.doesNotMatch(moved, /status: "pending"/);
 });
+
+test('review: a phases/ file without front matter is no item for new, query or update (no fake mirror row, never rewritten)', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0);
+  const readme = join(s.folder, 'phases', 'README.md'); const note = 'notes for humans\n';
+  writeFileSync(readme, note);
+  assert.equal(s.run(NEW('beta job')).status, 0);
+  const q = s.run(['query', '--phase', 'README']);
+  assert.doesNotMatch(q.stdout, /README\b.*pending|phase README/i, out(q));
+  const u = s.run(['update', 'README', '--summary', 'test']);
+  assert.equal(u.status, 1, out(u));
+  assert.equal(readFileSync(readme, 'utf8'), note);
+  const con = db.connect(s.folder);
+  try { assert.equal(con.prepare("SELECT COUNT(*) AS n FROM phase WHERE slug LIKE 'README%'").get().n, 0); } finally { con.close(); }
+});

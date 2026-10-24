@@ -419,3 +419,21 @@ test('review P2: move --to-repository refuses an item with depends_on, before an
   assert.equal(run(f, 'update', ['3', '--set-depends-on', 'none']).status, 0);
   assert.equal(run(f, 'move', ['3', '--to-repository', 'other/proj']).status, 0);
 });
+
+test('review P1: move --to-repository whose target scan throws removes the target copy and leaves the source untouched', () => {
+  const f = seed();
+  const first = join(f.other, 'phases', '001-first.md'); // an existing target item the target scan cannot read
+  writeFileSync(first, readFileSync(first, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n'));
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  const src = readFileSync(join(f.folder, 'phases', '003-gamma.md'));
+  const rows = () => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM phase ORDER BY id').all().concat(c.prepare('SELECT * FROM event ORDER BY id').all())); } finally { c.close(); } };
+  const before = rows();
+  const target = names(f.other, 'phases');
+  const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
+  assert.notEqual(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(names(f.other, 'phases'), target, 'no copy is left in the target');
+  assert.deepEqual(readFileSync(join(f.folder, 'phases', '003-gamma.md')), src);
+  assert.equal(rows(), before);
+  assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', 'other/proj'), 'M other/proj/phases/001-first.md');
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+});

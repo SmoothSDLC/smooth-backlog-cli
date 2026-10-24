@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { gitIn } from './shared-concurrency.js';
@@ -193,4 +196,23 @@ test('review: a clone whose upstream is origin/side and push.default=upstream st
   assert.match(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main'), /acme\/demo\/phases\/001-alpha-job\.md/);
   assert.equal(gitIn(bare, 'rev-parse', 'side'), side, 'side is untouched');
   assert.equal(s.run(['update', '1', '--summary', 'again']).status, 0); // later pulls follow main too
+});
+
+test('review P1: a command killed (kill -9) mid-mutation is rolled back by the next command before it publishes anything', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0); assert.equal(s.run(NEW('beta job')).status, 0);
+  const bare = join(s.tmp, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  const item = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(item, 'utf8');
+  const child = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), 'shared-audit-child.js'), s.home, s.folder], { encoding: 'utf8' });
+  assert.equal(child.signal, 'SIGKILL', child.stderr);
+  assert.equal(existsSync(item), false, 'the child died after its move');
+  const r = s.run(['update', '2', '--summary', 'next']);
+  assert.equal(r.status, 0, out(r)); assert.match(r.stderr, /rolled back a command that was killed/);
+  assert.equal(readFileSync(item, 'utf8'), before, 'item 1 is back, still pending');
+  assert.equal(existsSync(join(s.folder, 'archive', 'phases', '001-alpha-job.md')), false);
+  const con = db.connect(s.folder);
+  try { assert.deepEqual({ ...con.prepare('SELECT status, path FROM phase WHERE seq=1').get() }, { status: 'pending', path: 'phases/001-alpha-job.md' }); } finally { con.close(); }
+  const tree = gitIn(bare, 'ls-tree', '-r', '--name-only', 'main');
+  assert.match(tree, /acme\/demo\/phases\/001-alpha-job\.md/); assert.doesNotMatch(tree, /archive/);
+  assert.equal(gitIn(s.home, 'status', '--porcelain'), '');
 });

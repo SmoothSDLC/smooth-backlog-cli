@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { operation } from '../errors.js';
 import { hasFrontMatter, parse } from './frontmatter.js';
-import { assertFolder, assertNoSymlinks, journalled, note, now, reflow } from './store.js';
+import { assertFolder, assertNoSymlinks, beginJournal, endJournal, journalled, note, now, reflow } from './store.js';
 import { commit } from './sync.js';
 
 // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr (as store.nextSeq does).
@@ -95,7 +95,9 @@ export async function undoOnThrow(db, folder, fn) {
   const rowsOf = () => ['handoff', 'phase', 'event'].map(t => [t, db.prepare(`SELECT * FROM ${t}`).all().map(r => ({ ...r }))]);
   const tables = rowsOf();
   let touched;
-  try { return await journalled(async j => { touched = j; return fn(); }); } catch (e) {
+  const opened = beginJournal(folder);
+  try {
+   try { return await journalled(async j => { touched = j; return fn(); }); } catch (e) {
     for (const [p, prior] of touched) {
       if (prior === null) rmSync(p, { force: true }); else { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, prior); }
     }
@@ -113,6 +115,7 @@ export async function undoOnThrow(db, folder, fn) {
     // a nested undo that succeeded hands its paths to the outer one, which may still fail
     if (touched) for (const [p, prior] of touched) note(p, prior);
   }
+  } finally { if (opened) endJournal(); }
 }
 
 // lib_db.py log_event

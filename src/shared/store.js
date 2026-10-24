@@ -4,7 +4,7 @@
 // The surface is synchronous (spawnSync, tmp + rename) so sync and async callers can use it.
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, writeSync, realpathSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { operation } from '../errors.js';
@@ -72,6 +72,7 @@ export function cloneLocked(home, fn) {
   // a normal update (pull, write, push over the network) can take a while: a command behind it waits, 120 s unless BACKLOG_LOCK_WAIT_MS says otherwise
   return locked(path, async () => {
     held.add(path);
+    recoverJournal(home); // a killed predecessor's half-done change goes first
     try { return await fn(); } finally { held.delete(path); }
   }, { wait: Number(process.env.BACKLOG_LOCK_WAIT_MS) > 0 ? Number(process.env.BACKLOG_LOCK_WAIT_MS) : 120000, takeOver: true });
 }
@@ -129,9 +130,53 @@ export const assertFolder = dir => assertNoSymlinks(dirname(dirname(resolve(dir)
 // Whoever changes an item file calls note(path) first; write() does.
 const journals = [];
 export const journalled = fn => { const j = new Map(); journals.push(j); return fn(j).finally(() => journals.pop()); };
+
+// The recovery journal: the same priors, on disk (fsynced) before each write, for the outermost undoOnThrow only. A process killed inside that
+// window (no catch runs) leaves it behind; the next command that takes the clone lock rolls it back first (recoverJournal). It lives in .git:
+// git never sees it. persist = {home, files: Map<path, base64 | null>, folders: Set}.
+let persist = null;
+const journalFile = home => join(home, '.git', 'smooth-backlog-cli-journal.json');
+function saveJournal() {
+  const tmp = `${journalFile(persist.home)}.${process.pid}.tmp`;
+  const fd = openSync(tmp, 'w', 0o600);
+  try { writeSync(fd, JSON.stringify({ files: Object.fromEntries(persist.files), folders: [...persist.folders] })); fsyncSync(fd); } finally { closeSync(fd); }
+  renameSync(tmp, journalFile(persist.home));
+}
+export function beginJournal(folder) { // true when this call opened the journal (the outermost undo); it also covers `folder`
+  const home = dirname(dirname(resolve(folder)));
+  if (!persist && existsSync(join(home, '.git'))) { persist = { home, files: new Map(), folders: new Set() }; var opened = true; }
+  if (persist) { persist.folders.add(resolve(folder)); persistNote(join(resolve(folder), 'backlog.db')); }
+  return Boolean(opened);
+}
+export function endJournal() { const p = persist; persist = null; if (p) rmSync(journalFile(p.home), { force: true }); }
+function persistNote(path, prior) {
+  if (!persist || persist.files.has(path)) return;
+  const bytes = prior !== undefined ? prior : existsSync(path) ? readFileSync(path) : null;
+  persist.files.set(path, bytes === null ? null : Buffer.from(bytes).toString('base64'));
+  saveJournal();
+}
 export function note(path, prior) {
   const j = journals.at(-1);
   if (j && !j.has(path)) j.set(path, prior !== undefined ? prior : existsSync(path) ? readFileSync(path) : null);
+  persistNote(path, prior);
+}
+
+// Rolls back what a killed command left (see above): every path to its prior bytes or absence, the mirror db file included, and the git index
+// of the folders unstaged. Runs under the clone lock, before anything else.
+export function recoverJournal(home) {
+  const file = journalFile(home);
+  if (!existsSync(file)) return;
+  let rec;
+  try { rec = JSON.parse(readFileSync(file, 'utf8')); } catch { rmSync(file, { force: true }); return; } // a torn write: nothing was changed yet
+  const root = resolve(home) + sep;
+  for (const [path, b64] of Object.entries(rec.files)) {
+    if (!resolve(path).startsWith(root)) continue; // never write outside the clone, whatever the file says
+    if (path.endsWith('backlog.db')) for (const s of ['-journal', '-wal', '-shm']) rmSync(path + s, { force: true });
+    if (b64 === null) rmSync(path, { force: true }); else { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, Buffer.from(b64, 'base64')); }
+  }
+  for (const folder of rec.folders ?? []) if (resolve(folder).startsWith(root)) git(['reset', '-q', '--', '.'], folder);
+  rmSync(file, { force: true });
+  process.stderr.write(`backlog: rolled back a command that was killed half-way (${Object.keys(rec.files).length} path(s) restored in ${home})\n`);
 }
 
 export function write(item, root) {

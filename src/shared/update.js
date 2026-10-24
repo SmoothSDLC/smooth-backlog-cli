@@ -107,7 +107,7 @@ async function update(argv) {
   const { home } = store.resolveHome();
   let repo; let folder;
   try { repo = teamScope().repo || store.repoId(process.cwd()); folder = store.folder(home, repo); } catch (e) { return die(e.message); } // lib_db.py:122-129
-  return store.runLocked(home, repo, async () => { // update.py's run_lock: from the pull to the push
+  return store.cloneLocked(home, async () => { // update.py's run_lock: from the pull to the push
     await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
     const con = db.connect(folder); // refuses a link at the owner or the repository folder
     let open = true;

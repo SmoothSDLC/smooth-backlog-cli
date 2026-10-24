@@ -111,7 +111,8 @@ Do not pick for the user. Do not proceed past the brief without their answer.
 ====================== END-MANDATE — produce the brief now ======================`;
 
 // query.py:361-625
-export async function run(argv) {
+export const run = argv => store.cloneLocked(store.resolveHome().home, () => query(argv)); // a read that pulls waits for a writer of the clone
+async function query(argv) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
   if (a.next && a.agent) a.pop = true;

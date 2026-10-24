@@ -30,7 +30,7 @@ export function cliAsync(args, { cwd, tmp }) {
 // after `ms` it has neither finished nor changed `watch()`; once the lock is released it runs to the end.
 export async function waitsForRunLock(f, args, watch, ms = 2500) {
   let during; let before; let child;
-  await store.runLocked(f.home, 'acme/demo', async () => {
+  await store.cloneLocked(f.home, async () => {
     before = watch();
     child = cliAsync(args, { cwd: f.cons, tmp: f.t });
     await sleep(ms);

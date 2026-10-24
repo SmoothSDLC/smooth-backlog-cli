@@ -59,9 +59,20 @@ export function folder(home, repoId) {
   return join(resolve(home), ...parts);
 }
 
-// One changing command at a time per repository folder (lib_db.py run_lock, :338-345): wrap a command from before its pull
-// to after its push. A name of its own, Python's lock is a flock.
-export const runLocked = (home, repoId, fn) => locked(join(home, '.git', `smooth-backlog-cli-run-${repoId.replace('/', '__')}.lock`), fn);
+// The one operation lock of the clone: every command that can pull, write item files or touch backlog.db (reads that pull included) holds it
+// from before its pull to after its push, whatever repository folders it works on. Re-entrant in the process (query --pop runs pop), and for
+// a child its holder runs and waits for, which is given lockEnv(home) (pop --claim-now runs update).
+const held = new Set();
+const lockPath = home => join(home, '.git', 'smooth-backlog-cli-run.lock');
+export const lockEnv = home => ({ BACKLOG_RUN_LOCK_HELD: `${lockPath(home)}:${process.pid}` });
+export function cloneLocked(home, fn) {
+  const path = lockPath(home);
+  if (held.has(path) || process.env.BACKLOG_RUN_LOCK_HELD === `${path}:${process.ppid}`) return fn();
+  return locked(path, async () => {
+    held.add(path);
+    try { return await fn(); } finally { held.delete(path); }
+  });
+}
 
 function git(args, cwd) {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
@@ -112,11 +123,21 @@ export const assertFolder = dir => assertNoSymlinks(dirname(dirname(resolve(dir)
 
 // lib_db.py:182-184. item.path is absolute (the caller joins the folder and the load-relative path).
 // root is the repository folder; without it, the folder is what precedes the first phases/ or archive/ segment.
+// The paths a command writes, renames or removes, with their content before (null: absent): db.undoOnThrow puts back exactly these.
+// Whoever changes an item file calls note(path) first; write() does.
+const journals = [];
+export const journalled = fn => { const j = new Map(); journals.push(j); return fn(j).finally(() => journals.pop()); };
+export function note(path, prior) {
+  const j = journals.at(-1);
+  if (j && !j.has(path)) j.set(path, prior !== undefined ? prior : existsSync(path) ? readFileSync(path) : null);
+}
+
 export function write(item, root) {
   const inferred = /^(.*?)[/\\](?:phases|archive)[/\\]/.exec(item.path)?.[1];
   const base = root ?? (inferred || dirname(item.path));
   assertFolder(base);
   assertNoSymlinks(base, item.path);
+  note(item.path);
   atomicWrite(item.path, dump(item.fm, item.body));
 }
 

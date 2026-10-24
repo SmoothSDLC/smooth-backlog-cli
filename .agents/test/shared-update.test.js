@@ -411,3 +411,11 @@ test('review P1: update of an item of another team (field edit, note, append) is
   assert.equal(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), text);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
+
+for (const [title, args] of [['query', ['query', '--all']], ['next', ['next']], ['pop', ['pop', '--agent', 'cody']]]) {
+  test(`review P1: ${title} (a read that pulls) waits while another command holds the operation lock of the clone`, async () => {
+    const f = seed();
+    const w = await waitsForRunLock(f, args, () => git(f.home, 'rev-parse', 'HEAD'));
+    assert.deepEqual(w.during, { exited: false, same: true }, `${title} waits for the lock`);
+  });
+}

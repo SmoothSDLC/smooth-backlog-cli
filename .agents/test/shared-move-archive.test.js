@@ -484,10 +484,10 @@ test('review P1: archive and move --to-branch whose rescan throws put the files 
   }
 });
 
-test('review P1: a cross-repository move holds the run lock of the destination backlog too', async () => {
+test('review P1: a cross-repository move waits for the operation lock of the clone, which also covers the destination backlog', async () => {
   const f = seed();
   let during; let child;
-  await store.runLocked(f.home, 'other/proj', async () => {
+  await store.cloneLocked(f.home, async () => {
     child = cliAsync(['move', '3', '--to-repository', 'other/proj'], { cwd: f.cons, tmp: f.t });
     await new Promise(r => setTimeout(r, 2500));
     during = { exited: child.exited(), source: existsSync(join(f.folder, 'phases', '003-gamma.md')), copied: names(f.other, 'phases').length };
@@ -500,7 +500,7 @@ test('review P1: a cross-repository move holds the run lock of the destination b
 test('review P1: a bare --to-repository (the item names its target) also waits for the destination run lock', async () => {
   const f = seed();
   let during; let child;
-  await store.runLocked(f.home, 'other/proj', async () => {
+  await store.cloneLocked(f.home, async () => {
     child = cliAsync(['move', '7', '--to-repository'], { cwd: f.cons, tmp: f.t });
     await new Promise(r => setTimeout(r, 2500));
     during = { exited: child.exited(), source: existsSync(join(f.folder, 'phases', '007-eta.md')) };

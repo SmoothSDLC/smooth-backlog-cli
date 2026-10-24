@@ -14,7 +14,6 @@ import { parse as parseDoc } from './frontmatter.js';
 import { assertInside, git, redact } from './safety.js';
 import * as store from './store.js';
 
-class NeedLock extends Error { constructor(repo) { super(repo); this.repo = repo; } }
 const VALUE = ['to-branch', 'all-open-of-branch', 'note'];
 
 function parse(argv) { // move.py:67-74 argparse; --to-repository takes an optional value ('' when none follows)
@@ -41,12 +40,7 @@ function parse(argv) { // move.py:67-74 argparse; --to-repository takes an optio
 export async function run(argv) {
   try {
     const a = parse(argv);
-    const tail = ['move.py', ...argv.slice(0, 2)].join(' ');
-    const also = a['to-repository'] ? [a['to-repository']] : [];
-    try { return await withBacklog((con, ctx) => move(a, con, ctx), tail, also); } catch (e) {
-      if (!(e instanceof NeedLock)) throw e;
-      return await withBacklog((con, ctx) => move(a, con, ctx), tail, [e.repo]); // a bare --to-repository: the target is the item's own repository, known only after the lookup
-    }
+    return await withBacklog((con, ctx) => move(a, con, ctx), ['move.py', ...argv.slice(0, 2)].join(' '));
   } catch (e) { return die(e.message, e instanceof BacklogError ? e.exitCode : 1); }
 }
 
@@ -79,7 +73,7 @@ async function toBranch(con, folder, r, branch, note) {
   });
 }
 
-async function move(a, con, { home, repo, folder, close, locked }) {
+async function move(a, con, { home, repo, folder, close }) {
   if (a['all-open-of-branch']) { // move.py:76-86
     const from = a['all-open-of-branch'];
     if (!a['to-branch']) throw usage('--all-open-of-branch needs --to-branch');
@@ -111,7 +105,6 @@ async function move(a, con, { home, repo, folder, close, locked }) {
   // move.py:99-109
   const target = a['to-repository'] || r.repository;
   if (!target || target === repo) return refuse(`${r.slug} already belongs to ${repo}; name the target repository`);
-  if (!locked.includes(target)) throw new NeedLock(target); // a bare --to-repository: nothing is written yet, run again holding the target's lock too
   let tdir;
   try { tdir = store.folder(home, target); } catch (e) { throw usage(e.message); } // owner/name only: the target is the user's text or a file's data
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target file is named from it`); // mirror data: no path in it
@@ -145,6 +138,7 @@ async function move(a, con, { home, repo, folder, close, locked }) {
       for (const e of events) add.run(e.ts, null, pid, e.event, e.branch, e.commit_sha, `[from ${repo} ${r.slug}] ${e.note}`);
       add.run(store.now(), null, pid, 'moved_in', fm.branch || '', '', `from ${repo} as ${r.slug}`);
       tcon.exec('COMMIT');
+      store.note(src);
       rmSync(src);
       con.prepare('DELETE FROM phase WHERE id=?').run(r.id);
       db.logEvent(con, 'moved_out', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });

@@ -6,7 +6,7 @@ import { input } from '../errors.js';
 import { commitSettled, connect, ensureAnchor, logEvent, scan, undoOnThrow } from './db.js';
 import { parse } from './frontmatter.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
-import { branch as callerBranch, folder as repoFolder, nextSeq, now, reflow, repoId, resolveHome, runLocked, write } from './store.js';
+import { branch as callerBranch, folder as repoFolder, nextSeq, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
 import { pull } from './sync.js';
 import { outsideTeam, teamScope } from './team.js';
 
@@ -85,7 +85,7 @@ export async function run(argv) {
     const team = teamScope();
     const repo = team.repo || repoId(process.cwd());
     const folder = repoFolder(home, repo);
-    return await runLocked(home, repo, async () => {
+    return await cloneLocked(home, async () => {
       await pull(home);
       return await create(argv, { home, folder, repo, team });
     });

@@ -119,7 +119,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   if (act?.name === 'claim' && a['claim-now']) {
     const bin = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
-    const c = spawnSync(process.execPath, [bin, 'update', act.r.slug, '--claim', me], { encoding: 'utf8' });
+    const c = spawnSync(process.execPath, [bin, 'update', act.r.slug, '--claim', me], { encoding: 'utf8', env: { ...process.env, ...store.lockEnv(home) } });
     if (c.status !== 0) { // a nonzero exit, a signal or a process that did not start is no claim
       process.stdout.write(redact((c.stdout ?? '') + (c.stderr ?? '')));
       return c.status ?? die(`claim of ${act.r.slug} failed: ${c.error ? c.error.message : `the claim process ended by ${c.signal}`}`, 1);
@@ -164,7 +164,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
 }
 
 // query.py:405-460 up to the call of pop(); argv is that of `backlog query` (with --pop, or --next --agent) or of `backlog pop`.
-export async function run(argv) {
+export const run = argv => store.cloneLocked(store.resolveHome().home, () => popCommand(argv)); // a read that pulls waits for a writer of the clone
+async function popCommand(argv) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
   if (a.headless) return die('--headless is not in this build');

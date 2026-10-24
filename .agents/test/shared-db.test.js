@@ -390,3 +390,21 @@ test('review P1: connect refuses a symlinked owner folder (<home>/<owner>) befor
   assert.throws(() => db.connect(join(d, 'home', 'acme', 'demo')), /Symlink destination is unsupported/);
   assert.deepEqual(readdirSync(join(d, 'outside')), [], 'no folder and no database outside the backlog clone');
 });
+
+test('undoOnThrow puts back only what the command wrote: a file that appears meanwhile (a pull) is not deleted', async t => {
+  const dir = scratch(t);
+  const folder = join(dir, 'o', 'n'); mkdirSync(join(folder, 'phases'), { recursive: true });
+  const con = db.connect(folder);
+  const mine = join(folder, 'phases', '001-mine.md'); const pulled = join(folder, 'phases', '002-pulled.md'); const edited = join(folder, 'phases', '003-edited.md');
+  writeFileSync(edited, '---\nphase: 003-edited\nseq: 3\n---\nold\n');
+  await assert.rejects(db.undoOnThrow(con, folder, async () => {
+    store.write({ path: mine, fm: { phase: '001-mine', seq: 1 }, body: 'x\n' }, folder);
+    store.write({ path: edited, fm: { phase: '003-edited', seq: 3 }, body: 'new\n' }, folder);
+    writeFileSync(pulled, 'pulled by someone else\n');
+    throw new Error('boom');
+  }), /boom/);
+  con.close();
+  assert.equal(existsSync(mine), false, 'the file it created is removed');
+  assert.match(readFileSync(edited, 'utf8'), /old/, 'the file it changed is restored');
+  assert.equal(readFileSync(pulled, 'utf8'), 'pulled by someone else\n', 'a file it did not write stays');
+});

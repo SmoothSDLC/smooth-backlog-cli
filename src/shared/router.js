@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { assertInside, redact, validateHome } from './safety.js';
 import { atomicWrite } from '../storage.js';
-import { resolveHome, setMode } from './store.js';
+import { cloneLocked, resolveHome, setMode } from './store.js';
 import { pull } from './sync.js';
 
 // command -> [module relative to this file, ...arguments put in front of the user's argv]
@@ -22,7 +22,7 @@ export async function switchMode({ backlogRepo, rest = [] }) {
   if (backlogRepo === undefined) { setMode('local'); out.write('✅ local mode: the repo-local .backlog store is in use\n'); return 0; }
   let home;
   try { home = await validateHome(resolve(backlogRepo)); } catch (error) { return die(error.message); }
-  try { await pull(home); } catch (error) { return die(error.message, error.exitCode ?? 2); } // lock, abort, exit 3 and redaction are sync.js's
+  try { await cloneLocked(home, () => pull(home)); } catch (error) { return die(error.message, error.exitCode ?? 2); } // lock, abort, exit 3 and redaction are sync.js's
   const config = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
   const record = join(config, 'smoothsdlc-backlog', 'home');
   try {

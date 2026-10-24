@@ -123,6 +123,25 @@ async function update(argv) {
   });
 }
 
+// The slug of an item whose dependency chain (the files' depends_on, from deps on) leads back to `id`; `id` itself when deps names it. null: no cycle.
+function dependencyCycle(con, folder, id, deps) {
+  const edges = new Map();
+  for (const i of store.load(folder)) { const r = find(con, String(i.fm.phase ?? '')); if (r) edges.set(r.id, { slug: r.slug, deps: [i.fm.depends_on ?? []].flat() }); }
+  const seen = new Set();
+  const walk = list => {
+    for (const d of list) {
+      const r = d === '' || d === null ? null : find(con, String(d));
+      if (!r) continue;
+      if (r.id === id) return id;
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      if (walk(edges.get(r.id)?.deps ?? [])) return edges.get(r.id)?.slug ?? r.slug;
+    }
+    return null;
+  };
+  return walk(deps);
+}
+
 async function change(a, con, folder, repo) {
   const one = (sql, ...p) => { const r = con.prepare(sql).get(...p); return r ? { ...r } : null; };
   const hid = one("SELECT id FROM handoff WHERE status='active' LIMIT 1")?.id ?? null;
@@ -162,6 +181,7 @@ async function change(a, con, folder, repo) {
     if (k === 'commit' && !strip(v)) return refuse('--commit cannot be cleared');
     let n;
     if (['priority', 'seq', 'size_score'].includes(k) && (n = pyInt(v)) === null) throw new BacklogError('INVALID_INPUT', `invalid literal for int() with base 10: ${pyStr(v)}`, 1);
+    if (k === 'status' && !['pending', 'in_progress', 'done'].includes(v)) return refuse(`--status ${pyStr(v)}: use pending, in_progress or done (backlog archive moves a finished item to archive/)`);
     if (k === 'priority') { moveTarget = n; continue; }
     fm[k] = k === 'seq' || k === 'size_score' ? n : v;
     changes[k] = v;
@@ -181,6 +201,8 @@ async function change(a, con, folder, repo) {
       if (!find(con, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }
+    const cycle = dependencyCycle(con, folder, row.id, deps);
+    if (cycle) return refuse(`--set-depends-on: ${cycle === row.id ? 'an item cannot depend on itself' : `it would make a dependency cycle through ${cycle}`}`);
     fm.depends_on = deps;
     changes.depends_on = deps.join(',') || 'none';
   }

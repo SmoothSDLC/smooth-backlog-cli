@@ -53,3 +53,29 @@ test('audit t4: a done item can be neither claimed nor released back into the qu
   const file = readFileSync(join(s.folder, 'phases', '001-alpha-job.md'), 'utf8');
   assert.match(file, /^status: done$/m); assert.doesNotMatch(file, /claimed_by: amy/);
 });
+
+test('audit: update --status takes only pending, in_progress or done (archived and unknown words are refused, the file is unchanged)', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0);
+  const file = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(file, 'utf8');
+  for (const word of ['archived', 'bogus']) {
+    const r = s.run(['update', '1', '--status', word]);
+    assert.equal(r.status, 1, out(r)); assert.match(out(r), /use pending, in_progress or done/);
+    assert.equal(readFileSync(file, 'utf8'), before); assert.equal(existsSync(join(s.folder, 'archive', '001-alpha-job.md')), false);
+  }
+  assert.equal(s.run(['update', '1', '--status', 'in_progress']).status, 0);
+});
+
+test('audit: update --set-depends-on refuses itself and any cycle, and leaves the file as it was', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0);
+  assert.equal(s.run(NEW('beta job', '--depends-on', '1')).status, 0); // 2 -> 1
+  assert.equal(s.run(NEW('gamma job', '--depends-on', '2')).status, 0); // 3 -> 2 -> 1
+  const file = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(file, 'utf8');
+  for (const [item, dep, why] of [['1', '1', /depend on itself/], ['1', '001-alpha-job', /depend on itself/], ['1', '3', /cycle/], ['2', '3', /cycle/]]) {
+    const r = s.run(['update', item, '--set-depends-on', dep]);
+    assert.equal(r.status, 1, `${item} -> ${dep}: ${out(r)}`); assert.match(out(r), why);
+  }
+  assert.equal(readFileSync(file, 'utf8'), before);
+  assert.equal(s.run(['update', '3', '--set-depends-on', '1,2']).status, 0); // a diamond is no cycle
+});

@@ -59,9 +59,17 @@ function loadPhases(folder) {
 }
 
 // lib_db.py connect + _migrate; the busy timeout is Python's 30 s. Opening an up-to-date db writes nothing.
-export function connect(folder) {
+// readOnly (a dry run): no folder, file or migration is created; an absent backlog.db reads as an empty mirror (in memory).
+export function connect(folder, { readOnly = false } = {}) {
   assertFolder(folder); // <home>/<owner>/<name>: no link at the owner or the name
   assertNoSymlinks(folder, join(folder, 'backlog.db'));
+  if (readOnly) {
+    const file = join(folder, 'backlog.db');
+    const mem = !existsSync(file);
+    const ro = new (sqlite().DatabaseSync)(mem ? ':memory:' : file, { readOnly: !mem });
+    if (mem) ro.exec(SCHEMA);
+    return ro;
+  }
   mkdirSync(folder, { recursive: true });
   const db = new (sqlite().DatabaseSync)(join(folder, 'backlog.db'), { timeout: 30000 });
   db.exec(SCHEMA);

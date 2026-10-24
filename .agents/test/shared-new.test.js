@@ -182,6 +182,20 @@ for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
   });
 }
 
+test('review P2: new --dry-run in a repository without a backlog writes nothing (new --help promises it)', t => {
+  const f = fixture(t);
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+  const r = node(f, [...NONE, '--dry-run']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /\[dry-run\] would create phase phases\/001-alpha-job\.md \(seq 1\)/);
+  assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all'), '');
+  assert.equal(existsSync(f.folder), false, 'no folder, no backlog.db');
+  const dep = node(f, [...NONE.slice(0, -1), '1', '--dry-run']); // an absent mirror is an empty one: item 1 does not exist
+  assert.equal(dep.status, 1);
+  assert.match(dep.stdout, /no item '1'/);
+  assert.equal(existsSync(f.folder), false);
+});
+
 test('parity with new_phase.py: --split-from copies the objective, summary and body of the source and logs a split event', t => {
   const a = fixture(t); const b = fixture(t, 'new-oracle-');
   const first = ['--name', 'Parent', '--objective', 'parent objective', '--summary', 'parent summary', '--depends-on', 'none', '--body', 'Parent body with ünï\n\n## Definition of done\n- [ ] a'];

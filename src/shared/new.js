@@ -111,7 +111,7 @@ async function create(argv, { home, folder, repo, team }) {
     return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
   }
 
-  const db = connect(folder);
+  const db = connect(folder, { readOnly: Boolean(a.dryRun) }); // a dry run only looks: nothing is created in the backlog clone
   let seq; let slug; let rel; let order; let rank; let summary; let where;
   try {
     const deps = [];

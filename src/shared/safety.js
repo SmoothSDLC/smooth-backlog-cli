@@ -88,13 +88,12 @@ export function checkRefs(refs) {
   }
 }
 
-// Strip the user:token@ userinfo from URLs so that a credential in a git URL
-// never reaches the text that is shown. The whole userinfo goes (the item:
-// "strip user:token@"); a colon-less userinfo (git@host:) and plain text are
-// left intact. ponytail: one regex; a userinfo with two colons (rare) is only
-// stripped from its last component.
+// Strip the credential from URLs so that it never reaches the text that is shown. In a scheme://
+// URL the complete user-info goes (everything between '://' and the last '@' of the authority, any
+// characters); without a scheme only a user:token@ of word-like characters (git:tok@host) goes. A
+// colon-less user@host without a scheme (scp-style git@github.com:o/r) and plain text stay intact.
 export function redact(text) {
-  return String(text).replace(/\b[\w.-]+:[\w.~+/%-]+@/g, '');
+  return String(text).replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/?#]*@/gi, '$1').replace(/\b[\w.-]+:[\w.~+/%-]+@/g, '');
 }
 
 // Run git with an argv array — never a shell (pattern lib_db.py:188-193) — with

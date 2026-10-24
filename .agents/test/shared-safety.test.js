@@ -187,6 +187,14 @@ test('redact: user:token@ is stripped from URLs in git stderr (item hostile inpu
     'error: https://github.com/a/b.git then https://h.com/c/d.git');
 });
 
+test('redact: the whole user-info of a URL goes, whatever characters the password holds (review P1)', () => {
+  for (const pw of ['p=ss', 'p%40ss', "p=%!$&'()*+,;:x", 'a@b', 'p%3Ass@w']) {
+    assert.equal(redact(`fatal: unable to access 'https://user:${pw}@example.com/org/repo.git/'`),
+      "fatal: unable to access 'https://example.com/org/repo.git/'", pw);
+  }
+  assert.equal(redact('push ssh://tok@host:2222/o/r.git and ftp://u:p;q@h/x'), 'push ssh://host:2222/o/r.git and ftp://h/x');
+});
+
 test('redact: colon-less userinfo and plain text are left intact; non-strings are stringified', () => {
   assert.equal(redact('remote: git@github.com:SmoothSDLC/smoothsdlc-backlog.git'),
     'remote: git@github.com:SmoothSDLC/smoothsdlc-backlog.git');

@@ -3,7 +3,7 @@
 // pinned ec5b254e. Node has no flock, so the lock is a pid file (locked() of src/storage.js)
 // and a number two clones picked at once is repaired after the rebase (renumber below).
 // A failure to sync throws BacklogError with exitCode 3; the caller prints it and exits.
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { join, posix, resolve, sep } from 'node:path';
@@ -66,6 +66,46 @@ const retagged = (item, next) => ({ // the item with its number changed in the p
   body: item.body.replace(/^# Phase \d+/m, `# Phase ${pad(next)}`),
 });
 
+// The local side's own references follow its renumbered items: depends_on entries (number or slug) and "Split from `slug`" lines that the local
+// commits added. A reference already in upstream's copy of the file is upstream's and keeps its number. moves: [{folder, old, slug, next, newSlug}],
+// all applied at once, so a reference is never remapped twice.
+function remapDoc(doc, base, moves) {
+  const had = new Set([base?.fm.depends_on ?? []].flat().map(String));
+  const hit = d => (had.has(String(d)) ? null : moves.find(m => (m.slug && m.slug === String(d)) || (/^\d+$/.test(String(d)) && Number(d) === m.old)));
+  let changed = false;
+  const deps = [doc.fm.depends_on ?? []].flat().map(d => {
+    const m = hit(d);
+    if (!m) return d;
+    changed = true;
+    return /^\d+$/.test(String(d)) ? m.next : m.newSlug;
+  });
+  let body = doc.body;
+  for (const m of moves) {
+    const token = `Split from \`${m.slug}\``;
+    if (m.slug && body.includes(token) && !(base?.body ?? '').includes(token)) { body = body.replaceAll(token, `Split from \`${m.newSlug}\``); changed = true; }
+  }
+  return changed ? { fm: { ...doc.fm, ...(doc.fm.depends_on === undefined ? {} : { depends_on: deps }) }, body } : null;
+}
+
+// Rewrites and stages, among `files` (paths from the clone root, changed by the local commits), those whose local references moved. Resolves to what it staged.
+async function remapLocal(home, moves, files, baseRef, skip) {
+  const touched = [];
+  for (const file of files) {
+    const [owner, repo] = file.split('/');
+    const here = moves.filter(m => m.folder === `${owner}/${repo}`);
+    const abs = join(home, file);
+    if (!here.length || skip.has(file) || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(file) || !existsSync(abs)) continue;
+    const b = await g(home, ['show', `${baseRef}:${file}`]);
+    const next = remapDoc(parse(readFileSync(abs, 'utf8')), b.code ? null : parse(b.stdout), here);
+    if (!next) continue;
+    store.write({ path: abs, ...next });
+    await must(home, ['add', '--', lit(file)], `stage ${file}`);
+    touched.push(file);
+  }
+  return touched;
+}
+const changedBy = async (home, range) => (await g(home, ['diff', '-z', '--no-renames', '--name-only', ...range])).stdout.split('\0').filter(Boolean);
+
 // Files the unpushed commits added to any <owner>/<name>/phases or archive folder, renumbered when their
 // seq is already held by another file of the folder: git mv, phase/seq keys, body heading, amend.
 async function renumber(home, stream, mirror = false) {
@@ -83,7 +123,7 @@ async function renumber(home, stream, mirror = false) {
 }
 
 async function renumberFiles(home, stream, added, mirror) {
-  const out = [];
+  const out = []; const moves = [];
   for (const file of added) {
     const [owner, repo, ...rest] = file.split('/'); const name = `${owner}/${repo}`; const path = rest.join('/');
     const folder = join(home, owner, repo);
@@ -105,6 +145,21 @@ async function renumberFiles(home, stream, added, mirror) {
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
     out.push(pairOf(old, next, folder));
+    moves.push({ folder: name, old, slug: String(mine.fm.phase), next, newSlug: pad(next) + String(mine.fm.phase).replace(/^\d+/, '') });
+  }
+  if (moves.length) { // the local dependents of the renumbered items follow them
+    const touched = await remapLocal(home, moves, await changedBy(home, ['@{u}', 'HEAD']), '@{u}', new Set());
+    if (touched.length) {
+      if (mirror) {
+        for (const name of new Set(touched.map(f => f.split('/').slice(0, 2).join('/')))) {
+          const con = connect(join(home, name));
+          try { scan(con, join(home, name)); } finally { con.close(); }
+          await must(home, ['add', '--', lit(`${name}/backlog.db`)], `stage ${name}/backlog.db`);
+        }
+      }
+      const r = await g(home, ['commit', '-q', '--amend', '--no-edit']);
+      if (r.code) throw new BacklogError('SYNC_FAILED', `could not update the references to renumbered items in ${home} (${r.stderr.slice(0, 300)})`, 3);
+    }
   }
   return out;
 }
@@ -178,6 +233,7 @@ async function repairConflicts(home, folders, names, renumbered) {
         await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
         await must(home, ['add', '--', lit(path)], `stage ${path}`);
       }
+      const moves = []; const written = new Set();
       for (const [path, mine] of mines) {
         const name = names[nameOf(path)]; const folder = folders[nameOf(path)];
         const rel = path.slice(name.length + 1);
@@ -186,7 +242,10 @@ async function repairConflicts(home, folders, names, renumbered) {
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
         process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
         renumbered.push(pairOf(old, next, folder));
+        moves.push({ folder: name, old, slug: String(mine.fm.phase), next, newSlug: pad(next) + String(mine.fm.phase).replace(/^\d+/, '') });
+        written.add(`${name}/${target}`);
       }
+      if (moves.length) await remapLocal(home, moves, [...await changedBy(home, ['REBASE_HEAD^', 'REBASE_HEAD']), ...written], 'HEAD', new Set());
       if (!(await g(home, ['-c', 'core.editor=true', 'rebase', '--continue'])).code) return true;
     }
   } catch { /* fall through: the caller aborts the rebase */ }

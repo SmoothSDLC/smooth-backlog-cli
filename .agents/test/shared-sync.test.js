@@ -312,6 +312,41 @@ test('add/add: a conflict on anything else still aborts the rebase and exits 3',
   assert.equal(existsSync(join(f.home2, '.git', 'rebase-merge')) || existsSync(join(f.home2, '.git', 'rebase-apply')), false);
 });
 
+test('review: renumbering a local item remaps the LOCAL references to it (number and slug, split-from), never upstream\'s (pull path)', async t => {
+  const f = fixture(t);
+  putItem(f.folder2, 1, 'alpha'); putItem(f.folder2, 4, 'eta', { depends_on: [1] }); // upstream: its own 1 is alpha
+  await sync.commit(f.home2, f.folder2, 'upstream');
+  putItem(f.folder, 1, 'beta'); putItem(f.folder, 2, 'gamma', { depends_on: [1] });
+  const delta = putItem(f.folder, 3, 'delta', { depends_on: ['001-beta'] });
+  store.write({ path: join(f.folder, 'phases', `${delta}.md`), fm: { ...store.load(f.folder).find(i => i.fm.phase === delta).fm }, body: '\n# Phase 003 — delta\n\n## Split from `001-beta`. Inherited context:\n' });
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'acme/demo: local'); // never pushed
+  const write = process.stderr.write; process.stderr.write = () => true;
+  try { await captureStdout(() => sync.pull(f.home)); } finally { process.stderr.write = write; }
+  const by = name => store.load(f.folder).find(i => i.fm.name === name);
+  assert.equal(by('beta').fm.seq, 5);
+  assert.deepEqual(by('gamma').fm.depends_on, [5]);
+  assert.deepEqual(by('delta').fm.depends_on, ['005-beta']);
+  assert.match(by('delta').body, /Split from `005-beta`/);
+  assert.deepEqual(by('eta').fm.depends_on, [1], "upstream's reference to its own item 1 keeps its number");
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+});
+
+test('review: the same remap on the add/add recovery of a push', async t => {
+  const f = fixture(t);
+  putItem(f.folder2, 1, 'alpha', { summary: 'upstream' });
+  await sync.commit(f.home2, f.folder2, 'upstream');
+  putItem(f.folder, 1, 'alpha', { summary: 'local' }); // the same file name: add/add
+  putItem(f.folder, 2, 'gamma', { depends_on: [1] }); putItem(f.folder, 3, 'delta', { depends_on: ['001-alpha'] });
+  const write = process.stdout.write; process.stdout.write = () => true;
+  try { await sync.commit(f.home, f.folder, 'local'); } finally { process.stdout.write = write; }
+  const by = name => store.load(f.folder).find(i => i.fm.name === name);
+  const moved = store.load(f.folder).find(i => i.fm.summary === 'local');
+  assert.equal(moved.fm.seq, 4);
+  assert.deepEqual(by('gamma').fm.depends_on, [4]);
+  assert.deepEqual(by('delta').fm.depends_on, ['004-alpha']);
+  assert.equal(by('alpha') ? 1 : 0, 1);
+});
+
 test('pull: repairs a sequence collision with an outstanding local commit (message on stderr, stdout stays clean)', async t => {
   const f = fixture(t);
   putItem(f.folder2, 1, 'alpha'); await sync.commit(f.home2, f.folder2, 'new alpha'); // another writer's creation, on the bare

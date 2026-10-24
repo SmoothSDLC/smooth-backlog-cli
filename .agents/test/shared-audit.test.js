@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import * as db from '../../src/shared/db.js';
 import { gitIn } from './shared-concurrency.js';
 
 function solo(t) {
@@ -94,4 +95,15 @@ test('audit t3: a bound session moves nothing into another repository or branch 
   }
   assert.equal(readFileSync(file, 'utf8'), before); assert.equal(existsSync(join(s.home, 'other')), false);
   assert.equal(s.run(['move', '1', '--to-branch', 'release']).status, 0); // an unbound session may
+});
+
+test('audit t7: query --all and --by-branch survive an item whose status is empty (shown as None)', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0);
+  const con = db.connect(s.folder);
+  try { con.prepare('UPDATE phase SET status=NULL').run(); } finally { con.close(); } // a mirror row without a status (a hand-edited or older database)
+  for (const args of [['query', '--all'], ['query', '--by-branch', 'main']]) {
+    const r = s.run(args);
+    assert.equal(r.status, 0, out(r)); assert.match(r.stdout, /001-alpha-job/); assert.match(r.stdout, /None/);
+  }
 });

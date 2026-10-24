@@ -205,7 +205,7 @@ async function query(argv) {
 
     if (a['by-branch']) {
       for (const r of all('SELECT * FROM phase WHERE branch=? ORDER BY seq', a['by-branch'])) {
-        say(`  [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${r.status.padEnd(12)} commit=${sha7(r)} ${r.location}`);
+        say(`  [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} commit=${sha7(r)} ${r.location}`);
       }
       return 0;
     }
@@ -237,7 +237,7 @@ async function query(argv) {
     for (const r of rows) {
       const mark = { done: '✅', archived: '📦', in_progress: '🔄' }[r.status] ?? '•';
       const crit = (r.severity || 'normal') === 'critical' && ACTIONABLE.includes(r.status) ? ' ⚠️CRIT' : '';
-      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${r.status.padEnd(12)} P${pad(r.priority, 3)}${crit}  ${r.name}`);
+      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority, 3)}${crit}  ${r.name}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
     }
     if (unreadable) say('   ⚠️  the origin could not be read, so items of other branches were not checked');

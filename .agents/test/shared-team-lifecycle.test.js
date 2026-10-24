@@ -116,6 +116,29 @@ test('team session: TEAM_REPOSITORY binds the repository, a step on another scop
   assert.equal(update(f, [s, '--note', 'x'], { TEAM_REPOSITORY: '../x' }).status, 2);
 });
 
+test('team scope guards every mutating update path, not only the team steps (review P1)', () => {
+  const f = fixture();
+  const s = make(f, 'js', 'scoped edits', ['--work-class', 'app-code']);
+  const file = join(f.folder, 'phases', `${s}.md`);
+  const outside = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'other' };
+  const inside = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const before = readFileSync(file, 'utf8');
+  for (const args of [['--summary', 'x'], ['--status', 'in_progress'], ['--status', 'done'], ['--priority', '0'], ['--append', 'more text'],
+    ['--set-estimate', '9'], ['--set-work-class', 'docs'], ['--note', 'n'], ['--claim', 'cody']]) {
+    const out = update(f, [s, ...args], outside);
+    assert.equal(out.status, 1, `${args}: ${out.stdout}${out.stderr}`);
+    assert.match(out.stdout, /^❌ .*this item belongs to repository acme\/demo branch main, but this team session is bound to acme\/demo branch other/, args.join(' '));
+    assert.equal(update(f, [s, ...args, '--dry-run'], outside).status, 1, `${args} --dry-run`);
+    assert.equal(readFileSync(file, 'utf8'), before, `${args}: the file is untouched`);
+  }
+  assert.equal(update(f, [s, '--summary', 'edited inside'], inside).status, 0);
+  assert.equal(update(f, [s, '--append', 'body text'], inside).status, 0);
+  assert.equal(item(f, s).fm.summary, 'edited inside');
+  assert.ok(readFileSync(file, 'utf8').includes('body text'));
+  assert.equal(update(f, [s, '--claim', 'cody'], inside).status, 0);
+  assert.match(readFileSync(join(process.cwd(), 'COMMANDS.md'), 'utf8'), /works only on items of that repository and branch/);
+});
+
 test('an incomplete item is only refined: no claim, no note', () => {
   const f = fixture();
   const r = cli(['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });

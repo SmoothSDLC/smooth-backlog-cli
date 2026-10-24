@@ -196,7 +196,7 @@ ${DB}
 ${HELP_FLAG}
 
 A call takes at most one team step (--claim, --release, --request-review, --start-review, --review, --close, --waiting, --waiting-done).
-A session with TEAM_REPOSITORY (and TEAM_BRANCH) set works only on items of that repository and branch.
+A session with TEAM_REPOSITORY (and TEAM_BRANCH) set works only on items of that repository and branch: every change to another item is refused, field edits and --append as much as team steps.
 On success the command prints a line that starts with a check mark, the slug and the fields it set.
 
 ${EXIT}

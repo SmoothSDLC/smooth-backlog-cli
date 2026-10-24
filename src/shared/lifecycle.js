@@ -122,7 +122,8 @@ export function step(a, { fm, slug, folder, repo, incomplete, given }) {
   const actions = ACTIONS.filter(k => a[k]);
   if (actions.length > 1) return { refuse: `one team-work step at a time (got ${actions.map(k => `--${k}`).join(', ')})` };
   const note = a.note ?? '';
-  if (actions.length || strip(note)) {
+  // Beyond the oracle (update.py:241 guards only steps and notes): a field, --set-* or body edit is a change too.
+  if (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-'))) {
     const why = outsideTeam(fm);
     if (why) return { refuse: `${slug}: ${why}` };
   }

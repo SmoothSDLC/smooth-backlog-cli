@@ -61,7 +61,12 @@ export async function withBacklog(fn, tail, also = []) {
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
     let code;
-    try { code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close, locked: ids })); } finally { close(); }
+    try {
+      code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close, locked: ids }));
+    } catch (e) {
+      await git(['reset', '-q', '--', '.'], folder); // undoOnThrow put the files back; a staged git mv would still be in the index
+      throw e;
+    } finally { close(); }
     if (code === 0 && tail) await db.commitSettled(home, folder, tail);
     return code;
   });

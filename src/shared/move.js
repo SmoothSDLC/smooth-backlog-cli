@@ -125,11 +125,12 @@ async function move(a, con, { home, repo, folder, close, locked }) {
   const slug = `${String(seq).padStart(3, '0')}-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;
   Object.assign(fm, { phase: slug, seq, repository: target, updated: store.now() });
   const copy = join(tdir, 'phases', `${slug}.md`);
-  store.write({ path: copy, fm, body }, tdir);
+  const events = con.prepare('SELECT ts,event,branch,commit_sha,note FROM event WHERE phase_id=? ORDER BY id').all(r.id);
+  const tcon = db.connect(tdir);
   try {
-    const events = con.prepare('SELECT ts,event,branch,commit_sha,note FROM event WHERE phase_id=? ORDER BY id').all(r.id);
-    const tcon = db.connect(tdir);
-    try {
+    // all or nothing: a throw anywhere below, in the target scan or in the source rescan, restores both backlogs (files and mirror rows)
+    await db.undoOnThrow(tcon, tdir, async () => {
+      store.write({ path: copy, fm, body }, tdir);
       db.scan(tcon, tdir); // the target's scan
       const pid = tcon.prepare('SELECT id FROM phase WHERE slug=?').get(slug).id;
       const add = tcon.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)');
@@ -137,12 +138,12 @@ async function move(a, con, { home, repo, folder, close, locked }) {
       for (const e of events) add.run(e.ts, null, pid, e.event, e.branch, e.commit_sha, `[from ${repo} ${r.slug}] ${e.note}`);
       add.run(store.now(), null, pid, 'moved_in', fm.branch || '', '', `from ${repo} as ${r.slug}`);
       tcon.exec('COMMIT');
-    } finally { tcon.close(); }
-  } catch (e) { rmSync(copy, { force: true }); throw e; } // the source is still whole: a failed target scan must not leave a copy for the next command to publish
-  rmSync(src);
-  con.prepare('DELETE FROM phase WHERE id=?').run(r.id);
-  db.logEvent(con, 'moved_out', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
-  db.scan(con, folder);
+      rmSync(src);
+      con.prepare('DELETE FROM phase WHERE id=?').run(r.id);
+      db.logEvent(con, 'moved_out', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
+      db.scan(con, folder);
+    });
+  } finally { tcon.close(); }
   close();
   await db.commitSettled(home, tdir, `move.py ${r.slug} in from ${repo}`);
   say(`✅ ${r.slug} moved to ${target} as ${slug}`);

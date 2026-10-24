@@ -505,3 +505,21 @@ test('review P1: a bare --to-repository (the item names its target) also waits f
   assert.deepEqual(during, { exited: false, source: true });
   assert.equal((await child.done).status, 0);
 });
+
+test('review P1: a cross-repository move whose source rescan throws leaves no copy or row in the destination', () => {
+  const f = seed();
+  breakItem(f, 'phases/001-alpha.md');
+  const files = () => JSON.stringify([names(f.folder, 'phases'), names(f.other, 'phases'), readFileSync(join(f.folder, 'phases/003-gamma.md'), 'utf8')]);
+  const before = [files(), mirror(f), mirror({ folder: f.other }), git(f.home, 'rev-parse', 'HEAD')];
+  const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
+  assert.notEqual(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual([files(), mirror(f), mirror({ folder: f.other }), git(f.home, 'rev-parse', 'HEAD')], before);
+});
+
+test('review P1: archive whose rescan throws leaves nothing staged in the index', () => {
+  const f = seed();
+  breakItem(f, 'phases/001-alpha.md');
+  const r = run(f, 'archive', ['5']);
+  assert.notEqual(r.status, 0, r.stdout + r.stderr);
+  assert.equal(git(f.home, 'diff', '--cached', '--name-only'), '');
+});

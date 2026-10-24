@@ -19,7 +19,7 @@ const trim = (s) => s.replace(/^[ \t]+|[ \t]+$/g, '');
 const IDENT = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 export function parse(text) {
-  const source = String(text ?? '');
+  const source = String(text ?? '').replace(/\r\n?/g, '\n'); // python's text mode reads CRLF and lone CR as \n (beyond strict parity: safe direction)
   const m = FM_SPLIT.exec(source);
   if (!m) return { fm: {}, body: source };
   return { fm: parseFm(m[1]), body: m[2] };

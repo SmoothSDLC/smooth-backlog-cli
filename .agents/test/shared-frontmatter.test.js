@@ -367,3 +367,12 @@ for (const [cp, name] of [['\u0085', 'U+0085'], [' ', 'U+2028'], [' ', 'U+20
     assert.throws(() => parse(`---\nk:\n- first\n  x${cp}#123\n---\n`), /comment/);
   });
 }
+
+test('review P1: an item saved with CRLF (or lone CR) line endings parses like the LF one (python text mode normalises)', () => {
+  const lf = '---\nphase: 001-a\nseq: 1\nstatus: pending\n---\n\n# Body\nline\n';
+  for (const eol of ['\r\n', '\r']) {
+    const p = parse(lf.replace(/\n/g, eol));
+    assert.deepEqual(p, parse(lf), JSON.stringify(eol));
+    assert.equal(p.fm.status, 'pending');
+  }
+});

@@ -144,6 +144,14 @@ export function write(item, root) {
 }
 
 // lib_db.py:482-503: phases/*.md, then archive/**/*.md. path is folder-relative with '/'.
+// The phases/*.md files without a front matter block: left alone by every command, reported by query.
+export function bareFiles(dir) {
+  assertFolder(dir);
+  let names;
+  try { names = readdirSync(join(dir, 'phases')).filter(n => n.endsWith('.md')).sort(); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+  return names.filter(n => parse(readFileSync(join(dir, 'phases', n), 'utf8')).bare).map(n => `phases/${n}`);
+}
+
 export function load(dir) {
   assertFolder(dir);
   const items = [];
@@ -158,7 +166,9 @@ export function load(dir) {
       else if (e.isFile() && e.name.endsWith('.md')) {
         const text = readFileSync(join(dir, path), 'utf8');
         const sha256 = createHash('sha256').update(text).digest('hex'); // lib_db.py:163-164
-        items.push({ path, ...parse(text), sha256, sha: sha256 });
+        const doc = parse(text);
+        if (doc.bare && rel === 'phases') continue; // a README or a stray note in phases/ is not an item: ranking it would rewrite it as an empty one (see bareFiles)
+        items.push({ path, ...doc, sha256, sha: sha256 });
       }
     }
   };

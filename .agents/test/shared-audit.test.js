@@ -107,3 +107,20 @@ test('audit t7: query --all and --by-branch survive an item whose status is empt
     assert.equal(r.status, 0, out(r)); assert.match(r.stdout, /001-alpha-job/); assert.match(r.stdout, /None/);
   }
 });
+
+test('audit t6: a BOM file keeps its front matter; a phases/ file without front matter is skipped, reported and never rewritten', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0);
+  const alpha = join(s.folder, 'phases', '001-alpha-job.md');
+  writeFileSync(alpha, `﻿${readFileSync(alpha, 'utf8')}`); // saved by an editor that adds a BOM
+  const readme = join(s.folder, 'phases', 'README.md'); const note = '\nnotes for humans\n\n## not front matter\n';
+  writeFileSync(readme, note);
+  const r = s.run(NEW('beta job', '--priority', '0'));
+  assert.equal(r.status, 0, out(r));
+  assert.equal(readFileSync(readme, 'utf8'), note, 'the stray file is not rewritten');
+  const fixed = readFileSync(alpha, 'utf8');
+  assert.match(fixed, /^name: "alpha job"$/m); assert.match(fixed, /^seq: 1$/m); // fields kept, number not reused
+  assert.ok(existsSync(join(s.folder, 'phases', '002-beta-job.md')));
+  const q = s.run(['query', '--all']);
+  assert.equal(q.status, 0, out(q)); assert.match(q.stdout, /phases\/README\.md has no front matter/);
+});

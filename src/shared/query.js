@@ -67,6 +67,7 @@ function findingLines(f, repo) {
   return [
     ...f.foreign.map(r => `⚠️  CRITICAL: ${r.path} says repository ${r.repository} but is in the folder of ${repo}; it is out of the queue. Move it: move.py ${r.slug} --to-repository`),
     ...f.ghost.map(r => `⚠️  CRITICAL: item ${r.slug} has a database row but its file ${r.path} is gone (deleted outside the scripts); it is out of the queue. Restore the file from git, or remove.py ${r.slug} --reason "..."`),
+    ...(f.bare ?? []).map(p => `⚠️  ${p} has no front matter block; it is not an item, is out of the queue and is never rewritten. Add the front matter or move the file out of phases/`),
     ...f.untagged.map(r => `⚠️  item ${r.slug} records no repository or branch; it is out of the queue until migrate_repo.py <repository path> --identity-only fills them`),
   ];
 }
@@ -145,6 +146,8 @@ async function query(argv) {
     const hid = one("SELECT id FROM handoff WHERE status='active' LIMIT 1")?.id ?? null;
     const critical = () => (hid === null ? [] : all("SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') AND severity='critical' ORDER BY priority ASC, seq ASC", hid));
     const bad = findings(all("SELECT * FROM phase WHERE status NOT IN ('archived')"), folder, repo);
+    const bare = store.bareFiles(folder);
+    if (bare.length) bad.bare = bare; // only when there is one: the --json findings keep the oracle's three keys
     const excluded = new Set(Object.values(bad).flat().map(r => r.id));
     const lines = findingLines(bad, repo);
     if (!a.json && lines.length && (a.next || !plain)) lines.forEach(say); // findings lead the queue views only

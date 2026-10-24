@@ -352,3 +352,15 @@ test('review P1: new --split-from whose rescan throws leaves the mirror rows and
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.equal(rows(), before);
 });
+
+test('review P1: new --split-from an item of another team (TEAM_BRANCH differs) is refused and logs nothing', t => {
+  const f = fixture(t);
+  assert.equal(node(f, NONE).status, 0); // 001-alpha-job on acme/demo, branch main
+  const rows = () => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM event ORDER BY id').all()); } finally { c.close(); } };
+  const before = rows();
+  const r = node(f, [...NONE, '--split-from', '1', '--body', '## Definition of done\n- [ ] x'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /team session is bound to acme\/demo branch release/);
+  assert.equal(rows(), before);
+  assert.deepEqual(readdirSync(join(f.folder, 'phases')), ['001-alpha-job.md']);
+});

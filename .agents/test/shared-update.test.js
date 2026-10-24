@@ -398,3 +398,16 @@ test('review P2: after two clones picked one number, the merged queue is re-dens
   const ranks = readdirSync(join(f.folder, 'phases')).map(n => parse(readFileSync(join(f.folder, 'phases', n), 'utf8')).fm).filter(m => ['pending', 'in_progress'].includes(m.status)).map(m => m.priority).sort((a, b) => a - b);
   assert.deepEqual(ranks, ranks.map((_, i) => i));
 });
+
+test('review P1: update of an item of another team (field edit, note, append) is refused and writes nothing', () => {
+  const f = seed();
+  const text = readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8');
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  for (const args of [['2', '--summary', 'x'], ['2', '--note', 'x'], ['2', '--append', 'x'], ['2', '--priority', '0']]) {
+    const r = cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' } });
+    assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /team session is bound/);
+  }
+  assert.equal(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), text);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+});

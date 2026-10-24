@@ -9,6 +9,7 @@ import * as db from './db.js';
 import { assertInside, git, itemSelector, redact } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
+import { outsideTeam, teamScope } from './team.js';
 
 // Python repr of a str, for the oracle's `{x!r}`.
 export function pyStr(s) {
@@ -32,6 +33,12 @@ export const valueLike = s => s !== undefined && (!s.startsWith('-') || s === '-
 export const say = text => process.stdout.write(`${redact(text)}\n`);
 export const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 export const refuse = message => { say(`❌ ${message}`); return 1; }; // the scripts' refusals: stdout, exit 1
+// A team session (TEAM_REPOSITORY/TEAM_BRANCH) works only on items of its own repository and branch; every command that selects an
+// existing item and writes calls this before it writes (update through lifecycle.step). The item as a mirror row, or as front matter.
+export const teamRefusal = item => {
+  const why = outsideTeam({ repository: item.repository, branch: item.branch });
+  return why ? `${item.slug ?? item.phase}: ${why}` : null;
+};
 
 // lib_db.py:587-595
 export function find(con, text) {
@@ -50,7 +57,7 @@ export function find(con, text) {
 export async function withBacklog(fn, tail, also = []) {
   const { home } = store.resolveHome();
   let repo;
-  try { repo = store.repoId(process.cwd()); } catch (e) { return die(e.message); }
+  try { repo = teamScope().repo || store.repoId(process.cwd()); } catch (e) { return die(e.message); } // update's rule: a team session works on its repository
   for (const id of also) try { store.folder(home, id); } catch (e) { throw usage(e.message); } // owner/name only: it names a lock file
   const ids = [...new Set([repo, ...also])].sort();
   const hold = (i, f) => i < ids.length ? store.runLocked(home, ids[i], () => hold(i + 1, f)) : f();
@@ -107,6 +114,8 @@ function stamp(path) {
 async function archive(a, con, { folder, close }) {
   const row = find(con, a.phase);
   if (!row) return refuse(`no phase ${pyStr(a.phase)}`);
+  const outside = teamRefusal(row);
+  if (outside) return refuse(outside);
   if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived (${row.path})`); return 0; }
   if (row.status !== 'done' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'done' — finish it or pass --force`);
 

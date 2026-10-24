@@ -548,3 +548,22 @@ test('review P2: after a cross-repository move both queues are dense (the source
   const c = db.connect(f.other);
   try { assert.deepEqual(c.prepare("SELECT priority FROM phase WHERE status='pending' ORDER BY priority").all().map(r => r.priority), [0, 1]); } finally { c.close(); }
 });
+
+// A team session bound to another branch works only on items of its own repository and branch: archive and both move modes refuse
+// an item of another team before anything is written.
+const bound = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' }; // seed items are acme/demo on main (004-delta: feature/x)
+for (const [title, script, args] of [
+  ['archive', 'archive', ['5', '--force']],
+  ['move --to-branch', 'move', ['2', '--to-branch', 'release']],
+  ['move --to-repository', 'move', ['2', '--to-repository', 'other/proj']],
+  ['move --all-open-of-branch', 'move', ['--all-open-of-branch', 'main', '--to-branch', 'release']],
+]) {
+  test(`review P1: ${title} in a team session bound to another branch is refused and writes nothing`, () => {
+    const f = seed();
+    const before = [mirror(f), names(f.folder, 'phases'), names(f.folder, 'archive'), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'status', '--porcelain')];
+    const r = cli([script, ...args], { cwd: f.cons, tmp: f.t, env: bound });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /team session is bound to acme\/demo branch release/);
+    assert.deepEqual([mirror(f), names(f.folder, 'phases'), names(f.folder, 'archive'), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'status', '--porcelain')], before);
+  });
+}

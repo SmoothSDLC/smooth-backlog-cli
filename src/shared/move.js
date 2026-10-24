@@ -8,7 +8,7 @@
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { die, find, pyStr, refuse, say, usage, valueLike, withBacklog } from './archive.js';
+import { die, find, pyStr, refuse, say, teamRefusal, usage, valueLike, withBacklog } from './archive.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { assertInside, git, redact } from './safety.js';
@@ -86,6 +86,8 @@ async function move(a, con, { home, repo, folder, close, locked }) {
     const refusal = await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
     const rows = con.prepare("SELECT * FROM phase WHERE branch=? AND repository=? AND status IN ('pending','in_progress') ORDER BY id").all(from, repo);
+    const outside = rows.map(teamRefusal).find(Boolean); // before the first file is written
+    if (outside) return refuse(outside);
     for (const r of rows) await toBranch(con, folder, { ...r }, a['to-branch'], a.note || `all open items of ${from}`);
     db.scan(con, folder);
     say(`✅ moved ${rows.length} open item(s) of '${from}' to '${a['to-branch']}'`);
@@ -94,6 +96,8 @@ async function move(a, con, { home, repo, folder, close, locked }) {
   if (!a.phase) throw usage('name the item, or use --all-open-of-branch');
   const r = find(con, a.phase);
   if (!r) return refuse(`no item ${pyStr(a.phase)} in the backlog of ${repo}`);
+  const outside = teamRefusal(r);
+  if (outside) return refuse(outside);
   if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (the rescan does not visit archive/, so the mirror would keep the old branch or repository); beyond move.py parity, which rewrites the archive file and leaves the mirror stale`);
   if (a['to-branch']) { // move.py:93-98
     const refusal = await branchRefusal(a['to-branch'], repo);

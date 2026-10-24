@@ -8,7 +8,7 @@ import { parse } from './frontmatter.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
 import { branch as callerBranch, folder as repoFolder, nextSeq, now, reflow, repoId, resolveHome, runLocked, write } from './store.js';
 import { pull } from './sync.js';
-import { teamScope } from './team.js';
+import { outsideTeam, teamScope } from './team.js';
 
 const WORK_CLASSES = ['app-code', 'ui', 'api', 'tests', 'iac', 'network', 'identity', 'security', 'data', 'delivery', 'verify', 'docs', 'contract', 'chunk', 'skills']; // lib_db.py:601
 const REVIEW_CLASSES = [...WORK_CLASSES, 'code'];
@@ -123,6 +123,8 @@ async function create(argv, { home, folder, repo, team }) {
     const src = a.splitFrom ? byIdent(db, a.splitFrom) : null;
     if (a.splitFrom) {
       if (!src) return refuse(`--split-from: no phase '${a.splitFrom}'`);
+      const outside = outsideTeam({ repository: src.repository, branch: src.branch }); // the split logs an event on the parent
+      if (outside) return refuse(`${src.slug}: ${outside}`);
       // INTENTIONAL (new_phase.py:103-107): the parent's body goes in verbatim, duplicate headings included.
       const file = join(folder, String(src.path));
       await assertInside(folder, file); // the path comes from the mirror database: untrusted

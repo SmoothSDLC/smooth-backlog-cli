@@ -491,6 +491,20 @@ test('review P1: a takeover marker held by another waiter keeps the others waiti
 
 const actionableRanks = f => readdirSync(join(f.folder, 'phases')).map(n => fm(f, n).fm).filter(m => ['pending', 'in_progress'].includes(m.status)).map(m => m.priority).sort((a, b) => a - b);
 
+for (const status of ['pending', 'in_progress']) {
+  test(`review P2: an item that returns from done to ${status} is ranked again: no two actionable items share a priority`, () => {
+    const f = seed();
+    const p = join(f.folder, 'phases', '006-zeta.md');
+    writeFileSync(p, readFileSync(p, 'utf8').replace(/^priority: .*$/m, 'priority: 0')); // what it kept from before it was completed
+    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'old priority'); git(f.home, 'push', '-q');
+    const r = run(f, ['6', '--status', status]);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const ranks = actionableRanks(f);
+    assert.equal(ranks.length, 6);
+    assert.deepEqual(ranks, ranks.map((_, i) => i));
+  });
+}
+
 test('review P1: a bound team session reorders and re-ranks only its own items: --replan naming another team is refused, other files are never written', () => {
   const f = seed();
   git(f.cons, 'push', '-q', 'origin', 'HEAD:refs/heads/release');

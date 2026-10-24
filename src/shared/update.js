@@ -232,6 +232,11 @@ async function change(a, con, folder, repo) {
   } else if (completing) {
     order = store.reflow(folder); // the done item leaves the backlog; the rest re-densify
     db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `completed ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
+  } else if (['pending', 'in_progress'].includes(row.status) !== ['pending', 'in_progress'].includes(fm.status)) {
+    // into or out of the queue by a status other than done (done -> pending keeps its old priority and collides; a status out leaves a gap):
+    // rank the queue again (beyond python parity, which leaves the collision or the gap)
+    order = store.reflow(folder);
+    db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `${row.slug} is now ${fm.status}; backlog re-prioritized to ${order.length} item(s)` });
   }
   if (order) db.scan(con, folder);
 

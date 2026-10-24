@@ -102,6 +102,9 @@ export function ingest(db, item, hid = ensureAnchor(db)) {
   if (!row) {
     const names = ['handoff_id', 'slug', ...Object.keys(cols), 'created_at', 'updated_at'];
     const id = Number(db.prepare(`INSERT INTO phase(${names}) VALUES(${names.map(() => '?')})`).run(hid, slug, ...Object.values(cols), now(), now()).lastInsertRowid);
+    // Beyond the oracle: phase.id is a bare INTEGER PRIMARY KEY, so after move.py deleted the row with the highest id the new row
+    // reuses it. Events still naming that id belong to the departed item (move.py keeps its history there): detach them, keep them.
+    db.prepare('UPDATE event SET phase_id=NULL WHERE phase_id=?').run(id);
     logEvent(db, 'ingested', { ...ev, phaseId: id, note: `new phase ${slug}` });
     return { id, changed: true };
   }

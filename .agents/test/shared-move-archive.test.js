@@ -189,6 +189,29 @@ test('review P2: a name with --- in it does not hide the closing front-matter de
   try { assert.equal(con.prepare('SELECT status FROM phase WHERE slug=?').get(slug).status, 'archived'); } finally { con.close(); }
 });
 
+test('review P2: a new item does not inherit the events of the moved-away item whose row id it reuses', () => {
+  const t = mkdtempSync(join(tmpdir(), 'move-reuse-'));
+  dirs.push(t);
+  sharedBacklog(t);
+  const f = { t, cons: consumer(t, 'acme', 'demo', 'main') };
+  mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  const mk = name => {
+    const r = run(f, 'new', ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.split('created phase phases/')[1].split('.md')[0];
+  };
+  const old = mk('first one');
+  assert.equal(run(f, 'move', [old, '--to-repository', 'other/proj']).status, 0);
+  const fresh = mk('second one'); // the only row is gone: its INTEGER PRIMARY KEY comes round again
+  const ev = run(f, 'query', ['--events', fresh]);
+  assert.equal(ev.status, 0, ev.stderr);
+  assert.ok(ev.stdout.includes('new phase ' + fresh), ev.stdout);
+  assert.ok(!ev.stdout.includes('first') && !ev.stdout.includes('moved_out'), `no event of the moved item:\n${ev.stdout}`);
+  const con = db.connect(join(t, 'home', 'acme', 'demo'));
+  try { assert.equal(con.prepare('SELECT COUNT(*) n FROM event WHERE note LIKE ?').get('%first-one%').n > 0, true, 'its history is kept, detached'); } finally { con.close(); }
+});
+
 // --- move --to-branch
 
 test('move --to-branch matches move.py; Python query.py --by-branch lists the item', t => {

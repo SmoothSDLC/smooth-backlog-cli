@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { assertInside, validateHome } from './safety.js';
+import { assertInside, redact, validateHome } from './safety.js';
 import { atomicWrite } from '../storage.js';
 import { resolveHome, setMode } from './store.js';
 import { pull } from './sync.js';
@@ -14,7 +14,7 @@ export const TABLE = {
   next: ['./query.js', '--next'], move: ['./move.js'], archive: ['./archive.js'],
 };
 
-const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${message}\n`); return code; };
+const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 
 // `backlog --use-backlog-repo <path>` (lib_db.py:77-109, set_home.py:33-35) and `backlog --use-local-repo`.
 export async function switchMode({ backlogRepo, rest = [] }) {

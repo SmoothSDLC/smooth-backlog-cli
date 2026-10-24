@@ -16,7 +16,8 @@ const DEFAULT_HOME = '~/git/smoothsdlc-backlog'; // lib_db.py:36
 // git@host:Owner/name(.git), /srv/Owner/name.git. The last two parts win, so a
 // token in the URL changes nothing; fewer than two parts -> "".
 export function repoIdFromUrl(url) {
-  let u = String(url ?? '').trim().replace(/\/+$/, '');
+  // user-info (user:token@) is stripped here, at the one place origins are parsed: no identity, log or error carries it
+  let u = String(url ?? '').trim().replace(/\/+$/, '').replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, '$1').replace(/^[^/\\:@]*:[^/\\@]*@/, '');
   if (u.endsWith('.git')) u = u.slice(0, -4);
   // Also splits on \ (beyond the oracle) so a Windows local-path origin (C:\srv\Owner\name.git) works.
   const parts = u.split(/[/\\:]/).filter(Boolean);

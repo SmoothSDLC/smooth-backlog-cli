@@ -12,7 +12,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { sharedBacklog, consumer, GIT_IDENTITY } from './shared-fixtures.js';
+import { cli, sharedBacklog, consumer, GIT_IDENTITY } from './shared-fixtures.js';
 import {
   repoIdFromUrl, validateHome, slugify, itemSelector,
   assertInside, checkRefs, redact, git,
@@ -260,4 +260,33 @@ test('validateHome: a home that is a clone of the right origin but a subdirector
   const sub = join(home, 'phases');
   mkdirSync(sub);
   await assert.rejects(validateHome(sub), /is not the top folder of a git repository/);
+});
+
+const CRED = 'https://alice:SUPERSECRET@example.com';
+
+test('repoIdFromUrl strips URL user-info at the single place origins are parsed: no identity carries a credential', () => {
+  for (const url of [`${CRED}/repo.git`, `${CRED}/owner/name.git`, 'https://SUPERSECRET@example.com/owner/name', 'alice:SUPERSECRET@example.com:owner/name.git', 'ssh://git:SUPERSECRET@example.com/owner/name']) {
+    assert.ok(!repoIdFromUrl(url).includes('SUPERSECRET'), url);
+  }
+  assert.equal(repoIdFromUrl(`${CRED}/owner/name.git`), 'owner/name');
+  assert.equal(repoIdFromUrl('git@github.com:owner/name.git'), 'owner/name');
+});
+
+test('no command prints the credential of an origin: the invalid-origin error of --use-backlog-repo and every command run from a credentialed clone', t => {
+  const dir = tmp(t);
+  sharedBacklog(dir);
+  const bad = join(dir, 'bad-clone');
+  mkdirSync(bad);
+  for (const args of [['init', '-q', '-b', 'main'], ['remote', 'add', 'origin', `${CRED}/repo.git`]]) assert.equal(spawnSync('git', args, { cwd: bad }).status, 0);
+  const r = cli(['--use-backlog-repo', bad], { tmp: dir });
+  assert.notEqual(r.status, 0);
+  assert.ok(!(r.stdout + r.stderr).includes('SUPERSECRET'), r.stdout + r.stderr);
+
+  const cons = consumer(dir, 'acme', 'demo', 'main');
+  assert.equal(spawnSync('git', ['remote', 'set-url', 'origin', `${CRED}/acme/demo.git`], { cwd: cons }).status, 0);
+  for (const args of [['query', '--all'], ['next'], ['pop', '--agent', 'cody'], ['update', '1', '--summary', 'x'], ['archive', '1'], ['move', '1', '--to-branch', 'x'], ['move', '1', '--to-repository', 'a/b'],
+    ['new', '--name', 'n', '--objective', 'o', '--summary', 's', '--depends-on', 'none']]) {
+    const o = cli(args, { cwd: cons, tmp: dir });
+    assert.ok(!(o.stdout + o.stderr).includes('SUPERSECRET'), `${args[0]}: ${o.stdout}${o.stderr}`);
+  }
 });

@@ -1,4 +1,5 @@
 import { parse, modeOptions, sharedCommand } from './args.js';
+import { redact } from './shared/safety.js';
 import { getMode } from './shared/store.js';
 import { gitContext } from './context.js';
 import { withStore } from './storage.js';
@@ -36,7 +37,7 @@ export async function run({ installationRoot } = {}) {
         data = parsed.command === 'init' ? await initialize(context, parsed.args) : await withStore(context, store => execute(parsed, context, store));
         if (parsed.command !== 'init') {
           try { await refreshIntegrations(context, packageInfo.version); }
-          catch (e) { process.stderr.write(`backlog: Could not refresh generated skills: ${e.message}\n`); }
+          catch (e) { process.stderr.write(`backlog: Could not refresh generated skills: ${redact(e.message)}\n`); }
         }
         await updates.scheduled();
       }
@@ -44,7 +45,7 @@ export async function run({ installationRoot } = {}) {
       process.stdout.write(json ? JSON.stringify({ ok: true, data }) + '\n' : human(data) + '\n');
     }
   } catch (error) {
-    const data = { code: error.code || 'OPERATION_FAILED', message: error.message };
+    const data = { code: error.code || 'OPERATION_FAILED', message: redact(error.message) };
     if (json) process.stdout.write(JSON.stringify({ ok: false, error: data }) + '\n');
     else process.stderr.write(`${data.code}: ${data.message}\n`);
     process.exitCode = error.exitCode || 1;

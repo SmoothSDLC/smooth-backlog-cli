@@ -3,6 +3,8 @@
 // pinned ec5b254e. Node has no flock, so the lock is a pid file (locked() of src/storage.js)
 // and a number two clones picked at once is repaired after the rebase (renumber below).
 // A failure to sync throws BacklogError with exitCode 3; the caller prints it and exits.
+import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { join, posix, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
@@ -88,7 +90,7 @@ async function renumberFiles(home, stream, added) {
 // A pull --rebase that stopped on conflicts of this folder only, which are repairable: add/add of item files (two clones created
 // the same file name: the upstream file stays, the replayed local creation moves to nextSeq) and the binary mirror backlog.db
 // (two writers changed it: upstream's copy is taken, since the mirror is derived from the files; the caller rescans it from the files
-// afterwards, which `renumbered.mirror` asks for). The rebase goes on. false (the caller aborts) when anything else is in conflict or a step fails.
+// afterwards, which `renumbered.mirror` asks for; renumbered.localDbs lists copies of the local db, to carry over its archive transitions). The rebase goes on. false (the caller aborts) when anything else is in conflict or a step fails.
 async function repairConflicts(home, folder, name, renumbered) {
   const dbPath = `${name}/backlog.db`;
   try {
@@ -100,6 +102,13 @@ async function repairConflicts(home, folder, name, renumbered) {
       if (!stages.size || [...stages].some(([path, st]) => (path === dbPath ? !st.includes('2')
         : st !== '23' || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || !path.startsWith(`${name}/`)))) return false;
       if (stages.has(dbPath)) {
+        // the local db goes aside first: its archive transitions are not in upstream's copy (db.keepArchived puts them back)
+        if (stages.get(dbPath).includes('3')) {
+          const tmp = (await must(home, ['checkout-index', '--stage=3', '--temp', '--', dbPath], `read local ${dbPath}`)).stdout.split('\t')[0];
+          const kept = join(mkdtempSync(join(tmpdir(), 'backlog-localdb-')), 'backlog.db');
+          copyFileSync(join(home, tmp), kept); rmSync(join(home, tmp));
+          (renumbered.localDbs ??= []).push(kept);
+        }
         await must(home, ['checkout', '--ours', '--', lit(dbPath)], `keep upstream ${dbPath}`);
         await must(home, ['add', '--', lit(dbPath)], `stage ${dbPath}`);
         renumbered.mirror = true;

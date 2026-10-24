@@ -4,8 +4,8 @@
 // _migrate, ensure_handoff_anchor, ingest_phase, scan_stack, log_event and archive.py:89-93.
 // Synchronous like store.js. The caller closes the handle.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, isAbsolute, join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { operation } from '../errors.js';
 import { parse } from './frontmatter.js';
 import { assertFolder, assertNoSymlinks, now } from './store.js';
@@ -169,6 +169,28 @@ export function markArchived(db, slug, location) {
   return { id: Number(r.id), slug };
 }
 
+// After a conflict took upstream's backlog.db: scan reads phases/ only, so an archive done by the local commit would stay 'done' at a
+// path that is gone. Each row the local db holds as archived at an existing archive/ file becomes archived the same way (status, path,
+// updated_at) and its 'archived' events are copied with their own timestamps.
+function keepArchived(db, folder, localDb) {
+  const local = new (sqlite().DatabaseSync)(localDb, { readOnly: true });
+  try {
+    db.exec('BEGIN');
+    try {
+      for (const l of local.prepare("SELECT * FROM phase WHERE status='archived'").all()) {
+        if (!l.path.startsWith('archive/') || l.path.includes('..') || !existsSync(join(folder, l.path))) continue;
+        const u = db.prepare("SELECT id, handoff_id FROM phase WHERE slug=? AND status != 'archived'").get(l.slug);
+        if (!u) continue;
+        db.prepare("UPDATE phase SET status='archived', path=?, updated_at=? WHERE id=?").run(l.path, l.updated_at, u.id);
+        for (const e of local.prepare("SELECT ts, branch, commit_sha, note FROM event WHERE phase_id=? AND event='archived' ORDER BY id").all(l.id)) {
+          db.prepare("INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,'archived',?,?,?)").run(e.ts, u.handoff_id, u.id, e.branch, e.commit_sha, e.note);
+        }
+      }
+      db.exec('COMMIT');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  } finally { local.close(); }
+}
+
 // sync.commit, then scan and commit again until no renumbering remains (a rescan after the push would leave the db dirty).
 // The same when a conflict on backlog.db took upstream's copy (pairs.mirror): the rescan rebuilds the mirror from the files.
 // Resolves to every [old, new] pair renumbered on the way.
@@ -177,7 +199,10 @@ export async function commitSettled(home, folder, message) {
   for (let pairs = await commit(home, folder, message); pairs.length || pairs.mirror; pairs = await commit(home, folder, message)) {
     all.push(...pairs);
     const again = connect(folder);
-    try { scan(again, folder, pairs); } finally { again.close(); }
+    try {
+      for (const file of pairs.localDbs ?? []) keepArchived(again, folder, file);
+      scan(again, folder, pairs);
+    } finally { again.close(); for (const file of pairs.localDbs ?? []) rmSync(dirname(file), { recursive: true, force: true }); }
   }
   return all;
 }

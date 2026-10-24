@@ -62,3 +62,33 @@ test('two CLI writers creating different items in separate clones: both succeed 
     assert.equal(gitIn(w.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
   }
 });
+
+test('review P1: a backlog.db conflict that takes upstream\'s copy keeps the local archive: row archived at its archive path, with its archived event', async t => {
+  const [a, b, { bare }] = writers(t);
+  // gamma stays in phases/: if the archive moved every file of the folder, git would carry a's new file along into archive/ (directory rename detection)
+  for (const name of ['alpha job', 'gamma job']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0); // b has pulled both
+  const hold = holdFirstPush(b);
+  const second = cliAsync(['archive', '1', '--force'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held(); // b has moved the file to archive/, marked the row archived and committed
+  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // a pushes a backlog.db without that
+  hold.release();
+  const r = await second.done;
+  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
+
+  const verify = mkdtempSync(join(tmpdir(), 'dbconf-v-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
+  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
+  const dir = join(verify, 'c', 'acme', 'demo');
+  assert.ok(existsSync(join(dir, 'archive', 'phases', '001-alpha-job.md')));
+  const con = db.connect(dir);
+  try {
+    assert.deepEqual(con.prepare('SELECT slug, status, path FROM phase ORDER BY seq').all().map(x => ({ ...x })), [
+      { slug: '001-alpha-job', status: 'archived', path: 'archive/phases/001-alpha-job.md' },
+      { slug: '002-gamma-job', status: 'pending', path: 'phases/002-gamma-job.md' },
+      { slug: '003-beta-job', status: 'pending', path: 'phases/003-beta-job.md' },
+    ]);
+    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='archived' AND note LIKE '001-alpha-job%'").get().n, 1);
+    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
+  } finally { con.close(); }
+  assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+});

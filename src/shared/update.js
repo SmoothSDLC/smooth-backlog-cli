@@ -182,6 +182,11 @@ async function change(a, con, folder, repo) {
     let n;
     if (['priority', 'seq', 'size_score'].includes(k) && (n = pyInt(v)) === null) throw new BacklogError('INVALID_INPUT', `invalid literal for int() with base 10: ${pyStr(v)}`, 1);
     if (k === 'status' && !['pending', 'in_progress', 'done'].includes(v)) return refuse(`--status ${pyStr(v)}: use pending, in_progress or done (backlog archive moves a finished item to archive/)`);
+    if (k === 'seq') { // the number selects the item: another item (archived ones too) holding it would make every numeric selector ambiguous
+      const held = con.prepare('SELECT slug FROM phase WHERE seq=? AND id<>?').get(n, row.id)?.slug
+        ?? store.load(folder).find(i => Number(i.fm.seq) === n && i.fm.phase !== row.slug)?.fm.phase;
+      if (held) return refuse(`--seq ${n} is already item ${held}; the number must stay unique`);
+    }
     if (k === 'priority') { moveTarget = n; continue; }
     fm[k] = k === 'seq' || k === 'size_score' ? n : v;
     changes[k] = v;

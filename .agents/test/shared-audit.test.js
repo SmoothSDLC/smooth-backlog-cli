@@ -152,3 +152,16 @@ test('review: a phases/ file without front matter is no item for new, query or u
   const con = db.connect(s.folder);
   try { assert.equal(con.prepare("SELECT COUNT(*) AS n FROM phase WHERE slug LIKE 'README%'").get().n, 0); } finally { con.close(); }
 });
+
+test('review: update --seq refuses a number another item holds (archived ones included)', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0); assert.equal(s.run(NEW('beta job')).status, 0);
+  const file = join(s.folder, 'phases', '002-beta-job.md');
+  const r = s.run(['update', '2', '--seq', '1']);
+  assert.equal(r.status, 1, out(r)); assert.match(out(r), /already item 001-alpha-job/);
+  assert.equal(s.run(['archive', '1', '--force']).status, 0);
+  const again = s.run(['update', '2', '--seq', '1']);
+  assert.equal(again.status, 1, out(again));
+  assert.match(readFileSync(file, 'utf8'), /^seq: 2$/m);
+  assert.equal(s.run(['update', '2', '--seq', '7']).status, 0);
+});

@@ -85,20 +85,29 @@ async function renumberFiles(home, stream, added) {
   return out;
 }
 
-// A pull --rebase that stopped on add/add conflicts only, all in this folder's item files: two clones created
-// the same file name. The upstream file stays; the replayed local creation moves to nextSeq, and the rebase goes on.
-// false (the caller aborts) when anything else is in conflict or a step fails.
-async function repairAddAdd(home, folder, name, renumbered) {
+// A pull --rebase that stopped on conflicts of this folder only, which are repairable: add/add of item files (two clones created
+// the same file name: the upstream file stays, the replayed local creation moves to nextSeq) and the binary mirror backlog.db
+// (two writers changed it: upstream's copy is taken, since the mirror is derived from the files; the caller rescans it from the files
+// afterwards, which `renumbered.mirror` asks for). The rebase goes on. false (the caller aborts) when anything else is in conflict or a step fails.
+async function repairConflicts(home, folder, name, renumbered) {
+  const dbPath = `${name}/backlog.db`;
   try {
     for (let round = 0; round < 20; round++) {
       const stages = new Map();
       for (const e of (await must(home, ['ls-files', '-u', '-z'], 'list conflicts')).stdout.split('\0').filter(Boolean)) {
         const [meta, path] = e.split('\t'); stages.set(path, `${stages.get(path) ?? ''}${meta.split(' ')[2]}`);
       }
-      if (!stages.size || [...stages].some(([path, st]) => st !== '23' || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || !path.startsWith(`${name}/`))) return false;
+      if (!stages.size || [...stages].some(([path, st]) => (path === dbPath ? !st.includes('2')
+        : st !== '23' || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || !path.startsWith(`${name}/`)))) return false;
+      if (stages.has(dbPath)) {
+        await must(home, ['checkout', '--ours', '--', lit(dbPath)], `keep upstream ${dbPath}`);
+        await must(home, ['add', '--', lit(dbPath)], `stage ${dbPath}`);
+        renumbered.mirror = true;
+      }
       // Every upstream file is restored before a number is allocated: nextSeq loads all items, and a file still holding conflict markers would not parse.
       const mines = new Map();
       for (const path of stages.keys()) {
+        if (path === dbPath) continue;
         mines.set(path, parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout));
         await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
         await must(home, ['add', '--', lit(path)], `stage ${path}`);
@@ -118,7 +127,7 @@ async function repairAddAdd(home, folder, name, renumbered) {
 }
 
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
-// [old, new] pairs renumbered on the way. Recorded only when on origin/main (lib_db.py:275-309).
+// [old, new] pairs renumbered on the way (with .mirror = true when backlog.db was taken from upstream: rescan it and commit again). Recorded only when on origin/main (lib_db.py:275-309).
 export async function commit(home, folder, message) {
   const name = (await assertInside(home, folder)).split(sep).join('/');
   return locked(lockFile(home), async () => {
@@ -130,7 +139,7 @@ export async function commit(home, folder, message) {
     const renumbered = []; let err = '';
     for (let i = 0; i < 3; i++) {
       let pr = await g(home, PULL);
-      if (pr.code && await repairAddAdd(home, folder, name, renumbered)) pr = { code: 0 };
+      if (pr.code && await repairConflicts(home, folder, name, renumbered)) pr = { code: 0 };
       if (pr.code) {
         await g(home, ['rebase', '--abort']);
         err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;

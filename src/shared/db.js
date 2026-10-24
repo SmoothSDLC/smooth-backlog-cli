@@ -170,10 +170,11 @@ export function markArchived(db, slug, location) {
 }
 
 // sync.commit, then scan and commit again until no renumbering remains (a rescan after the push would leave the db dirty).
+// The same when a conflict on backlog.db took upstream's copy (pairs.mirror): the rescan rebuilds the mirror from the files.
 // Resolves to every [old, new] pair renumbered on the way.
 export async function commitSettled(home, folder, message) {
   const all = [];
-  for (let pairs = await commit(home, folder, message); pairs.length; pairs = await commit(home, folder, message)) {
+  for (let pairs = await commit(home, folder, message); pairs.length || pairs.mirror; pairs = await commit(home, folder, message)) {
     all.push(...pairs);
     const again = connect(folder);
     try { scan(again, folder, pairs); } finally { again.close(); }

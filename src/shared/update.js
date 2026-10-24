@@ -113,7 +113,7 @@ async function update(argv) {
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
     let code;
-    try { code = await change(a, con, folder, repo); } finally { close(); }
+    try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } finally { close(); }
     if (code || a['dry-run']) return code;
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
     await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '));

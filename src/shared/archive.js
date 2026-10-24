@@ -56,7 +56,7 @@ export async function withBacklog(fn, tail) {
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
     let code;
-    try { code = await fn(con, { home, repo, folder, close }); } finally { close(); }
+    try { code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close })); } finally { close(); }
     if (code === 0 && tail) await db.commitSettled(home, folder, tail);
     return code;
   });

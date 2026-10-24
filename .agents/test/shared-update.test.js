@@ -374,3 +374,19 @@ test('review P2: update on an archived item is refused for every flag that goes 
   assert.equal(readFileSync(file, 'utf8'), before);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
+
+test('review P1: update whose rescan throws (another item with size_score: []) restores the file and the db, and commits nothing', () => {
+  const f = seed();
+  const bad = join(f.folder, 'phases', '001-alpha.md');
+  writeFileSync(bad, readFileSync(bad, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n'));
+  const target = join(f.folder, 'phases', '002-beta.md');
+  const text = readFileSync(target, 'utf8');
+  const rows = () => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM phase ORDER BY id').all().concat(c.prepare('SELECT * FROM event ORDER BY id').all())); } finally { c.close(); } };
+  const before = rows();
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  const r = run(f, ['2', '--summary', 'REFUSED_EDIT']);
+  assert.notEqual(r.status, 0, r.stdout + r.stderr);
+  assert.equal(readFileSync(target, 'utf8'), text);
+  assert.equal(rows(), before);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+});

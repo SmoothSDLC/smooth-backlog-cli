@@ -4,7 +4,7 @@
 // _migrate, ensure_handoff_anchor, ingest_phase, scan_stack, log_event and archive.py:89-93.
 // Synchronous like store.js. The caller closes the handle.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { operation } from '../errors.js';
 import { parse } from './frontmatter.js';
@@ -77,6 +77,29 @@ export function connect(folder, { readOnly = false } = {}) {
   if (!have.has('severity')) db.exec("ALTER TABLE phase ADD COLUMN severity TEXT DEFAULT 'normal'");
   if (!have.has('repository')) db.exec("ALTER TABLE phase ADD COLUMN repository TEXT DEFAULT ''");
   return db;
+}
+
+// A command that writes item files and then scans must leave nothing behind when it throws (nothing is committed yet, so the
+// next successful command would publish it): fn() runs, and on a throw the item files under phases/ and archive/ and every row of
+// the mirror go back as they were. Beyond python parity. shortcut: files are held in memory; fine for a backlog folder.
+export async function undoOnThrow(db, folder, fn) {
+  const read = () => new Map(['phases', 'archive'].flatMap(d => existsSync(join(folder, d)) ? readdirSync(join(folder, d), { recursive: true, withFileTypes: true }) : [])
+    .filter(e => e.isFile()).map(e => { const p = join(e.parentPath, e.name); return [p, readFileSync(p)]; }));
+  const files = read();
+  const rowsOf = () => ['handoff', 'phase', 'event'].map(t => [t, db.prepare(`SELECT * FROM ${t}`).all().map(r => ({ ...r }))]);
+  const tables = rowsOf();
+  try { return await fn(); } catch (e) {
+    for (const p of read().keys()) if (!files.has(p)) rmSync(p, { force: true });
+    for (const [p, data] of files) if (!existsSync(p) || !readFileSync(p).equals(data)) { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, data); }
+    if (JSON.stringify(rowsOf()) === JSON.stringify(tables)) throw e; // untouched: do not rewrite the db file
+    db.exec('BEGIN');
+    for (const [t] of [...tables].reverse()) db.exec(`DELETE FROM ${t}`); // phase references handoff
+    for (const [t, rows] of tables) {
+      for (const r of rows) db.prepare(`INSERT INTO ${t}(${Object.keys(r)}) VALUES(${Object.keys(r).map(() => '?')})`).run(...Object.values(r));
+    }
+    db.exec('COMMIT');
+    throw e;
+  }
 }
 
 // lib_db.py log_event

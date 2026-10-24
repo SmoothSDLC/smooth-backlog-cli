@@ -468,3 +468,15 @@ test('review P2: archive stamps status: archived into an item saved with CRLF li
   assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
   assert.match(readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8'), /status: archived\r\n/);
 });
+
+test('review P1: archive and move --to-branch whose rescan throws put the files and the db back and commit nothing', () => {
+  for (const args of [['archive', ['5']], ['move', ['2', '--to-branch', 'release']]]) {
+    const f = seed();
+    breakItem(f, 'phases/001-alpha.md');
+    const files = () => JSON.stringify([names(f.folder, 'phases'), names(f.folder, 'archive'), readFileSync(join(f.folder, 'phases/002-beta.md'), 'utf8'), readFileSync(join(f.folder, 'phases/005-epsilon.md'), 'utf8')]);
+    const before = [files(), mirror(f), git(f.home, 'rev-parse', 'HEAD')];
+    const r = run(f, ...args);
+    assert.notEqual(r.status, 0, `${args[0]}: ${r.stdout}${r.stderr}`);
+    assert.deepEqual([files(), mirror(f), git(f.home, 'rev-parse', 'HEAD')], before, args[0]);
+  }
+});

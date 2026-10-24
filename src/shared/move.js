@@ -124,6 +124,7 @@ async function move(a, con, { home, repo, folder, close, folders }) {
   Object.assign(fm, { phase: slug, seq, repository: target, updated: store.now() });
   const copy = join(tdir, 'phases', `${slug}.md`);
   const events = con.prepare('SELECT ts,event,branch,commit_sha,note FROM event WHERE phase_id=? ORDER BY id').all(r.id);
+  const forget = db.freshDb(tdir);
   const tcon = db.connect(tdir);
   try {
     // all or nothing: a throw anywhere below, in the target scan or in the source rescan, restores both backlogs (files and mirror rows)
@@ -146,7 +147,7 @@ async function move(a, con, { home, repo, folder, close, folders }) {
       store.reflow(folder); // the item leaves the source queue: close the gap
       db.scan(con, folder);
     });
-  } finally { tcon.close(); }
+  } catch (e) { tcon.close(); forget(); throw e; } finally { tcon.close(); }
   close();
   folders.push(tdir); // ONE commit and push covers the source and the target: never one pushed without the other
   say(`✅ ${r.slug} moved to ${target} as ${slug}`);

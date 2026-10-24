@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { input } from '../errors.js';
-import { commitSettled, connect, ensureAnchor, logEvent, scan, undoOnThrow } from './db.js';
+import { commitSettled, connect, ensureAnchor, freshDb, logEvent, scan, undoOnThrow } from './db.js';
 import { parse } from './frontmatter.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
 import { branch as callerBranch, folder as repoFolder, nextSeq, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
@@ -111,7 +111,9 @@ async function create(argv, { home, folder, repo, team }) {
     return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
   }
 
+  const forget = freshDb(folder);
   const db = connect(folder, { readOnly: Boolean(a.dryRun) }); // a dry run only looks: nothing is created in the backlog clone
+  let written = false;
   let seq; let slug; let rel; let order; let rank; let summary; let where;
   try {
     const deps = [];
@@ -172,7 +174,8 @@ async function create(argv, { home, folder, repo, team }) {
       summary = scan(db, folder);
       where = priority === undefined ? 'appended' : `inserted at P${priority}`;
     });
-  } finally { db.close(); }
+    written = true;
+  } finally { db.close(); if (!written) forget(); }
 
   // every change is committed and pushed at once (new_phase.py:187-192); a file renumbered on the way is scanned and committed again
   const message = ['new', ...argv.slice(0, 2)].join(' ');

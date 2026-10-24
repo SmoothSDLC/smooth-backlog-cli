@@ -60,6 +60,14 @@ function loadPhases(folder) {
 
 // lib_db.py connect + _migrate; the busy timeout is Python's 30 s. Opening an up-to-date db writes nothing.
 // readOnly (a dry run): no folder, file or migration is created; an absent backlog.db reads as an empty mirror (in memory).
+// A run that leaves nothing to commit (refused, dry-run, failed) must not leave the backlog.db it created: untracked, it blocks every later pull.
+// Call before connect; call the result when the run did not end in a commit.
+export function freshDb(folder) {
+  const file = join(folder, 'backlog.db');
+  const had = existsSync(file);
+  return () => { if (!had) for (const s of ['', '-journal', '-wal', '-shm']) rmSync(file + s, { force: true }); };
+}
+
 export function connect(folder, { readOnly = false } = {}) {
   assertFolder(folder); // <home>/<owner>/<name>: no link at the owner or the name
   assertNoSymlinks(folder, join(folder, 'backlog.db'));

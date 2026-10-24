@@ -18,6 +18,13 @@ function solo(t) {
   return { tmp, home, cons, folder: join(home, 'acme', 'demo'), run };
 }
 const NEW = (name, ...more) => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', ...more];
+// A complete item (the team fields update --claim needs) that is then set done in its file and ingested.
+const FULL = (name, ...more) => NEW(name, '--work-class', 'docs', '--review-classes', 'docs', '--review-refs', 'references/review/docs.md', '--estimate', '5', '--body', '## Definition of done\n- [ ] x', ...more);
+function finish(s, file) {
+  const path = join(s.folder, 'phases', file);
+  writeFileSync(path, readFileSync(path, 'utf8').replace(/^status: .*$/m, 'status: done'));
+  assert.equal(s.run(['query', '--all']).status, 0); // ingests the edit
+}
 const out = r => `${r.stdout}${r.stderr}`;
 
 test('audit t1/t9: a refused or dry-run command leaves no untracked backlog.db that would block the next pull', t => {
@@ -32,4 +39,17 @@ test('audit t1/t9: a refused or dry-run command leaves no untracked backlog.db t
   assert.equal(existsSync(join(s.folder, 'backlog.db')), true);
   assert.equal(s.run(['update', '9', '--summary', 'x']).status, 1); // an existing db stays
   assert.equal(existsSync(join(s.folder, 'backlog.db')), true);
+});
+
+test('audit t4: a done item can be neither claimed nor released back into the queue (it stays done)', t => {
+  const s = solo(t);
+  const made = s.run(FULL('alpha job')); assert.equal(made.status, 0, out(made));
+  finish(s, '001-alpha-job.md');
+  for (const args of [['update', '1', '--claim', 'amy'], ['update', '1', '--release', 'amy']]) {
+    const r = s.run(args);
+    assert.equal(r.status, 1, out(r));
+    assert.match(out(r), /finished item cannot be (claimed|released)/);
+  }
+  const file = readFileSync(join(s.folder, 'phases', '001-alpha-job.md'), 'utf8');
+  assert.match(file, /^status: done$/m); assert.doesNotMatch(file, /claimed_by: amy/);
 });

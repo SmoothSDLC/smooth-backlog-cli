@@ -39,6 +39,7 @@ export function missingFields(fm, body) {
 
 export function claim({ fm, folder, repo }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
+  if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
   if (who && who !== agent) reject(`claimed by ${who} since ${fm.claimed_at}; message ${who} or pick another item`);
   const undone = undoneDependencies(folder, fm);
   if (undone.length) reject(`dependencies not done: ${undone.map(describeDependency).join('; ')}`);
@@ -50,6 +51,7 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
 
 export function release({ fm }, agent) {
   const who = fm.claimed_by || '';
+  if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be released into the queue`);
   if (who !== agent) reject(`claimed by ${who || 'nobody'}, not by ${agent}`);
   Object.assign(fm, { status: 'pending', claimed_by: '', claimed_at: '' });
   return { event: 'released', text: `Released by ${agent} at ${now()}` };

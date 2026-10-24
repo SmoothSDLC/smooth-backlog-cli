@@ -261,7 +261,7 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
   const o = fixture(); const n = fixture();
   const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
-  const norm = s => String(s).replace(TS, 'TS').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA').replace(/cwd=\S+/g, 'cwd=X').replace(/\b[0-9a-f]{40}\b/g, 'SHA40');
+  const norm = s => String(s).replace(TS, 'TS').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA').replace(/cwd=\S+/g, 'cwd=X').replace(/\b[0-9a-f]{40}\b/g, 'SHA40').replace(/,?"review_author":"[^"]*"/g, "");  // review_author: beyond the oracle (who asked for a review survives a release)
   const snapshot = f => {
     const files = {};
     for (const name of readdirSync(join(f.folder, 'phases'))) files[name] = norm(JSON.stringify(parse(readFileSync(join(f.folder, 'phases', name), 'utf8'))));

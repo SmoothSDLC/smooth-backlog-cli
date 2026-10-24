@@ -6,8 +6,8 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
@@ -419,3 +419,29 @@ for (const [title, args] of [['query', ['query', '--all']], ['next', ['next']], 
     assert.deepEqual(w.during, { exited: false, same: true }, `${title} waits for the lock`);
   });
 }
+
+test('review P1: a lock left by a dead process is taken over (said once); a live holder is waited for and, after the configured wait, named in the refusal', async () => {
+  const f = seed();
+  const lock = join(f.home, '.git', 'smooth-backlog-cli-run.lock');
+  const dead = spawnSync(process.execPath, ['-e', '0']).pid; // a pid that was alive a moment ago and is not now
+  writeFileSync(lock, JSON.stringify({ pid: dead, host: hostname(), command: 'update' }));
+  const r = cli(['query', '--all'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stderr.split(`took over a stale lock of process ${dead}`).length, 2, r.stderr);
+  assert.equal(existsSync(lock), false, 'the lock is released after the command');
+
+  // a live holder: refused after the configured wait, naming pid and command
+  let refused;
+  await store.cloneLocked(f.home, async () => { refused = cli(['query', '--all'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400' } }); });
+  assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+  assert.match(refused.stderr, new RegExp(`locked by another process \\(pid ${process.pid}[,)]`));
+  // a holder that finishes inside the configured wait: the command waits and succeeds
+  let ok;
+  await store.cloneLocked(f.home, async () => {
+    const child = cliAsync(['query', '--all'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '15000' } });
+    await new Promise(res => setTimeout(res, 1500));
+    assert.equal(child.exited(), false, 'still waiting while the holder runs');
+    ok = child;
+  });
+  assert.equal((await ok.done).status, 0);
+});

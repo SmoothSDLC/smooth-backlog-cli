@@ -43,7 +43,7 @@ async function pullLocked(home) {
     + 'because the local copy may be stale. Fix the cause, then run the command again', 3); // lib_db.py:106-109
 }
 
-export const pull = home => locked(lockFile(home), () => pullLocked(home));
+export const pull = home => locked(lockFile(home), () => pullLocked(home), { takeOver: true });
 
 const targetOf = (path, next) => posix.join(posix.dirname(path), pad(next) + posix.basename(path).replace(/^\d+/, ''));
 const retagged = (item, next) => ({ // the item with its number changed in the phase/seq keys and the body heading
@@ -174,5 +174,5 @@ export async function commit(home, folder, message) {
     }
     throw new BacklogError('SYNC_FAILED', `the change is committed in ${home} but NOT on origin/main (${err}). It is not recorded until it is `
       + `pushed: fix the cause and run 'git -C ${home} pull --rebase && git -C ${home} push'`, 3);
-  });
+  }, { takeOver: true });
 }

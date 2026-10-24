@@ -68,10 +68,11 @@ export const lockEnv = home => ({ BACKLOG_RUN_LOCK_HELD: `${lockPath(home)}:${pr
 export function cloneLocked(home, fn) {
   const path = lockPath(home);
   if (held.has(path) || process.env.BACKLOG_RUN_LOCK_HELD === `${path}:${process.ppid}`) return fn();
+  // a normal update (pull, write, push over the network) can take a while: a command behind it waits, 120 s unless BACKLOG_LOCK_WAIT_MS says otherwise
   return locked(path, async () => {
     held.add(path);
     try { return await fn(); } finally { held.delete(path); }
-  });
+  }, { wait: Number(process.env.BACKLOG_LOCK_WAIT_MS) > 0 ? Number(process.env.BACKLOG_LOCK_WAIT_MS) : 120000, takeOver: true });
 }
 
 function git(args, cwd) {

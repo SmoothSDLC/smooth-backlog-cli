@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { join, relative, resolve, dirname, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { operation, BacklogError } from './errors.js';
 import { validateStore } from './schema.js';
@@ -22,9 +23,12 @@ export async function atomicWrite(path, text) {
   try { await handle.writeFile(text); await handle.sync(); } finally { await handle.close(); }
   try { await fs.rename(temp, path); } finally { await fs.rm(temp, { force: true }); }
 }
-export async function locked(path, callback) {
+// wait: how long to wait for a holder (ms). takeOver: a lock whose pid is no longer running (on this host) is taken over and said so once,
+// instead of refused (shared mode; the local store keeps asking the user to look first).
+let tookOver = false;
+export async function locked(path, callback, { wait = 10000, takeOver = false } = {}) {
   await fs.mkdir(dirname(path), { recursive: true });
-  const started = Date.now(); let handle;
+  const started = Date.now(); let handle; let holder = '';
   for (;;) {
     try { handle = await fs.open(path, 'wx', 0o600); break; }
     catch (e) {
@@ -37,11 +41,18 @@ export async function locked(path, callback) {
       try {
         const record = JSON.parse(await fs.readFile(path, 'utf8'));
         operation(Number.isSafeInteger(record.pid) && record.pid > 0, `Invalid lock ${path}; inspect it before removing it.`);
-        try { process.kill(record.pid, 0); } catch (error) {
+        holder = ` (pid ${record.pid}${record.host && record.host !== hostname() ? ` on ${record.host}` : ''}${record.command ? `, command ${record.command}` : ''})`;
+        try { if (!record.host || record.host === hostname()) process.kill(record.pid, 0); } catch (error) { // a pid of another host cannot be probed: it counts as alive
           if (error.code === 'ESRCH') {
             // Another process may already own this pathname; never unlink a lock based on an old read.
             const current = JSON.parse(await fs.readFile(path, 'utf8'));
             if (current.pid !== record.pid) continue;
+            if (takeOver) { // the rename is atomic: of several waiters only one moves the dead owner's file away
+              const aside = `${path}.stale-${randomUUID()}`;
+              try { await fs.rename(path, aside); await fs.rm(aside, { force: true }); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+              if (!tookOver) { tookOver = true; process.stderr.write(`backlog: took over a stale lock of process ${record.pid} (no longer running): ${path}\n`); }
+              continue;
+            }
             throw new BacklogError('STALE_LOCK', `Lock owner ${record.pid} is no longer running. Verify no backlog process is using this storage, remove ${path}, then rerun; any journal will recover automatically.`, 1);
           }
         }
@@ -53,11 +64,11 @@ export async function locked(path, callback) {
         }
         if (!(error instanceof SyntaxError) && !(process.platform === 'win32' && error.code === 'EPERM')) throw error;
       }
-      if (Date.now() - started > 10000) throw new BacklogError('LOCKED', `Backlog is locked by another process: ${path}. Retry after it finishes.`, 1);
+      if (Date.now() - started > wait) throw new BacklogError('LOCKED', `Backlog is locked by another process${holder}: ${path}. Retry after it finishes, or raise BACKLOG_LOCK_WAIT_MS.`, 1);
       await delay(20 + Math.random() * 25);
     }
   }
-  try { await handle.writeFile(JSON.stringify({ pid: process.pid })); return await callback(); }
+  try { await handle.writeFile(JSON.stringify({ pid: process.pid, host: hostname(), command: process.argv[2] ?? '' })); return await callback(); }
   finally { await handle.close(); await fs.rm(path, { force: true }); }
 }
 export async function repositoryLocked(root, callback) {

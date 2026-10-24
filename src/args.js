@@ -32,3 +32,30 @@ export function parse(argv) {
   for (const key of Object.keys(flags)) input(allowed.has(key), `--${key} is not supported by ${command}.`);
   return { command, args, flags };
 }
+// Global mode options (shared mode, job 6). Only the leading options count (before the command name);
+// the rest of argv (the command, if any, and other global flags) is returned as `rest`.
+// Returns null when absent, else { backlogRepo?: path, local: boolean, rest }.
+export function modeOptions(argv) {
+  const rest = [...argv]; let backlogRepo, local = false;
+  for (let i = 0; i < rest.length && rest[i].startsWith('--');) {
+    const at = rest[i].indexOf('='); const key = at < 0 ? rest[i] : rest[i].slice(0, at);
+    if (key === '--use-local-repo') { input(at < 0 && !local, '--use-local-repo does not take a value and may be given once.'); local = true; rest.splice(i, 1); }
+    else if (key === '--use-backlog-repo') {
+      const value = at < 0 ? rest[i + 1] : rest[i].slice(at + 1);
+      input(backlogRepo === undefined, 'Option --use-backlog-repo was supplied twice.');
+      input(value && !value.startsWith('--'), '--use-backlog-repo requires a path.');
+      backlogRepo = value; rest.splice(i, at < 0 ? 2 : 1);
+    } else i++;
+  }
+  if (backlogRepo === undefined && !local) return null;
+  input(backlogRepo === undefined || !local, '--use-backlog-repo and --use-local-repo exclude each other.');
+  return { backlogRepo, local, rest };
+}
+// Shared mode skips the local grammar: the first word is the command, the rest is the module's own argv.
+// Leading global flags (--json) are passed on to the module and do not hide the command.
+// null for --help/--version, which stay with the local path.
+export function sharedCommand(argv) {
+  if (['--help', '--version'].includes(argv[0])) return null;
+  let at = 0; while (argv[at] === '--json') at++;
+  return argv[at] && !argv[at].startsWith('-') ? { command: argv[at], argv: [...argv.slice(0, at), ...argv.slice(at + 1)] } : { command: 'next', argv };
+}

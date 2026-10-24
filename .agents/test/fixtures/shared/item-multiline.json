@@ -1,0 +1,7 @@
+{
+  "objective": "first line\nsecond line",
+  "gaps": "a\n\nb\n\n\nc",
+  "trailing": "ends with a newline\n",
+  "long": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word \nnext word word word word word word word word word word word word word word word word word word word word ",
+  "single": "one line"
+}

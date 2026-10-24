@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the shared backlog repository mode: `backlog --use-backlog-repo <path>` keeps every repository's items in
+  one Git backlog repository (`SmoothSDLC/smoothsdlc-backlog`), with `new`, `update`, `query`, `next`, `pop`,
+  `move` and `archive` matching the Python backlog skill, including the team flags (claim, review, waiting,
+  hand-back) and the team views; `--use-local-repo` switches back. See COMMANDS.md.
+- Read and write item front matter compatibly with the Python skill's PyYAML files, keep the SQLite mirror in step,
+  and commit and push each change before exiting, with collision renumbering and a run lock per repository.
+- Refuse symlinked or escaping paths inside the backlog home and redact credentials in every diagnostic.
 - Fix intermittent permission errors when concurrent commands acquire locks on Windows.
 - Preserve existing backlog data and lock coordination after the project rename.
 - Refresh package documentation and repository references for npm registry installation.

@@ -4,7 +4,7 @@ Keep a backlog of tasks, priorities, progress, and evidence alongside your code.
 Each Git branch has its own work list, shared by people and coding agents through
 version-controlled files in `.backlog/`.
 
-Requires **Node.js 24+**, npm, and Git. Supports Linux, macOS, and Windows.
+Requires **Node.js 24+**, npm, and Git. Supports Linux and macOS. Windows is not supported or tested right now: CI does not run on Windows until Windows support for the shared backlog mode is done (backlog item 024).
 The package is **`@smoothsdlc/smooth-backlog-cli`**; the command is **`backlog`**.
 
 ## Install
@@ -62,6 +62,11 @@ arguments to see the next active item.
 If the backlog already exists, `backlog init backup` preserves its data and
 backs up existing files before replacing the generated skills. **`backlog init
 clean` deletes the entire backlog, including every branch and contained backups.**
+
+**Shared backlog repository:** `backlog --use-backlog-repo <path>` switches to a shared mode where the items of
+every repository live in one Git backlog repository instead of each repository's `.backlog/` folder; the commands
+there match the Python backlog skill. `backlog --use-local-repo` switches back. [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode)
+describes the mode and its commands.
 
 ## Command help
 

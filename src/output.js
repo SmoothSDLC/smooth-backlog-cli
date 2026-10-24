@@ -31,6 +31,24 @@ Global options: --help, --version, --json, --ask. --ask requires a terminal.
 Branch fallback: --branch or BACKLOG_CLI_BRANCH when Git cannot name a branch.
 --force is valid ONLY for whole-list set replacement. Init clean affects every branch.
 JSON emits {ok,data} or {ok,error}. Exit codes: 0 success, 2 invalid input, 1 failure.
+
+Shared backlog repository mode
+The items of every repository can live in one Git repository, the backlog repository, instead of in each
+repository's own .backlog folder. Two options, put before the command, choose the mode; the choice is kept per user.
+  backlog --use-backlog-repo <path>   Use the clone of SmoothSDLC/smoothsdlc-backlog at <path> (shared mode)
+  backlog --use-local-repo            Go back to the repository's own .backlog folder (local mode)
+Either option may be followed by a command, which then runs in that mode. In shared mode only the commands below
+exist; each one pulls the backlog repository first and pushes its change before it exits. An item is its number or
+its slug. backlog <command> --help prints every flag of the command, what the flag does, and an example.
+  backlog next [--all] [--branch name] [--json]   Show the next actionable item of this repository and branch
+  backlog new --name <text> --depends-on <items|none> [options]   Add an item, or split one with --split-from
+  backlog update <item> [options]       Change an item (status, priority, fields); --replan re-orders the backlog
+  backlog query [--status|--next|--critical|--phase <item>|--events [item]|--by-branch <name>] [--all] [--json]
+  backlog pop --agent <name> [--classes <classes>] [options]   Ask what one agent does next: continue, review, claim, refine, chunk or idle
+  backlog move <item> --to-branch <name>        Move an item (or --all-open-of-branch) to a branch or --to-repository
+  backlog archive <item> [--force] [--dry-run]  Archive a finished item
+In shared mode backlog update changes an item; in local mode it updates the CLI. The team flags of update (claim,
+review, close, waiting), the team views of query and backlog pop work; --plan is not in this build.
 `;
 const clean = value => String(value ?? '—').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ');
 export function human(data) {

@@ -1,0 +1,20 @@
+---
+phase: 004-cli-parity-job-4-front-matter-codec-compatible-with-pyyaml
+seq: 4
+name: 'cli-parity job 4: front-matter codec compatible with PyYAML'
+objective: Read the item files PyYAML writes and write files PyYAML reads, without
+  a dependency. The codec keeps the shared-mode format byte-for-byte per oracle.
+status: in_progress
+work_class:
+- app-code
+- tests
+review_classes:
+- code
+- tests
+- data
+created: '2026-10-22T03:39:31Z'
+location: ''
+---
+# Phase 004 - front-matter codec
+
+The body markdown of the item file stays exactly as written.

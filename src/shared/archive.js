@@ -106,9 +106,11 @@ export async function run(argv) {
 function stamp(path) {
   const text = readFileSync(path, 'utf8');
   // CRLF and lone CR delimiters, as frontmatter.parse reads them; the file keeps its own line endings
-  const m = /^(---(?:\r\n?|\n))([\s\S]*?)(?:\r\n?|\n)---(?=\r\n?|\n|$)/.exec(text);
-  if (!m || !/(?<![^\r\n])status:/.test(m[2])) return;
-  writeFileSync(path, `${m[1]}${m[2].replace(/(?<![^\r\n])status:[^\r\n]*/, 'status: archived')}${text.slice(m[1].length + m[2].length)}`);
+  const m = /^(---(\r\n?|\n))([\s\S]*?)(?:\r\n?|\n)---(?=\r\n?|\n|$)/.exec(text);
+  if (!m) return;
+  const fmText = /(?<![^\r\n])status:/.test(m[3]) ? m[3].replace(/(?<![^\r\n])status:[^\r\n]*/, 'status: archived')
+    : `${m[3]}${m[3] === '' ? '' : m[2]}status: archived`; // no status key: the item reads as pending, so the key is added
+  writeFileSync(path, `${m[1]}${fmText}${text.slice(m[1].length + m[3].length)}`);
 }
 
 async function archive(a, con, { folder, close }) {

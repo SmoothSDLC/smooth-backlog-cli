@@ -567,3 +567,32 @@ for (const [title, script, args] of [
     assert.deepEqual([mirror(f), names(f.folder, 'phases'), names(f.folder, 'archive'), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'status', '--porcelain')], before);
   });
 }
+
+test('review P2: archive inserts status: archived into an item whose front matter has no status key (LF, CRLF, lone CR)', () => {
+  for (const eol of ['\n', '\r\n', '\r']) {
+    const f = seed();
+    const p = join(f.folder, 'phases', '005-epsilon.md');
+    writeFileSync(p, readFileSync(p, 'utf8').replace(/^status: .*\n/m, '').replace(/\n/g, eol));
+    assert.ok(!/status:/.test(readFileSync(p, 'utf8').split(`${eol}---`)[1]), 'fixture has no status key');
+    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'no status'); git(f.home, 'push', '-q');
+    const r = run(f, 'archive', ['5', '--force']);
+    assert.equal(r.status, 0, JSON.stringify(eol) + r.stderr);
+    const text = readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8');
+    assert.equal(parse(text).fm.status, 'archived', JSON.stringify(eol));
+    assert.equal(text.split('status:').length, 2);
+    assert.ok(text.includes(`${eol}status: archived${eol}---${eol}`) || text.includes(`status: archived${eol}---`), JSON.stringify(eol));
+  }
+});
+
+test('review P2: move and the reflow add the keys they set (branch, repository, priority) to an item whose front matter lacks them', () => {
+  const f = seed();
+  const p = join(f.folder, 'phases', '002-beta.md');
+  writeFileSync(p, readFileSync(p, 'utf8').replace(/^(branch|repository|priority): .*\n/gm, ''));
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'no keys'); git(f.home, 'push', '-q');
+  assert.equal(run(f, 'move', ['2', '--to-branch', 'release']).status, 0);
+  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'release');
+  assert.equal(run(f, 'move', ['2', '--to-repository', 'other/proj']).status, 0);
+  const moved = fm(f.other, `phases/${names(f.other, 'phases').find(n => n.endsWith('-beta.md'))}`).fm;
+  assert.equal(moved.repository, 'other/proj');
+  assert.equal(typeof moved.priority, 'number');
+});

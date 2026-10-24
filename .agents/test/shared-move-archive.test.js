@@ -437,3 +437,20 @@ test('review P1: move --to-repository whose target scan throws removes the targe
   assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', 'other/proj'), 'M other/proj/phases/001-first.md');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
+
+test('review P2: move --to-repository refuses an item other items depend on, by number or slug, before any file is written', () => {
+  const f = seed();
+  assert.equal(run(f, 'update', ['1', '--set-depends-on', '3']).status, 0);
+  assert.equal(run(f, 'update', ['2', '--set-depends-on', '003-gamma']).status, 0);
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  const target = names(f.other, 'phases');
+  const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /001-alpha.*002-beta.*depend on 003-gamma.*update <dependent> --set-depends-on/s);
+  assert.deepEqual(names(f.other, 'phases'), target);
+  assert.equal(existsSync(join(f.folder, 'phases', '003-gamma.md')), true);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+  assert.equal(run(f, 'update', ['1', '--set-depends-on', 'none']).status, 0);
+  assert.equal(run(f, 'update', ['2', '--set-depends-on', 'none']).status, 0);
+  assert.equal(run(f, 'move', ['3', '--to-repository', 'other/proj']).status, 0);
+});

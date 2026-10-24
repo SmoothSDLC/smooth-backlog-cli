@@ -63,6 +63,11 @@ If the backlog already exists, `backlog init backup` preserves its data and
 backs up existing files before replacing the generated skills. **`backlog init
 clean` deletes the entire backlog, including every branch and contained backups.**
 
+**Shared backlog repository:** `backlog --use-backlog-repo <path>` switches to a shared mode where the items of
+every repository live in one Git backlog repository instead of each repository's `.backlog/` folder; the commands
+there match the Python backlog skill. `backlog --use-local-repo` switches back. [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode)
+describes the mode and its commands.
+
 ## Command help
 
 Run `backlog --help` for the available commands and options:

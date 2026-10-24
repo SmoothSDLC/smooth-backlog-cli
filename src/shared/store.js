@@ -11,6 +11,7 @@ import { operation } from '../errors.js';
 import { locked } from '../storage.js';
 import { dump, parse } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
+import { outsideTeam } from './team.js';
 
 const BACKLOG_ORIGIN = 'SmoothSDLC/smoothsdlc-backlog'; // lib_db.py:34
 const ACTIONABLE = ['pending', 'in_progress'];          // lib_db.py:515
@@ -206,28 +207,41 @@ function actionable(dir) {
 // lib_db.py:541-556: rank i onto the i-th item; only a file whose priority changes is rewritten.
 // int(priority): a quoted "0" equals rank 0.
 const asInt = p => (typeof p === 'string' && /^\s*[+-]?\d+\s*$/.test(p) ? Number(p) : p);
-function applyDense(dir, items) {
+function applyDense(dir, items, inScope) {
   return items.map((i, rank) => {
-    if (!i.ghost && asInt(i.fm.priority ?? -1) !== rank) write({ path: join(dir, i.path), fm: { ...i.fm, priority: rank, updated: now() }, body: i.body }, dir);
+    if (!i.ghost && inScope(i) && asInt(i.fm.priority ?? -1) !== rank) write({ path: join(dir, i.path), fm: { ...i.fm, priority: rank, updated: now() }, body: i.body }, dir);
     return [slugOf(i), rank];
   });
 }
 
+// A session bound to a team (TEAM_REPOSITORY/TEAM_BRANCH) ranks only its own items, beyond python parity. The queue is one for the whole folder, so
+// the other items keep their ranks and their files are not written: the team's items are re-ordered among the ranks they already hold
+// (a move target is a position among the team's own items), and stay dense when the queue was.
+const inScope = i => !outsideTeam(i.fm);
+function within(items, arrange) {
+  const at = items.flatMap((i, k) => (inScope(i) ? [k] : []));
+  const mine = arrange(at.map(k => items[k]));
+  const out = [...items];
+  at.forEach((k, n) => { out[k] = mine[n]; });
+  return out;
+}
+
 // lib_db.py:558-567: re-densify in current order; with {slug, target}, first move that item to the clamped rank.
 export function reflow(dir, move) {
-  let items = actionable(dir);
-  if (move && move.slug != null && move.target != null) {
-    const moving = items.filter(i => slugOf(i) === move.slug);
-    const rest = items.filter(i => slugOf(i) !== move.slug);
+  const items = within(actionable(dir), mine => {
+    if (!(move && move.slug != null && move.target != null)) return mine;
+    const moving = mine.filter(i => slugOf(i) === move.slug);
+    const rest = mine.filter(i => slugOf(i) !== move.slug);
     const t = Math.max(0, Math.min(Math.trunc(Number(move.target)), rest.length));
-    items = [...rest.slice(0, t), ...moving, ...rest.slice(t)];
-  }
-  return applyDense(dir, items);
+    return [...rest.slice(0, t), ...moving, ...rest.slice(t)];
+  });
+  return applyDense(dir, items, inScope);
 }
 
 // lib_db.py:570-584: idents (slugs or item numbers, never row ids) lead; the rest keeps its order.
 export function reorder(dir, idents) {
-  const items = actionable(dir);
+  const all = actionable(dir);
+  const items = all.filter(inScope);
   const bySlug = new Map(items.map(i => [slugOf(i), i]));
   const bySeq = new Map(items.map(i => [String(i.fm.seq), i]));
   const lead = [];
@@ -236,7 +250,8 @@ export function reorder(dir, idents) {
     const i = bySlug.get(key) || bySeq.get(key.replace(/^0+/, '') || '0');
     if (i && !lead.includes(i)) lead.push(i);
   }
-  return applyDense(dir, [...lead, ...items.filter(i => !lead.includes(i))]);
+  const order = [...lead, ...items.filter(i => !lead.includes(i))];
+  return applyDense(dir, within(all, () => order), inScope);
 }
 
 // lib_db.py:296-299

@@ -488,3 +488,26 @@ test('review P1: a takeover marker held by another waiter keeps the others waiti
   assert.equal(taken.code, 0, taken.err);
   assert.equal(readFileSync(log, 'utf8'), 'in y\nout y\n');
 });
+
+const actionableRanks = f => readdirSync(join(f.folder, 'phases')).map(n => fm(f, n).fm).filter(m => ['pending', 'in_progress'].includes(m.status)).map(m => m.priority).sort((a, b) => a - b);
+
+test('review P1: a bound team session reorders and re-ranks only its own items: --replan naming another team is refused, other files are never written', () => {
+  const f = seed();
+  git(f.cons, 'push', '-q', 'origin', 'HEAD:refs/heads/release');
+  for (const n of ['2', '3']) assert.equal(cli(['move', n, '--to-branch', 'release'], { cwd: f.cons, tmp: f.t }).status, 0); // two items of the team's branch; the rest stay on main
+  const team = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' };
+  const t = args => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: team });
+  const others = () => JSON.stringify(readdirSync(join(f.folder, 'phases')).filter(n => !/^00[23]/.test(n)).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8')));
+  const [before, head] = [others(), git(f.home, 'rev-parse', 'HEAD')];
+  const refused = t(['--replan', '1,3']);
+  assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+  assert.match(refused.stdout, /001-alpha.*team session is bound to acme\/demo branch release/);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+  const prio = n => fm(f, n).fm.priority;
+  const [a, b] = [prio('002-beta.md'), prio('003-gamma.md')];
+  assert.equal(t(['--replan', '003-gamma,002-beta']).status, 0);
+  assert.deepEqual([prio('003-gamma.md'), prio('002-beta.md')], [a, b], 'the team items trade the ranks they hold');
+  Object.assign(process.env, team); // the re-ranks of completion, --priority and the other commands go through store.reflow
+  try { store.reflow(f.folder, { slug: '003-gamma', target: 0 }); store.reflow(f.folder); } finally { for (const k of Object.keys(team)) delete process.env[k]; }
+  assert.equal(others(), before, 'no file of another team was written');
+});

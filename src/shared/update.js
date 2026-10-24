@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
+import { teamRefusal } from './archive.js';
 import { closeNow, headline, missingFields, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as store from './store.js';
@@ -128,6 +129,11 @@ async function change(a, con, folder, repo) {
   // --- pure planning event: explicit replan of the whole backlog (update.py:150-166)
   if (a.replan) {
     const idents = a.replan.split(',').map(strip).filter(Boolean);
+    for (const ident of idents) { // a bound team session reorders only its own items: naming another team's item is refused, before anything is written
+      const named = find(con, ident);
+      const outside = named && teamRefusal(named);
+      if (outside) return refuse(outside);
+    }
     if (a['dry-run']) { say(`ℹ️  [dry-run] would replan backlog leading order: [${idents.map(pyStr).join(', ')}]`); return 0; }
     const order = store.reorder(folder, idents);
     db.logEvent(con, 'planning_event', { handoffId: hid, note: a.note || `replan -> ${order.map(([s]) => s).join(', ')}` });

@@ -109,6 +109,8 @@ async function move(a, con, { home, repo, folder, close }) {
   const src = join(folder, r.path);
   await assertInside(folder, src);
   const { fm, body } = parseDoc(readFileSync(src, 'utf8'));
+  // beyond move.py parity: depends_on names items of THIS backlog; in the target they would point at unrelated items
+  if ([fm.depends_on ?? []].flat().some(d => d !== '' && d !== null)) return refuse(`${r.slug} depends on other items of ${repo}; dependencies are resolved against the target backlog, so clear them first: update ${r.slug} --set-depends-on none`);
   const seq = store.nextSeq(tdir);
   const slug = `${String(seq).padStart(3, '0')}-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;
   Object.assign(fm, { phase: slug, seq, repository: target, updated: store.now() });

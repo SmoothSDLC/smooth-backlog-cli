@@ -404,3 +404,18 @@ test('review P2: move accepts --note="two words" (an option with a value, not a 
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'release');
 });
+
+test('review P2: move --to-repository refuses an item with depends_on, before any file is written; cleared, it moves', () => {
+  const f = seed();
+  assert.equal(run(f, 'update', ['3', '--set-depends-on', '1']).status, 0);
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  const target = names(f.other, 'phases');
+  const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /003-gamma depends on other items of acme\/demo.*update 003-gamma --set-depends-on none/);
+  assert.deepEqual(names(f.other, 'phases'), target);
+  assert.equal(existsSync(join(f.folder, 'phases', '003-gamma.md')), true);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+  assert.equal(run(f, 'update', ['3', '--set-depends-on', 'none']).status, 0);
+  assert.equal(run(f, 'move', ['3', '--to-repository', 'other/proj']).status, 0);
+});

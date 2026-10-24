@@ -1,6 +1,6 @@
 // `backlog new` in shared mode (cli-parity job 10): a port of new_phase.py:28-192 of the pinned oracle.
 // Order of work as the oracle: pull, number, write, scan into backlog.db, reflow, scan, commit and push.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { input } from '../errors.js';
 import { commitSettled, connect, ensureAnchor, logEvent, scan } from './db.js';
@@ -157,16 +157,23 @@ async function create(argv, { home, folder, repo, team }) {
     if (!hasDefinitionOfDone(a.body)) parts.push(`\n## Definition of done\n\n${DOD_PLACEHOLDER}\n`);
 
     if (a.dryRun) { process.stdout.write(`ℹ️  [dry-run] would create phase ${rel} (seq ${seq})\n`); return 0; }
+    // shortcut: undo covers the new file only (a --force overwrite is restored); a reflow that already renumbered other files is not rolled back
+    const previous = existsSync(path) ? readFileSync(path) : null;
     write({ path, fm, body: parts.join('\n') }, folder);
-    if (src) logEvent(db, 'split', { handoffId: src.handoff_id, phaseId: src.id, note: `spawned sibling ${slug}` });
-    scan(db, folder);
-    // planning event: re-densify the backlog to 0..N-1, the new item at its insertion rank
-    const hid = ensureAnchor(db);
-    order = priority === undefined ? reflow(folder) : reflow(folder, { slug, target: priority });
-    rank = Object.fromEntries(order)[slug];
-    logEvent(db, 'planning_event', { handoffId: hid, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
-    summary = scan(db, folder);
-    where = priority === undefined ? 'appended' : `inserted at P${priority}`;
+    try {
+      if (src) logEvent(db, 'split', { handoffId: src.handoff_id, phaseId: src.id, note: `spawned sibling ${slug}` });
+      scan(db, folder);
+      // planning event: re-densify the backlog to 0..N-1, the new item at its insertion rank
+      const hid = ensureAnchor(db);
+      order = priority === undefined ? reflow(folder) : reflow(folder, { slug, target: priority });
+      rank = Object.fromEntries(order)[slug];
+      logEvent(db, 'planning_event', { handoffId: hid, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
+      summary = scan(db, folder);
+      where = priority === undefined ? 'appended' : `inserted at P${priority}`;
+    } catch (e) { // nothing is committed yet: a failed run must not leave its file for the next command to push (beyond python parity)
+      if (previous) writeFileSync(path, previous); else rmSync(path, { force: true });
+      throw e;
+    }
   } finally { db.close(); }
 
   // every change is committed and pushed at once (new_phase.py:187-192); a file renumbered on the way is scanned and committed again

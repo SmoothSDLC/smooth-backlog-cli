@@ -326,3 +326,16 @@ test('review P2: the skills class is accepted as work class and review class, wi
   const o = oracle(t, fixture(t, 'new-oracle-'), [...NONE, '--work-class', 'skills', '--review-classes', 'skills', '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
   if (o) assert.equal(o.status, 0, o.stdout + o.stderr);
 });
+
+test('review P1: new whose rescan throws (an existing phase with size_score: []) removes the file it wrote and commits nothing', t => {
+  const f = fixture(t);
+  assert.equal(node(f, NONE).status, 0);
+  const first = join(f.folder, 'phases', '001-alpha-job.md');
+  writeFileSync(first, readFileSync(first, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n'));
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  const r = node(f, NONE);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(existsSync(join(f.folder, 'phases', '002-alpha-job.md')), false, 'the half-created item is gone');
+  assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', 'acme/demo/phases/002-alpha-job.md'), '');
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+});

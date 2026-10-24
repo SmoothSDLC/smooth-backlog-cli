@@ -114,3 +114,22 @@ test('review P1: a backlog.db conflict that takes upstream\'s copy keeps the loc
     assert.equal(rows[0].slug, '001-alpha-job');
   } finally { con.close(); }
 });
+
+test('review P2: a pull whose non-conflict rebase renumbers an unpushed local item renames its mirror row in place (no ghost, no second row)', t => {
+  const [a, b] = writers(t);
+  const hook = join(b.home, '.git', 'hooks', 'pre-push');
+  writeFileSync(hook, '#!/bin/sh\nexit 1\n'); chmodSync(hook, 0o755);
+  assert.notEqual(cli(NEW('beta job'), { cwd: b.cons, tmp: b.tmp }).status, 0); // committed locally with its db, push refused
+  rmSync(hook);
+  // the other clone pushes the same number as a file only, so backlog.db does not conflict
+  store.write({ path: join(a.folder, 'phases', '001-alpha-job.md'), fm: { phase: '001-alpha-job', seq: 1, name: 'alpha job', status: 'pending', repository: 'acme/demo', branch: 'main', priority: 0, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' }, body: '\n# Phase 001\n' }, a.folder);
+  gitIn(a.home, 'add', 'acme/demo/phases/001-alpha-job.md'); gitIn(a.home, 'commit', '-q', '-m', 'alpha'); gitIn(a.home, 'push', '-q');
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0); // the pull renumbers 001-beta-job to 002
+  const r = cli(['update', '2', '--note', 'after the renumbering'], { cwd: b.cons, tmp: b.tmp });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const con = db.connect(b.folder);
+  try {
+    assert.deepEqual(con.prepare('SELECT slug, seq FROM phase ORDER BY seq').all().map(x => ({ ...x })), [{ slug: '001-alpha-job', seq: 1 }, { slug: '002-beta-job', seq: 2 }]);
+    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
+  } finally { con.close(); }
+});

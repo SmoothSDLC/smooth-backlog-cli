@@ -11,6 +11,7 @@ import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
+import { connect, scan } from './db.js';
 import * as store from './store.js';
 
 const PULL = ['pull', '-q', '--rebase', '--autostash'];
@@ -36,7 +37,7 @@ const must = async (home, args, what) => { const r = await g(home, args); if (r.
 
 async function pullLocked(home) {
   const r = await g(home, PULL);
-  if (!r.code) { await renumber(home, process.stderr); return; } // stderr: a read command's stdout may be JSON
+  if (!r.code) { await renumber(home, process.stderr, true); return; } // stderr: a read command's stdout may be JSON
   await g(home, ['rebase', '--abort']);
   throw new BacklogError('SYNC_FAILED', `could not update ${home} from origin/main (${r.stderr.slice(0, 300)}); nothing was read or changed, `
     + 'because the local copy may be stale. Fix the cause, then run the command again', 3); // lib_db.py:106-109
@@ -52,13 +53,13 @@ const retagged = (item, next) => ({ // the item with its number changed in the p
 
 // Files the unpushed commits added to any <owner>/<name>/phases or archive folder, renumbered when their
 // seq is already held by another file of the folder: git mv, phase/seq keys, body heading, amend.
-async function renumber(home, stream) {
+async function renumber(home, stream, mirror = false) {
   const added = (await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=A', '@{u}', 'HEAD']))
     .stdout.split('\0').filter(f => /^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(f));
   // Working edits (restored by the autostash) stay out of the repair, which stages and amends: stash them, pop them afterwards.
   const stashed = added.length > 0 && (await g(home, ['status', '--porcelain', '--untracked-files=no'])).stdout.trim() !== '';
   if (stashed) await must(home, ['stash', 'push', '-q'], 'set your working edits aside');
-  try { return await renumberFiles(home, stream, added); } finally {
+  try { return await renumberFiles(home, stream, added, mirror); } finally {
     if (stashed) {
       const r = await g(home, ['stash', 'pop', '-q']);
       if (r.code) throw new BacklogError('SYNC_FAILED', `could not restore your working edits in ${home} (${r.stderr.slice(0, 300)}); they are kept in 'git -C ${home} stash'`, 3);
@@ -66,7 +67,7 @@ async function renumber(home, stream) {
   }
 }
 
-async function renumberFiles(home, stream, added) {
+async function renumberFiles(home, stream, added, mirror) {
   const out = [];
   for (const file of added) {
     const [owner, repo, ...rest] = file.split('/'); const name = `${owner}/${repo}`; const path = rest.join('/');
@@ -79,6 +80,12 @@ async function renumberFiles(home, stream, added) {
     await must(home, ['mv', `${name}/${path}`, `${name}/${target}`], `move ${path} to ${target}`);
     store.write({ path: join(folder, target), ...retagged(mine, next) });
     await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
+    if (mirror) { // a pull has no caller that rescans (commit's callers do): the commit's backlog.db still holds the row under the old
+      // number, so rename it in place now; no later scan then reads the old file as missing and the new one as a second item
+      const con = connect(folder);
+      try { scan(con, folder, [[old, next]]); } finally { con.close(); }
+      await must(home, ['add', '--', lit(`${name}/backlog.db`)], `stage ${name}/backlog.db`);
+    }
     const r = await g(home, ['commit', '-q', '--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);

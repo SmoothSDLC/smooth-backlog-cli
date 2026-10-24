@@ -390,3 +390,11 @@ test('review P1: update whose rescan throws (another item with size_score: []) r
   assert.equal(rows(), before);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
+
+test('review P2: after two clones picked one number, the merged queue is re-densified (no two items share a priority)', () => {
+  const f = seed();
+  numberClash(f);
+  assert.equal(run(f, ['1', '--summary', 'touch']).status, 0);
+  const ranks = readdirSync(join(f.folder, 'phases')).map(n => parse(readFileSync(join(f.folder, 'phases', n), 'utf8')).fm).filter(m => ['pending', 'in_progress'].includes(m.status)).map(m => m.priority).sort((a, b) => a - b);
+  assert.deepEqual(ranks, ranks.map((_, i) => i));
+});

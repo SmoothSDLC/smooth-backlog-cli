@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { operation } from '../errors.js';
 import { parse } from './frontmatter.js';
-import { assertFolder, assertNoSymlinks, now } from './store.js';
+import { assertFolder, assertNoSymlinks, now, reflow } from './store.js';
 import { commit } from './sync.js';
 
 // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr (as store.nextSeq does).
@@ -225,6 +225,8 @@ export async function commitSettled(home, folder, message) {
     try {
       for (const file of pairs.localDbs ?? []) keepArchived(again, folder, file);
       scan(again, folder, pairs);
+      reflow(folder); // two writers each ranked their item against their own queue: ties are possible now that the queues are merged
+      scan(again, folder);
     } finally { again.close(); for (const file of pairs.localDbs ?? []) rmSync(dirname(file), { recursive: true, force: true }); }
   }
   return all;

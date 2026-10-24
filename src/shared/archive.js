@@ -62,14 +62,15 @@ export async function withBacklog(fn, tail) {
     const con = db.connect(folder); // refuses a link at the owner or the repository folder
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
+    const folders = [folder]; // the folders this command changed: one commit covers them all (a cross-repository move adds its target)
     let code;
     try {
-      code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close }));
+      code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close, folders }));
     } catch (e) {
       await git(['reset', '-q', '--', '.'], folder); // undoOnThrow put the files back; a staged git mv would still be in the index
       throw e;
     } finally { close(); }
-    if (code === 0 && tail) await db.commitSettled(home, folder, tail);
+    if (code === 0 && tail) await db.commitSettled(home, folders, tail);
     return code;
   });
 }

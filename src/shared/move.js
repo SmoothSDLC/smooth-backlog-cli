@@ -73,7 +73,7 @@ async function toBranch(con, folder, r, branch, note) {
   });
 }
 
-async function move(a, con, { home, repo, folder, close }) {
+async function move(a, con, { home, repo, folder, close, folders }) {
   if (a['all-open-of-branch']) { // move.py:76-86
     const from = a['all-open-of-branch'];
     if (!a['to-branch']) throw usage('--all-open-of-branch needs --to-branch');
@@ -148,7 +148,7 @@ async function move(a, con, { home, repo, folder, close }) {
     });
   } finally { tcon.close(); }
   close();
-  await db.commitSettled(home, tdir, `move.py ${r.slug} in from ${repo}`);
+  folders.push(tdir); // ONE commit and push covers the source and the target: never one pushed without the other
   say(`✅ ${r.slug} moved to ${target} as ${slug}`);
   return 0;
 }

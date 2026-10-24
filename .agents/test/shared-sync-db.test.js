@@ -36,15 +36,6 @@ function holdFirstPush(w) {
   return { held: async () => { for (let i = 0; i < 300 && !existsSync(marker); i++) await sleep(100); assert.ok(existsSync(marker), 'b reached its push'); }, release: () => writeFileSync(go, '') };
 }
 
-// Like holdFirstPush, for the second push of a command (a cross-repository move pushes the target folder, then the source folder).
-function holdSecondPush(w) {
-  const count = join(w.tmp, 'pushes'); const marker = join(w.tmp, 'second-push'); const go = join(w.tmp, 'go');
-  const hook = join(w.home, '.git', 'hooks', 'pre-push');
-  writeFileSync(hook, `#!/bin/sh\necho x >> '${count}'\n[ "$(wc -l < '${count}')" -ge 2 ] || exit 0\n[ -f '${marker}' ] && exit 0\ntouch '${marker}'\nwhile [ ! -f '${go}' ]; do sleep 0.1; done\n`);
-  chmodSync(hook, 0o755);
-  return { held: async () => { for (let i = 0; i < 300 && !existsSync(marker); i++) await sleep(100); assert.ok(existsSync(marker), 'b reached its second push'); }, release: () => writeFileSync(go, '') };
-}
-
 test('two CLI writers creating different items in separate clones: both succeed with distinct numbers and both can pull afterwards', async t => {
   const [a, b, { bare }] = writers(t);
   const hold = holdFirstPush(b);
@@ -147,9 +138,9 @@ test('review P1: a backlog.db conflict does not resurrect the source row of an i
   const [a, b, { bare }] = writers(t);
   for (const name of ['alpha job', 'gamma job']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
-  const hold = holdSecondPush(b);
+  const hold = holdFirstPush(b);
   const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
-  await hold.held(); // b has pushed the target folder and committed the source folder
+  await hold.held(); // b has moved the item out and committed both folders
   assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // a pushes a backlog.db that still has the row
   hold.release();
   const r = await second.done;
@@ -166,4 +157,33 @@ test('review P1: a backlog.db conflict does not resurrect the source row of an i
     assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
     assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='moved_out'").get().n, 1);
   } finally { con.close(); }
+});
+
+test('review P1: a cross-repository move racing another clone is ONE commit of the source and target folders: never the target pushed without the source', async t => {
+  const [a, b, { bare }] = writers(t);
+  for (const name of ['alpha job', 'gamma job']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hold = holdFirstPush(b);
+  const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held(); // b holds its (only) push: source and target changed, committed together
+  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // a changes the same source backlog.db
+  hold.release();
+  const r = await second.done;
+  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
+
+  const verify = mkdtempSync(join(tmpdir(), 'dbconf-1-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
+  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
+  const log = n => gitIn(join(verify, 'c'), 'log', '--format=%H', '--', n).split('\n').filter(Boolean);
+  const touched = sha => gitIn(join(verify, 'c'), 'show', '--format=', '--name-only', sha).split('\n');
+  const [commit] = log('new/place');
+  assert.ok(commit && log('new/place').length === 1, 'the target arrived in one commit');
+  assert.ok(touched(commit).some(f => f.startsWith('acme/demo/')), 'the same commit changes the source folder');
+  const dir = join(verify, 'c', 'acme', 'demo');
+  const con = db.connect(dir);
+  try {
+    const rows = con.prepare('SELECT slug, path FROM phase').all().map(x => ({ ...x }));
+    assert.ok(!rows.some(x => x.slug === '001-alpha-job'), JSON.stringify(rows));
+    for (const x of rows) assert.ok(existsSync(join(dir, x.path)));
+  } finally { con.close(); }
+  assert.ok(existsSync(join(verify, 'c', 'new', 'place', 'phases')));
 });

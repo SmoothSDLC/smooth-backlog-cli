@@ -98,17 +98,18 @@ async function renumberFiles(home, stream, added, mirror) {
 // the same file name: the upstream file stays, the replayed local creation moves to nextSeq) and the binary mirror backlog.db
 // (two writers changed it: upstream's copy is taken, since the mirror is derived from the files; the caller rescans it from the files
 // afterwards, which `renumbered.mirror` asks for; renumbered.localDbs lists copies of the local db and of the merge base, to replay the local changes onto it). The rebase goes on. false (the caller aborts) when anything else is in conflict or a step fails.
-async function repairConflicts(home, folder, name, renumbered) {
-  const dbPath = `${name}/backlog.db`;
+async function repairConflicts(home, folders, names, renumbered) {
+  const dbPaths = names.map(name => `${name}/backlog.db`);
+  const nameOf = path => names.findIndex(name => path.startsWith(`${name}/`));
   try {
     for (let round = 0; round < 20; round++) {
       const stages = new Map();
       for (const e of (await must(home, ['ls-files', '-u', '-z'], 'list conflicts')).stdout.split('\0').filter(Boolean)) {
         const [meta, path] = e.split('\t'); stages.set(path, `${stages.get(path) ?? ''}${meta.split(' ')[2]}`);
       }
-      if (!stages.size || [...stages].some(([path, st]) => (path === dbPath ? !st.includes('2')
-        : st !== '23' || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || !path.startsWith(`${name}/`)))) return false;
-      if (stages.has(dbPath)) {
+      if (!stages.size || [...stages].some(([path, st]) => (dbPaths.includes(path) ? !st.includes('2')
+        : st !== '23' || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || nameOf(path) < 0))) return false;
+      for (const dbPath of dbPaths) if (stages.has(dbPath)) {
         // the local db and the merge base go aside first: db.replayLocal replays the local side's own changes onto upstream's copy
         if (stages.get(dbPath).includes('3')) {
           const dir = mkdtempSync(join(tmpdir(), 'backlog-localdb-'));
@@ -118,7 +119,7 @@ async function repairConflicts(home, folder, name, renumbered) {
             return join(dir, file);
           };
           const local = await aside(3, 'backlog.db');
-          (renumbered.localDbs ??= []).push({ local, base: stages.get(dbPath).includes('1') ? await aside(1, 'base.db') : null });
+          (renumbered.localDbs ??= []).push({ folder: folders[dbPaths.indexOf(dbPath)], local, base: stages.get(dbPath).includes('1') ? await aside(1, 'base.db') : null });
         }
         await must(home, ['checkout', '--ours', '--', lit(dbPath)], `keep upstream ${dbPath}`);
         await must(home, ['add', '--', lit(dbPath)], `stage ${dbPath}`);
@@ -127,12 +128,13 @@ async function repairConflicts(home, folder, name, renumbered) {
       // Every upstream file is restored before a number is allocated: nextSeq loads all items, and a file still holding conflict markers would not parse.
       const mines = new Map();
       for (const path of stages.keys()) {
-        if (path === dbPath) continue;
+        if (dbPaths.includes(path)) continue;
         mines.set(path, parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout));
         await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
         await must(home, ['add', '--', lit(path)], `stage ${path}`);
       }
       for (const [path, mine] of mines) {
+        const name = names[nameOf(path)]; const folder = folders[nameOf(path)];
         const rel = path.slice(name.length + 1);
         const old = Number(mine.fm.seq); const next = store.nextSeq(folder); const target = targetOf(rel, next);
         store.write({ path: join(folder, target), ...retagged(mine, next) });
@@ -148,19 +150,23 @@ async function repairConflicts(home, folder, name, renumbered) {
 
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
 // [old, new] pairs renumbered on the way (with .mirror = true when backlog.db was taken from upstream: rescan it and commit again). Recorded only when on origin/main (lib_db.py:275-309).
-export async function commit(home, folder, message) {
-  const name = (await assertInside(home, folder)).split(sep).join('/');
+// `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
+export async function commit(home, folders, message) {
+  const list = [].concat(folders);
+  const names = [];
+  for (const folder of list) names.push((await assertInside(home, folder)).split(sep).join('/'));
+  const lits = names.map(lit);
   return locked(lockFile(home), async () => {
-    await must(home, ['add', '-A', '--', lit(name)], `stage ${name}`);
-    // scoped to the folder (beyond lib_db.py parity): work staged elsewhere in the backlog clone is neither committed nor pushed
-    if ((await g(home, ['diff', '--cached', '--quiet', '--', lit(name)])).code) {
-      const c = await g(home, ['commit', '-q', '--only', '-m', `${name}: ${message}`, '--', lit(name)]);
+    await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
+    // scoped to the folders (beyond lib_db.py parity): work staged elsewhere in the backlog clone is neither committed nor pushed
+    if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
+      const c = await g(home, ['commit', '-q', '--only', '-m', `${names.join(', ')}: ${message}`, '--', ...lits]);
       if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
     }
     const renumbered = []; let err = '';
     for (let i = 0; i < 3; i++) {
       let pr = await g(home, PULL);
-      if (pr.code && await repairConflicts(home, folder, name, renumbered)) pr = { code: 0 };
+      if (pr.code && await repairConflicts(home, list, names, renumbered)) pr = { code: 0 };
       if (pr.code) {
         await g(home, ['rebase', '--abort']);
         err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;

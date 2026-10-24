@@ -98,7 +98,7 @@ const snapshot = f => ({
   demo: snapshotFolder(f.folder),
   other: snapshotFolder(f.other),
   // move.py's scan of the target is a script of its own and commits alone ("other/proj: scan.py"); the CLI commits the move once
-  log: git(f.home, 'log', '--format=%s').split('\n').filter(s => !s.endsWith(': scan.py')),
+  log: ignoreRank ? [] : git(f.home, 'log', '--format=%s').split('\n').filter(s => !s.endsWith(': scan.py')), // a cross-repository move is one commit here, two in move.py
   origin: git(f.home, 'rev-parse', 'origin/main') === git(f.home, 'rev-parse', 'HEAD'),
 });
 
@@ -279,8 +279,8 @@ test('move --to-repository matches move.py: new number in the target, events cop
   assert.equal(r.stdout, '✅ 007-eta moved to other/proj as 002-eta\n');
   assert.ok(existsSync(join(w[1].other, 'phases/002-eta.md')));
   assert.ok(!existsSync(join(w[1].folder, 'phases/007-eta.md')));
-  const log = git(w[1].home, 'log', '-2', '--format=%s').split('\n');
-  assert.deepEqual(log, ['acme/demo: move.py 7 --to-repository', 'other/proj: move.py 007-eta in from acme/demo']);
+  assert.equal(git(w[1].home, 'log', '-1', '--format=%s'), 'acme/demo, other/proj: move.py 7 --to-repository'); // one commit for both folders
+  assert.deepEqual(git(w[1].home, 'show', '--format=', '--name-only', 'HEAD').split('\n').map(f => f.split('/').slice(0, 2).join('/')).filter((f, i, a) => a.indexOf(f) === i).sort(), ['acme/demo', 'other/proj']);
   assert.equal(git(w[1].home, 'rev-parse', 'origin/main'), git(w[1].home, 'rev-parse', 'HEAD'));
   pair(t, ...w, 'move', ['3', '--to-repository', 'other/proj'], { rankless: true });
   pair(t, ...w, 'move', ['4', '--to-repository', 'new/place'], { rankless: true }); // a folder that does not exist yet

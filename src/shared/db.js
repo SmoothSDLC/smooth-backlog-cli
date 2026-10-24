@@ -248,17 +248,23 @@ function replayLocal(db, folder, { local: localFile, base: baseFile }, renumbere
 // sync.commit, then scan and commit again until no renumbering remains (a rescan after the push would leave the db dirty).
 // The same when a conflict on backlog.db took upstream's copy (pairs.mirror): the rescan rebuilds the mirror from the files.
 // Resolves to every [old, new] pair renumbered on the way.
-export async function commitSettled(home, folder, message) {
+export async function commitSettled(home, folders, message) {
+  const list = [].concat(folders);
   const all = [];
-  for (let pairs = await commit(home, folder, message); pairs.length || pairs.mirror; pairs = await commit(home, folder, message)) {
+  for (let pairs = await commit(home, list, message); pairs.length || pairs.mirror; pairs = await commit(home, list, message)) {
     all.push(...pairs);
-    const again = connect(folder);
     try {
-      if (pairs.localDbs?.length) for (const files of pairs.localDbs) replayLocal(again, folder, files, pairs);
-      else scan(again, folder, pairs);
-      reflow(folder); // two writers each ranked their item against their own queue: ties are possible now that the queues are merged
-      scan(again, folder);
-    } finally { again.close(); for (const { local } of pairs.localDbs ?? []) rmSync(dirname(local), { recursive: true, force: true }); }
+      for (const folder of list) {
+        const again = connect(folder);
+        try {
+          const mine = (pairs.localDbs ?? []).filter(f => f.folder === folder);
+          if (mine.length) for (const files of mine) replayLocal(again, folder, files, pairs);
+          else scan(again, folder, pairs);
+          reflow(folder); // two writers each ranked their item against their own queue: ties are possible now that the queues are merged
+          scan(again, folder);
+        } finally { again.close(); }
+      }
+    } finally { for (const { local } of pairs.localDbs ?? []) rmSync(dirname(local), { recursive: true, force: true }); }
   }
   return all;
 }

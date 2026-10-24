@@ -339,3 +339,16 @@ test('review P1: new whose rescan throws (an existing phase with size_score: [])
   assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', 'acme/demo/phases/002-alpha-job.md'), '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
+
+test('review P1: new --split-from whose rescan throws leaves the mirror rows and events as they were (no stray split event)', t => {
+  const f = fixture(t);
+  assert.equal(node(f, NONE).status, 0);
+  assert.equal(node(f, NONE).status, 0);
+  const bad = join(f.folder, 'phases', '002-alpha-job.md');
+  writeFileSync(bad, readFileSync(bad, 'utf8').replace('\nseq: 2\n', '\nseq: 2\nsize_score: []\n'));
+  const rows = () => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM phase ORDER BY id').all().concat(c.prepare('SELECT * FROM event ORDER BY id').all())); } finally { c.close(); } };
+  const before = rows();
+  const r = node(f, [...NONE, '--split-from', '1']);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(rows(), before);
+});

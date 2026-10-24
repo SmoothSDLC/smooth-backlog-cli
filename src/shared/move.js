@@ -133,6 +133,8 @@ async function move(a, con, { home, repo, folder, close, locked }) {
     await db.undoOnThrow(tcon, tdir, async () => {
       store.write({ path: copy, fm, body }, tdir);
       db.scan(tcon, tdir); // the target's scan
+      store.reflow(tdir); // the copy keeps its source priority: rank it in the target's queue (beyond move.py parity, which leaves ties)
+      db.scan(tcon, tdir);
       const pid = tcon.prepare('SELECT id FROM phase WHERE slug=?').get(slug).id;
       const add = tcon.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)');
       tcon.exec('BEGIN');
@@ -142,6 +144,8 @@ async function move(a, con, { home, repo, folder, close, locked }) {
       rmSync(src);
       con.prepare('DELETE FROM phase WHERE id=?').run(r.id);
       db.logEvent(con, 'moved_out', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
+      db.scan(con, folder);
+      store.reflow(folder); // the item leaves the source queue: close the gap
       db.scan(con, folder);
     });
   } finally { tcon.close(); }

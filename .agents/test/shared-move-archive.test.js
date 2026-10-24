@@ -76,18 +76,20 @@ const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
 const norm = s => String(s).replace(TS, 'TS').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA');
 // The codec writes strings JSON-quoted (contract section 3) where PyYAML writes them plain: front matter is compared as
 // parsed values in key order, the body byte for byte.
-const doc = text => norm(JSON.stringify(parse(text)));
+// A cross-repository move re-densifies both queues, which move.py does not (review round 6): those runs compare without ranks.
+let ignoreRank = false;
+const doc = text => { const p = parse(text); if (ignoreRank) { delete p.fm.priority; delete p.fm.updated; } return norm(JSON.stringify(p)); };
 const names = (dir, sub) => (existsSync(join(dir, sub)) ? readdirSync(join(dir, sub), { recursive: true }).filter(n => n.endsWith('.md')).sort() : []);
 
 function snapshotFolder(dir) {
   const files = {};
   for (const sub of ['phases', 'archive']) for (const n of names(dir, sub)) files[`${sub}/${n}`] = doc(readFileSync(join(dir, sub, n), 'utf8'));
   const con = db.connect(dir);
-  const rows = x => con.prepare(x).all().map(r => norm(JSON.stringify({ ...r })));
+  const rows = x => con.prepare(x).all().map(r => { if (ignoreRank) { delete r.priority; delete r.updated_at; delete r.sha; } return norm(JSON.stringify({ ...r })); });
   const out = {
     files,
     phases: rows('SELECT id, handoff_id, slug, seq, name, objective, summary, status, severity, priority, path, branch, commit_sha, location, repository, size_score, completed_at FROM phase ORDER BY id'),
-    events: rows('SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event ORDER BY id'),
+    events: rows('SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event ORDER BY id').filter(e => !ignoreRank || !e.includes('"reingested"')), // a rank rewrite is a sha drift
   };
   con.close();
   return out;
@@ -105,14 +107,15 @@ const snapshot = f => ({
 // A write stamps `updated` to the second: a command that starts in the second of the previous one can rewrite a file
 // byte-identically, and then no `reingested` event follows. Start each command in a fresh second.
 let lastEnd = 0;
-function pair(t, o, n, script, args, { loose = false } = {}) {
+function pair(t, o, n, script, args, { loose = false, rankless = false } = {}) {
   while (Math.floor(Date.now() / 1000) === lastEnd) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
   const ro = py(`${script}.py`, args, { cwd: o.cons, tmp: o.t });
   const rn = cli([script, ...args], { cwd: n.cons, tmp: n.t });
   assert.equal(rn.status, ro.status, `${script} ${args.join(' ')}: ${rn.stderr}`);
   assert.equal(norm(rn.stdout), norm(ro.stdout), args.join(' '));
   if (!loose) assert.equal(rn.stderr, ro.stderr, args.join(' '));
-  assert.deepEqual(snapshot(n), snapshot(o), `${script} ${args.join(' ')}`);
+  ignoreRank = rankless;
+  try { assert.deepEqual(snapshot(n), snapshot(o), `${script} ${args.join(' ')}`); } finally { ignoreRank = false; }
   lastEnd = Math.floor(Date.now() / 1000);
   return rn;
 }
@@ -272,15 +275,15 @@ test('an origin that cannot be read refuses the move', () => {
 test('move --to-repository matches move.py: new number in the target, events copied, source row removed', t => {
   const w = twins(t);
   if (!w) return;
-  const r = pair(t, ...w, 'move', ['7', '--to-repository']); // default: the repository the item names
+  const r = pair(t, ...w, 'move', ['7', '--to-repository'], { rankless: true }); // default: the repository the item names
   assert.equal(r.stdout, '✅ 007-eta moved to other/proj as 002-eta\n');
   assert.ok(existsSync(join(w[1].other, 'phases/002-eta.md')));
   assert.ok(!existsSync(join(w[1].folder, 'phases/007-eta.md')));
   const log = git(w[1].home, 'log', '-2', '--format=%s').split('\n');
   assert.deepEqual(log, ['acme/demo: move.py 7 --to-repository', 'other/proj: move.py 007-eta in from acme/demo']);
   assert.equal(git(w[1].home, 'rev-parse', 'origin/main'), git(w[1].home, 'rev-parse', 'HEAD'));
-  pair(t, ...w, 'move', ['3', '--to-repository', 'other/proj']);
-  pair(t, ...w, 'move', ['4', '--to-repository', 'new/place']); // a folder that does not exist yet
+  pair(t, ...w, 'move', ['3', '--to-repository', 'other/proj'], { rankless: true });
+  pair(t, ...w, 'move', ['4', '--to-repository', 'new/place'], { rankless: true }); // a folder that does not exist yet
 });
 
 test('a target that is not a plain owner/name is refused before anything is written', () => {
@@ -535,4 +538,13 @@ test('review P2: move of an archived item (--to-branch, --to-repository) is refu
     assert.match(r.stdout, /005-epsilon is archived and cannot be moved/);
   }
   assert.deepEqual([readFileSync(file, 'utf8'), mirror(f), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD')], before);
+});
+
+test('review P2: after a cross-repository move both queues are dense (the source closes the gap, the copy does not tie in the target)', () => {
+  const f = seed();
+  const ranks = dir => readdirSync(join(dir, 'phases')).map(n => fm(dir, `phases/${n}`).fm).filter(m => ['pending', 'in_progress'].includes(m.status)).map(m => m.priority).sort((a, b) => a - b);
+  assert.equal(run(f, 'move', ['1', '--to-repository', 'other/proj']).status, 0); // 001-alpha is P0 of acme/demo; other/proj already holds a P0
+  for (const dir of [f.folder, f.other]) assert.deepEqual(ranks(dir), ranks(dir).map((_, i) => i), dir);
+  const c = db.connect(f.other);
+  try { assert.deepEqual(c.prepare("SELECT priority FROM phase WHERE status='pending' ORDER BY priority").all().map(r => r.priority), [0, 1]); } finally { c.close(); }
 });

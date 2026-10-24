@@ -36,6 +36,15 @@ function holdFirstPush(w) {
   return { held: async () => { for (let i = 0; i < 300 && !existsSync(marker); i++) await sleep(100); assert.ok(existsSync(marker), 'b reached its push'); }, release: () => writeFileSync(go, '') };
 }
 
+// Like holdFirstPush, for the second push of a command (a cross-repository move pushes the target folder, then the source folder).
+function holdSecondPush(w) {
+  const count = join(w.tmp, 'pushes'); const marker = join(w.tmp, 'second-push'); const go = join(w.tmp, 'go');
+  const hook = join(w.home, '.git', 'hooks', 'pre-push');
+  writeFileSync(hook, `#!/bin/sh\necho x >> '${count}'\n[ "$(wc -l < '${count}')" -ge 2 ] || exit 0\n[ -f '${marker}' ] && exit 0\ntouch '${marker}'\nwhile [ ! -f '${go}' ]; do sleep 0.1; done\n`);
+  chmodSync(hook, 0o755);
+  return { held: async () => { for (let i = 0; i < 300 && !existsSync(marker); i++) await sleep(100); assert.ok(existsSync(marker), 'b reached its second push'); }, release: () => writeFileSync(go, '') };
+}
+
 test('two CLI writers creating different items in separate clones: both succeed with distinct numbers and both can pull afterwards', async t => {
   const [a, b, { bare }] = writers(t);
   const hold = holdFirstPush(b);
@@ -131,5 +140,30 @@ test('review P2: a pull whose non-conflict rebase renumbers an unpushed local it
   try {
     assert.deepEqual(con.prepare('SELECT slug, seq FROM phase ORDER BY seq').all().map(x => ({ ...x })), [{ slug: '001-alpha-job', seq: 1 }, { slug: '002-beta-job', seq: 2 }]);
     assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
+  } finally { con.close(); }
+});
+
+test('review P1: a backlog.db conflict does not resurrect the source row of an item moved out to another repository', async t => {
+  const [a, b, { bare }] = writers(t);
+  for (const name of ['alpha job', 'gamma job']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hold = holdSecondPush(b);
+  const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held(); // b has pushed the target folder and committed the source folder
+  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // a pushes a backlog.db that still has the row
+  hold.release();
+  const r = await second.done;
+  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
+
+  const verify = mkdtempSync(join(tmpdir(), 'dbconf-m-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
+  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
+  const dir = join(verify, 'c', 'acme', 'demo');
+  const con = db.connect(dir);
+  try {
+    const rows = con.prepare('SELECT slug, path FROM phase ORDER BY seq').all().map(x => ({ ...x }));
+    assert.ok(!rows.some(x => x.slug === '001-alpha-job'), JSON.stringify(rows));
+    for (const x of rows) assert.ok(existsSync(join(dir, x.path)), `${x.slug} has its file`);
+    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
+    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='moved_out'").get().n, 1);
   } finally { con.close(); }
 });

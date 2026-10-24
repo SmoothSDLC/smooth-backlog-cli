@@ -197,51 +197,52 @@ export function markArchived(db, slug, location) {
   return { id: Number(r.id), slug };
 }
 
-// After a conflict took upstream's backlog.db: scan reads phases/ only, so an archive done by the local commit would stay 'done' at a
-// path that is gone. Each row the local db holds as archived at an existing archive/ file becomes archived the same way (status, path,
-// updated_at); its 'archived' events come back with every other local event (keepEvents).
-function keepArchived(db, folder, localDb) {
-  const local = new (sqlite().DatabaseSync)(localDb, { readOnly: true });
-  try {
-    db.exec('BEGIN');
-    try {
-      for (const l of local.prepare("SELECT * FROM phase WHERE status='archived'").all()) {
-        if (!l.path.startsWith('archive/') || l.path.includes('..') || !existsSync(join(folder, l.path))) continue;
-        const u = db.prepare("SELECT id FROM phase WHERE slug=? AND status != 'archived'").get(l.slug);
-        if (u) db.prepare("UPDATE phase SET status='archived', path=?, updated_at=? WHERE id=?").run(l.path, l.updated_at, u.id);
-      }
-      db.exec('COMMIT');
-    } catch (e) { db.exec('ROLLBACK'); throw e; }
-  } finally { local.close(); }
-}
-
-// The events are history the files cannot give back (notes, claims, reviews, moves): after upstream's db was taken, every event of the
-// local db that the recovered one lacks is added with its own timestamp. An item is matched by slug (renumbered: by its new slug), an
-// event already there (same item, time, kind, branch, commit and note) is not added twice. Events the scan writes by itself are skipped.
+// A conflict on backlog.db took upstream's copy (the mirror is derived from the files). What the files cannot give back is this clone's own
+// unpushed change to the mirror: replay it onto upstream's copy, as the difference between the local db and the merge base `base` (null:
+// no base, everything local is new). One function for every kind of change: rows the local side changed (an archive: status and path),
+// rows it deleted (a move out of the repository), and events it logged (notes, claims, reviews, moves). The files are rescanned in between:
+// rows the local side created come from their files, and an item renumbered by the recovery is matched by its new slug.
+// Events the scan writes by itself are not replayed; an event upstream has already (same item, time, kind, branch, commit, note) is not added twice.
 const SCAN_EVENTS = ['ingested', 'reingested', 'file_missing', 'renumbered'];
-function keepEvents(db, localDb, renumbered) {
-  const local = new (sqlite().DatabaseSync)(localDb, { readOnly: true });
+const NOT_REPLAYED = ['id', 'handoff_id', 'slug', 'seq', 'sha']; // identity, and what the rescan derives from the file
+function replayLocal(db, folder, { local: localFile, base: baseFile }, renumbered) {
+  const open = file => new (sqlite().DatabaseSync)(file, { readOnly: true });
+  const local = open(localFile); const base = baseFile ? open(baseFile) : null;
   try {
-    const key = (slug, e) => JSON.stringify([slug, e.ts, e.event, e.branch, e.commit_sha, e.note]);
-    const have = new Set(db.prepare('SELECT p.slug, e.ts, e.event, e.branch, e.commit_sha, e.note FROM event e LEFT JOIN phase p ON p.id = e.phase_id').all().map(e => key(e.slug, e)));
+    const rowsOf = d => (d ? d.prepare('SELECT * FROM phase').all().map(r => ({ ...r })) : []);
+    const [mine, was] = [rowsOf(local), rowsOf(base)];
+    const [mineBy, wasBy] = [new Map(mine.map(r => [r.slug, r])), new Map(was.map(r => [r.slug, r]))];
     const moved = new Map(renumbered.map(([old, next]) => [Number(old), next]));
-    const slugOf = new Map(local.prepare('SELECT id, slug FROM phase').all().map(r => [r.id, r.slug]));
     const rename = slug => { const n = moved.get(Number(/^\d+/.exec(slug)?.[0])); return n === undefined ? slug : String(n).padStart(3, '0') + slug.replace(/^\d+/, ''); };
     db.exec('BEGIN');
     try {
+      for (const r of mine) {
+        const b = wasBy.get(r.slug); const u = b && db.prepare('SELECT id FROM phase WHERE slug=?').get(rename(r.slug));
+        const cols = u ? Object.keys(r).filter(c => !NOT_REPLAYED.includes(c) && r[c] !== b[c] && !(c === 'path' && !String(r.path).startsWith('archive/'))) : [];
+        if (cols.length) db.prepare(`UPDATE phase SET ${cols.map(c => `${c}=?`).join(', ')} WHERE id=?`).run(...cols.map(c => r[c]), u.id);
+      }
+      for (const b of was) if (!mineBy.has(b.slug)) db.prepare('DELETE FROM phase WHERE slug=?').run(rename(b.slug)); // the row is gone locally, and so is its file
+      db.exec('COMMIT');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+    scan(db, folder, renumbered);
+
+    const key = (slug, e) => JSON.stringify([slug, e.ts, e.event, e.branch, e.commit_sha, e.note]);
+    const slugOf = new Map([...mine, ...was].map(r => [r.id, r.slug]));
+    const wasEvents = new Set((base ? base.prepare('SELECT * FROM event').all() : []).map(e => key(e.phase_id === null ? null : slugOf.get(e.phase_id) ?? null, e)));
+    const have = new Set(db.prepare('SELECT p.slug, e.ts, e.event, e.branch, e.commit_sha, e.note FROM event e LEFT JOIN phase p ON p.id = e.phase_id').all().map(e => key(e.slug, e)));
+    db.exec('BEGIN');
+    try {
       for (const e of local.prepare('SELECT * FROM event ORDER BY id').all()) {
-        if (SCAN_EVENTS.includes(e.event)) continue;
-        const slug = e.phase_id === null ? null : slugOf.has(e.phase_id) ? rename(slugOf.get(e.phase_id)) : null;
-        if (have.has(key(slug, e))) continue;
-        const p = slug === null ? null : db.prepare('SELECT id, handoff_id FROM phase WHERE slug=?').get(slug);
-        if (slug !== null && !p) continue; // the item is gone from the recovered backlog
+        const slug = e.phase_id === null || !slugOf.has(e.phase_id) ? null : rename(slugOf.get(e.phase_id));
+        if (SCAN_EVENTS.includes(e.event) || wasEvents.has(key(e.phase_id === null ? null : slugOf.get(e.phase_id) ?? null, e)) || have.has(key(slug, e))) continue;
+        const p = slug === null ? null : db.prepare('SELECT id, handoff_id FROM phase WHERE slug=?').get(slug); // gone (moved out): the event stays, without an item
         db.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)')
           .run(e.ts, e.handoff_id === null ? null : p?.handoff_id ?? ensureAnchor(db), p?.id ?? null, e.event, e.branch, e.commit_sha, e.note);
         have.add(key(slug, e));
       }
       db.exec('COMMIT');
     } catch (err) { db.exec('ROLLBACK'); throw err; }
-  } finally { local.close(); }
+  } finally { local.close(); base?.close(); }
 }
 
 // sync.commit, then scan and commit again until no renumbering remains (a rescan after the push would leave the db dirty).
@@ -253,12 +254,11 @@ export async function commitSettled(home, folder, message) {
     all.push(...pairs);
     const again = connect(folder);
     try {
-      for (const file of pairs.localDbs ?? []) keepArchived(again, folder, file);
-      scan(again, folder, pairs);
-      for (const file of pairs.localDbs ?? []) keepEvents(again, file, pairs);
+      if (pairs.localDbs?.length) for (const files of pairs.localDbs) replayLocal(again, folder, files, pairs);
+      else scan(again, folder, pairs);
       reflow(folder); // two writers each ranked their item against their own queue: ties are possible now that the queues are merged
       scan(again, folder);
-    } finally { again.close(); for (const file of pairs.localDbs ?? []) rmSync(dirname(file), { recursive: true, force: true }); }
+    } finally { again.close(); for (const { local } of pairs.localDbs ?? []) rmSync(dirname(local), { recursive: true, force: true }); }
   }
   return all;
 }

@@ -100,9 +100,13 @@ export function redact(text) {
 // Run git with an argv array — never a shell (pattern lib_db.py:188-193) — with
 // GIT_TERMINAL_PROMPT=0 so a git subprocess can never prompt on a terminal.
 // Resolves {stdout, stderr, code}; a failed or unspawable run has code != 0.
-export function git(args, cwd) {
+export function git(args, cwd, config = {}) { // config: git settings for this run only, through GIT_CONFIG_* (argv stays as the caller wrote it)
+  const keys = Object.entries(config);
+  const n = Number(process.env.GIT_CONFIG_COUNT) || 0;
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', ...(keys.length ? { GIT_CONFIG_COUNT: String(n + keys.length) } : {}) };
+  keys.forEach(([k, v], i) => { env[`GIT_CONFIG_KEY_${n + i}`] = k; env[`GIT_CONFIG_VALUE_${n + i}`] = v; });
   return new Promise((done) => {
-    execFile('git', args, { cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, encoding: 'utf8' },
+    execFile('git', args, { cwd, env, encoding: 'utf8' },
       (err, stdout, stderr) => {
         const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
         done({ stdout: String(stdout ?? ''), stderr: String(stderr ?? ''), code });

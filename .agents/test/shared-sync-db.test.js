@@ -252,3 +252,60 @@ test('audit: a move that empties phases/ does not carry another clone\'s new fil
   assert.deepEqual(files(['acme', 'demo']).filter(f => /beta/.test(f)).length, 1, 'beta stays in acme/demo');
   assert.deepEqual(files(['new', 'place']).filter(f => /beta/.test(f)), [], 'beta is not carried into new/place');
 });
+
+// Writer b stops before its first push; writer a runs `aArgs` and pushes first; then b's command (bArgs) rebases onto it.
+async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv } = {}) {
+  const [a, b, { bare }] = writers(t);
+  for (const args of seedArgs) assert.equal(cli(args, { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hold = holdFirstPush(b);
+  const second = cliAsync(bArgs, { cwd: b.cons, tmp: b.tmp, env: bEnv });
+  await hold.held();
+  await sleep(1100); // the two copies of a moved item differ in their `updated` second
+  const first = cli(aArgs, { cwd: a.cons, tmp: a.tmp, env: aEnv });
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  hold.release();
+  return { a, b, bare, result: await second.done };
+}
+const clone = (t, bare) => {
+  const verify = mkdtempSync(join(tmpdir(), 'dbconf-r-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
+  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
+  return join(verify, 'c');
+};
+
+test('audit t2: two concurrent reprioritisations (modify/modify on priority and updated) merge: no abort, no stuck local commit, dense ranks', async t => {
+  const seed = ['alpha job', 'beta job', 'gamma job'].map(NEW);
+  const { a, b, bare, result } = await race(t, seed, ['update', '2', '--priority', '0'], ['update', '3', '--priority', '0']);
+  assert.equal(result.status, 0, `exit ${result.status}\n${result.stdout}${result.stderr}`);
+  const dir = join(clone(t, bare), 'acme', 'demo');
+  const items = store.load(dir);
+  assert.equal(items.length, 3);
+  assert.deepEqual(items.map(i => i.fm.priority).sort(), [0, 1, 2], 'ranks are dense and distinct');
+  for (const w of [a, b]) {
+    assert.equal(gitIn(w.home, 'status', '--porcelain'), '');
+    assert.equal(cli(['query', '--all'], { cwd: w.cons, tmp: w.tmp }).status, 0); // later pulls work
+    assert.equal(gitIn(w.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'), 'nothing is left unpushed');
+  }
+});
+
+test('audit t5 (passes at b14557c too: git merges the identical renames; kept as a regression test): two clones moving the same item to the same repository leave ONE copy there', async t => {
+  const seed = ['alpha job', 'gamma job'].map(NEW);
+  const mv = ['move', '1', '--to-repository', 'new/place'];
+  const { bare, result } = await race(t, seed, mv, mv);
+  assert.equal(result.status, 0, `exit ${result.status}\n${result.stdout}${result.stderr}`);
+  const root = clone(t, bare);
+  assert.deepEqual(store.load(join(root, 'new', 'place')).map(i => i.fm.name), ['alpha job']);
+  assert.deepEqual(store.load(join(root, 'acme', 'demo')).map(i => i.fm.name), ['gamma job']);
+});
+
+test('audit t2: a conflict nobody can merge parks the local commit on backlog-unmerged-<utc> and resets the clone, which keeps working', async t => {
+  const { b, bare, result } = await race(t, [NEW('alpha job')], ['update', '1', '--summary', 'from a'], ['update', '1', '--summary', 'from b']);
+  assert.equal(result.status, 3, `${result.stdout}${result.stderr}`);
+  const branch = /parked on branch (backlog-unmerged-\d{8}T\d{6}Z)/.exec(result.stderr)?.[1];
+  assert.ok(branch, result.stderr);
+  assert.match(gitIn(b.home, 'show', `${branch}:acme/demo/phases/001-alpha-job.md`), /from b/, 'nothing is lost');
+  assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+  assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+  const again = cli(['update', '1', '--summary', 'from b again'], { cwd: b.cons, tmp: b.tmp });
+  assert.equal(again.status, 0, again.stdout + again.stderr); // every later pull works
+});

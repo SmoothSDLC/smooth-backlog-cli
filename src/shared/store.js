@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { operation } from '../errors.js';
 import { locked } from '../storage.js';
-import { dump, parse } from './frontmatter.js';
+import { dump, hasFrontMatter, parse } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
 import { outsideTeam } from './team.js';
 
@@ -149,7 +149,7 @@ export function bareFiles(dir) {
   assertFolder(dir);
   let names;
   try { names = readdirSync(join(dir, 'phases')).filter(n => n.endsWith('.md')).sort(); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
-  return names.filter(n => parse(readFileSync(join(dir, 'phases', n), 'utf8')).bare).map(n => `phases/${n}`);
+  return names.filter(n => !hasFrontMatter(readFileSync(join(dir, 'phases', n), 'utf8'))).map(n => `phases/${n}`);
 }
 
 export function load(dir) {
@@ -166,9 +166,8 @@ export function load(dir) {
       else if (e.isFile() && e.name.endsWith('.md')) {
         const text = readFileSync(join(dir, path), 'utf8');
         const sha256 = createHash('sha256').update(text).digest('hex'); // lib_db.py:163-164
-        const doc = parse(text);
-        if (doc.bare && rel === 'phases') continue; // a README or a stray note in phases/ is not an item: ranking it would rewrite it as an empty one (see bareFiles)
-        items.push({ path, ...doc, sha256, sha: sha256 });
+        if (rel === 'phases' && !hasFrontMatter(text)) continue; // a README or a stray note in phases/ is not an item: ranking it would rewrite it as an empty one (see bareFiles)
+        items.push({ path, ...parse(text), sha256, sha: sha256 });
       }
     }
   };

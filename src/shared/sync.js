@@ -26,7 +26,7 @@ async function g(home, args) {
   let r;
   for (let i = 0; i < 5; i++) {
     if (i) await delay(500 * i);
-    r = await run(['-c', 'merge.directoryRenames=false', ...args], home); // a move that empties a folder must not drag another clone's new file along
+    r = await run(args, home, { 'merge.directoryRenames': 'false' }); // a move that empties a folder must not drag another clone's new file along
     if (r.code === 0 || !r.stderr.includes('index.lock')) break;
   }
   return { ...r, stderr: redact(r.stderr).trim() };
@@ -53,9 +53,9 @@ async function pullLocked(home) {
   const r = await g(home, PULL);
   if (!r.code) await refuseConflicts(home);
   if (!r.code) { await renumber(home, process.stderr, true); return; } // stderr: a read command's stdout may be JSON
-  await g(home, ['rebase', '--abort']);
+  const parked = await parkConflict(home);
   throw new BacklogError('SYNC_FAILED', `could not update ${home} from origin/main (${r.stderr.slice(0, 300)}); nothing was read or changed, `
-    + 'because the local copy may be stale. Fix the cause, then run the command again', 3); // lib_db.py:106-109
+    + (parked ? `because an unpushed local commit conflicts: ${parked}. Then run the command again` : 'because the local copy may be stale. Fix the cause, then run the command again'), 3); // lib_db.py:106-109
 }
 
 export const pull = home => locked(lockFile(home), () => pullLocked(home), { takeOver: true });
@@ -113,6 +113,24 @@ async function renumberFiles(home, stream, added, mirror) {
 // the same file name: the upstream file stays, the replayed local creation moves to nextSeq) and the binary mirror backlog.db
 // (two writers changed it: upstream's copy is taken, since the mirror is derived from the files; the caller rescans it from the files
 // afterwards, which `renumbered.mirror` asks for; renumbered.localDbs lists copies of the local db and of the merge base, to replay the local changes onto it). The rebase goes on. false (the caller aborts) when anything else is in conflict or a step fails.
+// True when the two sides of a conflicted item file (stage 2 upstream, stage 3 local) differ in nothing but priority and updated.
+async function sameButRank(home, path) {
+  const side = async n => { const d = parse((await must(home, ['show', `:${n}:${path}`], `read ${path}`)).stdout); return JSON.stringify([Object.entries(d.fm).filter(([k]) => k !== 'priority' && k !== 'updated').sort(([x], [y]) => (x < y ? -1 : 1)), d.body]); };
+  return (await side(2)) === (await side(3));
+}
+
+// A rebase that stopped on a conflict nobody can merge: abort it, keep the local commits on a branch and put the clone on upstream, so the
+// clone keeps working and the change is not lost. Returns the sentence for the error text, or '' when there was no conflict (or the reset failed).
+async function parkConflict(home) {
+  const unmerged = [...new Set((await g(home, ['ls-files', '-u', '-z'])).stdout.split('\0').filter(Boolean).map(e => e.split('\t')[1]))];
+  await g(home, ['rebase', '--abort']);
+  if (!unmerged.length) return '';
+  const branch = `backlog-unmerged-${new Date().toISOString().replace(/[-:]|\.\d+/g, '')}`;
+  if ((await g(home, ['branch', branch, 'HEAD'])).code || (await g(home, ['reset', '-q', '--keep', '@{u}'])).code) return '';
+  return `it conflicts with origin/main in ${unmerged.slice(0, 3).join(', ')}${unmerged.length > 3 ? ', ...' : ''}; the local commit is parked on branch ${branch} `
+    + `(git -C ${home} log ${branch}) and the clone is reset to origin/main, so later commands work. Redo the change on top of the current backlog`;
+}
+
 async function repairConflicts(home, folders, names, renumbered) {
   const dbPaths = names.map(name => `${name}/backlog.db`);
   const nameOf = path => names.findIndex(name => path.startsWith(`${name}/`));
@@ -122,8 +140,14 @@ async function repairConflicts(home, folders, names, renumbered) {
       for (const e of (await must(home, ['ls-files', '-u', '-z'], 'list conflicts')).stdout.split('\0').filter(Boolean)) {
         const [meta, path] = e.split('\t'); stages.set(path, `${stages.get(path) ?? ''}${meta.split(' ')[2]}`);
       }
-      if (!stages.size || [...stages].some(([path, st]) => (dbPaths.includes(path) ? !st.includes('2')
-        : st !== '23' || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || nameOf(path) < 0))) return false;
+      if (!stages.size) return false;
+      const same = new Set(); // item files that both sides changed (or both added) in nothing but their rank: upstream's copy stands, the reflow after the pull re-ranks
+      for (const [path, st] of stages) {
+        if (dbPaths.includes(path)) { if (!st.includes('2')) return false; continue; }
+        if (!['23', '123'].includes(st) || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || nameOf(path) < 0) return false;
+        if (await sameButRank(home, path)) same.add(path);
+        else if (st !== '23') return false; // a real edit of one item by both clones cannot be merged by number
+      }
       for (const dbPath of dbPaths) if (stages.has(dbPath)) {
         // the local db and the merge base go aside first: db.replayLocal replays the local side's own changes onto upstream's copy
         if (stages.get(dbPath).includes('3')) {
@@ -144,6 +168,12 @@ async function repairConflicts(home, folders, names, renumbered) {
       const mines = new Map();
       for (const path of stages.keys()) {
         if (dbPaths.includes(path)) continue;
+        if (same.has(path)) { // renumbering would duplicate the item
+          await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
+          await must(home, ['add', '--', lit(path)], `stage ${path}`);
+          renumbered.mirror = true;
+          continue;
+        }
         mines.set(path, parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout));
         await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
         await must(home, ['add', '--', lit(path)], `stage ${path}`);
@@ -184,7 +214,8 @@ export async function commit(home, folders, message) {
       let pr = await g(home, PULL);
       if (pr.code && await repairConflicts(home, list, names, renumbered)) pr = { code: 0 };
       if (pr.code) {
-        await g(home, ['rebase', '--abort']);
+        const parked = await parkConflict(home);
+        if (parked) throw new BacklogError('SYNC_FAILED', `the change is NOT on origin/main: ${parked}`, 3);
         err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;
       } else {
         await refuseConflicts(home);

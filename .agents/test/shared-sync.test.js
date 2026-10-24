@@ -69,14 +69,14 @@ test('pull: fetches what another clone pushed, and the lock file is gone afterwa
   assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli.lock')), false);
 });
 
-test('pull: a failing pull aborts the rebase and exits 3 with the lib_db.py message', async t => {
+test('pull: a failing pull aborts the rebase and exits 3; an unmergeable local commit is parked on a branch (lib_db.py message, beyond parity)', async t => {
   const f = fixture(t);
   putItem(f.folder, 1, 'mine');
   mkdirSync(f.folder2, { recursive: true });
   writeFileSync(join(f.folder, 'README'), 'a\n'); writeFileSync(join(f.folder2, 'README'), 'b\n');
   git(f.home2, 'add', '-A'); git(f.home2, 'commit', '-qm', 'b'); git(f.home2, 'push', '-q');
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'a'); // conflicts with b on acme/demo/README
-  const e = await rejects3(sync.pull(f.home), /^could not update .* from origin\/main \(.*\); nothing was read or changed, because the local copy may be stale\. Fix the cause, then run the command again$/s);
+  const e = await rejects3(sync.pull(f.home), /^could not update .* from origin\/main \(.*\); nothing was read or changed, because an unpushed local commit conflicts: .*parked on branch backlog-unmerged-\d{8}T\d{6}Z .*Then run the command again$/s);
   assert.ok(e.message.includes(f.home));
   assert.equal(existsSync(join(f.home, '.git', 'rebase-merge')) || existsSync(join(f.home, '.git', 'rebase-apply')), false);
   assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli.lock')), false);
@@ -308,7 +308,7 @@ test('add/add: a conflict on anything else still aborts the rebase and exits 3',
   mkdirSync(f.folder2, { recursive: true }); mkdirSync(f.folder, { recursive: true });
   writeFileSync(join(f.folder, 'README'), 'a\n'); writeFileSync(join(f.folder2, 'README'), 'b\n');
   await sync.commit(f.home, f.folder, 'a');
-  await rejects3(sync.commit(f.home2, f.folder2, 'b'), /NOT on origin\/main \(pull --rebase failed/);
+  await rejects3(sync.commit(f.home2, f.folder2, 'b'), /NOT on origin\/main: it conflicts with origin\/main in .*parked on branch backlog-unmerged-/);
   assert.equal(existsSync(join(f.home2, '.git', 'rebase-merge')) || existsSync(join(f.home2, '.git', 'rebase-apply')), false);
 });
 

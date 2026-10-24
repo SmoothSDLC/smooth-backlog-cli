@@ -56,8 +56,9 @@ test('test_new_item_refusals: refusals at creation, --claimable rejects an unkno
   p = run(f, 'new', [...base, '--depends-on', 'no-such-item']);
   assert.ok(p.status === 1 && p.stdout.includes("no item 'no-such-item'"), p.stdout + p.stderr);
   assert.equal(count(), before);
-  assert.ok(run(f, 'query', ['--claimable', '--classes', 'bogus']).stderr.includes('unknown class bogus'));
   const s = make(f, 'released only by its holder', ['--work-class', 'docs', '--depends-on', 'none']);
+  assert.ok(run(f, 'query', ['--claimable', '--classes', 'bogus']).stderr.includes('unknown class bogus'));
+  // after the first item: a refused creation leaves no backlog (and no empty db) behind, and query needs one
   ok(f, s, '--claim', 'cody');
   assert.ok(refused(f, s, '--release', 'archy').includes('claimed by cody, not by archy'));
   ok(f, s, '--release', 'cody');

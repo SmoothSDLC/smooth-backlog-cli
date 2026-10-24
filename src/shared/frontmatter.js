@@ -18,10 +18,13 @@ const KEY_LINE = /^([^\s:#][^:]*):(?:[ \t]+(.*))?$/; // top-level 'key:' or 'key
 const trim = (s) => s.replace(/^[ \t]+|[ \t]+$/g, '');
 const IDENT = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
+// False for a text that does not start with a front-matter block (store.load skips such files in phases/: they are not items).
+export const hasFrontMatter = text => FM_SPLIT.test(String(text ?? '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'));
+
 export function parse(text) {
   const source = String(text ?? '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'); // a BOM is not content: it hid the front matter // python's text mode reads CRLF and lone CR as \n (beyond strict parity: safe direction)
   const m = FM_SPLIT.exec(source);
-  if (!m) return { fm: {}, body: source, bare: true }; // no front matter block: not an item (store.load skips it in phases/)
+  if (!m) return { fm: {}, body: source };
   return { fm: parseFm(m[1]), body: m[2] };
 }
 

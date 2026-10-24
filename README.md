@@ -4,7 +4,7 @@ Keep a backlog of tasks, priorities, progress, and evidence alongside your code.
 Each Git branch has its own work list, shared by people and coding agents through
 version-controlled files in `.backlog/`.
 
-Requires **Node.js 24+**, npm, and Git. Supports Linux, macOS, and Windows.
+Requires **Node.js 24+**, npm, and Git. Supports Linux and macOS. Windows is not supported or tested right now: CI does not run on Windows until Windows support for the shared backlog mode is done (backlog item 024).
 The package is **`@smoothsdlc/smooth-backlog-cli`**; the command is **`backlog`**.
 
 ## Install

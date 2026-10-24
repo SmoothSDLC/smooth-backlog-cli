@@ -132,8 +132,9 @@ export async function commit(home, folder, message) {
   const name = (await assertInside(home, folder)).split(sep).join('/');
   return locked(lockFile(home), async () => {
     await must(home, ['add', '-A', '--', lit(name)], `stage ${name}`);
-    if ((await g(home, ['diff', '--cached', '--quiet'])).code) {
-      const c = await g(home, ['commit', '-q', '-m', `${name}: ${message}`]);
+    // scoped to the folder (beyond lib_db.py parity): work staged elsewhere in the backlog clone is neither committed nor pushed
+    if ((await g(home, ['diff', '--cached', '--quiet', '--', lit(name)])).code) {
+      const c = await g(home, ['commit', '-q', '--only', '-m', `${name}: ${message}`, '--', lit(name)]);
       if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
     }
     const renumbered = []; let err = '';

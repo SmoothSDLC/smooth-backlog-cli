@@ -356,3 +356,25 @@ test('pull: a collision repair keeps an unstaged working edit uncommitted (and i
   assert.match(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), /seq: 2[\s\S]*working edit, not yet committed/);
   assert.equal(git(f.home, 'stash', 'list'), '');
 });
+
+test('review P2: commit takes only the repository folder: a file staged elsewhere stays staged and off origin; deletions in the folder are committed', async t => {
+  const f = fixture(t);
+  putItem(f.folder, 1, 'alpha');
+  putItem(f.folder, 2, 'beta');
+  await sync.commit(f.home, f.folder, 'seed');
+  writeFileSync(join(f.home, 'stray.txt'), 'x');
+  git(f.home, 'add', 'stray.txt');
+  rmSync(join(f.folder, 'phases', '001-alpha.md'));
+  putItem(f.folder, 3, 'gamma');
+  await sync.commit(f.home, f.folder, 'second');
+  const onOrigin = git(f.bare, 'ls-tree', '-r', '--name-only', 'main').split('\n');
+  assert.equal(onOrigin.includes('stray.txt'), false, 'the unrelated staged file was pushed');
+  assert.equal(onOrigin.includes('acme/demo/phases/001-alpha.md'), false, 'the deletion was not committed');
+  assert.equal(onOrigin.includes('acme/demo/phases/003-gamma.md'), true);
+  assert.equal(git(f.home, 'diff', '--cached', '--name-only'), 'stray.txt', 'still staged locally');
+  // only a deletion, nothing else, in the folder
+  rmSync(join(f.folder, 'phases', '002-beta.md'));
+  await sync.commit(f.home, f.folder, 'third');
+  assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').includes('002-beta'), false);
+  assert.equal(git(f.home, 'diff', '--cached', '--name-only'), 'stray.txt');
+});

@@ -359,3 +359,18 @@ test('review P2 (job 15): --set-review-refs goes through checkRefs: an absolute 
   assert.equal(readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8'), before);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
+
+test('review P2: update on an archived item is refused for every flag that goes through it, and writes nothing', () => {
+  const f = seed();
+  assert.equal(cli(['archive', '2', '--force'], { cwd: f.cons, tmp: f.t }).status, 0);
+  const file = join(f.folder, 'archive', 'phases', '002-beta.md');
+  const before = readFileSync(file, 'utf8');
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  for (const args of [['002-beta', '--summary', 'new'], ['2', '--status', 'done'], ['002-beta', '--claim', 'me'], ['002-beta', '--request-review', 'codex'], ['002-beta', '--close']]) {
+    const r = run(f, args);
+    assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /002-beta is archived and cannot be edited/, args.join(' '));
+  }
+  assert.equal(readFileSync(file, 'utf8'), before);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+});

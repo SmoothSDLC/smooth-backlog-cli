@@ -140,6 +140,7 @@ async function change(a, con, folder, repo) {
   if (!a.phase) return refuse('phase is required (or use --replan "id,id,...")');
   const row = find(con, a.phase);
   if (!row) return refuse(`no phase ${pyStr(a.phase)} (run scan.py, or new_phase.py to create it)`);
+  if (row.status === 'archived') return refuse(`${row.slug} is archived and cannot be edited (the rescan does not visit archive/); beyond update.py parity, which edits the file and leaves the mirror stale`); // covers --claim, --request-review, --review and --close too
 
   const path = join(folder, row.path);
   await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way

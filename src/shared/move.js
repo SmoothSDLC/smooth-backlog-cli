@@ -13,6 +13,7 @@ import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { assertInside, git, redact } from './safety.js';
 import * as store from './store.js';
+import { teamScope } from './team.js';
 
 const VALUE = ['to-branch', 'all-open-of-branch', 'note'];
 
@@ -51,6 +52,14 @@ async function originBranches() {
   return new Set(r.stdout.split('\n').filter(l => l.includes('refs/heads/')).map(l => l.split('refs/heads/')[1]));
 }
 
+// A bound team session (TEAM_REPOSITORY / TEAM_BRANCH) moves nothing into another team's repository or branch: teamRefusal checks only the source.
+function teamTarget({ branch, repository }) {
+  const t = teamScope();
+  if (branch !== undefined && t.branch && branch !== t.branch) return `this session is bound to branch '${t.branch}'; it cannot move an item to branch '${branch}'`;
+  if (repository !== undefined && t.repo && repository !== t.repo) return `this session is bound to ${t.repo}; it cannot move an item to ${repository}`;
+  return null;
+}
+
 // The refusal for a target branch the origin does not have (or null).
 async function branchRefusal(branch, repo) {
   const branches = await originBranches();
@@ -77,7 +86,7 @@ async function move(a, con, { home, repo, folder, close, folders }) {
   if (a['all-open-of-branch']) { // move.py:76-86
     const from = a['all-open-of-branch'];
     if (!a['to-branch']) throw usage('--all-open-of-branch needs --to-branch');
-    const refusal = await branchRefusal(a['to-branch'], repo);
+    const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
     const rows = con.prepare("SELECT * FROM phase WHERE branch=? AND repository=? AND status IN ('pending','in_progress') ORDER BY id").all(from, repo);
     const outside = rows.map(teamRefusal).find(Boolean); // before the first file is written
@@ -94,7 +103,7 @@ async function move(a, con, { home, repo, folder, close, folders }) {
   if (outside) return refuse(outside);
   if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (the rescan does not visit archive/, so the mirror would keep the old branch or repository); beyond move.py parity, which rewrites the archive file and leaves the mirror stale`);
   if (a['to-branch']) { // move.py:93-98
-    const refusal = await branchRefusal(a['to-branch'], repo);
+    const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
     await toBranch(con, folder, r, a['to-branch'], a.note);
     db.scan(con, folder);
@@ -105,6 +114,8 @@ async function move(a, con, { home, repo, folder, close, folders }) {
   // move.py:99-109
   const target = a['to-repository'] || r.repository;
   if (!target || target === repo) return refuse(`${r.slug} already belongs to ${repo}; name the target repository`);
+  const bound = teamTarget({ repository: target });
+  if (bound) return refuse(bound);
   let tdir;
   try { tdir = store.folder(home, target); } catch (e) { throw usage(e.message); } // owner/name only: the target is the user's text or a file's data
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target file is named from it`); // mirror data: no path in it

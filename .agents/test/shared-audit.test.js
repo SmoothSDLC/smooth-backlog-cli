@@ -79,3 +79,19 @@ test('audit: update --set-depends-on refuses itself and any cycle, and leaves th
   assert.equal(readFileSync(file, 'utf8'), before);
   assert.equal(s.run(['update', '3', '--set-depends-on', '1,2']).status, 0); // a diamond is no cycle
 });
+
+test('audit t3: a bound session moves nothing into another repository or branch (only the source was checked)', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0);
+  gitIn(s.cons, 'push', '-q', 'origin', 'HEAD:refs/heads/release');
+  const bound = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const file = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(file, 'utf8');
+  for (const [args, why] of [[['move', '1', '--to-repository', 'other/proj'], /bound to acme\/demo; it cannot move an item to other\/proj/],
+    [['move', '1', '--to-branch', 'release'], /bound to branch 'main'; it cannot move an item to branch 'release'/],
+    [['move', '--all-open-of-branch', 'main', '--to-branch', 'release'], /bound to branch 'main'/]]) {
+    const r = s.run(args, bound);
+    assert.equal(r.status, 1, out(r)); assert.match(out(r), why);
+  }
+  assert.equal(readFileSync(file, 'utf8'), before); assert.equal(existsSync(join(s.home, 'other')), false);
+  assert.equal(s.run(['move', '1', '--to-branch', 'release']).status, 0); // an unbound session may
+});

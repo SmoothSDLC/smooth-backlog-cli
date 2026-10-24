@@ -26,7 +26,7 @@ async function g(home, args) {
   let r;
   for (let i = 0; i < 5; i++) {
     if (i) await delay(500 * i);
-    r = await run(args, home);
+    r = await run(['-c', 'merge.directoryRenames=false', ...args], home); // a move that empties a folder must not drag another clone's new file along
     if (r.code === 0 || !r.stderr.includes('index.lock')) break;
   }
   return { ...r, stderr: redact(r.stderr).trim() };

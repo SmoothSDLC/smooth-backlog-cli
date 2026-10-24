@@ -2,7 +2,7 @@
 // writer conflicts on it, and recovery used to refuse before the number collision was repaired. Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -233,4 +233,22 @@ test('review P1: a number collision in the destination of a cross-repository mov
   }
   const src = db.connect(join(verify, 'c', 'acme', 'demo'));
   try { assert.ok(!src.prepare('SELECT slug FROM phase').all().some(x => /alpha/.test(x.slug)), 'the moved item has no row in the source'); } finally { src.close(); }
+});
+
+test('audit: a move that empties phases/ does not carry another clone\'s new file into the target (directory renames are off)', async t => {
+  const [a, b, { bare }] = writers(t);
+  assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // the only item of acme/demo
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hold = holdFirstPush(b);
+  const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held();
+  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // a new file in the folder b just emptied
+  hold.release();
+  const r = await second.done;
+  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
+  const verify = mkdtempSync(join(tmpdir(), 'dbconf-q-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
+  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
+  const files = repo => existsSync(join(verify, 'c', ...repo, 'phases')) ? readdirSync(join(verify, 'c', ...repo, 'phases')) : [];
+  assert.deepEqual(files(['acme', 'demo']).filter(f => /beta/.test(f)).length, 1, 'beta stays in acme/demo');
+  assert.deepEqual(files(['new', 'place']).filter(f => /beta/.test(f)), [], 'beta is not carried into new/place');
 });

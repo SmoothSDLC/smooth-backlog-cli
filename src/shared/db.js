@@ -194,7 +194,7 @@ export function markArchived(db, slug, location) {
 
 // After a conflict took upstream's backlog.db: scan reads phases/ only, so an archive done by the local commit would stay 'done' at a
 // path that is gone. Each row the local db holds as archived at an existing archive/ file becomes archived the same way (status, path,
-// updated_at) and its 'archived' events are copied with their own timestamps.
+// updated_at); its 'archived' events come back with every other local event (keepEvents).
 function keepArchived(db, folder, localDb) {
   const local = new (sqlite().DatabaseSync)(localDb, { readOnly: true });
   try {
@@ -202,15 +202,40 @@ function keepArchived(db, folder, localDb) {
     try {
       for (const l of local.prepare("SELECT * FROM phase WHERE status='archived'").all()) {
         if (!l.path.startsWith('archive/') || l.path.includes('..') || !existsSync(join(folder, l.path))) continue;
-        const u = db.prepare("SELECT id, handoff_id FROM phase WHERE slug=? AND status != 'archived'").get(l.slug);
-        if (!u) continue;
-        db.prepare("UPDATE phase SET status='archived', path=?, updated_at=? WHERE id=?").run(l.path, l.updated_at, u.id);
-        for (const e of local.prepare("SELECT ts, branch, commit_sha, note FROM event WHERE phase_id=? AND event='archived' ORDER BY id").all(l.id)) {
-          db.prepare("INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,'archived',?,?,?)").run(e.ts, u.handoff_id, u.id, e.branch, e.commit_sha, e.note);
-        }
+        const u = db.prepare("SELECT id FROM phase WHERE slug=? AND status != 'archived'").get(l.slug);
+        if (u) db.prepare("UPDATE phase SET status='archived', path=?, updated_at=? WHERE id=?").run(l.path, l.updated_at, u.id);
       }
       db.exec('COMMIT');
     } catch (e) { db.exec('ROLLBACK'); throw e; }
+  } finally { local.close(); }
+}
+
+// The events are history the files cannot give back (notes, claims, reviews, moves): after upstream's db was taken, every event of the
+// local db that the recovered one lacks is added with its own timestamp. An item is matched by slug (renumbered: by its new slug), an
+// event already there (same item, time, kind, branch, commit and note) is not added twice. Events the scan writes by itself are skipped.
+const SCAN_EVENTS = ['ingested', 'reingested', 'file_missing', 'renumbered'];
+function keepEvents(db, localDb, renumbered) {
+  const local = new (sqlite().DatabaseSync)(localDb, { readOnly: true });
+  try {
+    const key = (slug, e) => JSON.stringify([slug, e.ts, e.event, e.branch, e.commit_sha, e.note]);
+    const have = new Set(db.prepare('SELECT p.slug, e.ts, e.event, e.branch, e.commit_sha, e.note FROM event e LEFT JOIN phase p ON p.id = e.phase_id').all().map(e => key(e.slug, e)));
+    const moved = new Map(renumbered.map(([old, next]) => [Number(old), next]));
+    const slugOf = new Map(local.prepare('SELECT id, slug FROM phase').all().map(r => [r.id, r.slug]));
+    const rename = slug => { const n = moved.get(Number(/^\d+/.exec(slug)?.[0])); return n === undefined ? slug : String(n).padStart(3, '0') + slug.replace(/^\d+/, ''); };
+    db.exec('BEGIN');
+    try {
+      for (const e of local.prepare('SELECT * FROM event ORDER BY id').all()) {
+        if (SCAN_EVENTS.includes(e.event)) continue;
+        const slug = e.phase_id === null ? null : slugOf.has(e.phase_id) ? rename(slugOf.get(e.phase_id)) : null;
+        if (have.has(key(slug, e))) continue;
+        const p = slug === null ? null : db.prepare('SELECT id, handoff_id FROM phase WHERE slug=?').get(slug);
+        if (slug !== null && !p) continue; // the item is gone from the recovered backlog
+        db.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)')
+          .run(e.ts, e.handoff_id === null ? null : p?.handoff_id ?? ensureAnchor(db), p?.id ?? null, e.event, e.branch, e.commit_sha, e.note);
+        have.add(key(slug, e));
+      }
+      db.exec('COMMIT');
+    } catch (err) { db.exec('ROLLBACK'); throw err; }
   } finally { local.close(); }
 }
 
@@ -225,6 +250,7 @@ export async function commitSettled(home, folder, message) {
     try {
       for (const file of pairs.localDbs ?? []) keepArchived(again, folder, file);
       scan(again, folder, pairs);
+      for (const file of pairs.localDbs ?? []) keepEvents(again, file, pairs);
       reflow(folder); // two writers each ranked their item against their own queue: ties are possible now that the queues are merged
       scan(again, folder);
     } finally { again.close(); for (const file of pairs.localDbs ?? []) rmSync(dirname(file), { recursive: true, force: true }); }

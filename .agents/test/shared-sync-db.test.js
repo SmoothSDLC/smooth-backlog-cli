@@ -92,3 +92,25 @@ test('review P1: a backlog.db conflict that takes upstream\'s copy keeps the loc
   } finally { con.close(); }
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
 });
+
+test('review P1: a backlog.db conflict that takes upstream\'s copy keeps the local events (a note), once, on its item', async t => {
+  const [a, b, { bare }] = writers(t);
+  assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hold = holdFirstPush(b);
+  const second = cliAsync(['update', '1', '--note', 'UNIQUE_DELIVERY_EVIDENCE'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held();
+  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  hold.release();
+  const r = await second.done;
+  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
+
+  const verify = mkdtempSync(join(tmpdir(), 'dbconf-e-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
+  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
+  const con = db.connect(join(verify, 'c', 'acme', 'demo'));
+  try {
+    const rows = con.prepare("SELECT p.slug, e.event FROM event e JOIN phase p ON p.id = e.phase_id WHERE e.note LIKE '%UNIQUE_DELIVERY_EVIDENCE%'").all().map(x => ({ ...x }));
+    assert.equal(rows.length, 1, JSON.stringify(rows));
+    assert.equal(rows[0].slug, '001-alpha-job');
+  } finally { con.close(); }
+});

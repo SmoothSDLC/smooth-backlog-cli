@@ -2,7 +2,7 @@
 // writer conflicts on it, and recovery used to refuse before the number collision was repaired. Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -187,3 +187,20 @@ test('review P1: a cross-repository move racing another clone is ONE commit of t
   } finally { con.close(); }
   assert.ok(existsSync(join(verify, 'c', 'new', 'place', 'phases')));
 });
+
+for (const [title, args] of [['query', ['query', '--all']], ['new', NEW('beta job')]]) {
+  test(`review P1: ${title} after a pull whose autostash does not apply (exit 0, conflict markers) is refused: nothing ingests or pushes the markers`, t => {
+    const [a, b, { bare }] = writers(t);
+    assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+    assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+    const file = join(b.folder, 'phases', '001-alpha-job.md');
+    writeFileSync(file, readFileSync(file, 'utf8').replace(/^summary: .*$/m, 'summary: "LOCAL EDIT"')); // an uncommitted edit of b
+    assert.equal(cli(['update', '1', '--summary', 'REMOTE EDIT'], { cwd: a.cons, tmp: a.tmp }).status, 0); // upstream changes the same line
+    const head = gitIn(bare, 'rev-parse', 'main');
+    const r = cli(args, { cwd: b.cons, tmp: b.tmp });
+    assert.equal(r.status, 3, `${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /unresolved conflicts/);
+    assert.equal(gitIn(bare, 'rev-parse', 'main'), head, 'nothing was pushed');
+    assert.ok(!existsSync(join(b.folder, 'phases', '002-beta-job.md')), 'nothing was created');
+  });
+}

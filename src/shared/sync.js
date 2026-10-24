@@ -35,8 +35,21 @@ const lit = path => `:(literal)${path}`;
 const fail = (home, what, r) => new BacklogError('SYNC_FAILED', `could not ${what} in ${home} (${r.stderr.slice(0, 300)}); the change is not recorded`, 3);
 const must = async (home, args, what) => { const r = await g(home, args); if (r.code) throw fail(home, what, r); return r; };
 
+// `pull --autostash` exits 0 when applying the stash back conflicted: unmerged entries, or markers in the files. Nothing may ingest, stage or push
+// that content; the clone is left as it is for the user (their edits are in the files and in 'git stash').
+async function refuseConflicts(home) {
+  const unmerged = (await g(home, ['ls-files', '-u', '-z'])).stdout.split('\0').filter(Boolean).map(e => e.split('\t')[1]);
+  const marked = (await g(home, ['grep', '-l', '-E', '^(<{7}|>{7})( |$)', '--', '*.md'])).stdout.split('\n').filter(Boolean);
+  const files = [...new Set([...unmerged, ...marked])];
+  if (files.length) {
+    throw new BacklogError('SYNC_FAILED', `${home} has unresolved conflicts after updating from origin/main (${files.slice(0, 5).join(', ')}${files.length > 5 ? ', ...' : ''}); `
+      + `nothing was read, changed or pushed. Resolve them (git -C ${home} status; the stashed edits are in 'git -C ${home} stash list'), then run the command again`, 3);
+  }
+}
+
 async function pullLocked(home) {
   const r = await g(home, PULL);
+  if (!r.code) await refuseConflicts(home);
   if (!r.code) { await renumber(home, process.stderr, true); return; } // stderr: a read command's stdout may be JSON
   await g(home, ['rebase', '--abort']);
   throw new BacklogError('SYNC_FAILED', `could not update ${home} from origin/main (${r.stderr.slice(0, 300)}); nothing was read or changed, `
@@ -157,6 +170,7 @@ export async function commit(home, folders, message) {
   for (const folder of list) names.push((await assertInside(home, folder)).split(sep).join('/'));
   const lits = names.map(lit);
   return locked(lockFile(home), async () => {
+    await refuseConflicts(home); // never stage or push the markers of an autostash that did not apply
     await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
     // scoped to the folders (beyond lib_db.py parity): work staged elsewhere in the backlog clone is neither committed nor pushed
     if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
@@ -171,6 +185,7 @@ export async function commit(home, folders, message) {
         await g(home, ['rebase', '--abort']);
         err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;
       } else {
+        await refuseConflicts(home);
         renumbered.push(...await renumber(home, process.stdout));
         const ps = await g(home, ['push', '-q']);
         if (!ps.code) return renumbered;

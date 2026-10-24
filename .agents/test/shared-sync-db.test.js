@@ -204,3 +204,33 @@ for (const [title, args] of [['query', ['query', '--all']], ['new', NEW('beta jo
     assert.ok(!existsSync(join(b.folder, 'phases', '002-beta-job.md')), 'nothing was created');
   });
 }
+
+test('review P1: a number collision in the destination of a cross-repository move renames nothing in the source (no phantom 002-alpha)', async t => {
+  const [a, b, { bare }] = writers(t);
+  // gamma stays in phases/: if the move emptied the folder, git would carry a's new file along into the target (directory rename detection)
+  for (const name of ['alpha job', 'gamma job']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0); // acme/demo 001-alpha-job, 002-gamma-job
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hold = holdFirstPush(b);
+  const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp }); // becomes new/place 001-alpha-job
+  await hold.held();
+  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // the source backlog.db changes too
+  const delta = cli([...NEW('delta job'), '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'new/place' } }); // new/place 001-delta-job
+  assert.equal(delta.status, 0, delta.stdout + delta.stderr);
+  hold.release();
+  const r = await second.done;
+  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
+
+  const verify = mkdtempSync(join(tmpdir(), 'dbconf-p-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
+  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
+  for (const repo of [['acme', 'demo'], ['new', 'place']]) {
+    const dir = join(verify, 'c', ...repo);
+    const con = db.connect(dir);
+    try {
+      const rows = con.prepare('SELECT slug, path FROM phase').all().map(x => ({ ...x }));
+      for (const x of rows) assert.ok(existsSync(join(dir, x.path)), `${repo.join('/')}: row ${x.slug} has its file (${JSON.stringify(rows)})`);
+      assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
+    } finally { con.close(); }
+  }
+  const src = db.connect(join(verify, 'c', 'acme', 'demo'));
+  try { assert.ok(!src.prepare('SELECT slug FROM phase').all().some(x => /alpha/.test(x.slug)), 'the moved item has no row in the source'); } finally { src.close(); }
+});

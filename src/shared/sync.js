@@ -6,7 +6,7 @@
 import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
-import { join, posix, sep } from 'node:path';
+import { join, posix, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
@@ -16,6 +16,8 @@ import * as store from './store.js';
 
 const PULL = ['pull', '-q', '--rebase', '--autostash'];
 const pad = n => String(n).padStart(3, '0');
+// A renumbering is [old, new] of one repository folder: a number is only taken in its own folder, so a caller applies it to that folder alone.
+const pairOf = (old, next, folder) => Object.defineProperty([old, next], 'folder', { value: resolve(folder) });
 const lockFile = home => join(home, '.git', 'smooth-backlog-cli.lock');
 
 // git in the backlog clone; an index.lock held by a git run outside the CLI is retried 5 times
@@ -102,7 +104,7 @@ async function renumberFiles(home, stream, added, mirror) {
     const r = await g(home, ['commit', '-q', '--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
-    out.push([old, next]);
+    out.push(pairOf(old, next, folder));
   }
   return out;
 }
@@ -153,7 +155,7 @@ async function repairConflicts(home, folders, names, renumbered) {
         store.write({ path: join(folder, target), ...retagged(mine, next) });
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
         process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
-        renumbered.push([old, next]);
+        renumbered.push(pairOf(old, next, folder));
       }
       if (!(await g(home, ['-c', 'core.editor=true', 'rebase', '--continue'])).code) return true;
     }

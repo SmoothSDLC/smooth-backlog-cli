@@ -5,7 +5,7 @@
 // Synchronous like store.js. The caller closes the handle.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { operation } from '../errors.js';
 import { parse } from './frontmatter.js';
 import { assertFolder, assertNoSymlinks, journalled, note, now, reflow } from './store.js';
@@ -257,9 +257,10 @@ export async function commitSettled(home, folders, message) {
       for (const folder of list) {
         const again = connect(folder);
         try {
+          const own = pairs.filter(p => p.folder === undefined || p.folder === resolve(folder)); // the renumberings of this folder only
           const mine = (pairs.localDbs ?? []).filter(f => f.folder === folder);
-          if (mine.length) for (const files of mine) replayLocal(again, folder, files, pairs);
-          else scan(again, folder, pairs);
+          if (mine.length) for (const files of mine) replayLocal(again, folder, files, own);
+          else scan(again, folder, own);
           reflow(folder); // two writers each ranked their item against their own queue: ties are possible now that the queues are merged
           scan(again, folder);
         } finally { again.close(); }

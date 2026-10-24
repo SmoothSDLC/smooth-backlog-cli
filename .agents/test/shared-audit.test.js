@@ -165,3 +165,17 @@ test('review: update --seq refuses a number another item holds (archived ones in
   assert.match(readFileSync(file, 'utf8'), /^seq: 2$/m);
   assert.equal(s.run(['update', '2', '--seq', '7']).status, 0);
 });
+
+test('review: releasing a claim after --request-review does not let the author review her own work', t => {
+  const s = solo(t);
+  const made = s.run(FULL('alpha job')); assert.equal(made.status, 0, out(made));
+  for (const args of [['update', '1', '--claim', 'alice'], ['update', '1', '--request-review', 'bob', '--note', 'please look'], ['update', '1', '--release', 'alice']]) {
+    const r = s.run(args); assert.equal(r.status, 0, out(r));
+  }
+  const own = s.run(['update', '1', '--review', 'pass', '--by', 'alice', '--comments', 'references/review/docs.md']);
+  assert.equal(own.status, 1, out(own)); assert.match(out(own), /cannot review its own work/);
+  const start = s.run(['update', '1', '--start-review', '--by', 'alice']);
+  assert.equal(start.status, 1, out(start));
+  const other = s.run(['update', '1', '--review', 'pass', '--by', 'bob', '--comments', 'checked against references/review/docs.md']);
+  assert.equal(other.status, 0, out(other)); // another agent still can
+});

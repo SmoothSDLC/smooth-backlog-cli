@@ -60,13 +60,14 @@ export function release({ fm }, agent) {
 export function requestReview({ fm }, reviewer, note) {
   if (!strip(note || '')) reject('--request-review needs --note "<what to review: commits, deployed evidence>"');
   const t = now();
-  Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '' });
+  // review_author outlives a release: the one who asked for the review never reviews it, whatever claimed_by says later
+  Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: fm.claimed_by || fm.review_author || '' });
   return { event: 'review_requested', text: `## Review requested by ${fm.claimed_by || 'unknown'} at ${t} (reviewer: ${reviewer})\n\n${note}` };
 }
 
 export function startReview({ fm }, by) {
   if (!by) reject('--start-review needs --by <agent>');
-  if (by === (fm.claimed_by || '')) reject(NO_SELF_REVIEW(by));
+  if (by === (fm.claimed_by || '') || by === (fm.review_author || '')) reject(NO_SELF_REVIEW(by));
   const st = fm.review_state; const rv = fm.reviewer;
   if (!['requested', 'in_review'].includes(st)) reject(`no review is requested (review_state ${st || 'none'})`);
   if (!reviewOpenTo(fm, by)) reject(`in review by ${rv} since ${fm.review_started}; review another item`);
@@ -78,7 +79,7 @@ export function startReview({ fm }, by) {
 
 export function review({ fm }, verdict, { by, comments } = {}) {
   if (!by || !strip(comments || '')) reject('--review needs --by <agent> and --comments "<findings>"');
-  if (by === (fm.claimed_by || '')) reject(NO_SELF_REVIEW(by));
+  if (by === (fm.claimed_by || '') || by === (fm.review_author || '')) reject(NO_SELF_REVIEW(by));
   const refs = asList(fm.review_refs);
   if (refs.length && !refs.some(p => comments.includes(p))) {
     reject(`--comments must cite at least one of the item's review_refs (${refs.join(', ')}): they are its definition of done and the review document`);

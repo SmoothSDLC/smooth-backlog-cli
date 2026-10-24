@@ -5,10 +5,11 @@
 // skip when SMOOTH_BACKLOG_SCRIPTS is not configured or PyYAML is missing. Local bare repos only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
@@ -444,4 +445,46 @@ test('review P1: a lock left by a dead process is taken over (said once); a live
     ok = child;
   });
   assert.equal((await ok.done).status, 0);
+});
+
+// The takeover of a dead owner's lock is exclusive: several processes racing on one dead lock, with fresh locks created in between, never overlap.
+const LOCK_JS = fileURLToPath(new URL('../../src/storage.js', import.meta.url));
+const holderScript = dir => {
+  const file = join(dir, 'holder.mjs');
+  writeFileSync(file, `import { locked } from ${JSON.stringify(LOCK_JS)}; import { appendFileSync } from 'node:fs'; import { setTimeout as sleep } from 'node:timers/promises';
+const [lock, log, id, rounds] = process.argv.slice(2);
+for (let i = 0; i < Number(rounds); i++) await locked(lock, async () => { appendFileSync(log, 'in ' + id + '\\n'); await sleep(30); appendFileSync(log, 'out ' + id + '\\n'); }, { takeOver: true, wait: 60000 });\n`);
+  return file;
+};
+const runHolder = (file, lock, log, id, rounds) => new Promise(res => { const c = spawn(process.execPath, [file, lock, log, id, rounds], { stdio: ['ignore', 'ignore', 'pipe'] }); let err = ''; c.stderr.on('data', d => { err += d; }); c.on('close', code => res({ code, err })); });
+
+test('review P1: processes racing on one dead lock take it over one at a time: critical sections never overlap, no fresh lock is displaced', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'lock-race-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const [lock, log] = [join(dir, 'run.lock'), join(dir, 'log')];
+  writeFileSync(lock, JSON.stringify({ pid: spawnSync(process.execPath, ['-e', '0']).pid, host: hostname(), command: 'update' }));
+  const script = holderScript(dir);
+  const done = await Promise.all(['a', 'b', 'c', 'd'].map(id => runHolder(script, lock, log, id, 5)));
+  for (const d of done) assert.equal(d.code, 0, d.err);
+  const lines = readFileSync(log, 'utf8').trim().split('\n');
+  assert.equal(lines.length, 40);
+  for (let i = 0; i < lines.length; i += 2) assert.deepEqual([lines[i].split(' ')[0], lines[i + 1].split(' ')[0], lines[i].split(' ')[1] === lines[i + 1].split(' ')[1]], ['in', 'out', true], lines.slice(i, i + 4).join('|'));
+  assert.equal(done.map(d => d.err).join('').split('took over a stale lock').length - 1, 1, 'taken over once, by exactly one process');
+});
+
+test('review P1: a takeover marker held by another waiter keeps the others waiting; one left by a dead process is stale after 30 s', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'lock-marker-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const [lock, log] = [join(dir, 'run.lock'), join(dir, 'log')];
+  writeFileSync(lock, JSON.stringify({ pid: spawnSync(process.execPath, ['-e', '0']).pid, host: hostname(), command: 'update' }));
+  writeFileSync(`${lock}.takeover`, '');
+  const script = holderScript(dir);
+  const quick = join(dir, 'quick.mjs');
+  writeFileSync(quick, readFileSync(script, 'utf8').replace('wait: 60000', 'wait: 700'));
+  const refused = await runHolder(quick, lock, log, 'x', 1);
+  assert.notEqual(refused.code, 0, 'a fresh marker: the waiter does not take the lock over');
+  assert.equal(existsSync(log), false);
+  const old = new Date(Date.now() - 60000);
+  utimesSync(`${lock}.takeover`, old, old);
+  const taken = await runHolder(script, lock, log, 'y', 1);
+  assert.equal(taken.code, 0, taken.err);
+  assert.equal(readFileSync(log, 'utf8'), 'in y\nout y\n');
 });

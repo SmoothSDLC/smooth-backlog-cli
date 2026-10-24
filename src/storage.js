@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { promises as fs, closeSync, openSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join, relative, resolve, dirname, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
@@ -47,12 +47,26 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
             // Another process may already own this pathname; never unlink a lock based on an old read.
             const current = JSON.parse(await fs.readFile(path, 'utf8'));
             if (current.pid !== record.pid) continue;
-            if (takeOver) { // the rename is atomic: of several waiters only one moves the dead owner's file away
-              const aside = `${path}.stale-${randomUUID()}`;
-              try { await fs.rename(path, aside); await fs.rm(aside, { force: true }); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-              if (!tookOver) { tookOver = true; process.stderr.write(`backlog: took over a stale lock of process ${record.pid} (no longer running): ${path}\n`); }
-              continue;
-            }
+            if (takeOver) {
+              // Exclusive: only the owner of the takeover marker may replace the dead owner's record, and only if the file still names that dead pid
+              // (a process that created a fresh lock meanwhile is never displaced). Everyone else keeps waiting. A marker its owner died holding is old after 30 s.
+              const marker = `${path}.takeover`; let fd;
+              try { fd = openSync(marker, 'wx'); } catch (e) {
+                if (e.code !== 'EEXIST') throw e;
+                try { if (Date.now() - statSync(marker).mtimeMs > 30000) rmSync(marker, { force: true }); } catch { /* gone already */ }
+              }
+              if (fd !== undefined) {
+                closeSync(fd);
+                try {
+                  const again = JSON.parse(readFileSync(path, 'utf8'));
+                  if (again.pid === record.pid && again.host === record.host) {
+                    handle = await fs.open(path, 'w', 0o600); // ours now; the record is written below
+                    if (!tookOver) { tookOver = true; process.stderr.write(`backlog: took over a stale lock of process ${record.pid} (no longer running): ${path}\n`); }
+                    break;
+                  }
+                } finally { rmSync(marker, { force: true }); }
+              }
+            } else
             throw new BacklogError('STALE_LOCK', `Lock owner ${record.pid} is no longer running. Verify no backlog process is using this storage, remove ${path}, then rerun; any journal will recover automatically.`, 1);
           }
         }

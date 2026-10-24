@@ -175,6 +175,20 @@ test('archive finds the item by number, never by database row id', () => {
   assert.ok(existsSync(join(f.folder, 'phases/003-gamma.md')));
 });
 
+test('review P2: a name with --- in it does not hide the closing front-matter delimiter: archive --force stamps the file', () => {
+  const f = seed();
+  const made = run(f, 'new', ['--name', 'three---dashes', '--objective', 'o --- o', '--summary', 'a---b', '--depends-on', 'none']);
+  assert.equal(made.status, 0, made.stderr);
+  const slug = made.stdout.split('created phase phases/')[1].split('.md')[0];
+  const r = run(f, 'archive', [slug, '--force']);
+  assert.equal(r.status, 0, r.stderr);
+  const moved = fm(f.folder, `archive/phases/${slug}.md`);
+  assert.equal(moved.fm.status, 'archived');
+  assert.equal(moved.fm.name, 'three---dashes');
+  const con = db.connect(f.folder);
+  try { assert.equal(con.prepare('SELECT status FROM phase WHERE slug=?').get(slug).status, 'archived'); } finally { con.close(); }
+});
+
 // --- move --to-branch
 
 test('move --to-branch matches move.py; Python query.py --by-branch lists the item', t => {

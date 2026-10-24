@@ -84,14 +84,13 @@ export async function run(argv) {
 }
 
 // archive.py:22-37: `status: archived` into the FRONT MATTER text of the moved file, everything else untouched.
+// Beyond the oracle (text.split("---", 2) stops at a --- inside a name or summary): the closing delimiter is a line of its own,
+// as in the front-matter parser (frontmatter.js FM_SPLIT).
 function stamp(path) {
   const text = readFileSync(path, 'utf8');
-  if (!text.startsWith('---')) return;
-  const end = text.indexOf('---', 3); // text.split("---", 2)
-  if (end < 0) return;
-  const head = text.slice(3, end);
-  if (!/(?<![^\n])status:/.test(head)) return;
-  writeFileSync(path, `---${head.replace(/(?<![^\n])status:[^\n]*/, 'status: archived')}${text.slice(end)}`);
+  const m = /^---\n([\s\S]*?)\n---(?=\n|$)/.exec(text);
+  if (!m || !/(?<![^\n])status:/.test(m[1])) return;
+  writeFileSync(path, `---\n${m[1].replace(/(?<![^\n])status:[^\n]*/, 'status: archived')}${text.slice(4 + m[1].length)}`);
 }
 
 async function archive(a, con, { folder, close }) {

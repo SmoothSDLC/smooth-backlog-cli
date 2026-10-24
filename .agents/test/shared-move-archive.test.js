@@ -523,3 +523,16 @@ test('review P1: archive whose rescan throws leaves nothing staged in the index'
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
   assert.equal(git(f.home, 'diff', '--cached', '--name-only'), '');
 });
+
+test('review P2: move of an archived item (--to-branch, --to-repository) is refused and writes nothing', () => {
+  const f = seed();
+  assert.equal(run(f, 'archive', ['5']).status, 0);
+  const file = join(f.folder, 'archive', 'phases', '005-epsilon.md');
+  const before = [readFileSync(file, 'utf8'), mirror(f), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD')];
+  for (const args of [['5', '--to-branch', 'release'], ['005-epsilon', '--to-repository', 'other/proj']]) {
+    const r = run(f, 'move', args);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /005-epsilon is archived and cannot be moved/);
+  }
+  assert.deepEqual([readFileSync(file, 'utf8'), mirror(f), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD')], before);
+});

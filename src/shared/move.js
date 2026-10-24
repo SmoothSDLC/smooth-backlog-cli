@@ -94,6 +94,7 @@ async function move(a, con, { home, repo, folder, close, locked }) {
   if (!a.phase) throw usage('name the item, or use --all-open-of-branch');
   const r = find(con, a.phase);
   if (!r) return refuse(`no item ${pyStr(a.phase)} in the backlog of ${repo}`);
+  if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (the rescan does not visit archive/, so the mirror would keep the old branch or repository); beyond move.py parity, which rewrites the archive file and leaves the mirror stale`);
   if (a['to-branch']) { // move.py:93-98
     const refusal = await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);

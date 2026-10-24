@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
-import { numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
+import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
@@ -453,4 +453,18 @@ test('review P2: move --to-repository refuses an item other items depend on, by 
   assert.equal(run(f, 'update', ['1', '--set-depends-on', 'none']).status, 0);
   assert.equal(run(f, 'update', ['2', '--set-depends-on', 'none']).status, 0);
   assert.equal(run(f, 'move', ['3', '--to-repository', 'other/proj']).status, 0);
+});
+
+const mirror = f => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM phase ORDER BY id').all().concat(c.prepare('SELECT * FROM event ORDER BY id').all())); } finally { c.close(); } };
+const breakItem = (f, rel) => { const p = join(f.folder, rel); writeFileSync(p, readFileSync(p, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n')); };
+
+test('review P2: archive stamps status: archived into an item saved with CRLF line endings', () => {
+  const f = seed();
+  const p = join(f.folder, 'phases', '005-epsilon.md');
+  writeFileSync(p, readFileSync(p, 'utf8').replace(/\n/g, '\r\n'));
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'crlf'); git(f.home, 'push', '-q');
+  const r = run(f, 'archive', ['5']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
+  assert.match(readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8'), /status: archived\r\n/);
 });

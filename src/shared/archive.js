@@ -88,9 +88,10 @@ export async function run(argv) {
 // as in the front-matter parser (frontmatter.js FM_SPLIT).
 function stamp(path) {
   const text = readFileSync(path, 'utf8');
-  const m = /^---\n([\s\S]*?)\n---(?=\n|$)/.exec(text);
-  if (!m || !/(?<![^\n])status:/.test(m[1])) return;
-  writeFileSync(path, `---\n${m[1].replace(/(?<![^\n])status:[^\n]*/, 'status: archived')}${text.slice(4 + m[1].length)}`);
+  // CRLF and lone CR delimiters, as frontmatter.parse reads them; the file keeps its own line endings
+  const m = /^(---(?:\r\n?|\n))([\s\S]*?)(?:\r\n?|\n)---(?=\r\n?|\n|$)/.exec(text);
+  if (!m || !/(?<![^\r\n])status:/.test(m[2])) return;
+  writeFileSync(path, `${m[1]}${m[2].replace(/(?<![^\r\n])status:[^\r\n]*/, 'status: archived')}${text.slice(m[1].length + m[2].length)}`);
 }
 
 async function archive(a, con, { folder, close }) {

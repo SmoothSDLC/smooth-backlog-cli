@@ -480,3 +480,28 @@ test('review P1: archive and move --to-branch whose rescan throws put the files 
     assert.deepEqual([files(), mirror(f), git(f.home, 'rev-parse', 'HEAD')], before, args[0]);
   }
 });
+
+test('review P1: a cross-repository move holds the run lock of the destination backlog too', async () => {
+  const f = seed();
+  let during; let child;
+  await store.runLocked(f.home, 'other/proj', async () => {
+    child = cliAsync(['move', '3', '--to-repository', 'other/proj'], { cwd: f.cons, tmp: f.t });
+    await new Promise(r => setTimeout(r, 2500));
+    during = { exited: child.exited(), source: existsSync(join(f.folder, 'phases', '003-gamma.md')), copied: names(f.other, 'phases').length };
+  });
+  assert.deepEqual(during, { exited: false, source: true, copied: 1 }, 'the move waits for the destination lock');
+  assert.equal((await child.done).status, 0);
+  assert.deepEqual(names(f.other, 'phases').length, 2);
+});
+
+test('review P1: a bare --to-repository (the item names its target) also waits for the destination run lock', async () => {
+  const f = seed();
+  let during; let child;
+  await store.runLocked(f.home, 'other/proj', async () => {
+    child = cliAsync(['move', '7', '--to-repository'], { cwd: f.cons, tmp: f.t });
+    await new Promise(r => setTimeout(r, 2500));
+    during = { exited: child.exited(), source: existsSync(join(f.folder, 'phases', '007-eta.md')) };
+  });
+  assert.deepEqual(during, { exited: false, source: true });
+  assert.equal((await child.done).status, 0);
+});

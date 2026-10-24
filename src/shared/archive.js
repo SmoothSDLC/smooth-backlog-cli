@@ -45,18 +45,23 @@ export function find(con, text) {
 // Resolve the consuming repository, take its run lock, pull, open its mirror db and run fn(con, {home, repo, folder, close}); then, when
 // fn answers 0 and `tail` (the commit message: script name + first two arguments, archive.py:112-117) is given, commit and push the folder.
 // The lock is held from the pull to the push (archive.py's run_lock).
-export async function withBacklog(fn, tail) {
+// `also`: further repositories the command writes to (a cross-repository move); their run locks are held too. All locks are
+// taken in sorted order, so two moves in opposite directions cannot wait on each other.
+export async function withBacklog(fn, tail, also = []) {
   const { home } = store.resolveHome();
   let repo;
   try { repo = store.repoId(process.cwd()); } catch (e) { return die(e.message); }
-  return store.runLocked(home, repo, async () => {
+  for (const id of also) try { store.folder(home, id); } catch (e) { throw usage(e.message); } // owner/name only: it names a lock file
+  const ids = [...new Set([repo, ...also])].sort();
+  const hold = (i, f) => i < ids.length ? store.runLocked(home, ids[i], () => hold(i + 1, f)) : f();
+  return hold(0, async () => {
     await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
     const folder = store.folder(home, repo);
     const con = db.connect(folder); // refuses a link at the owner or the repository folder
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
     let code;
-    try { code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close })); } finally { close(); }
+    try { code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close, locked: ids })); } finally { close(); }
     if (code === 0 && tail) await db.commitSettled(home, folder, tail);
     return code;
   });

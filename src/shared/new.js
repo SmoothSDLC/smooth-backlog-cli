@@ -5,7 +5,7 @@ import { join, posix } from 'node:path';
 import { input } from '../errors.js';
 import { commitSettled, connect, ensureAnchor, freshDb, logEvent, scan, undoOnThrow } from './db.js';
 import { parse } from './frontmatter.js';
-import { actor, recordWrites } from './seen.js';
+import { actor, check, recordWrites } from './seen.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
 import { branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
 import { pull } from './sync.js';
@@ -132,6 +132,7 @@ async function create(argv, { home, folder, repo, team }) {
       const file = join(folder, String(src.path));
       await assertInside(folder, file); // the path comes from the mirror database: untrusted
       if (!existsSync(file)) return refuse(`--split-from: the file of '${src.slug}' (${src.path}) is missing`);
+      check(folder, repo, actor(), src.slug, src.path); // the split logs a parent event based on this version and scope
       const parent = Array.from(parse(readFileSync(file, 'utf8')).body.trim()).slice(0, 800).join('');
       inherited = { objective: src.objective, summary: src.summary, context: `Split from \`${src.slug}\`. Inherited context:\n\n${parent}` };
     }

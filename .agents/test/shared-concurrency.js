@@ -17,8 +17,8 @@ export const gitIn = (cwd, ...args) => {
 };
 
 // The CLI as a child that does not block this process: { child, done } where done resolves to { status, stdout, stderr }.
-export function cliAsync(args, { cwd, tmp }) {
-  const child = spawn(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, ...env(tmp) }, stdio: ['ignore', 'pipe', 'pipe'] });
+export function cliAsync(args, { cwd, tmp, env: extra = {} }) {
+  const child = spawn(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, ...env(tmp), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = ''; let stderr = ''; let exited = false;
   child.stdout.on('data', d => { stdout += d; });
   child.stderr.on('data', d => { stderr += d; });

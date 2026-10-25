@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Shared mode revalidates every publication against the merged backlog, refusing sequence collisions and dangling dependencies after concurrent changes. Rejected publication preflights restore starting files, databases, and staging.
+- Shared mode revalidates every publication against the merged backlog, refusing sequence/slug collisions, dangling dependencies, dependency cycles, and claims whose dependencies or active-work limit changed concurrently. Split parent reads are guarded too. Rejected publication preflights restore starting files, databases, and staging.
 
 - Shared mode rolls back unpublished changes after a failed push, preserving starting working edits and staging. Legacy unpublished commits are refused with explicit recovery commands; cross-repository moves publish both folders together.
 - Shared mode keeps write views at their published slug and path after collision recovery, including cross-repository moves and incidental reflows, so later stale writes are refused.

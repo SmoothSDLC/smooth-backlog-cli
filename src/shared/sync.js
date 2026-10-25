@@ -6,7 +6,7 @@
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
-import { dirname, join, posix, resolve, sep } from 'node:path';
+import { basename, dirname, join, posix, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
@@ -291,7 +291,7 @@ async function repairConflicts(home, folders, names, renumbered) {
 // Validate the entire publication, including incidental reflow writes and both sides of a move,
 // against the merged files after recovery. Added-file renumbering cannot protect existing --seq
 // assignments or incoming references that another clone added while this command was publishing.
-async function validatePublication(home, folders, names) {
+async function validatePublication(home, folders, names, claims, renumbered) {
   const delta = paths(await must(home, ['diff', '-z', '--no-renames', '--name-status', 'origin/main', 'HEAD'], 'list publication writes'));
   const changed = new Map();
   for (let i = 0; i < delta.length; i += 2) changed.set(delta[i + 1], delta[i]);
@@ -299,29 +299,82 @@ async function validatePublication(home, folders, names) {
   for (let n = 0; n < folders.length; n++) {
     const items = store.load(folders[n]);
     const prefix = `${names[n]}/`;
-    const resolves = d => items.some(i => /^\d+$/.test(String(d)) ? Number(i.fm.seq) === Number(d) : i.fm.phase === String(d));
+    const slug = i => i.fm.phase || basename(i.path, '.md'); // same fallback as db ingestion
+    const seq = i => Number(Object.hasOwn(i.fm, 'seq') ? i.fm.seq : 0);
+    const find = d => items.find(i => /^\d+$/.test(String(d)) ? seq(i) === Number(d) : slug(i) === String(d));
+    const con = connect(folders[n], { readOnly: true });
+    let reserved;
+    try { // --seq checks mirror rows too: a ghost still reserves its number until explicitly repaired.
+      reserved = con.prepare('SELECT slug, seq FROM phase').all().filter(r => !items.some(i => slug(i) === r.slug));
+    } finally { con.close(); }
+    const resolves = d => Boolean(find(d));
     const key = d => /^\d+$/.test(String(d)) ? String(Number(d)) : String(d);
     const lost = new Set();
+    // Walk from every write, through unchanged/upstream and archived vertices too. A check of
+    // just its outgoing edge cannot see a cycle completed by another publisher's edge.
+    const checked = new Set(); const visiting = new Set();
+    const acyclic = item => {
+      if (visiting.has(item)) reject(`${names[n]}: dependency cycle through ${slug(item)}`);
+      if (checked.has(item)) return;
+      visiting.add(item);
+      for (const d of asList(item.fm.depends_on)) {
+        const target = find(d);
+        if (target) acyclic(target);
+      }
+      visiting.delete(item); checked.add(item);
+    };
     for (const [file, status] of changed) {
       if (!file.startsWith(prefix)) continue;
       const path = file.slice(prefix.length);
       if (!/^(phases\/[^/]+|archive\/.+)\.md$/.test(path)) continue;
       const item = items.find(i => i.path === path);
       if (item) {
-        const held = items.find(i => i !== item && Number(i.fm.seq) === Number(item.fm.seq));
-        if (held) reject(`${names[n]}: seq ${item.fm.seq} of ${item.fm.phase} is already held by ${held.fm.phase}; the number must stay unique`);
+        const held = items.find(i => i !== item && seq(i) === seq(item));
+        const holder = held ? slug(held) : reserved.find(r => Number(r.seq) === seq(item))?.slug;
+        if (holder) reject(`${names[n]}: seq ${item.fm.seq} of ${slug(item)} is already held by ${holder}; the number must stay unique`);
+        const sameSlug = items.find(i => i !== item && slug(i) === slug(item));
+        if (sameSlug) reject(`${names[n]}: duplicate slug ${slug(item)} in ${item.path} and ${sameSlug.path}; the slug must stay unique`);
         for (const d of asList(item.fm.depends_on)) if (!resolves(d)) reject(`${names[n]}: ${item.fm.phase} depends on missing item ${d}`);
+        acyclic(item);
       }
       if (status === 'A') continue; // a new item has no incoming identity to preserve
       const before = await must(home, ['show', `origin/main:${file}`], `read the prior identity of ${file}`);
       const { fm } = parse(before.stdout);
       for (const d of [fm.phase, fm.seq]) if (d !== undefined && !resolves(d)) lost.add(key(d));
+      // update --seq refuses incoming slug references as well as numeric ones, even though
+      // a slug still resolves after a sequence-only change. Keep that pre-write rule after rebase.
+      if (item && Number(item.fm.seq) !== Number(fm.seq)) {
+        for (const other of items) for (const d of asList(other.fm.depends_on)) {
+          if (other !== item && (d === fm.phase || (/^\d+$/.test(d) && Number(d) === Number(fm.seq)))) {
+            reject(`${names[n]}: ${slug(other)} depends on ${d}; clear or repoint incoming dependencies before changing its target's sequence`);
+          }
+        }
+      }
     }
     // The source item may have disappeared from this folder, but its new upstream dependents
     // are outside the write set. Check them too before allowing any of the folders to publish.
     for (const item of items) for (const d of asList(item.fm.depends_on)) {
       if (lost.has(key(d))) {
         reject(`${names[n]}: ${item.fm.phase} depends on ${d}; removing or renumbering that item would leave its dependency missing`);
+      }
+    }
+    // Claim eligibility depends on other files, so the target's stale guard alone cannot
+    // protect it. Recheck the claim against the merged graph, preserving --force/reclaim policy.
+    for (const claim of claims.filter(c => resolve(c.folder) === resolve(folders[n]))) {
+      let path = claim.path;
+      for (const pair of renumbered.filter(p => p.folder === undefined || p.folder === resolve(folders[n]))) {
+        if (Number(basename(path).match(/^\d+/)?.[0]) === pair[0]) path = targetOf(path, pair[1]);
+      }
+      const item = items.find(i => i.path === path);
+      if (!item) reject(`${names[n]}: claimed item ${path} disappeared`);
+      for (const d of asList(item.fm.depends_on)) {
+        const target = find(d);
+        if (!target || !['done', 'archived'].includes(target.fm.status)) reject(`${names[n]}: ${slug(item)} dependencies not done: ${d}`);
+      }
+      if (!claim.skipActiveLimit) {
+        const held = items.filter(i => i !== item && i.path.startsWith('phases/') && ['pending', 'in_progress'].includes(i.fm.status ?? 'pending')
+          && i.fm.claimed_by === claim.agent && !['requested', 'in_review'].includes(i.fm.review_state) && !i.fm.wait_on);
+        if (held.length) reject(`${names[n]}: ${claim.agent} holds ${held.length} active item(s): ${held.map(slug).join(', ')}; pull new work only when every item you hold waits; --force overrides`);
       }
     }
   }
@@ -333,7 +386,7 @@ async function validatePublication(home, folders, names) {
 // `guard`: [{path (from the clone root), slug, was}] of the items this change rewrites on the strength of what the command read. When origin/main
 // gains a change to one of them from someone else before the push, the commit is taken back (clone and index as before the command) and the command
 // is refused with the stale-item message, never merged or parked on a side branch.
-export async function commit(home, folders, message, reconcile = null, guard = []) {
+export async function commit(home, folders, message, reconcile = null, guard = [], claims = []) {
   guard = publicationGuard(guard);
   const list = [].concat(folders);
   const names = [];
@@ -407,7 +460,7 @@ export async function commit(home, folders, message, reconcile = null, guard = [
             await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
             await foldIn(home, lits, names, message);
           }
-          await validatePublication(home, list, names);
+          await validatePublication(home, list, names, claims, renumbered);
           await restoreStaging(saved.staged.filter(p => !own(p)));
           const ps = await g(home, ['push', '-q', 'origin', 'HEAD:refs/heads/main']);
           if (!ps.code) return renumbered;

@@ -633,3 +633,139 @@ test('review P1: publication refuses a sequence change after an upstream clone a
   assert.deepEqual(state(b.home), state(clone(t, bare)));
   assert.equal(store.load(b.folder).find(i => i.fm.phase === '001-alpha').fm.seq, 1);
 });
+
+// Each race passes its initial validation, then changes a different file upstream.
+// Rejection must remove the entire mutation (including its mirror/events), not park it for the next command.
+function rejectedPublication(t, b, bare, result, why) {
+  assert.equal(result.status, 3, result.stdout + result.stderr);
+  assert.match(result.stderr, /not published.*rolled back/s);
+  assert.match(result.stderr, why);
+  assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+  assert.deepEqual(state(b.home), state(clone(t, bare)));
+}
+
+for (const [forward, reverse] of [['2', '1'], ['002-beta', '001-alpha']]) {
+  test(`publication graph: opposing dependencies ${forward}/${reverse} cannot publish a cycle`, async t => {
+    const { b, bare, result } = await race(t, [NEW('alpha'), NEW('beta')],
+      ['update', '2', '--set-depends-on', reverse], ['update', '1', '--set-depends-on', forward]);
+    rejectedPublication(t, b, bare, result, /dependency cycle/);
+    assert.deepEqual(store.load(b.folder).map(i => i.fm.depends_on), [[], [/^\d+$/.test(reverse) ? 1 : reverse]]);
+  });
+}
+
+test('publication graph: transitive cycle through an upstream edge is refused', async t => {
+  const { b, bare, result } = await race(t, [NEW('alpha'), NEW('beta'), NEW('gamma'), ['update', '1', '--set-depends-on', '2']],
+    ['update', '2', '--set-depends-on', '3'], ['update', '3', '--set-depends-on', '1']);
+  rejectedPublication(t, b, bare, result, /dependency cycle/);
+});
+
+const COMPLETE = name => [...NEW(name), '--work-class', 'tests', '--review-classes', 'code',
+  '--review-refs', 'references/review/code.md', '--estimate', '5', '--body', '## Definition of done\n- [ ] verified'];
+
+test('publication graph: a claim is refused when its completed dependency reopens upstream', async t => {
+  const { b, bare, result } = await race(t,
+    [NEW('dependency'), ['update', '1', '--status', 'done'], [...COMPLETE('work'), '--depends-on', '1']],
+    ['update', '1', '--status', 'pending', '--priority', '99'], ['update', '2', '--claim', 'amy']);
+  rejectedPublication(t, b, bare, result, /dependencies not done/);
+});
+
+for (const force of [false, true]) test(`publication graph: concurrent claims by one agent ${force ? 'respect --force' : 'cannot bypass the active-work limit'}`, async t => {
+  const { b, bare, result } = await race(t, [COMPLETE('alpha'), COMPLETE('beta')],
+    ['update', '1', '--claim', 'amy'], ['update', '2', '--claim', 'amy', ...(force ? ['--force'] : [])]);
+  if (!force) rejectedPublication(t, b, bare, result, /amy holds.*active item/);
+  else {
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.deepEqual(store.load(b.folder).map(i => i.fm.claimed_by), ['amy', 'amy']);
+    assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+  }
+});
+
+test('publication identity: an upstream archived file cannot duplicate the slug of a written item', async t => {
+  const [a, b, { bare }] = writers(t);
+  assert.equal(cli(NEW('alpha'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hold = holdFirstPush(b);
+  const second = cliAsync(['update', '1', '--append', 'rejected note'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held();
+  try {
+    const item = store.load(a.folder)[0];
+    store.write({ path: join(a.folder, 'archive', '099-other.md'), fm: { ...item.fm, seq: 99, status: 'archived' }, body: item.body }, a.folder);
+    gitIn(a.home, 'add', 'acme/demo/archive'); gitIn(a.home, 'commit', '-qm', 'external archived slug collision'); gitIn(a.home, 'push', '-q');
+  } finally { hold.release(); }
+  rejectedPublication(t, b, bare, await second.done, /slug.*001-alpha.*unique|duplicate.*001-alpha/i);
+});
+
+test('publication identity: an upstream slug dependent also prevents changing its target sequence', async t => {
+  const { b, bare, result } = await race(t, [NEW('alpha')],
+    [...NEW('dependent'), '--depends-on', '001-alpha'], ['update', '1', '--seq', '5']);
+  rejectedPublication(t, b, bare, result, /depends on.*001-alpha/);
+});
+
+test('publication graph: an outgoing slug dependency is rechecked after an upstream move', async t => {
+  const { b, bare, result } = await race(t, [NEW('alpha'), NEW('beta')],
+    ['move', '2', '--to-repository', 'acme/dst'], ['update', '1', '--set-depends-on', '002-beta']);
+  rejectedPublication(t, b, bare, result, /depends on missing item 002-beta/);
+});
+
+// File-only publishers are supported peers too; do not rely on a backlog.db conflict to trigger validation.
+async function fileRace(t, seed, args, publish, env) {
+  const [a, b, { bare }] = writers(t);
+  for (const cmd of seed) assert.equal(cli(cmd, { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const before = state(b.home);
+  const hold = holdFirstPush(b);
+  const second = cliAsync(args, { cwd: b.cons, tmp: b.tmp, env });
+  await hold.held();
+  try {
+    publish(a);
+    gitIn(a.home, 'add', 'acme/demo'); gitIn(a.home, 'commit', '-qm', 'external file publication'); gitIn(a.home, 'push', '-q');
+  } finally { hold.release(); }
+  return { b, bare, before, result: await second.done };
+}
+
+test('publication identity: an upstream archived sequence colliding with an existing assignment is refused', async t => {
+  const { b, bare, result } = await fileRace(t, [NEW('alpha')], ['update', '1', '--seq', '5'], a => {
+    store.write({ path: join(a.folder, 'archive', '005-other.md'), fm: { phase: '005-other', seq: 5, status: 'archived' }, body: '\narchived\n' }, a.folder);
+  });
+  rejectedPublication(t, b, bare, result, /seq.*5.*005-other/);
+});
+
+test('publication identity: an upstream mirror-only sequence reservation is not overwritten', async t => {
+  const { b, bare, result } = await fileRace(t, [NEW('alpha')], ['update', '1', '--seq', '5'], a => {
+    const con = db.connect(a.folder);
+    try {
+      con.prepare('INSERT INTO phase(handoff_id,slug,seq,status,path) VALUES(?,?,?,?,?)')
+        .run(db.ensureAnchor(con), '005-ghost', 5, 'pending', 'phases/005-ghost.md');
+    } finally { con.close(); }
+  });
+  rejectedPublication(t, b, bare, result, /seq.*5.*005-ghost/);
+});
+
+test('publication safety: upstream conflict markers abort an otherwise disjoint write', async t => {
+  const { b, bare, result } = await fileRace(t, [NEW('alpha')], ['update', '1', '--append', 'rejected note'], a => {
+    writeFileSync(join(a.folder, 'conflict.md'), '<<<<<<< upstream\nunfinished\n');
+  });
+  assert.equal(result.status, 3, result.stdout + result.stderr);
+  assert.match(result.stderr, /unresolved conflicts/);
+  assert.deepEqual(state(b.home), state(clone(t, bare)));
+});
+
+for (const [name, args, change] of [
+  ['required fields', ['update', '1', '--claim', 'amy'], fm => { fm.estimate_min = 0; }],
+  ['review state', ['update', '1', '--close', '--by', 'amy', '--summary', 'delivered'], fm => { fm.review_state = 'changes-requested'; }],
+  ['claim ownership', ['update', '1', '--claim', 'amy'], fm => { fm.claimed_by = 'bob'; }],
+  ['team scope of a split parent', [...COMPLETE('child'), '--split-from', '1'], fm => { fm.branch = 'other'; }],
+]) test(`publication read set: concurrent ${name} changes cannot pass earlier validation`, async t => {
+  const { b, bare, before, result } = await fileRace(t,
+    [COMPLETE('alpha'), ['update', '1', '--request-review', 'any', '--note', 'initial evidence'],
+      ['update', '1', '--review', 'pass', '--by', 'bob', '--comments', 'references/review/code.md passed']], args, a => {
+      const item = store.load(a.folder)[0];
+      change(item.fm);
+      store.write({ path: join(a.folder, item.path), fm: item.fm, body: item.body }, a.folder);
+    }, { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' });
+  assert.equal(result.status, 5, result.stdout + result.stderr);
+  assert.match(result.stderr, /changed by.*read it again/s);
+  assert.deepEqual(state(b.home), before, 'stale-view rollback retains the established pre-command snapshot');
+  assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+  assert.doesNotMatch(gitIn(bare, 'log', '-1', '--format=%s'), /update.py|new --name/);
+});

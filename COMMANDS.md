@@ -239,7 +239,7 @@ write set against changes arriving during push.
 A stale item refuses the entire write without publishing any of it.
 Every shared change succeeds only after its commit is pushed. A push that still fails after retries rolls the local branch
 back to origin/main and restores the starting working files and staging, including both folders of a cross-repository move.
-Before every push, the CLI validates the entire write set against the merged backlog, including sequence uniqueness and incoming dependencies of moved or renumbered items. A rejected publication preflight restores the starting files, databases, and staging.
+Before every push, the CLI validates the entire write set against the merged backlog, including live/archive sequence and slug uniqueness, dependency existence and cycles, and incoming dependencies of moved or renumbered items. Claims recheck that dependencies are finished and the agent's other work permits another claim (`--force` still overrides only the active-work limit). The read guard also protects a split's parent. A rejected publication preflight restores the starting files, databases, and staging.
 The CLI refuses existing unpublished commits before changing anything and lists their hashes, subjects, and explicit commands
 to publish or drop them; it never silently rewrites a legacy stack.
 

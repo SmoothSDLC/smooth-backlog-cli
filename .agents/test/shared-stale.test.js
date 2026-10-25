@@ -4,7 +4,7 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
@@ -519,4 +519,42 @@ test('review P2: exact agent names keep independent views despite slash, space a
     assert.throws(() => seen.check(f.folder, 'acme/demo', first, '001-alpha', path), e => e.code === 'STALE_ITEM', `${first} must keep its stale view after ${second} reads`);
     assert.doesNotThrow(() => seen.check(f.folder, 'acme/demo', second, '001-alpha', path));
   }
+});
+
+test('review P2: published write views follow chained renumberings only in their own repository folder', async () => {
+  const f = seed(['alpha']);
+  const seen = await import('../../src/shared/seen.js');
+  const target = join(f.home, 'new', 'place');
+  const path = 'archive/phases/003-alpha.md';
+  mkdirSync(join(target, 'archive', 'phases'), { recursive: true });
+  writeFileSync(join(target, path), readFileSync(join(f.folder, 'phases/001-alpha.md'), 'utf8'));
+  const pairs = [Object.assign([1, 2], { folder: target }), Object.assign([2, 3], { folder: target })];
+  seen.recordWrites(f.folder, 'acme/demo', 'amy', [
+    { slug: '001-alpha', path: 'phases/001-alpha.md' },
+    { folder: target, repo: 'new/place', slug: '001-alpha', path: 'archive/phases/001-alpha.md' },
+  ], pairs);
+  const cache = JSON.parse(readFileSync(viewCache(f.home, 'amy'), 'utf8'));
+  assert.equal(cache['acme/demo/001-alpha'].path, 'phases/001-alpha.md', 'the source number is unchanged');
+  assert.equal(cache['new/place/003-alpha'].path, path, 'the destination uses its final number and retains its directory');
+  writeFileSync(join(target, path), readFileSync(join(target, path), 'utf8') + '\nanother writer\n');
+  assert.throws(() => seen.check(target, 'new/place', 'amy', '003-alpha', path), { exitCode: 5 });
+});
+
+test('review P2: a renumbered incidental write retains proof of the previously read bytes', async () => {
+  const f = seed(['alpha']);
+  const seen = await import('../../src/shared/seen.js');
+  const old = 'phases/001-alpha.md'; const path = 'phases/003-alpha.md';
+  seen.view('amy', f.folder, 'acme/demo', { slug: '001-alpha', path: old });
+  seen.setActor('amy');
+  try {
+    await seen.guarded(() => {
+      seen.guardReflow(f.folder, store.load(f.folder));
+      renameSync(join(f.folder, old), join(f.folder, path));
+      writeFileSync(join(f.folder, path), readFileSync(join(f.folder, path), 'utf8') + '\npublished reflow\n');
+      seen.recordWrites(f.folder, 'acme/demo', 'amy', [], [Object.assign([1, 3], { folder: f.folder })]);
+    });
+    assert.doesNotThrow(() => seen.check(f.folder, 'acme/demo', 'amy', '003-alpha', path));
+    writeFileSync(join(f.folder, path), readFileSync(join(f.folder, path), 'utf8') + '\nanother writer\n');
+    assert.throws(() => seen.check(f.folder, 'acme/demo', 'amy', '003-alpha', path), { exitCode: 5 });
+  } finally { seen.setActor('nobody'); }
 });

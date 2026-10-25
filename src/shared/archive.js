@@ -76,7 +76,10 @@ export async function withBacklog(fn, tail) {
       throw e;
     } finally { close(); }
     if (code !== 0 || !tail) forget();
-    if (code === 0 && tail) { await db.commitSettled(home, folders, tail, guard); seen.recordWrites(folder, repo, seen.actor(), wrote); }
+    if (code === 0 && tail) {
+      const pairs = await db.commitSettled(home, folders, tail, guard);
+      seen.recordWrites(folder, repo, seen.actor(), wrote, pairs);
+    }
     return code;
   });
 }

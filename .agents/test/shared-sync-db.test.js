@@ -254,6 +254,76 @@ test('audit: a move that empties phases/ does not carry another clone\'s new fil
   assert.deepEqual(files(['new', 'place']).filter(f => /beta/.test(f)), [], 'beta is not carried into new/place');
 });
 
+test('review P2: a destination-renumbered move caches the moved item and refuses a subsequent stale summary overwrite', async t => {
+  const [a, b, { bare }] = writers(t);
+  const mover = process.env.QWEN_CODE_AGENT_ID || process.env.USER || 'unknown'; // cliAsync uses the inherited actor
+  for (const name of ['alpha', 'gamma']) assert.equal(cli([...NEW(name), '--work-class', 'app-code', '--review-classes', 'code',
+    '--review-refs', 'references/review/code.md', '--estimate', '5', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hold = holdFirstPush(b);
+  const move = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held();
+  let collision;
+  try {
+    collision = cli([...NEW('delta'), '--body', '## Definition of done\n- [ ] x'], {
+      cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'new/place' },
+    });
+  } finally { hold.release(); }
+  const moved = await move.done;
+  assert.equal(collision.status, 0, collision.stdout + collision.stderr);
+  assert.equal(moved.status, 0, moved.stdout + moved.stderr);
+  assert.match(moved.stdout, /renumbered 001 -> 002/);
+  const path = 'new/place/phases/002-alpha.md';
+  assert.match(gitIn(bare, 'show', `main:${path}`), /phase: "002-alpha"/);
+  assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+
+  const changed = cli(['update', '002-alpha', '--summary', 'remote summary', '--by', 'other-writer'], {
+    cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'new/place' },
+  });
+  assert.equal(changed.status, 0, changed.stdout + changed.stderr);
+  const head = gitIn(bare, 'rev-parse', 'main');
+  // Do not query the destination first: the move itself must have recorded what the mover wrote.
+  const stale = cli(['update', '002-alpha', '--summary', 'stale summary', '--by', mover], {
+    cwd: b.cons, tmp: b.tmp, env: { TEAM_REPOSITORY: 'new/place' },
+  });
+  assert.equal(stale.status, 5, stale.stdout + stale.stderr);
+  assert.match(stale.stderr, /item 002-alpha was changed by other-writer .* after you last read it/);
+  assert.equal(gitIn(bare, 'rev-parse', 'main'), head, 'the stale write published nothing');
+  assert.match(gitIn(bare, 'show', `main:${path}`), /summary: "remote summary"/);
+  assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+  assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+});
+
+test('review P2: update records its published identity when an added item is renumbered during recovery', async t => {
+  const [a, b, { bare }] = writers(t);
+  const agent = process.env.QWEN_CODE_AGENT_ID || process.env.USER || 'unknown';
+  assert.equal(cli(NEW('anchor'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const [anchor] = store.load(b.folder);
+  store.write({ path: join(b.folder, 'phases/002-local.md'), fm: {
+    ...anchor.fm, phase: '002-local', seq: 2, name: 'local', priority: 1,
+    work_class: ['app-code'], review_classes: ['code'], review_refs: ['references/review/code.md'], estimate_min: 5,
+  }, body: '\n## Definition of done\n- [ ] x\n' }, b.folder);
+  const con = db.connect(b.folder); try { db.scan(con, b.folder); } finally { con.close(); }
+  const hold = holdFirstPush(b);
+  const update = cliAsync(['update', '002-local', '--summary', 'local summary'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held();
+  let collision;
+  try { collision = cli(NEW('delta'), { cwd: a.cons, tmp: a.tmp }); } finally { hold.release(); }
+  const published = await update.done;
+  assert.equal(collision.status, 0, collision.stdout + collision.stderr);
+  assert.equal(published.status, 0, published.stdout + published.stderr);
+  assert.match(published.stdout, /renumbered 002 -> 003/);
+  const changed = cli(['update', '003-local', '--summary', 'remote summary', '--by', 'other-writer'], { cwd: a.cons, tmp: a.tmp });
+  assert.equal(changed.status, 0, changed.stdout + changed.stderr);
+  const head = gitIn(bare, 'rev-parse', 'main');
+  const stale = cli(['update', '003-local', '--summary', 'stale summary', '--by', agent], { cwd: b.cons, tmp: b.tmp });
+  assert.equal(stale.status, 5, stale.stdout + stale.stderr);
+  assert.equal(gitIn(bare, 'rev-parse', 'main'), head);
+  assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+  assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+});
+
 // Writer b stops before its first push; writer a runs `aArgs` and pushes first; then b's command (bArgs) rebases onto it.
 async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv } = {}) {
   const [a, b, { bare }] = writers(t);

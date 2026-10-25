@@ -183,10 +183,9 @@ async function create(argv, { home, folder, repo, team }) {
 
   // every change is committed and pushed at once (new_phase.py:187-192); a file renumbered on the way is scanned and committed again
   const message = ['new', ...argv.slice(0, 2)].join(' ');
-  for (const [old, next] of await commitSettled(home, folder, message)) {
-    if (old === seq) { seq = next; slug = pad(next) + slug.replace(/^\d+/, ''); rel = `phases/${slug}.md`; }
-  }
-  recordWrites(folder, repo, actor(), [{ slug, path: rel }]); // the creator has seen what it wrote
+  const pairs = await commitSettled(home, folder, message);
+  [{ slug, path: rel }] = recordWrites(folder, repo, actor(), [{ slug, path: rel }], pairs); // the creator has seen what it wrote
+  seq = Number(slug.match(/^\d+/)[0]);
 
   if (severity === 'critical') {
     const bar = `⚠️ ${'='.repeat(72)}`;

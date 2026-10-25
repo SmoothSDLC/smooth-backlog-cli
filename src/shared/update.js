@@ -118,8 +118,8 @@ async function update(argv) {
     try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); throw e; } finally { close(); }
     if (code || a['dry-run']) { forget(); return code; }
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
-    await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '), a.guard);
-    seen.recordWrites(folder, repo, seen.actor(), a.wrote ? [a.wrote] : []); // after the push, including a pure replan
+    const pairs = await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '), a.guard);
+    seen.recordWrites(folder, repo, seen.actor(), a.wrote ? [a.wrote] : [], pairs); // after the push, including a pure replan
     return 0;
   });
 }

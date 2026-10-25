@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Shared mode rolls back unpublished changes after a failed push, preserving starting working edits and staging. Legacy unpublished commits are refused with explicit recovery commands; cross-repository moves publish both folders together.
+- Shared mode keeps write views at their published slug and path after collision recovery, including cross-repository moves and incidental reflows, so later stale writes are refused.
 
 - Add the shared backlog repository mode: `backlog --use-backlog-repo <path>` keeps every repository's items in
   one Git backlog repository (`SmoothSDLC/smoothsdlc-backlog`), with `new`, `update`, `query`, `next`, `pop`,

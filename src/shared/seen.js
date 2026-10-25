@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { parse } from './frontmatter.js';
 
@@ -42,7 +42,7 @@ export function record(folder, repo, agent, views) {
     const all = read(home, agent);
     for (const v of views) { // a view may name another repository folder (a cross-repository move leaves the item there)
       const key = `${v.repo ?? repo}/${v.slug}`;
-      if (v.before !== undefined && all[key]?.sha !== v.before) continue;
+      if (v.before !== undefined && all[`${v.repo ?? repo}/${v.beforeSlug ?? v.slug}`]?.sha !== v.before) continue;
       const { fm, sha } = fileView(v.folder ?? folder, v.path);
       all[key] = { updated: fm.updated ?? null, updated_by: fm.updated_by ?? null, sha, commit, path: v.path, folder: v.folder ?? folder };
     }
@@ -56,9 +56,26 @@ export function record(folder, repo, agent, views) {
 
 // Only successful publication refreshes incidental views, and only with proof
 // that their pre-write bytes were the bytes this agent had already read.
-export function recordWrites(folder, repo, agent, views) {
+export function recordWrites(folder, repo, agent, views, pairs = []) {
   const incidental = [...(operation.getStore()?.incidental.values() ?? [])].filter(v => v.agent === agent);
-  if (incidental.length || views.length) record(folder, repo, agent, [...incidental, ...views]);
+  const published = remapViews(folder, views, pairs);
+  if (incidental.length || views.length) record(folder, repo, agent, [...remapViews(folder, incidental, pairs), ...published]);
+  return published;
+}
+
+// Creation's slug/path adjustment also applies to moves, updates and incidental
+// reflows. Numbers belong to one folder; follow successive publication retries.
+function remapViews(folder, views, pairs) {
+  return views.map(view => {
+    let v = { ...view };
+    for (const [old, next] of pairs.filter(p => p.folder === undefined || p.folder === resolve(v.folder ?? folder))) {
+      if (Number(v.slug.match(/^\d+/)?.[0]) !== old) continue;
+      const slug = String(next).padStart(3, '0') + v.slug.replace(/^\d+/, '');
+      v = { ...v, slug, path: v.path.replace(/[^/\\]+$/, `${slug}.md`),
+        ...(v.before !== undefined ? { beforeSlug: v.beforeSlug ?? v.slug } : {}) };
+    }
+    return v;
+  });
 }
 
 // A command showed the item (a mirror row) to `agent`.

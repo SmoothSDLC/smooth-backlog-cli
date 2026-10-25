@@ -13,6 +13,7 @@ import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
 import { connect, scan } from './db.js';
 import * as store from './store.js';
+import { asList } from './team.js';
 
 const PULL = ['pull', '-q', '--rebase', '--autostash', 'origin', 'main']; // explicit: the clone's tracking branch and push.default are the user's, not ours
 const pad = n => String(n).padStart(3, '0');
@@ -70,12 +71,12 @@ const retagged = (item, next) => ({ // the item with its number changed in the p
 // commits added. A reference already in upstream's copy of the file is upstream's and keeps its number. moves: [{folder, old, slug, next, newSlug}],
 // all applied at once, so a reference is never remapped twice.
 function remapDoc(doc, base, moves) {
-  const had = new Set([base?.fm.depends_on ?? []].flat().map(String));
+  const had = new Set(asList(base?.fm.depends_on));
   const hit = d => (had.has(String(d)) ? null : moves.find(m => (m.slug && m.slug === String(d)) || (/^\d+$/.test(String(d)) && Number(d) === m.old)));
   let changed = false;
-  const deps = [doc.fm.depends_on ?? []].flat().map(d => {
+  const deps = asList(doc.fm.depends_on).map(d => {
     const m = hit(d);
-    if (!m) return d;
+    if (!m) return /^\d+$/.test(d) ? Number(d) : d;
     changed = true;
     return /^\d+$/.test(String(d)) ? m.next : m.newSlug;
   });

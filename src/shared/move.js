@@ -13,7 +13,7 @@ import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { assertInside, git, redact } from './safety.js';
 import * as store from './store.js';
-import { teamScope } from './team.js';
+import { asList, teamScope } from './team.js';
 
 const VALUE = ['to-branch', 'all-open-of-branch', 'note'];
 
@@ -126,9 +126,9 @@ async function move(a, con, { home, repo, folder, close, folders }) {
   await assertInside(folder, src);
   const { fm, body } = parseDoc(readFileSync(src, 'utf8'));
   // beyond move.py parity: depends_on names items of THIS backlog; in the target they would point at unrelated items
-  if ([fm.depends_on ?? []].flat().some(d => d !== '' && d !== null)) return refuse(`${r.slug} depends on other items of ${repo}; dependencies are resolved against the target backlog, so clear them first: update ${r.slug} --set-depends-on none`);
+  if (asList(fm.depends_on).length) return refuse(`${r.slug} depends on other items of ${repo}; dependencies are resolved against the target backlog, so clear them first: update ${r.slug} --set-depends-on none`);
   // beyond move.py parity: items of this backlog that list the item (by number or slug, as update --set-depends-on stores it) would be left pointing at nothing
-  const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && [i.fm.depends_on ?? []].flat().some(d => d !== '' && d !== null && find(con, String(d))?.id === r.id)).map(i => i.fm.phase ?? i.path);
+  const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && asList(i.fm.depends_on).some(d => find(con, d)?.id === r.id)).map(i => i.fm.phase ?? i.path);
   if (dependents.length) return refuse(`${dependents.join(', ')} depend${dependents.length > 1 ? '' : 's'} on ${r.slug}, which would leave their depends_on pointing at nothing; clear them first: update <dependent> --set-depends-on ... (the other dependencies, or none)`);
   const seq = store.nextSeq(tdir);
   const slug = `${String(seq).padStart(3, '0')}-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;

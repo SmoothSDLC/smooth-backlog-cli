@@ -226,3 +226,16 @@ test('review: update --seq is refused while another item (archived included) dep
   assert.equal(s.run(['update', '2', '--set-depends-on', 'none']).status, 0);
   assert.equal(s.run(['update', '1', '--seq', '3']).status, 0);
 });
+
+test('review: a scalar comma depends_on ("1,2") counts as two references in move, --seq and the cycle check', t => {
+  const s = solo(t);
+  for (const n of ['alpha job', 'beta job', 'gamma job']) assert.equal(s.run(NEW(n)).status, 0);
+  const path = join(s.folder, 'phases', '003-gamma-job.md');
+  writeFileSync(path, readFileSync(path, 'utf8').replace(/^depends_on: .*$/m, 'depends_on: "1,2"')); // a hand-written scalar
+  const mv = s.run(['move', '2', '--to-repository', 'other/proj']);
+  assert.equal(mv.status, 1, out(mv)); assert.match(out(mv), /003-gamma-job depends on 002-beta-job/);
+  const seq = s.run(['update', '2', '--seq', '9']);
+  assert.equal(seq.status, 1, out(seq)); assert.match(out(seq), /003-gamma-job depends on 002-beta-job/);
+  const cyc = s.run(['update', '1', '--set-depends-on', '3']); // 3 -> "1,2" -> 1
+  assert.equal(cyc.status, 1, out(cyc)); assert.match(out(cyc), /cycle/);
+});

@@ -13,7 +13,7 @@ import { closeNow, headline, missingFields, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { teamScope, uncoveredReviewClasses } from './team.js';
+import { asList, teamScope, uncoveredReviewClasses } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-work-class', 'set-review-classes', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on'];
@@ -47,9 +47,6 @@ function pyStr(s) {
   return q + out + q;
 }
 const pyVal = v => (typeof v === 'number' ? String(v) : pyStr(v));
-// lib_db.py as_list: missing, empty or 'none' is []; a comma-separated string or a list of items.
-const asList = v => (v == null || (typeof v === 'string' && ['', 'none'].includes(strip(v).toLowerCase())) ? []
-  : (Array.isArray(v) ? v : String(v).split(',')).map(x => strip(String(x))).filter(Boolean));
 
 const usage = message => new BacklogError('INVALID_INPUT', message); // argparse errors: exit 2
 // A token that argparse takes as a value or positional: no leading dash, a lone dash, a negative number, or a space inside.
@@ -126,7 +123,7 @@ async function update(argv) {
 // The slug of an item whose dependency chain (the files' depends_on, from deps on) leads back to `id`; `id` itself when deps names it. null: no cycle.
 function dependencyCycle(con, folder, id, deps) {
   const edges = new Map();
-  for (const i of store.load(folder)) { const r = find(con, String(i.fm.phase ?? '')); if (r) edges.set(r.id, { slug: r.slug, deps: [i.fm.depends_on ?? []].flat() }); }
+  for (const i of store.load(folder)) { const r = find(con, String(i.fm.phase ?? '')); if (r) edges.set(r.id, { slug: r.slug, deps: asList(i.fm.depends_on) }); }
   const seen = new Set();
   const walk = list => {
     for (const d of list) {
@@ -186,7 +183,7 @@ async function change(a, con, folder, repo) {
       const held = con.prepare('SELECT slug FROM phase WHERE seq=? AND id<>?').get(n, row.id)?.slug
         ?? store.load(folder).find(i => Number(i.fm.seq) === n && i.fm.phase !== row.slug)?.fm.phase;
       if (held) return refuse(`--seq ${n} is already item ${held}; the number must stay unique`);
-      const by = store.load(folder).filter(i => i.fm.phase !== row.slug && [i.fm.depends_on ?? []].flat().some(d => String(d) === row.slug || (/^\d+$/.test(String(d)) && Number(d) === Number(row.seq)))).map(i => i.fm.phase ?? i.path);
+      const by = store.load(folder).filter(i => i.fm.phase !== row.slug && asList(i.fm.depends_on).some(d => d === row.slug || (/^\d+$/.test(String(d)) && Number(d) === Number(row.seq)))).map(i => i.fm.phase ?? i.path);
       if (by.length) return refuse(`${by.join(', ')} depend${by.length > 1 ? '' : 's'} on ${row.slug}, which a new number would leave them pointing at nothing; clear or repoint them first: update <dependent> --set-depends-on <ids|none>`);
     }
     if (k === 'priority') { moveTarget = n; continue; }

@@ -11,7 +11,7 @@ import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
-import { connect, scan } from './db.js';
+import { connect, reconcileFolders, scan } from './db.js';
 import * as store from './store.js';
 import { asList } from './team.js';
 
@@ -50,8 +50,30 @@ async function refuseConflicts(home) {
   }
 }
 
+// Stages the reconciled folders into ONE commit, never a stack: an earlier unpushed commit would be published with a stale mirror.
+// When the rebase dropped our commit (upstream has the same change) there is nothing to amend: commit anew, never rewrite upstream's.
+async function foldIn(home, lits, names, message) {
+  const ahead = Number((await g(home, ['rev-list', '--count', 'origin/main..HEAD'])).stdout.trim());
+  const dirty = (await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code;
+  if (ahead > 1) await must(home, ['reset', '-q', '--soft', 'origin/main'], 'squash the unpushed commits');
+  if (ahead > 1 || dirty) await must(home, ['commit', '-q', ...(ahead === 1 ? ['--amend', '--no-edit'] : ['-m', `${names.join(', ')}: ${message}`]), ...(ahead > 1 ? [] : ['--only', '--', ...lits])], 'commit the reconciled mirror');
+}
+
 async function pullLocked(home) {
-  const r = await g(home, PULL);
+  let r = await g(home, PULL);
+  if (r.code) { // the same repair as commit()'s pull: an unpushed commit (a failed push) must not be parked just because another clone pushed meanwhile
+    const names = [...new Set((await g(home, ['ls-files', '-u', '-z'])).stdout.split('\0').filter(Boolean).map(e => e.split('\t')[1].split('/').slice(0, 2).join('/')))];
+    const folders = names.map(n => join(home, n)); const pairs = [];
+    if (names.length && await repairConflicts(home, folders, names, pairs)) {
+      r = { code: 0 };
+      if (pairs.length || pairs.mirror) {
+        const lits = names.map(lit);
+        await reconcileFolders(folders, pairs);
+        await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
+        await foldIn(home, lits, names, 'reconcile the mirror');
+      }
+    }
+  }
   if (!r.code) await refuseConflicts(home);
   if (!r.code) { await renumber(home, process.stderr, true); return; } // stderr: a read command's stdout may be JSON
   const parked = await parkConflict(home);
@@ -256,7 +278,7 @@ async function repairConflicts(home, folders, names, renumbered) {
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
 // [old, new] pairs renumbered on the way (with .mirror = true when backlog.db was taken from upstream: rescan it and commit again). Recorded only when on origin/main (lib_db.py:275-309).
 // `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
-export async function commit(home, folders, message) {
+export async function commit(home, folders, message, reconcile = null) {
   const list = [].concat(folders);
   const names = [];
   for (const folder of list) names.push((await assertInside(home, folder)).split(sep).join('/'));
@@ -269,7 +291,7 @@ export async function commit(home, folders, message) {
       const c = await g(home, ['commit', '-q', '--only', '-m', `${names.join(', ')}: ${message}`, '--', ...lits]);
       if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
     }
-    const renumbered = []; let err = '';
+    const renumbered = []; let err = ''; let settled = 0;
     for (let i = 0; i < 3; i++) {
       let pr = await g(home, PULL);
       if (pr.code && await repairConflicts(home, list, names, renumbered)) pr = { code: 0 };
@@ -280,6 +302,13 @@ export async function commit(home, folders, message) {
       } else {
         await refuseConflicts(home);
         renumbered.push(...await renumber(home, process.stdout));
+        if (reconcile && (renumbered.length > settled || renumbered.mirror)) { // the mirror and priorities are made right in the commit itself: nothing inconsistent is ever pushed
+          const fresh = Object.assign(renumbered.slice(settled), { localDbs: renumbered.localDbs, mirror: renumbered.mirror });
+          settled = renumbered.length; renumbered.localDbs = []; renumbered.mirror = false;
+          await reconcile(fresh);
+          await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
+          await foldIn(home, lits, names, message);
+        }
         const ps = await g(home, ['push', '-q', 'origin', 'HEAD:refs/heads/main']);
         if (!ps.code) return renumbered;
         err = `push failed: ${ps.stderr.slice(0, 300)}`;

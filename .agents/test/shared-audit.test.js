@@ -251,3 +251,14 @@ test('review: after the author released her claim, pop and query --reviewable st
   const mine = pop('alice'); assert.doesNotMatch(mine.stdout, /"action":\s*"review"/, mine.stdout);
   const theirs = pop('bob'); assert.match(theirs.stdout, /"action":\s*"review"/, theirs.stdout + theirs.stderr);
 });
+
+test('review P2: the cycle check follows the outgoing edges of an item whose file has no phase field (slug from the file name, as ingestion)', t => {
+  const s = solo(t);
+  for (const n of ['alpha job', 'beta job']) assert.equal(s.run(NEW(n)).status, 0);
+  const path = join(s.folder, 'phases', '002-beta-job.md');
+  writeFileSync(path, readFileSync(path, 'utf8').replace(/^phase: .*\n/m, ''));
+  assert.equal(s.run(['query', '--all']).status, 0); // ingests the edit
+  assert.equal(s.run(['update', '2', '--set-depends-on', '1']).status, 0);
+  const r = s.run(['update', '1', '--set-depends-on', '2']);
+  assert.equal(r.status, 1, out(r)); assert.match(out(r), /cycle/);
+});

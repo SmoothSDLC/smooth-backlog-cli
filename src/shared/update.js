@@ -4,7 +4,7 @@
 // (seq) or slug, never by database row id. The team flags (update.py:27-104) go to lifecycle.js (job 15).
 // shortcut: argparse's unique-prefix abbreviations (--stat) are not accepted.
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
@@ -123,7 +123,7 @@ async function update(argv) {
 // The slug of an item whose dependency chain (the files' depends_on, from deps on) leads back to `id`; `id` itself when deps names it. null: no cycle.
 function dependencyCycle(con, folder, id, deps) {
   const edges = new Map();
-  for (const i of store.load(folder)) { const r = find(con, String(i.fm.phase ?? '')); if (r) edges.set(r.id, { slug: r.slug, deps: asList(i.fm.depends_on) }); }
+  for (const i of store.load(folder)) { const r = find(con, String(i.fm.phase || basename(i.path, '.md'))); if (r) edges.set(r.id, { slug: r.slug, deps: asList(i.fm.depends_on) }); }
   const seen = new Set();
   const walk = list => {
     for (const d of list) {

@@ -256,14 +256,15 @@ function replayLocal(db, folder, { local: localFile, base: baseFile }, renumbere
   } finally { local.close(); base?.close(); }
 }
 
-// sync.commit, then scan and commit again until no renumbering remains (a rescan after the push would leave the db dirty).
-// The same when a conflict on backlog.db took upstream's copy (pairs.mirror): the rescan rebuilds the mirror from the files.
-// Resolves to every [old, new] pair renumbered on the way.
+// sync.commit with a reconcile step: after a rebase renumbered items or took upstream's backlog.db, the mirror is rebuilt from the files
+// (local changes replayed, priorities reflowed) and folded into the commit BEFORE its first push, so origin/main never holds a mirror
+// that disagrees with its files. Resolves to every [old, new] pair renumbered on the way.
 export async function commitSettled(home, folders, message) {
   const list = [].concat(folders);
-  const all = [];
-  for (let pairs = await commit(home, list, message); pairs.length || pairs.mirror; pairs = await commit(home, list, message)) {
-    all.push(...pairs);
+  return commit(home, list, message, pairs => reconcileFolders(list, pairs));
+}
+
+export function reconcileFolders(list, pairs) {
     try {
       for (const folder of list) {
         const again = connect(folder);
@@ -277,6 +278,4 @@ export async function commitSettled(home, folders, message) {
         } finally { again.close(); }
       }
     } finally { for (const { local } of pairs.localDbs ?? []) rmSync(dirname(local), { recursive: true, force: true }); }
-  }
-  return all;
 }

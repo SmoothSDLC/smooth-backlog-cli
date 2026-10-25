@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -308,4 +309,53 @@ test('audit t2: a conflict nobody can merge parks the local commit on backlog-un
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
   const again = cli(['update', '1', '--summary', 'from b again'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(again.status, 0, again.stdout + again.stderr); // every later pull works
+});
+
+test('review P1: origin/main never holds a commit whose backlog.db mirror disagrees with its item files, also while a mirror conflict is recovered', async t => {
+  const [a, b, { bare }] = writers(t);
+  const hold = holdFirstPush(b);
+  const second = cliAsync(NEW('beta job'), { cwd: b.cons, tmp: b.tmp });
+  await hold.held();
+  assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  hold.release();
+  const r = await second.done;
+  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
+
+  const tmp = mkdtempSync(join(tmpdir(), 'dbconf-h-')); t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const commits = gitIn(bare, 'rev-list', 'main').split('\n');
+  let checked = 0;
+  for (const c of commits) {
+    const files = gitIn(bare, 'ls-tree', '-r', '--name-only', c).split('\n');
+    if (!files.includes('acme/demo/backlog.db')) continue;
+    const dbFile = join(tmp, `${c}.db`);
+    writeFileSync(dbFile, execFileSync('git', ['show', `${c}:acme/demo/backlog.db`], { cwd: bare, maxBuffer: 1 << 26 }));
+    const con = new (await import('node:sqlite')).DatabaseSync(dbFile, { readOnly: true });
+    try {
+      const rows = con.prepare("SELECT slug FROM phase WHERE status != 'archived' ORDER BY slug").all().map(x => x.slug);
+      const names = files.filter(f => /^acme\/demo\/phases\/.+\.md$/.test(f)).map(f => f.replace(/^.*\/|\.md$/g, '')).sort();
+      assert.deepEqual(rows, names, `commit ${c.slice(0, 7)} on origin/main: mirror rows differ from item files`);
+      checked++;
+    } finally { con.close(); }
+  }
+  assert.ok(checked >= 2);
+});
+
+test('review (merge risk): after a failed push the next command\'s leading pull repairs the backlog.db conflict: the local note is kept, nothing is parked, and it reaches origin', async t => {
+  const [a, b, { bare }] = writers(t);
+  for (const n of ['one', 'two']) assert.equal(cli(NEW(n), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hook = join(bare, 'hooks', 'pre-receive');
+  writeFileSync(hook, '#!/bin/sh\necho "rejected: origin down" >&2\nexit 1\n'); chmodSync(hook, 0o755);
+  assert.equal(cli(['update', '1', '--append', 'first note'], { cwd: a.cons, tmp: a.tmp }).status, 3); // committed locally, not pushed
+  rmSync(hook);
+  assert.equal(cli(NEW('three'), { cwd: b.cons, tmp: b.tmp }).status, 0); // another clone pushes meanwhile
+  const q = cli(['query', '--all'], { cwd: a.cons, tmp: a.tmp }); // the leading pull rebases a's unpushed commit onto it
+  assert.equal(q.status, 0, q.stdout + q.stderr);
+  assert.doesNotMatch(gitIn(a.home, 'branch', '--list'), /backlog-unmerged/);
+  const w = cli(['update', '2', '--append', 'second note'], { cwd: a.cons, tmp: a.tmp });
+  assert.equal(w.status, 0, w.stdout + w.stderr);
+  const dir = join(clone(t, bare), 'acme', 'demo');
+  assert.match(readFileSync(join(dir, 'phases', '001-one.md'), 'utf8'), /first note/);
+  assert.match(readFileSync(join(dir, 'phases', '002-two.md'), 'utf8'), /second note/);
+  assert.equal(gitIn(a.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
 });

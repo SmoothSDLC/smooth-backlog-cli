@@ -139,7 +139,7 @@ const journalFile = home => join(home, '.git', 'smooth-backlog-cli-journal.json'
 function saveJournal() {
   const tmp = `${journalFile(persist.home)}.${process.pid}.tmp`;
   const fd = openSync(tmp, 'w', 0o600);
-  try { writeSync(fd, JSON.stringify({ files: Object.fromEntries(persist.files), folders: [...persist.folders] })); fsyncSync(fd); } finally { closeSync(fd); }
+  try { writeSync(fd, JSON.stringify({ home: persist.home, files: Object.fromEntries(persist.files), folders: [...persist.folders] })); fsyncSync(fd); } finally { closeSync(fd); }
   renameSync(tmp, journalFile(persist.home));
 }
 export function beginJournal(folder) { // true when this call opened the journal (the outermost undo); it also covers `folder`
@@ -168,13 +168,16 @@ export function recoverJournal(home) {
   if (!existsSync(file)) return;
   let rec;
   try { rec = JSON.parse(readFileSync(file, 'utf8')); } catch { rmSync(file, { force: true }); return; } // a torn write: nothing was changed yet
-  const root = resolve(home) + sep;
-  for (const [path, b64] of Object.entries(rec.files)) {
-    if (!resolve(path).startsWith(root)) continue; // never write outside the clone, whatever the file says
+  // The paths were written in the spelling of the process that died (/var/... on macOS), this one may spell the clone differently (/private/var/...):
+  // each is taken relative to the home the journal names and rebuilt under this process's home; a path outside the clone is never touched.
+  const inside = path => { const rel = relative(resolve(rec.home ?? home), resolve(path)); return rel === '' || rel.startsWith('..') || isAbsolute(rel) ? null : join(home, rel); };
+  for (const [recorded, b64] of Object.entries(rec.files)) {
+    const path = inside(recorded);
+    if (!path) continue;
     if (path.endsWith('backlog.db')) for (const s of ['-journal', '-wal', '-shm']) rmSync(path + s, { force: true });
     if (b64 === null) rmSync(path, { force: true }); else { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, Buffer.from(b64, 'base64')); }
   }
-  for (const folder of rec.folders ?? []) if (resolve(folder).startsWith(root)) git(['reset', '-q', '--', '.'], folder);
+  for (const recorded of rec.folders ?? []) { const folder = inside(recorded); if (folder) git(['reset', '-q', '--', '.'], folder); }
   rmSync(file, { force: true });
   process.stderr.write(`backlog: rolled back a command that was killed half-way (${Object.keys(rec.files).length} path(s) restored in ${home})\n`);
 }

@@ -1,7 +1,7 @@
 // Tests for the full-audit batch of PR #3 (an independent reviewer's reproductions, ported). One clone, one consumer repository acme/demo.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -203,7 +203,8 @@ test('review P1: a command killed (kill -9) mid-mutation is rolled back by the n
   assert.equal(s.run(NEW('alpha job')).status, 0); assert.equal(s.run(NEW('beta job')).status, 0);
   const bare = join(s.tmp, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
   const item = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(item, 'utf8');
-  const child = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), 'shared-audit-child.js'), s.home, s.folder], { encoding: 'utf8' });
+  const link = `${s.tmp}-link`; symlinkSync(s.tmp, link); t.after(() => rmSync(link, { force: true })); // the child spells the clone as macOS's /var does, the next command as /private/var
+  const child = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), 'shared-audit-child.js'), join(link, 'home'), join(link, 'home', 'acme', 'demo')], { encoding: 'utf8' });
   assert.equal(child.signal, 'SIGKILL', child.stderr);
   assert.equal(existsSync(item), false, 'the child died after its move');
   const r = s.run(['update', '2', '--summary', 'next']);

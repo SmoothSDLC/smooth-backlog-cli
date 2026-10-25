@@ -239,3 +239,15 @@ test('review: a scalar comma depends_on ("1,2") counts as two references in move
   const cyc = s.run(['update', '1', '--set-depends-on', '3']); // 3 -> "1,2" -> 1
   assert.equal(cyc.status, 1, out(cyc)); assert.match(out(cyc), /cycle/);
 });
+
+test('review: after the author released her claim, pop and query --reviewable still do not offer her the review of her own work', t => {
+  const s = solo(t);
+  assert.equal(s.run(FULL('alpha job')).status, 0);
+  for (const args of [['update', '1', '--claim', 'alice'], ['update', '1', '--request-review', 'bob', '--note', 'look'], ['update', '1', '--release', 'alice']]) assert.equal(s.run(args).status, 0);
+  const rev = who => s.run(['query', '--reviewable', '--classes', 'docs', '--agent', who]);
+  assert.doesNotMatch(rev('alice').stdout, /001-alpha-job/);
+  assert.match(rev('bob').stdout, /001-alpha-job/);
+  const pop = who => s.run(['query', '--pop', '--json', '--agent', who, '--classes', 'docs', '--review-classes', 'docs']);
+  const mine = pop('alice'); assert.doesNotMatch(mine.stdout, /"action":\s*"review"/, mine.stdout);
+  const theirs = pop('bob'); assert.match(theirs.stdout, /"action":\s*"review"/, theirs.stdout + theirs.stderr);
+});

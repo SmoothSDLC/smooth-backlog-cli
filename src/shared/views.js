@@ -34,7 +34,7 @@ export function refinementCap(folder, repr) {
 // lib_db.py:731-742: null = not offered to agent now; [] = offered as a class holder; the item's review classes = offered
 // to a non-holder, after TEAM_REVIEW_HOLDER_PRIORITY_MIN minutes (5) or at once when no other roster member holds one.
 export function reviewOffer(fm, agent, mine, roster) {
-  if ((fm.claimed_by ?? null) === (agent ?? null) || !team.reviewOpenTo(fm, agent)) return null;
+  if (team.isReviewAuthor(fm, agent) || !team.reviewOpenTo(fm, agent)) return null;
   const classes = team.asList(fm.review_classes);
   if (classes.some(c => mine.includes(c))) return [];
   const window = 60 * Number(process.env.TEAM_REVIEW_HOLDER_PRIORITY_MIN ?? 5);

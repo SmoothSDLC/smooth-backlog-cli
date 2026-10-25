@@ -116,11 +116,15 @@ export function loadRoster(path) {
   } catch (e) { throw new BacklogError('INVALID_INPUT', `roster ${path}: ${e.message}`); }
 }
 
+// Whether agent wrote the work under review: the current claimer, or whoever asked for the review (review_author survives a release).
+// The one predicate behind every offer, dispatch and refusal of a review.
+export const isReviewAuthor = (fm, agent) => (fm.claimed_by || '') === (agent || '') || (Boolean(agent) && fm.review_author === agent);
+
 // lib_db.py:700-707: the item's review classes when no roster member but its claimer holds one of them; [] otherwise.
 export function fallbackReview(fm, roster) {
   const classes = asList(fm.review_classes);
   if (!Object.keys(roster).length || !classes.length) return [];
-  const others = new Set(Object.entries(roster).filter(([a]) => a !== fm.claimed_by).flatMap(([, [, r]]) => r));
+  const others = new Set(Object.entries(roster).filter(([a]) => !isReviewAuthor(fm, a)).flatMap(([, [, r]]) => r));
   return classes.some(c => others.has(c)) ? [] : classes;
 }
 

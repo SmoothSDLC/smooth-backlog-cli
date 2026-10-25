@@ -5,7 +5,7 @@
 import { hasDefinitionOfDone } from './new.js';
 import { now } from './store.js';
 import {
-  asList, claimRefusal, describeDependency, gitBranch, outsideTeam, reviewOpenTo, strip, teamScope, uncoveredReviewClasses, undoneDependencies,
+  asList, claimRefusal, describeDependency, gitBranch, isReviewAuthor, outsideTeam, reviewOpenTo, strip, teamScope, uncoveredReviewClasses, undoneDependencies,
 } from './team.js';
 
 export class Rejected extends Error {}
@@ -67,7 +67,7 @@ export function requestReview({ fm }, reviewer, note) {
 
 export function startReview({ fm }, by) {
   if (!by) reject('--start-review needs --by <agent>');
-  if (by === (fm.claimed_by || '') || by === (fm.review_author || '')) reject(NO_SELF_REVIEW(by));
+  if (isReviewAuthor(fm, by)) reject(NO_SELF_REVIEW(by));
   const st = fm.review_state; const rv = fm.reviewer;
   if (!['requested', 'in_review'].includes(st)) reject(`no review is requested (review_state ${st || 'none'})`);
   if (!reviewOpenTo(fm, by)) reject(`in review by ${rv} since ${fm.review_started}; review another item`);
@@ -79,7 +79,7 @@ export function startReview({ fm }, by) {
 
 export function review({ fm }, verdict, { by, comments } = {}) {
   if (!by || !strip(comments || '')) reject('--review needs --by <agent> and --comments "<findings>"');
-  if (by === (fm.claimed_by || '') || by === (fm.review_author || '')) reject(NO_SELF_REVIEW(by));
+  if (isReviewAuthor(fm, by)) reject(NO_SELF_REVIEW(by));
   const refs = asList(fm.review_refs);
   if (refs.length && !refs.some(p => comments.includes(p))) {
     reject(`--comments must cite at least one of the item's review_refs (${refs.join(', ')}): they are its definition of done and the review document`);

@@ -186,6 +186,8 @@ async function change(a, con, folder, repo) {
       const held = con.prepare('SELECT slug FROM phase WHERE seq=? AND id<>?').get(n, row.id)?.slug
         ?? store.load(folder).find(i => Number(i.fm.seq) === n && i.fm.phase !== row.slug)?.fm.phase;
       if (held) return refuse(`--seq ${n} is already item ${held}; the number must stay unique`);
+      const by = store.load(folder).filter(i => i.fm.phase !== row.slug && [i.fm.depends_on ?? []].flat().some(d => String(d) === row.slug || (/^\d+$/.test(String(d)) && Number(d) === Number(row.seq)))).map(i => i.fm.phase ?? i.path);
+      if (by.length) return refuse(`${by.join(', ')} depend${by.length > 1 ? '' : 's'} on ${row.slug}, which a new number would leave them pointing at nothing; clear or repoint them first: update <dependent> --set-depends-on <ids|none>`);
     }
     if (k === 'priority') { moveTarget = n; continue; }
     fm[k] = k === 'seq' || k === 'size_score' ? n : v;

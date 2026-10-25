@@ -217,3 +217,12 @@ test('review P1: a command killed (kill -9) mid-mutation is rolled back by the n
   assert.match(tree, /acme\/demo\/phases\/001-alpha-job\.md/); assert.doesNotMatch(tree, /archive/);
   assert.equal(gitIn(s.home, 'status', '--porcelain'), '');
 });
+
+test('review: update --seq is refused while another item (archived included) depends on the item', t => {
+  const s = solo(t);
+  assert.equal(s.run(NEW('alpha job')).status, 0); assert.equal(s.run(NEW('beta job', '--depends-on', '1')).status, 0);
+  const r = s.run(['update', '1', '--seq', '3']);
+  assert.equal(r.status, 1, out(r)); assert.match(out(r), /002-beta-job depends on 001-alpha-job/);
+  assert.equal(s.run(['update', '2', '--set-depends-on', 'none']).status, 0);
+  assert.equal(s.run(['update', '1', '--seq', '3']).status, 0);
+});

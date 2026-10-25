@@ -188,3 +188,13 @@ test('the creator of an item has seen it: another writer\'s change is refused on
   const amy = run(f, f.home, ['update', '4', '--append', 'amy'], { env: { QWEN_CODE_AGENT_ID: 'amy' } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
 });
+
+test('what the agent itself re-ranked on the side is not news to it: completing item 1 reflows item 2, and her next update of 2 goes through', () => {
+  const f = seed();
+  for (const slug of ['001-alpha', '002-beta']) run(f, f.home, ['query', '--phase', slug, '--agent', 'amy']);
+  const done = run(f, f.home, ['update', '1', '--status', 'done', '--by', 'amy']);
+  assert.equal(done.status, 0, done.stderr + done.stdout);
+  assert.equal(fm(f.folder, '002-beta.md').priority, 0); // item 2 was rewritten by the reflow
+  const next = run(f, f.home, ['update', '2', '--append', 'x', '--by', 'amy']);
+  assert.equal(next.status, 0, next.stderr + next.stdout);
+});

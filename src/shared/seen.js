@@ -27,9 +27,12 @@ export function record(folder, repo, agent, views) {
   try {
     const commit = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: home, encoding: 'utf8' }).stdout.trim();
     const all = read(home, agent);
-    for (const { slug, path } of views) {
-      const { fm, sha } = fileView(folder, path);
-      all[`${repo}/${slug}`] = { updated: fm.updated ?? null, updated_by: fm.updated_by ?? null, sha, commit };
+    for (const v of views) { // a view may name another repository folder (a cross-repository move leaves the item there)
+      const { fm, sha } = fileView(v.folder ?? folder, v.path);
+      all[`${v.repo ?? repo}/${v.slug}`] = { updated: fm.updated ?? null, updated_by: fm.updated_by ?? null, sha, commit, path: v.path, folder: v.folder ?? folder };
+    }
+    for (const e of Object.values(all)) { // what this agent itself rewrote on the side (a reflow re-ranks other items) is not news to it
+      try { const now = fileView(e.folder, e.path); if (now.fm.updated_by === agent && now.sha !== e.sha) Object.assign(e, { updated: now.fm.updated ?? null, sha: now.sha, commit }); } catch { /* moved or removed */ }
     }
     const file = viewsFile(home, agent);
     mkdirSync(dirname(file), { recursive: true });

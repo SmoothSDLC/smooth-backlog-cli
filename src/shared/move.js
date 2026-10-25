@@ -168,6 +168,7 @@ async function move(a, con, ctx) {
     });
   } catch (e) { tcon.close(); forget(); throw e; } finally { tcon.close(); }
   close();
+  ctx.wrote.push({ slug, path: `phases/${slug}.md`, folder: tdir, repo: target }); // the mover has seen the copy it made
   folders.push(tdir); // ONE commit and push covers the source and the target: never one pushed without the other
   say(`✅ ${r.slug} moved to ${target} as ${slug}`);
   return 0;

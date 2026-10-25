@@ -118,6 +118,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
       }
     }
   }
+  if (act?.r && act.f === repo) seen.view(me, folder, repo, act.r); // the pop just showed it: the claim below acts on this view
   if (act?.name === 'claim' && a['claim-now']) {
     const bin = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
     const c = spawnSync(process.execPath, [bin, 'update', act.r.slug, '--claim', me], { encoding: 'utf8', env: { ...process.env, ...store.lockEnv(home) } });

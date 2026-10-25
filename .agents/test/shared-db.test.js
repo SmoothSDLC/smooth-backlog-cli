@@ -350,6 +350,41 @@ test('scan: unsupported archive front matter cannot block the scan of the active
   });
 });
 
+test('review P2: reconciliation rebuilds missing archive rows and refreshes archive file hashes', t => {
+  const d = inHome(t);
+  putItem(d, 1, 'archived', { status: 'archived' }, 'archive/phases/001-archived.md');
+  db.reconcileFolders([d], []);
+  const check = () => {
+    const con = db.connect(d);
+    try {
+      const row = con.prepare("SELECT status, path, sha, summary FROM phase WHERE slug='001-archived'").get();
+      assert.ok(row, 'reconciliation visits archive/');
+      const item = store.load(d)[0];
+      assert.deepEqual({ ...row }, { status: 'archived', path: item.path, sha: item.sha256, summary: item.fm.summary });
+    } finally { con.close(); }
+  };
+  check();
+  putItem(d, 1, 'archived', { status: 'archived', summary: 'reconciled archive content' }, 'archive/phases/001-archived.md');
+  db.reconcileFolders([d], []);
+  check();
+});
+
+test('review P2: recovery renumbers an archived mirror row in place, retaining its event identity', t => {
+  const d = inHome(t);
+  putItem(d, 1, 'archived', { status: 'archived' }, 'archive/phases/001-archived.md');
+  db.reconcileFolders([d], []);
+  const con = db.connect(d);
+  try {
+    const id = con.prepare("SELECT id FROM phase WHERE slug='001-archived'").get().id;
+    db.logEvent(con, 'archived', { phaseId: id, handoffId: db.ensureAnchor(con), note: 'keep this identity' });
+    renameSync(join(d, 'archive/phases/001-archived.md'), join(d, 'archive/phases/002-archived.md'));
+    putItem(d, 2, 'archived', { status: 'archived' }, 'archive/phases/002-archived.md');
+    db.scan(con, d, [[1, 2]], { includeArchived: true });
+    assert.deepEqual(rows(con, 'SELECT id, slug, path FROM phase'), [{ id, slug: '002-archived', path: 'archive/phases/002-archived.md' }]);
+    assert.deepEqual(rows(con, "SELECT phase_id FROM event WHERE event='archived'"), [{ phase_id: id }]);
+  } finally { con.close(); }
+});
+
 test('scan: an active item that is a symlink is still refused', t => {
   const d = inHome(t);
   mkdirSync(join(d, 'phases'), { recursive: true });

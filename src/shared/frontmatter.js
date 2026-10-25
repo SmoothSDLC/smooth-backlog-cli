@@ -227,6 +227,16 @@ export function dump(fm, body) {
   return `---\n${fmText}\n---\n${String(body ?? '')}`;
 }
 
+// Replace the complete mapping through the codec, keeping the document's envelope and body bytes.
+// A scalar can span several physical lines, so replacing a 'key:' line is never a safe YAML edit.
+export function replaceFrontMatter(text, fm) {
+  const [bom, source] = splitBom(text);
+  const m = /^---(\r\n?|\n)[\s\S]*?(?:\r\n?|\n)---(\r\n?|\n|$)([\s\S]*)$/.exec(source);
+  if (!m) throw err('cannot replace front matter: document has no front-matter block');
+  const header = dump(fm, '').replace(/\n/g, m[1]);
+  return bom + header.slice(0, -m[1].length) + m[2] + m[3];
+}
+
 function encodeScalar(value) {
   if (value === null || value === undefined) return 'null';
   if (value === true) return 'true';

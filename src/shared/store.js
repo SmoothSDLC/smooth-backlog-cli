@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { operation } from '../errors.js';
 import { locked } from '../storage.js';
-import { dump, hasFrontMatter, parse } from './frontmatter.js';
+import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
 import { actor, created, guarded, guardReflow } from './seen.js';
 import { outsideTeam } from './team.js';
@@ -183,14 +183,14 @@ export function recoverJournal(home) {
   process.stderr.write(`backlog: rolled back a command that was killed half-way (${Object.keys(rec.files).length} path(s) restored in ${home})\n`);
 }
 
-export function write(item, root) {
+export function write(item, root, { frontMatterOnly = false } = {}) {
   const inferred = /^(.*?)[/\\](?:phases|archive)[/\\]/.exec(item.path)?.[1];
   const base = root ?? (inferred || dirname(item.path));
   assertFolder(base);
   assertNoSymlinks(base, item.path);
   if (!existsSync(item.path)) created(base, relative(base, item.path));
   note(item.path);
-  atomicWrite(item.path, dump(item.fm, item.body));
+  atomicWrite(item.path, frontMatterOnly ? replaceFrontMatter(readFileSync(item.path, 'utf8'), item.fm) : dump(item.fm, item.body));
 }
 
 // lib_db.py:482-503: phases/*.md, then archive/**/*.md. path is folder-relative with '/'.

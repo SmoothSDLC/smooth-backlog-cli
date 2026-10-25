@@ -461,6 +461,26 @@ test('review P2: move --to-repository refuses an item other items depend on, by 
 const mirror = f => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM phase ORDER BY id').all().concat(c.prepare('SELECT * FROM event ORDER BY id').all())); } finally { c.close(); } };
 const breakItem = (f, rel) => { const p = join(f.folder, rel); writeFileSync(p, readFileSync(p, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n')); };
 
+for (const eol of ['\n', '\r\n', '\r']) {
+  test(`review P2: archive replaces a whole escaped multiline status scalar (${JSON.stringify(eol)})`, () => {
+    const f = seed();
+    const p = join(f.folder, 'phases', '002-beta.md');
+    const source = '\uFEFF' + readFileSync(p, 'utf8').replace(/^status: .*$/m, 'status: "pend\\\n  ing"').replace(/\n/g, eol);
+    writeFileSync(p, source);
+    const before = parse(source);
+    assert.equal(before.fm.status, 'pending');
+    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'multiline status'); git(f.home, 'push', '-q');
+    const r = run(f, 'archive', ['2', '--force']);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const text = readFileSync(join(f.folder, 'archive/phases/002-beta.md'), 'utf8');
+    assert.deepEqual(parse(text), { fm: { ...before.fm, status: 'archived' }, body: before.body });
+    assert.ok(text.startsWith(`\uFEFF---${eol}`), 'BOM and line endings survive');
+    assert.equal(text.slice(text.indexOf(`${eol}---${eol}`) + (eol + '---' + eol).length), source.slice(source.indexOf(`${eol}---${eol}`) + (eol + '---' + eol).length), 'body bytes survive');
+    const con = db.connect(f.folder);
+    try { assert.equal(con.prepare("SELECT status FROM phase WHERE slug='002-beta'").get().status, parse(text).fm.status); } finally { con.close(); }
+  });
+}
+
 test('review P2: archive stamps status: archived into an item saved with CRLF line endings', () => {
   const f = seed();
   const p = join(f.folder, 'phases', '005-epsilon.md');
@@ -469,7 +489,7 @@ test('review P2: archive stamps status: archived into an item saved with CRLF li
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
-  assert.match(readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8'), /status: archived\r\n/);
+  assert.match(readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8'), /status: "archived"\r\n/);
 });
 
 test('review P1: archive and move --to-branch whose rescan throws put the files and the db back and commit nothing', () => {
@@ -580,7 +600,7 @@ test('review P2: archive inserts status: archived into an item whose front matte
     const text = readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8');
     assert.equal(parse(text).fm.status, 'archived', JSON.stringify(eol));
     assert.equal(text.split('status:').length, 2);
-    assert.ok(text.includes(`${eol}status: archived${eol}---${eol}`) || text.includes(`status: archived${eol}---`), JSON.stringify(eol));
+    assert.ok(text.includes(`${eol}status: "archived"${eol}---${eol}`) || text.includes(`status: "archived"${eol}---`), JSON.stringify(eol));
   }
 });
 

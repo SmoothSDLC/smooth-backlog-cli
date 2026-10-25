@@ -274,6 +274,49 @@ const clone = (t, bare) => {
   return join(verify, 'c');
 };
 
+test('review P2: create then archive in an unpushed stack survives a mirror conflict with its events attached, once', t => {
+  const [a, b, { bare }] = writers(t);
+  // Keep an active file on both sides so directory-rename detection is irrelevant.
+  assert.equal(cli(NEW('anchor job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const hook = join(bare, 'hooks', 'pre-receive');
+  writeFileSync(hook, '#!/bin/sh\nexit 1\n'); chmodSync(hook, 0o755);
+  for (const args of [NEW('local job'), ['update', '2', '--note', 'LOCAL_ARCHIVE_EVIDENCE'], ['archive', '2', '--force']]) {
+    const r = cli(args, { cwd: b.cons, tmp: b.tmp });
+    assert.equal(r.status, 3, r.stdout + r.stderr);
+  }
+  const local = db.connect(b.folder);
+  let expected;
+  try {
+    expected = local.prepare("SELECT ts, event, branch, commit_sha, note FROM event WHERE phase_id=(SELECT id FROM phase WHERE slug='002-local-job') AND event NOT IN ('ingested','reingested','file_missing','renumbered') ORDER BY id").all().map(e => ({ ...e }));
+    assert.ok(expected.some(e => e.event === 'archived'));
+    assert.ok(expected.some(e => e.note.includes('LOCAL_ARCHIVE_EVIDENCE')));
+  } finally { local.close(); }
+  rmSync(hook);
+  assert.equal(cli(NEW('remote job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  // The leading pull recovers the binary conflict across the whole unpushed stack.
+  const q = cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp });
+  assert.equal(q.status, 0, q.stdout + q.stderr);
+  const verify = folder => {
+    const con = db.connect(folder);
+    try {
+      const row = con.prepare("SELECT * FROM phase WHERE name='local job'").get();
+      assert.ok(row, 'the locally created and archived row survives');
+      assert.equal(row.slug, '003-local-job', 'the archived item follows recovery renumbering');
+      assert.equal(row.status, 'archived');
+      assert.equal(row.path, 'archive/phases/003-local-job.md');
+      assert.ok(existsSync(join(folder, row.path)));
+      assert.deepEqual(con.prepare("SELECT ts, event, branch, commit_sha, note FROM event WHERE phase_id=? AND event NOT IN ('ingested','reingested','file_missing','renumbered') ORDER BY id").all(row.id).map(e => ({ ...e })), expected);
+      assert.equal(con.prepare("SELECT count(*) AS n FROM event WHERE phase_id IS NULL AND (event='archived' OR note LIKE '%LOCAL_ARCHIVE_EVIDENCE%')").get().n, 0);
+    } finally { con.close(); }
+  };
+  verify(b.folder);
+  const r = cli(['update', '1', '--note', 'publish recovered stack'], { cwd: b.cons, tmp: b.tmp });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  verify(join(clone(t, bare), 'acme', 'demo'));
+  assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+});
+
 test('audit t2: the same item changed by two clones: the second is refused (exit 5), its change is not parked or pushed, and the clone keeps working', async t => {
   const { b, bare, result } = await race(t, [NEW('alpha job')], ['update', '1', '--summary', 'from a'], ['update', '1', '--summary', 'from b']);
   assert.equal(result.status, 5, `${result.stdout}${result.stderr}`);

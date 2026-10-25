@@ -137,7 +137,7 @@ test('review: archive stamps the status of a file that starts with a BOM and kee
   const r = s.run(['archive', '1', '--force']);
   assert.equal(r.status, 0, out(r));
   const moved = readFileSync(join(s.folder, 'archive', 'phases', '001-alpha-job.md'), 'utf8');
-  assert.ok(moved.startsWith('\uFEFF---\n')); assert.match(moved, /^status: archived$/m);
+  assert.ok(moved.startsWith('\uFEFF---\n')); assert.match(moved, /^status: "archived"$/m);
   assert.doesNotMatch(moved, /status: "pending"/);
 });
 

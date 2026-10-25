@@ -2,12 +2,12 @@
 // oracle's order: pull, resolve the item, git mv under archive/, stamp status, mirror row and event, scan, reflow, commit and
 // push. The item is found by number (seq) or slug, never by database row id. The helpers at the top are shared with move.js.
 // shortcut: argparse's unique-prefix abbreviations (--for) are not accepted.
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { assertInside, git, itemSelector, redact } from './safety.js';
-import { parse as parseDoc, splitBom } from './frontmatter.js';
+import { parse as parseDoc } from './frontmatter.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
@@ -102,19 +102,6 @@ export async function run(argv) {
   } catch (e) { return die(e.message, e instanceof BacklogError ? e.exitCode : 1); }
 }
 
-// archive.py:22-37: `status: archived` into the FRONT MATTER text of the moved file, everything else untouched.
-// Beyond the oracle (text.split("---", 2) stops at a --- inside a name or summary): the closing delimiter is a line of its own,
-// as in the front-matter parser (frontmatter.js FM_SPLIT).
-function stamp(path) {
-  const [bom, text] = splitBom(readFileSync(path, 'utf8')); // parse() accepts a BOM; the file keeps it
-  // CRLF and lone CR delimiters, as frontmatter.parse reads them; the file keeps its own line endings
-  const m = /^(---(\r\n?|\n))([\s\S]*?)(?:\r\n?|\n)---(?=\r\n?|\n|$)/.exec(text);
-  if (!m) return;
-  const fmText = /(?<![^\r\n])status:/.test(m[3]) ? m[3].replace(/(?<![^\r\n])status:[^\r\n]*/, 'status: archived')
-    : `${m[3]}${m[3] === '' ? '' : m[2]}status: archived`; // no status key: the item reads as pending, so the key is added
-  writeFileSync(path, `${bom}${m[1]}${fmText}${text.slice(m[1].length + m[3].length)}`);
-}
-
 async function archive(a, con, { repo, folder, close, guard }) {
   const row = find(con, a.phase);
   if (!row) return refuse(`no phase ${pyStr(a.phase)}`);
@@ -139,7 +126,7 @@ async function archive(a, con, { repo, folder, close, guard }) {
   if ((await git(['mv', '--', from, to], folder)).code) { // archive.py:39-49: a file git does not track yet moves plainly
     try { renameSync(src, join(folder, to)); } catch { return refuse(`could not move ${src}`); }
   }
-  stamp(join(folder, to));
+  store.write({ path: join(folder, to), fm: { ...fm, status: 'archived' } }, folder, { frontMatterOnly: true });
   // archiving removes an item from the backlog -> planning event: re-densify the remainder to 0..M-1
   const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
   let s;

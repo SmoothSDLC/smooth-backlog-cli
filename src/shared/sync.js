@@ -162,7 +162,7 @@ async function renumberFiles(home, stream, added, mirror) {
     if (mirror) { // a pull has no caller that rescans (commit's callers do): the commit's backlog.db still holds the row under the old
       // number, so rename it in place now; no later scan then reads the old file as missing and the new one as a second item
       const con = connect(folder);
-      try { scan(con, folder, [[old, next]]); } finally { con.close(); }
+      try { scan(con, folder, [[old, next]], { includeArchived: true }); } finally { con.close(); }
       await must(home, ['add', '--', lit(`${name}/backlog.db`)], `stage ${name}/backlog.db`);
     }
     const r = await g(home, ['commit', '-q', '--amend', '--no-edit']);
@@ -177,7 +177,7 @@ async function renumberFiles(home, stream, added, mirror) {
       if (mirror) {
         for (const name of new Set(touched.map(f => f.split('/').slice(0, 2).join('/')))) {
           const con = connect(join(home, name));
-          try { scan(con, join(home, name)); } finally { con.close(); }
+          try { scan(con, join(home, name), [], { includeArchived: true }); } finally { con.close(); }
           await must(home, ['add', '--', lit(`${name}/backlog.db`)], `stage ${name}/backlog.db`);
         }
       }

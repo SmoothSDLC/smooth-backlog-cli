@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { operation } from '../errors.js';
 import { hasFrontMatter, parse } from './frontmatter.js';
-import { assertFolder, assertNoSymlinks, beginJournal, endJournal, journalled, note, now, reflow } from './store.js';
+import { assertFolder, assertNoSymlinks, beginJournal, endJournal, journalled, load, note, now, reflow } from './store.js';
 import { commit } from './sync.js';
 
 // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr (as store.nextSeq does).
@@ -161,17 +161,17 @@ export function ingest(db, item, hid = ensureAnchor(db)) {
   return { id: Number(row.id), changed: true };
 }
 
-// lib_db.py scan_stack over phases/*.md (archive/ is not scanned): ingest what is new or changed, log
+// lib_db.py scan_stack over phases/*.md (reconciliation opts into archive/ too): ingest what is new or changed, log
 // file_missing for every non-archived row without a file. One transaction, so a failed scan leaves the db as it was.
 // renumbered = the [old, new] pairs sync.commit returned: a row of the old number whose file is gone is the stale
 // row of a renumbered item, and is renamed in place to the new number so it is not reported as a ghost.
-export function scan(db, folder, renumbered = []) {
+export function scan(db, folder, renumbered = [], { includeArchived = false } = {}) {
   const summary = { handoff: 0, phases: 0, changed: 0, missing: 0 };
   db.exec('BEGIN');
   try {
     const hid = ensureAnchor(db);
     for (const [old, next] of renumbered) {
-      for (const r of db.prepare("SELECT id, slug, path, branch, commit_sha FROM phase WHERE handoff_id=? AND seq=? AND status != 'archived'").all(hid, Number(old))) {
+      for (const r of db.prepare(`SELECT id, slug, path, branch, commit_sha FROM phase WHERE handoff_id=? AND seq=?${includeArchived ? '' : " AND status != 'archived'"}`).all(hid, Number(old))) {
         if (existsSync(join(folder, r.path))) continue;
         // in place, keeping the id: the row's events stay its own (a deleted id can be reused by another item).
         // The ingest below then sees the sha drift and logs 'reingested'.
@@ -183,7 +183,9 @@ export function scan(db, folder, renumbered = []) {
       }
     }
     const seen = new Set();
-    for (const item of loadPhases(folder)) {
+    // Ordinary scans keep Python's active-only contract. Recovery must also derive the archive mirror from its files.
+    const items = includeArchived ? load(folder).filter(i => hasFrontMatter(readFileSync(join(folder, i.path), 'utf8'))) : loadPhases(folder);
+    for (const item of items) {
       summary.phases += 1;
       summary.changed += Number(ingest(db, item, hid).changed);
       seen.add(item.fm.phase || basename(item.path, '.md'));
@@ -212,7 +214,7 @@ export function markArchived(db, slug, location) {
 // unpushed change to the mirror: replay it onto upstream's copy, as the difference between the local db and the merge base `base` (null:
 // no base, everything local is new). One function for every kind of change: rows the local side changed (an archive: status and path),
 // rows it deleted (a move out of the repository), and events it logged (notes, claims, reviews, moves). The files are rescanned in between:
-// rows the local side created come from their files, and an item renumbered by the recovery is matched by its new slug.
+// locally added rows (including already archived ones) are restored before their events, and renumbered items use their new slug.
 // Events the scan writes by itself are not replayed; an event upstream has already (same item, time, kind, branch, commit, note) is not added twice.
 const SCAN_EVENTS = ['ingested', 'reingested', 'file_missing', 'renumbered'];
 const NOT_REPLAYED = ['id', 'handoff_id', 'slug', 'seq', 'sha']; // identity, and what the rescan derives from the file
@@ -228,14 +230,23 @@ function replayLocal(db, folder, { local: localFile, base: baseFile }, renumbere
     db.exec('BEGIN');
     try {
       for (const r of mine) {
-        const b = wasBy.get(r.slug); const u = b && db.prepare('SELECT id FROM phase WHERE slug=?').get(rename(r.slug));
-        const cols = u ? Object.keys(r).filter(c => !NOT_REPLAYED.includes(c) && r[c] !== b[c] && !(c === 'path' && !String(r.path).startsWith('archive/'))) : [];
+        const b = wasBy.get(r.slug); const u = db.prepare('SELECT id FROM phase WHERE slug=?').get(rename(r.slug));
+        if (!b && !u) {
+          // Database ids belong to each clone. Restore the row with a fresh id and the current anchor; events are matched by slug below.
+          const restored = { ...r, handoff_id: ensureAnchor(db), slug: rename(r.slug), seq: moved.get(Number(r.seq)) ?? r.seq,
+            path: r.path == null ? null : r.path.replace(/[^/]*$/, rename) };
+          delete restored.id;
+          const id = Number(db.prepare(`INSERT INTO phase(${Object.keys(restored)}) VALUES(${Object.keys(restored).map(() => '?')})`).run(...Object.values(restored)).lastInsertRowid);
+          db.prepare('UPDATE event SET phase_id=NULL WHERE phase_id=?').run(id); // a deleted upstream id can still have history
+          continue;
+        }
+        const cols = b && u ? Object.keys(r).filter(c => !NOT_REPLAYED.includes(c) && r[c] !== b[c] && !(c === 'path' && !String(r.path).startsWith('archive/'))) : [];
         if (cols.length) db.prepare(`UPDATE phase SET ${cols.map(c => `${c}=?`).join(', ')} WHERE id=?`).run(...cols.map(c => r[c]), u.id);
       }
       for (const b of was) if (!mineBy.has(b.slug)) db.prepare('DELETE FROM phase WHERE slug=?').run(rename(b.slug)); // the row is gone locally, and so is its file
       db.exec('COMMIT');
     } catch (e) { db.exec('ROLLBACK'); throw e; }
-    scan(db, folder, renumbered);
+    scan(db, folder, renumbered, { includeArchived: true });
 
     const key = (slug, e) => JSON.stringify([slug, e.ts, e.event, e.branch, e.commit_sha, e.note]);
     const slugOf = new Map([...mine, ...was].map(r => [r.id, r.slug]));
@@ -272,9 +283,9 @@ export function reconcileFolders(list, pairs) {
           const own = pairs.filter(p => p.folder === undefined || p.folder === resolve(folder)); // the renumberings of this folder only
           const mine = (pairs.localDbs ?? []).filter(f => f.folder === folder);
           if (mine.length) for (const files of mine) replayLocal(again, folder, files, own);
-          else scan(again, folder, own);
+          else scan(again, folder, own, { includeArchived: true });
           reflow(folder); // two writers each ranked their item against their own queue: ties are possible now that the queues are merged
-          scan(again, folder);
+          scan(again, folder, [], { includeArchived: true });
         } finally { again.close(); }
       }
     } finally { for (const { local } of pairs.localDbs ?? []) rmSync(dirname(local), { recursive: true, force: true }); }

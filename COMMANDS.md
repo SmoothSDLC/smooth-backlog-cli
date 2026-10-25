@@ -233,7 +233,10 @@ somebody else changed it since, the write is refused with exit code 5 and the me
 after you last read it (<what you saw>); read it again (backlog query --phase <item>) and retry`. The same refusal comes when another
 writer's change to the item reaches origin while this command is pushing; the command's change is then taken back (never merged,
 never parked on a branch). Changes to different items rebase and push on their own. An item the agent never read is written without
-the check (its first write). The same holds for `backlog move` and `backlog archive`.
+the check (its first write). The same holds for `backlog move` and `backlog archive`. The leading pull never refreshes the agent's
+cached view. Completing or closing an item also checks every other item whose priority the reflow rewrites, and guards that whole
+write set against changes arriving during push.
+A stale item refuses the entire write without publishing any of it.
 
 ```sh
 backlog --use-backlog-repo <path>   # use the clone at <path>: shared mode

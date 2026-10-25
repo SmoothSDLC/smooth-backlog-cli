@@ -275,9 +275,12 @@ function actionable(dir) {
 // lib_db.py:541-556: rank i onto the i-th item; only a file whose priority changes is rewritten.
 // int(priority): a quoted "0" equals rank 0.
 const asInt = p => (typeof p === 'string' && /^\s*[+-]?\d+\s*$/.test(p) ? Number(p) : p);
-function applyDense(dir, items, inScope) {
+function applyDense(dir, items, inScope, beforeApply) {
+  const changes = items.map((i, rank) => !i.ghost && inScope(i) && asInt(i.fm.priority ?? -1) !== rank);
+  // Validate the entire reflow write set before rewriting any of it; a leading pull is not an agent read.
+  beforeApply?.(items.filter((i, rank) => changes[rank]));
   return items.map((i, rank) => {
-    if (!i.ghost && inScope(i) && asInt(i.fm.priority ?? -1) !== rank) write({ path: join(dir, i.path), fm: stamp({ ...i.fm, priority: rank }), body: i.body }, dir);
+    if (changes[rank]) write({ path: join(dir, i.path), fm: stamp({ ...i.fm, priority: rank }), body: i.body }, dir);
     return [slugOf(i), rank];
   });
 }
@@ -295,7 +298,7 @@ function within(items, arrange) {
 }
 
 // lib_db.py:558-567: re-densify in current order; with {slug, target}, first move that item to the clamped rank.
-export function reflow(dir, move) {
+export function reflow(dir, move, beforeApply) {
   const items = within(actionable(dir), mine => {
     if (!(move && move.slug != null && move.target != null)) return mine;
     const moving = mine.filter(i => slugOf(i) === move.slug);
@@ -303,7 +306,7 @@ export function reflow(dir, move) {
     const t = Math.max(0, Math.min(Math.trunc(Number(move.target)), rest.length));
     return [...rest.slice(0, t), ...moving, ...rest.slice(t)];
   });
-  return applyDense(dir, items, inScope);
+  return applyDense(dir, items, inScope, beforeApply);
 }
 
 // lib_db.py:570-584: idents (slugs or item numbers, never row ids) lead; the rest keeps its order.

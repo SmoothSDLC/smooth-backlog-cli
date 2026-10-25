@@ -36,11 +36,14 @@ function fixture() {
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-// A real agent looks at an item before it writes it again: the driver reads it as the agent the write names (seen.js refuses a write on a stale view).
+// The lifecycle parity driver reads the write set as the named agent; stale-view refusals have their own regression suite.
 const update = (f, args, env) => {
   const named = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
   const who = named ?? (args.includes('--request-review') ? 'cody' : undefined); // a review is requested by the one working on the item (cody here)
-  if (who && args[0] && !args[0].startsWith('-')) cli(['query', '--phase', args[0], '--agent', who], { cwd: f.cons, tmp: f.t, env });
+  if (who && args[0] && !args[0].startsWith('-')) {
+    const slugs = args.includes('--close') ? readdirSync(join(f.folder, 'phases')).map(n => n.replace(/\.md$/, '')) : [args[0]];
+    for (const slug of slugs) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t, env });
+  }
   return cli(['update', ...args], { cwd: f.cons, tmp: f.t, env });
 };
 const query = (f, args) => cli(['query', ...args], { cwd: f.cons, tmp: f.t });

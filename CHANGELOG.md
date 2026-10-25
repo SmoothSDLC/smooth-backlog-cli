@@ -12,6 +12,7 @@
 - Fix intermittent permission errors when concurrent commands acquire locks on Windows.
 - Preserve existing backlog data and lock coordination after the project rename.
 - Shared mode: every item write records `updated_by`; a write to an item that somebody else changed after the agent read it (or while the command pushes) is refused with exit code 5. No move, new, archive or sync renumbering replaces an item that holds the file name, and a release ends the holder's wait.
+- Shared mode: completion and close validate every reflowed item against the agent's cached view and guard the whole write set during push; pulling never counts as reading an item.
 - Refresh package documentation and repository references for npm registry installation.
 
 ## 1.0.1

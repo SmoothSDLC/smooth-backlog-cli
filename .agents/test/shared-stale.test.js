@@ -198,3 +198,89 @@ test('what the agent itself re-ranked on the side is not news to it: completing 
   const next = run(f, f.home, ['update', '2', '--append', 'x', '--by', 'amy']);
   assert.equal(next.status, 0, next.stderr + next.stdout);
 });
+
+for (const [name, args] of [
+  ['direct write', ['2', '--append', 'from amy']],
+  ['completion reflow', ['1', '--status', 'done']],
+]) test(`the leading pull preserves Amy's expected version of item 2 before a ${name}`, () => {
+  const f = seed();
+  const read = run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']);
+  assert.equal(read.status, 0, read.stderr + read.stdout);
+  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const expected = readFileSync(cache, 'utf8');
+  const bob = run(f, f.home2, ['update', '2', '--append', 'from bob', '--by', 'bob']);
+  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
+  const originBefore = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
+  assert.notEqual(git(f.home, 'rev-parse', 'HEAD'), originBefore);
+
+  const amy = run(f, f.home, ['update', ...args, '--by', 'amy']);
+  // The command itself pulled Bob's commit; that must not count as Amy reading it.
+  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), originBefore);
+  assert.match(amy.stderr, /item 002-beta was changed by bob .* after you last read it/);
+  assert.equal(readFileSync(cache, 'utf8'), expected);
+  assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
+  assert.equal(fm(f.folder, '001-alpha.md').status, 'pending');
+  assert.equal(fm(f.folder, '002-beta.md').priority, 1);
+  assert.match(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), /from bob/);
+  assert.ok(!onOrigin(f, 'acme/demo/phases/002-beta.md').includes('from amy'));
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+});
+
+function closeFixture() {
+  const f = seed();
+  const path = join(f.folder, 'phases', '001-alpha.md');
+  const doc = parse(readFileSync(path, 'utf8'));
+  store.write({ path, fm: { ...doc.fm, work_class: ['tests'], review_classes: ['tests'],
+    review_refs: ['references/review/tests.md'], review_state: 'passed', estimate_min: 5 },
+    body: doc.body + '\n## Definition of done\n\n- [x] Tested\n' }, f.folder);
+  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'ready to close'); git(f.home, 'push', '-q');
+  return f;
+}
+
+for (const [seq, slug] of [[2, '002-beta'], [3, '003-gamma']]) {
+  test(`close validates reflowed item ${seq}'s cached version after its leading pull`, () => {
+    const f = closeFixture();
+    for (const item of ['001-alpha', '002-beta', '003-gamma']) {
+      const r = run(f, f.home, ['query', '--phase', item, '--agent', 'amy']);
+      assert.equal(r.status, 0, r.stderr + r.stdout);
+    }
+    const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+    const expected = readFileSync(cache, 'utf8');
+    const bob = run(f, f.home2, ['update', String(seq), '--append', 'from bob', '--by', 'bob']);
+    assert.equal(bob.status, 0, bob.stderr + bob.stdout);
+    const originBefore = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
+    const amy = run(f, f.home, ['update', '1', '--close', '--summary', 'delivered', '--by', 'amy']);
+    assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+    assert.ok(amy.stderr.includes(`item ${slug} was changed by bob`), amy.stderr);
+    assert.equal(git(f.home, 'rev-parse', 'HEAD'), originBefore);
+    assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
+    assert.equal(readFileSync(cache, 'utf8'), expected);
+    assert.equal(fm(f.folder, '001-alpha.md').status, 'pending');
+    assert.equal(fm(f.folder, '002-beta.md').priority, 1);
+    assert.equal(fm(f.folder, '003-gamma.md').priority, 2);
+    assert.equal(git(f.home, 'status', '--porcelain'), '');
+  });
+
+  test(`close guards reflowed item ${seq} against a push race, even without a cached view`, () => {
+    const f = closeFixture();
+    const before = git(f.home, 'rev-parse', 'HEAD');
+    const hook = join(f.home, '.git', 'hooks', 'pre-push');
+    const flag = join(f.t, 'hook-ran');
+    writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update ${seq} --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
+    chmodSync(hook, 0o755);
+    const amy = run(f, f.home, ['update', '1', '--close', '--summary', 'delivered', '--by', 'amy']);
+    assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+    assert.ok(amy.stderr.includes(`item ${slug} was changed by bob`), amy.stderr);
+    assert.match(onOrigin(f, `acme/demo/phases/${slug}.md`), /bob won/);
+    assert.equal(parse(onOrigin(f, 'acme/demo/phases/001-alpha.md')).fm.status, 'pending');
+    assert.equal(parse(onOrigin(f, 'acme/demo/phases/002-beta.md')).fm.priority, 1);
+    assert.equal(parse(onOrigin(f, 'acme/demo/phases/003-gamma.md')).fm.priority, 2);
+    assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
+    assert.equal(git(f.home, 'status', '--porcelain'), '');
+    assert.equal(git(f.home, 'branch', '--list').split('\n').filter(Boolean).length, 1);
+    assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+    assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json')), false);
+  });
+}

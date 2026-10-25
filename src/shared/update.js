@@ -252,28 +252,41 @@ async function change(a, con, folder, repo) {
 
   store.write({ path, fm, body }, folder);
   a.wrote = { slug: row.slug, path: row.path };
-  db.logEvent(con, event, {
-    handoffId: row.handoff_id, phaseId: row.id, branch: fm.branch || '', commitSha: fm.commit || '',
-    note: a.note || `set ${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ')}`,
-  });
-  db.scan(con, folder); // rescan -> the db follows the file
+  const recordChange = () => {
+    db.logEvent(con, event, {
+      handoffId: row.handoff_id, phaseId: row.id, branch: fm.branch || '', commitSha: fm.commit || '',
+      note: a.note || `set ${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ')}`,
+    });
+    db.scan(con, folder); // rescan -> the db follows the file
+  };
 
   // --- the planning event: a move-to-rank, or completion re-densifying the remaining backlog (update.py:288-306)
   let order = null;
+  const guardReflow = items => {
+    for (const i of items) {
+      const path = `${repo}/${i.path}`;
+      if (a.guard.some(g => g.path === path)) continue; // the primary item was checked before its write
+      const slug = i.fm.phase || basename(i.path, '.md');
+      seen.check(folder, repo, seen.actor(), slug, i.path);
+      a.guard.push({ path, slug, was: `${i.fm.updated}${i.fm.updated_by ? ` by ${i.fm.updated_by}` : ''}` });
+    }
+    // Validate the whole write set before touching the mirror; a refusal then restores only the primary file.
+    recordChange();
+  };
   if (moveTarget !== null) {
-    order = store.reflow(folder, { slug: row.slug, target: moveTarget });
+    order = store.reflow(folder, { slug: row.slug, target: moveTarget }, guardReflow);
     changes.priority = `P${new Map(order).get(row.slug) ?? 'None'}`;
     db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
   } else if (completing) {
-    order = store.reflow(folder); // the done item leaves the backlog; the rest re-densify
+    order = store.reflow(folder, null, guardReflow); // the done item leaves the backlog; the rest re-densify
     db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `completed ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
   } else if (['pending', 'in_progress'].includes(row.status) !== ['pending', 'in_progress'].includes(fm.status)) {
     // into or out of the queue by a status other than done (done -> pending keeps its old priority and collides; a status out leaves a gap):
     // rank the queue again (beyond python parity, which leaves the collision or the gap)
-    order = store.reflow(folder);
+    order = store.reflow(folder, null, guardReflow);
     db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `${row.slug} is now ${fm.status}; backlog re-prioritized to ${order.length} item(s)` });
   }
-  if (order) db.scan(con, folder);
+  if (order) db.scan(con, folder); else recordChange();
 
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
   if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug, a.by));

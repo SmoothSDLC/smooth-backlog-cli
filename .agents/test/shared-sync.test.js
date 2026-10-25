@@ -413,3 +413,31 @@ test('review P2: commit takes only the repository folder: a file staged elsewher
   assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').includes('002-beta'), false);
   assert.equal(git(f.home, 'diff', '--cached', '--name-only'), 'stray.txt');
 });
+
+test('review P2: recovery squashes an unpushed stack without publishing unrelated staged files', async t => {
+  const f = fixture(t);
+  putItem(f.folder, 1, 'anchor');
+  let con = db.connect(f.folder); db.scan(con, f.folder); con.close();
+  await sync.commit(f.home, f.folder, 'seed');
+  await sync.pull(f.home2);
+  for (const [seq, note] of [[2, 'local one'], [3, 'local two']]) {
+    putItem(f.folder, seq, `local-${seq}`);
+    con = db.connect(f.folder); db.scan(con, f.folder); db.logEvent(con, 'note', { note }); con.close();
+    git(f.home, 'add', 'acme/demo'); git(f.home, 'commit', '-qm', note);
+  }
+  putItem(f.folder2, 4, 'remote');
+  con = db.connect(f.folder2); db.scan(con, f.folder2); db.logEvent(con, 'note', { note: 'remote' }); con.close();
+  await sync.commit(f.home2, f.folder2, 'remote');
+  writeFileSync(join(f.home, 'stray.txt'), 'private staged work');
+  git(f.home, 'add', 'stray.txt');
+  const staged = git(f.home, 'ls-files', '--stage', '--', 'stray.txt');
+  await sync.pull(f.home); // repairs the binary conflict and folds the two local commits into one
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '1');
+  await sync.commit(f.home, f.folder, 'publish recovered stack');
+  assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').includes('stray.txt'), false);
+  assert.equal(git(f.home, 'ls-files', '--stage', '--', 'stray.txt'), staged);
+  assert.equal(readFileSync(join(f.home, 'stray.txt'), 'utf8'), 'private staged work');
+  con = db.connect(f.folder);
+  try { assert.deepEqual(con.prepare("SELECT note FROM event WHERE event='note' ORDER BY note").all().map(e => e.note), ['local one', 'local two', 'remote']); }
+  finally { con.close(); }
+});

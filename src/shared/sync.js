@@ -36,6 +36,8 @@ async function g(home, args) {
 
 // Git pathspecs are globs: ":(literal)" keeps a folder name such as acme/* from matching its siblings.
 const lit = path => `:(literal)${path}`;
+// Every commit, including recovery squashes and amendments, leaves unrelated index entries alone.
+const commitOnly = (home, lits, options) => g(home, ['commit', '-q', ...options, '--only', '--', ...lits]);
 const fail = (home, what, r) => new BacklogError('SYNC_FAILED', `could not ${what} in ${home} (${r.stderr.slice(0, 300)}); the change is not recorded`, 3);
 const must = async (home, args, what) => { const r = await g(home, args); if (r.code) throw fail(home, what, r); return r; };
 
@@ -57,7 +59,10 @@ async function foldIn(home, lits, names, message) {
   const ahead = Number((await g(home, ['rev-list', '--count', 'origin/main..HEAD'])).stdout.trim());
   const dirty = (await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code;
   if (ahead > 1) await must(home, ['reset', '-q', '--soft', 'origin/main'], 'squash the unpushed commits');
-  if (ahead > 1 || dirty) await must(home, ['commit', '-q', ...(ahead === 1 ? ['--amend', '--no-edit'] : ['-m', `${names.join(', ')}: ${message}`]), ...(ahead > 1 ? [] : ['--only', '--', ...lits])], 'commit the reconciled mirror');
+  if (ahead > 1 || dirty) {
+    const r = await commitOnly(home, lits, ahead === 1 ? ['--amend', '--no-edit'] : ['-m', `${names.join(', ')}: ${message}`]);
+    if (r.code) throw fail(home, 'commit the reconciled mirror', r);
+  }
 }
 
 async function pullLocked(home) {
@@ -165,7 +170,7 @@ async function renumberFiles(home, stream, added, mirror) {
       try { scan(con, folder, [[old, next]], { includeArchived: true }); } finally { con.close(); }
       await must(home, ['add', '--', lit(`${name}/backlog.db`)], `stage ${name}/backlog.db`);
     }
-    const r = await g(home, ['commit', '-q', '--amend', '--no-edit']);
+    const r = await commitOnly(home, [lit(name)], ['--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
     out.push(pairOf(old, next, folder));
@@ -181,7 +186,8 @@ async function renumberFiles(home, stream, added, mirror) {
           await must(home, ['add', '--', lit(`${name}/backlog.db`)], `stage ${name}/backlog.db`);
         }
       }
-      const r = await g(home, ['commit', '-q', '--amend', '--no-edit']);
+      const lits = [...new Set(touched.map(f => f.split('/').slice(0, 2).join('/')))].map(lit);
+      const r = await commitOnly(home, lits, ['--amend', '--no-edit']);
       if (r.code) throw new BacklogError('SYNC_FAILED', `could not update the references to renumbered items in ${home} (${r.stderr.slice(0, 300)})`, 3);
     }
   }
@@ -293,7 +299,7 @@ export async function commit(home, folders, message, reconcile = null, guard = [
     await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
     // scoped to the folders (beyond lib_db.py parity): work staged elsewhere in the backlog clone is neither committed nor pushed
     if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
-      const c = await g(home, ['commit', '-q', '--only', '-m', `${names.join(', ')}: ${message}`, '--', ...lits]);
+      const c = await commitOnly(home, lits, ['-m', `${names.join(', ')}: ${message}`]);
       if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
     }
     const renumbered = []; let err = ''; let settled = 0;

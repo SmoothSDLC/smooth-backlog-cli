@@ -3,6 +3,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +17,7 @@ const git = (cwd, ...args) => {
   if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
   return p.stdout.trim();
 };
+const viewCache = (home, agent) => join(home, '.git', 'smooth-backlog-cli-views', `${createHash('sha256').update(agent).digest('hex')}.json`);
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 
@@ -89,7 +91,7 @@ test('replan refuses a stale ordering after its leading pull without changing Bo
   const f = seed();
   const read = run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
   assert.equal(read.status, 0, read.stderr + read.stdout);
-  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const cache = viewCache(f.home, 'amy');
   const expected = readFileSync(cache, 'utf8');
   const bob = run(f, f.home2, ['update', '1', '--priority', '1', '--by', 'bob']);
   assert.equal(bob.status, 0, bob.stderr + bob.stdout);
@@ -125,23 +127,23 @@ test('replan guards implicitly reordered items against a push race without a cac
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   assert.equal(git(f.home, 'branch', '--list').split('\n').filter(Boolean).length, 1);
   assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
-  assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json')), false);
+  assert.equal(existsSync(viewCache(f.home, 'amy')), false);
 });
 
 test('the read cache is a file in .git, survives across commands and is per agent; an unread item is written without a check', () => {
   const f = seed();
   run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
-  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const cache = viewCache(f.home, 'amy');
   const seen = JSON.parse(readFileSync(cache, 'utf8'))['acme/demo/001-alpha'];
   assert.equal(seen.updated, '2026-10-01T00:00:00Z');
   assert.match(seen.commit, /^[0-9a-f]{40}$/);
-  assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'bob.json')), false);
+  assert.equal(existsSync(viewCache(f.home, 'bob')), false);
   // bob never read the item: his first write goes through; amy's cached view is now stale, bob's is the newer
   assert.equal(run(f, f.home, ['update', '1', '--append', 'bob', '--by', 'bob']).status, 0);
   assert.equal(run(f, f.home, ['update', '1', '--append', 'amy', '--by', 'amy']).status, 5);
   sleepSec();
   assert.equal(run(f, f.home, ['update', '1', '--append', 'bob again', '--by', 'bob']).status, 0); // bob's own writes recorded his view
-  assert.equal(JSON.parse(readFileSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'bob.json'), 'utf8'))['acme/demo/001-alpha'].updated_by, 'bob');
+  assert.equal(JSON.parse(readFileSync(viewCache(f.home, 'bob'), 'utf8'))['acme/demo/001-alpha'].updated_by, 'bob');
 });
 
 test('two clones update different items concurrently: both succeed and neither loses its change', () => {
@@ -249,7 +251,7 @@ for (const [name, args] of [
   const f = seed();
   const read = run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']);
   assert.equal(read.status, 0, read.stderr + read.stdout);
-  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const cache = viewCache(f.home, 'amy');
   const expected = readFileSync(cache, 'utf8');
   const bob = run(f, f.home2, ['update', '2', '--append', 'from bob', '--by', 'bob']);
   assert.equal(bob.status, 0, bob.stderr + bob.stdout);
@@ -289,7 +291,7 @@ for (const [seq, slug] of [[2, '002-beta'], [3, '003-gamma']]) {
       const r = run(f, f.home, ['query', '--phase', item, '--agent', 'amy']);
       assert.equal(r.status, 0, r.stderr + r.stdout);
     }
-    const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+    const cache = viewCache(f.home, 'amy');
     const expected = readFileSync(cache, 'utf8');
     const bob = run(f, f.home2, ['update', String(seq), '--append', 'from bob', '--by', 'bob']);
     assert.equal(bob.status, 0, bob.stderr + bob.stdout);
@@ -324,7 +326,7 @@ for (const [seq, slug] of [[2, '002-beta'], [3, '003-gamma']]) {
     assert.equal(git(f.home, 'status', '--porcelain'), '');
     assert.equal(git(f.home, 'branch', '--list').split('\n').filter(Boolean).length, 1);
     assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
-    assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json')), false);
+    assert.equal(existsSync(viewCache(f.home, 'amy')), false);
   });
 }
 
@@ -347,7 +349,7 @@ for (const [name, args, target] of [
     git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'move source'); git(f.home, 'push', '-q');
   }
   assert.equal(run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']).status, 0);
-  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const cache = viewCache(f.home, 'amy');
   const expected = readFileSync(cache, 'utf8');
   const bob = run(f, f.home2, ['update', '2', '--append', 'Bob edit survives', '--by', 'bob']);
   assert.equal(bob.status, 0, bob.stderr + bob.stdout);
@@ -391,7 +393,7 @@ for (const [name, args] of [
     const r = run(f, f.home, ['query', '--phase', slug, '--agent', 'amy']);
     assert.equal(r.status, 0, r.stderr + r.stdout);
   }
-  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const cache = viewCache(f.home, 'amy');
   const expected = JSON.parse(readFileSync(cache, 'utf8'))['acme/demo/004-done'];
   git(f.home2, 'pull', '-q', '--rebase');
   const done = join(f.folder2, 'phases', '004-done.md');
@@ -458,12 +460,12 @@ for (const [name, args, target] of [
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
-  assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json')), false);
+  assert.equal(existsSync(viewCache(f.home, 'amy')), false);
 });
 
 for (const cached of [false, true]) test(`reconciliation ${cached ? 'refuses a stale cached view' : 'adds newly discovered incidental writes to the next publication guard'}`, () => {
   const f = seed();
-  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const cache = viewCache(f.home, 'amy');
   if (cached) assert.equal(run(f, f.home, ['query', '--phase', '003-gamma', '--agent', 'amy']).status, 0);
   const expected = cached ? readFileSync(cache, 'utf8') : null;
   const script = join(f.t, 'bob-reconcile.mjs');
@@ -501,4 +503,20 @@ exit 0
   assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
   if (cached) assert.equal(readFileSync(cache, 'utf8'), expected);
   else assert.equal(existsSync(cache), false);
+});
+
+test('review P2: exact agent names keep independent views despite slash, space and Unicode collisions', async () => {
+  const f = seed(['alpha']);
+  const seen = await import('../../src/shared/seen.js');
+  const path = 'phases/001-alpha.md';
+  const file = join(f.folder, path);
+  const original = readFileSync(file, 'utf8');
+  for (const [first, second] of [['team/alice', 'team_alice'], ['team alice', 'team_alice'], ['é', '_'], ['é', 'ø']]) {
+    writeFileSync(file, original);
+    seen.view(first, f.folder, 'acme/demo', { slug: '001-alpha', path });
+    writeFileSync(file, original + '\nchanged after first read\n');
+    seen.view(second, f.folder, 'acme/demo', { slug: '001-alpha', path });
+    assert.throws(() => seen.check(f.folder, 'acme/demo', first, '001-alpha', path), e => e.code === 'STALE_ITEM', `${first} must keep its stale view after ${second} reads`);
+    assert.doesNotThrow(() => seen.check(f.folder, 'acme/demo', second, '001-alpha', path));
+  }
 });

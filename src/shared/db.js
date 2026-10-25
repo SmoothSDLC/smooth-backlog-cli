@@ -249,14 +249,16 @@ function replayLocal(db, folder, { local: localFile, base: baseFile }, renumbere
     scan(db, folder, renumbered, { includeArchived: true });
 
     const key = (slug, e) => JSON.stringify([slug, e.ts, e.event, e.branch, e.commit_sha, e.note]);
-    const slugOf = new Map([...mine, ...was].map(r => [r.id, r.slug]));
-    const wasEvents = new Set((base ? base.prepare('SELECT * FROM event').all() : []).map(e => key(e.phase_id === null ? null : slugOf.get(e.phase_id) ?? null, e)));
+    // Row ids are private to each snapshot: a deletion and insertion can reuse one even in the same clone.
+    const localSlugOf = new Map(mine.map(r => [r.id, r.slug]));
+    const baseSlugOf = new Map(was.map(r => [r.id, r.slug]));
+    const wasEvents = new Set((base ? base.prepare('SELECT * FROM event').all() : []).map(e => key(e.phase_id === null ? null : baseSlugOf.get(e.phase_id) ?? null, e)));
     const have = new Set(db.prepare('SELECT p.slug, e.ts, e.event, e.branch, e.commit_sha, e.note FROM event e LEFT JOIN phase p ON p.id = e.phase_id').all().map(e => key(e.slug, e)));
     db.exec('BEGIN');
     try {
       for (const e of local.prepare('SELECT * FROM event ORDER BY id').all()) {
-        const slug = e.phase_id === null || !slugOf.has(e.phase_id) ? null : rename(slugOf.get(e.phase_id));
-        if (SCAN_EVENTS.includes(e.event) || wasEvents.has(key(e.phase_id === null ? null : slugOf.get(e.phase_id) ?? null, e)) || have.has(key(slug, e))) continue;
+        const slug = e.phase_id === null || !localSlugOf.has(e.phase_id) ? null : rename(localSlugOf.get(e.phase_id));
+        if (SCAN_EVENTS.includes(e.event) || wasEvents.has(key(e.phase_id === null ? null : localSlugOf.get(e.phase_id) ?? null, e)) || have.has(key(slug, e))) continue;
         const p = slug === null ? null : db.prepare('SELECT id, handoff_id FROM phase WHERE slug=?').get(slug); // gone (moved out): the event stays, without an item
         db.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)')
           .run(e.ts, e.handoff_id === null ? null : p?.handoff_id ?? ensureAnchor(db), p?.id ?? null, e.event, e.branch, e.commit_sha, e.note);

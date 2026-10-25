@@ -14,7 +14,8 @@ export const STALE_EXIT = 5;
 let current; // the --by/--agent of the running command
 export const setActor = name => { if (name) current = String(name); };
 export const actor = () => current || process.env.QWEN_CODE_AGENT_ID || process.env.USER || 'unknown';
-const viewsFile = (home, agent) => join(home, '.git', 'smooth-backlog-cli-views', `${agent.replace(/[^\w.-]/g, '_')}.json`);
+// Hash the exact name: replacement aliases distinct agents. Old lossy names are deliberately not read.
+const viewsFile = (home, agent) => join(home, '.git', 'smooth-backlog-cli-views', `${createHash('sha256').update(agent).digest('hex')}.json`);
 const homeOf = folder => dirname(dirname(folder)); // <home>/<owner>/<name>
 const operation = new AsyncLocalStorage();
 

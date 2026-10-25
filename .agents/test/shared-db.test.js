@@ -443,3 +443,32 @@ test('undoOnThrow puts back only what the command wrote: a file that appears mea
   assert.match(readFileSync(edited, 'utf8'), /old/, 'the file it changed is restored');
   assert.equal(readFileSync(pulled, 'utf8'), 'pulled by someone else\n', 'a file it did not write stays');
 });
+
+test('review P2: replay resolves reused row ids in their own database snapshots', t => {
+  const folder = inHome(t);
+  const snapshots = join(scratch(t), 'snapshots'); mkdirSync(snapshots);
+  const base = join(snapshots, 'base.db'); const local = join(snapshots, 'local.db');
+  putItem(folder, 1, 'departed');
+  let con = db.connect(folder); db.scan(con, folder);
+  const oldId = con.prepare("SELECT id FROM phase WHERE slug='001-departed'").get().id;
+  db.logEvent(con, 'note', { phaseId: oldId, note: 'BASE_HISTORY' });
+  con.close(); cpSync(join(folder, 'backlog.db'), base);
+  con = db.connect(folder); con.prepare('DELETE FROM phase WHERE id=?').run(oldId); con.close();
+  renameSync(join(folder, 'phases', '001-departed.md'), join(snapshots, 'departed.md'));
+  putItem(folder, 2, 'replacement');
+  con = db.connect(folder); db.scan(con, folder);
+  const newId = con.prepare("SELECT id FROM phase WHERE slug='002-replacement'").get().id;
+  assert.equal(newId, oldId, 'SQLite reuses the deleted maximum row id');
+  db.logEvent(con, 'note', { phaseId: newId, note: 'LOCAL_REPLACEMENT_HISTORY' });
+  con.close(); cpSync(join(folder, 'backlog.db'), local);
+  cpSync(base, join(folder, 'backlog.db')); // upstream still has the departed item
+  db.reconcileFolders([folder], Object.assign([], { localDbs: [{ folder, local, base }] }));
+  con = db.connect(folder);
+  try {
+    const events = rows(con, "SELECT p.slug, e.note FROM event e LEFT JOIN phase p ON p.id=e.phase_id WHERE e.event='note' ORDER BY e.note");
+    assert.deepEqual(events, [
+      { slug: null, note: 'BASE_HISTORY' },
+      { slug: '002-replacement', note: 'LOCAL_REPLACEMENT_HISTORY' },
+    ]);
+  } finally { con.close(); }
+});

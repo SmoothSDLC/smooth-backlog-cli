@@ -288,6 +288,45 @@ async function repairConflicts(home, folders, names, renumbered) {
   return false;
 }
 
+// Validate the entire publication, including incidental reflow writes and both sides of a move,
+// against the merged files after recovery. Added-file renumbering cannot protect existing --seq
+// assignments or incoming references that another clone added while this command was publishing.
+async function validatePublication(home, folders, names) {
+  const delta = paths(await must(home, ['diff', '-z', '--no-renames', '--name-status', 'origin/main', 'HEAD'], 'list publication writes'));
+  const changed = new Map();
+  for (let i = 0; i < delta.length; i += 2) changed.set(delta[i + 1], delta[i]);
+  const reject = why => { throw new BacklogError('SYNC_FAILED', `The change was not published in ${home}: ${why}; the local branch and working tree were rolled back. Fix the cause and retry the command`, 3); };
+  for (let n = 0; n < folders.length; n++) {
+    const items = store.load(folders[n]);
+    const prefix = `${names[n]}/`;
+    const resolves = d => items.some(i => /^\d+$/.test(String(d)) ? Number(i.fm.seq) === Number(d) : i.fm.phase === String(d));
+    const key = d => /^\d+$/.test(String(d)) ? String(Number(d)) : String(d);
+    const lost = new Set();
+    for (const [file, status] of changed) {
+      if (!file.startsWith(prefix)) continue;
+      const path = file.slice(prefix.length);
+      if (!/^(phases\/[^/]+|archive\/.+)\.md$/.test(path)) continue;
+      const item = items.find(i => i.path === path);
+      if (item) {
+        const held = items.find(i => i !== item && Number(i.fm.seq) === Number(item.fm.seq));
+        if (held) reject(`${names[n]}: seq ${item.fm.seq} of ${item.fm.phase} is already held by ${held.fm.phase}; the number must stay unique`);
+        for (const d of asList(item.fm.depends_on)) if (!resolves(d)) reject(`${names[n]}: ${item.fm.phase} depends on missing item ${d}`);
+      }
+      if (status === 'A') continue; // a new item has no incoming identity to preserve
+      const before = await must(home, ['show', `origin/main:${file}`], `read the prior identity of ${file}`);
+      const { fm } = parse(before.stdout);
+      for (const d of [fm.phase, fm.seq]) if (d !== undefined && !resolves(d)) lost.add(key(d));
+    }
+    // The source item may have disappeared from this folder, but its new upstream dependents
+    // are outside the write set. Check them too before allowing any of the folders to publish.
+    for (const item of items) for (const d of asList(item.fm.depends_on)) {
+      if (lost.has(key(d))) {
+        reject(`${names[n]}: ${item.fm.phase} depends on ${d}; removing or renumbering that item would leave its dependency missing`);
+      }
+    }
+  }
+}
+
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
 // [old, new] pairs renumbered on the way (with .mirror = true when backlog.db was taken from upstream: rescan it and commit again). Recorded only when on origin/main (lib_db.py:275-309).
 // `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
@@ -301,7 +340,6 @@ export async function commit(home, folders, message, reconcile = null, guard = [
   for (const folder of list) names.push((await assertInside(home, folder)).split(sep).join('/'));
   const lits = names.map(lit);
   return locked(lockFile(home), async () => {
-    await refuseConflicts(home); // never stage or push the markers of an autostash that did not apply
     await refuseUnpublished(home);
     const saved = starting.get(resolve(home)) ?? await snapshot(home);
     starting.delete(resolve(home));
@@ -331,6 +369,7 @@ export async function commit(home, folders, message, reconcile = null, guard = [
       await restoreStaging([...new Set([...saved.dirty, ...saved.staged])]);
     };
     try {
+      await refuseConflicts(home); // a rejected mutation must restore its starting files and mirror too
       await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
       // scoped to the folders (beyond lib_db.py parity): work staged elsewhere in the backlog clone is neither committed nor pushed
       if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
@@ -368,6 +407,7 @@ export async function commit(home, folders, message, reconcile = null, guard = [
             await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
             await foldIn(home, lits, names, message);
           }
+          await validatePublication(home, list, names);
           await restoreStaging(saved.staged.filter(p => !own(p)));
           const ps = await g(home, ['push', '-q', 'origin', 'HEAD:refs/heads/main']);
           if (!ps.code) return renumbered;

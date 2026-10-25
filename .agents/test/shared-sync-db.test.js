@@ -558,3 +558,78 @@ test('publication: permanent failure after a push race removes renumbering and r
   assert.deepEqual(store.load(b.folder).map(x => x.fm.name), ['anchor', 'upstream collision']);
   assert.equal(store.load(join(b.home, 'other', 'repo'))[0].fm.name, 'other folder');
 });
+
+
+for (const dependency of ['1', '001-alpha']) test(`review P1: publication refuses a repository move after another clone adds dependent ${dependency}`, async t => {
+  const { a, b, bare, result } = await race(t, [NEW('alpha')],
+    [...NEW('dependent'), '--depends-on', dependency], ['move', '1', '--to-repository', 'acme/dst']);
+  assert.equal(result.status, 3, result.stdout + result.stderr);
+  assert.match(result.stderr, /002-dependent depends on/);
+  assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+  assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+  assert.deepEqual(state(b.home), state(clone(t, bare)), 'both files and databases match the winning upstream clone');
+  assert.ok(existsSync(join(b.folder, 'phases', '001-alpha.md')));
+  assert.ok(!existsSync(join(b.home, 'acme', 'dst', 'phases', '001-alpha.md')));
+  for (const w of [a, b]) {
+    const q = cli(['query', '--blocked', '--json'], { cwd: w.cons, tmp: w.tmp });
+    assert.equal(q.status, 0, q.stdout + q.stderr);
+    assert.doesNotMatch(q.stdout, /missing/);
+    assert.match(q.stdout, /001-alpha/);
+  }
+});
+
+test('review P1: publication refuses update --seq when another clone allocates that sequence', async t => {
+  const { b, bare, result } = await race(t, [NEW('alpha'), NEW('beta')], NEW('gamma'), ['update', '2', '--seq', '3']);
+  assert.equal(result.status, 3, result.stdout + result.stderr);
+  assert.match(result.stderr, /seq.*3.*003-gamma|003-gamma.*seq.*3/i);
+  assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+  assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+  assert.deepEqual(state(b.home), state(clone(t, bare)), 'the rejected sequence and mirror edits are both rolled back');
+  assert.deepEqual(store.load(b.folder).map(i => [i.fm.phase, i.fm.seq]), [['001-alpha', 1], ['002-beta', 2], ['003-gamma', 3]]);
+  const q = cli(['query', '--all', '--json'], { cwd: b.cons, tmp: b.tmp });
+  assert.equal(q.status, 0, q.stdout + q.stderr);
+});
+
+test('review P1: publication preflight rejecting an appended conflict marker restores starting files, database and staging', t => {
+  const [a, b, { bare }] = writers(t);
+  assert.equal(cli(NEW('alpha'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const item = join(b.folder, 'phases', '001-alpha.md');
+  writeFileSync(item, readFileSync(item, 'utf8') + '\nprior staged note\n');
+  gitIn(b.home, 'add', 'acme/demo/phases/001-alpha.md');
+  writeFileSync(item, readFileSync(item, 'utf8') + '\nprior unstaged note\n');
+  writeFileSync(join(b.home, 'private.txt'), 'private staging');
+  gitIn(b.home, 'add', 'private.txt');
+  const before = state(b.home); const remote = gitIn(bare, 'rev-parse', 'main');
+  const r = cli(['update', '1', '--append', '<<<<<<< example'], { cwd: b.cons, tmp: b.tmp });
+  assert.equal(r.status, 3, r.stdout + r.stderr);
+  assert.match(r.stderr, /conflicts/i);
+  assert.deepEqual(state(b.home), before, 'preflight failure restores Markdown, backlog.db, HEAD and index byte for byte');
+  assert.equal(gitIn(bare, 'rev-parse', 'main'), remote, 'nothing was published');
+  assert.ok(!existsSync(join(b.home, '.git', 'smooth-backlog-cli-journal.json')));
+  const next = cli(['update', '1', '--append', 'valid follow-up'], { cwd: b.cons, tmp: b.tmp });
+  assert.equal(next.status, 0, next.stdout + next.stderr);
+  assert.doesNotMatch(gitIn(bare, 'show', 'main:acme/demo/phases/001-alpha.md'), /<<<<<<< example/);
+});
+
+
+for (const args of [
+  [...NEW('dependent'), '--depends-on', '2'],
+  ['update', '1', '--set-depends-on', '2'],
+]) test(`review P1: publication validates outgoing dependencies of ${args[0]} against an upstream move`, async t => {
+  const { b, bare, result } = await race(t, [NEW('beta'), NEW('alpha')],
+    ['move', '2', '--to-repository', 'acme/dst'], args);
+  assert.equal(result.status, 3, result.stdout + result.stderr);
+  assert.match(result.stderr, /depends on missing item 2/);
+  assert.deepEqual(state(b.home), state(clone(t, bare)), 'the entire rejected write set is restored to upstream');
+  assert.equal(cli(['query', '--blocked', '--json'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+});
+
+test('review P1: publication refuses a sequence change after an upstream clone adds an incoming dependency', async t => {
+  const { b, bare, result } = await race(t, [NEW('alpha')],
+    [...NEW('dependent'), '--depends-on', '1'], ['update', '1', '--seq', '5']);
+  assert.equal(result.status, 3, result.stdout + result.stderr);
+  assert.match(result.stderr, /depends on.*1/);
+  assert.deepEqual(state(b.home), state(clone(t, bare)));
+  assert.equal(store.load(b.folder).find(i => i.fm.phase === '001-alpha').fm.seq, 1);
+});

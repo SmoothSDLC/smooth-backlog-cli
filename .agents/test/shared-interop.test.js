@@ -44,7 +44,9 @@ function step(f, tool, script, args) {
 }
 
 const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
-const doc = text => { const { fm, body } = parse(text); return { keys: Object.keys(fm), fm: JSON.parse(JSON.stringify(fm).replace(TS, 'TS').replace(/[0-9a-f]{40}/g, 'SHA')), body }; };
+// updated_by is per-invocation metadata; the pinned Python writer predates it.
+// Compare the shared item contract, with author stamping covered by shared-stale.test.js.
+const doc = text => { const { fm, body } = parse(text); return { keys: Object.keys(fm).filter(k => k !== 'updated_by'), fm: JSON.parse(JSON.stringify(fm, (k, v) => k === 'updated_by' ? undefined : v).replace(TS, 'TS').replace(/[0-9a-f]{40}/g, 'SHA')), body }; };
 
 // Right after a changing step the change is committed and pushed, not left for the next command to publish: the working
 // home is clean, its HEAD is the bare's main, the bare has one more commit, and the committed item file is as expected.
@@ -120,6 +122,6 @@ test('the same with the tools swapped (CLI first), and both runs leave the same 
   const first = scenario(t, PYTHON, NODE);
   for (const name of Object.keys(first.files)) assert.deepEqual(doc(swapped.files[name]), doc(first.files[name]), name);
   // sha is the hash of the file text (quoting differs between the codecs) and commit_sha the consumer's HEAD of each fixture
-  const norm = q => JSON.parse(JSON.stringify(q, (k, v) => (k === 'sha' || k === 'commit_sha' ? 'X' : v)).replace(TS, 'TS'));
+  const norm = q => JSON.parse(JSON.stringify(q, (k, v) => (k === 'sha' || k === 'commit_sha' ? 'X' : k === 'updated_by' ? undefined : v)).replace(TS, 'TS'));
   assert.deepEqual(norm(swapped.queue), norm(first.queue));
 });

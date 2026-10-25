@@ -69,14 +69,14 @@ test('pull: fetches what another clone pushed, and the lock file is gone afterwa
   assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli.lock')), false);
 });
 
-test('pull: a failing pull aborts the rebase and exits 3; an unmergeable local commit is parked on a branch (lib_db.py message, beyond parity)', async t => {
+test('pull: an unmergeable legacy commit is refused before rebasing', async t => {
   const f = fixture(t);
   putItem(f.folder, 1, 'mine');
   mkdirSync(f.folder2, { recursive: true });
   writeFileSync(join(f.folder, 'README'), 'a\n'); writeFileSync(join(f.folder2, 'README'), 'b\n');
   git(f.home2, 'add', '-A'); git(f.home2, 'commit', '-qm', 'b'); git(f.home2, 'push', '-q');
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'a'); // conflicts with b on acme/demo/README
-  const e = await rejects3(sync.pull(f.home), /^could not update .* from origin\/main \(.*\); nothing was read or changed, because an unpushed local commit conflicts: .*parked on branch backlog-unmerged-\d{8}T\d{6}Z .*Then run the command again$/s);
+  const e = await rejects3(sync.pull(f.home), /has unpublished commits:[\s\S]*a[\s\S]*Nothing was changed/);
   assert.ok(e.message.includes(f.home));
   assert.equal(existsSync(join(f.home, '.git', 'rebase-merge')) || existsSync(join(f.home, '.git', 'rebase-apply')), false);
   assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli.lock')), false);
@@ -215,15 +215,16 @@ test('Node first, overlapping: Node has scanned backlog.db and is held at its pu
   assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-nodeitem.md', seq: 1 }, { file: '002-pyitem.md', seq: 2 }]);
 });
 
-test('a bare that refuses pushes: exit 3 with the committed-but-not-pushed message; the change stays committed; a token URL is never printed', async t => {
+test('a bare that refuses pushes: exit 3, no unpublished commit, starting edits retained and token URL redacted', async t => {
   const f = fixture(t);
   const hook = join(f.bare, 'hooks', 'pre-receive');
   writeFileSync(hook, '#!/bin/sh\necho "read-only: see https://user:SECRETTOKEN@example.com/x.git" >&2\nexit 1\n');
   chmodSync(hook, 0o755);
   putItem(f.folder, 1, 'alpha');
-  const e = await rejects3(sync.commit(f.home, f.folder, 'new alpha'), /^the change is committed in .* but NOT on origin\/main \(push failed: .*read-only.*\)\. It is not recorded until it is pushed: fix the cause and run 'git -C .* pull --rebase && git -C .* push'$/s);
+  const e = await rejects3(sync.commit(f.home, f.folder, 'new alpha'), /change was not published.*push failed: .*read-only.*rolled back/s);
   assert.equal(e.message.includes('SECRETTOKEN'), false);
-  assert.equal(git(f.home, 'log', '-1', '--format=%s'), 'acme/demo: new alpha');
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'));
+  assert.ok(existsSync(join(f.folder, 'phases', '001-alpha.md')), 'the input working edit remains');
   assert.equal(git(f.bare, 'rev-list', '--count', 'main'), '1');
 });
 
@@ -308,20 +309,18 @@ test('add/add: a conflict on anything else still aborts the rebase and exits 3',
   mkdirSync(f.folder2, { recursive: true }); mkdirSync(f.folder, { recursive: true });
   writeFileSync(join(f.folder, 'README'), 'a\n'); writeFileSync(join(f.folder2, 'README'), 'b\n');
   await sync.commit(f.home, f.folder, 'a');
-  await rejects3(sync.commit(f.home2, f.folder2, 'b'), /NOT on origin\/main: it conflicts with origin\/main in .*parked on branch backlog-unmerged-/);
+  await rejects3(sync.commit(f.home2, f.folder2, 'b'), /change was not published[\s\S]*rolled back/);
   assert.equal(existsSync(join(f.home2, '.git', 'rebase-merge')) || existsSync(join(f.home2, '.git', 'rebase-apply')), false);
 });
 
-test('review: renumbering a local item remaps the LOCAL references to it (number and slug, split-from), never upstream\'s (pull path)', async t => {
+test('review: renumbering the current command remaps LOCAL references (number, slug, split-from), never upstream\'s', async t => {
   const f = fixture(t);
   putItem(f.folder2, 1, 'alpha'); putItem(f.folder2, 4, 'eta', { depends_on: [1] }); // upstream: its own 1 is alpha
   await sync.commit(f.home2, f.folder2, 'upstream');
   putItem(f.folder, 1, 'beta'); putItem(f.folder, 2, 'gamma', { depends_on: [1] });
   const delta = putItem(f.folder, 3, 'delta', { depends_on: ['001-beta'] });
   store.write({ path: join(f.folder, 'phases', `${delta}.md`), fm: { ...store.load(f.folder).find(i => i.fm.phase === delta).fm }, body: '\n# Phase 003 — delta\n\n## Split from `001-beta`. Inherited context:\n' });
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'acme/demo: local'); // never pushed
-  const write = process.stderr.write; process.stderr.write = () => true;
-  try { await captureStdout(() => sync.pull(f.home)); } finally { process.stderr.write = write; }
+  await captureStdout(() => sync.commit(f.home, f.folder, 'local'));
   const by = name => store.load(f.folder).find(i => i.fm.name === name);
   assert.equal(by('beta').fm.seq, 5);
   assert.deepEqual(by('gamma').fm.depends_on, [5]);
@@ -347,21 +346,18 @@ test('review: the same remap on the add/add recovery of a push', async t => {
   assert.equal(by('alpha') ? 1 : 0, 1);
 });
 
-test('pull: repairs a sequence collision with an outstanding local commit (message on stderr, stdout stays clean)', async t => {
+test('pull and commit refuse an outstanding local commit, even a repairable sequence collision', async t => {
   const f = fixture(t);
-  putItem(f.folder2, 1, 'alpha'); await sync.commit(f.home2, f.folder2, 'new alpha'); // another writer's creation, on the bare
+  putItem(f.folder2, 1, 'alpha'); await sync.commit(f.home2, f.folder2, 'new alpha');
   putItem(f.folder, 1, 'beta');
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'acme/demo: new beta'); // committed locally, never pushed
-  const write = process.stderr.write; let err = '';
-  process.stderr.write = c => { err += c; return true; };
-  let captured;
-  try { captured = await captureStdout(() => sync.pull(f.home)); } finally { process.stderr.write = write; }
-  assert.equal(captured.out, ''); assert.equal(err, 'renumbered 001 -> 002\n');
-  const beta = store.load(f.folder).find(i => i.fm.name === 'beta');
-  assert.equal(beta.path, 'phases/002-beta.md'); assert.equal(beta.fm.seq, 2);
-  assert.equal(git(f.home, 'status', '--porcelain'), '');
-  await sync.commit(f.home, f.folder, 'nothing more'); // the outstanding commit is pushed with its repaired number
-  assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-alpha.md', seq: 1 }, { file: '002-beta.md', seq: 2 }]);
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'acme/demo: new beta');
+  const before = git(f.home, 'rev-parse', 'HEAD');
+  for (const run of [() => sync.pull(f.home), () => sync.commit(f.home, f.folder, 'nothing more')]) {
+    await rejects3(run(), /unpublished commits:[\s\S]*new beta/);
+    assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
+    assert.equal(git(f.home, 'status', '--porcelain'), '');
+  }
+  assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').includes('beta'), false);
 });
 
 // Review fixes (second review).
@@ -377,18 +373,17 @@ test('add/add: several conflicting additions whose front matter differs are all 
     ['phases/001-alpha.md', 1, 'first alpha'], ['phases/002-beta.md', 2, 'first beta'], ['phases/003-alpha.md', 3, 'second alpha'], ['phases/004-beta.md', 4, 'second beta']]);
 });
 
-test('pull: a collision repair keeps an unstaged working edit uncommitted (and in the working tree)', async t => {
+test('pull: refusing an old commit preserves its unstaged working edit', async t => {
   const f = fixture(t);
   putItem(f.folder2, 1, 'alpha'); await sync.commit(f.home2, f.folder2, 'new alpha');
   putItem(f.folder, 1, 'beta');
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'acme/demo: new beta'); // committed locally, never pushed
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'acme/demo: new beta');
   const file = join(f.folder, 'phases', '001-beta.md');
   writeFileSync(file, readFileSync(file, 'utf8') + '\nworking edit, not yet committed\n');
-  const write = process.stderr.write; process.stderr.write = () => true;
-  try { await sync.pull(f.home); } finally { process.stderr.write = write; }
-  assert.equal(git(f.home, 'show', 'HEAD:acme/demo/phases/002-beta.md').includes('working edit'), false, 'the edit must not be in the commit');
-  assert.equal(git(f.home, 'status', '--porcelain'), 'M acme/demo/phases/002-beta.md');
-  assert.match(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), /seq: 2[\s\S]*working edit, not yet committed/);
+  const before = readFileSync(file, 'utf8'); const index = git(f.home, 'ls-files', '--stage');
+  await rejects3(sync.pull(f.home), /unpublished commits/);
+  assert.equal(readFileSync(file, 'utf8'), before);
+  assert.equal(git(f.home, 'ls-files', '--stage'), index);
   assert.equal(git(f.home, 'stash', 'list'), '');
 });
 
@@ -414,7 +409,7 @@ test('review P2: commit takes only the repository folder: a file staged elsewher
   assert.equal(git(f.home, 'diff', '--cached', '--name-only'), 'stray.txt');
 });
 
-test('review P2: recovery squashes an unpushed stack without publishing unrelated staged files', async t => {
+test('review P2: refusing a legacy stack preserves all commits and unrelated staging', async t => {
   const f = fixture(t);
   putItem(f.folder, 1, 'anchor');
   let con = db.connect(f.folder); db.scan(con, f.folder); con.close();
@@ -431,13 +426,32 @@ test('review P2: recovery squashes an unpushed stack without publishing unrelate
   writeFileSync(join(f.home, 'stray.txt'), 'private staged work');
   git(f.home, 'add', 'stray.txt');
   const staged = git(f.home, 'ls-files', '--stage', '--', 'stray.txt');
-  await sync.pull(f.home); // repairs the binary conflict and folds the two local commits into one
-  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '1');
-  await sync.commit(f.home, f.folder, 'publish recovered stack');
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  await rejects3(sync.pull(f.home), /unpublished commits:[\s\S]*local two[\s\S]*local one/);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '2');
   assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').includes('stray.txt'), false);
   assert.equal(git(f.home, 'ls-files', '--stage', '--', 'stray.txt'), staged);
   assert.equal(readFileSync(join(f.home, 'stray.txt'), 'utf8'), 'private staged work');
   con = db.connect(f.folder);
-  try { assert.deepEqual(con.prepare("SELECT note FROM event WHERE event='note' ORDER BY note").all().map(e => e.note), ['local one', 'local two', 'remote']); }
+  try { assert.deepEqual(con.prepare("SELECT note FROM event WHERE event='note' ORDER BY note").all().map(e => e.note), ['local one', 'local two']); }
   finally { con.close(); }
+});
+
+test('pull: incoming commits preserve unrelated staged and unstaged versions separately', async t => {
+  const f = fixture(t);
+  mkdirSync(join(f.home, 'other', 'repo'), { recursive: true });
+  const note = join(f.home, 'other', 'repo', 'notes.txt');
+  writeFileSync(note, 'published note\n');
+  git(f.home, 'add', 'other/repo'); git(f.home, 'commit', '-qm', 'seed private edit target'); git(f.home, 'push', '-q');
+  await sync.pull(f.home2);
+  writeFileSync(note, 'staged note\n'); git(f.home, 'add', 'other/repo');
+  writeFileSync(note, 'unstaged note\n');
+  const entry = git(f.home, 'ls-files', '--stage', '--', 'other/repo/notes.txt');
+  putItem(f.folder2, 1, 'remote'); await sync.commit(f.home2, f.folder2, 'remote');
+  await sync.pull(f.home);
+  assert.equal(git(f.home, 'ls-files', '--stage', '--', 'other/repo/notes.txt'), entry);
+  assert.equal(readFileSync(note, 'utf8'), 'unstaged note\n');
+  assert.ok(existsSync(join(f.folder, 'phases', '001-remote.md')));
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
 });

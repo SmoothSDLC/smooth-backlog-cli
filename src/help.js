@@ -15,8 +15,8 @@ const EXIT = `Exit codes:
   2  The arguments or the place were wrong: the message is on standard error.
   3  The local clone of the backlog repository could not be synchronised with its origin. Either the update before the
      command failed: then nothing was read or changed, and the command can be run again once the cause is fixed. Or the
-     change was committed in the local clone but could not be pushed: then it is not recorded until it is pushed, as the
-     message says.
+     change was not published and was rolled back: fix the cause and retry the command. Existing unpublished commits
+     are refused before any change; the message lists them and gives explicit publish or drop commands.
   4  The backlog repository is not set up; the printed question must be answered by the user.
   5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
      records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
@@ -393,8 +393,7 @@ Exit codes:
   0  The command answered with an action.
   3  The action is idle: nothing is left for the agent. The same code is used when the local clone of the backlog
      repository could not be updated from its origin before the answer (nothing was read; the message is on standard error),
-     and when a --claim-now claim was committed in the local clone but could not be pushed (it is not recorded until it is
-     pushed, as the message says).
+     and when a --claim-now claim was not published and was rolled back. Fix the cause and retry the command.
   1  A --claim-now claim was refused or could not be run (its process failed or was interrupted): its output, or the failure, is
      shown. After an interruption the claim may already be saved, or even pushed: check the item before running pop again.
   2  The arguments or the place were wrong: the message is on standard error.
@@ -437,7 +436,7 @@ ${HELP_FLAG}
 
 Exit codes for this command: 0 moved and pushed, 1 refused (for example the item does not exist), 2 wrong place or
 wrong arguments (for example neither --to-branch nor --to-repository), 3 the update of the local clone failed before
-the move (nothing was changed), or the move was committed locally but not pushed.
+the move (nothing was changed), or the move was not published and was rolled back.
 
 Example:
   backlog move 18 --to-branch team-cli-parity-1

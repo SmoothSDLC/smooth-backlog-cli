@@ -153,3 +153,8 @@ Test files: one shared suite per job (`.agents/test/shared-<area>.test.js`, each
 line). Tests use only local bare repos from `.agents/test/shared-fixtures.js` (job 1), with
 `BACKLOG_HOME` and `XDG_CONFIG_HOME` inside the test's temp dir; never the real backlog
 repository or `~/.config` (item 002:40).
+
+
+## Publication decision (owner, 2026-10-25)
+
+Every shared mutation commits and pushes before success. If publication fails after the existing retry/rebase loop, reset the local branch to origin/main and restore the starting working edits and staging; exit 3 with a loud not-published message. An existing unpublished stack is refused before reading or writing, with commit hashes/subjects and explicit publish/drop commands. No leading-pull squash or silent history rewrite is allowed. Conflict repair is limited to the one commit created by the active command. Both folders of a cross-repository move remain in that same commit. This supersedes failed-push retention and leading-pull recovery described above.

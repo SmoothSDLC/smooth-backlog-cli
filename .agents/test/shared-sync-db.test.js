@@ -116,7 +116,7 @@ test('review P1: a backlog.db conflict that takes upstream\'s copy keeps the loc
   } finally { con.close(); }
 });
 
-test('review P2: a pull whose non-conflict rebase renumbers an unpushed local item renames its mirror row in place (no ghost, no second row)', t => {
+test('review P2: retrying a rolled-back creation takes the upstream number into account without ghost mirror rows', t => {
   const [a, b] = writers(t);
   const hook = join(b.home, '.git', 'hooks', 'pre-push');
   writeFileSync(hook, '#!/bin/sh\nexit 1\n'); chmodSync(hook, 0o755);
@@ -125,7 +125,7 @@ test('review P2: a pull whose non-conflict rebase renumbers an unpushed local it
   // the other clone pushes the same number as a file only, so backlog.db does not conflict
   store.write({ path: join(a.folder, 'phases', '001-alpha-job.md'), fm: { phase: '001-alpha-job', seq: 1, name: 'alpha job', status: 'pending', repository: 'acme/demo', branch: 'main', priority: 0, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' }, body: '\n# Phase 001\n' }, a.folder);
   gitIn(a.home, 'add', 'acme/demo/phases/001-alpha-job.md'); gitIn(a.home, 'commit', '-q', '-m', 'alpha'); gitIn(a.home, 'push', '-q');
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0); // the pull renumbers 001-beta-job to 002
+  assert.equal(cli(NEW('beta job'), { cwd: b.cons, tmp: b.tmp }).status, 0); // a fresh command allocates 002 after pulling alpha
   const r = cli(['update', '2', '--note', 'after the renumbering'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const con = db.connect(b.folder);
@@ -274,46 +274,30 @@ const clone = (t, bare) => {
   return join(verify, 'c');
 };
 
-test('review P2: create then archive in an unpushed stack survives a mirror conflict with its events attached, once', t => {
+test('review P2: failed create, note and archive each roll back; successful retries retain events exactly once', t => {
   const [a, b, { bare }] = writers(t);
-  // Keep an active file on both sides so directory-rename detection is irrelevant.
   assert.equal(cli(NEW('anchor job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hook = join(bare, 'hooks', 'pre-receive');
-  writeFileSync(hook, '#!/bin/sh\nexit 1\n'); chmodSync(hook, 0o755);
   for (const args of [NEW('local job'), ['update', '2', '--note', 'LOCAL_ARCHIVE_EVIDENCE'], ['archive', '2', '--force']]) {
-    const r = cli(args, { cwd: b.cons, tmp: b.tmp });
-    assert.equal(r.status, 3, r.stdout + r.stderr);
+    const before = state(b.home);
+    writeFileSync(hook, '#!/bin/sh\nexit 1\n'); chmodSync(hook, 0o755);
+    const failed = cli(args, { cwd: b.cons, tmp: b.tmp });
+    assert.equal(failed.status, 3, failed.stdout + failed.stderr);
+    assert.deepEqual(state(b.home), before);
+    rmSync(hook);
+    const retried = cli(args, { cwd: b.cons, tmp: b.tmp });
+    assert.equal(retried.status, 0, retried.stdout + retried.stderr);
   }
-  const local = db.connect(b.folder);
-  let expected;
+  const con = db.connect(join(clone(t, bare), 'acme', 'demo'));
   try {
-    expected = local.prepare("SELECT ts, event, branch, commit_sha, note FROM event WHERE phase_id=(SELECT id FROM phase WHERE slug='002-local-job') AND event NOT IN ('ingested','reingested','file_missing','renumbered') ORDER BY id").all().map(e => ({ ...e }));
-    assert.ok(expected.some(e => e.event === 'archived'));
-    assert.ok(expected.some(e => e.note.includes('LOCAL_ARCHIVE_EVIDENCE')));
-  } finally { local.close(); }
-  rmSync(hook);
-  assert.equal(cli(NEW('remote job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  // The leading pull recovers the binary conflict across the whole unpushed stack.
-  const q = cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp });
-  assert.equal(q.status, 0, q.stdout + q.stderr);
-  const verify = folder => {
-    const con = db.connect(folder);
-    try {
-      const row = con.prepare("SELECT * FROM phase WHERE name='local job'").get();
-      assert.ok(row, 'the locally created and archived row survives');
-      assert.equal(row.slug, '003-local-job', 'the archived item follows recovery renumbering');
-      assert.equal(row.status, 'archived');
-      assert.equal(row.path, 'archive/phases/003-local-job.md');
-      assert.ok(existsSync(join(folder, row.path)));
-      assert.deepEqual(con.prepare("SELECT ts, event, branch, commit_sha, note FROM event WHERE phase_id=? AND event NOT IN ('ingested','reingested','file_missing','renumbered') ORDER BY id").all(row.id).map(e => ({ ...e })), expected);
-      assert.equal(con.prepare("SELECT count(*) AS n FROM event WHERE phase_id IS NULL AND (event='archived' OR note LIKE '%LOCAL_ARCHIVE_EVIDENCE%')").get().n, 0);
-    } finally { con.close(); }
-  };
-  verify(b.folder);
-  const r = cli(['update', '1', '--note', 'publish recovered stack'], { cwd: b.cons, tmp: b.tmp });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  verify(join(clone(t, bare), 'acme', 'demo'));
+    const row = con.prepare("SELECT * FROM phase WHERE name='local job'").get();
+    assert.equal(row.slug, '002-local-job'); assert.equal(row.status, 'archived');
+    assert.equal(row.path, 'archive/phases/002-local-job.md');
+    assert.equal(con.prepare("SELECT count(*) AS n FROM event WHERE phase_id=? AND event='archived'").get(row.id).n, 1);
+    assert.equal(con.prepare("SELECT count(*) AS n FROM event WHERE phase_id=? AND note LIKE '%LOCAL_ARCHIVE_EVIDENCE%'").get(row.id).n, 1);
+    assert.equal(con.prepare("SELECT count(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
+  } finally { con.close(); }
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
 });
 
@@ -358,13 +342,13 @@ test('review P1: origin/main never holds a commit whose backlog.db mirror disagr
   assert.ok(checked >= 2);
 });
 
-test('review (merge risk): after a failed push the next command\'s leading pull repairs the backlog.db conflict: the local note is kept, nothing is parked, and it reaches origin', async t => {
+test('review (merge risk): a failed push is rolled back; a later command never publishes the failed note', async t => {
   const [a, b, { bare }] = writers(t);
   for (const n of ['one', 'two']) assert.equal(cli(NEW(n), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hook = join(bare, 'hooks', 'pre-receive');
   writeFileSync(hook, '#!/bin/sh\necho "rejected: origin down" >&2\nexit 1\n'); chmodSync(hook, 0o755);
-  assert.equal(cli(['update', '1', '--append', 'first note'], { cwd: a.cons, tmp: a.tmp }).status, 3); // committed locally, not pushed
+  assert.equal(cli(['update', '1', '--append', 'first note'], { cwd: a.cons, tmp: a.tmp }).status, 3); // rolled back, never left unpublished
   rmSync(hook);
   assert.equal(cli(NEW('three'), { cwd: b.cons, tmp: b.tmp }).status, 0); // another clone pushes meanwhile
   const q = cli(['query', '--all'], { cwd: a.cons, tmp: a.tmp }); // the leading pull rebases a's unpushed commit onto it
@@ -373,7 +357,134 @@ test('review (merge risk): after a failed push the next command\'s leading pull 
   const w = cli(['update', '2', '--append', 'second note'], { cwd: a.cons, tmp: a.tmp });
   assert.equal(w.status, 0, w.stdout + w.stderr);
   const dir = join(clone(t, bare), 'acme', 'demo');
-  assert.match(readFileSync(join(dir, 'phases', '001-one.md'), 'utf8'), /first note/);
+  assert.doesNotMatch(readFileSync(join(dir, 'phases', '001-one.md'), 'utf8'), /first note/);
   assert.match(readFileSync(join(dir, 'phases', '002-two.md'), 'utf8'), /second note/);
   assert.equal(gitIn(a.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+});
+
+// Publication must leave no pending commit for a later command to publish.
+const state = home => ({
+  head: gitIn(home, 'rev-parse', 'HEAD'),
+  index: gitIn(home, 'ls-files', '--stage'),
+  status: gitIn(home, 'status', '--porcelain'),
+  files: gitIn(home, 'ls-files', '-z', '--cached', '--others', '--exclude-standard').split('\0').filter(Boolean)
+    .map(p => [p, existsSync(join(home, p)) ? readFileSync(join(home, p)).toString('base64') : null]),
+});
+
+test('publication: a legacy unpublished commit is refused without changing files, index or history', t => {
+  const [a, , { bare }] = writers(t);
+  assert.equal(cli(NEW('one'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  writeFileSync(join(a.home, 'legacy.txt'), 'legacy change');
+  gitIn(a.home, 'add', 'legacy.txt'); gitIn(a.home, 'commit', '-qm', 'legacy unpublished change');
+  const sha = gitIn(a.home, 'rev-parse', '--short', 'HEAD');
+  writeFileSync(join(a.home, 'staged.txt'), 'private index'); gitIn(a.home, 'add', 'staged.txt');
+  const before = state(a.home); const remote = gitIn(bare, 'rev-parse', 'main');
+  const r = cli(['update', '1', '--append', 'must not run'], { cwd: a.cons, tmp: a.tmp });
+  assert.equal(r.status, 3, r.stdout + r.stderr);
+  assert.match(r.stderr, /unpublished commit/i); assert.ok(r.stderr.includes(sha));
+  assert.match(r.stderr, /legacy unpublished change/); assert.match(r.stderr, /git -C .* push/); assert.match(r.stderr, /git -C .* reset/);
+  assert.deepEqual(state(a.home), before);
+  assert.equal(gitIn(bare, 'rev-parse', 'main'), remote);
+});
+
+for (const [name, args] of [
+  ['new', NEW('failed creation')], ['update', ['update', '1', '--append', 'failed note']],
+  ['archive', ['archive', '1', '--force']], ['move', ['move', '1', '--to-repository', 'new/place']],
+]) test(`publication: permanently rejected ${name} restores history, working files and staging`, t => {
+  const [a, , { bare }] = writers(t);
+  assert.equal(cli(NEW('one'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  writeFileSync(join(a.home, 'private.txt'), 'staged private content'); gitIn(a.home, 'add', 'private.txt');
+  writeFileSync(join(a.home, 'private.txt'), 'unstaged private content');
+  writeFileSync(join(a.folder, 'private.md'), 'pre-existing file inside the command folder');
+  const item = join(a.folder, 'phases', '001-one.md');
+  writeFileSync(item, readFileSync(item, 'utf8') + '\npre-existing staged note\n');
+  gitIn(a.home, 'add', 'acme/demo/phases/001-one.md');
+  writeFileSync(item, readFileSync(item, 'utf8') + '\npre-existing unstaged note\n');
+  const before = state(a.home);
+  const hook = join(bare, 'hooks', 'pre-receive');
+  writeFileSync(hook, '#!/bin/sh\necho "permanently read-only" >&2\nexit 1\n'); chmodSync(hook, 0o755);
+  const r = cli(args, { cwd: a.cons, tmp: a.tmp });
+  assert.equal(r.status, 3, r.stdout + r.stderr);
+  assert.match(r.stderr, /change was not published/i);
+  assert.deepEqual(state(a.home), before);
+  assert.equal(gitIn(a.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+  assert.equal(gitIn(a.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+  rmSync(hook);
+  assert.equal(cli(NEW('later success'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  const files = gitIn(bare, 'ls-tree', '-r', '--name-only', 'main');
+  assert.ok(files.includes('acme/demo/phases/001-one.md'));
+  assert.doesNotMatch(files, /failed-creation|new\/place|private.txt/);
+  assert.doesNotMatch(gitIn(bare, 'show', 'main:acme/demo/phases/001-one.md'), /failed note/);
+});
+
+test('publication: legacy two-commit move with destination-only conflict is refused; explicit drop and retry publishes both folders', async t => {
+  const [a, b, { bare }] = writers(t);
+  assert.equal(cli(NEW('one'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const src = 'acme/demo/phases/001-one.md'; const dst = 'new/place/phases/001-one.md';
+  mkdirSync(join(b.home, 'new', 'place', 'phases'), { recursive: true }); gitIn(b.home, 'mv', src, dst);
+  let con = db.connect(join(b.home, 'new', 'place')); db.scan(con, join(b.home, 'new', 'place')); con.close();
+  gitIn(b.home, 'add', '-A'); gitIn(b.home, 'commit', '-qm', 'legacy cross-repository move');
+  con = db.connect(join(b.home, 'new', 'place')); db.logEvent(con, 'note', { note: 'second legacy commit' }); con.close();
+  gitIn(b.home, 'add', '-A'); gitIn(b.home, 'commit', '-qm', 'second legacy commit');
+  const hashes = gitIn(b.home, 'log', '--format=%h', 'origin/main..HEAD').split('\n');
+  con = db.connect(join(a.home, 'new', 'place')); db.logEvent(con, 'note', { note: 'destination-only conflict' }); con.close();
+  gitIn(a.home, 'add', 'new/place'); gitIn(a.home, 'commit', '-qm', 'destination only'); gitIn(a.home, 'push', '-q');
+  writeFileSync(join(b.home, 'private.txt'), 'do not publish'); gitIn(b.home, 'add', 'private.txt');
+  const before = state(b.home); const remote = gitIn(bare, 'rev-parse', 'main');
+  const refused = cli(['update', '1', '--append', 'must refuse'], { cwd: b.cons, tmp: b.tmp });
+  assert.equal(refused.status, 3, refused.stdout + refused.stderr);
+  for (const hash of hashes) assert.ok(refused.stderr.includes(hash));
+  assert.deepEqual(state(b.home), before); assert.equal(gitIn(bare, 'rev-parse', 'main'), remote);
+  assert.deepEqual(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(p => p.endsWith('001-one.md')), [src]);
+  // The fixture explicitly drops the legacy stack; the CLI never chooses for the owner.
+  gitIn(b.home, 'fetch', '-q', 'origin'); gitIn(b.home, 'reset', '--hard', 'origin/main');
+  writeFileSync(join(b.home, 'private.txt'), 'do not publish'); gitIn(b.home, 'add', 'private.txt');
+  const staged = gitIn(b.home, 'ls-files', '--stage', '--', 'private.txt');
+  const hold = holdFirstPush(b);
+  const move = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held();
+  try {
+    con = db.connect(join(a.home, 'new', 'place')); db.logEvent(con, 'note', { note: 'destination changes again' }); con.close();
+    gitIn(a.home, 'add', 'new/place'); gitIn(a.home, 'commit', '-qm', 'destination race'); gitIn(a.home, 'push', '-q');
+  } finally { hold.release(); }
+  const r = await move.done; assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(p => p.endsWith('001-one.md')), [dst]);
+  assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+  assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+  assert.equal(gitIn(b.home, 'ls-files', '--stage', '--', 'private.txt'), staged);
+  assert.doesNotMatch(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main'), /private.txt/);
+  const changed = gitIn(bare, 'diff-tree', '--no-commit-id', '--no-renames', '--name-status', '-r', 'main');
+  assert.match(changed, /D\s+acme\/demo\/phases\/001-one.md/); assert.match(changed, /A\s+new\/place\/phases\/001-one.md/);
+});
+
+test('publication: permanent failure after a push race removes renumbering and retains all incoming remote files', async t => {
+  const [a, b, { bare }] = writers(t);
+  assert.equal(cli(NEW('anchor'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  writeFileSync(join(b.home, 'private.txt'), 'private staging'); gitIn(b.home, 'add', 'private.txt');
+  const staged = gitIn(b.home, 'ls-files', '--stage', '--', 'private.txt');
+  const hold = holdFirstPush(b);
+  // Keep the gate, but every attempted push by b fails, including after rebasing.
+  const hook = join(b.home, '.git', 'hooks', 'pre-push');
+  writeFileSync(hook, readFileSync(hook, 'utf8').replace('&& exit 0', '&& exit 1') + '\nexit 1\n');
+  const failed = cliAsync(NEW('failed raced creation'), { cwd: b.cons, tmp: b.tmp });
+  await hold.held();
+  let collision; let remote;
+  try {
+    collision = cli(NEW('upstream collision'), { cwd: a.cons, tmp: a.tmp });
+    remote = cli([...NEW('other folder'), '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'other/repo' } });
+  } finally { hold.release(); }
+  const r = await failed.done;
+  assert.equal(collision.status, 0, collision.stdout + collision.stderr);
+  assert.equal(remote.status, 0, remote.stdout + remote.stderr);
+  assert.equal(r.status, 3, r.stdout + r.stderr);
+  assert.match(r.stdout, /renumbered 002 -> 003/);
+  assert.match(r.stderr, /change was not published/i);
+  assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+  assert.equal(gitIn(b.home, 'diff', '--name-only'), '');
+  assert.equal(gitIn(b.home, 'diff', '--cached', '--name-only'), 'private.txt');
+  assert.equal(gitIn(b.home, 'ls-files', '--stage', '--', 'private.txt'), staged);
+  assert.deepEqual(store.load(b.folder).map(x => x.fm.name), ['anchor', 'upstream collision']);
+  assert.equal(store.load(join(b.home, 'other', 'repo'))[0].fm.name, 'other folder');
 });

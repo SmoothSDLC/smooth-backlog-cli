@@ -3,16 +3,16 @@
 // pinned ec5b254e. Node has no flock, so the lock is a pid file (locked() of src/storage.js)
 // and a number two clones picked at once is repaired after the rebase (renumber below).
 // A failure to sync throws BacklogError with exitCode 3; the caller prints it and exits.
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
-import { join, posix, resolve, sep } from 'node:path';
+import { dirname, join, posix, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
 import { publicationGuard, staleError } from './seen.js';
-import { connect, reconcileFolders, scan } from './db.js';
+import { connect, scan } from './db.js';
 import * as store from './store.js';
 import { asList } from './team.js';
 
@@ -53,38 +53,56 @@ async function refuseConflicts(home) {
   }
 }
 
-// Stages the reconciled folders into ONE commit, never a stack: an earlier unpushed commit would be published with a stale mirror.
-// When the rebase dropped our commit (upstream has the same change) there is nothing to amend: commit anew, never rewrite upstream's.
+// Only the commit created by this command may be repaired. Older versions/crashes
+// can leave a stack: require an explicit publish/drop decision before touching it.
+async function refuseUnpublished(home) {
+  const commits = (await must(home, ['log', '--format=%h %s', 'origin/main..HEAD'], 'list unpublished commits')).stdout.trim();
+  if (commits) throw new BacklogError('SYNC_FAILED', `${home} has unpublished commits:\n${commits}\n`
+    + `Nothing was changed. Publish them explicitly with 'git -C ${home} push origin HEAD:main', or drop them with `
+    + `'git -C ${home} reset --keep origin/main', then retry. Resolve any divergence manually before publishing`, 3);
+}
+
+// The leading pull records pre-command edits, including staging. Keeping this in
+// sync lets every mutating caller use the same rollback, including two-folder moves.
+const starting = new Map();
+const paths = r => r.stdout.split('\0').filter(Boolean);
+async function snapshot(home) {
+  const files = new Map();
+  const dirty = paths(await must(home, ['diff', '--name-only', '--no-renames', '-z', 'HEAD'], 'list working edits'));
+  const untracked = paths(await must(home, ['ls-files', '--others', '--exclude-standard', '-z'], 'list untracked files'));
+  const staged = paths(await must(home, ['diff', '--cached', '--name-only', '--no-renames', '-z'], 'list staged edits'));
+  for (const path of new Set([...dirty, ...untracked, ...staged])) {
+    const abs = join(home, path);
+    let st; try { st = lstatSync(abs); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    files.set(path, !st ? null : st.isSymbolicLink() ? { link: readlinkSync(abs) } : { bytes: readFileSync(abs), mode: st.mode });
+  }
+  const index = (await must(home, ['write-tree'], 'save staging')).stdout.trim();
+  return { files, dirty, staged, index };
+}
+
 async function foldIn(home, lits, names, message) {
   const ahead = Number((await g(home, ['rev-list', '--count', 'origin/main..HEAD'])).stdout.trim());
-  const dirty = (await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code;
-  if (ahead > 1) await must(home, ['reset', '-q', '--soft', 'origin/main'], 'squash the unpushed commits');
-  if (ahead > 1 || dirty) {
+  if (ahead > 1) await refuseUnpublished(home); // never squash a stack with a partial folder list
+  if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
     const r = await commitOnly(home, lits, ahead === 1 ? ['--amend', '--no-edit'] : ['-m', `${names.join(', ')}: ${message}`]);
     if (r.code) throw fail(home, 'commit the reconciled mirror', r);
   }
 }
 
 async function pullLocked(home) {
-  let r = await g(home, PULL);
-  if (r.code) { // the same repair as commit()'s pull: an unpushed commit (a failed push) must not be parked just because another clone pushed meanwhile
-    const names = [...new Set((await g(home, ['ls-files', '-u', '-z'])).stdout.split('\0').filter(Boolean).map(e => e.split('\t')[1].split('/').slice(0, 2).join('/')))];
-    const folders = names.map(n => join(home, n)); const pairs = [];
-    if (names.length && await repairConflicts(home, folders, names, pairs)) {
-      r = { code: 0 };
-      if (pairs.length || pairs.mirror) {
-        const lits = names.map(lit);
-        await reconcileFolders(folders, pairs);
-        await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
-        await foldIn(home, lits, names, 'reconcile the mirror');
-      }
-    }
+  await refuseConflicts(home);
+  const fetched = await g(home, ['fetch', '-q', 'origin', '+refs/heads/main:refs/remotes/origin/main']);
+  if (fetched.code) throw new BacklogError('SYNC_FAILED', `could not update ${home} from origin/main (${fetched.stderr.slice(0, 300)}); nothing was read or changed`, 3);
+  await refuseUnpublished(home);
+  const before = await snapshot(home);
+  const r = await g(home, PULL);
+  if (r.code) {
+    await g(home, ['rebase', '--abort']);
+    throw new BacklogError('SYNC_FAILED', `could not update ${home} from origin/main (${r.stderr.slice(0, 300)}); nothing was read or changed`, 3);
   }
-  if (!r.code) await refuseConflicts(home);
-  if (!r.code) { await renumber(home, process.stderr, true); return; } // stderr: a read command's stdout may be JSON
-  const parked = await parkConflict(home);
-  throw new BacklogError('SYNC_FAILED', `could not update ${home} from origin/main (${r.stderr.slice(0, 300)}); nothing was read or changed, `
-    + (parked ? `because an unpushed local commit conflicts: ${parked}. Then run the command again` : 'because the local copy may be stale. Fix the cause, then run the command again'), 3); // lib_db.py:106-109
+  await refuseConflicts(home);
+  if (before.staged.length) await must(home, ['restore', '--staged', `--source=${before.index}`, '--', ...before.staged.map(lit)], 'restore your staging');
+  starting.set(resolve(home), await snapshot(home));
 }
 
 export const pull = home => locked(lockFile(home), () => pullLocked(home), { takeOver: true });
@@ -204,18 +222,6 @@ async function sameButRank(home, path) {
   return (await side(2)) === (await side(3));
 }
 
-// A rebase that stopped on a conflict nobody can merge: abort it, keep the local commits on a branch and put the clone on upstream, so the
-// clone keeps working and the change is not lost. Returns the sentence for the error text, or '' when there was no conflict (or the reset failed).
-async function parkConflict(home) {
-  const unmerged = [...new Set((await g(home, ['ls-files', '-u', '-z'])).stdout.split('\0').filter(Boolean).map(e => e.split('\t')[1]))];
-  await g(home, ['rebase', '--abort']);
-  if (!unmerged.length) return '';
-  const branch = `backlog-unmerged-${new Date().toISOString().replace(/[-:]|\.\d+/g, '')}`;
-  if ((await g(home, ['branch', branch, 'HEAD'])).code || (await g(home, ['reset', '-q', '--keep', 'origin/main'])).code) return '';
-  return `it conflicts with origin/main in ${unmerged.slice(0, 3).join(', ')}${unmerged.length > 3 ? ', ...' : ''}; the local commit is parked on branch ${branch} `
-    + `(git -C ${home} log ${branch}) and the clone is reset to origin/main, so later commands work. Redo the change on top of the current backlog`;
-}
-
 async function repairConflicts(home, folders, names, renumbered) {
   const dbPaths = names.map(name => `${name}/backlog.db`);
   const nameOf = path => names.findIndex(name => path.startsWith(`${name}/`));
@@ -296,64 +302,87 @@ export async function commit(home, folders, message, reconcile = null, guard = [
   const lits = names.map(lit);
   return locked(lockFile(home), async () => {
     await refuseConflicts(home); // never stage or push the markers of an autostash that did not apply
-    await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
-    // scoped to the folders (beyond lib_db.py parity): work staged elsewhere in the backlog clone is neither committed nor pushed
-    if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
-      const c = await commitOnly(home, lits, ['-m', `${names.join(', ')}: ${message}`]);
-      if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
-    }
-    const renumbered = []; let err = ''; let settled = 0;
-    const undoCommit = async () => {
-      // Also discard uncommitted reconciliation writes. The rebased parent
-      // retains upstream's changes; no refused local change may be pushed later.
-      if (Number((await g(home, ['rev-list', '--count', 'origin/main..HEAD'])).stdout.trim()) > 0) {
-        await must(home, ['reset', '-q', '--soft', 'HEAD~1'], 'take back the refused change');
-      }
-      await must(home, ['restore', '-q', '--staged', '--worktree', '--source=HEAD', '--', ...lits], 'take back the refused change');
+    await refuseUnpublished(home);
+    const saved = starting.get(resolve(home)) ?? await snapshot(home);
+    starting.delete(resolve(home));
+    const own = path => names.some(n => path === n || path.startsWith(`${n}/`));
+    const restoreStaging = async paths => {
+      if (paths.length) await must(home, ['restore', '--staged', `--source=${saved.index}`, '--', ...paths.map(lit)], 'restore your staging');
     };
-    const staleHit = async () => { for (const x of guard) if ((await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) return x; return null; };
-    const staleCheck = async () => {
-      for (const x of guard) {
-        if (!(await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) continue;
-        const up = parse((await g(home, ['show', `origin/main:${x.path}`])).stdout).fm;
-        // shortcut: the whole folder goes back to HEAD, so an edit made by hand in this folder while the command ran is lost with it (the command would have published it too)
-        await undoCommit();
-        throw staleError(x.slug, up.updated_by, up.updated, x.was);
+    const undoCommit = async (target = 'origin/main') => {
+      await g(home, ['rebase', '--abort']);
+      await must(home, ['reset', '-q', '--soft', target], 'take back the unpublished change');
+      if ((await g(home, ['ls-files'])).stdout.trim()) {
+        await must(home, ['restore', '-q', '--staged', '--worktree', '--source=HEAD', '--', '.'], 'take back the unpublished change');
       }
-    };
-    const base = (await g(home, ['merge-base', 'HEAD', 'origin/main'])).stdout.trim();
-    for (let i = 0; i < 3; i++) {
-      if (base) await g(home, ['fetch', '-q', 'origin', '+refs/heads/main:refs/remotes/origin/main']);
-      await staleCheck();
-      let pr = await g(home, PULL);
-      if (pr.code && guard.length && await staleHit()) { await g(home, ['rebase', '--abort']); await staleCheck(); } // a guarded item arrived with the pull and conflicts: refuse, never park
-      if (pr.code && await repairConflicts(home, list, names, renumbered)) pr = { code: 0 };
-      if (pr.code) {
-        const parked = await parkConflict(home);
-        if (parked) throw new BacklogError('SYNC_FAILED', `the change is NOT on origin/main: ${parked}`, 3);
-        err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;
-      } else {
-        await refuseConflicts(home);
-        await staleCheck();
-        renumbered.push(...await renumber(home, process.stdout));
-        if (reconcile && (renumbered.length > settled || renumbered.mirror)) { // the mirror and priorities are made right in the commit itself: nothing inconsistent is ever pushed
-          const fresh = Object.assign(renumbered.slice(settled), { localDbs: renumbered.localDbs, mirror: renumbered.mirror });
-          settled = renumbered.length; renumbered.localDbs = []; renumbered.mirror = false;
-          try { await reconcile(fresh); } catch (e) {
-            if (e.code === 'STALE_ITEM') await undoCommit();
-            throw e;
-          }
-          await staleCheck(); // reconciliation can add more incidental writes to the guard
-          await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
-          await foldIn(home, lits, names, message);
+      // Reconciliation can fail before staging its new files.
+      for (const path of paths(await g(home, ['ls-files', '--others', '--exclude-standard', '-z']))) {
+        if (own(path) && !saved.files.has(path)) rmSync(join(home, path), { force: true });
+      }
+      for (const [path, prior] of saved.files) {
+        const abs = join(home, path);
+        rmSync(abs, { force: true });
+        if (prior) {
+          mkdirSync(dirname(abs), { recursive: true });
+          if (prior.link !== undefined) symlinkSync(prior.link, abs);
+          else { writeFileSync(abs, prior.bytes); chmodSync(abs, prior.mode); }
         }
-        const ps = await g(home, ['push', '-q', 'origin', 'HEAD:refs/heads/main']);
-        if (!ps.code) return renumbered;
-        err = `push failed: ${ps.stderr.slice(0, 300)}`;
       }
-      if (i < 2) await delay(1000 * (1 + i));
+      await restoreStaging([...new Set([...saved.dirty, ...saved.staged])]);
+    };
+    try {
+      await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
+      // scoped to the folders (beyond lib_db.py parity): work staged elsewhere in the backlog clone is neither committed nor pushed
+      if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
+        const c = await commitOnly(home, lits, ['-m', `${names.join(', ')}: ${message}`]);
+        if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
+      }
+      const renumbered = []; let err = ''; let settled = 0;
+      const staleHit = async () => { for (const x of guard) if ((await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) return x; return null; };
+      const staleCheck = async () => {
+        for (const x of guard) {
+          if (!(await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) continue;
+          const up = parse((await g(home, ['show', `origin/main:${x.path}`])).stdout).fm;
+            throw staleError(x.slug, up.updated_by, up.updated, x.was);
+        }
+      };
+      const base = (await g(home, ['merge-base', 'HEAD', 'origin/main'])).stdout.trim();
+      for (let i = 0; i < 3; i++) {
+        if (base) await g(home, ['fetch', '-q', 'origin', '+refs/heads/main:refs/remotes/origin/main']);
+        await staleCheck();
+        let pr = await g(home, PULL);
+        if (pr.code && guard.length && await staleHit()) { await g(home, ['rebase', '--abort']); await staleCheck(); } // a guarded item arrived with the pull and conflicts: refuse, never park
+        if (pr.code && await repairConflicts(home, list, names, renumbered)) pr = { code: 0 };
+        if (pr.code) {
+          await g(home, ['rebase', '--abort']);
+          err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;
+        } else {
+          await refuseConflicts(home);
+          await staleCheck();
+          renumbered.push(...await renumber(home, process.stdout));
+          if (reconcile && (renumbered.length > settled || renumbered.mirror)) { // the mirror and priorities are made right in the commit itself: nothing inconsistent is ever pushed
+            const fresh = Object.assign(renumbered.slice(settled), { localDbs: renumbered.localDbs, mirror: renumbered.mirror });
+            settled = renumbered.length; renumbered.localDbs = []; renumbered.mirror = false;
+            await reconcile(fresh);
+            await staleCheck(); // reconciliation can add more incidental writes to the guard
+            await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
+            await foldIn(home, lits, names, message);
+          }
+          await restoreStaging(saved.staged.filter(p => !own(p)));
+          const ps = await g(home, ['push', '-q', 'origin', 'HEAD:refs/heads/main']);
+          if (!ps.code) return renumbered;
+          err = `push failed: ${ps.stderr.slice(0, 300)}`;
+        }
+        if (i < 2) await delay(1000 * (1 + i));
+      }
+      throw new BacklogError('SYNC_FAILED', `The change was not published in ${home} (${err}); the local branch and working tree were rolled back. Fix the cause and retry the command`, 3);
+    } catch (e) {
+      // A stale-view refusal keeps the established parent rollback (and exit 5).
+      // Publication failures return the branch to the fetched remote instead.
+      const stale = e.code === 'STALE_ITEM';
+      const ahead = stale && Number((await g(home, ['rev-list', '--count', 'origin/main..HEAD'])).stdout.trim()) > 0;
+      await undoCommit(stale ? (ahead ? 'HEAD~1' : 'HEAD') : 'origin/main');
+      throw e;
     }
-    throw new BacklogError('SYNC_FAILED', `the change is committed in ${home} but NOT on origin/main (${err}). It is not recorded until it is `
-      + `pushed: fix the cause and run 'git -C ${home} pull --rebase && git -C ${home} push'`, 3);
   }, { takeOver: true });
 }

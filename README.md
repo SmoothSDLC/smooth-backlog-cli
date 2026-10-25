@@ -66,7 +66,9 @@ clean` deletes the entire backlog, including every branch and contained backups.
 **Shared backlog repository:** `backlog --use-backlog-repo <path>` switches to a shared mode where the items of
 every repository live in one Git backlog repository instead of each repository's `.backlog/` folder; the commands
 there match the Python backlog skill. `backlog --use-local-repo` switches back. [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode)
-describes the mode and its commands.
+describes the mode and its commands. Every shared change succeeds only after it is committed and pushed.
+A failed publication rolls back the change and restores starting edits and staging. Existing unpublished commits
+require an explicit publish or drop decision before another command can change the backlog.
 
 In shared mode, a write to an item that somebody else changed after you last read it is refused with exit code 5 (read it again, then retry); every write records `updated_by`. See [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode).
 

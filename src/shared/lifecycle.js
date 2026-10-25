@@ -53,7 +53,7 @@ export function release({ fm }, agent) {
   const who = fm.claimed_by || '';
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be released into the queue`);
   if (who !== agent) reject(`claimed by ${who || 'nobody'}, not by ${agent}`);
-  Object.assign(fm, { status: 'pending', claimed_by: '', claimed_at: '' });
+  Object.assign(fm, { status: 'pending', claimed_by: '', claimed_at: '', ...(fm.wait_on ? { wait_on: '' } : {}) }); // beyond update.py parity: a wait belongs to the holder; left behind it hides the item from pop's continue AND offers it as a claim
   return { event: 'released', text: `Released by ${agent} at ${now()}` };
 }
 

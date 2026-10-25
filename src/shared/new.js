@@ -5,8 +5,9 @@ import { join, posix } from 'node:path';
 import { input } from '../errors.js';
 import { commitSettled, connect, ensureAnchor, freshDb, logEvent, scan, undoOnThrow } from './db.js';
 import { parse } from './frontmatter.js';
+import { actor, record } from './seen.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
-import { branch as callerBranch, folder as repoFolder, nextSeq, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
+import { branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
 import { pull } from './sync.js';
 import { outsideTeam, teamScope } from './team.js';
 
@@ -135,8 +136,8 @@ async function create(argv, { home, folder, repo, team }) {
       inherited = { objective: src.objective, summary: src.summary, context: `Split from \`${src.slug}\`. Inherited context:\n\n${parent}` };
     }
 
-    seq = nextSeq(folder);
     const name = a.name || `${a.splitFrom || 'split'}-cont`;
+    seq = nextSeqFor(folder, `-${slugify(name)}.md`);
     slug = `${pad(seq)}-${slugify(name)}`;
     rel = `phases/${slug}.md`;
     const path = join(folder, rel);
@@ -147,7 +148,7 @@ async function create(argv, { home, folder, repo, team }) {
       phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: 'pending', severity,
       priority: priority ?? 10 ** 6, // a big sentinel sorts it last until the reflow places it
       repository: repo, branch: team.branch || callerBranch(process.cwd()),
-      commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(),
+      commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(), updated_by: actor(),
     };
     if (work.length) fm.work_class = work;
     if (review.length) fm.review_classes = review;
@@ -182,6 +183,7 @@ async function create(argv, { home, folder, repo, team }) {
   for (const [old, next] of await commitSettled(home, folder, message)) {
     if (old === seq) { seq = next; slug = pad(next) + slug.replace(/^\d+/, ''); rel = `phases/${slug}.md`; }
   }
+  record(folder, repo, actor(), [{ slug, path: rel }]); // the creator has seen what it wrote
 
   if (severity === 'critical') {
     const bar = `⚠️ ${'='.repeat(72)}`;

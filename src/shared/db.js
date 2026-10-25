@@ -259,9 +259,9 @@ function replayLocal(db, folder, { local: localFile, base: baseFile }, renumbere
 // sync.commit with a reconcile step: after a rebase renumbered items or took upstream's backlog.db, the mirror is rebuilt from the files
 // (local changes replayed, priorities reflowed) and folded into the commit BEFORE its first push, so origin/main never holds a mirror
 // that disagrees with its files. Resolves to every [old, new] pair renumbered on the way.
-export async function commitSettled(home, folders, message) {
+export async function commitSettled(home, folders, message, guard = []) {
   const list = [].concat(folders);
-  return commit(home, list, message, pairs => reconcileFolders(list, pairs));
+  return commit(home, list, message, pairs => reconcileFolders(list, pairs), guard);
 }
 
 export function reconcileFolders(list, pairs) {

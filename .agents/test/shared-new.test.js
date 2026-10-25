@@ -41,7 +41,7 @@ const BASE = ['--name', 'Alpha job', '--objective', 'do alpha', '--summary', 'su
 const NONE = [...BASE, '--depends-on', 'none'];
 const items = f => store.load(f.folder).filter(i => i.path.startsWith('phases/'));
 // An item without what differs between two runs: the creation and update times and the creating commit.
-const bare = ({ fm: { created, updated, commit, ...fm }, body, path }) => ({ path, keys: Object.keys(fm), fm, body }); // eslint-disable-line no-unused-vars
+const bare = ({ fm: { created, updated, updated_by, commit, ...fm }, body, path }) => ({ path, keys: Object.keys(fm), fm, body }); // eslint-disable-line no-unused-vars
 const subject = f => git(f.bare, 'log', '-1', '--format=%s', 'main');
 const rows = (f, sql) => { const con = db.connect(f.folder); try { return con.prepare(sql).all().map(r => ({ ...r })); } finally { con.close(); } };
 
@@ -134,9 +134,9 @@ test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name 
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
   const [item] = items(f);
   assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'priority', 'repository', 'branch', 'commit',
-    'location', 'created', 'updated', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer']);
-  assert.deepEqual({ ...item.fm, created: 0, updated: 0, commit: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
-    status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0,
+    'location', 'created', 'updated', 'updated_by', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer']);
+  assert.deepEqual({ ...item.fm, created: 0, updated: 0, updated_by: 0, commit: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
+    status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0, updated_by: 0,
     depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
   assert.equal(item.fm.commit, git(f.cons, 'rev-parse', 'HEAD'));
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
@@ -300,21 +300,19 @@ test('review P2: review refs go through checkRefs: an absolute or ..-crossing re
   assert.ok(!existsSync(join(f.folder, 'backlog.db')), 'the database is not even opened');
 });
 
-test('review P2: a file with the name of the next item is a collision: refused without --force and left intact, replaced with --force', t => {
+test('review P2: a file with the name of the next item is never replaced: the item takes the next free number, with or without --force', t => {
   const f = fixture(t);
   const path = join(f.folder, 'phases', '001-alpha-job.md');
   mkdirSync(join(f.folder, 'phases'), { recursive: true });
   const seeded = '---\nphase: 001-alpha-job\n---\nSEEDED BODY\n'; // no seq and no mirror row: the number 1 is handed out again
   writeFileSync(path, seeded);
-  const refused = node(f, NONE);
-  assert.equal(refused.status, 1, refused.stderr);
-  assert.equal(refused.stdout, '❌ phases/001-alpha-job.md exists (pass --force)\n');
-  assert.equal(readFileSync(path, 'utf8'), seeded);
+  const first = node(f, NONE);
+  assert.equal(first.status, 0, first.stderr);
+  assert.ok(readFileSync(path, 'utf8').includes('SEEDED BODY'));
   const forced = node(f, [...NONE, '--force']);
   assert.equal(forced.status, 0, forced.stderr);
-  const [item] = items(f);
-  assert.equal(item.fm.seq, 1);
-  assert.ok(!item.body.includes('SEEDED BODY'));
+  assert.ok(readFileSync(path, 'utf8').includes('SEEDED BODY'));
+  assert.deepEqual(items(f).map(i => i.path).sort(), ['phases/001-alpha-job.md', 'phases/002-alpha-job.md', 'phases/003-alpha-job.md']);
 });
 
 test('review P2: the skills class is accepted as work class and review class, with a covering skills.md ref; the fields are persisted', t => {

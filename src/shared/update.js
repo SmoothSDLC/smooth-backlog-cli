@@ -11,6 +11,7 @@ import { parse as parseDoc } from './frontmatter.js';
 import { teamRefusal } from './archive.js';
 import { closeNow, headline, missingFields, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
+import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { asList, teamScope, uncoveredReviewClasses } from './team.js';
@@ -102,6 +103,8 @@ export async function run(argv) {
 
 async function update(argv) {
   const a = parse(argv);
+  seen.setActor(a.by ?? a.claim ?? a.release);
+  a.named = Boolean(a.by ?? a.claim ?? a.release);
   const { home } = store.resolveHome();
   let repo; let folder;
   try { repo = teamScope().repo || store.repoId(process.cwd()); folder = store.folder(home, repo); } catch (e) { return die(e.message); } // lib_db.py:122-129
@@ -115,7 +118,8 @@ async function update(argv) {
     try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); throw e; } finally { close(); }
     if (code || a['dry-run']) { forget(); return code; }
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
-    await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '));
+    await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '), a.guard);
+    if (a.wrote) seen.record(folder, repo, seen.actor(), [a.wrote]); // after the push: this is what the agent now has
     return 0;
   });
 }
@@ -168,6 +172,9 @@ async function change(a, con, folder, repo) {
   const path = join(folder, row.path);
   await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way
   const { fm, body: text } = parseDoc(readFileSync(path, 'utf8'));
+  if (!a.named && a['request-review'] !== undefined) seen.setActor(fm.claimed_by); // only the holder asks for a review of its work
+  seen.check(folder, repo, seen.actor(), row.slug, row.path); // refuses (exit 5) when someone else changed the item since this agent read it
+  a.guard = [{ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` }];
   let body = text;
   const changes = {};
   let moveTarget = null; // --priority is a move-to-rank, applied via reflow (stays dense)
@@ -234,7 +241,7 @@ async function change(a, con, folder, repo) {
   }
   const completing = a.status === 'done' || event === 'closed';
   if (completing && !fm.completed) fm.completed = store.now();
-  fm.updated = store.now();
+  store.stamp(fm);
   if (a.append) body = `${rstrip(body)}\n\n${a.append}\n`;
 
   if (a['dry-run']) {
@@ -244,6 +251,7 @@ async function change(a, con, folder, repo) {
   }
 
   store.write({ path, fm, body }, folder);
+  a.wrote = { slug: row.slug, path: row.path };
   db.logEvent(con, event, {
     handoffId: row.handoff_id, phaseId: row.id, branch: fm.branch || '', commitSha: fm.commit || '',
     note: a.note || `set ${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ')}`,

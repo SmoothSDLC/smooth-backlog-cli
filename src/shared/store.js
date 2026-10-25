@@ -11,6 +11,7 @@ import { operation } from '../errors.js';
 import { locked } from '../storage.js';
 import { dump, hasFrontMatter, parse } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
+import { actor } from './seen.js';
 import { outsideTeam } from './team.js';
 
 const BACKLOG_ORIGIN = 'SmoothSDLC/smoothsdlc-backlog'; // lib_db.py:34
@@ -245,6 +246,16 @@ export function nextSeq(dir) {
   return Math.max(max, withMirror(dir, db => Number(db.prepare('SELECT COALESCE(MAX(seq), 0) AS m FROM phase').get().m)) ?? 0) + 1;
 }
 
+// nextSeq whose file name `<seq><tail>` (tail: '-name.md') is also free in phases/ and archive/: update --seq can leave a low number unused while
+// its neighbour's name stays, so the next number alone does not make the name new, and a write by path would replace that item.
+export function nextSeqFor(dir, tail) {
+  let bare = []; try { bare = readdirSync(join(dir, 'phases')); } catch { /* no phases/ yet */ } // a file without front matter is not an item, but its name is taken
+  const taken = new Set([...bare, ...load(dir).flatMap(i => [basename(i.path), `${i.fm.phase}.md`])]);
+  let n = nextSeq(dir);
+  while (taken.has(String(n).padStart(3, '0') + tail)) n++;
+  return n;
+}
+
 const slugOf = i => i.fm.phase || basename(i.path, '.md'); // lib_db.py:ingest_phase slug
 
 // lib_db.py:523-530: pending/in_progress items of phases/ (all branches), priority then seq. The oracle ranks mirror rows: a ghost
@@ -266,7 +277,7 @@ function actionable(dir) {
 const asInt = p => (typeof p === 'string' && /^\s*[+-]?\d+\s*$/.test(p) ? Number(p) : p);
 function applyDense(dir, items, inScope) {
   return items.map((i, rank) => {
-    if (!i.ghost && inScope(i) && asInt(i.fm.priority ?? -1) !== rank) write({ path: join(dir, i.path), fm: { ...i.fm, priority: rank, updated: now() }, body: i.body }, dir);
+    if (!i.ghost && inScope(i) && asInt(i.fm.priority ?? -1) !== rank) write({ path: join(dir, i.path), fm: stamp({ ...i.fm, priority: rank }), body: i.body }, dir);
     return [slugOf(i), rank];
   });
 }
@@ -331,3 +342,14 @@ export function findings(dir) {
 
 // lib_db.py:159-160
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+// the one way an item write marks itself: when, and by whom (see seen.js)
+export function stamp(fm) {
+  const had = Object.hasOwn(fm, 'updated_by');
+  Object.assign(fm, { updated: now(), updated_by: actor() });
+  if (!had && Object.keys(fm).includes('updated')) { // a new key lands next to updated, not at the end
+    const rest = Object.entries(fm).filter(([k]) => k !== 'updated_by');
+    for (const k of Object.keys(fm)) delete fm[k];
+    for (const [k, v] of rest) { fm[k] = v; if (k === 'updated') fm.updated_by = actor(); }
+  }
+  return fm;
+}

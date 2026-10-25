@@ -36,7 +36,13 @@ function fixture() {
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-const update = (f, args, env) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env });
+// A real agent looks at an item before it writes it again: the driver reads it as the agent the write names (seen.js refuses a write on a stale view).
+const update = (f, args, env) => {
+  const named = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
+  const who = named ?? (args.includes('--request-review') ? 'cody' : undefined); // a review is requested by the one working on the item (cody here)
+  if (who && args[0] && !args[0].startsWith('-')) cli(['query', '--phase', args[0], '--agent', who], { cwd: f.cons, tmp: f.t, env });
+  return cli(['update', ...args], { cwd: f.cons, tmp: f.t, env });
+};
 const query = (f, args) => cli(['query', ...args], { cwd: f.cons, tmp: f.t });
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 
@@ -261,7 +267,7 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
   const o = fixture(); const n = fixture();
   const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
-  const norm = s => String(s).replace(TS, 'TS').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA').replace(/cwd=\S+/g, 'cwd=X').replace(/\b[0-9a-f]{40}\b/g, 'SHA40').replace(/,?"review_author":"[^"]*"/g, "");  // review_author: beyond the oracle (who asked for a review survives a release)
+  const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA').replace(/cwd=\S+/g, 'cwd=X').replace(/\b[0-9a-f]{40}\b/g, 'SHA40').replace(/,?"review_author":"[^"]*"/g, "");  // review_author: beyond the oracle (who asked for a review survives a release)
   const snapshot = f => {
     const files = {};
     for (const name of readdirSync(join(f.folder, 'phases'))) files[name] = norm(JSON.stringify(parse(readFileSync(join(f.folder, 'phases', name), 'utf8'))));

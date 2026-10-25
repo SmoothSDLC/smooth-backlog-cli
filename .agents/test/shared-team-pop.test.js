@@ -48,6 +48,8 @@ function make(f, side, cwd, name, extra = []) {
 }
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const upWith = side => (f, slug, ...args) => {
+  const who = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
+  if (side !== 'py' && who) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t }); // an agent reads an item before it writes it again (seen.js)
   const r = (side === 'py' ? py : (s, a, o) => cli([s, ...a], o))(side === 'py' ? 'update.py' : 'update', [slug, ...args], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r;

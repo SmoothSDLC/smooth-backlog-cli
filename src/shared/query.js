@@ -7,6 +7,7 @@ import { join, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { assertInside, git, itemSelector, redact } from './safety.js';
+import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { teamScope } from './team.js';
@@ -187,6 +188,7 @@ async function query(argv) {
         : one('SELECT * FROM phase WHERE slug=?', sel.slug));
       if (!r) { say(`❌ no phase ${repr(a.phase)}`); return 1; }
       dump(r);
+      seen.view(a.agent, folder, repo, r); // the agent now holds this version: its next write to the item is checked against it
       return 0;
     }
 

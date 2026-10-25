@@ -67,7 +67,7 @@ function seed({ permuteIds = false } = {}) {
 }
 
 const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
-const norm = s => String(s).replace(TS, 'TS').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA');
+const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA');
 
 // The codec writes strings JSON-quoted (contract section 3) where PyYAML writes them plain: the front matter is compared
 // as parsed values in key order, the body byte for byte.

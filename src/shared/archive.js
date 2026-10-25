@@ -2,12 +2,13 @@
 // oracle's order: pull, resolve the item, git mv under archive/, stamp status, mirror row and event, scan, reflow, commit and
 // push. The item is found by number (seq) or slug, never by database row id. The helpers at the top are shared with move.js.
 // shortcut: argparse's unique-prefix abbreviations (--for) are not accepted.
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { assertInside, git, itemSelector, redact } from './safety.js';
-import { splitBom } from './frontmatter.js';
+import { parse as parseDoc, splitBom } from './frontmatter.js';
+import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { outsideTeam, teamScope } from './team.js';
@@ -64,17 +65,18 @@ export async function withBacklog(fn, tail) {
     const con = db.connect(folder); // refuses a link at the owner or the repository folder
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
+    const guard = []; const wrote = []; // the items this command rewrites on the strength of what it read (seen.js), and what it leaves behind
     const folders = [folder]; // the folders this command changed: one commit covers them all (a cross-repository move adds its target)
     let code;
     try {
-      code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close, folders }));
+      code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close, folders, guard, wrote }));
     } catch (e) {
       await git(['reset', '-q', '--', '.'], folder); // undoOnThrow put the files back; a staged git mv would still be in the index
       close(); forget();
       throw e;
     } finally { close(); }
     if (code !== 0 || !tail) forget();
-    if (code === 0 && tail) await db.commitSettled(home, folders, tail);
+    if (code === 0 && tail) { await db.commitSettled(home, folders, tail, guard); seen.record(folder, repo, seen.actor(), wrote); }
     return code;
   });
 }
@@ -113,7 +115,7 @@ function stamp(path) {
   writeFileSync(path, `${bom}${m[1]}${fmText}${text.slice(m[1].length + m[3].length)}`);
 }
 
-async function archive(a, con, { folder, close }) {
+async function archive(a, con, { repo, folder, close, guard }) {
   const row = find(con, a.phase);
   if (!row) return refuse(`no phase ${pyStr(a.phase)}`);
   const outside = teamRefusal(row);
@@ -123,11 +125,15 @@ async function archive(a, con, { folder, close }) {
 
   const src = join(folder, row.path);
   await assertInside(folder, src); // the row is mirror data: it names a file inside the folder, no symlink on the way
+  const { fm } = parseDoc(readFileSync(src, 'utf8'));
+  seen.check(folder, repo, seen.actor(), row.slug, row.path);
+  guard.push({ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   const from = relative(folder, resolve(src)).split('\\').join('/');
   const to = `archive/${from}`; // the same path under archive/ (archive.py:76-77)
   store.assertNoSymlinks(folder, join(folder, to)); // a link at archive/ or archive/phases/ would take the move outside
   if (a['dry-run']) { say(`ℹ️  [dry-run] would git mv ${from} -> ${to} and mark ${row.slug} archived`); return 0; }
 
+  if (existsSync(join(folder, to))) return refuse(`${to} already exists; archiving ${row.slug} would replace that archived item`);
   mkdirSync(join(folder, to, '..'), { recursive: true });
   store.note(src); store.note(join(folder, to)); // the move and the stamp below are undone from these
   if ((await git(['mv', '--', from, to], folder)).code) { // archive.py:39-49: a file git does not track yet moves plainly

@@ -224,6 +224,17 @@ In this mode the items of every repository live in one Git repository, the backl
 (`SmoothSDLC/smoothsdlc-backlog`), in a folder per consuming repository, instead of in each repository's own
 `.backlog/` folder. Two global options, put before the command, choose the mode. The choice is kept per user.
 
+**Two writers never overwrite each other.** Every item write sets `updated_by` (the `--by`/`--claim` agent of the command, else
+`QWEN_CODE_AGENT_ID`, else `USER`) next to `updated`; older items without it read as written by nobody. A command that shows an
+item to an agent (`backlog query --phase <item> --agent <you>`, `backlog pop --agent <you>`) records what that agent saw (`updated`,
+`updated_by`, the backlog commit) in `.git/smooth-backlog-cli-views/<agent>.json` of the backlog clone, and so does every write after
+it succeeds. The next write of that agent to the item first compares the item, after the update from origin, with that record: when
+somebody else changed it since, the write is refused with exit code 5 and the message `item <item> was changed by <who> at <when>
+after you last read it (<what you saw>); read it again (backlog query --phase <item>) and retry`. The same refusal comes when another
+writer's change to the item reaches origin while this command is pushing; the command's change is then taken back (never merged,
+never parked on a branch). Changes to different items rebase and push on their own. An item the agent never read is written without
+the check (its first write). The same holds for `backlog move` and `backlog archive`.
+
 ```sh
 backlog --use-backlog-repo <path>   # use the clone at <path>: shared mode
 backlog --use-local-repo            # back to the repository's own .backlog folder: local mode
@@ -324,6 +335,10 @@ Exit codes:
      change was committed in the local clone but could not be pushed: then it is not recorded until it is pushed, as the
      message says.
   4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
+     without the check (its first write).
 
 Example:
   backlog new --name "Fix login" --objective "An expired cookie no longer blocks sign-in" --summary "Login cookie handling" --depends-on none
@@ -442,6 +457,10 @@ Exit codes:
      change was committed in the local clone but could not be pushed: then it is not recorded until it is pushed, as the
      message says.
   4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
+     without the check (its first write).
 
 Example:
   backlog update 18 --status in_progress --note "Started the help text"
@@ -548,6 +567,10 @@ Exit codes:
      change was committed in the local clone but could not be pushed: then it is not recorded until it is pushed, as the
      message says.
   4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
+     without the check (its first write).
 
 With --pop, and with --next and --agent, the exit codes are those of backlog pop (see backlog pop --help): 0 the command
 answered with an action, 3 the action is idle (3 is also used when the local clone could not be updated before the answer, or a --claim-now claim could not be pushed),
@@ -597,6 +620,10 @@ Exit codes:
      change was committed in the local clone but could not be pushed: then it is not recorded until it is pushed, as the
      message says.
   4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
+     without the check (its first write).
 
 With --pop, and with --next and --agent, the exit codes are those of backlog pop (see backlog pop --help): 0 the command
 answered with an action, 3 the action is idle (3 is also used when the local clone could not be updated before the answer, or a --claim-now claim could not be pushed),
@@ -770,6 +797,10 @@ Exit codes:
      change was committed in the local clone but could not be pushed: then it is not recorded until it is pushed, as the
      message says.
   4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
+     without the check (its first write).
 
 Example:
   backlog archive 12

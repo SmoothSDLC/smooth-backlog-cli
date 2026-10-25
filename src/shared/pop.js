@@ -11,6 +11,7 @@ import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { REFINE_HOW, missingFields } from './lifecycle.js';
 import { assertInside, git, redact } from './safety.js';
+import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import * as team from './team.js';
@@ -148,6 +149,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     act = { name: 'idle', r: null, f: repo, say: `nothing for ${me}: ${blocked.length ? 'message the agents holding the blockers below, or the coordinator' : 'tell the coordinator'}${refusal ? ` (${refusal})` : ''}` };
   }
   const { name, r, f } = act;
+  if (r && f === repo) seen.view(me, folder, repo, r); // shown to the agent
   if (a.json) {
     process.stdout.write(`${dumps(clean({ // redact the values before they are escaped: a cut in the escaped text breaks the JSON
       action: name, item: r ? r.slug : null, ...(name === 'refine' ? { missing: incomplete.get(r.id) } : {}), seq: r ? r.seq : null,

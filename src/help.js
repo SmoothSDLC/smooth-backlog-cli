@@ -17,7 +17,11 @@ const EXIT = `Exit codes:
      command failed: then nothing was read or changed, and the command can be run again once the cause is fixed. Or the
      change was committed in the local clone but could not be pushed: then it is not recorded until it is pushed, as the
      message says.
-  4  The backlog repository is not set up; the printed question must be answered by the user.`;
+  4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
+     without the check (its first write).`;
 
 const DB = `  --db DB
       Not in this build. The Python scripts use this flag for an internal database path; the shared mode always

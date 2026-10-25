@@ -11,6 +11,7 @@ import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
+import { staleError } from './seen.js';
 import { connect, reconcileFolders, scan } from './db.js';
 import * as store from './store.js';
 import { asList } from './team.js';
@@ -153,7 +154,7 @@ async function renumberFiles(home, stream, added, mirror) {
     const items = store.load(folder);
     const mine = items.find(i => i.path === path);
     if (!mine || !items.some(i => i !== mine && Number(i.fm.seq) === Number(mine.fm.seq))) continue;
-    const old = Number(mine.fm.seq); const next = store.nextSeq(folder);
+    const old = Number(mine.fm.seq); const next = store.nextSeqFor(folder, posix.basename(path).replace(/^\d+/, ''));
     const target = targetOf(path, next);
     await must(home, ['mv', `${name}/${path}`, `${name}/${target}`], `move ${path} to ${target}`);
     store.write({ path: join(folder, target), ...retagged(mine, next) });
@@ -193,7 +194,7 @@ async function renumberFiles(home, stream, added, mirror) {
 // afterwards, which `renumbered.mirror` asks for; renumbered.localDbs lists copies of the local db and of the merge base, to replay the local changes onto it). The rebase goes on. false (the caller aborts) when anything else is in conflict or a step fails.
 // True when the two sides of a conflicted item file (stage 2 upstream, stage 3 local) differ in nothing but priority and updated.
 async function sameButRank(home, path) {
-  const side = async n => { const d = parse((await must(home, ['show', `:${n}:${path}`], `read ${path}`)).stdout); return JSON.stringify([Object.entries(d.fm).filter(([k]) => k !== 'priority' && k !== 'updated').sort(([x], [y]) => (x < y ? -1 : 1)), d.body]); };
+  const side = async n => { const d = parse((await must(home, ['show', `:${n}:${path}`], `read ${path}`)).stdout); return JSON.stringify([Object.entries(d.fm).filter(([k]) => k !== 'priority' && k !== 'updated' && k !== 'updated_by').sort(([x], [y]) => (x < y ? -1 : 1)), d.body]); };
   return (await side(2)) === (await side(3));
 }
 
@@ -260,7 +261,7 @@ async function repairConflicts(home, folders, names, renumbered) {
       for (const [path, mine] of mines) {
         const name = names[nameOf(path)]; const folder = folders[nameOf(path)];
         const rel = path.slice(name.length + 1);
-        const old = Number(mine.fm.seq); const next = store.nextSeq(folder); const target = targetOf(rel, next);
+        const old = Number(mine.fm.seq); const next = store.nextSeqFor(folder, posix.basename(rel).replace(/^\d+/, '')); const target = targetOf(rel, next);
         store.write({ path: join(folder, target), ...retagged(mine, next) });
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
         process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
@@ -278,7 +279,10 @@ async function repairConflicts(home, folders, names, renumbered) {
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
 // [old, new] pairs renumbered on the way (with .mirror = true when backlog.db was taken from upstream: rescan it and commit again). Recorded only when on origin/main (lib_db.py:275-309).
 // `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
-export async function commit(home, folders, message, reconcile = null) {
+// `guard`: [{path (from the clone root), slug, was}] of the items this change rewrites on the strength of what the command read. When origin/main
+// gains a change to one of them from someone else before the push, the commit is taken back (clone and index as before the command) and the command
+// is refused with the stale-item message, never merged or parked on a side branch.
+export async function commit(home, folders, message, reconcile = null, guard = []) {
   const list = [].concat(folders);
   const names = [];
   for (const folder of list) names.push((await assertInside(home, folder)).split(sep).join('/'));
@@ -292,8 +296,25 @@ export async function commit(home, folders, message, reconcile = null) {
       if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
     }
     const renumbered = []; let err = ''; let settled = 0;
+    const staleHit = async () => { for (const x of guard) if ((await g(home, ['diff', '--quiet', base, 'origin/main', '--', lit(x.path)])).code) return x; return null; };
+    const staleCheck = async () => {
+      for (const x of guard) {
+        if (!(await g(home, ['diff', '--quiet', base, 'origin/main', '--', lit(x.path)])).code) continue;
+        const up = parse((await g(home, ['show', `origin/main:${x.path}`])).stdout).fm;
+        // shortcut: the whole folder goes back to HEAD, so an edit made by hand in this folder while the command ran is lost with it (the command would have published it too)
+        if (Number((await g(home, ['rev-list', '--count', 'origin/main..HEAD'])).stdout.trim()) > 0) { // take our commit back, clone and index as before the command
+          await must(home, ['reset', '-q', '--soft', 'HEAD~1'], 'take back the refused change');
+          await must(home, ['restore', '-q', '--staged', '--worktree', '--source=HEAD', '--', ...lits], 'take back the refused change');
+        }
+        throw staleError(x.slug, up.updated_by, up.updated, x.was);
+      }
+    };
+    const base = guard.length ? (await g(home, ['merge-base', 'HEAD', 'origin/main'])).stdout.trim() : '';
     for (let i = 0; i < 3; i++) {
+      if (base) await g(home, ['fetch', '-q', 'origin', '+refs/heads/main:refs/remotes/origin/main']);
+      await staleCheck();
       let pr = await g(home, PULL);
+      if (pr.code && guard.length && await staleHit()) { await g(home, ['rebase', '--abort']); await staleCheck(); } // a guarded item arrived with the pull and conflicts: refuse, never park
       if (pr.code && await repairConflicts(home, list, names, renumbered)) pr = { code: 0 };
       if (pr.code) {
         const parked = await parkConflict(home);
@@ -301,6 +322,7 @@ export async function commit(home, folders, message, reconcile = null) {
         err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;
       } else {
         await refuseConflicts(home);
+        await staleCheck();
         renumbered.push(...await renumber(home, process.stdout));
         if (reconcile && (renumbered.length > settled || renumbered.mirror)) { // the mirror and priorities are made right in the commit itself: nothing inconsistent is ever pushed
           const fresh = Object.assign(renumbered.slice(settled), { localDbs: renumbered.localDbs, mirror: renumbered.mirror });

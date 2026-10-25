@@ -12,6 +12,7 @@ import { die, find, pyStr, refuse, say, teamRefusal, usage, valueLike, withBackl
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { assertInside, git, redact } from './safety.js';
+import * as seen from './seen.js';
 import * as store from './store.js';
 import { asList, teamScope } from './team.js';
 
@@ -68,21 +69,25 @@ async function branchRefusal(branch, repo) {
 }
 
 // move.py:22-29
-async function toBranch(con, folder, r, branch, note) {
+async function toBranch(con, folder, r, branch, note, { repo, guard, wrote }) {
   const path = join(folder, r.path);
   await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way
   const { fm, body } = parseDoc(readFileSync(path, 'utf8'));
+  seen.check(folder, repo, seen.actor(), r.slug, r.path);
+  guard.push({ path: `${repo}/${r.path}`, slug: r.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   const old = Object.hasOwn(fm, 'branch') ? fm.branch ?? 'None' : '';
   fm.branch = branch;
-  fm.updated = store.now();
+  store.stamp(fm);
   store.write({ path, fm, body }, folder);
+  wrote.push({ slug: r.slug, path: r.path });
   db.logEvent(con, 'moved_branch', {
     handoffId: r.handoff_id, phaseId: r.id, branch,
     note: `${r.slug}: branch '${old}' -> '${branch}'${note ? ` (${note})` : ''}`,
   });
 }
 
-async function move(a, con, { home, repo, folder, close, folders }) {
+async function move(a, con, ctx) {
+  const { home, repo, folder, close, folders, guard } = ctx;
   if (a['all-open-of-branch']) { // move.py:76-86
     const from = a['all-open-of-branch'];
     if (!a['to-branch']) throw usage('--all-open-of-branch needs --to-branch');
@@ -91,7 +96,7 @@ async function move(a, con, { home, repo, folder, close, folders }) {
     const rows = con.prepare("SELECT * FROM phase WHERE branch=? AND repository=? AND status IN ('pending','in_progress') ORDER BY id").all(from, repo);
     const outside = rows.map(teamRefusal).find(Boolean); // before the first file is written
     if (outside) return refuse(outside);
-    for (const r of rows) await toBranch(con, folder, { ...r }, a['to-branch'], a.note || `all open items of ${from}`);
+    for (const r of rows) await toBranch(con, folder, { ...r }, a['to-branch'], a.note || `all open items of ${from}`, ctx);
     db.scan(con, folder);
     say(`✅ moved ${rows.length} open item(s) of '${from}' to '${a['to-branch']}'`);
     return 0;
@@ -105,7 +110,7 @@ async function move(a, con, { home, repo, folder, close, folders }) {
   if (a['to-branch']) { // move.py:93-98
     const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
-    await toBranch(con, folder, r, a['to-branch'], a.note);
+    await toBranch(con, folder, r, a['to-branch'], a.note, ctx);
     db.scan(con, folder);
     say(`✅ ${r.slug} now belongs to branch '${a['to-branch']}'`);
     return 0;
@@ -125,14 +130,17 @@ async function move(a, con, { home, repo, folder, close, folders }) {
   const src = join(folder, r.path);
   await assertInside(folder, src);
   const { fm, body } = parseDoc(readFileSync(src, 'utf8'));
+  seen.check(folder, repo, seen.actor(), r.slug, r.path);
+  guard.push({ path: `${repo}/${r.path}`, slug: r.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   // beyond move.py parity: depends_on names items of THIS backlog; in the target they would point at unrelated items
   if (asList(fm.depends_on).length) return refuse(`${r.slug} depends on other items of ${repo}; dependencies are resolved against the target backlog, so clear them first: update ${r.slug} --set-depends-on none`);
   // beyond move.py parity: items of this backlog that list the item (by number or slug, as update --set-depends-on stores it) would be left pointing at nothing
   const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && asList(i.fm.depends_on).some(d => find(con, d)?.id === r.id)).map(i => i.fm.phase ?? i.path);
   if (dependents.length) return refuse(`${dependents.join(', ')} depend${dependents.length > 1 ? '' : 's'} on ${r.slug}, which would leave their depends_on pointing at nothing; clear them first: update <dependent> --set-depends-on ... (the other dependencies, or none)`);
-  const seq = store.nextSeq(tdir);
-  const slug = `${String(seq).padStart(3, '0')}-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;
-  Object.assign(fm, { phase: slug, seq, repository: target, updated: store.now() });
+  const tail = `-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;
+  const seq = store.nextSeqFor(tdir, `${tail}.md`); // never a number whose file name the target already holds
+  const slug = `${String(seq).padStart(3, '0')}${tail}`;
+  store.stamp(Object.assign(fm, { phase: slug, seq, repository: target }));
   const copy = join(tdir, 'phases', `${slug}.md`);
   const events = con.prepare('SELECT ts,event,branch,commit_sha,note FROM event WHERE phase_id=? ORDER BY id').all(r.id);
   const forget = db.freshDb(tdir);

@@ -1,0 +1,190 @@
+// Stale-view guard (backlog-cli item 025): updated_by, the per-agent read cache, the refusal (exit 5) and the push race.
+// Also: no write by path replaces another item (move/new/archive), and a release ends the holder's wait.
+import test, { after } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import * as db from '../../src/shared/db.js';
+import { parse } from '../../src/shared/frontmatter.js';
+import * as store from '../../src/shared/store.js';
+
+const git = (cwd, ...args) => {
+  const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+  if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
+  return p.stdout.trim();
+};
+const dirs = [];
+after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
+
+// Two clones of the shared backlog (home = A's, home2 = B's) over one origin, both with acme/demo and items 001-alpha, 002-beta, 003-gamma.
+// An item has no updated_by (as a file written before this change).
+function seed(items = ['alpha', 'beta', 'gamma'], repo = 'demo') {
+  const t = mkdtempSync(join(tmpdir(), 'stale-test-'));
+  dirs.push(t);
+  const home = sharedBacklog(t);
+  const cons = consumer(t, 'acme', repo, 'main');
+  mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  const folder = join(home, 'acme', repo);
+  items.forEach((name, i) => store.write({
+    path: join(folder, 'phases', `${String(i + 1).padStart(3, '0')}-${name}.md`),
+    fm: {
+      phase: `${String(i + 1).padStart(3, '0')}-${name}`, seq: i + 1, name: `Name ${name}`, objective: `obj ${name}`, summary: `sum ${name}`, status: 'pending', severity: 'normal',
+      priority: i, repository: `acme/${repo}`, branch: 'main', commit: '', location: '', created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z',
+      depends_on: [], claimed_by: '', claimed_at: '',
+    },
+    body: `\n# Phase ${i + 1}\n\nBody of ${name}.\n`,
+  }, folder));
+  const con = db.connect(folder); db.scan(con, folder); con.close();
+  git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'fixture'); git(home, 'push', '-q');
+  const home2 = join(t, 'home2');
+  git(t, 'clone', '-q', join(t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2);
+  return { t, home, home2, cons, folder, folder2: join(home2, 'acme', repo), bare: join(t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git') };
+}
+// the CLI as the clone `home`; the agent is named by --agent/--by on the command
+const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { BACKLOG_HOME: home, QWEN_CODE_AGENT_ID: '', USER: 'nobody', ...opts.env } });
+const fm = (folder, file) => parse(readFileSync(join(folder, 'phases', file), 'utf8')).fm;
+const onOrigin = (f, path) => git(f.t, '--git-dir', f.bare, 'show', `main:${path}`);
+const sleepSec = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100); // updated has a resolution of one second
+
+test('every write stamps updated_by next to updated; an item without updated_by is read and written', () => {
+  const f = seed();
+  assert.equal(fm(f.folder, '001-alpha.md').updated_by, undefined);
+  assert.equal(run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']).status, 0); // reads the older file
+  const r = run(f, f.home, ['update', '1', '--append', 'x', '--by', 'amy']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const keys = Object.keys(fm(f.folder, '001-alpha.md'));
+  assert.equal(fm(f.folder, '001-alpha.md').updated_by, 'amy');
+  assert.equal(keys.indexOf('updated_by'), keys.indexOf('updated') + 1);
+  const env = run(f, f.home, ['update', '2', '--append', 'y'], { env: { QWEN_CODE_AGENT_ID: 'qwen-7' } });
+  assert.equal(env.status, 0, env.stderr);
+  assert.equal(fm(f.folder, '002-beta.md').updated_by, 'qwen-7');
+});
+
+test('a write to an item another writer changed after the agent read it is refused (exit 5) and changes nothing', () => {
+  const f = seed();
+  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
+  git(f.home, 'pull', '-q', '--rebase');
+  const b = run(f, f.home2, ['update', '1', '--append', 'from bob', '--by', 'bob']);
+  assert.equal(b.status, 0, b.stderr);
+  const originBefore = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
+  const localBefore = git(f.home, 'rev-parse', 'HEAD');
+  const a = run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']);
+  assert.equal(a.status, 5, a.stderr + a.stdout);
+  assert.match(a.stderr, /item 001-alpha was changed by bob at \d{4}-\d\d-\d\dT[\d:]+Z after you last read it \(2026-10-01T00:00:00Z\); read it again \(backlog query --phase 001-alpha\) and retry/);
+  assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
+  assert.ok(!onOrigin(f, 'acme/demo/phases/001-alpha.md').includes('from amy'));
+  assert.ok(!readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8').includes('from amy'));
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+  assert.ok(git(f.home, 'rev-parse', 'HEAD') !== '' && git(f.home, 'merge-base', '--is-ancestor', localBefore, 'HEAD') === '');
+  // reading again lifts the refusal
+  assert.equal(run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']).status, 0);
+  assert.equal(run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']).status, 0);
+});
+
+test('the read cache is a file in .git, survives across commands and is per agent; an unread item is written without a check', () => {
+  const f = seed();
+  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
+  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const seen = JSON.parse(readFileSync(cache, 'utf8'))['acme/demo/001-alpha'];
+  assert.equal(seen.updated, '2026-10-01T00:00:00Z');
+  assert.match(seen.commit, /^[0-9a-f]{40}$/);
+  assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'bob.json')), false);
+  // bob never read the item: his first write goes through; amy's cached view is now stale, bob's is the newer
+  assert.equal(run(f, f.home, ['update', '1', '--append', 'bob', '--by', 'bob']).status, 0);
+  assert.equal(run(f, f.home, ['update', '1', '--append', 'amy', '--by', 'amy']).status, 5);
+  sleepSec();
+  assert.equal(run(f, f.home, ['update', '1', '--append', 'bob again', '--by', 'bob']).status, 0); // bob's own writes recorded his view
+  assert.equal(JSON.parse(readFileSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'bob.json'), 'utf8'))['acme/demo/001-alpha'].updated_by, 'bob');
+});
+
+test('two clones update different items concurrently: both succeed and neither loses its change', () => {
+  const f = seed();
+  for (const [h, who] of [[f.home, 'amy'], [f.home2, 'bob']]) run(f, h, ['query', '--phase', who === 'amy' ? '001-alpha' : '002-beta', '--agent', who]);
+  const a = run(f, f.home, ['update', '1', '--append', 'amy was here', '--by', 'amy']);
+  const b = run(f, f.home2, ['update', '2', '--append', 'bob was here', '--by', 'bob']);
+  assert.equal(a.status, 0, a.stderr); assert.equal(b.status, 0, b.stderr);
+  assert.match(onOrigin(f, 'acme/demo/phases/001-alpha.md'), /amy was here/);
+  assert.match(onOrigin(f, 'acme/demo/phases/002-beta.md'), /bob was here/);
+});
+
+test('push race on the same item: one wins, the other is refused, and its change is neither on origin nor on a side branch', () => {
+  const f = seed();
+  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
+  // while amy's push is on its way, bob pushes his change to the same item
+  const hook = join(f.home, '.git', 'hooks', 'pre-push');
+  const flag = join(f.t, 'hook-ran');
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 1 --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
+  chmodSync(hook, 0o755);
+  // amy's leading pull already ran when the hook fires, so amy's check passed: only the push-time guard can stop her
+  const a = run(f, f.home, ['update', '1', '--append', 'amy lost', '--by', 'amy']);
+  assert.equal(a.status, 5, a.stderr + a.stdout);
+  assert.match(a.stderr, /item 001-alpha was changed by bob at .* after you last read it/);
+  assert.match(onOrigin(f, 'acme/demo/phases/001-alpha.md'), /bob won/);
+  assert.ok(!onOrigin(f, 'acme/demo/phases/001-alpha.md').includes('amy lost'));
+  assert.equal(git(f.home, 'branch', '--list').split('\n').filter(Boolean).length, 1); // no side branch
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+  assert.ok(!readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8').includes('amy lost'));
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+});
+
+test('a move never replaces an item of the target that holds the file name, even after update --seq freed its number', () => {
+  const f = seed(['temp', 'beta'], 'dest');
+  const src = consumer(f.t, 'acme', 'demo', 'main');
+  const sfolder = join(f.home, 'acme', 'demo');
+  store.write({ path: join(sfolder, 'phases', '001-beta.md'), fm: { phase: '001-beta', seq: 1, name: 'Source beta', objective: 'src', summary: 's', status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: '', location: '', created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z', depends_on: [], claimed_by: '', claimed_at: '' }, body: '\n# Phase 1\n\nSOURCE BODY\n' }, sfolder);
+  const con = db.connect(sfolder); db.scan(con, sfolder); con.close();
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'src'); git(f.home, 'push', '-q');
+  const dest = consumer(f.t, 'acme', 'dest', 'main');
+  assert.equal(run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd: dest }).status, 0);
+  assert.equal(run(f, f.home, ['update', '2', '--seq', '1'], { cwd: dest }).status, 0);
+  const m = run(f, f.home, ['move', '001-beta', '--to-repository', 'acme/dest'], { cwd: src });
+  assert.equal(m.status, 0, m.stderr + m.stdout);
+  const files = readdirSync(join(f.home, 'acme', 'dest', 'phases')).sort();
+  assert.equal(files.length, 2, files.join());
+  assert.match(onOrigin(f, 'acme/dest/phases/002-beta.md'), /Body of beta/); // the destination's own item is intact
+  assert.ok(files.some(n => n !== '002-beta.md' && /SOURCE BODY/.test(readFileSync(join(f.home, 'acme', 'dest', 'phases', n), 'utf8'))));
+});
+
+test('a release ends the holder\'s wait, so the released item is not offered while it still shows a wait', () => {
+  const f = seed();
+  const file = join(f.folder, 'phases', '001-alpha.md'); // held by amy and waiting (written as a holder's --waiting would)
+  const doc = parse(readFileSync(file, 'utf8'));
+  store.write({ path: file, fm: { ...doc.fm, status: 'in_progress', claimed_by: 'amy', claimed_at: '2026-10-02T00:00:00Z', wait_on: 'ci run', wait_since: '2026-10-02T00:00:00Z' }, body: doc.body }, f.folder);
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'held'); git(f.home, 'push', '-q');
+  assert.equal(fm(f.folder, '001-alpha.md').wait_on, 'ci run');
+  assert.equal(run(f, f.home, ['update', '1', '--release', 'amy']).status, 0);
+  assert.equal(fm(f.folder, '001-alpha.md').wait_on, '');
+});
+
+test('a change in the same second by the same writer name is still a change: the view includes the content', () => {
+  const f = seed();
+  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
+  const file = join(f.folder2, 'phases', '001-alpha.md');
+  writeFileSync(file, readFileSync(file, 'utf8') + '\nedited elsewhere, updated and updated_by untouched\n');
+  git(f.home2, 'add', '-A'); git(f.home2, 'commit', '-q', '-m', 'edit'); git(f.home2, 'push', '-q');
+  const a = run(f, f.home, ['update', '1', '--append', 'amy', '--by', 'amy']);
+  assert.equal(a.status, 5, a.stderr + a.stdout);
+});
+
+test('nextSeqFor never returns a number whose file name is held, also by a file without front matter', () => {
+  const t = mkdtempSync(join(tmpdir(), 'stale-seq-')); dirs.push(t);
+  const folder = join(t, 'acme', 'demo');
+  mkdirSync(join(folder, 'phases'), { recursive: true });
+  writeFileSync(join(folder, 'phases', '001-x.md'), 'a note, not an item\n');
+  assert.equal(store.nextSeqFor(folder, '-x.md'), 2);
+  assert.equal(store.nextSeqFor(folder, '-y.md'), 1);
+});
+
+test('the creator of an item has seen it: another writer\'s change is refused on her next update', () => {
+  const f = seed();
+  const made = run(f, f.home, ['new', '--name', 'fresh job', '--depends-on', 'none'], { env: { QWEN_CODE_AGENT_ID: 'amy' } });
+  assert.equal(made.status, 0, made.stdout + made.stderr);
+  const bob = run(f, f.home2, ['update', '4', '--append', 'bob', '--by', 'bob']);
+  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
+  const amy = run(f, f.home, ['update', '4', '--append', 'amy'], { env: { QWEN_CODE_AGENT_ID: 'amy' } });
+  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+});

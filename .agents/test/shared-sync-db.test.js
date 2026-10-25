@@ -274,39 +274,14 @@ const clone = (t, bare) => {
   return join(verify, 'c');
 };
 
-test('audit t2: two concurrent reprioritisations (modify/modify on priority and updated) merge: no abort, no stuck local commit, dense ranks', async t => {
-  const seed = ['alpha job', 'beta job', 'gamma job'].map(NEW);
-  const { a, b, bare, result } = await race(t, seed, ['update', '2', '--priority', '0'], ['update', '3', '--priority', '0']);
-  assert.equal(result.status, 0, `exit ${result.status}\n${result.stdout}${result.stderr}`);
-  const dir = join(clone(t, bare), 'acme', 'demo');
-  const items = store.load(dir);
-  assert.equal(items.length, 3);
-  assert.deepEqual(items.map(i => i.fm.priority).sort(), [0, 1, 2], 'ranks are dense and distinct');
-  for (const w of [a, b]) {
-    assert.equal(gitIn(w.home, 'status', '--porcelain'), '');
-    assert.equal(cli(['query', '--all'], { cwd: w.cons, tmp: w.tmp }).status, 0); // later pulls work
-    assert.equal(gitIn(w.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'), 'nothing is left unpushed');
-  }
-});
-
-test('audit t5 (passes at b14557c too: git merges the identical renames; kept as a regression test): two clones moving the same item to the same repository leave ONE copy there', async t => {
-  const seed = ['alpha job', 'gamma job'].map(NEW);
-  const mv = ['move', '1', '--to-repository', 'new/place'];
-  const { bare, result } = await race(t, seed, mv, mv);
-  assert.equal(result.status, 0, `exit ${result.status}\n${result.stdout}${result.stderr}`);
-  const root = clone(t, bare);
-  assert.deepEqual(store.load(join(root, 'new', 'place')).map(i => i.fm.name), ['alpha job']);
-  assert.deepEqual(store.load(join(root, 'acme', 'demo')).map(i => i.fm.name), ['gamma job']);
-});
-
-test('audit t2: a conflict nobody can merge parks the local commit on backlog-unmerged-<utc> and resets the clone, which keeps working', async t => {
+test('audit t2: the same item changed by two clones: the second is refused (exit 5), its change is not parked or pushed, and the clone keeps working', async t => {
   const { b, bare, result } = await race(t, [NEW('alpha job')], ['update', '1', '--summary', 'from a'], ['update', '1', '--summary', 'from b']);
-  assert.equal(result.status, 3, `${result.stdout}${result.stderr}`);
-  const branch = /parked on branch (backlog-unmerged-\d{8}T\d{6}Z)/.exec(result.stderr)?.[1];
-  assert.ok(branch, result.stderr);
-  assert.match(gitIn(b.home, 'show', `${branch}:acme/demo/phases/001-alpha-job.md`), /from b/, 'nothing is lost');
-  assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+  assert.equal(result.status, 5, `${result.stdout}${result.stderr}`);
+  assert.match(result.stderr, /item 001-alpha-job was changed by .* after you last read it/);
+  assert.equal(gitIn(b.home, 'branch', '--list').split('\n').filter(Boolean).length, 1, 'no side branch');
+  assert.ok(!gitIn(bare, 'show', 'main:acme/demo/phases/001-alpha-job.md').includes('from b'));
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+  assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
   const again = cli(['update', '1', '--summary', 'from b again'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(again.status, 0, again.stdout + again.stderr); // every later pull works
 });

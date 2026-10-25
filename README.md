@@ -68,6 +68,8 @@ every repository live in one Git backlog repository instead of each repository's
 there match the Python backlog skill. `backlog --use-local-repo` switches back. [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode)
 describes the mode and its commands.
 
+In shared mode, a write to an item that somebody else changed after you last read it is refused with exit code 5 (read it again, then retry); every write records `updated_by`. See [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode).
+
 ## Command help
 
 Run `backlog --help` for the available commands and options:

@@ -156,7 +156,14 @@ async function change(a, con, folder, repo) {
       if (outside) return refuse(outside);
     }
     if (a['dry-run']) { say(`ℹ️  [dry-run] would replan backlog leading order: [${idents.map(pyStr).join(', ')}]`); return 0; }
-    const order = store.reorder(folder, idents);
+    a.guard = [];
+    const order = store.reorder(folder, idents, items => {
+      for (const i of items) {
+        const slug = i.fm.phase || basename(i.path, '.md');
+        seen.check(folder, repo, seen.actor(), slug, i.path);
+        a.guard.push({ path: `${repo}/${i.path}`, slug, was: `${i.fm.updated}${i.fm.updated_by ? ` by ${i.fm.updated_by}` : ''}` });
+      }
+    });
     db.logEvent(con, 'planning_event', { handoffId: hid, note: a.note || `replan -> ${order.map(([s]) => s).join(', ')}` });
     db.scan(con, folder);
     say('📋 PLANNING EVENT — backlog re-prioritized (P0 = next):');

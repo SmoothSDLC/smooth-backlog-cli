@@ -310,7 +310,7 @@ export function reflow(dir, move, beforeApply) {
 }
 
 // lib_db.py:570-584: idents (slugs or item numbers, never row ids) lead; the rest keeps its order.
-export function reorder(dir, idents) {
+export function reorder(dir, idents, beforeApply) {
   const all = actionable(dir);
   const items = all.filter(inScope);
   const bySlug = new Map(items.map(i => [slugOf(i), i]));
@@ -322,7 +322,7 @@ export function reorder(dir, idents) {
     if (i && !lead.includes(i)) lead.push(i);
   }
   const order = [...lead, ...items.filter(i => !lead.includes(i))];
-  return applyDense(dir, within(all, () => order), inScope);
+  return applyDense(dir, within(all, () => order), inScope, beforeApply);
 }
 
 // lib_db.py:296-299

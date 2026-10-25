@@ -85,6 +85,49 @@ test('a write to an item another writer changed after the agent read it is refus
   assert.equal(run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']).status, 0);
 });
 
+test('replan refuses a stale ordering after its leading pull without changing Bob\'s priorities', () => {
+  const f = seed();
+  const read = run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
+  assert.equal(read.status, 0, read.stderr + read.stdout);
+  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const expected = readFileSync(cache, 'utf8');
+  const bob = run(f, f.home2, ['update', '1', '--priority', '1', '--by', 'bob']);
+  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
+  const originBefore = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
+
+  const amy = run(f, f.home, ['update', '--replan', '1,2', '--by', 'amy']);
+  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+  assert.match(amy.stderr, /item 001-alpha was changed by bob .* after you last read it/);
+  assert.equal(readFileSync(cache, 'utf8'), expected);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), originBefore);
+  assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
+  for (const folder of [f.folder, f.folder2]) {
+    assert.equal(fm(folder, '001-alpha.md').priority, 1);
+    assert.equal(fm(folder, '002-beta.md').priority, 0);
+  }
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+});
+
+test('replan guards implicitly reordered items against a push race without a cached view', () => {
+  const f = seed();
+  const before = git(f.home, 'rev-parse', 'HEAD');
+  const hook = join(f.home, '.git', 'hooks', 'pre-push');
+  const flag = join(f.t, 'hook-ran');
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 1 --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
+  chmodSync(hook, 0o755);
+  const amy = run(f, f.home, ['update', '--replan', '2', '--by', 'amy']);
+  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+  assert.match(amy.stderr, /item 001-alpha was changed by bob .* after you last read it/);
+  assert.match(onOrigin(f, 'acme/demo/phases/001-alpha.md'), /bob won/);
+  assert.equal(parse(onOrigin(f, 'acme/demo/phases/001-alpha.md')).fm.priority, 0);
+  assert.equal(parse(onOrigin(f, 'acme/demo/phases/002-beta.md')).fm.priority, 1);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+  assert.equal(git(f.home, 'branch', '--list').split('\n').filter(Boolean).length, 1);
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+  assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json')), false);
+});
+
 test('the read cache is a file in .git, survives across commands and is per agent; an unread item is written without a check', () => {
   const f = seed();
   run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);

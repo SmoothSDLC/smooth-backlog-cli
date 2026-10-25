@@ -76,7 +76,7 @@ export async function withBacklog(fn, tail) {
       throw e;
     } finally { close(); }
     if (code !== 0 || !tail) forget();
-    if (code === 0 && tail) { await db.commitSettled(home, folders, tail, guard); seen.record(folder, repo, seen.actor(), wrote); }
+    if (code === 0 && tail) { await db.commitSettled(home, folders, tail, guard); seen.recordWrites(folder, repo, seen.actor(), wrote); }
     return code;
   });
 }
@@ -140,11 +140,16 @@ async function archive(a, con, { repo, folder, close, guard }) {
     try { renameSync(src, join(folder, to)); } catch { return refuse(`could not move ${src}`); }
   }
   stamp(join(folder, to));
-  db.markArchived(con, row.slug, to);
-  const s = db.scan(con, folder); // rescan the whole stack after the lifecycle event
   // archiving removes an item from the backlog -> planning event: re-densify the remainder to 0..M-1
   const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
-  const order = hid === null ? [] : store.reflow(folder);
+  let s;
+  const recordArchive = () => {
+    db.markArchived(con, row.slug, to);
+    s = db.scan(con, folder);
+  };
+  // Exclude the departed item's mirror ghost while validating, so no mirror
+  // writes are needed before the whole ranking write set has passed its guard.
+  const order = hid === null ? (recordArchive(), []) : store.reflow(folder, { exclude: [row.slug] }, recordArchive);
   if (order.length) {
     db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `archived ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
     db.scan(con, folder);

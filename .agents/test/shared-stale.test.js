@@ -327,3 +327,178 @@ for (const [seq, slug] of [[2, '002-beta'], [3, '003-gamma']]) {
     assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json')), false);
   });
 }
+
+// Every ranking caller must use the same guard, including the two queues of a move.
+for (const [name, args, target] of [
+  ['new critical insertion', ['new', '--name', 'urgent', '--severity', 'critical', '--depends-on', 'none']],
+  ['archive reflow', ['archive', '1', '--force']],
+  ['move source reflow', ['move', '1', '--to-repository', 'acme/dest']],
+  ['move destination reflow', ['move', '1', '--to-repository', 'acme/demo'], true],
+]) test(`${name} refuses stale item 2 before any ranking write`, () => {
+  const f = seed();
+  let cwd = f.cons;
+  if (target) {
+    cwd = consumer(f.t, 'acme', 'source');
+    const folder = join(f.home, 'acme', 'source');
+    store.write({ path: join(folder, 'phases', '001-source.md'), fm: {
+      ...fm(f.folder, '001-alpha.md'), phase: '001-source', repository: 'acme/source',
+    }, body: '\nSource item\n' }, folder);
+    const con = db.connect(folder); db.scan(con, folder); con.close();
+    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'move source'); git(f.home, 'push', '-q');
+  }
+  assert.equal(run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']).status, 0);
+  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const expected = readFileSync(cache, 'utf8');
+  const bob = run(f, f.home2, ['update', '2', '--append', 'Bob edit survives', '--by', 'bob']);
+  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
+  const before = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
+  const amy = run(f, f.home, args, { cwd, env: { QWEN_CODE_AGENT_ID: 'amy' } });
+  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+  assert.match(amy.stderr, /item 002-beta was changed by bob/);
+  assert.equal(readFileSync(cache, 'utf8'), expected);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
+  assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), before);
+  assert.match(onOrigin(f, 'acme/demo/phases/002-beta.md'), /Bob edit survives/);
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+});
+
+// A timestamp or author is not evidence of a read. The ranking refresh may update
+// beta's matching view, but must not sweep an unread change to the done item into it.
+for (const [name, args] of [
+  ['update priority', ['1', '--priority', '1']],
+  ['update completion', ['1', '--status', 'done']],
+  ['update close', ['1', '--close', '--summary', 'delivered']],
+  ['update reopening', ['1', '--status', 'pending']],
+  ['replan', ['--replan', '2,1']],
+]) test(`${name} refreshes only matching incidental views`, () => {
+  const f = closeFixture();
+  const beta = join(f.folder, 'phases', '002-beta.md');
+  if (name === 'update reopening') {
+    const alpha = join(f.folder, 'phases', '001-alpha.md');
+    const a = parse(readFileSync(alpha, 'utf8'));
+    store.write({ path: alpha, fm: { ...a.fm, status: 'done' }, body: a.body }, f.folder);
+    for (const [slug, priority] of [['002-beta', 0], ['003-gamma', 1]]) {
+      const path = join(f.folder, 'phases', `${slug}.md`); const d = parse(readFileSync(path, 'utf8'));
+      store.write({ path, fm: { ...d.fm, priority }, body: d.body }, f.folder);
+    }
+  }
+  store.write({ path: join(f.folder, 'phases', '004-done.md'), fm: {
+    ...fm(f.folder, '003-gamma.md'), phase: '004-done', seq: 4, status: 'done', updated_by: 'amy',
+  }, body: '\nA previously read done item\n' }, f.folder);
+  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'cache fixture'); git(f.home, 'push', '-q');
+  for (const slug of ['002-beta', '004-done']) {
+    const r = run(f, f.home, ['query', '--phase', slug, '--agent', 'amy']);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+  }
+  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  const expected = JSON.parse(readFileSync(cache, 'utf8'))['acme/demo/004-done'];
+  git(f.home2, 'pull', '-q', '--rebase');
+  const done = join(f.folder2, 'phases', '004-done.md');
+  writeFileSync(done, readFileSync(done, 'utf8') + '\nUnread edit; author and timestamp unchanged\n');
+  git(f.home2, 'add', '-A'); git(f.home2, 'commit', '-q', '-m', 'unread edit'); git(f.home2, 'push', '-q');
+  const before = readFileSync(beta, 'utf8');
+  const amy = run(f, f.home, ['update', ...args, '--by', 'amy']);
+  assert.equal(amy.status, 0, amy.stderr + amy.stdout);
+  assert.notEqual(readFileSync(beta, 'utf8'), before, 'the caller really reflowed beta');
+  assert.deepEqual(JSON.parse(readFileSync(cache, 'utf8'))['acme/demo/004-done'], expected, 'unread content must not be adopted just because updated_by is amy');
+  const next = run(f, f.home, ['update', '2', '--append', 'known reflow', '--by', 'amy']);
+  assert.equal(next.status, 0, next.stderr + next.stdout);
+  const stale = run(f, f.home, ['update', '4', '--append', 'must refuse', '--by', 'amy']);
+  assert.equal(stale.status, 5, stale.stderr + stale.stdout);
+});
+
+test('database reconciliation validates the entire incidental write set', async () => {
+  const f = seed();
+  assert.equal(run(f, f.home, ['query', '--phase', '003-gamma', '--agent', 'amy']).status, 0);
+  const bob = run(f, f.home2, ['update', '3', '--append', 'Bob edit survives', '--by', 'bob']);
+  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
+  git(f.home, 'pull', '-q', '--rebase');
+  const alpha = join(f.folder, 'phases', '001-alpha.md');
+  const a = parse(readFileSync(alpha, 'utf8'));
+  store.write({ path: alpha, fm: { ...a.fm, status: 'done' }, body: a.body }, f.folder);
+  const before = ['002-beta.md', '003-gamma.md'].map(n => readFileSync(join(f.folder, 'phases', n), 'utf8'));
+  const seen = await import('../../src/shared/seen.js');
+  seen.setActor('amy');
+  try {
+    await assert.rejects(async () => db.reconcileFolders([f.folder], []), { exitCode: 5 });
+    assert.deepEqual(['002-beta.md', '003-gamma.md'].map(n => readFileSync(join(f.folder, 'phases', n), 'utf8')), before);
+  } finally { seen.setActor('nobody'); }
+});
+
+for (const [name, args, target] of [
+  ['new insertion', ['new', '--name', 'urgent', '--severity', 'critical', '--depends-on', 'none']],
+  ['new with inherited operation lock', ['new', '--name', 'urgent', '--severity', 'critical', '--depends-on', 'none']],
+  ['archive', ['archive', '1', '--force']],
+  ['move source', ['move', '1', '--to-repository', 'acme/dest']],
+  ['move destination', ['move', '1', '--to-repository', 'acme/demo'], true],
+]) test(`${name} publishes with a guard for incidental items never read by Amy`, () => {
+  const f = seed();
+  let cwd = f.cons;
+  if (target) {
+    cwd = consumer(f.t, 'acme', 'source');
+    const folder = join(f.home, 'acme', 'source');
+    store.write({ path: join(folder, 'phases', '001-source.md'), fm: {
+      ...fm(f.folder, '001-alpha.md'), phase: '001-source', repository: 'acme/source',
+    }, body: '\nSource item\n' }, folder);
+    const con = db.connect(folder); db.scan(con, folder); con.close();
+    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'move source'); git(f.home, 'push', '-q');
+  }
+  const before = git(f.home, 'rev-parse', 'HEAD');
+  const hook = join(f.home, '.git', 'hooks', 'pre-push'); const flag = join(f.t, 'hook-ran');
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 2 --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
+  chmodSync(hook, 0o755);
+  const amy = run(f, f.home, args, { cwd, env: { QWEN_CODE_AGENT_ID: 'amy',
+    ...(name.includes('inherited') ? { BACKLOG_RUN_LOCK_HELD: `${join(f.home, '.git', 'smooth-backlog-cli-run.lock')}:${process.pid}` } : {}),
+  } });
+  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+  assert.match(amy.stderr, /item 002-beta was changed by bob/);
+  assert.match(onOrigin(f, 'acme/demo/phases/002-beta.md'), /bob won/);
+  assert.equal(parse(onOrigin(f, 'acme/demo/phases/002-beta.md')).fm.priority, 1);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+  assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json')), false);
+});
+
+for (const cached of [false, true]) test(`reconciliation ${cached ? 'refuses a stale cached view' : 'adds newly discovered incidental writes to the next publication guard'}`, () => {
+  const f = seed();
+  const cache = join(f.home, '.git', 'smooth-backlog-cli-views', 'amy.json');
+  if (cached) assert.equal(run(f, f.home, ['query', '--phase', '003-gamma', '--agent', 'amy']).status, 0);
+  const expected = cached ? readFileSync(cache, 'utf8') : null;
+  const script = join(f.t, 'bob-reconcile.mjs');
+  writeFileSync(script, `import { readFileSync } from 'node:fs';
+import * as store from ${JSON.stringify(join(process.cwd(), 'src/shared/store.js'))};
+import * as db from ${JSON.stringify(join(process.cwd(), 'src/shared/db.js'))};
+import { parse } from ${JSON.stringify(join(process.cwd(), 'src/shared/frontmatter.js'))};
+import { setActor } from ${JSON.stringify(join(process.cwd(), 'src/shared/seen.js'))};
+setActor('bob');
+const path = ${JSON.stringify(join(f.folder2, 'phases', '003-gamma.md'))};
+const doc = parse(readFileSync(path, 'utf8'));
+store.write({ path, fm: store.stamp({ ...doc.fm, priority: 4 }), body: doc.body + '\\nBob first edit\\n' }, ${JSON.stringify(f.folder2)});
+const con = db.connect(${JSON.stringify(f.folder2)}); db.scan(con, ${JSON.stringify(f.folder2)}); con.close();
+`);
+  const hook = join(f.home, '.git', 'hooks', 'pre-push'); const flag = join(f.t, 'first-push'); const second = join(f.t, 'second-push');
+  writeFileSync(hook, `#!/bin/sh
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+if [ ! -f '${flag}' ]; then
+  touch '${flag}'
+  '${process.execPath}' '${script}' && git -C '${f.home2}' add -A && git -C '${f.home2}' commit -qm 'Bob changes the queue' && git -C '${f.home2}' push -q
+elif [ ! -f '${second}' ]; then
+  touch '${second}'
+  cd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 3 --append 'Bob second edit' --by bob
+fi
+exit 0
+`);
+  chmodSync(hook, 0o755);
+  const amy = run(f, f.home, ['update', '1', '--append', 'Amy refused', '--by', 'amy']);
+  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+  assert.match(amy.stderr, /item 003-gamma was changed by bob/);
+  assert.equal(existsSync(second), !cached, 'cached staleness refuses before a second push; otherwise the next push is guarded');
+  assert.match(onOrigin(f, 'acme/demo/phases/003-gamma.md'), cached ? /Bob first edit/ : /Bob second edit/);
+  assert.ok(!onOrigin(f, 'acme/demo/phases/001-alpha.md').includes('Amy refused'));
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+  if (cached) assert.equal(readFileSync(cache, 'utf8'), expected);
+  else assert.equal(existsSync(cache), false);
+});

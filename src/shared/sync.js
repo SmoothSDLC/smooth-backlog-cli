@@ -11,7 +11,7 @@ import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
-import { staleError } from './seen.js';
+import { publicationGuard, staleError } from './seen.js';
 import { connect, reconcileFolders, scan } from './db.js';
 import * as store from './store.js';
 import { asList } from './team.js';
@@ -283,6 +283,7 @@ async function repairConflicts(home, folders, names, renumbered) {
 // gains a change to one of them from someone else before the push, the commit is taken back (clone and index as before the command) and the command
 // is refused with the stale-item message, never merged or parked on a side branch.
 export async function commit(home, folders, message, reconcile = null, guard = []) {
+  guard = publicationGuard(guard);
   const list = [].concat(folders);
   const names = [];
   for (const folder of list) names.push((await assertInside(home, folder)).split(sep).join('/'));
@@ -296,20 +297,25 @@ export async function commit(home, folders, message, reconcile = null, guard = [
       if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
     }
     const renumbered = []; let err = ''; let settled = 0;
-    const staleHit = async () => { for (const x of guard) if ((await g(home, ['diff', '--quiet', base, 'origin/main', '--', lit(x.path)])).code) return x; return null; };
+    const undoCommit = async () => {
+      // Also discard uncommitted reconciliation writes. The rebased parent
+      // retains upstream's changes; no refused local change may be pushed later.
+      if (Number((await g(home, ['rev-list', '--count', 'origin/main..HEAD'])).stdout.trim()) > 0) {
+        await must(home, ['reset', '-q', '--soft', 'HEAD~1'], 'take back the refused change');
+      }
+      await must(home, ['restore', '-q', '--staged', '--worktree', '--source=HEAD', '--', ...lits], 'take back the refused change');
+    };
+    const staleHit = async () => { for (const x of guard) if ((await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) return x; return null; };
     const staleCheck = async () => {
       for (const x of guard) {
-        if (!(await g(home, ['diff', '--quiet', base, 'origin/main', '--', lit(x.path)])).code) continue;
+        if (!(await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) continue;
         const up = parse((await g(home, ['show', `origin/main:${x.path}`])).stdout).fm;
         // shortcut: the whole folder goes back to HEAD, so an edit made by hand in this folder while the command ran is lost with it (the command would have published it too)
-        if (Number((await g(home, ['rev-list', '--count', 'origin/main..HEAD'])).stdout.trim()) > 0) { // take our commit back, clone and index as before the command
-          await must(home, ['reset', '-q', '--soft', 'HEAD~1'], 'take back the refused change');
-          await must(home, ['restore', '-q', '--staged', '--worktree', '--source=HEAD', '--', ...lits], 'take back the refused change');
-        }
+        await undoCommit();
         throw staleError(x.slug, up.updated_by, up.updated, x.was);
       }
     };
-    const base = guard.length ? (await g(home, ['merge-base', 'HEAD', 'origin/main'])).stdout.trim() : '';
+    const base = (await g(home, ['merge-base', 'HEAD', 'origin/main'])).stdout.trim();
     for (let i = 0; i < 3; i++) {
       if (base) await g(home, ['fetch', '-q', 'origin', '+refs/heads/main:refs/remotes/origin/main']);
       await staleCheck();
@@ -327,7 +333,11 @@ export async function commit(home, folders, message, reconcile = null, guard = [
         if (reconcile && (renumbered.length > settled || renumbered.mirror)) { // the mirror and priorities are made right in the commit itself: nothing inconsistent is ever pushed
           const fresh = Object.assign(renumbered.slice(settled), { localDbs: renumbered.localDbs, mirror: renumbered.mirror });
           settled = renumbered.length; renumbered.localDbs = []; renumbered.mirror = false;
-          await reconcile(fresh);
+          try { await reconcile(fresh); } catch (e) {
+            if (e.code === 'STALE_ITEM') await undoCommit();
+            throw e;
+          }
+          await staleCheck(); // reconciliation can add more incidental writes to the guard
           await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
           await foldIn(home, lits, names, message);
         }

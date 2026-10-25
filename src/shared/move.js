@@ -145,28 +145,30 @@ async function move(a, con, ctx) {
   const events = con.prepare('SELECT ts,event,branch,commit_sha,note FROM event WHERE phase_id=? ORDER BY id').all(r.id);
   const forget = db.freshDb(tdir);
   const tcon = db.connect(tdir);
+  let failed = false;
   try {
     // all or nothing: a throw anywhere below, in the target scan or in the source rescan, restores both backlogs (files and mirror rows)
     await db.undoOnThrow(tcon, tdir, async () => {
       store.write({ path: copy, fm, body }, tdir);
-      db.scan(tcon, tdir); // the target's scan
-      store.reflow(tdir); // the copy keeps its source priority: rank it in the target's queue (beyond move.py parity, which leaves ties)
-      db.scan(tcon, tdir);
-      const pid = tcon.prepare('SELECT id FROM phase WHERE slug=?').get(slug).id;
-      const add = tcon.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)');
-      tcon.exec('BEGIN');
-      for (const e of events) add.run(e.ts, null, pid, e.event, e.branch, e.commit_sha, `[from ${repo} ${r.slug}] ${e.note}`);
-      add.run(store.now(), null, pid, 'moved_in', fm.branch || '', '', `from ${repo} as ${r.slug}`);
-      tcon.exec('COMMIT');
       store.note(src);
       rmSync(src);
-      con.prepare('DELETE FROM phase WHERE id=?').run(r.id);
-      db.logEvent(con, 'moved_out', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
-      db.scan(con, folder);
-      store.reflow(folder); // the item leaves the source queue: close the gap
+      // Validate the source write set first, then the destination write set,
+      // before either reflow writes ranks or changes a mirror.
+      store.reflow(folder, { exclude: [r.slug] }, () => {
+        store.reflow(tdir); // rank the copy among the destination's items
+        db.scan(tcon, tdir);
+        const pid = tcon.prepare('SELECT id FROM phase WHERE slug=?').get(slug).id;
+        const add = tcon.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)');
+        tcon.exec('BEGIN');
+        for (const e of events) add.run(e.ts, null, pid, e.event, e.branch, e.commit_sha, `[from ${repo} ${r.slug}] ${e.note}`);
+        add.run(store.now(), null, pid, 'moved_in', fm.branch || '', '', `from ${repo} as ${r.slug}`);
+        tcon.exec('COMMIT');
+        con.prepare('DELETE FROM phase WHERE id=?').run(r.id);
+        db.logEvent(con, 'moved_out', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
+      });
       db.scan(con, folder);
     });
-  } catch (e) { tcon.close(); forget(); throw e; } finally { tcon.close(); }
+  } catch (e) { failed = true; throw e; } finally { tcon.close(); if (failed) forget(); }
   close();
   ctx.wrote.push({ slug, path: `phases/${slug}.md`, folder: tdir, repo: target }); // the mover has seen the copy it made
   folders.push(tdir); // ONE commit and push covers the source and the target: never one pushed without the other

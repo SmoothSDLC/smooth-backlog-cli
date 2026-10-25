@@ -11,7 +11,7 @@ import { operation } from '../errors.js';
 import { locked } from '../storage.js';
 import { dump, hasFrontMatter, parse } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
-import { actor } from './seen.js';
+import { actor, created, guarded, guardReflow } from './seen.js';
 import { outsideTeam } from './team.js';
 
 const BACKLOG_ORIGIN = 'SmoothSDLC/smoothsdlc-backlog'; // lib_db.py:34
@@ -69,12 +69,12 @@ const lockPath = home => join(home, '.git', 'smooth-backlog-cli-run.lock');
 export const lockEnv = home => ({ BACKLOG_RUN_LOCK_HELD: `${lockPath(home)}:${process.pid}` });
 export function cloneLocked(home, fn) {
   const path = lockPath(home);
-  if (held.has(path) || process.env.BACKLOG_RUN_LOCK_HELD === `${path}:${process.ppid}`) return fn();
+  if (held.has(path) || process.env.BACKLOG_RUN_LOCK_HELD === `${path}:${process.ppid}`) return guarded(fn);
   // a normal update (pull, write, push over the network) can take a while: a command behind it waits, 120 s unless BACKLOG_LOCK_WAIT_MS says otherwise
   return locked(path, async () => {
     held.add(path);
     recoverJournal(home); // a killed predecessor's half-done change goes first
-    try { return await fn(); } finally { held.delete(path); }
+    try { return await guarded(fn); } finally { held.delete(path); }
   }, { wait: Number(process.env.BACKLOG_LOCK_WAIT_MS) > 0 ? Number(process.env.BACKLOG_LOCK_WAIT_MS) : 120000, takeOver: true });
 }
 
@@ -188,6 +188,7 @@ export function write(item, root) {
   const base = root ?? (inferred || dirname(item.path));
   assertFolder(base);
   assertNoSymlinks(base, item.path);
+  if (!existsSync(item.path)) created(base, relative(base, item.path));
   note(item.path);
   atomicWrite(item.path, dump(item.fm, item.body));
 }
@@ -278,7 +279,9 @@ const asInt = p => (typeof p === 'string' && /^\s*[+-]?\d+\s*$/.test(p) ? Number
 function applyDense(dir, items, inScope, beforeApply) {
   const changes = items.map((i, rank) => !i.ghost && inScope(i) && asInt(i.fm.priority ?? -1) !== rank);
   // Validate the entire reflow write set before rewriting any of it; a leading pull is not an agent read.
-  beforeApply?.(items.filter((i, rank) => changes[rank]));
+  const writes = items.filter((i, rank) => changes[rank]);
+  guardReflow(dir, writes);
+  beforeApply?.(writes);
   return items.map((i, rank) => {
     if (changes[rank]) write({ path: join(dir, i.path), fm: stamp({ ...i.fm, priority: rank }), body: i.body }, dir);
     return [slugOf(i), rank];
@@ -298,8 +301,9 @@ function within(items, arrange) {
 }
 
 // lib_db.py:558-567: re-densify in current order; with {slug, target}, first move that item to the clamped rank.
+// exclude omits explicitly departed items before their mirror rows are changed.
 export function reflow(dir, move, beforeApply) {
-  const items = within(actionable(dir), mine => {
+  const items = within(actionable(dir).filter(i => !move?.exclude?.includes(slugOf(i))), mine => {
     if (!(move && move.slug != null && move.target != null)) return mine;
     const moving = mine.filter(i => slugOf(i) === move.slug);
     const rest = mine.filter(i => slugOf(i) !== move.slug);

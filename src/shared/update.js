@@ -119,7 +119,7 @@ async function update(argv) {
     if (code || a['dry-run']) { forget(); return code; }
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
     await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '), a.guard);
-    if (a.wrote) seen.record(folder, repo, seen.actor(), [a.wrote]); // after the push: this is what the agent now has
+    seen.recordWrites(folder, repo, seen.actor(), a.wrote ? [a.wrote] : []); // after the push, including a pure replan
     return 0;
   });
 }
@@ -157,13 +157,7 @@ async function change(a, con, folder, repo) {
     }
     if (a['dry-run']) { say(`ℹ️  [dry-run] would replan backlog leading order: [${idents.map(pyStr).join(', ')}]`); return 0; }
     a.guard = [];
-    const order = store.reorder(folder, idents, items => {
-      for (const i of items) {
-        const slug = i.fm.phase || basename(i.path, '.md');
-        seen.check(folder, repo, seen.actor(), slug, i.path);
-        a.guard.push({ path: `${repo}/${i.path}`, slug, was: `${i.fm.updated}${i.fm.updated_by ? ` by ${i.fm.updated_by}` : ''}` });
-      }
-    });
+    const order = store.reorder(folder, idents);
     db.logEvent(con, 'planning_event', { handoffId: hid, note: a.note || `replan -> ${order.map(([s]) => s).join(', ')}` });
     db.scan(con, folder);
     say('📋 PLANNING EVENT — backlog re-prioritized (P0 = next):');
@@ -269,28 +263,17 @@ async function change(a, con, folder, repo) {
 
   // --- the planning event: a move-to-rank, or completion re-densifying the remaining backlog (update.py:288-306)
   let order = null;
-  const guardReflow = items => {
-    for (const i of items) {
-      const path = `${repo}/${i.path}`;
-      if (a.guard.some(g => g.path === path)) continue; // the primary item was checked before its write
-      const slug = i.fm.phase || basename(i.path, '.md');
-      seen.check(folder, repo, seen.actor(), slug, i.path);
-      a.guard.push({ path, slug, was: `${i.fm.updated}${i.fm.updated_by ? ` by ${i.fm.updated_by}` : ''}` });
-    }
-    // Validate the whole write set before touching the mirror; a refusal then restores only the primary file.
-    recordChange();
-  };
   if (moveTarget !== null) {
-    order = store.reflow(folder, { slug: row.slug, target: moveTarget }, guardReflow);
+    order = store.reflow(folder, { slug: row.slug, target: moveTarget }, recordChange);
     changes.priority = `P${new Map(order).get(row.slug) ?? 'None'}`;
     db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
   } else if (completing) {
-    order = store.reflow(folder, null, guardReflow); // the done item leaves the backlog; the rest re-densify
+    order = store.reflow(folder, null, recordChange); // the done item leaves the backlog; the rest re-densify
     db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `completed ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
   } else if (['pending', 'in_progress'].includes(row.status) !== ['pending', 'in_progress'].includes(fm.status)) {
     // into or out of the queue by a status other than done (done -> pending keeps its old priority and collides; a status out leaves a gap):
     // rank the queue again (beyond python parity, which leaves the collision or the gap)
-    order = store.reflow(folder, null, guardReflow);
+    order = store.reflow(folder, null, recordChange);
     db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `${row.slug} is now ${fm.status}; backlog re-prioritized to ${order.length} item(s)` });
   }
   if (order) db.scan(con, folder); else recordChange();

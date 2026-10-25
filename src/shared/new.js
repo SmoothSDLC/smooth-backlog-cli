@@ -5,7 +5,7 @@ import { join, posix } from 'node:path';
 import { input } from '../errors.js';
 import { commitSettled, connect, ensureAnchor, freshDb, logEvent, scan, undoOnThrow } from './db.js';
 import { parse } from './frontmatter.js';
-import { actor, record } from './seen.js';
+import { actor, recordWrites } from './seen.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
 import { branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
 import { pull } from './sync.js';
@@ -165,11 +165,14 @@ async function create(argv, { home, folder, repo, team }) {
     // nothing is committed yet: a failed run must not leave its file, a renumbered neighbour or a mirror row for the next command to push (beyond python parity)
     await undoOnThrow(db, folder, async () => {
       write({ path, fm, body: parts.join('\n') }, folder);
-      if (src) logEvent(db, 'split', { handoffId: src.handoff_id, phaseId: src.id, note: `spawned sibling ${slug}` });
-      scan(db, folder);
       // planning event: re-densify the backlog to 0..N-1, the new item at its insertion rank
-      const hid = ensureAnchor(db);
-      order = priority === undefined ? reflow(folder) : reflow(folder, { slug, target: priority });
+      let hid;
+      order = reflow(folder, priority === undefined ? null : { slug, target: priority }, () => {
+        // The mandatory ranking guard runs before any mirror or event changes.
+        if (src) logEvent(db, 'split', { handoffId: src.handoff_id, phaseId: src.id, note: `spawned sibling ${slug}` });
+        scan(db, folder);
+        hid = ensureAnchor(db);
+      });
       rank = Object.fromEntries(order)[slug];
       logEvent(db, 'planning_event', { handoffId: hid, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
       summary = scan(db, folder);
@@ -183,7 +186,7 @@ async function create(argv, { home, folder, repo, team }) {
   for (const [old, next] of await commitSettled(home, folder, message)) {
     if (old === seq) { seq = next; slug = pad(next) + slug.replace(/^\d+/, ''); rel = `phases/${slug}.md`; }
   }
-  record(folder, repo, actor(), [{ slug, path: rel }]); // the creator has seen what it wrote
+  recordWrites(folder, repo, actor(), [{ slug, path: rel }]); // the creator has seen what it wrote
 
   if (severity === 'critical') {
     const bar = `⚠️ ${'='.repeat(72)}`;

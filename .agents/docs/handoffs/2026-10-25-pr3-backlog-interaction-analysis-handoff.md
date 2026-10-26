@@ -1,28 +1,28 @@
-# PR #3 backlog interaction-analysis handoff — COMPLETED / ARCHIVED
+# PR #3 — analysis handoff (COMPLETED / historical reference)
 
-**Status (2026-10-26):** This was the October 25 **analysis-only** execution brief. Its requested research and artifact commit are complete. **Do not execute it a second time, create duplicate analysis backlog items, or interpret its old per-task assumptions as active policy.** Keep this file for provenance.
+**Updated:** 2026-10-26. **Not an executable work order.** This document originally commissioned an analysis-only session. That session finished its deliverable: [the 270-use-case interaction and adversarial behavior matrix](../analysis/2026-10-25-pr3-use-cases-interaction-behavior-matrix.md), committed on the existing PR #3 branch. Its historical source text remains available through this file's Git history. Do not repeat the analysis-only assignment or confuse its old SHA pins with current HEAD.
 
-## Delivered analysis
+## Current authority and scope
 
-- [Authoritative use-case and interaction matrix](../analysis/2026-10-25-pr3-use-cases-interaction-behavior-matrix.md), first committed at `198ec5a645fff5c912b93bfa96dafc744cadb728`.
-- 270 numbered UC scenarios (UC-001..UC-270), 16 invariants, 80 ordered/reversed command interactions, 18 configuration scenarios, 12 risk rows and 15 evidence gaps.
-- Source-derived findings are not newly reproduced defects. No synthetic test executions or BigFan runtime tests were claimed.
-- The branch is `team-cli-parity-1`, and PR #3 must not be merged/published without owner review.
+1. **Owner contract:** [Atomic item execution and dependency handoffs](../specs/2026-10-26-atomic-item-execution-dependency-handoffs.md) (2026-10-26).
+2. **Implementation execution plan:** [Updated PR #3 test-first implementation handoff](2026-10-25-pr3-test-first-implementation-handoff.md). This is planning/agent-orientation documentation only; actual item state, claimed executor, review and dependencies belong in the authoritative backlog.
+3. **Authoritative source item:** `SmoothSDLC/smoothsdlc-backlog` `SmoothSDLC/backlog-cli/phases/030-pull-request-3-patch-item-placeholder-content-to-come-from-chatgpt.md`, using **legacy item repository identity `SmoothSDLC/backlog-cli`**, branch `team-cli-parity-1`. That file contains item-level PR3 source requirements; the old placeholder name/metadata must be normalized by a backed, authorized backlog mutation.
+4. **Current coding methods:** `SmoothSDLC/cody-coding-model` PR #29 `references-review-v2` / `references/methods/refine-and-split.md`; PR #23 is already merged and does not substitute for PR #29.
+5. **Qwen runtime:** `SmoothSDLC/cody-topology-bigfan-linux` draft PR #1 `fix/qwen-team-member-lifecycle-reuse` — untested runtime patch, not a completed deployment.
 
-## Current execution authority (October 26)
+## Corrections to the 2026-10-25 instructions
 
-1. **Backlog item 030** is the source/tracking item in `SmoothSDLC/smoothsdlc-backlog`, historical namespace `SmoothSDLC/backlog-cli/phases/`; the implementation target is `SmoothSDLC/smooth-backlog-cli` PR #3. Preserve this mapping. The item's body is substantive even while its frontmatter still contains a placeholder label; repair metadata through the installed authoritative backlog skill, never edit the phase Markdown without the SQLite mirror.
-2. The active [test-first implementation handoff](2026-10-25-pr3-test-first-implementation-handoff.md) sets the coverage and remediation stages, subject to the **October 26 item-level execution correction** documented at its top.
-3. The authoritative method is `SmoothSDLC/cody-coding-model` PR #29 `references/methods/refine-and-split.md`: refine and split into **separate independently claimable backlog items** (not task sections), with explicit DAG edges. A member takes **one claimed item in one fresh session**, peer-review PASS precedes claimer close; the session terminates after close.
-4. For an item with dependents, the finishing member writes a **durable dependency handoff into the backlog item and/or a versioned repository artifact** and identifies its consumers. The lead reviews and acknowledges it before a dependent item may be dispatched/claimed. This is a durable engineering artifact **not a conversational/session transcript handoff**. The next fresh Qwen session loads skills and queries authoritative items; no prior-session prompt or context is injected.
-5. `SmoothSDLC/cody-topology-bigfan-linux` draft PR #1 handles Qwen teammate shutdown, roster persistence and same-name reuse. CLI owns persisted item state and concurrency; team skill/dispatcher owns scheduling and the handoff/retirement gate. Do not implement Qwen lifecycle inside PR #3.
+- **One item = one execution/review/close/new-session unit.** The team lead refines an original work item and creates new, *separate* independently claimable backlog items if work must be split; create explicit `depends_on` edges and parent-to-child provenance. Do not treat test batches, 270 UC IDs, file sections or per-task internal state as equivalent to individual backlog items.
+- **Self-organizing team:** the lead creates/publishes the DAG and exposes claimable items. Team members independently make an **atomic remote-published claim**. No lead-assigned claimant, read-only dispatch as reservation or implicit carryover from retired agent sessions.
+- **Dependency handoff is mandatory:** the producer of an item that has a downstream consumer writes a committed dependency-handoff artifact in the implementation repository, links it in the backlog, and obtains lead verification/approval against the exact artifact/commit and downstream interface **before dependent dispatch**. This *artifact* is distinct from an old conversational session handoff (which remains prohibited).
+- **Session reset:** close -> `CLOSED <seq>` -> no more member tool calls -> actual Qwen release/cleanup/persisted roster removal -> fresh identical canonical name, no previous context -> read current item/backlog/artifact. A reset failure is a dispatch blocker, never a reason to reuse an old session.
+- **Owner approval remains mandatory:** no merge/publish/release (PR3 merge can publish), destructive tests against the live central backlog, BigFan deployment, forced refs or writes to other repositories without their separately scoped authorization. Use isolated local clone/repo fixtures for adversarial tests.
+- **Analysis evidence discipline:** existing matrix rows and previous Codex reports are specifications/leads, not passing executions. Explicitly track NOT-RUN, policy-blocked, SHA-pinned reproducible failures, and source-derived observations.
 
-## Remaining scope and evidence requirements
+## Frozen analysis artifacts and acceptance references
 
-Work is **not** finished when this analysis closes. The implementation handoff and approved split children must supply failing deterministic tests, corrected CLI/backend contracts, independent reviews, all previously passing regression gates, and verified SHA-pinned evidence. Neither the 270-case proposal nor a source-only Qwen patch is a passing test run.
+- `../analysis/2026-10-25-pr3-use-cases-interaction-behavior-matrix.md` — 270 numbered UC requirements; 16 invariants; F-00..F-13 injection points; command, ordered-pair and cross-agent matrix; risk register.
+- PR3 current `src/shared/` implementation and `.agents/test/` fixtures — re-inspect latest HEAD, do not treat 2026-10-25 line numbers or historical HEAD as immutable.
+- Prior two-pass review inventory is retained in PR commits, issues/review threads and the matrix. Check unresolved Codex findings at execution time.
 
-Use isolated temporary Git clones for adversarial tests; do not modify the live backlog, production BigFan processes, or `main` during the implementation work. No owner-unapproved PR merge or package release.
-
-## Historical note
-
-The former 2026-10-25 analysis brief was created when phase-level tasks and session-reset approaches were still in flux. Its fulfilled objective and immutable test IDs are retained in the committed matrix. For new work, use backlog item 030, the October 26 item-level policy, the implementation handoff and current branch HEAD rather than the obsolete acquisition instructions formerly in this file.
+**Next action:** execute the separately refined, externally claimable backlog item(s) following the updated test-first implementation handoff. The matrix is complete as an *analysis document*, not as a test suite. A documentation handoff file must not become a second source of state.

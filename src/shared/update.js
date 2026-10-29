@@ -14,17 +14,14 @@ import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { asList, teamScope, uncoveredReviewClasses } from './team.js';
+import { REVIEW_DIR, asList, needsReview, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
-const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-work-class', 'set-review-classes', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on'];
+const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk'];
 const BOOL = ['dry-run'];
 const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments'];
 const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close'];
-// lib_db.py:601-606
-const WORK_CLASSES = ['app-code', 'ui', 'api', 'tests', 'iac', 'network', 'identity', 'security', 'data', 'delivery', 'verify', 'docs', 'contract', 'chunk', 'skills'];
-const REVIEW_CLASSES = [...WORK_CLASSES, 'code'];
-const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'] };
+const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'], 'set-chunk': ['yes', 'no'] };
 
 // Python str.strip()/rstrip() whitespace (not JS's: \x1c-\x1f and \x85 count, ﻿ does not).
 const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
@@ -83,11 +80,6 @@ function parse(argv) {
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const refuse = message => { say(`❌ ${message}`); return 1; }; // update.py's refusals: stdout, exit 1
-const classes = (text, allowed, flag) => { // lib_db.py:634-640
-  const vals = asList(text); const bad = vals.filter(v => !allowed.includes(v));
-  if (bad.length) throw usage(`${flag}: unknown class ${bad.join(', ')}; the vocabulary is: ${allowed.join(', ')}`);
-  return vals;
-};
 // lib_db.py:587-595
 function find(con, text) {
   const sel = itemSelector(text);
@@ -167,8 +159,8 @@ async function change(a, con, folder, repo) {
 
   if (!a.phase) return refuse('phase is required (or use --replan "id,id,...")');
   const row = find(con, a.phase);
-  if (!row) return refuse(`no phase ${pyStr(a.phase)} (run scan.py, or new_phase.py to create it)`);
-  if (row.status === 'archived') return refuse(`${row.slug} is archived and cannot be edited (the rescan does not visit archive/); beyond update.py parity, which edits the file and leaves the mirror stale`); // covers --claim, --request-review, --review and --close too
+  if (!row) return refuse(`no phase ${pyStr(a.phase)} (create it with backlog new)`);
+  if (row.status === 'archived') return refuse(`${row.slug} is archived and cannot be edited (the rescan does not visit archive/)`); // covers --claim, --request-review, --review and --close too
 
   const path = join(folder, row.path);
   await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way
@@ -183,7 +175,7 @@ async function change(a, con, folder, repo) {
   for (const k of SETTABLE) {
     const v = a[k];
     if (v === undefined) continue;
-    if (k === 'branch') return refuse('--branch is not changed by update.py; use move.py to move an item to another branch'); // identity field (owner rule 2026-10-11)
+    if (k === 'branch') return refuse('--branch is not changed by backlog update; use backlog move to move an item to another branch'); // identity field (owner rule 2026-10-11)
     if (k === 'commit' && !strip(v)) return refuse('--commit cannot be cleared');
     let n;
     if (['priority', 'seq', 'size_score'].includes(k) && (n = pyInt(v)) === null) throw new BacklogError('INVALID_INPUT', `invalid literal for int() with base 10: ${pyStr(v)}`, 1);
@@ -200,8 +192,7 @@ async function change(a, con, folder, repo) {
     changes[k] = v;
   }
   const incomplete = missingFields(fm, body); // as the item is before this call
-  if (a['set-work-class'] !== undefined) { fm.work_class = classes(a['set-work-class'], WORK_CLASSES, '--set-work-class'); changes.work_class = fm.work_class.join(','); }
-  if (a['set-review-classes'] !== undefined) { fm.review_classes = classes(a['set-review-classes'], REVIEW_CLASSES, '--set-review-classes'); changes.review_classes = fm.review_classes.join(','); }
+  if (a['set-chunk'] !== undefined) { fm.chunk = a['set-chunk'] === 'yes'; changes.chunk = a['set-chunk']; } // update.py:259-261
   for (const [k, v] of [['estimate_min', a['set-estimate'] === undefined ? undefined : pyInt(a['set-estimate'])], ['complexity', a['set-complexity']], ['layer', a['set-layer']]]) {
     if (v === undefined) continue;
     if (k === 'estimate_min' && v <= 0) return refuse('--set-estimate: minutes must be > 0');
@@ -221,9 +212,8 @@ async function change(a, con, folder, repo) {
   }
   if (a['set-review-refs'] !== undefined) {
     const refs = asList(a['set-review-refs']);
-    checkRefs(refs); // before the coverage check and any assignment
-    const missing = uncoveredReviewClasses(asList(fm.review_classes), refs);
-    if (missing.length) return refuse(`${row.slug}: no review ref covers ${missing.join(', ')} (references/review/<class>.md or <class>.example.md in cody-coding-model)`);
+    checkRefs(refs); // before any assignment
+    if (!refs.some(r => r.startsWith(REVIEW_DIR))) return refuse(`${row.slug}: --set-review-refs needs at least one review document (${REVIEW_DIR}<type>.md in cody-coding-model)`);
     fm.review_refs = refs;
     changes.review_refs = refs.join(',');
   }
@@ -238,8 +228,8 @@ async function change(a, con, folder, repo) {
     fm.wait_on = '';
     body = `${rstrip(body)}\n\nWAIT DONE ${store.now()} (next step on the item)\n`;
   }
-  if (a.status === 'done' && event !== 'closed' && asList(fm.review_classes).length && fm.review_state !== 'passed') { // reviewed items finish through --close only
-    return refuse(`${row.slug}: has review_classes and review_state ${fm.review_state || 'none'}; use --request-review, then --close after a passing review`);
+  if (a.status === 'done' && event !== 'closed' && needsReview(fm) && fm.review_state !== 'passed') { // reviewed items finish through --close only
+    return refuse(`${row.slug}: has review_refs and review_state ${fm.review_state || 'none'}; use --request-review, then --close after a passing review`);
   }
   const completing = a.status === 'done' || event === 'closed';
   if (completing && !fm.completed) fm.completed = store.now();
@@ -286,8 +276,8 @@ async function change(a, con, folder, repo) {
     if (order.length) say(`      backlog now ${order.length} item(s), P0..P${order.length - 1}; next = P0 ${order[0][0]}`);
     else say('      backlog now empty — no actionable phase remains.');
     say('      RE-EVALUATE the order now (it is a planning step even if nothing changes):');
-    say('        update.py <phase> --priority <rank>      # promote/demote one');
-    say('        update.py --replan "<id,id,id,...>"       # set the leading order');
+    say('        backlog update <phase> --priority <rank>      # promote/demote one');
+    say('        backlog update --replan "<id,id,id,...>"       # set the leading order');
   }
   return 0;
 }

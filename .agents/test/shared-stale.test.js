@@ -276,7 +276,7 @@ function closeFixture() {
   const f = seed();
   const path = join(f.folder, 'phases', '001-alpha.md');
   const doc = parse(readFileSync(path, 'utf8'));
-  store.write({ path, fm: { ...doc.fm, work_class: ['tests'], review_classes: ['tests'],
+  store.write({ path, fm: { ...doc.fm,
     review_refs: ['references/review/tests.md'], review_state: 'passed', estimate_min: 5 },
     body: doc.body + '\n## Definition of done\n\n- [x] Tested\n' }, f.folder);
   const con = db.connect(f.folder); db.scan(con, f.folder); con.close();

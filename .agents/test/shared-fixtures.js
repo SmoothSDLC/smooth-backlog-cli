@@ -110,8 +110,23 @@ export function py(script, args = [], opts = {}) {
     encoding: 'utf8',
     timeout: opts.timeout ?? 300000,
   });
-  return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
+  const words = args.includes('--help') ? s => s : cliWords; // the help parity tests compare the flags themselves
+  return { status: p.status ?? -1, stdout: words(p.stdout ?? ''), stderr: words(p.stderr ?? '') };
 }
+
+// The CLI's messages name its own commands where the oracle names its scripts (spec 2026-10-28-pr1-learnings: members
+// know the backlog only through this CLI); otherwise the text is the oracle's. Applied to the oracle's output.
+const CLI_WORDS = [
+  ['scripts/handback.py\n     and end your turn with its DECISION NEEDED line', 'end your turn\n     with a DECISION NEEDED line'],
+  ['if that tool says it cannot ask in non-interactive mode, use ', 'if that tool says it cannot ask in non-interactive mode, '],
+  ['update.py/archive.py/new_phase.py', 'backlog update/archive/new'],
+  ['(run scripts/scan.py to create the phase anchor)', '(backlog new creates the first item and the phase anchor)'],
+  ['(run scan.py, or new_phase.py to create it)', '(create it with backlog new)'],
+  [/; it is out of the queue until migrate_repo\.py <repository path> --identity-only fills them/g, '; it is out of the queue until its repository and branch are filled in'],
+  [/\. Restore the file from git, or remove\.py \S+ --reason "\.\.\."/g, '. Restore the file from git'],
+  [/\b(update|move|archive|query)\.py\b/g, 'backlog $1'], [/\bnew_phase\.py\b/g, 'backlog new'],
+];
+export const cliWords = s => CLI_WORDS.reduce((t, [a, b]) => t.replaceAll(a, b), s);
 
 let calls = 0;
 // Runs node bin/backlog.js (this repository's CLI) from a consumer checkout.

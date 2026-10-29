@@ -106,7 +106,7 @@ async function move(a, con, ctx) {
   if (!r) return refuse(`no item ${pyStr(a.phase)} in the backlog of ${repo}`);
   const outside = teamRefusal(r);
   if (outside) return refuse(outside);
-  if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (the rescan does not visit archive/, so the mirror would keep the old branch or repository); beyond move.py parity, which rewrites the archive file and leaves the mirror stale`);
+  if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (the rescan does not visit archive/, so the mirror would keep the old branch or repository)`);
   if (a['to-branch']) { // move.py:93-98
     const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);

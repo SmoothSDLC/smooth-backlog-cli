@@ -49,14 +49,15 @@ const update = (f, args, env) => {
 const query = (f, args) => cli(['query', ...args], { cwd: f.cons, tmp: f.t });
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 
-// A complete team item as conftest.Repos.new makes it: review refs for every review class, an estimate, a definition of done.
+// A complete team item as conftest.Repos.new makes it: review refs, an estimate, a definition of done.
 const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
 function newArgs(name, extra = []) {
   const has = k => extra.includes(k);
   const out = ['--name', name, '--objective', 'o', '--summary', 's', ...(has('--depends-on') ? [] : ['--depends-on', 'none'])];
-  const classes = has('--review-classes') ? extra[extra.indexOf('--review-classes') + 1] : (has('--work-class') ? 'code' : '');
-  if (classes && !has('--review-classes')) out.push('--review-classes', classes);
-  if (classes && !has('--review-refs')) out.push('--review-refs', classes.split(',').map(c => `references/review/${c}.md`).join(','));
+  // owner 2026-10-28: no classes. A team item names its review documents; the default is references/review/code.md
+  // (conftest.Repos.new). '--no-review-refs' (this helper's own flag) makes an item without any.
+  const bare = has('--no-review-refs'); extra = extra.filter(x => x !== '--no-review-refs');
+  if (!has('--review-refs') && !bare) out.push('--review-refs', 'references/review/code.md');
   if (!has('--estimate')) out.push('--estimate', '5', '--complexity', 'low');
   return [...out, '--body', DOD, ...extra];
 }
@@ -71,12 +72,12 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
   const f = fixture();
   const ok = (...args) => { const r = update(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
   const refused = (...args) => { const r = update(f, args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };
-  const first = make(f, 'js', 'dependency first', ['--work-class', 'tests']);
+  const first = make(f, 'js', 'dependency first', []);
   const seq = first.split('-')[0];
-  const job = make(f, 'js', 'the job', ['--work-class', 'app-code,tests', '--review-classes', 'code', '--depends-on', seq]);
+  const job = make(f, 'js', 'the job', ['--review-refs', 'references/review/code.md', '--depends-on', seq]);
   let { fm } = item(f, job);
-  assert.deepEqual(fm.work_class, ['app-code', 'tests']);
-  assert.deepEqual(fm.review_classes, ['code']);
+  assert.deepEqual(fm.review_refs, ['references/review/code.md']);
+  assert.ok(!('work_class' in fm) && !('review_classes' in fm)); // no class field is written
   assert.deepEqual(fm.depends_on, [Number(seq)]);
   assert.equal(fm.claimed_by, '');
   assert.equal(fm.review_state, 'none');
@@ -113,11 +114,11 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
 
 test('team session: TEAM_REPOSITORY binds the repository, a step on another scope is refused', () => {
   const f = fixture();
-  const s = make(f, 'js', 'scoped job', ['--work-class', 'app-code']);
+  const s = make(f, 'js', 'scoped job', []);
   const inScope = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const out = update(f, [s, '--claim', 'cody'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'other' });
   assert.equal(out.status, 1);
-  assert.equal(out.stdout, `❌ ${s}: this item belongs to repository acme/demo branch main, but this team session is bound to acme/demo branch other (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with query.py --scope, never claim or change them\n`);
+  assert.equal(out.stdout, `❌ ${s}: this item belongs to repository acme/demo branch main, but this team session is bound to acme/demo branch other (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them\n`);
   assert.equal(item(f, s).fm.claimed_by, '');
   const ok = update(f, [s, '--claim', 'cody'], inScope);
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
@@ -127,13 +128,13 @@ test('team session: TEAM_REPOSITORY binds the repository, a step on another scop
 
 test('team scope guards every mutating update path, not only the team steps (review P1)', () => {
   const f = fixture();
-  const s = make(f, 'js', 'scoped edits', ['--work-class', 'app-code']);
+  const s = make(f, 'js', 'scoped edits', []);
   const file = join(f.folder, 'phases', `${s}.md`);
   const outside = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'other' };
   const inside = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const before = readFileSync(file, 'utf8');
   for (const args of [['--summary', 'x'], ['--status', 'in_progress'], ['--status', 'done'], ['--priority', '0'], ['--append', 'more text'],
-    ['--set-estimate', '9'], ['--set-work-class', 'docs'], ['--note', 'n'], ['--claim', 'cody']]) {
+    ['--set-estimate', '9'], ['--set-chunk', 'yes'], ['--note', 'n'], ['--claim', 'cody']]) {
     const out = update(f, [s, ...args], outside);
     assert.equal(out.status, 1, `${args}: ${out.stdout}${out.stderr}`);
     assert.match(out.stdout, /^❌ .*this item belongs to repository acme\/demo branch main, but this team session is bound to acme\/demo branch other/, args.join(' '));
@@ -155,40 +156,35 @@ test('an incomplete item is only refined: no claim, no note', () => {
   const slug = r.stdout.split('created phase phases/')[1].split('.md')[0];
   const out = update(f, [slug, '--claim', 'cody']);
   assert.equal(out.status, 1);
-  assert.match(out.stdout, new RegExp(`^❌ ${slug}: incomplete item, missing work_class, review_classes, review_refs, estimate_min, definition_of_done: in a team nobody claims, reviews or works it \\(--claim refused\\); the team lead refines it only: update\\.py <item> --set-work-class`));
+  assert.match(out.stdout, new RegExp(`^❌ ${slug}: incomplete item, missing review_refs, estimate_min, definition_of_done: in a team nobody claims, reviews or works it \\(--claim refused\\); the team lead refines it only: backlog update <item> --set-review-refs references/review/<type>\\.md`));
   assert.equal(update(f, [slug, '--release', 'cody']).status, 1); // a release is not work: only its own refusal
   assert.match(update(f, [slug, '--release', 'cody']).stdout, /claimed by nobody, not by cody/);
   assert.equal(update(f, [slug, '--set-estimate', '5']).status, 0); // refining is allowed
 });
 
-test('team.js: class vocabularies, lists, review-ref coverage', () => {
-  assert.equal(team.WORK_CLASSES.length, 15);
-  assert.deepEqual(team.REVIEW_CLASSES, [...team.WORK_CLASSES, 'code']);
+test('team.js: lists, chunk items, review documents', () => {
   assert.deepEqual(team.asList(' a, b ,,c '), ['a', 'b', 'c']);
   assert.deepEqual(team.asList(' None '), []);
   assert.deepEqual(team.asList(undefined), []);
   assert.deepEqual(team.asList([1, ' x ', '']), ['1', 'x']);
-  assert.deepEqual(team.parseClasses('docs,code', team.REVIEW_CLASSES, '--x'), ['docs', 'code']);
-  assert.throws(() => team.parseClasses('docs,bogus', team.WORK_CLASSES, '--set-work-class'),
-    e => e.exitCode === 2 && e.message.startsWith(`--set-work-class: unknown class bogus; the vocabulary is: ${team.WORK_CLASSES.join(', ')}`));
-  assert.deepEqual(team.uncoveredReviewClasses(['code', 'ui', 'tests'], ['a/b/code.md', 'ui.example.md', 'tests']), ['tests']);
+  for (const v of [true, 'true', 'yes', '1', 'True']) assert.equal(team.isChunk({ chunk: v }), true, String(v)); // lib_db.is_chunk
+  for (const v of [false, 'no', '', undefined]) assert.equal(team.isChunk({ chunk: v }), false, String(v));
+  assert.equal(team.isChunk({ work_class: ['chunk'] }), false); // the old class field means nothing
+  assert.equal(team.needsReview({ review_refs: ['references/review/code.md'] }), true);
+  assert.equal(team.needsReview({ review_classes: ['code'] }), false);
+  assert.equal(team.REVIEW_DIR, 'references/review/');
+  for (const name of ['WORK_CLASSES', 'REVIEW_CLASSES', 'parseClasses', 'uncoveredReviewClasses', 'fallbackReview']) assert.ok(!(name in team), name);
 });
 
-test('team.js: roster and fallback review', () => {
+test('team.js: the roster names the members in order; any profile fields are kept and none is a class', () => {
   const f = fixture();
   assert.deepEqual(team.loadRoster(''), {});
   const file = join(f.t, 'roster.json');
-  writeFileSync(file, JSON.stringify({ cody: { work_classes: 'app-code,tests', review_classes: ['code'] }, archy: { work_classes: ['docs'] } }));
-  const roster = team.loadRoster(file);
-  assert.deepEqual(roster, { cody: [['app-code', 'tests'], ['code']], archy: [['docs'], []] });
+  writeFileSync(file, JSON.stringify({ cody: { work_classes: 'app-code,tests', review_classes: ['code'] }, archy: [1] }));
+  assert.deepEqual(team.loadRoster(file), { cody: { work_classes: 'app-code,tests', review_classes: ['code'] }, archy: {} }); // lib_db.load_roster
   assert.throws(() => team.loadRoster(join(f.t, 'missing.json')), e => e.exitCode === 2 && e.message.startsWith(`roster ${join(f.t, 'missing.json')}:`));
   writeFileSync(file, '[1]');
   assert.throws(() => team.loadRoster(file), e => e.exitCode === 2);
-  // no roster member but the claimer holds the review class: any other member may review it
-  assert.deepEqual(team.fallbackReview({ review_classes: ['code'], claimed_by: 'cody' }, roster), ['code']);
-  assert.deepEqual(team.fallbackReview({ review_classes: ['code'], claimed_by: 'archy' }, roster), []);
-  assert.deepEqual(team.fallbackReview({ review_classes: ['code'], claimed_by: 'cody' }, {}), []);
-  assert.deepEqual(team.fallbackReview({ claimed_by: 'cody' }, roster), []);
 });
 
 // Item files of a folder, then the mirror database scanned from them (the rules read the rows, the files only for metadata).
@@ -213,7 +209,7 @@ test('team.js: held items, the claim rule, undone dependencies on a folder', () 
   put(6, 'f', { depends_on: [1, '004-d', 'nothing', 5] });
   scan();
   assert.deepEqual(team.heldItems(f.folder, 'cody').map(h => [h.slug, h.state]), [['001-a', 'active'], ['002-b', 'awaiting-review'], ['003-c', 'waiting:run 5']]);
-  assert.equal(team.claimRefusal(f.folder, 'cody'), 'cody holds 1 active item(s): 001-a; pull new work only when every item you hold waits (review requested, or update.py <item> --waiting "<what>" --by cody); --force overrides');
+  assert.equal(team.claimRefusal(f.folder, 'cody'), 'cody holds 1 active item(s): 001-a; pull new work only when every item you hold waits (review requested, or backlog update <item> --waiting "<what>" --by cody); --force overrides');
   assert.equal(team.claimRefusal(f.folder, 'nobody'), null);
   const undone = team.undoneDependencies(f.folder, { depends_on: [1, '004-d', 'nothing', 5] });
   assert.deepEqual(undone.map(d => team.describeDependency(d)), ['001-a (status in_progress, claimed by cody)', 'nothing (no such item in this backlog)', '005-e (status in_progress, claimed by archy)']);
@@ -249,8 +245,8 @@ test('team.js: status and identity come from the mirror rows, the files give onl
 
 test('review P2: a holder whose item file has malformed front matter still blocks a second claim: the error propagates and nothing is written', () => {
   const f = fixture();
-  const a = make(f, 'js', 'held job', ['--work-class', 'app-code']);
-  const b = make(f, 'js', 'second job', ['--work-class', 'app-code']);
+  const a = make(f, 'js', 'held job', []);
+  const b = make(f, 'js', 'second job', []);
   assert.equal(update(f, [a, '--claim', 'cody']).status, 0);
   const held = join(f.folder, 'phases', `${a}.md`);
   writeFileSync(held, readFileSync(held, 'utf8').replace(/^claimed_by:/m, 'not a pair\nclaimed_by:'));
@@ -301,9 +297,9 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   };
   const slugs = {};
   for (const [key, name, extra] of [
-    ['a', 'dependency first', ['--work-class', 'tests']],
-    ['b', 'the job', ['--work-class', 'app-code,tests', '--review-classes', 'code', '--depends-on', '1']],
-    ['c', 'third', ['--work-class', 'docs']],
+    ['a', 'dependency first', []],
+    ['b', 'the job', ['--review-refs', 'references/review/code.md', '--depends-on', '1']],
+    ['c', 'third', []],
   ]) {
     slugs[key] = make(o, 'py', name, extra);
     assert.equal(make(n, 'js', name, extra), slugs[key]);
@@ -337,7 +333,7 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   both([B, '--claim', 'cody'], undefined, 0);
   both([B, '--close', '--summary', 'early'], undefined, 1);
   both([B, '--status', 'done'], undefined, 1); // reviewed items finish through --close only
-  both([B, '--set-review-refs', 'references/review/ui.md'], undefined, 1); // does not cover class code
+  both([B, '--set-review-refs', 'docs/notes.md'], undefined, 1); // not a review document
   both([B, '--set-review-refs', 'references/review/code.md,x/y.md'], undefined, 0);
   both([B, '--request-review', 'archy', '--note', 'commit def5678'], undefined, 0);
   both([B, '--review', 'changes', '--by', 'archy', '--comments', 'no refs cited'], undefined, 1);
@@ -357,5 +353,5 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   both([C, '--start-review', '--by', 'cody'], undefined, 0);
   both([C, '--start-review', '--by', 'zed'], undefined, 1); // in review by cody
   both([C, '--start-review', '--by', 'zed'], { BACKLOG_REVIEW_STALE_SECONDS: '-1' }, 0); // a stale review is taken over
-  both([C, '--claim', 'cody', '--set-work-class', 'docs,bogus'], undefined, 2);
+  both([C, '--claim', 'cody', '--set-work-class', 'docs'], undefined, 2); // the class options are gone: unrecognized
 });

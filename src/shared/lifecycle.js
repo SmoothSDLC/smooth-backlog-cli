@@ -5,14 +5,14 @@
 import { hasDefinitionOfDone } from './new.js';
 import { now } from './store.js';
 import {
-  asList, claimRefusal, describeDependency, gitBranch, isReviewAuthor, outsideTeam, reviewOpenTo, strip, teamScope, uncoveredReviewClasses, undoneDependencies,
+  REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip, teamScope, undoneDependencies,
 } from './team.js';
 
 export class Rejected extends Error {}
 const reject = message => { throw new Rejected(message); };
 const NO_SELF_REVIEW = by => `${by} claimed this item and cannot review its own work; another agent reviews it`;
 // lib_db.py:258-260
-export const REFINE_HOW = 'update.py <item> --set-work-class <c,..> / --set-review-classes <c,..> / --set-review-refs references/review/<class>.md,.. / '
+export const REFINE_HOW = 'backlog update <item> --set-review-refs references/review/<type>.md,.. / '
   + '--set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / '
   + "--append '## Definition of done\\n- [ ] <checkable line>'";
 
@@ -28,11 +28,11 @@ function estimateMin(fm, body) {
   return m ? Number(m[1]) : null;
 }
 
-// lib_db.py:240-250: the required team fields an item lacks; [] = complete.
+// lib_db.missing_fields: the required team fields an item lacks; [] = complete. review_refs names at least one review
+// document (references/review/<type>.md), depends_on is written (may be none), an estimate, a definition of done.
 export function missingFields(fm, body) {
-  const classes = asList(fm.review_classes); const refs = asList(fm.review_refs);
-  return [['work_class', !asList(fm.work_class).length], ['review_classes', !classes.length],
-    ['review_refs', !refs.length || uncoveredReviewClasses(classes, refs).length > 0],
+  const refs = asList(fm.review_refs);
+  return [['review_refs', !refs.some(r => r.startsWith(REVIEW_DIR))],
     ['depends_on', fm.depends_on == null || fm.depends_on === ''], ['estimate_min', estimateMin(fm, body) === null],
     ['definition_of_done', !hasDefinitionOfDone(body)]].filter(([, bad]) => bad).map(([f]) => f);
 }
@@ -108,8 +108,8 @@ export function waitingDone({ fm }, by) {
 
 export function closeItem({ fm }, by, summary) {
   if (!strip(summary || '')) reject('--close needs --summary "<what was delivered>"');
-  if (asList(fm.review_classes).length && fm.review_state !== 'passed') {
-    reject(`review_state is ${fm.review_state || 'none'}; an item with review_classes closes only after a passing review (--request-review, then another agent's --review pass)`);
+  if (needsReview(fm) && fm.review_state !== 'passed') {
+    reject(`review_state is ${fm.review_state || 'none'}; an item with review_refs closes only after a passing review (--request-review, then another agent's --review pass)`);
   }
   const closer = by || fm.claimed_by || '';
   if (!closer) reject('nobody claimed this item: pass --by <agent>');
@@ -156,4 +156,4 @@ export function step(a, { fm, slug, folder, repo, incomplete, given }) {
 }
 
 // update.py:253-255: printed after a passing review.
-export const closeNow = (fm, slug, by) => `   ➡️  CLOSE NOW: ${fm.claimed_by || 'the claimer'} closes it (update.py ${slug} --close --summary "<outcome>"); ${by} closes it (--close --by ${by} --summary ...) if the claimer has not within 3 min`;
+export const closeNow = (fm, slug, by) => `   ➡️  CLOSE NOW: ${fm.claimed_by || 'the claimer'} closes it (backlog update ${slug} --close --summary "<outcome>"); ${by} closes it (--close --by ${by} --summary ...) if the claimer has not within 3 min`;

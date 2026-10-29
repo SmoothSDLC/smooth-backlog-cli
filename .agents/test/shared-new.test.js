@@ -50,13 +50,13 @@ const rows = (f, sql) => { const con = db.connect(f.folder); try { return con.pr
 const REFUSALS = [
   ['no --depends-on', BASE, 1, 'stdout', '--depends-on is required'],
   ['no --name', ['--depends-on', 'none'], 1, 'stdout', '--name is required (or --split-from <phase>)'],
-  ['a review class as work class', [...NONE, '--work-class', 'app-code,code'], 2, 'stderr', 'unknown class code'],
-  ['an unknown review class', [...NONE, '--review-classes', 'wizardry'], 2, 'stderr', 'unknown class wizardry'],
+  ['a work class (the classes are gone)', [...NONE, '--work-class', 'docs'], 2, 'stderr', 'unrecognized arguments: --work-class docs'],
+  ['a review class (the classes are gone)', [...NONE, '--review-classes', 'code'], 2, 'stderr', 'unrecognized arguments: --review-classes code'],
+  ['review refs that name no review document', [...NONE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x'], 1, 'stdout', '--review-refs needs at least one review document (references/review/<type>.md in cody-coding-model)'],
   ['a dependency that is not there', [...BASE, '--depends-on', 'no-such-item'], 1, 'stdout', "no item 'no-such-item'"],
   ['a number that is not there', [...BASE, '--depends-on', '99'], 1, 'stdout', "no item '99'"],
   ['--split-from not found', [...NONE, '--split-from', 'nope'], 1, 'stdout', "--split-from: no phase 'nope'"],
-  ['review classes without refs', [...NONE, '--review-classes', 'code,tests', '--review-refs', 'references/review/code.md', '--body', '## Definition of done\n- [ ] x'], 1, 'stdout', 'uncovered: tests (e.g. references/review/tests.md in cody-coding-model)'],
-  ['review classes without a definition of done', [...NONE, '--review-classes', 'code', '--review-refs', 'references/review/code.md'], 1, 'stdout', '--body must hold a definition of done'],
+  ['review refs without a definition of done', [...NONE, '--review-refs', 'references/review/code.md'], 1, 'stdout', '--body must hold a definition of done'],
   ['an unknown option', [...NONE, '--bogus', 'x'], 2, 'stderr', 'unrecognized arguments: --bogus x'],
   ['an invalid choice', [...NONE, '--severity', 'urgent'], 2, 'stderr', "invalid choice: 'urgent'"],
   ['an invalid integer', [...NONE, '--priority', 'soon'], 2, 'stderr', "invalid int value: 'soon'"],
@@ -78,7 +78,7 @@ for (const [title, args, code, stream, text] of REFUSALS) {
     const o = oracle(t, fixture(t, 'new-oracle-'), args); // the same refusal from Python on a second fixture
     if (!o) return;
     assert.equal(r.status, o.status);
-    if (title !== 'an unknown option' && !title.startsWith('an invalid') && title !== 'a missing value') assert.equal(r[stream], o[stream]); // argparse's own wording is its own
+    if (title !== 'an unknown option' && !title.startsWith('an invalid') && title !== 'a missing value' && !title.includes('(the classes are gone)')) assert.equal(r[stream], o[stream]); // argparse's own wording is its own
   });
 }
 
@@ -151,8 +151,8 @@ test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name 
 
 // The same flags on two fixtures, one run by new_phase.py: the item, the output, the commit and the mirror agree.
 const SCENARIOS = {
-  'every flag, appended': [[], [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--work-class', 'app-code, tests',
-    '--review-classes', 'code,tests', '--review-refs', 'references/review/code.md,references/review/tests.example.md', '--estimate', '30', '--complexity', 'medium', '--layer', '3']],
+  'every flag, appended': [[], [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--chunk',
+    '--review-refs', 'references/review/code.md,references/review/tests.example.md', '--estimate', '30', '--complexity', 'medium', '--layer', '3']],
   'inserted at rank 0 before older work': [[['--name', 'Older', '--depends-on', 'none'], ['--name', 'Oldest', '--depends-on', '1']], [...BASE, '--depends-on', '1,Oldest'.replace('Oldest', '002-oldest'), '--priority', '0']],
   'critical, forced to P0 with the banner': [[['--name', 'Older', '--depends-on', 'none']], [...NONE, '--severity', 'critical']],
   'a rank beyond the end is clamped, a layer of process': [[['--name', 'Older', '--depends-on', 'none']], [...NONE, '--priority', '7', '--layer', 'process', '--complexity', 'high']],
@@ -292,7 +292,7 @@ test('review P1: a symlinked owner folder in the home is refused before any data
 test('review P2: review refs go through checkRefs: an absolute or ..-crossing ref is refused and nothing is persisted', t => {
   const f = fixture(t);
   for (const ref of ['../../outside/code.md', '/outside/code.md']) {
-    const r = node(f, [...NONE, '--review-classes', 'code', '--review-refs', ref, '--body', '## Definition of done\n- [ ] x']);
+    const r = node(f, [...NONE, '--review-refs', ref, '--body', '## Definition of done\n- [ ] x']);
     assert.equal(r.status, 2, ref);
     assert.match(r.stderr, /review ref .* (is absolute|contains '\.\.')/);
   }
@@ -315,13 +315,14 @@ test('review P2: a file with the name of the next item is never replaced: the it
   assert.deepEqual(items(f).map(i => i.path).sort(), ['phases/001-alpha-job.md', 'phases/002-alpha-job.md', 'phases/003-alpha-job.md']);
 });
 
-test('review P2: the skills class is accepted as work class and review class, with a covering skills.md ref; the fields are persisted', t => {
+test('review P2: a skills.md review document is accepted and persisted; no class field is written', t => {
   const f = fixture(t);
-  const r = node(f, [...NONE, '--work-class', 'skills', '--review-classes', 'skills', '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
+  const r = node(f, [...NONE, '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const [item] = items(f);
-  assert.deepEqual([item.fm.work_class, item.fm.review_classes, item.fm.review_refs], [['skills'], ['skills'], ['references/review/skills.md']]);
-  const o = oracle(t, fixture(t, 'new-oracle-'), [...NONE, '--work-class', 'skills', '--review-classes', 'skills', '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
+  assert.deepEqual(item.fm.review_refs, ['references/review/skills.md']);
+  assert.ok(!('work_class' in item.fm) && !('review_classes' in item.fm) && !('chunk' in item.fm));
+  const o = oracle(t, fixture(t, 'new-oracle-'), [...NONE, '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
   if (o) assert.equal(o.status, 0, o.stdout + o.stderr);
 });
 

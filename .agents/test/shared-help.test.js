@@ -75,17 +75,17 @@ for (const [command, script] of Object.entries(SCRIPT)) {
   });
 }
 
-test('backlog update --claim keeps its refusal conditions, query --roster the shape, default and reviewer rules (update.py:117-118, query.py:397-399)', () => {
+test('backlog update --claim keeps its refusal conditions, query --roster the shape, default and reviewer rule (update.py:117-118, query.py:428-429)', () => {
   const claim = block(backlog('update', '--help').stdout, 'claim');
   assert.match(claim, /refuses when another agent holds the item/);
   assert.match(claim, /depends_on\s+is not done/);
   assert.match(claim, /in progress/);
   for (const command of ['query', 'pop']) {
     const roster = block(backlog(command, '--help').stdout, 'roster');
-    assert.match(roster, /\{agent: \{work_classes, review_classes\}\}/, command);
+    assert.match(roster, /\{agent: \{\.\.\.\}\}, the team's members in order/, command);
     assert.match(roster, /TEAM_ROSTER/, command);
     assert.match(roster, /Any member but the author may review/, command);
-    assert.match(roster, /TEAM_REVIEW_HOLDER_PRIORITY_MIN \(5\) minutes/, command);
+    assert.doesNotMatch(roster, /class|HOLDER/, command); // no class profiles, no holder window
   }
 });
 
@@ -104,7 +104,7 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
   const made = backlog('new', '--name', 'Help fixture', '--depends-on', 'none');
   assert.equal(made.status, 0, made.stdout + made.stderr);
   const roster = join(t, 'roster.json');
-  writeFileSync(roster, '{"x": {"work_classes": ["app-code"], "review_classes": ["code"]}}');
+  writeFileSync(roster, '{"x": {}}');
   const unknown = /unrecognized arguments: --db/;
   const plan = (flag, what = 'the team dispatch plan') => new RegExp(`^--${flag}: ${what} is not in this build$`);
   const cases = [

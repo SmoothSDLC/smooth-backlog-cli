@@ -14,7 +14,7 @@ import { teamScope } from './team.js';
 import { SCOPES, teamView } from './views.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'pop', 'plan', 'claim-now', 'headless'];
-const VALUE = ['phase', 'by-branch', 'branch', 'classes', 'agent', 'lead', 'agents', 'review-classes', 'roster', 'scope'];
+const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
 // Flags of --plan (not built): refused. --pop is pop.js.
 const TEAM = new Set(['plan', 'agents']);
 const ACTIONABLE = ['pending', 'in_progress'];
@@ -66,10 +66,10 @@ function findings(rows, folder, repo) {
 // scan.py:26-38
 function findingLines(f, repo) {
   return [
-    ...f.foreign.map(r => `⚠️  CRITICAL: ${r.path} says repository ${r.repository} but is in the folder of ${repo}; it is out of the queue. Move it: move.py ${r.slug} --to-repository`),
-    ...f.ghost.map(r => `⚠️  CRITICAL: item ${r.slug} has a database row but its file ${r.path} is gone (deleted outside the scripts); it is out of the queue. Restore the file from git, or remove.py ${r.slug} --reason "..."`),
+    ...f.foreign.map(r => `⚠️  CRITICAL: ${r.path} says repository ${r.repository} but is in the folder of ${repo}; it is out of the queue. Move it: backlog move ${r.slug} --to-repository`),
+    ...f.ghost.map(r => `⚠️  CRITICAL: item ${r.slug} has a database row but its file ${r.path} is gone (deleted outside the scripts); it is out of the queue. Restore the file from git`),
     ...(f.bare ?? []).map(p => `⚠️  ${p} has no front matter block; it is not an item, is out of the queue and is never rewritten. Add the front matter or move the file out of phases/`),
-    ...f.untagged.map(r => `⚠️  item ${r.slug} records no repository or branch; it is out of the queue until migrate_repo.py <repository path> --identity-only fills them`),
+    ...f.untagged.map(r => `⚠️  item ${r.slug} records no repository or branch; it is out of the queue until its repository and branch are filled in`),
   ];
 }
 
@@ -99,10 +99,10 @@ a HARD FAILURE. Before you respond to the user you MUST, in order:
        (c) Readiness       — what is implementable now vs. needs refinement; soft
                              spots; the documentation surface it will touch.
        (d) Bottom line     — one-paragraph verdict (start as-is / carve-outs / refine).
-       (e) (read-only — no update.py/archive.py/new_phase.py, no status change here)
+       (e) (read-only — no backlog update/archive/new, no status change here)
   3. STOP AND ASK — end with EXACTLY ONE AskUserQuestion (rule 11: one decision);
-     if that tool says it cannot ask in non-interactive mode, use scripts/handback.py
-     and end your turn with its DECISION NEEDED line (SKILL.md, hand the decision back),
+     if that tool says it cannot ask in non-interactive mode, end your turn
+     with a DECISION NEEDED line (SKILL.md, hand the decision back),
      a single question ("How do you want to proceed with [NNN-slug]?") offering these
      THREE options as the next steps — never fewer, never auto-picked:
        • Further refinement   — Socratically tighten scope / split coupled parts first.
@@ -169,7 +169,7 @@ async function query(argv) {
         return 0;
       }
       if (a.json) { dump(r); return 0; }
-      if (process.env.BACKLOG_HEADLESS === '1') return die('BACKLOG_HEADLESS=1 (handback.py) is not in this build');
+      if (process.env.BACKLOG_HEADLESS === '1') return die('BACKLOG_HEADLESS=1 is not in this build');
       criticalBanner(critical());
       say(`➡️  NEXT: P${r.priority} (rank 0 = next) — [${pad(r.seq, 3)}] ${r.slug}  (${r.status})${(r.severity || 'normal') === 'critical' ? '  ⚠️ CRITICAL' : ''}`);
       say(`    ${r.name}`);
@@ -217,7 +217,7 @@ async function query(argv) {
 
     // default / --status: the full stack
     const h = one("SELECT * FROM handoff WHERE status='active' LIMIT 1");
-    if (!h) { say('ℹ️  backlog not initialized yet (run scripts/scan.py to create the phase anchor)'); return 0; }
+    if (!h) { say('ℹ️  backlog not initialized yet (backlog new creates the first item and the phase anchor)'); return 0; }
     const every = all("SELECT * FROM phase WHERE handoff_id=? ORDER BY CASE WHEN status IN ('done','archived') THEN 1 ELSE 0 END, priority ASC, seq ASC", h.id);
     const rows = every.filter(r => !excluded.has(r.id) && (a.all || ((r.repository || '') === repo && (r.branch || '') === branch)));
     // F6: open items of another branch that is no longer on the origin wait for a decision, in no queue
@@ -247,7 +247,7 @@ async function query(argv) {
     }
     if (unreadable) say('   ⚠️  the origin could not be read, so items of other branches were not checked');
     if (gone.length) {
-      say(`   ⚠️  ${gone.length} open item(s) belong to branches that no longer exist on the origin; they are in no queue. Decide for each: move to a branch (move.py <item> --to-branch <name>), archive, or remove:`);
+      say(`   ⚠️  ${gone.length} open item(s) belong to branches that no longer exist on the origin; they are in no queue. Decide for each: move to a branch (backlog move <item> --to-branch <name>), archive, or remove:`);
       for (const r of gone) say(`      - ${r.slug} (branch ${r.branch}) ${r.name}`);
     }
     return 0;

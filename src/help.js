@@ -30,7 +30,6 @@ const DB = `  --db DB
 const HELP_FLAG = `  --help
       Print this text and exit. Nothing is read or changed.`;
 
-const CLASSES = 'app-code, ui, api, tests, iac, network, identity, security, data, delivery, verify, docs, contract, chunk, skills';
 
 export const HELP = {
   new: `backlog new — add an item to the backlog of this repository, or split a sibling off an existing item
@@ -72,18 +71,12 @@ ${DB}
       the item does not exist.
   --body BODY
       The initial body of the item, the hand-over content for whoever does it. When the body has no "Definition of
-      done" heading or line with checkable lines, a placeholder checklist is added. With --review-classes the body
-      must hold a real definition of done.
-  --work-class WORK_CLASS
-      What doing the item requires, as comma-separated classes from: ${CLASSES}.
-  --review-classes REVIEW_CLASSES
-      The expertise the review needs, as comma-separated classes from the work classes above plus code. When it is
-      omitted the item closes without a review.
+      done" heading or line with checkable lines, a placeholder checklist is added. With --review-refs, or in a team
+      session, the body must hold a real definition of done.
   --review-refs REVIEW_REFS
-      Required together with --review-classes: the review documents and the definition of done, as
-      comma-separated paths in the cody-coding-model repository. Every review class needs one path whose file
-      name starts with the class (references/review/<class>.md or <class>.example.md). The command refuses when
-      a class is not covered.
+      How the item is reviewed: comma-separated paths of review documents in the cody-coding-model repository, at
+      least one of them under references/review/ (references/review/<type>.md). An item with review documents
+      closes only after a passing review; without them it closes without one.
   --depends-on DEPENDS_ON
       Required: the item numbers or slugs that must be done first, comma-separated, or the word none. The command
       refuses when a named item is not in this backlog.
@@ -93,6 +86,8 @@ ${DB}
       The estimated complexity of the item.
   --layer {1,2,3,4,5,process}
       The layer of the item: 1 to 5, or the word process.
+  --chunk
+      Chunk work: small pieces any member does between items (the front matter key chunk: true).
   --force
       Write the item file even when a file of that name already exists. Without it the command refuses.
   --dry-run
@@ -126,7 +121,7 @@ Options:
 ${DB}
   --status STATUS
       The new status of the item. Open items are pending or in_progress, a finished item is done. Setting done
-      completes the item; the command refuses when the item has review classes and no passing review.
+      completes the item; the command refuses when the item has review documents (review_refs) and no passing review.
   --branch BRANCH
       Refused by design: the branch of an item is not changed here. Use backlog move --to-branch instead.
   --commit COMMIT
@@ -166,11 +161,7 @@ ${DB}
       Clear the wait of the item (team session).
   --set-review-refs PATHS
       Set the review_refs of the item (its definition of done), as comma-separated paths in the cody-coding-model repository.
-      They must cover every review class: one path per class, references/review/<class>.md (team session).
-  --set-work-class CLASSES
-      Replace the work classes of the item, as comma-separated classes from: ${CLASSES}.
-  --set-review-classes CLASSES
-      Replace the review classes of the item, as comma-separated classes from the work classes above plus code.
+      At least one of them is a review document under references/review/ (references/review/<type>.md) (team session).
   --set-depends-on IDS
       Replace the depends_on of the item, as item numbers or slugs, or the word none. The command refuses when a
       named item is not in this backlog.
@@ -180,6 +171,8 @@ ${DB}
       Replace the estimated complexity of the item.
   --set-layer {1,2,3,4,5,process}
       Replace the layer of the item: 1 to 5, or the word process.
+  --set-chunk {yes,no}
+      Mark the item as chunk work (small pieces any member does between items) or not.
   --release AGENT
       Give the item back, pending and unclaimed (team session).
   --request-review AGENT|any
@@ -194,7 +187,7 @@ ${DB}
   --comments COMMENTS
       The review findings (--review); they must cite one of the review references of the item (team session).
   --close
-      Complete the item; --summary says what was delivered. It needs a passing review when the item has review_classes (team session).
+      Complete the item; --summary says what was delivered. It needs a passing review when the item has review documents (review_refs) (team session).
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
 ${HELP_FLAG}
@@ -214,8 +207,8 @@ Example:
 Usage:
   backlog query [--status] [--all] [--branch <name>] [--json]
   backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
-  backlog query --claimable | --reviewable | --blocked [--classes <classes>] [--agent <name>] [--roster <file>] [--scope branch|repo|all] [--json]
-  backlog query --pop --agent <name> [--classes <classes>] [--review-classes <classes>] [--lead <name>] [--roster <file>] [--scope branch|repo|all] [--claim-now] [--json]
+  backlog query --claimable | --reviewable | --blocked [--agent <name>] [--roster <file>] [--scope branch|repo|all] [--json]
+  backlog query --pop --agent <name> [--lead <name>] [--roster <file>] [--scope branch|repo|all] [--claim-now] [--json]
 
 Reads the backlog and never changes it, except that --pop with --claim-now claims an item. Without a view option it prints the full stack of the branch: the open
 items in queue order (priority 0 is next), then the finished ones. Items that are not on the queue because their file
@@ -249,15 +242,12 @@ ${DB}
       The branch whose queue to show. The default is the branch that is checked out here; a detached HEAD needs
       this option or --all.
   --claimable
-      Open, unclaimed items whose dependencies are all done and whose work classes are within --classes, in priority order
-      (team session).
+      Open, unclaimed items whose dependencies are all done, in priority order; another repository's items only as chunk
+      work (chunk: true) (team session).
   --reviewable
-      Items with a requested review that --agent may start or continue and whose review classes meet --classes (team session).
+      Items with a requested review that --agent may start or continue: any member but the author reviews (team session).
   --blocked
       Open items that wait for dependencies that are not done, with the status and holder of each dependency (team session).
-  --classes CLASSES
-      The classes the agent covers, comma-separated: work classes for --claimable, review classes for --reviewable; with --pop
-      they are the work classes of the agent (team session).
   --pop
       The one next action of the agent named by --agent: continue, review, claim, refine, chunk or idle (exit code 3, with the
       blockers named) (team session).
@@ -273,17 +263,14 @@ ${DB}
       else cody (team session).
   --agents AGENTS
       Not in this build. With --plan: the team members present, comma-separated; the default is the whole roster (team session).
-  --review-classes REVIEW_CLASSES
-      With --pop: the review classes the agent covers, comma-separated (team session).
   --claim-now
       With --pop: claim the item when the next action is to claim (team session).
   --roster ROSTER
-      With --pop or --reviewable: the team roster as a JSON file {agent: {work_classes, review_classes}}; the default is the file
-      named by TEAM_ROSTER. Any member but the author may review: holders of a review class of the item at once, the others after
-      TEAM_REVIEW_HOLDER_PRIORITY_MIN (5) minutes, or at once when no other roster member holds one (team session).
+      The team roster as a JSON file {agent: {...}}, the team's members in order; the default is the file named by TEAM_ROSTER.
+      Any member but the author may review an item (team session).
   --scope {branch,repo,all}
-      With --pop, --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk and docs items
-      of every repository. The widest scope for chunk and docs items is capped by the line refinement_scope: off|branch|repo|all
+      With --pop, --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk items
+      of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
       in the file backlog.scope of the folder of this repository (default branch).
   --headless
       Not in this build. Record the next-step decision without asking a question. BACKLOG_HEADLESS=1 is refused
@@ -340,13 +327,13 @@ Example:
   pop: `backlog pop — ask what one agent does next: the one next action, first match wins
 
 Usage:
-  backlog pop --agent <name> [--classes <classes>] [--review-classes <classes>] [--lead <name>] [--roster <file>]
+  backlog pop --agent <name> [--lead <name>] [--roster <file>]
               [--scope branch|repo|all] [--all] [--branch <name>] [--claim-now] [--json]
 
 Answers with exactly one action for the agent, the first that applies: continue (an item the agent holds and can work
 on; when its review passed, close it), review (an item another agent asks to have reviewed, or a review the agent
-started), claim (the open item with the lowest priority whose work classes the agent covers, whose dependencies are done
-and that nobody holds), refine (the team lead only: an incomplete item that lacks required fields), chunk (a small piece
+started), claim (the open item with the lowest priority whose dependencies are done, that is no chunk item and that nobody
+holds), refine (the team lead only: an incomplete item that lacks required fields), chunk (a small piece
 of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or for a run is not
 continued, and the agent claims a new item only when every item it holds waits. A review request older than
 BACKLOG_REVIEW_FIRST_SECONDS (300) is answered before the agent's own work. Incomplete items are never claimed or
@@ -362,20 +349,14 @@ ${SHARED}
 Options:
   --agent AGENT
       The agent that asks. Required.
-  --classes CLASSES
-      The work classes the agent covers, comma-separated (${CLASSES}).
-  --review-classes REVIEW_CLASSES
-      The review classes the agent covers, comma-separated. A member that does not hold a review class of the item reviews it
-      after TEAM_REVIEW_HOLDER_PRIORITY_MIN (5) minutes, or at once when no other roster member holds one.
   --lead LEAD
       The team lead, who alone refines incomplete items. The default is the environment variable TEAM_LEAD, else cody.
   --roster ROSTER
-      The team roster as a JSON file {agent: {work_classes, review_classes}}; the default is the file named by TEAM_ROSTER.
-      Any member but the author may review: holders of a review class of the item at once, the others after
-      TEAM_REVIEW_HOLDER_PRIORITY_MIN (5) minutes, or at once when no other roster member holds one.
+      The team roster as a JSON file {agent: {...}}, the team's members in order; the default is the file named by TEAM_ROSTER.
+      Any member but the author may review an item.
   --scope {branch,repo,all}
-      How far the agent looks: this branch (the default), every branch of this repository, or also the chunk and docs items
-      of every repository. The widest scope for chunk and docs items is capped by the line refinement_scope: off|branch|repo|all
+      How far the agent looks: this branch (the default), every branch of this repository, or also the chunk items
+      of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
       in the file backlog.scope of the folder of this repository (default branch).
   --all
       Look at every branch, not only the current one.
@@ -400,7 +381,7 @@ Exit codes:
   4  The backlog repository is not set up; the printed question must be answered by the user.
 
 Example:
-  backlog pop --agent cody --classes app-code,tests --review-classes code --json
+  backlog pop --agent archy --json
 `,
 
   move: `backlog move — move an item to another branch, or to another repository's folder, keeping its history

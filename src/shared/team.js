@@ -4,15 +4,14 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, posix, resolve, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
 import { connect } from './db.js';
 import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 
-// lib_db.py:601-606 (skills: owner 2026-10-22)
-export const WORK_CLASSES = ['app-code', 'ui', 'api', 'tests', 'iac', 'network', 'identity', 'security', 'data', 'delivery', 'verify', 'docs', 'contract', 'chunk', 'skills'];
-export const REVIEW_CLASSES = [...WORK_CLASSES, 'code'];
+// An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true (owner 2026-10-28).
+export const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR: the review documents of cody-coding-model
 const DONE_STATES = ['done', 'archived'];
 const ACTIONABLE = ['pending', 'in_progress'];
 
@@ -25,12 +24,10 @@ export const strip = s => rstrip(s).replace(new RegExp(`^[${WS}]+`), '');
 export const asList = v => (v == null || (typeof v === 'string' && ['', 'none'].includes(strip(v).toLowerCase())) ? []
   : (Array.isArray(v) ? v : String(v).split(',')).map(x => strip(String(x))).filter(Boolean));
 
-// lib_db.py:634-640: a value outside the vocabulary dies (exit 2).
-export function parseClasses(text, allowed, flag) {
-  const vals = asList(text); const bad = vals.filter(v => !allowed.includes(v));
-  input(!bad.length, `${flag}: unknown class ${bad.join(', ')}; the vocabulary is: ${allowed.join(', ')}`);
-  return vals;
-}
+// lib_db.is_chunk: a chunk item, small pieces of work any member does between items (front matter chunk: true).
+export const isChunk = fm => ['true', 'yes', '1'].includes(String(fm.chunk).toLowerCase());
+// lib_db.needs_review: an item with review documents closes only after a passing review.
+export const needsReview = fm => asList(fm.review_refs).length > 0;
 
 // lib_db.py:205-211: the (repository, branch) a team session is bound to by the environment; ('', '') outside a team.
 export function teamScope() {
@@ -47,7 +44,7 @@ export const gitBranch = cwd => teamScope().branch
 export function outsideTeam(fm) {
   const { repo, branch } = teamScope();
   if (!repo || ((fm.repository || '') === repo && (!branch || (fm.branch || '') === branch))) return null;
-  return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with query.py --scope, never claim or change them`;
+  return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them`;
 }
 
 // lib_db.py:587-595 phase_by_ident over the mirror rows: by number (a live row before an archived one) or by slug.
@@ -96,37 +93,23 @@ export function heldItems(folder, agent) {
 export function claimRefusal(folder, agent) {
   const active = heldItems(folder, agent).filter(h => h.state === 'active').map(h => h.slug);
   if (!active.length) return null;
-  return `${agent} holds ${active.length} active item(s): ${active.join(', ')}; pull new work only when every item you hold waits (review requested, or update.py <item> --waiting "<what>" --by ${agent}); --force overrides`;
+  return `${agent} holds ${active.length} active item(s): ${active.join(', ')}; pull new work only when every item you hold waits (review requested, or backlog update <item> --waiting "<what>" --by ${agent}); --force overrides`;
 }
 
-// lib_db.py:683-686: a ref covers class c when its file name starts with 'c.'.
-export const uncoveredReviewClasses = (classes, refs) => classes.filter(c => !refs.some(r => posix.basename(r).startsWith(`${c}.`)));
-
-// lib_db.py:689-697: {agent: [work classes, review classes]} from a roster file; {} without one.
+// lib_db.load_roster: {agent: profile} from a team roster {agent: {...}} (the team's members, in order); {} without one.
 export function loadRoster(path) {
   if (!path) return {};
   const plain = v => v !== null && typeof v === 'object' && !Array.isArray(v);
   try {
     const data = JSON.parse(readFileSync(path === '~' || path.startsWith('~/') ? join(homedir(), path.slice(1)) : path, 'utf8'));
-    if (!plain(data)) throw new TypeError('the roster must be an object {agent: {work_classes, review_classes}}');
-    return Object.fromEntries(Object.entries(data).map(([a, p]) => {
-      if (!plain(p)) throw new TypeError(`${a}: expected {work_classes, review_classes}`);
-      return [a, [asList(p.work_classes), asList(p.review_classes)]];
-    }));
+    if (!plain(data)) throw new TypeError('the roster must be an object {agent: {...}}');
+    return Object.fromEntries(Object.entries(data).map(([a, p]) => [a, plain(p) ? p : {}]));
   } catch (e) { throw new BacklogError('INVALID_INPUT', `roster ${path}: ${e.message}`); }
 }
 
 // Whether agent wrote the work under review: the current claimer, or whoever asked for the review (review_author survives a release).
 // The one predicate behind every offer, dispatch and refusal of a review.
 export const isReviewAuthor = (fm, agent) => (fm.claimed_by || '') === (agent || '') || (Boolean(agent) && fm.review_author === agent);
-
-// lib_db.py:700-707: the item's review classes when no roster member but its claimer holds one of them; [] otherwise.
-export function fallbackReview(fm, roster) {
-  const classes = asList(fm.review_classes);
-  if (!Object.keys(roster).length || !classes.length) return [];
-  const others = new Set(Object.entries(roster).filter(([a]) => !isReviewAuthor(fm, a)).flatMap(([, [, r]]) => r));
-  return classes.some(c => others.has(c)) ? [] : classes;
-}
 
 // lib_db.py:710-715: seconds since a front-matter time stamp; -1 when there is none.
 export const age = ts => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(String(ts)) ? (Date.now() - Date.parse(ts)) / 1000 : -1);

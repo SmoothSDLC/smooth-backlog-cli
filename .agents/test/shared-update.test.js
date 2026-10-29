@@ -51,7 +51,7 @@ function seed({ permuteIds = false } = {}) {
   item(2, 'beta');
   item(3, 'gamma', { status: 'in_progress' });
   item(4, 'delta', { wait_on: 'workflow run', wait_since: '2026-10-02T00:00:00Z' });
-  item(5, 'epsilon', { review_classes: ['tests'], review_state: '' });
+  item(5, 'epsilon', { review_refs: ['references/review/tests.md'], review_state: '' });
   item(6, 'zeta', { status: 'done', priority: 5, completed: '2026-10-02T00:00:00Z' });
   const con = db.connect(folder);
   db.scan(con, folder);
@@ -204,15 +204,26 @@ test('--note on an item that waits clears the wait with a WAIT DONE line (match 
   assert.match(fm(w[1], '004-delta.md').body, /\n\nWAIT DONE \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \(next step on the item\)\n$/);
 });
 
-test('refinement flags --set-work-class --set-review-classes --set-estimate --set-complexity --set-layer --set-depends-on (match update.py)', t => {
+test('refinement flags --set-review-refs --set-chunk --set-estimate --set-complexity --set-layer --set-depends-on (match update.py)', t => {
   const w = twins(t);
   if (!w) return;
-  pair(t, ...w, ['2', '--set-work-class', 'app-code,skills', '--set-review-classes', 'code,tests', '--set-estimate', '30',
+  pair(t, ...w, ['2', '--set-review-refs', 'references/review/code.md,references/review/tests.md', '--set-chunk', 'yes', '--set-estimate', '30',
     '--set-complexity', 'high', '--set-layer', '3', '--set-depends-on', '1,003-gamma']);
   pair(t, ...w, ['2', '--set-depends-on', 'none', '--set-layer', 'process']);
   pair(t, ...w, ['2', '--set-depends-on', '99']);
-  pair(t, ...w, ['2', '--set-work-class', 'bogus']);
-  pair(t, ...w, ['2', '--set-review-classes', 'app-code,nope,more']);
+  pair(t, ...w, ['2', '--set-chunk', 'no']);
+  pair(t, ...w, ['2', '--set-review-refs', 'docs/notes.md']);
+});
+
+test('the class options are gone: --set-work-class and --set-review-classes are unrecognized, nothing is written', () => {
+  const f = seed();
+  const before = readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8');
+  for (const flag of ['--set-work-class', '--set-review-classes']) {
+    const r = run(f, ['2', flag, 'docs']);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, new RegExp(`unrecognized arguments: ${flag}`));
+  }
+  assert.equal(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), before);
 });
 
 test('a bare number is the item number, never the database row id', t => {
@@ -283,7 +294,7 @@ test('a repository without a backlog yet: no phase, exit 1', () => {
   git(f.home, 'push', '-q');
   const r = run(f, ['1', '--status', 'done']);
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /^❌ no phase '1' \(run scan\.py, or new_phase\.py to create it\)\n$/);
+  assert.match(r.stdout, /^❌ no phase '1' \(create it with backlog new\)\n$/);
 });
 
 // ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 11)
@@ -326,9 +337,9 @@ test('review P2: --summary="two words" and --append="extra text" are options wit
 
 // ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 15)
 
-// An item that a team can claim: work class, review class and covering ref, estimate and a definition of done.
+// An item that a team can claim: a review document, an estimate and a definition of done.
 function claimable(f) {
-  const r = run(f, ['2', '--set-work-class', 'app-code', '--set-review-classes', 'tests', '--set-review-refs', 'references/review/tests.md', '--set-estimate', '10', '--append', '## Definition of done\n- [ ] x']);
+  const r = run(f, ['2', '--set-review-refs', 'references/review/tests.md', '--set-estimate', '10', '--append', '## Definition of done\n- [ ] x']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
 }
 

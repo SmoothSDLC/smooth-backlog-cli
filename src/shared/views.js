@@ -1,5 +1,5 @@
-// Shared-mode team views (cli-parity job 16): `backlog query --claimable | --reviewable | --blocked` with --classes,
-// --agent, --roster and --scope. Port of query.py:76-153 (scopes, refinement cap, team_rows) and :330-372 (the views),
+// Shared-mode team views (cli-parity job 16): `backlog query --claimable | --reviewable | --blocked` with --agent,
+// --roster and --scope. Port of query.py:76-153 (scopes, refinement cap, team_rows) and :330-372 (the views),
 // lib_db.py:731-742 (review_offer) and :621-624 (job_fields). Rows and dependencies come from the backlog.db mirror as
 // in query.js (team.js); the item files of the repository folder give only the front matter the rows do not hold.
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
@@ -11,12 +11,11 @@ import * as store from './store.js';
 import * as team from './team.js';
 
 export const SCOPES = ['branch', 'repo', 'all'];
-const REFINEMENT = ['chunk', 'docs']; // the only work another repository's agents may pick up (--scope all)
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
 export const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
-const JSON_FIELDS = ['work_class', 'review_classes', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'estimate_min', 'complexity', 'layer'];
+const JSON_FIELDS = ['chunk', 'review_refs', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'estimate_min', 'complexity', 'layer'];
 
-const refinement = fm => { const wc = team.asList(fm.work_class); return wc.length > 0 && wc.every(c => REFINEMENT.includes(c)); };
+const refinement = fm => team.isChunk(fm); // query.py _refinement: chunk items, the only work another repository's agents may pick up (--scope all)
 const files = dir => new Map(store.load(dir).map(i => [i.path, i]));
 const dirs = dir => { try { return readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch { return []; } };
 
@@ -31,18 +30,15 @@ export function refinementCap(folder, repr) {
   return v;
 }
 
-// lib_db.py:731-742: null = not offered to agent now; [] = offered as a class holder; the item's review classes = offered
-// to a non-holder, after TEAM_REVIEW_HOLDER_PRIORITY_MIN minutes (5) or at once when no other roster member holds one.
-export function reviewOffer(fm, agent, mine, roster) {
+// lib_db.review_offer (owner 2026-10-22/28): any member but the author may review a requested item at once; the item's
+// review_refs say how to review it. null = not offered to agent, [] = offered.
+export function reviewOffer(fm, agent) {
   if (team.isReviewAuthor(fm, agent) || !team.reviewOpenTo(fm, agent)) return null;
-  const classes = team.asList(fm.review_classes);
-  if (classes.some(c => mine.includes(c))) return [];
-  const window = 60 * Number(process.env.TEAM_REVIEW_HOLDER_PRIORITY_MIN ?? 5);
-  return team.fallbackReview(fm, roster).length || team.age(fm.review_requested_at) >= window ? classes : null;
+  return [];
 }
 
 // query.py:93-129 team_rows: [{r, fm, undone, f}] of the open items within scope, in priority order. branch = the caller's
-// repository and branch, repo = every branch of it, all = also the chunk/docs items of every other repository folder.
+// repository and branch, repo = every branch of it, all = also the chunk items of every other repository folder.
 export async function teamRows({ open, scope, cap, every, excluded, repo, branch, folder, home }) {
   const ref = RANK[scope] <= RANK[cap] ? scope : cap;
   const mine = files(folder);
@@ -89,13 +85,8 @@ export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d
 export async function teamView(a, { all, hid, excluded, repo, branch, folder, home, io }) {
   const { say, dump, die, repr } = io;
   try {
-    if ((a.claimable || a.reviewable) && !a.classes) return die('--claimable and --reviewable need --classes <the classes this agent covers>');
-    const mine = team.parseClasses(a.classes, a.claimable ? team.WORK_CLASSES : team.REVIEW_CLASSES, '--classes');
+    if (a.reviewable && !a.agent) return die('--reviewable needs --agent <you> (the author never reviews its own item)');
     const scope = a.scope || 'branch';
-    const roster = team.loadRoster(a.roster || process.env.TEAM_ROSTER);
-    if (scope === 'all' && a.claimable && !mine.every(c => REFINEMENT.includes(c))) {
-      return die(`--scope all offers only chunk/docs refinement work; implementation items of another repository are never claimed (${[...new Set(mine.filter(c => !REFINEMENT.includes(c)))].sort().join(', ')} is implementation). Use --classes chunk,docs with --scope all, or --scope repo|branch for your implementation classes`);
-    }
     const inTeam = Boolean(team.teamScope().repo || a.agent);
     const own = files(folder);
     const found = (await teamRows({ open: all(OPEN, hid), scope, cap: refinementCap(folder, repr), every: a.all, excluded, repo, branch, folder, home }))
@@ -104,11 +95,8 @@ export async function teamView(a, { all, hid, excluded, repo, branch, folder, ho
           const file = own.get(r.path);
           if (!file || missingFields(file.fm, file.body).length) return false;
         }
-        if (a.claimable) {
-          const wc = team.asList(fm.work_class);
-          return r.status === 'pending' && !fm.claimed_by && !undone.length && wc.every(c => mine.includes(c)) && (wc.length > 0 || !inTeam);
-        }
-        return a.reviewable ? reviewOffer(fm, a.agent, mine, roster) !== null : undone.length > 0;
+        if (a.claimable) return r.status === 'pending' && !fm.claimed_by && !undone.length && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
+        return a.reviewable ? reviewOffer(fm, a.agent) !== null : undone.length > 0;
       });
     if (a.json) {
       dump(found.map(({ r, fm, undone }) => ({ ...r, ...Object.fromEntries(JSON_FIELDS.map(k => [k, fm[k] ?? null])), waiting_on: waitingOn(undone) })));
@@ -118,7 +106,7 @@ export async function teamView(a, { all, hid, excluded, repo, branch, folder, ho
     say(`📋 ${found.length} ${a.claimable ? 'claimable' : a.reviewable ? 'reviewable' : 'blocked'} item(s) — ${repo}, branch ${where}, P0 = next:`);
     for (const { r, fm, undone, f } of found) {
       say(`   P${String(r.priority).padEnd(3)} ${r.slug} (${r.status}) — ${r.name}${f === repo ? '' : `  [repository ${redact(f)}]`}`);
-      say(`        work_class=${team.asList(fm.work_class).join(',') || '-'} review_classes=${team.asList(fm.review_classes).join(',') || '-'} `
+      say(`        review_refs=${team.asList(fm.review_refs).join(',') || '-'} `
         + `claimed_by=${fm.claimed_by || '-'} review=${fm.review_state || 'none'}${fm.reviewer ? ` reviewer=${fm.reviewer}` : ''}${jobFields(fm)}`);
       for (const dep of undone) say(`        waits on ${team.describeDependency(dep)}`);
     }

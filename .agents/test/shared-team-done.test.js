@@ -34,17 +34,17 @@ const update = (side, f, args) => (side === 'py' ? py('update.py', args, { cwd: 
 const status = f => parse(readFileSync(f.file, 'utf8')).fm.status;
 
 test('--status done is refused until the review passed (port of test_status_done_refused_until_review_passed)', () => {
-  const f = fixture('js', 'reviewed job', ['--work-class', 'app-code', '--review-classes', 'code', '--review-refs', 'references/review/code.md']);
+  const f = fixture('js', 'reviewed job', ['--review-refs', 'references/review/code.md']);
   const ok = update('js', f, [f.slug, '--claim', 'cody']);
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
   const r = update('js', f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 1);
   assert.ok(r.stdout.includes('use --request-review, then --close after a passing review'), r.stdout);
-  assert.equal(r.stdout, `❌ ${f.slug}: has review_classes and review_state none; use --request-review, then --close after a passing review\n`);
+  assert.equal(r.stdout, `❌ ${f.slug}: has review_refs and review_state none; use --request-review, then --close after a passing review\n`);
   assert.equal(status(f), 'in_progress');
 });
 
-test('--status done on an item without review_classes finishes as before (port of test_status_done_on_item_without_review_classes)', () => {
+test('--status done on an item without review_refs finishes as before (port of test_status_done_on_item_without_review_refs)', () => {
   const f = fixture('js', 'old item finishes as before', []);
   const { fm, body } = parse(readFileSync(f.file, 'utf8')); // as an old item looks: none of the team keys
   for (const k of OLD) delete fm[k];
@@ -57,7 +57,7 @@ test('--status done on an item without review_classes finishes as before (port o
 test('both cases print and exit as update.py', t => {
   if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
   const norm = s => String(s).replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g, 'TS');
-  const reviewed = ['--work-class', 'app-code', '--review-classes', 'code', '--review-refs', 'references/review/code.md'];
+  const reviewed = ['--review-refs', 'references/review/code.md'];
   const outs = ['py', 'js'].map(side => {
     const f = fixture(side, 'reviewed job', reviewed);
     assert.equal(update(side, f, [f.slug, '--claim', 'cody']).status, 0);

@@ -18,7 +18,7 @@ import * as team from './team.js';
 import { OPEN, SCOPES, refinementCap, reviewOffer, teamRows, waitingOn } from './views.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'pop', 'plan', 'claim-now', 'headless'];
-const VALUE = ['phase', 'by-branch', 'branch', 'classes', 'agent', 'lead', 'agents', 'review-classes', 'roster', 'scope'];
+const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
 const narrower = (a, b) => (RANK[a] <= RANK[b] ? a : b);
 
@@ -57,14 +57,14 @@ function excludedIds(rows, folder, repo) {
 // query.py:132-134
 const dod = fm => { const refs = team.asList(fm.review_refs); return refs.length ? `; definition of done: ${refs.join(', ')} (cody-coding-model: load them before working)` : ''; };
 // query.py:137-148
-function reviewSay(slug, fm, me, fallback) {
+function reviewSay(slug, fm, me) {
   const refs = team.asList(fm.review_refs);
   let text = fm.review_state === 'in_review' && fm.reviewer === me ? `continue your review (started ${fm.review_started ?? 'None'}): `
-    : `start the review: update.py ${slug} --start-review --by ${me}; then `;
-  text += fallback.length ? `review per ${fallback.map(c => `references/review/${c}.md`).join(', ')} (cody-coding-model; you do not hold its review classes) the work of ` : 'review the work of ';
+    : `start the review: backlog update ${slug} --start-review --by ${me}; then `;
+  text += 'review the work of ';
   text += fm.claimed_by || 'its author';
   if (refs.length) text += `; load its review_refs first: ${refs.join(', ')} (cody-coding-model) and cite one in --comments`;
-  return `${text}, then update.py ${slug} --review pass|changes --by ${me} --comments "<findings>"`;
+  return `${text}, then backlog update ${slug} --review pass|changes --by ${me} --comments "<findings>"`;
 }
 
 // query.py:155-252. io-free: returns the exit code.
@@ -81,9 +81,6 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     if (m.length) incomplete.set(r.id, m);
   }
   excluded = new Set([...excluded, ...incomplete.keys()]);
-  const work = team.parseClasses(a.classes, team.WORK_CLASSES, '--classes');
-  const rev = team.parseClasses(a['review-classes'], team.REVIEW_CLASSES, '--review-classes');
-  const roster = team.loadRoster(a.roster || process.env.TEAM_ROSTER);
   const scope = a.scope || 'branch'; const cap = refinementCap(folder, repr);
   const rows = (s, every) => teamRows({ open, scope: s, cap, every, excluded, repo, branch, folder, home });
   // continue/review/claim stay in the caller's repository: --scope all widens only the chunk search
@@ -91,8 +88,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const held = team.heldItems(folder, me);
   const reviews = [];
   for (const x of own) {
-    const fb = reviewOffer(x.fm, me, rev, roster);
-    if (fb !== null) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me, fb) });
+    if (reviewOffer(x.fm, me) !== null) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me) });
   }
   const first = Number(process.env.BACKLOG_REVIEW_FIRST_SECONDS ?? 300);
   let act = reviews.find(x => x.fm.review_state === 'in_review' && x.fm.reviewer === me) // your review in progress comes first
@@ -101,8 +97,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     for (const { r, fm, f } of own) {
       if (fm.claimed_by !== me || ['requested', 'in_review'].includes(fm.review_state) || fm.wait_on) continue; // waiting for a verdict or a run is not work
       act = fm.review_state === 'passed'
-        ? { name: 'continue', r, f, say: `close ${r.seq} with --close --summary (update.py ${r.slug} --close --summary "<outcome>")` }
-        : { name: 'continue', r, f, say: `you hold it: keep working and record each step in the item (update.py ${r.slug} --append "..."), then --request-review or --close${dod(fm)}` };
+        ? { name: 'continue', r, f, say: `close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")` }
+        : { name: 'continue', r, f, say: `you hold it: keep working and record each step in the item (backlog update ${r.slug} --append "..."), then --request-review or --close${dod(fm)}` };
       break;
     }
   }
@@ -110,10 +106,9 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const refusal = act ? null : team.claimRefusal(folder, me);
   if (!act && !refusal) {
     for (const { r, fm, undone, f } of own) {
-      const wc = team.asList(fm.work_class);
-      // an item without work_class is never popped (team mode); chunk items are offered as chunk work below
-      if (r.status === 'pending' && !fm.claimed_by && !undone.length && wc.length && wc.every(c => work.includes(c)) && !wc.includes('chunk')) {
-        act = { name: 'claim', r, f, say: `claim it: update.py ${r.slug} --claim ${me}${dod(fm)}` };
+      // chunk items are offered as chunk work below
+      if (r.status === 'pending' && !fm.claimed_by && !undone.length && !team.isChunk(fm)) {
+        act = { name: 'claim', r, f, say: `claim it: backlog update ${r.slug} --claim ${me}${dod(fm)}` };
         break;
       }
     }
@@ -132,15 +127,15 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   if (!act && lead) { // the lead refines an incomplete item (never actions it): after complete work, before chunk
     const r = open.find(x => incomplete.has(x.id) && (x.repository || '') === repo && x.branch === branch);
     if (r) {
-      act = { name: 'refine', r, f: repo, say: `refine ${r.seq}, never action it: set ${incomplete.get(r.id).join(', ')} (${REFINE_HOW.replaceAll('<item>', r.slug)}); an incomplete item means the backlog was not filled properly: once complete, record the gap in the item (update.py <item> --append "GAP: ...")` };
+      act = { name: 'refine', r, f: repo, say: `refine ${r.seq}, never action it: set ${incomplete.get(r.id).join(', ')} (${REFINE_HOW.replaceAll('<item>', r.slug)}); an incomplete item means the backlog was not filled properly: once complete, record the gap in the item (backlog update <item> --append "GAP: ...")` };
     }
   }
   if (!act && cap !== 'off') {
-    const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone }) => team.asList(fm.work_class).includes('chunk') && r.status === 'pending' && !fm.claimed_by && !undone.length);
-    if (chunks.length || work.includes('chunk')) {
+    const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length);
+    if (chunks.length || !lead) { // query.py:271: a member with nothing else does small-chunk work; the lead does not
       const { r, f } = chunks[0] ?? { r: null, f: repo };
       const where = f === repo ? '' : ` (repository ${f}: work from its clone)`;
-      act = { name: 'chunk', r, f, say: r ? `do one small chunk (<= 10 min) of it${where}, then update.py ${r.slug} --append "CHUNK <time> <what> <result>"`
+      act = { name: 'chunk', r, f, say: r ? `do one small chunk (<= 10 min) of it${where}, then backlog update ${r.slug} --append "CHUNK <time> <what> <result>"`
         : 'no item fits you: do one small chunk (<= 10 min) of refinement or tests on this repository\'s open items and append "CHUNK <time> <what> <result>" to the item you touched' };
     }
   }

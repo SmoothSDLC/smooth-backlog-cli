@@ -257,8 +257,8 @@ test('audit: a move that empties phases/ does not carry another clone\'s new fil
 test('review P2: a destination-renumbered move caches the moved item and refuses a subsequent stale summary overwrite', async t => {
   const [a, b, { bare }] = writers(t);
   const mover = process.env.QWEN_CODE_AGENT_ID || process.env.USER || 'unknown'; // cliAsync uses the inherited actor
-  for (const name of ['alpha', 'gamma']) assert.equal(cli([...NEW(name), '--work-class', 'app-code', '--review-classes', 'code',
-    '--review-refs', 'references/review/code.md', '--estimate', '5', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp }).status, 0);
+  for (const name of ['alpha', 'gamma']) assert.equal(cli([...NEW(name), '--review-refs', 'references/review/code.md',
+    '--estimate', '5', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
   const move = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
@@ -302,7 +302,7 @@ test('review P2: update records its published identity when an added item is ren
   const [anchor] = store.load(b.folder);
   store.write({ path: join(b.folder, 'phases/002-local.md'), fm: {
     ...anchor.fm, phase: '002-local', seq: 2, name: 'local', priority: 1,
-    work_class: ['app-code'], review_classes: ['code'], review_refs: ['references/review/code.md'], estimate_min: 5,
+    review_refs: ['references/review/code.md'], estimate_min: 5,
   }, body: '\n## Definition of done\n- [ ] x\n' }, b.folder);
   const con = db.connect(b.folder); try { db.scan(con, b.folder); } finally { con.close(); }
   const hold = holdFirstPush(b);
@@ -659,8 +659,8 @@ test('publication graph: transitive cycle through an upstream edge is refused', 
   rejectedPublication(t, b, bare, result, /dependency cycle/);
 });
 
-const COMPLETE = name => [...NEW(name), '--work-class', 'tests', '--review-classes', 'code',
-  '--review-refs', 'references/review/code.md', '--estimate', '5', '--body', '## Definition of done\n- [ ] verified'];
+const COMPLETE = name => [...NEW(name), '--review-refs', 'references/review/code.md',
+  '--estimate', '5', '--body', '## Definition of done\n- [ ] verified'];
 
 test('publication graph: a claim is refused when its completed dependency reopens upstream', async t => {
   const { b, bare, result } = await race(t,

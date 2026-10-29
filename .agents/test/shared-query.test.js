@@ -320,8 +320,8 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
   if (f.noOracle) return;
   const url = 'https://user:review_dummy@host/path';
   for (const args of [['query', '--next', '--branch', url], ['query', '--next', '--branch', url, '--json'], ['query', '--status', '--branch', url], ['query', '--status', '--branch', url, '--json'],
-    ['query', '--claimable', '--classes', 'app-code', '--branch', url], ['query', '--reviewable', '--classes', 'code', '--branch', url],
-    ['pop', '--agent', 'x', '--classes', 'app-code', '--branch', url], ['pop', '--agent', 'x', '--classes', 'app-code', '--branch', url, '--json'], ['pop', '--agent', url, '--classes', 'app-code'], ['pop', '--agent', url, '--json']]) {
+    ['query', '--claimable', '--branch', url], ['query', '--reviewable', '--agent', 'cody', '--branch', url],
+    ['pop', '--agent', 'x', '--branch', url], ['pop', '--agent', 'x', '--branch', url, '--json'], ['pop', '--agent', url], ['pop', '--agent', url, '--json']]) {
     const n = cli(args, { cwd: f.cons, tmp: f.t });
     assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));
     assert.ok(n.stdout.length > 0, `${args.join(' ')} printed nothing (${n.stderr})`);

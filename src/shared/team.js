@@ -11,7 +11,13 @@ import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 
 // An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true (owner 2026-10-28).
-export const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR: the review documents of cody-coding-model
+export const REVIEW_DIR = 'references/review/';
+// lib_db.STAGES and the review-hitl stage of topology item 288; REFINEMENT_REVIEWERS record a refinement verdict.
+export const STAGES = ['refining', 'refined', 'refinement-review', 'review-hitl', 'ready'];
+export const REFINEMENT_REVIEWERS = ['codex', 'claude'];
+// lib_db.is_ready: an item may be claimed when it has no stage (no team, or the team's work item, which the runner claims
+// for the lead) or its refinement review passed. The items the lead splits off start in stage refining.
+export const isReady = fm => [undefined, null, '', 'ready'].includes(fm.stage); // lib_db.py REVIEW_DIR: the review documents of cody-coding-model
 const DONE_STATES = ['done', 'archived'];
 const ACTIONABLE = ['pending', 'in_progress'];
 

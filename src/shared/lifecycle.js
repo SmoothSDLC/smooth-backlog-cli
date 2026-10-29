@@ -5,7 +5,8 @@
 import { hasDefinitionOfDone } from './new.js';
 import { now } from './store.js';
 import {
-  REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip, teamScope, undoneDependencies,
+  REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
+  teamScope, undoneDependencies,
 } from './team.js';
 
 export class Rejected extends Error {}
@@ -40,6 +41,7 @@ export function missingFields(fm, body) {
 export function claim({ fm, folder, repo }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
+  if (!isReady(fm) && !force) reject(`team ${fm.team || ''} item in stage ${fm.stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`); // update.py:75-77
   if (who && who !== agent) reject(`claimed by ${who} since ${fm.claimed_at}; message ${who} or pick another item`);
   const undone = undoneDependencies(folder, fm);
   if (undone.length) reject(`dependencies not done: ${undone.map(describeDependency).join('; ')}`);
@@ -47,6 +49,73 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   if (refusal && !force) reject(refusal);
   Object.assign(fm, { status: 'in_progress', claimed_by: agent, claimed_at: t });
   return { event: 'claimed', text: `Claimed by ${agent} at ${t} repository=${repo} branch=${gitBranch(process.cwd()) || '(detached)'} cwd=${process.cwd()}${refusal ? ` (--force past the claim rule: ${refusal.split(';')[0]})` : ''}` };
+}
+
+// The stages before any work (item 036; update.py:36-71): refining -> refined -> refinement-review -> ready, and review-hitl
+// for an owner decision (topology item 288). A member refines first, the lead requests the refinement review, and Codex
+// records the verdict; Claude only after Codex's 5-hour limit is recorded for the round.
+const inStage = fm => `team ${fm.team || 'none'}, stage ${fm.stage || 'none'}`;
+export function refineStart({ fm }, by) {
+  if (!by) reject('--refine-start needs --by <agent>');
+  if (!fm.team || fm.stage !== 'refining') reject(`only an item of a team in stage refining is refined (${inStage(fm)})`);
+  if (fm.claimed_by) reject(`claimed by ${fm.claimed_by}: the work item itself is refined and split by the team lead, not refined here`);
+  if (fm.refiner && fm.refiner !== by) reject(`${fm.refiner} is refining it since ${fm.refine_started}; refine another item`);
+  const t = now();
+  Object.assign(fm, { refiner: by, refine_started: t });
+  return { event: 'refine_started', text: `Refinement started by ${by} at ${t}` };
+}
+
+export function refineDone({ fm }, by, note) {
+  if (!by || fm.refiner !== by || fm.stage !== 'refining') reject(`--refine-done --by <the refiner>: refiner is ${fm.refiner || 'nobody'}, stage ${fm.stage || 'none'}`);
+  if (!strip(note || '')) reject('--refine-done needs --note "<what you refined>"');
+  const t = now();
+  Object.assign(fm, { stage: 'refined', refined_at: t });
+  return { event: 'refined', text: `## Refined by ${by} at ${t}\n\n${note}` };
+}
+
+export function requestRefinementReview({ fm }, by) {
+  if (fm.stage !== 'refined') reject(`only a refined item goes to the refinement review (stage ${fm.stage || 'none'})`);
+  const t = now();
+  Object.assign(fm, { stage: 'refinement-review', refinement_review_requested_at: t, refinement_codex_limit: '' });
+  return { event: 'refinement_review_requested', text: `Refinement review requested by ${by || 'the lead'} at ${t} (Codex first; Claude only when Codex's 5-hour limit is exceeded)` };
+}
+
+export function refinementReview({ fm }, verdict, { by, comments } = {}) {
+  if (!REFINEMENT_REVIEWERS.includes(by)) reject(`--refinement-review --by codex|claude: the refinement is reviewed by Codex or Claude (got ${by || 'none'})`);
+  if (fm.stage !== 'refinement-review') reject(`no refinement review is requested (stage ${fm.stage || 'none'})`);
+  if (!strip(comments || '')) reject('--refinement-review needs --comments "<the reviewer\'s findings, and its thread or session id>"');
+  const t = now();
+  if (verdict === 'limit') { // beyond the oracle (item 036): Codex's 5-hour limit is recorded before Claude may review
+    if (by !== 'codex') reject('--refinement-review limit --by codex: only Codex reports its own 5-hour limit');
+    fm.refinement_codex_limit = t;
+    return { event: 'refinement_codex_limit', text: `## Refinement review: Codex 5-hour limit (${t})\n\n${comments}` };
+  }
+  if (by === 'claude' && !fm.refinement_codex_limit) {
+    reject('--refinement-review --by claude: Claude reviews a refinement only when Codex reports its 5-hour limit; record it first (--refinement-review limit --by codex --comments "<Codex\'s answer>")');
+  }
+  const passed = verdict === 'pass';
+  Object.assign(fm, { stage: passed ? 'ready' : 'refining', refiner: passed ? fm.refiner || '' : '', refinement_reviewed_by: by, refinement_reviewed_at: t });
+  return { event: 'refinement_reviewed', text: `## Refinement review by ${by}: ${passed ? 'PASS: ready' : 'CHANGES: back to refining'} (${t})\n\n${comments}` };
+}
+
+// Beyond the oracle (topology item 288, owner 2026-10-28): an item whose refinement needs an owner decision waits in stage
+// review-hitl, with the question; the owner's answer sends it back to refining, where the lead re-refines it.
+const BEFORE_READY = ['refining', 'refined', 'refinement-review'];
+export function requestDecision({ fm }, by, question) {
+  if (!by) reject('--request-decision needs --by <agent>');
+  if (!fm.team || !BEFORE_READY.includes(fm.stage)) reject(`only a team item before ready waits for an owner decision (${inStage(fm)})`);
+  if (!strip(question || '')) reject('--request-decision needs the question: what, why, how it came up, the options and a recommendation');
+  const t = now();
+  Object.assign(fm, { stage: 'review-hitl', decision_requested_by: by, decision_requested_at: t, refiner: '' });
+  return { event: 'decision_requested', text: `## Owner decision needed (asked by ${by} at ${t})\n\n${question}` };
+}
+
+export function decision({ fm }, answer) {
+  if (fm.stage !== 'review-hitl') reject(`no owner decision is pending (stage ${fm.stage || 'none'})`);
+  if (!strip(answer || '')) reject('--decision needs the owner\'s answer');
+  const t = now();
+  Object.assign(fm, { stage: 'refining', refiner: '', decided_at: t });
+  return { event: 'decided', text: `DECISION ${t.slice(0, 10)}: ${answer}` };
 }
 
 export function release({ fm }, agent) {
@@ -120,8 +189,9 @@ export function closeItem({ fm }, by, summary) {
 // update.py:181-241: the guards and the one team action of a call. ctx = {fm, slug, folder, repo, body, incomplete, given}:
 // incomplete = missingFields before the call, given = the SETTABLE flags on the command line. Returns {refuse} (the text after
 // the "❌ ") or {event, text} (event 'state_change' and no text when no action was asked).
-const ACTIONS = ['claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done'];
-export function step(a, { fm, slug, folder, repo, incomplete, given }) {
+const ACTIONS = ['refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
+  'claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done'];
+export function step(a, { fm, body, slug, folder, repo, incomplete, given }) {
   const actions = ACTIONS.filter(k => a[k]);
   if (actions.length > 1) return { refuse: `one team-work step at a time (got ${actions.map(k => `--${k}`).join(', ')})` };
   const note = a.note ?? '';
@@ -131,7 +201,11 @@ export function step(a, { fm, slug, folder, repo, incomplete, given }) {
     if (why) return { refuse: `${slug}: ${why}` };
   }
   const steps = actions.filter(k => k !== 'release');
-  if (incomplete.length && (teamScope().repo || steps.length)) { // team mode: an incomplete item is only refined
+  if (a['refine-done'] && missingFields(fm, body).length) { // a refined item is complete (owner 2026-10-28; update.py:303-307)
+    return { refuse: `${slug}: still missing ${missingFields(fm, body).join(', ')}: complete it before --refine-done (${REFINE_HOW})` };
+  }
+  const refining = fm.team && ['refining', 'review-hitl'].includes(fm.stage); // being refined (or waiting for its decision): its refinement steps are allowed
+  if (incomplete.length && !refining && (teamScope().repo || steps.length)) { // team mode: an incomplete item is only refined
     const work = [...steps.map(k => `--${k}`), ...(strip(note) ? ['--note'] : []), ...given.map(k => `--${k}`),
       ...(a.append && !a.append.includes('ESTIMATE:') && !hasDefinitionOfDone(a.append) ? ['--append'] : [])];
     if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${REFINE_HOW}` };
@@ -140,6 +214,12 @@ export function step(a, { fm, slug, folder, repo, incomplete, given }) {
   const item = { fm, folder, repo };
   try {
     switch (actions[0]) {
+      case 'refine-start': return refineStart(item, a.by);
+      case 'refine-done': return refineDone(item, a.by, note);
+      case 'request-refinement-review': return requestRefinementReview(item, a.by);
+      case 'refinement-review': return refinementReview(item, a['refinement-review'], { by: a.by, comments: a.comments });
+      case 'request-decision': return requestDecision(item, a.by, a['request-decision']);
+      case 'decision': return decision(item, a.decision);
       case 'claim': return claim(item, a.claim, { force: a.force });
       case 'release': return release(item, a.release);
       case 'request-review': return requestReview(item, a['request-review'], note);

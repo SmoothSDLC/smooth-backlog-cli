@@ -152,10 +152,11 @@ ${DB}
   --note NOTE
       The note for the event log. Without it the log records which fields were set.
   --claim AGENT
-      Take the item for an agent (team session). The command refuses when another agent holds the item or when an item
-      in its depends_on is not done; otherwise the item becomes in progress and claimed by that agent.
+      Take the item for an agent (team session). The command refuses when another agent holds the item, when an item
+      in its depends_on is not done, or when a team's item is not in stage ready (its refinement review has not passed);
+      otherwise the item becomes in progress and claimed by that agent.
   --force
-      Together with --claim: claim although the agent already holds active items.
+      Together with --claim: claim although the agent already holds active items, or before stage ready.
   --waiting WHAT
       Record that the holder of the item (named with --by) waits for something asynchronous, for example a workflow run or a
       deployment. The wait is cleared by the next --note, --review, --close or --request-review of the item, or by
@@ -179,6 +180,24 @@ ${DB}
   --set-team NAME
       Set the team that owns the item; an empty NAME clears it. The team runner sets it on the work item it hands the team
       lead, and claims that item for the lead; items split from it inherit the team.
+  --refine-start
+      A team member starts refining the item (--by <agent>): only a team's item in stage refining that nobody claims or
+      already refines. The stages before any work are refining, refined, refinement-review and ready.
+  --refine-done
+      The refiner finished (--by <the refiner>, --note "<what you refined>"): stage refined. Refused while a team field or
+      the definition of done is missing.
+  --request-refinement-review
+      The team lead sends a refined item to the refinement review (--by <lead>): stage refinement-review.
+  --refinement-review {pass,changes,limit}
+      Record the refinement verdict, --by codex|claude with --comments "<findings; thread or session id>": pass makes the
+      item ready, changes sends it back to refining. limit (--by codex) records Codex's answer that its 5-hour limit is
+      exceeded; only then may Claude record a verdict for that round.
+  --request-decision QUESTION
+      The item needs an owner decision (--by <agent>): stage review-hitl, the question is written in the item (what, why,
+      how it came up, the options and a recommendation). Nobody claims it, or an item that depends on it, until the answer.
+  --decision ANSWER
+      The owner's answer to the item's question: written in the item as DECISION <date>: <answer>, and the item goes back
+      to stage refining, where the lead re-refines it with the decision.
   --release AGENT
       Give the item back, pending and unclaimed (team session).
   --request-review AGENT|any
@@ -213,7 +232,7 @@ Example:
 Usage:
   backlog query [--status] [--all] [--branch <name>] [--json]
   backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
-  backlog query --claimable | --reviewable | --blocked [--agent <name>] [--roster <file>] [--scope branch|repo|all] [--json]
+  backlog query --claimable | --reviewable | --blocked | --decisions [--agent <name>] [--roster <file>] [--scope branch|repo|all] [--json]
   backlog query --pop --agent <name> [--lead <name>] [--roster <file>] [--scope branch|repo|all] [--claim-now] [--json]
 
 Reads the backlog and never changes it, except that --pop with --claim-now claims an item. Without a view option it prints the full stack of the branch: the open
@@ -254,9 +273,12 @@ ${DB}
       Items with a requested review that --agent may start or continue: any member but the author reviews (team session).
   --blocked
       Open items that wait for dependencies that are not done, with the status and holder of each dependency (team session).
+  --decisions
+      The items that wait in stage review-hitl for an owner decision, each with its question, for the morning report; with
+      --all every branch. Answer one with backlog update <item> --decision "<answer>".
   --pop
-      The one next action of the agent named by --agent: continue, review, claim, refine, chunk or idle (exit code 3, with the
-      blockers named) (team session).
+      The one next action of the agent named by --agent: continue, review, refine, claim, refinement-review, chunk or idle
+      (exit code 3, with the blockers named) (team session).
       It is the same as backlog pop; see backlog pop --help. With --next, --agent does the same.
   --agent AGENT
       The agent that asks. With --claimable or --reviewable it also switches to team rules: an incomplete item is not offered
@@ -338,8 +360,10 @@ Usage:
 
 Answers with exactly one action for the agent, the first that applies: continue (an item the agent holds and can work
 on; when its review passed, close it), review (an item another agent asks to have reviewed, or a review the agent
-started), claim (the open item with the lowest priority whose dependencies are done, that is no chunk item and that nobody
-holds), refine (the team lead only: an incomplete item that lacks required fields), chunk (a small piece
+started), refine (a member: the refinement it has started, or the first-round refinement of a team item in stage
+refining that nobody refines; the team lead: an incomplete item that lacks required fields), claim (the open item with the
+lowest priority whose dependencies are done, that is no chunk item, is in stage ready when it has a team, and that nobody
+holds), refinement-review (the team lead: refined items to send to the refinement review), chunk (a small piece
 of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or for a run is not
 continued, and the agent claims a new item only when every item it holds waits. A review request older than
 BACKLOG_REVIEW_FIRST_SECONDS (300) is answered before the agent's own work. Incomplete items are never claimed or

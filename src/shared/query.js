@@ -13,7 +13,7 @@ import * as sync from './sync.js';
 import { teamScope } from './team.js';
 import { SCOPES, teamView } from './views.js';
 
-const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'pop', 'plan', 'claim-now', 'headless'];
+const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'pop', 'plan', 'claim-now', 'headless'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
 // Flags of --plan (not built): refused. --pop is pop.js.
 const TEAM = new Set(['plan', 'agents']);
@@ -160,7 +160,7 @@ async function query(argv) {
       return 0;
     }
 
-    if (a.claimable || a.reviewable || a.blocked) return teamView(a, { all, hid, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
+    if (a.claimable || a.reviewable || a.blocked || a.decisions) return teamView(a, { all, hid, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
 
     if (a.next) {
       const r = all(OPEN, hid).find(x => !excluded.has(x.id) && (a.all || ((x.repository || '') === repo && (x.branch || '') === branch)));

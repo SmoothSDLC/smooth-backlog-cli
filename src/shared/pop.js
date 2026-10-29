@@ -88,6 +88,10 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   // continue/review/claim stay in the caller's repository: --scope all widens only the chunk search
   const own = (await rows(narrower(scope, 'repo'), a.all)).filter(x => team.inTeam(x.fm)); // query.py:184: only the caller's team's items
   const held = team.heldItems(folder, me);
+  // query.py:186-188: this branch's items of the caller's team in stage refining that nobody holds (first-round refinement)
+  const here = open.filter(r => (r.repository || '') === repo && r.branch === branch).map(r => ({ r, fm: files.get(r.path)?.fm ?? {} }));
+  const teamRefining = here.filter(({ fm }) => fm.team && team.inTeam(fm) && fm.stage === 'refining' && !fm.claimed_by);
+  const refineHow = slug => REFINE_HOW.replaceAll('<item>', slug);
   const reviews = [];
   for (const x of own) {
     if (reviewOffer(x.fm, me) !== null) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me) });
@@ -95,21 +99,28 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const first = Number(process.env.BACKLOG_REVIEW_FIRST_SECONDS ?? 300);
   let act = reviews.find(x => x.fm.review_state === 'in_review' && x.fm.reviewer === me) // your review in progress comes first
     ?? reviews.find(x => team.age(x.fm.review_requested_at) >= first);
+  // query.py:197-221: the item you work on, your refinement in progress, then your passed and your changes-requested items
+  const mine = own.filter(({ fm }) => fm.claimed_by === me && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on); // waiting for a verdict or a run is not work
+  const cont = ({ r, fm, f }) => (fm.review_state === 'passed'
+    ? { name: 'continue', r, f, say: `close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")` }
+    : { name: 'continue', r, f, say: `you hold it: keep working and record each step in the item (backlog update ${r.slug} --append "..."), then --request-review or --close${dod(fm)}` });
+  const pick = (...states) => mine.find(({ fm }) => states.includes(fm.review_state ?? null));
+  if (!act) { const x = pick(null, '', 'none'); if (x) act = cont(x); }
   if (!act) {
-    for (const { r, fm, f } of own) {
-      if (fm.claimed_by !== me || ['requested', 'in_review'].includes(fm.review_state) || fm.wait_on) continue; // waiting for a verdict or a run is not work
-      act = fm.review_state === 'passed'
-        ? { name: 'continue', r, f, say: `close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")` }
-        : { name: 'continue', r, f, say: `you hold it: keep working and record each step in the item (backlog update ${r.slug} --append "..."), then --request-review or --close${dod(fm)}` };
-      break;
-    }
+    const x = teamRefining.find(({ fm }) => fm.refiner === me);
+    if (x) act = { name: 'refine', r: x.r, f: repo, say: `you are refining ${x.r.seq}: complete its team fields and definition of done (${refineHow(x.r.slug)}), then backlog update ${x.r.slug} --refine-done --by ${me} --note "<what you refined>"` };
   }
+  if (!act) { const x = pick('passed') ?? mine.find(({ fm }) => !['passed', null, '', 'none', undefined].includes(fm.review_state)); if (x) act = cont(x); }
   if (!act && reviews.length) act = reviews[0];
+  if (!act && !noClaim) { // query.py:222-227: first-round refinement of a team item, before new work
+    const x = teamRefining.find(({ fm }) => !fm.refiner);
+    if (x) act = { name: 'refine', r: x.r, f: repo, say: `refine it before anyone works on it: backlog update ${x.r.slug} --refine-start --by ${me}, complete its team fields and definition of done (${refineHow(x.r.slug)}), then backlog update ${x.r.slug} --refine-done --by ${me} --note "<what you refined>"` };
+  }
   const refusal = act || noClaim ? null : team.claimRefusal(folder, me);
   if (!act && !refusal && !noClaim) {
     for (const { r, fm, undone, f } of own) {
       // chunk items are offered as chunk work below
-      if (r.status === 'pending' && !fm.claimed_by && !undone.length && !team.isChunk(fm)) {
+      if (r.status === 'pending' && !fm.claimed_by && !undone.length && !team.isChunk(fm) && team.isReady(fm)) { // a team's item only in stage ready
         act = { name: 'claim', r, f, say: `claim it: backlog update ${r.slug} --claim ${me}${dod(fm)}` };
         break;
       }
@@ -126,6 +137,17 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     const fm = store.load(folder).find(i => i.path === act.r.path)?.fm ?? {};
     act = { ...act, say: `claimed for ${me}: start the work and record each step in the item${dod(fm)}` };
   }
+  if (lead && (!act || ['continue', 'review'].includes(act.name))) { // query.py:247-258: the refinement review comes before the lead's own work
+    const rv = here.filter(({ fm }) => fm.team && team.inTeam(fm) && ['refined', 'refinement-review'].includes(fm.stage));
+    if (rv.length) {
+      act = { name: 'refinement-review', r: rv[0].r, f: repo, say: `have the refinement of ${rv.map(x => x.r.seq).join(', ')} reviewed before anyone works on them: `
+        + `backlog update <item> --request-refinement-review --by ${me} for each refined one; send them to Codex with the codex-agent tool codex `
+        + '(Claude with the claude-agent tool claude_code only when Codex answers that its 5-hour usage limit is exceeded; record that answer first: '
+        + 'backlog update <item> --refinement-review limit --by codex --comments "<Codex\'s answer>"), asking for a pass or changes verdict per item '
+        + "against the team standard (backlog skill 'complete item', the item's review documents); then record each verdict: "
+        + 'backlog update <item> --refinement-review pass|changes --by codex|claude --comments "<findings; thread or session id>"' };
+    }
+  }
   if (!act && lead) { // the lead refines an incomplete item (never actions it): after complete work, before chunk
     const r = open.find(x => incomplete.has(x.id) && (x.repository || '') === repo && x.branch === branch);
     if (r) {
@@ -134,7 +156,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   if (!act && cap !== 'off') {
     const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone, f }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length
-      && team.offeredTo(fm, f, repo)); // never another team's chunk item (item 037)
+      && team.offeredTo(fm, f, repo) && team.isReady(fm)); // never another team's chunk item (item 037), nor one before ready (036)
     if (chunks.length || !noClaim) { // query.py:271: a member with nothing else does small-chunk work; the lead does not
       const { r, f } = chunks[0] ?? { r: null, f: repo };
       const where = f === repo ? '' : ` (repository ${f}: work from its clone)`;

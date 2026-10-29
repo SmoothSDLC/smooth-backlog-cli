@@ -19,9 +19,9 @@ import { REVIEW_DIR, asList, needsReview, teamScope } from './team.js';
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team'];
 const BOOL = ['dry-run'];
-const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments'];
-const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close'];
-const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'], 'set-chunk': ['yes', 'no'] };
+const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision'];
+const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close', 'refine-start', 'refine-done', 'request-refinement-review'];
+const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'], 'set-chunk': ['yes', 'no'], 'refinement-review': ['pass', 'changes', 'limit'] };
 
 // Python str.strip()/rstrip() whitespace (not JS's: \x1c-\x1f and \x85 count, ﻿ does not).
 const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
@@ -218,7 +218,7 @@ async function change(a, con, folder, repo) {
     fm.review_refs = refs;
     changes.review_refs = refs.join(',');
   }
-  const todo = step(a, { fm, slug: row.slug, folder, repo, incomplete, given: SETTABLE.filter(k => a[k] !== undefined) }); // update.py:181-241
+  const todo = step(a, { fm, body, slug: row.slug, folder, repo, incomplete, given: SETTABLE.filter(k => a[k] !== undefined) }); // update.py:181-241
   if (todo.refuse) return refuse(todo.refuse);
   const { event } = todo;
   if (todo.text) {

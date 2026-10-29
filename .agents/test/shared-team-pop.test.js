@@ -98,6 +98,9 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   p = pop(f); // (c) claim beats chunk; not claimed yet
   assert.deepEqual([p.action, p.item, p.claimed], ['claim', job, false]);
   assert.ok(!item(f, job).fm.claimed_by);
+  assert.notEqual(popLead(f).action, 'claim'); // the lead never claims
+  assert.notEqual(popLead(f, '--claim-now').action, 'claim');
+  assert.ok(!item(f, job).fm.claimed_by);
   p = pop(f, '--claim-now'); // --claim-now claims it
   assert.deepEqual([p.action, p.item, p.claimed], ['claim', job, true]);
   assert.equal(item(f, job).fm.claimed_by, 'cody');
@@ -221,6 +224,21 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   const old = popCli(f, ['--json'], { env: { BACKLOG_REVIEW_FIRST_SECONDS: '0' } });
   p = JSON.parse(old.stdout);
   assert.deepEqual([p.action, p.item], ['review', other]);
+});
+
+test('a roster member with review_only never claims; a missing roster is an error (query.py:176-179)', () => {
+  const f = fixture();
+  git(f.cons, 'checkout', '-q', '-b', 'pop-review-only');
+  const job = make(f, 'js', f.cons, 'review only job', []);
+  const roster = join(f.t, 'team.json');
+  writeFileSync(roster, JSON.stringify({ rev: { review_only: true }, cody: {} }));
+  const as = (agent, ...args) => cli(['query', '--pop', '--agent', agent, '--roster', roster, '--json', ...args], { cwd: f.cons, tmp: f.t, env: LEAD });
+  for (const args of [[], ['--claim-now']]) assert.equal(JSON.parse(as('rev', ...args).stdout).action, 'idle', args.join(' '));
+  assert.ok(!item(f, job).fm.claimed_by);
+  assert.deepEqual([JSON.parse(as('cody').stdout).action, JSON.parse(as('cody').stdout).item], ['claim', job]);
+  const gone = cli(['query', '--pop', '--agent', 'cody', '--roster', join(f.t, 'missing.json')], { cwd: f.cons, tmp: f.t, env: LEAD });
+  assert.equal(gone.status, 2);
+  assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'missing.json')}: `), gone.stderr);
 });
 
 // test_team_pop_compat.py: without the new flags every query prints what it printed before.
@@ -439,7 +457,7 @@ function claimOutcome(kind) {
     : kind === 'late' // the claim is saved in the item file; the process is stopped before its commit
     ? "const cp = require('node:child_process'); const run = cp.execFile;\ncp.execFile = function (file, args) { if (process.argv[2] === 'update' && file === 'git' && args.includes('commit')) process.kill(process.pid, 'SIGTERM'); return run.apply(this, arguments); };\n"
     : "if (process.argv[2] === 'update') { process.stderr.write('fatal: https://user:hunter2secret@host/x\\n'); process.exit(1); }\n");
-  const env = { NODE_OPTIONS: `--require=${hook}` };
+  const env = { ...LEAD, NODE_OPTIONS: `--require=${hook}` }; // cody a member: the lead never claims
   const r = cli(['pop', '--agent', 'cody', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env });
   return { f, job, r };
 }

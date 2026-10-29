@@ -71,6 +71,8 @@ function reviewSay(slug, fm, me) {
 async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const me = a.agent;
   const lead = me === team.strip(a.lead || process.env.TEAM_LEAD || 'cody');
+  // query.py:176-179: the lead never claims an execution item; a roster profile with review_only never claims either
+  const noClaim = lead || Boolean(team.loadRoster(a.roster || process.env.TEAM_ROSTER || '')[me]?.review_only);
   const open = all(OPEN, hid);
   const files = new Map(store.load(folder).map(i => [i.path, i]));
   const incomplete = new Map(); // members never claim, review or work an incomplete item
@@ -103,8 +105,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     }
   }
   if (!act && reviews.length) act = reviews[0];
-  const refusal = act ? null : team.claimRefusal(folder, me);
-  if (!act && !refusal) {
+  const refusal = act || noClaim ? null : team.claimRefusal(folder, me);
+  if (!act && !refusal && !noClaim) {
     for (const { r, fm, undone, f } of own) {
       // chunk items are offered as chunk work below
       if (r.status === 'pending' && !fm.claimed_by && !undone.length && !team.isChunk(fm)) {
@@ -132,7 +134,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   if (!act && cap !== 'off') {
     const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length);
-    if (chunks.length || !lead) { // query.py:271: a member with nothing else does small-chunk work; the lead does not
+    if (chunks.length || !noClaim) { // query.py:271: a member with nothing else does small-chunk work; the lead does not
       const { r, f } = chunks[0] ?? { r: null, f: repo };
       const where = f === repo ? '' : ` (repository ${f}: work from its clone)`;
       act = { name: 'chunk', r, f, say: r ? `do one small chunk (<= 10 min) of it${where}, then backlog update ${r.slug} --append "CHUNK <time> <what> <result>"`

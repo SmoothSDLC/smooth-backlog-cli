@@ -145,6 +145,11 @@ test('an item with old work_class and review_classes fields behaves exactly like
   const { fm, body } = item(f, old);
   store.write({ path, fm: { ...fm, work_class: ['chunk', 'docs'], review_classes: ['security'] }, body }, f.folder); // as a class-era item looks
   const pop = agent => JSON.parse(run(f, 'query', ['--pop', '--agent', agent, '--json']).stdout);
+  // the team view of both items is the same but for identity, rank and time stamps
+  const IDENTITY = ['id', 'slug', 'seq', 'name', 'objective', 'summary', 'priority', 'path', 'sha', 'created_at', 'updated_at'];
+  const rows = JSON.parse(run(f, 'query', ['--claimable', '--json']).stdout).map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !IDENTITY.includes(k))));
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows[1], rows[0]);
   assert.deepEqual(q(f, '--claimable'), [plain, old]); // both complete and claimable: no class makes either chunk work
   assert.deepEqual([pop('archy').action, pop('archy').item], ['claim', plain]);
   ok(f, plain, '--claim', 'archy');
@@ -154,7 +159,4 @@ test('an item with old work_class and review_classes fields behaves exactly like
     ok(f, s, '--request-review', 'any', '--note', 'ready');
     assert.ok(q(f, '--reviewable', '--agent', 'zed').includes(s), s); // any member but the author reviews; no review class counts
   }
-  const view = s => { const { seq, slug, name, phase, id, priority, ...rest } = JSON.parse(run(f, 'query', ['--phase', s, '--json']).stdout); return rest; }; // eslint-disable-line no-unused-vars
-  const [a, b] = [view(plain), view(old)];
-  assert.deepEqual(Object.keys(a).sort(), Object.keys(b).sort());
 });

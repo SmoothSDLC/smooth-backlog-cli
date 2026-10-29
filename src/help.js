@@ -259,15 +259,15 @@ ${DB}
       Not in this build. The dispatch plan of the team for this branch: one action per member (respond, close, review or claim),
       each item to one member, with the reason; it needs --roster (team session).
   --lead LEAD
-      With --pop or --plan: the team lead, who alone refines incomplete items. The default is the environment variable TEAM_LEAD,
-      else cody (team session).
+      With --pop or --plan: the team lead, who alone refines incomplete items and never claims an execution item. The default
+      is the environment variable TEAM_LEAD, else cody (team session).
   --agents AGENTS
       Not in this build. With --plan: the team members present, comma-separated; the default is the whole roster (team session).
   --claim-now
       With --pop: claim the item when the next action is to claim (team session).
   --roster ROSTER
       The team roster as a JSON file {agent: {...}}, the team's members in order; the default is the file named by TEAM_ROSTER.
-      Any member but the author may review an item (team session).
+      Any member but the author may review an item; a member with "review_only": true never claims (team session).
   --scope {branch,repo,all}
       With --pop, --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk items
       of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
@@ -350,10 +350,11 @@ Options:
   --agent AGENT
       The agent that asks. Required.
   --lead LEAD
-      The team lead, who alone refines incomplete items. The default is the environment variable TEAM_LEAD, else cody.
+      The team lead, who alone refines incomplete items and never claims an execution item. The default is the environment
+      variable TEAM_LEAD, else cody.
   --roster ROSTER
       The team roster as a JSON file {agent: {...}}, the team's members in order; the default is the file named by TEAM_ROSTER.
-      Any member but the author may review an item.
+      Any member but the author may review an item; a member with "review_only": true never claims.
   --scope {branch,repo,all}
       How far the agent looks: this branch (the default), every branch of this repository, or also the chunk items
       of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all

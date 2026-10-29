@@ -6,7 +6,7 @@ import { hasDefinitionOfDone } from './new.js';
 import { now } from './store.js';
 import {
   REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
-  teamScope, undoneDependencies,
+  teamLead, teamScope, undoneDependencies,
 } from './team.js';
 
 export class Rejected extends Error {}
@@ -41,6 +41,7 @@ export function missingFields(fm, body) {
 export function claim({ fm, folder, repo }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
+  if (fm.stage === 'review-hitl') reject('the item waits in stage review-hitl for an owner decision; nobody claims it, --force included (backlog update <item> --decision "<answer>" first)');
   if (!isReady(fm) && !force) reject(`team ${fm.team || ''} item in stage ${fm.stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`); // update.py:75-77
   if (who && who !== agent) reject(`claimed by ${who} since ${fm.claimed_at}; message ${who} or pick another item`);
   const undone = undoneDependencies(folder, fm);
@@ -74,10 +75,11 @@ export function refineDone({ fm }, by, note) {
 }
 
 export function requestRefinementReview({ fm }, by) {
+  if (!by || by !== teamLead()) reject(`--request-refinement-review --by <the team lead>: the lead (${teamLead()}; TEAM_LEAD) sends a refined item to the refinement review (got ${by || 'none'})`);
   if (fm.stage !== 'refined') reject(`only a refined item goes to the refinement review (stage ${fm.stage || 'none'})`);
   const t = now();
   Object.assign(fm, { stage: 'refinement-review', refinement_review_requested_at: t, refinement_codex_limit: '' });
-  return { event: 'refinement_review_requested', text: `Refinement review requested by ${by || 'the lead'} at ${t} (Codex first; Claude only when Codex's 5-hour limit is exceeded)` };
+  return { event: 'refinement_review_requested', text: `Refinement review requested by ${by} at ${t} (Codex first; Claude only when Codex's 5-hour limit is exceeded)` };
 }
 
 export function refinementReview({ fm }, verdict, { by, comments } = {}) {
@@ -189,6 +191,7 @@ export function closeItem({ fm }, by, summary) {
 // update.py:181-241: the guards and the one team action of a call. ctx = {fm, slug, folder, repo, body, incomplete, given}:
 // incomplete = missingFields before the call, given = the SETTABLE flags on the command line. Returns {refuse} (the text after
 // the "❌ ") or {event, text} (event 'state_change' and no text when no action was asked).
+const REFINEMENT_STEPS = ['refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision'];
 const ACTIONS = ['refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
   'claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done'];
 export function step(a, { fm, body, slug, folder, repo, incomplete, given }) {
@@ -204,7 +207,9 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given }) {
   if (a['refine-done'] && missingFields(fm, body).length) { // a refined item is complete (owner 2026-10-28; update.py:303-307)
     return { refuse: `${slug}: still missing ${missingFields(fm, body).join(', ')}: complete it before --refine-done (${REFINE_HOW})` };
   }
-  const refining = fm.team && ['refining', 'review-hitl'].includes(fm.stage); // being refined (or waiting for its decision): its refinement steps are allowed
+  // being refined (or waiting for its decision): its refinement steps are allowed although it is incomplete; beyond the
+  // oracle (update.py:309 lets every step through), only those steps (Codex review of item 036)
+  const refining = fm.team && ['refining', 'review-hitl'].includes(fm.stage) && steps.every(k => REFINEMENT_STEPS.includes(k));
   if (incomplete.length && !refining && (teamScope().repo || steps.length)) { // team mode: an incomplete item is only refined
     const work = [...steps.map(k => `--${k}`), ...(strip(note) ? ['--note'] : []), ...given.map(k => `--${k}`),
       ...(a.append && !a.append.includes('ESTIMATE:') && !hasDefinitionOfDone(a.append) ? ['--append'] : [])];

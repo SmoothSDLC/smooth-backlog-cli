@@ -17,7 +17,9 @@ export const STAGES = ['refining', 'refined', 'refinement-review', 'review-hitl'
 export const REFINEMENT_REVIEWERS = ['codex', 'claude'];
 // lib_db.is_ready: an item may be claimed when it has no stage (no team, or the team's work item, which the runner claims
 // for the lead) or its refinement review passed. The items the lead splits off start in stage refining.
-export const isReady = fm => [undefined, null, '', 'ready'].includes(fm.stage); // lib_db.py REVIEW_DIR: the review documents of cody-coding-model
+export const isReady = fm => [undefined, null, '', 'ready'].includes(fm.stage);
+// lib_db.team_lead: --lead, else env TEAM_LEAD, else cody. Only the lead refines an incomplete item and requests the refinement review.
+export const teamLead = name => strip(name || process.env.TEAM_LEAD || 'cody'); // lib_db.py REVIEW_DIR: the review documents of cody-coding-model
 const DONE_STATES = ['done', 'archived'];
 const ACTIONABLE = ['pending', 'in_progress'];
 

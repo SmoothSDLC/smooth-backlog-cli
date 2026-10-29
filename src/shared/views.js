@@ -83,7 +83,7 @@ export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d
 
 // Beyond the oracle (topology item 288): the items that wait in stage review-hitl for an owner decision, with the question
 // (the last "Owner decision needed" section of the item), for the morning report. Answer: backlog update <item> --decision.
-const QUESTION = /^## Owner decision needed \(asked by [^\n]*\)\n\n([\s\S]*?)(?=\n## |\nDECISION |$)/gm;
+const QUESTION = /^## Owner decision needed \(asked by [^\n]*\)\n\n([\s\S]*?)(?=\n## |\nDECISION |(?![\s\S]))/gm;
 function decisionsView(found, { a, scope, repo, branch, own, say, dump }) {
   const question = r => { const m = [...(own.get(r.path)?.body ?? '').matchAll(QUESTION)].pop(); return m ? team.strip(m[1]) : ''; };
   const rows = found.map(({ r, fm }) => ({ ...r, team: fm.team || null, decision_requested_by: fm.decision_requested_by || null,

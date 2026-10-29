@@ -70,7 +70,7 @@ function reviewSay(slug, fm, me) {
 // query.py:155-252. io-free: returns the exit code.
 async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const me = a.agent;
-  const lead = me === team.strip(a.lead || process.env.TEAM_LEAD || 'cody');
+  const lead = me === team.teamLead(a.lead);
   // query.py:176-179: the lead never claims an execution item; a roster profile with review_only never claims either
   const noClaim = lead || Boolean(team.loadRoster(a.roster || process.env.TEAM_ROSTER || '')[me]?.review_only);
   const open = all(OPEN, hid);
@@ -162,7 +162,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
       const { r, f } = chunks[0] ?? { r: null, f: repo };
       const where = f === repo ? '' : ` (repository ${f}: work from its clone)`;
       act = { name: 'chunk', r, f, say: r ? `do one small chunk (<= 10 min) of it${where}, then backlog update ${r.slug} --append "CHUNK <time> <what> <result>"`
-        : 'no item fits you: do one small chunk (<= 10 min) of refinement or tests on this repository\'s open items and append "CHUNK <time> <what> <result>" to the item you touched' };
+        : `no item fits you: do one small chunk (<= 10 min) of refinement or tests on ${team.teamName() ? `the open items of your team ${team.teamName()}` : 'this repository\'s open items'} and append "CHUNK <time> <what> <result>" to the item you touched` };
     }
   }
   const waits = new Map(held.filter(h => h.state !== 'active').map(h => [h.slug, { slug: h.slug, text: h.state === 'awaiting-review' ? `awaiting review: ${h.fm.seq}` : h.state.replace(':', ': ') }]));

@@ -451,10 +451,20 @@ Options:
   --decision ANSWER
       The owner's answer to the item's question: written in the item as DECISION <date>: <answer>, and the item goes back
       to stage refining, where the lead re-refines it with the decision.
+  --reassign AGENT
+      The team lead only (--by <lead>, --reason "<why>"): take the item from the agent that holds it and give it to AGENT.
+      In a qwen-code team session (QWEN_CODE_AGENT_ID=<name>@<team>) a member acts only as itself: its claim, release,
+      refinement, review and close of an item name itself, never another agent.
+  --reason REASON
+      Why the lead reassigns or releases another agent's item (with --reassign, or --release AGENT --by <lead>).
   --release AGENT
-      Give the item back, pending and unclaimed (team session).
+      Give the item back, pending and unclaimed (team session). Only AGENT itself, or the team lead with --by <lead> and
+      --reason, releases it.
   --request-review AGENT|any
-      Ask an agent, or any agent, for a review; --note says what to review (team session).
+      Ask an agent, or any agent, for a review; --note says what to review (team session). The output ends with the
+      instruction to end the session now: a review request, a changes verdict (--review changes) and a close each end the
+      agent's session, so its next task starts in a fresh one (not for the team lead, nor while the agent holds another
+      active item).
   --start-review
       Record that the agent named by --by starts the requested review (review_state in_review, reviewer and review_started are
       set). Other agents skip it unless the review was started more than 20 minutes ago (team session).
@@ -727,6 +737,51 @@ Exit codes:
 
 Example:
   backlog pop --agent archy --json
+```
+
+### backlog work
+
+```text
+backlog work — the one next-work command of a team member: the next action, marked as yours, with the whole item
+
+Usage:
+  backlog work --agent <you> [--lead <name>] [--roster <file>] [--scope branch|repo|all] [--all] [--branch <name>] [--json]
+
+Applies the team workflow order of backlog pop (your current task, reviewed work, another member's review request, the
+first-round refinement of a team item, the next ready item of your team, a chunk, else idle), marks the item as yours for
+that step (a claim, a refinement start or a review start, each one locked write), and prints the action, the one
+instruction and the whole item: its front matter and its body. A team member reads and writes the backlog only with
+these commands. When the mark is refused because another agent took the item meanwhile, the refusal is printed: run
+backlog work again.
+
+Options:
+  --agent AGENT
+      Required: you, the agent asking.
+  --lead LEAD
+      The team lead. The default is the environment variable TEAM_LEAD, else cody.
+  --roster ROSTER
+      The team roster as a JSON file {agent: {...}}; the default is the file named by TEAM_ROSTER.
+  --scope {branch,repo,all}
+      How far the agent looks, as backlog pop --scope.
+  --all
+      Look at every branch, not only the current one.
+  --branch BRANCH
+      The branch whose queue to use. The default is the branch that is checked out here.
+  --json
+      Print one object: the keys of backlog pop --json, marked (the step that marked the item, or null), front_matter and
+      body.
+  --help
+      Print this text and exit. Nothing is read or changed.
+
+Exit codes:
+  0  The command answered with an action, and the item is marked as yours where the step needs it.
+  3  The action is idle: nothing is left for you (the blockers are named).
+  1  The mark was refused (another agent took the item meanwhile) or could not be run: its output is shown.
+  2  The arguments or the place were wrong: the message is on standard error.
+  4  The backlog repository is not set up; the printed question must be answered by the user.
+
+Example:
+  backlog work --agent archy --json
 ```
 
 ### backlog move

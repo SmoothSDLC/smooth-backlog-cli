@@ -187,7 +187,9 @@ async function query(argv) {
         ? one("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id", sel.number)
         : one('SELECT * FROM phase WHERE slug=?', sel.slug));
       if (!r) { say(`❌ no phase ${repr(a.phase)}`); return 1; }
-      dump(r);
+      // the oracle's row, then the whole item (item 033: a member that may use only the CLI reads its item here)
+      const file = store.load(folder).find(i => i.path === r.path);
+      dump({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null });
       seen.view(a.agent, folder, repo, r); // the agent now holds this version: its next write to the item is checked against it
       return 0;
     }

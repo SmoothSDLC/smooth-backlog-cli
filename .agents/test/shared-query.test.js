@@ -75,11 +75,17 @@ function both(t, f, args) {
   const n = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
   return { o, n };
 }
+// --phase prints the oracle's row and then the whole item (front_matter and body, item 033): the row part is the oracle's.
+const rowOnly = (args, out) => {
+  if (!args.includes('--phase') || !out.startsWith('{')) return out;
+  const { front_matter: _f, body: _b, ...row } = JSON.parse(out); // eslint-disable-line no-unused-vars
+  return `${JSON.stringify(row, null, 2)}\n`;
+};
 function same(t, f, args) {
   const r = both(t, f, args);
   if (!r) return null;
   assert.equal(r.n.status, r.o.status, `${args.join(' ')}: ${r.n.stderr}`);
-  assert.equal(r.n.stdout, r.o.stdout);
+  assert.equal(rowOnly(args, r.n.stdout), args.includes('--phase') && r.o.stdout.startsWith('{') ? `${JSON.stringify(JSON.parse(r.o.stdout), null, 2)}\n` : r.o.stdout);
   assert.equal(r.n.stderr, r.o.stderr);
   return r;
 }

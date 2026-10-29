@@ -9,17 +9,17 @@ import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { teamRefusal } from './archive.js';
-import { closeNow, headline, missingFields, step } from './lifecycle.js';
+import { closeNow, headline, missingFields, shutdown, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { REVIEW_DIR, asList, needsReview, teamScope } from './team.js';
+import { REVIEW_DIR, asList, heldItems, needsReview, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team'];
 const BOOL = ['dry-run'];
-const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision'];
+const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason'];
 const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close', 'refine-start', 'refine-done', 'request-refinement-review'];
 const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'], 'set-chunk': ['yes', 'no'], 'refinement-review': ['pass', 'changes', 'limit'] };
 
@@ -192,6 +192,7 @@ async function change(a, con, folder, repo) {
     changes[k] = v;
   }
   const incomplete = missingFields(fm, body); // as the item is before this call
+  const before = { team: fm.team, stage: fm.stage };
   if (a['set-team'] !== undefined) { const name = strip(a['set-team']); fm.team = name; changes.team = name || 'none'; } // update.py:255-258
   if (a['set-chunk'] !== undefined) { fm.chunk = a['set-chunk'] === 'yes'; changes.chunk = a['set-chunk']; } // update.py:259-261
   for (const [k, v] of [['estimate_min', a['set-estimate'] === undefined ? undefined : pyInt(a['set-estimate'])], ['complexity', a['set-complexity']], ['layer', a['set-layer']]]) {
@@ -218,7 +219,8 @@ async function change(a, con, folder, repo) {
     fm.review_refs = refs;
     changes.review_refs = refs.join(',');
   }
-  const todo = step(a, { fm, body, slug: row.slug, folder, repo, incomplete, given: SETTABLE.filter(k => a[k] !== undefined) }); // update.py:181-241
+  const holder = fm.claimed_by || '';
+  const todo = step(a, { fm, body, before, slug: row.slug, folder, repo, incomplete, given: SETTABLE.filter(k => a[k] !== undefined) }); // update.py:181-241
   if (todo.refuse) return refuse(todo.refuse);
   const { event } = todo;
   if (todo.text) {
@@ -272,6 +274,10 @@ async function change(a, con, folder, repo) {
 
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
   if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug, a.by));
+  // item 033 (spec section 7): the hand-off to review, a changes verdict and a close end the agent's session, unless it
+  // is the lead or still holds another active item
+  const ender = event === 'review_requested' ? holder : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
+  if (ender && ender !== teamLead() && !heldItems(folder, ender).some(h => h.slug !== row.slug && h.state === 'active')) say(shutdown(ender));
   if (completing) {
     say('   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).');
     if (order.length) say(`      backlog now ${order.length} item(s), P0..P${order.length - 1}; next = P0 ${order[0][0]}`);

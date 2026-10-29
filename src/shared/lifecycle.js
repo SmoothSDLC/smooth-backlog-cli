@@ -121,13 +121,32 @@ export function decision({ fm }, answer) {
   return { event: 'decided', text: `DECISION ${t.slice(0, 10)}: ${answer}` };
 }
 
-export function release({ fm }, agent) {
+export function release({ fm }, agent, { by, reason } = {}) {
   const who = fm.claimed_by || '';
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be released into the queue`);
   if (who !== agent) reject(`claimed by ${who || 'nobody'}, not by ${agent}`);
+  // item 033 (spec section 8): only the team lead gives back another agent's item, and says why
+  if (by && by !== agent && (by !== teamLead() || !strip(reason || ''))) reject(`${by} cannot release ${agent}'s item: only the team lead (${teamLead()}) does, with --reason "<why>"`);
   Object.assign(fm, { status: 'pending', claimed_by: '', claimed_at: '', ...(fm.wait_on ? { wait_on: '' } : {}) }); // beyond update.py parity: a wait belongs to the holder; left behind it hides the item from pop's continue AND offers it as a claim
-  return { event: 'released', text: `Released by ${agent} at ${now()}` };
+  return { event: 'released', text: by && by !== agent ? `Released by ${by} for ${agent} at ${now()}: ${reason}` : `Released by ${agent} at ${now()}` };
 }
+
+// item 033 (spec section 8): the team lead takes an item from one agent and gives it to another, with the reason.
+export function reassign({ fm }, agent, { by, reason } = {}) {
+  if (!by || by !== teamLead()) reject(`--reassign --by <the team lead>: only the lead (${teamLead()}; TEAM_LEAD) gives one agent's item to another (got ${by || 'none'})`);
+  if (!strip(reason || '')) reject('--reassign needs --reason "<why>"');
+  if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item is not reassigned`);
+  const from = fm.claimed_by || '';
+  if (!from) reject('nobody holds the item: the agent claims it (backlog update <item> --claim <agent>)');
+  if (from === agent) reject(`${agent} holds it already`);
+  const t = now();
+  Object.assign(fm, { claimed_by: agent, claimed_at: t, ...(fm.wait_on ? { wait_on: '' } : {}) });
+  return { event: 'reassigned', text: `## Reassigned by ${by} from ${from} to ${agent} at ${t}\n\n${reason}` };
+}
+
+// item 033: in a qwen-code team session the shell runs with QWEN_CODE_AGENT_ID=<name>@<team>; that agent acts only as
+// itself. Outside a team session (no such id) the caller is not known and the named agent is taken as given.
+export const caller = () => { const id = strip(process.env.QWEN_CODE_AGENT_ID || ''); return /^[^@\s]+@\S+$/.test(id) ? id.split('@')[0] : ''; };
 
 export function requestReview({ fm }, reviewer, note) {
   if (!strip(note || '')) reject('--request-review needs --note "<what to review: commits, deployed evidence>"');
@@ -193,11 +212,19 @@ export function closeItem({ fm }, by, summary) {
 // incomplete = missingFields before the call, given = the SETTABLE flags on the command line. Returns {refuse} (the text after
 // the "❌ ") or {event, text} (event 'state_change' and no text when no action was asked).
 const REFINEMENT_STEPS = ['refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision'];
-const ACTIONS = ['refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
+// the agent each step acts as (item 033: a member acts only as itself)
+const ACTS_AS = { claim: a => a.claim, release: a => a.by || a.release, reassign: a => a.by, 'request-review': (a, fm) => fm.claimed_by,
+  close: (a, fm) => a.by || fm.claimed_by, 'waiting-done': (a, fm) => a.by || fm.claimed_by };
+const ACTIONS = ['reassign', 'refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
   'claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done'];
-export function step(a, { fm, body, slug, folder, repo, incomplete, given }) {
+export function step(a, { fm, body, slug, folder, repo, incomplete, given, before = fm }) {
   const actions = ACTIONS.filter(k => a[k]);
   if (actions.length > 1) return { refuse: `one team-work step at a time (got ${actions.map(k => `--${k}`).join(', ')})` };
+  const me = caller();
+  if (me && actions.length && me !== teamLead()) {
+    const as = (ACTS_AS[actions[0]] ?? (x => x.by))(a, fm);
+    if (as && as !== me) return { refuse: `${slug}: you are ${me} (QWEN_CODE_AGENT_ID): a member acts only as itself, not as ${as}; only the team lead (${teamLead()}) takes or gives another agent's work (backlog update <item> --reassign <agent> --by <lead> --reason "<why>")` };
+  }
   const note = a.note ?? '';
   // Beyond the oracle (update.py:241 guards only steps and notes): a field, --set-* or body edit is a change too.
   if (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-'))) {
@@ -212,7 +239,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given }) {
   // and appended team fields or definition of done, and nothing else. Beyond the oracle (update.py:309 lets every step
   // through; Codex review of item 036): a status change, another step or appended text that is no definition of done is
   // refused, so nothing but a refinement completes it.
-  const refining = fm.team && ['refining', 'review-hitl'].includes(fm.stage);
+  const refining = before.team && ['refining', 'review-hitl'].includes(before.stage); // as the item was before this call: --set-team '' does not lift the rule
   if (incomplete.length && (teamScope().repo || steps.length || refining)) { // team mode: an incomplete item is only refined
     const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k))).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),
       ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k))).map(k => `--${k}`),
@@ -230,7 +257,8 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given }) {
       case 'request-decision': return requestDecision(item, a.by, a['request-decision']);
       case 'decision': return decision(item, a.decision);
       case 'claim': return claim(item, a.claim, { force: a.force });
-      case 'release': return release(item, a.release);
+      case 'release': return release(item, a.release, { by: a.by, reason: a.reason });
+      case 'reassign': return reassign(item, a.reassign, { by: a.by, reason: a.reason });
       case 'request-review': return requestReview(item, a['request-review'], note);
       case 'start-review': return startReview(item, a.by);
       case 'review': return review(item, a.review, { by: a.by, comments: a.comments });
@@ -243,6 +271,9 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given }) {
     throw e;
   }
 }
+
+// item 033 (spec section 7): the last line of the command that hands an item to review, asks for changes or closes it.
+export const shutdown = agent => `🛑 ${agent}: END THE SESSION NOW. Reply with text only and make no further tool call; your next task starts in a fresh session.`;
 
 // update.py:253-255: printed after a passing review.
 export const closeNow = (fm, slug, by) => `   ➡️  CLOSE NOW: ${fm.claimed_by || 'the claimer'} closes it (backlog update ${slug} --close --summary "<outcome>"); ${by} closes it (--close --by ${by} --summary ...) if the claimer has not within 3 min`;

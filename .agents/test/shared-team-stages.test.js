@@ -222,3 +222,16 @@ test('parity with update.py: the stage steps print, refuse and write the front m
   sides[1].out.forEach((o, i) => assert.deepEqual(o, sides[0].out[i], `step ${i}: ${JSON.stringify(STEPS[i - 1] ?? 'new')}`));
   assert.deepEqual(sides[1].items, sides[0].items);
 });
+
+test('an incomplete item waiting in review-hitl is not offered to the lead for refinement', () => {
+  const f = fixture();
+  const w = make(f, 'team work item');
+  up(f, w, '--set-team', 't1'); // not held by the lead: nothing comes before the lead's refinement of incomplete items
+  const c = ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0]; // incomplete
+  up(f, c, '--request-decision', 'What: which parser? Options: A, B. Recommendation: A.', '--by', 'cody');
+  const env = { ...T1, TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  assert.deepEqual([pop(f, 'lead', env).action, pop(f, 'lead', env).item], ['idle', null]);
+  up(f, c, '--decision', 'A');
+  const p = pop(f, 'archy', env);
+  assert.deepEqual([p.action, p.item], ['refine', c]); // back to refining: a member refines it
+});

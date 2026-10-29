@@ -149,7 +149,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     }
   }
   if (!act && lead) { // the lead refines an incomplete item (never actions it): after complete work, before chunk
-    const r = open.find(x => incomplete.has(x.id) && (x.repository || '') === repo && x.branch === branch);
+    const r = open.find(x => incomplete.has(x.id) && (x.repository || '') === repo && x.branch === branch && team.inTeam(files.get(x.path)?.fm ?? {})
+      && files.get(x.path)?.fm.stage !== 'review-hitl'); // only its team's (item 037), never one waiting for an owner decision (036)
     if (r) {
       act = { name: 'refine', r, f: repo, say: `refine ${r.seq}, never action it: set ${incomplete.get(r.id).join(', ')} (${REFINE_HOW.replaceAll('<item>', r.slug)}); an incomplete item means the backlog was not filled properly: once complete, record the gap in the item (backlog update <item> --append "GAP: ...")` };
     }

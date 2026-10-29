@@ -132,3 +132,16 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
   assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all'], T1), [free]);
   assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all']), [theirs, far, free]); // without TEAM_NAME every chunk item
 });
+
+test('the lead refines only an incomplete item of its own team', () => {
+  const f = fixture();
+  const bare = name => { const r = ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none']); return r.stdout.split('created phase phases/')[1].split('.md')[0]; };
+  const theirs = bare('t2 incomplete'); // first on the branch
+  ok(f, ['update', theirs, '--set-team', 't2']);
+  const mine = bare('t1 incomplete');
+  ok(f, ['update', mine, '--set-team', 't1']);
+  const lead = env => pop(f, 'lead', { ...env, TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' });
+  assert.deepEqual([lead({ TEAM_NAME: 't1' }).action, lead({ TEAM_NAME: 't1' }).item], ['refine', mine]);
+  assert.deepEqual([lead({ TEAM_NAME: 't2' }).action, lead({ TEAM_NAME: 't2' }).item], ['refine', theirs]);
+  assert.equal(lead({}).item, theirs); // without TEAM_NAME the first incomplete item
+});

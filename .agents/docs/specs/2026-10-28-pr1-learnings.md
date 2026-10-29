@@ -45,6 +45,9 @@ are in its `docs/owner/DECISIONS.md` ("Decided 2026-10-28" and earlier).
   claude-agent MCP only when Codex reports its 5-hour limit. The lead records the verdict with `pass|changes --by
   codex|claude --comments`.
 - On pass the item is `ready`; on changes it goes back to `refining`, with the findings.
+- An item that needs an owner decision waits in stage `review-hitl`. The nightly morning report lists the decision; after the
+  owner's answer the item goes back to `refining`, where the lead re-refines it with the decision (topology item 288, owner
+  2026-10-28; CLI item 036).
 - An item whose body has only the definition-of-done placeholder is incomplete. In team mode nobody claims, reviews or
   works it; the lead only refines it (owner 2026-10-22).
 
@@ -108,9 +111,10 @@ Every run of the CLI reports its name, exit code and times to the topology's scr
 never blocks or fails the run, including a recorder that raises or exits at import. `bin/backlog.js` does this since
 d0dc5f1; its tests set `CODY_SCRIPT_RUNS_FILE=/dev/null`, so test runs write no records.
 
-## 13. Repository identity
+## 13. Repository identity and dependencies across repositories
 The backlog folder is keyed by the origin's owner/name. This repository was renamed from SmoothSDLC/backlog-cli to
-SmoothSDLC/smooth-backlog-cli, and its folder was moved to SmoothSDLC/smooth-backlog-cli on 2026-10-28, keeping its history.
+SmoothSDLC/smooth-backlog-cli, and its folder was moved to SmoothSDLC/smooth-backlog-cli on 2026-10-28, keeping its history. Items depend on items of other repositories
+(owner/name#seq in depends_on, CLI item 042); a not-done foreign dependency blocks claim and next-work like a local one.
 
 ## 14. Tests
 - The backlog tests run the way agents run, against the real shared backlog repository (owner 2026-10-11), and remove

@@ -117,7 +117,10 @@ test('each step refuses what update.py refuses, and one step at a time', () => {
   const r = run(f, ['update', c, '--refinement-review', 'maybe', '--by', 'codex', '--comments', 'x']);
   assert.equal(r.status, 2, r.stdout + r.stderr);
   const d = make(f, 'claimed child', '--split-from', w);
-  up(f, d, '--claim', 'cody', '--force'); // --force claims before ready
+  no(f, ['update', d, '--claim', 'cody', '--force'], 'claimed only when its refinement review passed'); // --force does not pass the stages
+  const { fm: dfm, body: dbody } = doc(f, d);
+  store.write({ path: join(f.folder, 'phases', `${d}.md`), fm: { ...dfm, claimed_by: 'cody' }, body: dbody }, f.folder); // as a hand edit leaves it
+  const con = db.connect(f.folder); try { db.scan(con, f.folder); } finally { con.close(); }
   no(f, ['update', d, '--refine-start', '--by', 'archy'], 'claimed by cody: the work item itself is refined and split by the team lead');
   assert.equal(fm(f, plain).stage, undefined);
 });
@@ -128,7 +131,7 @@ test('the review-hitl stage: an owner decision holds the item and its dependents
   const c = make(f, 'needs a decision', '--split-from', w);
   const dep = make(f, 'waits for it', '--depends-on', c.split('-')[0]);
   up(f, dep, '--set-team', 't1'); // a work item of t1 without a stage: claimable but for its dependency
-  const Q = 'What: keep the old format?\nWhy: the parser needs it.\nOptions: A keep, B drop.\nRecommendation: A.'; // the whole question, every line
+  const Q = 'What: keep the old format?\nWhy: the parser needs it.\n## Options\nA keep, B drop.\nRecommendation: A.'; // the whole question, its own headings included
   no(f, ['update', c, '--request-decision', Q], '--request-decision needs --by <agent>');
   no(f, ['update', c, '--request-decision', ' ', '--by', 'cody'], '--request-decision needs the question');
   no(f, ['update', make(f, 'plain'), '--request-decision', Q, '--by', 'cody'], 'only a team item before ready waits for an owner decision (team none, stage none)');
@@ -247,12 +250,17 @@ test('refine-done is refused while a field or the definition of done is missing;
   up(f, w, '--set-team', 't1');
   const c = bare('--name', 'bare child', '--split-from', w);
   up(f, c, '--refine-start', '--by', 'cody'); // an incomplete item in refining: its refinement steps are allowed
-  up(f, c, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--by', 'cody');
+  up(f, c, '--set-review-refs', 'references/review/code.md', '--by', 'cody');
+  no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing estimate_min, definition_of_done');
+  up(f, c, '--set-estimate', '5', '--by', 'cody');
   no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing definition_of_done: complete it before --refine-done');
   up(f, c, '--note', 'a note while refining', '--by', 'cody');
   no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing definition_of_done'); // the event lines after the placeholder do not count
   no(f, ['update', c, '--request-review', 'any', '--note', 'x', '--by', 'cody'], 'incomplete item, missing definition_of_done'); // only refinement steps while incomplete
   no(f, ['update', c, '--claim', 'cody', '--force'], 'incomplete item, missing definition_of_done');
+  no(f, ['update', c, '--status', 'in_progress', '--by', 'cody'], '--status refused'); // nothing but a refinement while incomplete
+  no(f, ['update', c, '--append', 'some notes', '--by', 'cody'], '--append refused'); // text that is no definition of done
+  up(f, c, '--summary', 'a better summary', '--by', 'cody'); // the text fields are refinement
   up(f, c, '--append', DOD, '--by', 'cody');
   up(f, c, '--refine-done', '--by', 'cody', '--note', 'definition of done written');
   assert.equal(fm(f, c).stage, 'refined');

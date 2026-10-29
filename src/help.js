@@ -156,7 +156,7 @@ ${DB}
       in its depends_on is not done, or when a team's item is not in stage ready (its refinement review has not passed);
       otherwise the item becomes in progress and claimed by that agent.
   --force
-      Together with --claim: claim although the agent already holds active items, or before stage ready.
+      Together with --claim: claim although the agent already holds active items (never before stage ready).
   --waiting WHAT
       Record that the holder of the item (named with --by) waits for something asynchronous, for example a workflow run or a
       deployment. The wait is cleared by the next --note, --review, --close or --request-review of the item, or by

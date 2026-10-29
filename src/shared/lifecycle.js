@@ -42,7 +42,8 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
   if (fm.stage === 'review-hitl') reject('the item waits in stage review-hitl for an owner decision; nobody claims it, --force included (backlog update <item> --decision "<answer>" first)');
-  if (!isReady(fm) && !force) reject(`team ${fm.team || ''} item in stage ${fm.stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`); // update.py:75-77
+  // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages
+  if (!isReady(fm)) reject(`team ${fm.team || ''} item in stage ${fm.stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`);
   if (who && who !== agent) reject(`claimed by ${who} since ${fm.claimed_at}; message ${who} or pick another item`);
   const undone = undoneDependencies(folder, fm);
   if (undone.length) reject(`dependencies not done: ${undone.map(describeDependency).join('; ')}`);
@@ -207,11 +208,14 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given }) {
   if (a['refine-done'] && missingFields(fm, body).length) { // a refined item is complete (owner 2026-10-28; update.py:303-307)
     return { refuse: `${slug}: still missing ${missingFields(fm, body).join(', ')}: complete it before --refine-done (${REFINE_HOW})` };
   }
-  // being refined (or waiting for its decision): its refinement steps are allowed although it is incomplete; beyond the
-  // oracle (update.py:309 lets every step through), only those steps (Codex review of item 036)
-  const refining = fm.team && ['refining', 'review-hitl'].includes(fm.stage) && steps.every(k => REFINEMENT_STEPS.includes(k));
-  if (incomplete.length && !refining && (teamScope().repo || steps.length)) { // team mode: an incomplete item is only refined
-    const work = [...steps.map(k => `--${k}`), ...(strip(note) ? ['--note'] : []), ...given.map(k => `--${k}`),
+  // Being refined (or waiting for its decision), an incomplete item takes its refinement steps, notes, its text fields
+  // and appended team fields or definition of done, and nothing else. Beyond the oracle (update.py:309 lets every step
+  // through; Codex review of item 036): a status change, another step or appended text that is no definition of done is
+  // refused, so nothing but a refinement completes it.
+  const refining = fm.team && ['refining', 'review-hitl'].includes(fm.stage);
+  if (incomplete.length && (teamScope().repo || steps.length || refining)) { // team mode: an incomplete item is only refined
+    const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k))).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),
+      ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k))).map(k => `--${k}`),
       ...(a.append && !a.append.includes('ESTIMATE:') && !hasDefinitionOfDone(a.append) ? ['--append'] : [])];
     if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${REFINE_HOW}` };
   }

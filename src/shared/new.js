@@ -9,7 +9,7 @@ import { actor, check, recordWrites } from './seen.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
 import { branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
 import { pull } from './sync.js';
-import { outsideTeam, teamScope } from './team.js';
+import { outsideTeam, strip, teamScope } from './team.js';
 
 const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; // lib_db.py:224
@@ -18,7 +18,7 @@ const pad = n => String(n).padStart(3, '0');
 // new_phase.py:29-58. 's' = text, 'i' = integer, an array = choices, true = a switch. argparse also takes a unique prefix.
 const OPTIONS = {
   name: 's', objective: 's', summary: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
-  'review-refs': 's', 'depends-on': 's', estimate: 'i', chunk: true,
+  'review-refs': 's', 'depends-on': 's', estimate: 'i', team: 's', chunk: true,
   complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], force: true, 'dry-run': true,
 };
 const NEGATIVE = /^-(\d+|\d*\.\d+)$/;
@@ -121,7 +121,9 @@ async function create(argv, { home, folder, repo, team }) {
       await assertInside(folder, file); // the path comes from the mirror database: untrusted
       if (!existsSync(file)) return refuse(`--split-from: the file of '${src.slug}' (${src.path}) is missing`);
       check(folder, repo, actor(), src.slug, src.path); // the split logs a parent event based on this version and scope
-      const parent = Array.from(parse(readFileSync(file, 'utf8')).body.trim()).slice(0, 800).join('');
+      const doc = parse(readFileSync(file, 'utf8'));
+      a.team = a.team || doc.fm.team || undefined; // new_phase.py:99: a split item inherits the source's team
+      const parent = Array.from(doc.body.trim()).slice(0, 800).join('');
       inherited = { objective: src.objective, summary: src.summary, context: `Split from \`${src.slug}\`. Inherited context:\n\n${parent}` };
     }
 
@@ -139,6 +141,7 @@ async function create(argv, { home, folder, repo, team }) {
       repository: repo, branch: team.branch || callerBranch(process.cwd()),
       commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(), updated_by: actor(),
     };
+    if (a.team) Object.assign(fm, { team: strip(a.team), stage: 'refining', refiner: '' }); // new_phase.py:126-127
     if (a.chunk) fm.chunk = true;
     if (refs.length) fm.review_refs = refs;
     for (const [k, v] of [['estimate_min', a.estimate], ['complexity', a.complexity], ['layer', a.layer]]) if (v !== undefined) fm[k] = v;

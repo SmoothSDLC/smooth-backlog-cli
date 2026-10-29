@@ -29,6 +29,11 @@ export const isChunk = fm => ['true', 'yes', '1'].includes(String(fm.chunk).toLo
 // lib_db.needs_review: an item with review documents closes only after a passing review.
 export const needsReview = fm => asList(fm.review_refs).length > 0;
 
+// lib_db.team_name / in_team: the caller's team (env TEAM_NAME, set by the team runner); with it set, a member works only
+// that team's items (owner 2026-10-28: the team that refined and split items owns them).
+export const teamName = () => strip(process.env.TEAM_NAME || '');
+export const inTeam = fm => !teamName() || fm.team === teamName();
+
 // lib_db.py:205-211: the (repository, branch) a team session is bound to by the environment; ('', '') outside a team.
 export function teamScope() {
   const repo = strip(process.env.TEAM_REPOSITORY || '');

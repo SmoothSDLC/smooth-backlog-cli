@@ -86,7 +86,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const scope = a.scope || 'branch'; const cap = refinementCap(folder, repr);
   const rows = (s, every) => teamRows({ open, scope: s, cap, every, excluded, repo, branch, folder, home });
   // continue/review/claim stay in the caller's repository: --scope all widens only the chunk search
-  const own = await rows(narrower(scope, 'repo'), a.all);
+  const own = (await rows(narrower(scope, 'repo'), a.all)).filter(x => team.inTeam(x.fm)); // query.py:184: only the caller's team's items
   const held = team.heldItems(folder, me);
   const reviews = [];
   for (const x of own) {

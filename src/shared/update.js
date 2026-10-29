@@ -17,7 +17,7 @@ import * as sync from './sync.js';
 import { REVIEW_DIR, asList, needsReview, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
-const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk'];
+const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team'];
 const BOOL = ['dry-run'];
 const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments'];
 const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close'];
@@ -192,6 +192,7 @@ async function change(a, con, folder, repo) {
     changes[k] = v;
   }
   const incomplete = missingFields(fm, body); // as the item is before this call
+  if (a['set-team'] !== undefined) { const name = strip(a['set-team']); fm.team = name; changes.team = name || 'none'; } // update.py:255-258
   if (a['set-chunk'] !== undefined) { fm.chunk = a['set-chunk'] === 'yes'; changes.chunk = a['set-chunk']; } // update.py:259-261
   for (const [k, v] of [['estimate_min', a['set-estimate'] === undefined ? undefined : pyInt(a['set-estimate'])], ['complexity', a['set-complexity']], ['layer', a['set-layer']]]) {
     if (v === undefined) continue;

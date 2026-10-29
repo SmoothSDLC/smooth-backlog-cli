@@ -86,6 +86,9 @@ ${DB}
       The estimated complexity of the item.
   --layer {1,2,3,4,5,process}
       The layer of the item: 1 to 5, or the word process.
+  --team NAME
+      The team that owns the item (front matter team): the item starts in stage refining. --split-from inherits the
+      source's team.
   --chunk
       Chunk work: small pieces any member does between items (the front matter key chunk: true).
   --force
@@ -173,6 +176,9 @@ ${DB}
       Replace the layer of the item: 1 to 5, or the word process.
   --set-chunk {yes,no}
       Mark the item as chunk work (small pieces any member does between items) or not.
+  --set-team NAME
+      Set the team that owns the item; an empty NAME clears it. The team runner sets it on the work item it hands the team
+      lead, and claims that item for the lead; items split from it inherit the team.
   --release AGENT
       Give the item back, pending and unclaimed (team session).
   --request-review AGENT|any
@@ -243,7 +249,7 @@ ${DB}
       this option or --all.
   --claimable
       Open, unclaimed items whose dependencies are all done, in priority order; another repository's items only as chunk
-      work (chunk: true) (team session).
+      work (chunk: true); with TEAM_NAME set, only that team's items of this repository (team session).
   --reviewable
       Items with a requested review that --agent may start or continue: any member but the author reviews (team session).
   --blocked
@@ -337,7 +343,8 @@ holds), refine (the team lead only: an incomplete item that lacks required field
 of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or for a run is not
 continued, and the agent claims a new item only when every item it holds waits. A review request older than
 BACKLOG_REVIEW_FIRST_SECONDS (300) is answered before the agent's own work. Incomplete items are never claimed or
-reviewed. When nothing is left the action is idle, the blockers are named, and the command exits with 3 (see the exit codes below).
+reviewed. With TEAM_NAME set (the team runner sets it), only that team's items of this repository are continued, reviewed
+or claimed. When nothing is left the action is idle, the blockers are named, and the command exits with 3 (see the exit codes below).
 
 Without --json the first line is the action and the item, the second line says what to do, and one line per blocked item
 follows. With --json the command prints one object with the keys action, item, seq, repository, branch, instruction,

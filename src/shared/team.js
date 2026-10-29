@@ -33,6 +33,9 @@ export const needsReview = fm => asList(fm.review_refs).length > 0;
 // that team's items (owner 2026-10-28: the team that refined and split items owns them).
 export const teamName = () => strip(process.env.TEAM_NAME || '');
 export const inTeam = fm => !teamName() || fm.team === teamName();
+// Beyond the oracle (item 037: another team's item is never offered): an item of another repository, offered only as chunk
+// work, is held back when it names a team other than the caller's.
+export const offeredTo = (fm, f, repo) => (f === repo ? inTeam(fm) : !fm.team || !teamName() || fm.team === teamName());
 
 // lib_db.py:205-211: the (repository, branch) a team session is bound to by the environment; ('', '') outside a team.
 export function teamScope() {

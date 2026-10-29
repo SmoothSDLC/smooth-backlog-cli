@@ -110,3 +110,25 @@ test('parity with update.py and new_phase.py: --set-team, --team and the inherit
   assert.deepEqual(sides[1].items, sides[0].items);
   assert.deepEqual(sides[1].out.slice(1, 3), sides[0].out.slice(1, 3)); // the update lines; new prints paths of its own fixture
 });
+
+test('another team\'s chunk item is never offered, in this repository or (--scope all) in another one', () => {
+  const f = fixture();
+  const other = consumer(f.t, 'other', 'thing', 'main');
+  const theirs = make(f, 't2 chunk here', '--chunk');
+  ok(f, ['update', theirs, '--set-team', 't2']);
+  writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
+  const T1 = { TEAM_NAME: 't1' };
+  const popAll = env => JSON.parse(run(f, ['query', '--pop', '--agent', 'cody', '--scope', 'all', '--json'], env).stdout);
+  const p = pop(f, 'cody', T1);
+  assert.deepEqual([p.action, p.item], ['chunk', null]); // small-chunk work, but not t2's item
+  const newIn = name => { const r = cli(['new', ...NEW(name), '--chunk'], { cwd: other, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr); return r.stdout.split('created phase phases/')[1].split('.md')[0]; };
+  const far = newIn('t2 chunk there');
+  const r = cli(['update', far, '--set-team', 't2'], { cwd: other, tmp: f.t, env: LEAD });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(popAll(T1).item, null);
+  assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all'], T1), []);
+  const free = newIn('chunk of no team there'); // another repository's chunk work without a team stays open to every team
+  assert.equal(popAll(T1).item, free);
+  assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all'], T1), [free]);
+  assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all']), [theirs, far, free]); // without TEAM_NAME every chunk item
+});

@@ -133,7 +133,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     }
   }
   if (!act && cap !== 'off') {
-    const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length);
+    const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone, f }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length
+      && team.offeredTo(fm, f, repo)); // never another team's chunk item (item 037)
     if (chunks.length || !noClaim) { // query.py:271: a member with nothing else does small-chunk work; the lead does not
       const { r, f } = chunks[0] ?? { r: null, f: repo };
       const where = f === repo ? '' : ` (repository ${f}: work from its clone)`;

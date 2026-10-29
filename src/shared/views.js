@@ -95,7 +95,7 @@ export async function teamView(a, { all, hid, excluded, repo, branch, folder, ho
           const file = own.get(r.path);
           if (!file || missingFields(file.fm, file.body).length) return false;
         }
-        if (f === repo && !team.inTeam(fm)) return false; // another team's item (TEAM_NAME)
+        if (!team.offeredTo(fm, f, repo)) return false; // another team's item (TEAM_NAME)
         if (a.claimable) return r.status === 'pending' && !fm.claimed_by && !undone.length && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
         return a.reviewable ? reviewOffer(fm, a.agent) !== null : undone.length > 0;
       });

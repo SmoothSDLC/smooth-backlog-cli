@@ -111,3 +111,16 @@ test('034: a start that another clone made while this one published counts: the 
   const r = f.run('demo', ['update', a, '--claim', 'amy'], 3);
   assert.match(r.stdout + r.stderr, /the repository work-in-progress limit of acme\/demo is 1 and 1 item\(s\) are in progress/);
 });
+
+test('034: a reclaim of an item set back to pending is a start; a combined start and team change counts the new team', () => {
+  const f = fixture();
+  const [a, b, c] = ['one', 'two', 'three'].map(n => f.make('demo', n));
+  f.run('demo', ['update', a, '--claim', 'amy']);
+  f.run('demo', ['update', a, '--status', 'pending', '--by', 'amy']);
+  f.limits({ repository: 1 });
+  f.run('demo', ['update', b, '--claim', 'bob']);
+  assert.match(f.run('demo', ['update', a, '--claim', 'amy'], 1).stdout, /the repository work-in-progress limit of acme\/demo is 1/);
+  f.limits({ team: 1 });
+  f.run('demo', ['update', b, '--set-team', 't1']);
+  assert.match(f.run('demo', ['update', c, '--status', 'in_progress', '--set-team', 't1', '--by', 'cat'], 1).stdout, /the team work-in-progress limit of t1 is 1/);
+});

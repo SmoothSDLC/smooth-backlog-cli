@@ -175,7 +175,7 @@ async function change(a, con, folder, repo) {
   if (!a.named && a['request-review'] !== undefined) seen.setActor(fm.claimed_by); // only the holder asks for a review of its work
   seen.check(folder, repo, seen.actor(), row.slug, row.path); // refuses (exit 5) when someone else changed the item since this agent read it
   a.guard = [{ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` }];
-  a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: fm.claimed_by === a.claim }] : [];
+  a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: fm.claimed_by === a.claim && fm.status === 'in_progress' }] : [];
   let body = text;
   const changes = {};
   let moveTarget = null; // --priority is a move-to-rank, applied via reflow (stays dense)
@@ -188,7 +188,7 @@ async function change(a, con, folder, repo) {
     if (['priority', 'seq', 'size_score'].includes(k) && (n = pyInt(v)) === null) throw new BacklogError('INVALID_INPUT', `invalid literal for int() with base 10: ${pyStr(v)}`, 1);
     if (k === 'status' && !['pending', 'in_progress', 'done'].includes(v)) return refuse(`--status ${pyStr(v)}: use pending, in_progress or done (backlog archive moves a finished item to archive/)`);
     if (k === 'status' && v === 'in_progress' && fm.status !== 'in_progress') { // item 034: starting work by status is starting work
-      const wip = wipRefusal(folder, repo, fm, fm.claimed_by || a.by || caller(), row.slug);
+      const wip = wipRefusal(folder, repo, { ...fm, team: a['set-team'] !== undefined ? strip(a['set-team']) : fm.team }, fm.claimed_by || a.by || caller(), row.slug);
       if (wip) return refuse(`${row.slug}: ${wip}`);
     }
     if (k === 'seq') { // the number selects the item: another item (archived ones too) holding it would make every numeric selector ambiguous

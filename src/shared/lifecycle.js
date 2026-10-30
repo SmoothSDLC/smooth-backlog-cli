@@ -52,7 +52,7 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   if (undone.length) reject(`dependencies not done: ${undone.map(describeDependency).join('; ')}`);
   const refusal = who === agent ? null : claimRefusal(folder, agent);
   if (refusal && !force) reject(refusal);
-  const wip = who === agent ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // item 034: --force never passes a limit
+  const wip = who === agent && fm.status === 'in_progress' ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // item 034: --force never passes a limit; a reclaim of a pending item is a start
   if (wip) reject(wip);
   Object.assign(fm, { status: 'in_progress', claimed_by: agent, claimed_at: t });
   return { event: 'claimed', text: `Claimed by ${agent} at ${t} repository=${repo} branch=${gitBranch(process.cwd()) || '(detached)'} cwd=${process.cwd()}${refusal ? ` (--force past the claim rule: ${refusal.split(';')[0]})` : ''}` };

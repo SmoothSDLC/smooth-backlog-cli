@@ -18,6 +18,8 @@
 - The run lock names the agent holding the backlog and since when, appears whole or not at all, and a lock a
   crash left behind is taken over.
 - `update --severity`, the template skill teaches every team step, and the parity review rule is written down.
+- Known limit: a reference owner/name#seq from another repository is checked when an item is moved, but not when an
+  item is renumbered (update --seq) or when two clones publish a move and such a reference at the same time.
 
 - Shared mode revalidates every publication against the merged backlog, refusing sequence/slug collisions, dangling dependencies, dependency cycles, and claims whose dependencies or active-work limit changed concurrently. Split parent reads are guarded too. Rejected publication preflights restore starting files, databases, and staging.
 

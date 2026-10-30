@@ -81,3 +81,15 @@ test('failure writing the owner record leaves no lock and no temp file', async t
   assert.equal(await fs.stat(path).then(() => true, () => false), false);
   assert.deepEqual(readdirSync(f.dir).filter(n => n.startsWith('owner-write.lock')), []);
 });
+test('item 025: a takeover marker is cleared only if it is still the one read; a newer one is put back', async t => {
+  const { clearMarker } = await import('../../src/storage.js');
+  const { readFileSync, existsSync } = await import('node:fs');
+  const f = fixture(t); const marker = join(f.dir, 'run.lock.takeover');
+  writeFileSync(marker, '1@here');
+  clearMarker(marker, '1@here');
+  assert.equal(existsSync(marker), false); // the one read: removed
+  writeFileSync(marker, '2@here'); // another waiter's new marker, after this one read '1@here'
+  clearMarker(marker, '1@here');
+  assert.equal(readFileSync(marker, 'utf8'), '2@here');
+  assert.deepEqual(readdirSync(f.dir).filter(n => n.startsWith('run.lock.takeover.')), []); // no private copy left
+});

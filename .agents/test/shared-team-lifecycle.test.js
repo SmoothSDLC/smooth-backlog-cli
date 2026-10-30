@@ -288,7 +288,11 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
     const ro = py('update.py', args, { cwd: o.cons, tmp: o.t, env });
     const rn = update(n, args, env);
     assert.equal(rn.status, ro.status, `${args.join(' ')}: ${rn.stdout}${rn.stderr}`);
-    assert.equal(norm(rn.stdout), norm(ro.stdout), args.join(' '));
+    // beyond the oracle (item 033, spec section 7): a member's hand-off, changes verdict or close ends with the shutdown
+    // line, and a member's close leaves the re-ranking to the lead; everything else is the oracle's
+    const mine = rn.stdout.replace(/🛑 \S+: END THE SESSION NOW\. .*\n$/, '').replace('      the team lead re-evaluates the order (backlog update --replan, --priority); not you\n',
+      '      RE-EVALUATE the order now (it is a planning step even if nothing changes):\n        backlog update <phase> --priority <rank>      # promote/demote one\n        backlog update --replan "<id,id,id,...>"       # set the leading order\n');
+    assert.equal(norm(mine), norm(ro.stdout), args.join(' '));
     assert.equal(rn.stderr, ro.stderr, args.join(' '));
     assert.deepEqual(snapshot(n), snapshot(o), args.join(' '));
     if (want !== undefined) assert.equal(ro.status, want, `${args.join(' ')}: ${ro.stdout}`);
@@ -342,7 +346,9 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   both([B, '--note', 'the holder continues'], undefined, 0); // ends the wait
   both([B, '--request-review', 'archy', '--note', 'commit 9999999'], undefined, 0);
   both([B, '--review', 'pass', '--by', 'archy', '--comments', 'good (references/review/code.md)'], undefined, 0); // CLOSE NOW line
-  both([B, '--close', '--by', 'archy', '--summary', 'delivered'], undefined, 0);
+  // beyond the oracle (item 039): the reviewer never closes (update.py prints the rule but lets it through)
+  assert.match(update(n, [B, '--close', '--by', 'archy', '--summary', 'delivered']).stdout, /only the claimer \(cody\) closes it, else the team lead \(cody\); not archy/);
+  both([B, '--close', '--by', 'cody', '--summary', 'delivered'], undefined, 0);
   both([C, '--close', '--summary', 'x'], undefined, 1); // nobody claimed it
   both([C, '--claim', 'cody', '--note', 'n'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'other' }, 1); // outside the team scope
   both([C, '--claim', 'cody'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' }, 0);
@@ -352,6 +358,10 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   both([C, '--request-review', 'any', '--note', 'ready'], undefined, 0);
   both([C, '--start-review', '--by', 'cody'], undefined, 0);
   both([C, '--start-review', '--by', 'zed'], undefined, 1); // in review by cody
-  both([C, '--start-review', '--by', 'zed'], { BACKLOG_REVIEW_STALE_SECONDS: '-1' }, 0); // a stale review is taken over
-  both([C, '--claim', 'cody', '--set-work-class', 'docs'], undefined, 2); // the class options are gone: unrecognized
+  // beyond the oracle (item 033): a stale review is handed on by the team lead (--reassign-review), never taken over
+  assert.match(update(n, [C, '--start-review', '--by', 'zed'], { BACKLOG_REVIEW_STALE_SECONDS: '-1' }).stdout, /the review is stale: the team lead hands it on/);
+  // the class options are gone: unrecognized, exit 2 in both (argparse prints its whole usage, the CLI names the option)
+  assert.equal(py('update.py', [C, '--claim', 'cody', '--set-work-class', 'docs'], { cwd: o.cons, tmp: o.t }).status, 2);
+  const gone = update(n, [C, '--claim', 'cody', '--set-work-class', 'docs']);
+  assert.deepEqual([gone.status, gone.stderr], [2, '❌ backlog: unrecognized arguments: --set-work-class\n']);
 });

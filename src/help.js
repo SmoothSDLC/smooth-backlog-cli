@@ -88,8 +88,8 @@ ${DB}
   --layer {1,2,3,4,5,process}
       The layer of the item: 1 to 5, or the word process.
   --team NAME
-      The team that owns the item (front matter team): the item starts in stage refining. --split-from inherits the
-      source's team.
+      The team that owns the item (front matter team; owner 2026-10-28): the item starts in stage refining and is claimed
+      only when its refinement review passed. --split-from inherits the source's team.
   --chunk
       Chunk work: small pieces any member does between items (the front matter key chunk: true).
   --force
@@ -197,7 +197,8 @@ ${DB}
       The refiner finished (--by <the refiner>, --note "<what you refined>"): stage refined. Refused while a team field or
       the definition of done is missing.
   --request-refinement-review
-      The team lead sends a refined item to the refinement review (--by <lead>): stage refinement-review.
+      The team lead sends a refined item to the refinement review (--by <lead>; Codex first, Claude only when Codex's
+      5-hour limit is exceeded): stage refinement-review.
   --refinement-review {pass,changes,limit}
       Record the refinement verdict, --by codex|claude with --comments "<findings; thread or session id>": pass makes the
       item ready, changes sends it back to refining. limit (--by codex) records Codex's answer that its 5-hour limit is
@@ -236,7 +237,8 @@ ${DB}
   --review {pass,changes}
       Record a review verdict; it needs --by and --comments (team session).
   --by AGENT
-      The agent that reviews (--start-review, --review) or closes (--close) the item (team session).
+      The agent that reviews (--start-review, --review), refines (--refine-start, --refine-done), requests or records the
+      refinement review, or closes (--close) the item (team session).
   --comments COMMENTS
       The review findings (--review); they must cite one of the review references of the item (team session).
   --close
@@ -298,7 +300,7 @@ ${DB}
       this option or --all.
   --claimable
       Open, unclaimed items whose dependencies are all done, in priority order; another repository's items only as chunk
-      work (chunk: true); with TEAM_NAME set, only that team's items of this repository (team session).
+      work (chunk: true, with --scope all); with TEAM_NAME set, only that team's items of this repository (team session).
   --reviewable
       Items with a requested review that --agent may start or continue: any member but the author reviews (team session).
   --blocked
@@ -336,7 +338,8 @@ ${DB}
   --claim-now
       With --pop: claim the item when the next action is to claim (team session).
   --roster ROSTER
-      The team roster as a JSON file {agent: {...}}, the team's members in order; the default is the file named by TEAM_ROSTER.
+      With --pop and --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
+      file named by TEAM_ROSTER.
       Any member but the author may review an item; a member with "review_only": true never claims (team session).
   --scope {branch,repo,all}
       With --pop, --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk items
@@ -431,7 +434,8 @@ Options:
       The team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the environment
       variable TEAM_LEAD, else cody.
   --roster ROSTER
-      The team roster as a JSON file {agent: {...}}, the team's members in order; the default is the file named by TEAM_ROSTER.
+      With --pop and --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
+      file named by TEAM_ROSTER.
       Any member but the author may review an item; a member with "review_only": true never claims.
   --scope {branch,repo,all}
       How far the agent looks: this branch (the default), every branch of this repository, or also the chunk items

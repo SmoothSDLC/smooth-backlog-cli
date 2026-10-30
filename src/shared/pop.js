@@ -125,7 +125,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
       : `every item of team ${fm.team} is done: close ${r.seq} (backlog update ${r.slug} --close --summary "<outcome>")` }
     : fm.review_state === 'passed'
     ? { name: 'continue', r, f, say: `close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")` }
-    : { name: 'continue', r, f, say: `you hold it: keep working and record each step in the item (backlog update ${r.slug} --append "..."), then --request-review or --close${dod(fm)}` });
+    : { name: 'continue', r, f, say: `you hold it: keep working and record each step in the item (backlog update ${r.slug} --append "..."), then ${team.needsReview(fm) ? 'write the reviewer handoff and --request-review' : 'close it with --close --summary'}${dod(fm)}` }); // query.py:212-213 (an item without review_refs closes without a review)
   const pick = (...states) => mine.find(({ fm }) => states.includes(fm.review_state ?? null));
   if (!act) { const x = pick(null, '', 'none'); if (x) act = cont(x); }
   if (!act) {

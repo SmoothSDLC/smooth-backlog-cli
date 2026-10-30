@@ -290,9 +290,10 @@ test('a missing home: BACKLOG_HOME set -> exit 2 with the oracle message; defaul
   const nope = join(f.tmp, 'nope');
   const cases = [
     ['BACKLOG_HOME set but missing', { BACKLOG_HOME: nope }, 2, /^❌ backlog: BACKLOG_HOME=.*nope does not exist; expected a clone of SmoothSDLC\/smoothsdlc-backlog on main \(unset BACKLOG_HOME to use ~\/git\/smoothsdlc-backlog\)\n$/],
-    ['default home missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, 4, /^❌ backlog: the backlog repository is not at .*smoothsdlc-backlog\. ASK THE USER: where is the local clone of SmoothSDLC\/smoothsdlc-backlog, or should it be cloned to .* Then run 'python3 .*set_home\.py <path>'/],
+    // beyond the oracle (item 043): the answer is backlog setup, not the Python skill's set_home.py; exit code as the oracle
+    ['default home missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, 4, /^❌ backlog: the backlog repository is not at .*smoothsdlc-backlog\. ASK THE USER: where is the local clone of SmoothSDLC\/smoothsdlc-backlog, or should it be cloned to .*\? Then run 'backlog setup' in this repository .*'backlog setup --ask'/, 'text'],
   ];
-  for (const [label, e, code, pattern] of cases) {
+  for (const [label, e, code, pattern, differs] of cases) {
     const extra = { BACKLOG_HEADLESS: '', ...e };
     const r = cli(['next'], { cwd: f.cons, tmp: f.tmp, env: extra });
     assert.equal(r.status, code, `${label}: ${r.stderr}`);
@@ -300,7 +301,7 @@ test('a missing home: BACKLOG_HOME set -> exit 2 with the oracle message; defaul
     const o = py('query.py', ['--status'], { cwd: f.cons, tmp: f.tmp, env: extra });
     if (!o) { t.diagnostic(`${label}: oracle not configured, parity not compared`); continue; }
     assert.equal(o.status, code, `${label} oracle`);
-    assert.equal(r.stderr, o.stderr, `${label}: same message as the oracle`);
+    if (differs !== 'text') assert.equal(r.stderr, o.stderr, `${label}: same message as the oracle`);
   }
   // the home record points at a missing folder: that is the "not the default" ask case too (lib_db.py:81-85)
   mkdirSync(dirname(recordFile(f.tmp)), { recursive: true });

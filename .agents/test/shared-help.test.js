@@ -58,7 +58,8 @@ function oracleDescriptions(text) {
   return out;
 }
 // What a description must keep, in any wording: numbers, quoted words, identifiers (snake_case, ENV_NAMES, paths), --flags.
-const IGNORED = /\.py$|^SKILL\.md$|^--db$|^slugs\/ids$|^e\.g$|^folder>/;
+// chunk/docs: the oracle's docs work class is gone (owner: work and review classes are dead); chunk items stay
+const IGNORED = /\.py$|^SKILL\.md$|^--db$|^slugs\/ids$|^e\.g$|^folder>|^chunk\/docs$/;
 const tokensOf = d => [...new Set([...d.replace(/See SKILL\.md '[^']*'\./, '').matchAll(/'([^']+)'|(--[a-z][\w-]*)|(\b[A-Za-z][\w.<>/-]*[_/.][\w.<>/-]*\b)|(\b\d+\b)/g)].map(m => m[1] ?? m[2] ?? m[3] ?? m[4]).filter(x => !IGNORED.test(x) && !/^'?SKILL/.test(x)))];
 
 for (const [command, script] of Object.entries(SCRIPT)) {

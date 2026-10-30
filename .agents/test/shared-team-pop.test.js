@@ -376,6 +376,13 @@ test('parity with query.py --pop: every action prints, refuses and exits alike',
     }
   }
   for (const base of cases.slice(0, 5)) same(['--pop', ...base, '--json'], { BACKLOG_REVIEW_FIRST_SECONDS: '0' }); // old review requests go first
+  // the requested reviews of 004 and 006 are offered to every member with no work of its own (item 033): once they are started and the free item is claimed,
+  // the other actions show (claim, refine, chunk, idle)
+  for (const args of [['004-ui-held', '--start-review', '--by', 'rev'], ['006-sleepy-item', '--start-review', '--by', 'rev2'], ['003-free-impl', '--claim', 'free3']]) {
+    const r = cli(['update', ...args], { cwd: f.cons, tmp: f.t });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  }
+  for (const base of cases) same(['--pop', ...base, '--json']);
   for (const json of [[], ['--json']]) {
     const args = ['--next', '--agent', 'busy', ...json];
     const o = py('query.py', args, { cwd: f.cons, tmp: f.t });

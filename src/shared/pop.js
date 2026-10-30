@@ -91,7 +91,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const held = team.heldItems(folder, me);
   // query.py:186-188: this branch's items of the caller's team in stage refining that nobody holds (first-round refinement)
   const here = open.filter(r => (r.repository || '') === repo && r.branch === branch).map(r => ({ r, fm: files.get(r.path)?.fm ?? {} }));
-  const teamRefining = here.filter(({ fm }) => fm.team && team.inTeam(fm) && fm.stage === 'refining' && !fm.claimed_by);
+  const teamRefining = here.filter(x => x.fm.team && team.inTeam(x.fm) && x.fm.stage === 'refining' && !x.fm.claimed_by && !waitsAway(folder, x)); // nor one waiting on another repository (042)
   const refineHow = slug => REFINE_HOW.replaceAll('<item>', slug);
   const reviews = [];
   for (const x of own) {
@@ -232,6 +232,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
 // plan follows the rules of this build's pop: a stale review is the lead's to hand on (never a member's), a member's own
 // work goes before another member's review request, a member waiting for its restart gets nothing, and items before
 // stage ready are neither reviewed nor claimed.
+// item 042: an item that waits on a not-done item of another repository is offered to nobody here (pop names that first)
+const waitsAway = (folder, x) => (x.undone ?? team.undoneDependencies(folder, x.fm)).some(d => d.foreign && d.item?.status !== 'done');
 async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   const roster = team.loadRoster(a.roster || process.env.TEAM_ROSTER || '');
   const want = new Set(a.agents ? team.asList(a.agents) : Object.keys(roster));
@@ -283,7 +285,7 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
     }
   }
   if (want.has(lead) && !busy.has(lead)) { // the lead alone refines an incomplete item (one per plan); never one waiting for an owner decision
-    const x = every.find(y => missing.get(y.r.id).length && !y.fm.stage); // outside the refinement stages: there a member refines (036)
+    const x = every.find(y => missing.get(y.r.id).length && !y.fm.stage && !waitsAway(folder, y)); // outside the refinement stages: there a member refines (036); nothing waiting on another repository (042)
     if (x) {
       const m = missing.get(x.r.id);
       give(lead, 'refine', x.r, `refine ${x.r.seq}, never action it: set ${m.join(', ')} (${REFINE_HOW.replaceAll('<item>', x.r.slug)}); once complete, record the gap in the item`, `incomplete: ${m.join(',')}`, ` ${m.join(',')}`);

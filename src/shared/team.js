@@ -150,27 +150,37 @@ export function describeDependency({ id, item, fm }) {
 export const STOP_TEXT = 'your session is being replaced by a fresh one for your next task (you handed your item to review or '
   + 'closed it): end your turn now with a text-only reply and no other tool call';
 const SAFE = /^(?!\.{1,2}$)[\w.-]+$/; // a team or agent name is one path segment, never . or ..
-const ms = v => (Number.isFinite(Number(v)) ? Number(v) : null);
+// a time stamp is a finite number or a string of digits; anything else (an array, an object, text) is no time stamp
+const ms = v => (typeof v === 'number' ? (Number.isFinite(v) ? v : null) : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : null);
 const teamsRoot = () => join(homedir(), '.qwen', 'teams');
 export function teamDirs(name) {
   const t = strip(name || process.env.TEAM_NAME || '');
   if (t) return SAFE.test(t) ? [join(teamsRoot(), t)] : [];
   try { return readdirSync(teamsRoot(), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => join(teamsRoot(), e.name)).sort(); } catch { return []; }
 }
-// joinedAt of the agent's registered session; null when the name is not registered or config.json cannot be read
-export function memberJoinedMs(tdir, agent) {
+// What config.json says of the agent: 'no-team' (no config.json: no Qwen team), 'unreadable', 'absent' (not registered),
+// or {joined} (the time stamp of its registered session, null when it is invalid).
+function member(tdir, agent) {
+  let text;
+  try { text = readFileSync(join(tdir, 'config.json'), 'utf8'); } catch (e) { return e.code === 'ENOENT' ? 'no-team' : 'unreadable'; }
   let cfg;
-  try { cfg = JSON.parse(readFileSync(join(tdir, 'config.json'), 'utf8')); } catch { return null; }
-  const m = (Array.isArray(cfg?.members) ? cfg.members : []).filter(x => x && typeof x === 'object' && x.name === agent);
-  return m.length ? ms(m[0].joinedAt || 0) : null; // an invalid joinedAt is no session
+  try { cfg = JSON.parse(text); } catch { return 'unreadable'; }
+  if (!cfg || typeof cfg !== 'object' || !Array.isArray(cfg.members)) return 'unreadable';
+  const m = cfg.members.filter(x => x && typeof x === 'object' && x.name === agent);
+  return m.length ? { joined: ms(m[0].joinedAt ?? 0) } : 'absent';
 }
+// joinedAt of the agent's registered session; null when it is not registered, its time stamp is invalid, or config.json
+// cannot be read: no fresh session
+export function memberJoinedMs(tdir, agent) { const m = member(tdir, agent); return typeof m === 'object' ? m.joined : null; }
 // Returns null when written or when the agent is no registered member of a Qwen team (Claude or Codex working a team's
 // item, or the lead), else why it was not written (as PR1, the command does not fail; update.js warns).
 export function markHandoff(teamName, agent, seq) {
   if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return `no team folder for team ${teamName || '(none)'} and agent ${agent || '(none)'}`;
   if (agent === teamLead()) return null; // the lead is not a member
   const tdir = join(teamsRoot(), teamName);
-  if (memberJoinedMs(tdir, agent) === null) return null; // no registered member of a Qwen team: nothing to lock
+  const m = member(tdir, agent);
+  if (m === 'no-team' || m === 'absent') return null; // no registered member of a Qwen team (Claude, Codex): nothing to lock
+  // a registered member (with a valid time stamp or not), or a config.json that cannot be read: lock (fail closed)
   try {
     mkdirSync(join(tdir, 'handoff'), { recursive: true });
     const tmp = join(tdir, 'handoff', `.${agent}.tmp`);

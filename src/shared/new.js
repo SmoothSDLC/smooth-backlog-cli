@@ -103,12 +103,6 @@ async function create(argv, { home, folder, repo, team }) {
   if (!hasDefinitionOfDone(a.body) && (team.repo || refs.length)) {
     return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
   }
-  // item 039 (beyond the oracle): in a named team session (TEAM_NAME, set by the team runner) the creator names how the
-  // item is reviewed; an item that starts in stage refining (--split-from, --team) gets its review documents in the
-  // members' refinement. TEAM_REPOSITORY alone (a write into another repository's folder) is no team session here.
-  if (teamName() && !refs.length && !a.splitFrom && !a.team) {
-    return refuse(`in a team session an item names its review documents at creation: --review-refs ${REVIEW_DIR}<type>.md (a split item, or a team's item made with --team, gets them in its refinement)`);
-  }
 
   const forget = freshDb(folder);
   const db = connect(folder, { readOnly: Boolean(a.dryRun) }); // a dry run only looks: nothing is created in the backlog clone
@@ -135,6 +129,13 @@ async function create(argv, { home, folder, repo, team }) {
       a.team = a.team || doc.fm.team || undefined; // new_phase.py:99: a split item inherits the source's team
       const parent = Array.from(doc.body.trim()).slice(0, 800).join('');
       inherited = { objective: src.objective, summary: src.summary, context: `Split from \`${src.slug}\`. Inherited context:\n\n${parent}` };
+    }
+    // item 039 (beyond the oracle): in a named team session (TEAM_NAME, set by the team runner) the creator names how the
+    // item is reviewed, unless the item starts in stage refining (it has a team, its own or its source's), where the
+    // members' refinement gives it its review documents. TEAM_REPOSITORY alone (a write into another repository's folder)
+    // is no team session here.
+    if (teamName() && !refs.length && !a.team) {
+      return refuse(`in a team session an item names its review documents at creation: --review-refs ${REVIEW_DIR}<type>.md (an item of a team, which starts in stage refining, gets them in its refinement)`);
     }
 
     const name = a.name || `${a.splitFrom || 'split'}-cont`;

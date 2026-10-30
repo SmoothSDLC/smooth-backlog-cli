@@ -239,8 +239,9 @@ async function change(a, con, folder, repo) {
     fm.wait_on = '';
     body = `${rstrip(body)}\n\nWAIT DONE ${store.now()} (next step on the item)\n`;
   }
-  if (a.status === 'done' && event !== 'closed' && needsReview(fm) && fm.review_state !== 'passed') { // reviewed items finish through --close only
-    return refuse(`${row.slug}: has review_refs and review_state ${fm.review_state || 'none'}; use --request-review, then --close after a passing review`);
+  if (a.status === 'done' && event !== 'closed' && needsReview(fm)) { // reviewed items finish through --close only (beyond the oracle: after a pass too, so the close rule applies; Codex review of item 039)
+    return refuse(fm.review_state === 'passed' ? `${row.slug}: has review_refs and a passing review; finish it with --close --summary (the claimer, else the team lead)`
+      : `${row.slug}: has review_refs and review_state ${fm.review_state || 'none'}; use --request-review, then --close after a passing review`);
   }
   const completing = a.status === 'done' || event === 'closed';
   if (completing && !fm.completed) fm.completed = store.now();

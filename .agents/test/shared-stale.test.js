@@ -375,6 +375,11 @@ for (const [name, args] of [
 ]) test(`${name} refreshes only matching incidental views`, () => {
   const f = closeFixture();
   const beta = join(f.folder, 'phases', '002-beta.md');
+  if (name === 'update completion') { // a reviewed item finishes only through --close (item 039): complete one without review documents
+    const alpha = join(f.folder, 'phases', '001-alpha.md');
+    const { review_refs: _r, review_state: _s, ...rest } = parse(readFileSync(alpha, 'utf8')).fm; // eslint-disable-line no-unused-vars
+    store.write({ path: alpha, fm: rest, body: parse(readFileSync(alpha, 'utf8')).body }, f.folder);
+  }
   if (name === 'update reopening') {
     const alpha = join(f.folder, 'phases', '001-alpha.md');
     const a = parse(readFileSync(alpha, 'utf8'));

@@ -111,7 +111,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     busy = own.filter(x => x.fm.team && x.fm.claimed_by !== me && x.r.status !== 'done' && !x.undone.some(d => d.item && leads.has(String(d.item.seq))));
     if (busy.length) mine = mine.filter(x => ['passed', 'changes-requested'].includes(x.fm.review_state));
   }
-  const teamDone = ({ r, fm }) => lead && fm.team && !busy.length && !own.some(x => x.r.slug !== r.slug && x.fm.team === fm.team && x.r.status !== 'done');
+  // every open item of the team on this branch, incomplete ones included (a split child before its refinement is open work)
+  const teamDone = ({ r, fm }) => lead && fm.team && !busy.length && !here.some(x => x.r.slug !== r.slug && x.fm.team === fm.team);
   const cont = ({ r, fm, f }) => (teamDone({ r, fm }) && !['passed', 'changes-requested'].includes(fm.review_state) // item 039: the lead closes the work item when every item of its team is done
     ? { name: 'continue', r, f, say: team.needsReview(fm)
       ? `every item of team ${fm.team} is done: have ${r.seq} reviewed (backlog update ${r.slug} --request-review any --note "<the items and their evidence>"), then close it after the pass`
@@ -152,7 +153,10 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     const fm = store.load(folder).find(i => i.path === act.r.path)?.fm ?? {};
     act = { ...act, say: `claimed for ${me}: start the work and record each step in the item${dod(fm)}` };
   }
-  if (lead && (!act || ['continue', 'review'].includes(act.name))) { // query.py:247-258: the refinement review comes before the lead's own work
+  // the lead's plain work (a continue without a verdict) or a review gives way to its team's refinement review or stale review;
+  // its close and rework never do (spec section 8; beyond query.py:247, which let the refinement review go first)
+  const plain = () => !act || act.name === 'review' || (act.name === 'continue' && [undefined, null, '', 'none'].includes(own.find(x => x.r.slug === act.r.slug)?.fm.review_state));
+  if (lead && plain()) { // query.py:247-258: the refinement review comes before the lead's own work
     const rv = here.filter(({ fm }) => fm.team && team.inTeam(fm) && ['refined', 'refinement-review'].includes(fm.stage));
     if (rv.length) {
       act = { name: 'refinement-review', r: rv[0].r, f: repo, say: `have the refinement of ${rv.map(x => x.r.seq).join(', ')} reviewed before anyone works on them: `
@@ -163,7 +167,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
         + 'backlog update <item> --refinement-review pass|changes --by codex|claude --comments "<findings; thread or session id>"' };
     }
   }
-  if (lead && (!act || act.name === 'review' || (act.name === 'continue' && act.say.startsWith('you hold it')))) { // item 033: a stale review of its team is the lead's to hand on (members never take it over); before its own plain work, never before its close or rework
+  if (lead && plain()) { // item 033: a stale review of its team is the lead's to hand on (members never take it over); before its own plain work, never before its close or rework
     const x = own.find(({ fm }) => team.staleReview(fm) && fm.reviewer !== me);
     if (x) act = { name: 'reassign-review', r: x.r, f: x.f, say: `the review of ${x.r.seq} by ${x.fm.reviewer} is stale (started ${x.fm.review_started}): hand it on: backlog update ${x.r.slug} --reassign-review <member> --by ${me} --reason "<why>"` };
   }

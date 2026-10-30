@@ -219,6 +219,7 @@ export function closeItem({ fm }, by, summary) {
   if (!closer) reject('nobody claimed this item: pass --by <agent>');
   // item 039 (spec section 9, owner 2026-10-25): only the claimer closes its item, else the team lead
   if (fm.claimed_by && closer !== fm.claimed_by && closer !== teamLead()) reject(`only the claimer (${fm.claimed_by}) closes it, else the team lead (${teamLead()}); not ${closer}`);
+  if (!fm.claimed_by && fm.team && closer !== teamLead()) reject(`nobody holds this item of team ${fm.team}: the team lead (${teamLead()}) closes it; not ${closer}`); // a team's item (beyond the oracle)
   fm.status = 'done';
   return { event: 'closed', text: `## Closed by ${closer} at ${now()}\n\n${summary}` };
 }

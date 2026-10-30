@@ -172,3 +172,24 @@ test('--refine-start is refused while the member waits for its restart, and . or
   no(f, ['update', c, '--refine-start', '--by', 'archy'], '--refine-start refused: archy is waiting for its restart');
   for (const name of ['.', '..']) assert.notEqual(pop(f, 'archy', { TEAM_NAME: name }).action, 'stop', name); // looked up nowhere
 });
+
+test('a hand-off writes the marker when config.json cannot be read or the session time stamp is invalid; a non-scalar time stamp is none', () => {
+  const f = fixture();
+  config(f, [{ name: 'archy', joinedAt: 1000 }]);
+  const [a, b] = ['one', 'two'].map(n => teamItem(f, n));
+  ok(f, ['update', a, '--claim', 'archy']);
+  writeFileSync(join(f.tdir, 'config.json'), '{ broken');
+  ok(f, ['update', a, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
+  assert.ok(existsSync(marker(f)), 'fail closed: an unreadable config.json still locks');
+  rmSync(marker(f));
+  config(f, [{ name: 'archy', joinedAt: [9999999999999] }]);
+  ok(f, ['update', b, '--claim', 'archy', '--force']);
+  ok(f, ['update', b, '--request-review', 'any', '--note', 'y', '--by', 'archy']);
+  assert.ok(existsSync(marker(f)), 'a registered member with an invalid time stamp is locked too');
+  assert.equal(pop(f, 'archy', T1).action, 'stop'); // and [9999999999999] is no fresh session
+  config(f, [{ name: 'zed', joinedAt: 1000 }]); // archy is not registered: Claude or Codex working the team's item
+  const c = teamItem(f, 'three');
+  ok(f, ['update', c, '--claim', 'claude']);
+  ok(f, ['update', c, '--request-review', 'any', '--note', 'z', '--by', 'claude']);
+  assert.ok(!existsSync(join(f.tdir, 'handoff', 'claude.json')));
+});

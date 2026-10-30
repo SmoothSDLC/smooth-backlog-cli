@@ -219,3 +219,49 @@ test('in a team session an item names its review documents at creation, unless i
   ok(f, base); // outside a team session the item is refined later
   ok(f, base, { TEAM_REPOSITORY: 'acme/demo' }); // TEAM_REPOSITORY alone writes into a repository's folder: no team session
 });
+
+test('039: the claimer never reviews its own item; a reviewed item finishes only through --close; an unclaimed team item is closed by the lead', () => {
+  const f = fixture();
+  const job = make(f, 'reviewed job');
+  ok(f, ['update', job, '--claim', 'archy']);
+  ok(f, ['update', job, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
+  no(f, ['update', job, '--start-review', '--by', 'archy'], 'archy claimed this item and cannot review its own work');
+  no(f, ['update', job, '--review', 'pass', '--by', 'archy', '--comments', 'fine per references/review/code.md'], 'cannot review its own work');
+  no(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine'], 'must cite at least one of the item');
+  ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
+  no(f, ['update', job, '--status', 'done'], 'has review_refs and a passing review; finish it with --close');
+  ok(f, ['update', job, '--close', '--summary', 'done', '--by', 'archy']);
+  const t = make(f, 'team job');
+  ok(f, ['update', t, '--set-team', 't1']);
+  ok(f, ['update', t, '--claim', 'archy']);
+  ok(f, ['update', t, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
+  ok(f, ['update', t, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
+  ok(f, ['update', t, '--release', 'archy']);
+  no(f, ['update', t, '--close', '--summary', 'x', '--by', 'zed'], 'nobody holds this item of team t1: the team lead (lead) closes it; not zed');
+  ok(f, ['update', t, '--close', '--summary', 'done', '--by', 'lead']);
+});
+
+test("039: the lead's close and rework are never hidden by its team's refinement review or a stale review", () => {
+  const f = fixture();
+  const T = { TEAM_NAME: 't1' };
+  const w = make(f, 'team work item');
+  ok(f, ['update', w, '--set-team', 't1']);
+  ok(f, ['update', w, '--claim', 'lead']);
+  ok(f, ['update', w, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
+  ok(f, ['update', w, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
+  const c = make(f, 'child', '--split-from', w);
+  for (const step of [['--refine-start', '--by', 'archy'], ['--refine-done', '--by', 'archy', '--note', 'x']]) ok(f, ['update', c, ...step]);
+  const p = JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], T).stdout);
+  assert.deepEqual([p.action, p.item], ['continue', w]); // the passed work item's close comes first
+  assert.ok(p.instruction.startsWith(`close ${fm(f, w).seq} with --close --summary`), p.instruction);
+  ok(f, ['update', w, '--close', '--summary', 'done', '--by', 'lead']);
+  assert.equal(JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], T).stdout).action, 'refinement-review');
+});
+
+test('039: in a team session a split from an item without a team names its review documents too', () => {
+  const f = fixture();
+  const plain = make(f, 'plain parent');
+  const team = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  no(f, ['new', '--split-from', plain, '--depends-on', 'none', '--body', DOD], 'in a team session an item names its review documents at creation', team);
+  ok(f, ['new', '--split-from', plain, '--depends-on', 'none', '--body', DOD, '--review-refs', 'references/review/code.md'], team);
+});

@@ -83,17 +83,9 @@ export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d
 
 // Beyond the oracle (topology item 288): the items that wait in stage review-hitl for an owner decision, with the question
 // (the last "Owner decision needed" section of the item), for the morning report. Answer: backlog update <item> --decision.
-// a decision asked before the question went into the front matter: everything after its heading
-const legacyQuestion = body => {
-  const i = (body || '').lastIndexOf('## Owner decision needed (asked by ');
-  if (i < 0) return '';
-  const rest = body.slice(body.indexOf('\n', i) + 1);
-  const end = rest.search(/\n## |\nDECISION \d{4}-/); // the old reading: up to the next section
-  return end < 0 ? rest : rest.slice(0, end);
-};
 function decisionsView(found, { a, scope, repo, branch, own, say, dump }) {
   const rows = found.map(({ r, fm }) => ({ ...r, team: fm.team || null, decision_requested_by: fm.decision_requested_by || null,
-    decision_requested_at: fm.decision_requested_at || null, question: team.strip(String(fm.decision_question ?? legacyQuestion(own.get(r.path)?.body))) }));
+    decision_requested_at: fm.decision_requested_at || null, question: team.strip(String(fm.decision_question ?? '')) })); // review-hitl came with this build: every decision carries its question
   if (a.json) { dump(rows); return 0; }
   const where = a.all ? '(all)' : scope === 'branch' ? redact(branch) : `(scope ${scope})`;
   say(`📋 ${rows.length} owner decision(s) waiting — ${repo}, branch ${where}; answer with backlog update <item> --decision "<answer>":`);
@@ -122,7 +114,7 @@ export async function teamView(a, { all, hid, excluded, repo, branch, folder, ho
         }
         if (!team.offeredTo(fm, f, repo)) return false; // another team's item (TEAM_NAME)
         if (a.claimable) return r.status === 'pending' && !fm.claimed_by && !undone.length && team.isReady(fm) && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
-        return a.reviewable ? reviewOffer(fm, a.agent) !== null : undone.length > 0;
+        return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) : undone.length > 0; // never a review of an item before ready (036)
       });
     if (a.decisions) return decisionsView(found, { a, scope, repo, branch, own, say, dump });
     if (a.json) {

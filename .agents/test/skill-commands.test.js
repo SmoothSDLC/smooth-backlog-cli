@@ -18,7 +18,7 @@ const NOT_TAUGHT = new Set(['force']);
 test('040: every team flag of backlog update and every team command is in the skill', () => {
   const missing = [...TEAM_VALUE, ...TEAM_BOOL].filter(f => !NOT_TAUGHT.has(f) && !new RegExp(`--${f}(?![\\w-])`).test(skill));
   assert.deepEqual(missing, [], `flags missing from SKILL.md: ${missing.join(', ')}`);
-  for (const c of ['backlog setup', 'backlog work --agent', 'backlog query --phase', 'backlog new --split-from', 'backlog query --plan', 'backlog query --decisions', 'backlog query --wip']) assert.ok(skill.includes(c), c);
+  for (const c of ['backlog setup', 'backlog work --agent', 'backlog query --phase', 'backlog new --split-from <item> --depends-on', 'backlog query --plan', 'backlog query --decisions', 'backlog query --wip']) assert.ok(skill.includes(c), c);
   // every command of help.js and of COMMANDS.md, and every flag of the update help that a team session or the lead uses
   const shared = [...new Set([...Object.keys(HELP), ...[...readFileSync(fileURLToPath(new URL('../../COMMANDS.md', import.meta.url)), 'utf8').matchAll(/^### backlog (\S+)$/gm)].map(m => m[1])])];
   assert.ok(shared.length >= 9, shared.join());

@@ -35,6 +35,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, dump } from '../../src/shared/frontmatter.js';
+import { ORACLE_SKIP } from './shared-fixtures.js';
 
 const FIX = join(fileURLToPath(new URL('./fixtures/shared/', import.meta.url)));
 const FIXTURES = ['item-realistic', 'item-scalars', 'item-shapes', 'item-multiline', 'item-escapes', 'item-wrapped-lists'];
@@ -77,7 +78,7 @@ for (const name of FIXTURES) {
   test(`fixture ${name}: PyYAML reads our dump (safe_load of the dumped front matter equals the input)`, (t) => {
     const { fm, body } = parse(readFixture(name));
     if (!pyYamlAvailable()) {
-      t.skip('python3 with PyYAML is not on PATH');
+      t.skip(ORACLE_SKIP); // the backlog format's oracle is PyYAML here (item 023's rule)
       return;
     }
     const dir = mkdtempSync(join(tmpdir(), 'codec-'));

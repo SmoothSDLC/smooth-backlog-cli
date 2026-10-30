@@ -74,7 +74,10 @@ test('051: the team workflow through the CLI only, step by step', () => {
     const p = json('lead', ['query', '--plan', '--roster', roster, '--json']);
     assert.deepEqual(p.filter(e => e.item === c1).map(e => e.action), ['claim']);
   });
-  step('S14 work claims the ready item', () => { const p = json('zed', ['work', '--agent', 'zed', '--json']); assert.deepEqual([p.action, p.item, fm(c1).claimed_by], ['claim', c1, 'zed']); });
+  step('S14 pop --roster --claim-now claims the ready item', () => {
+    const p = json('zed', ['pop', '--agent', 'zed', '--roster', roster, '--claim-now', '--json']);
+    assert.deepEqual([p.action, p.item, p.claimed, fm(c1).claimed_by], ['claim', c1, true, 'zed']);
+  });
   step('S15 --waiting and --waiting-done', () => { as('zed', ['update', c1, '--waiting', 'ci run 7', '--by', 'zed']); as('zed', ['update', c1, '--waiting-done', '--by', 'zed']); assert.ok(!fm(c1).wait_on); });
   step('S16 query --blocked names the dependency', () => { assert.ok(json('archy', ['query', '--blocked', '--json']).some(b => b.slug === c2)); });
   step('S17 --append evidence, --request-review: the session ends, the marker is written', () => {
@@ -87,6 +90,7 @@ test('051: the team workflow through the CLI only, step by step', () => {
   step('S18 query --reviewable for another member', () => { assert.ok(json('archy', ['query', '--reviewable', '--agent', 'archy', '--json']).some(r => r.slug === c1)); });
   step('S19 --start-review, --review changes citing a review_ref', () => {
     as('archy', ['update', c1, '--start-review', '--by', 'archy']);
+    assert.match(as('archy', ['update', c1, '--review', 'changes', '--by', 'archy', '--comments', 'add a case'], 1).stdout, /must cite/); // a verdict cites a review_ref
     const r = as('archy', ['update', c1, '--review', 'changes', '--by', 'archy', '--comments', 'add the empty-input case (references/review/tests.md)']);
     assert.equal(STOP.exec(r.stdout)?.[1], 'archy');
   });

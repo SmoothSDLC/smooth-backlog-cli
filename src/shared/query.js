@@ -2,9 +2,10 @@
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the backlog.db mirror,
 // the oracle's order: pull, no-backlog check, branch, connect, findings. Output strings and --json match query.py.
 // Never writes an item (the db is opened as lib_db.connect does). The team views are views.js, --pop and --plan are pop.js; --headless is refused.
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
+import { parse as parseItem } from './frontmatter.js';
 import * as db from './db.js';
 import { assertInside, git, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
@@ -262,8 +263,9 @@ async function query(argv) {
     }
     if (a.json) {
       // item 060: who holds each item and whether it is in review, so no caller reads the item files for them
-      const fms = new Map(store.load(folder).map(i => [i.path, i.fm]));
-      const teamFields = r => ({ ...r, claimed_by: fms.get(r.path)?.claimed_by ?? '', review_state: fms.get(r.path)?.review_state ?? '' });
+      // each row's own file, inside the folder only (a row that leaves it is a ghost: no file is read for it)
+      const fmOf = r => (present(folder, r.path) ? parseItem(readFileSync(join(folder, String(r.path)), 'utf8')).fm : {});
+      const teamFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
       dump({ handoff: h, repository: repo, branch: redact(branch), phases: rows.map(teamFields), gone_branch_items: gone, findings: bad });
       return 0;
     }

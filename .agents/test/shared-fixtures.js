@@ -145,3 +145,7 @@ export function cli(args = [], opts = {}) {
   });
   return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
 }
+
+// Item 060: the CLI's --status --json rows carry claimed_by and review_state, which the oracle's rows lack: parity
+// comparisons drop them from the CLI's output (they are the last two keys of each row).
+export const withoutTeamFields = s => String(s).replace(/,\n( +)"claimed_by": [^\n]*,\n\1"review_state": [^\n]*(?=\n)/g, '');

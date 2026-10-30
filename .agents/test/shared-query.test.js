@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { withoutTeamFields, cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 
@@ -85,7 +85,7 @@ function same(t, f, args) {
   const r = both(t, f, args);
   if (!r) return null;
   assert.equal(r.n.status, r.o.status, `${args.join(' ')}: ${r.n.stderr}`);
-  assert.equal(rowOnly(args, r.n.stdout), args.includes('--phase') && r.o.stdout.startsWith('{') ? `${JSON.stringify(JSON.parse(r.o.stdout), null, 2)}\n` : r.o.stdout);
+  assert.equal(withoutTeamFields(rowOnly(args, r.n.stdout)), args.includes('--phase') && r.o.stdout.startsWith('{') ? `${JSON.stringify(JSON.parse(r.o.stdout), null, 2)}\n` : r.o.stdout);
   assert.equal(r.n.stderr, r.o.stderr);
   return r;
 }

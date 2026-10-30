@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { withoutTeamFields, cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 
@@ -73,7 +73,7 @@ function scenario(t, a, b) {
 
   const qa = step(f, a, 'query', ['--status', '--json']);
   const qb = step(f, b, 'query', ['--status', '--json']);
-  assert.equal(qb.stdout, qa.stdout, 'query --status --json differs between the tools');
+  assert.equal(withoutTeamFields(qb.stdout), withoutTeamFields(qa.stdout), 'query --status --json differs between the tools');
   const queue = JSON.parse(qa.stdout);
   assert.ok(JSON.stringify(queue).includes('001-interop-first') && JSON.stringify(queue).includes('002-interop-second'), qa.stdout);
 
@@ -121,6 +121,6 @@ test('the same with the tools swapped (CLI first), and both runs leave the same 
   const first = scenario(t, PYTHON, NODE);
   for (const name of Object.keys(first.files)) assert.deepEqual(doc(swapped.files[name]), doc(first.files[name]), name);
   // sha is the hash of the file text (quoting differs between the codecs) and commit_sha the consumer's HEAD of each fixture
-  const norm = q => JSON.parse(JSON.stringify(q, (k, v) => (k === 'sha' || k === 'commit_sha' ? 'X' : k === 'updated_by' ? undefined : v)).replace(TS, 'TS'));
+  const norm = q => JSON.parse(JSON.stringify(q, (k, v) => (k === 'sha' || k === 'commit_sha' ? 'X' : k === 'updated_by' || k === 'claimed_by' || k === 'review_state' ? undefined : v)).replace(TS, 'TS'));
   assert.deepEqual(norm(swapped.queue), norm(first.queue));
 });

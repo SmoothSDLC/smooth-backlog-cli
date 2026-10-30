@@ -275,8 +275,9 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   }
   // spec section 4: outside the refinement stages only the lead refines an incomplete item of its team (a member known by
   // QWEN_CODE_AGENT_ID changes nothing on it)
-  if (incomplete.length && (before.team || teamScope().repo) && !refining && me && me !== teamLead() && (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-')))) {
-    return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: only the team lead (${teamLead()}) refines it, not ${me}` };
+  const who = me || a.by; // the Qwen caller, else the agent named by --by
+  if (incomplete.length && (before.team || teamScope().repo) && !refining && who && who !== teamLead() && (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-')))) {
+    return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: only the team lead (${teamLead()}) refines it, not ${who}` };
   }
   if (incomplete.length && (teamScope().repo || steps.length || refining)) { // team mode: an incomplete item is only refined
     const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k))).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),

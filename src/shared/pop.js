@@ -239,7 +239,7 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   };
   for (const { r, fm } of rows) {
     const m = fm.claimed_by;
-    if (!members.includes(m) || busy.has(m) || fm.wait_on) continue;
+    if (!members.includes(m) || busy.has(m) || fm.wait_on || !team.isReady(fm)) continue; // nothing before stage ready (036)
     if (fm.review_state === 'changes-requested') {
       give(m, 'respond', r, `the review by ${fm.reviewer || 'the reviewer'} asked for changes (${fm.reviewed_at || 'time not recorded'}): read its findings in the item, fix them, record each step (backlog update ${r.slug} --append "..."), then backlog update ${r.slug} --request-review any --note "<what changed>"`,
         'claimer', fm.reviewed_at ? ` ${fm.reviewed_at}` : '');

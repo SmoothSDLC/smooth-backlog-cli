@@ -327,3 +327,25 @@ test('in a team session a split of a team item may keep the placeholder, a split
   const bare = ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0]; // no team field
   no(f, ['update', bare, '--set-estimate', '5'], 'only the team lead (lead) refines it, not archy', { ...TR, QWEN_CODE_AGENT_ID: 'archy@t1' });
 });
+
+test('a team split with review documents and no body starts in refining; --by names the member the lead-only rule refuses', () => {
+  const f = fixture();
+  const TR = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const w = make(f, 'team work item');
+  up(f, w, '--set-team', 't1');
+  const c = ok(f, ['new', '--name', 'child', '--split-from', w, '--depends-on', 'none', '--review-refs', 'references/review/code.md'], TR).stdout.split('created phase phases/')[1].split('.md')[0];
+  assert.equal(fm(f, c).stage, 'refining');
+  const bare = ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  no(f, ['update', bare, '--set-estimate', '5', '--by', 'archy'], 'only the team lead (lead) refines it, not archy', TR);
+  ok(f, ['update', bare, '--set-estimate', '5', '--by', 'lead'], TR);
+});
+
+test('backlog work --lead: the marking update knows the same lead as the pop', () => {
+  const f = fixture();
+  const w = make(f, 'team work item');
+  up(f, w, '--set-team', 't1');
+  const c = make(f, 'child', '--split-from', w);
+  const r = run(f, ['work', '--agent', 'cody', '--lead', 'lead', '--json'], { TEAM_LEAD: '', TEAM_NAME: 't1' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual([JSON.parse(r.stdout).item, fm(f, c).refiner], [c, 'cody']);
+});

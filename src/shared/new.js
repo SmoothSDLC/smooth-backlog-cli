@@ -102,7 +102,7 @@ async function create(argv, { home, folder, repo, team }) {
   checkRefs(refs); // before any database access
   if (refs.length && !refs.some(r => r.startsWith(REVIEW_DIR))) return refuse(`--review-refs needs at least one review document (${REVIEW_DIR}<type>.md in cody-coding-model)`); // new_phase.py: the creator names how it is reviewed
   // an item of a team (--team, or a split of a team's item) starts in stage refining, where a member writes it
-  const intoRefining = a.team || (a.splitFrom && !refs.length);
+  const intoRefining = a.team || a.splitFrom;
   if (!hasDefinitionOfDone(a.body) && (team.repo || refs.length) && !intoRefining) {
     return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
   }

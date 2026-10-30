@@ -41,6 +41,7 @@ export async function run(argv) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
   if (!a.agent) return die('work needs --agent <your name>');
+  if (a.lead) process.env.TEAM_LEAD = a.lead; // the marking update knows the same lead as the pop
   const pop = self(['pop', '--agent', a.agent, '--claim-now', '--json', ...a.pass]); // a claim is marked by pop itself
   let p;
   try { p = JSON.parse(pop.stdout); } catch { process.stdout.write(pop.stdout); process.stderr.write(pop.stderr); return pop.status ?? 1; }

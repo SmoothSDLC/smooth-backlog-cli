@@ -11,7 +11,7 @@ version_of_install() { npm ls --global --depth=0 --json "$pkg" 2>/dev/null | nod
 installed=$(version_of_install)
 err=$(mktemp); trap 'rm -f "$err"' EXIT
 if ! latest=$(npm view "$pkg" version --registry="$registry" 2>"$err"); then # stdout only: npm's warnings go to stderr
-  [ -n "$installed" ] || die "cannot reach $registry for $pkg (authenticate with npm login --scope=@smoothsdlc --registry=$registry): $(cat "$err")"
+  [ -n "$installed" ] || die "cannot reach $registry for $pkg (authenticate: npm login --scope=@smoothsdlc --auth-type=legacy --registry=$registry, with a classic GitHub token that has read:packages): $(cat "$err")"
   echo "install-backlog-cli: could not check $registry for a newer release, keeping $installed: $(cat "$err")" >&2; latest=""
 fi
 # newer, by SemVer: build metadata ignored, numbers compared as numbers, a release after its pre-releases, numeric

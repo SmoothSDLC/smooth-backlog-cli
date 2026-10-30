@@ -30,7 +30,7 @@ test('023: the parity rule is written down, and every oracle skip names it', () 
     const vars = new Set([...text.matchAll(/\bconst (\w+) = ([^\n]*)/g)].filter(m => m[2].includes('ORACLE_SKIP') && !/['"`][^'"`]*[A-Za-z]{3}[^'"`]*['"`]/.test(m[2].replace(/py\([^)]*\)|spawnSync\([^)]*\)/g, ''))).map(m => m[1]));
     // a reason that names ORACLE_SKIP holds no other text of its own (a ternary with another literal is another reason)
     const ownText = r => /['"`][^'"`]*[A-Za-z]{3}[^'"`]*['"`]/.test(r.replace(/\/\/.*$/, '').replace(/\$\{ORACLE_SKIP\}/g, '')); // comments are no reason
-    const other = reasons.filter(r => !((/ORACLE_SKIP/.test(r) && !ownText(r.replace(/`[^`]*\$\{ORACLE_SKIP\}[^`]*`/g, ''))) || /cannot create a symlink here|process\.platform|needs a POSIX shell/.test(r) || vars.has(r)));
+    const other = reasons.filter(r => !((/ORACLE_SKIP/.test(r) && !ownText(r.replace(/`[^`]*\$\{ORACLE_SKIP\}[^`]*`/g, ''))) || (/cannot create a symlink here|process\.platform|needs a POSIX shell/.test(r) && !/['"`][^'"`]*(Python|python|PyYAML|oracle)[^'"`]*['"`]/.test(r)) || vars.has(r))); // a platform or symlink reason names no Python
     assert.deepEqual(other, [], `${f}: a skip or diagnostic in a parity file without the rule`);
   }
 });

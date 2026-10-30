@@ -332,10 +332,10 @@ test('second review P2: a quote inside a plain flow-list item is content, not a 
   }
 });
 
-test('second review P2: only YAML separation characters (space, tab, line breaks) count in the comment and mapping checks', () => {
+test('second review P2: only YAML separation characters (space, tab, line breaks) count in the comment and mapping checks', t => {
   // PyYAML (allow_unicode) writes these as plain scalars; every Unicode space except space/tab is scalar content.
   const cases = ['see\u00a0#123', 'a:\u00a0b', 'x\u2003#y', 'a:\u3000b', 'b:\u2003', '\u00a0:x', '\u00a0lead', 'trail\u00a0', '\u00a0', '\u2003a', 'a\u200b\u00a0#b', 'a\ufeff', "it's, c"];
-  if (!pyYamlAvailable()) return;
+  if (!pyYamlAvailable()) return t.skip(ORACLE_SKIP);
   const py = spawnSync('python3', ['-I', '-c',
     "import json, sys, yaml\n" +
     "cases = json.loads(sys.stdin.read())\n" +

@@ -177,6 +177,9 @@ ${DB}
       Replace the layer of the item: 1 to 5, or the word process.
   --set-chunk {yes,no}
       Mark the item as chunk work (small pieces any member does between items) or not.
+  --severity {normal,critical}
+      Change the item's severity (backlog new sets it, and starts a critical item at P0; backlog query --critical lists
+      the critical items). The item does not move: change its place with --priority.
   --set-team NAME
       Set the team that owns the item; an empty NAME clears it. The team runner sets it on the work item it hands the team
       lead, and claims that item for the lead; items split from it inherit the team.
@@ -303,6 +306,9 @@ ${DB}
   --agent AGENT
       The agent that asks. With --claimable or --reviewable it also switches to team rules: an incomplete item is not offered
       and the agent never reviews its own work. With --pop it is the agent whose next action is answered (team session).
+      With --status (the default view) the agent has read every item listed, and with --all every item a planning move
+      re-ranks: its next write of one is checked against that version. A change of an item's rank alone (another agent's
+      move or reflow) never makes the agent's view stale; a change of its content does.
   --plan
       The dispatch plan of the team for this branch: at most one action per member (respond, close, review, claim, and for
       the team lead refine or reassign-review), each item to one member, with the reason and a dispatch key; the members

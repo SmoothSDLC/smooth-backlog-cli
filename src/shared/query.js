@@ -265,9 +265,10 @@ async function query(argv) {
     if (a.json) {
       // item 060: who holds each item and whether it is in review, so no caller reads the item files for them
       // each row's own file, inside the folder only (a row that leaves it is a ghost: no file is read for it)
-      const fmOf = r => (present(folder, r.path) ? parseItem(readFileSync(join(folder, String(r.path)), 'utf8')).fm : {});
+      const fmOf = r => (present(folder, r.path) ? parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8')).fm : {});
       const teamFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
-      dump({ handoff: h, repository: repo, branch: redact(branch), phases: rows.map(teamFields), gone_branch_items: gone, findings: bad });
+      const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(teamFields) : v]));
+      dump({ handoff: h, repository: repo, branch: redact(branch), phases: rows.map(teamFields), gone_branch_items: gone.map(teamFields), findings: each(bad) });
       return 0;
     }
     criticalBanner(critical());

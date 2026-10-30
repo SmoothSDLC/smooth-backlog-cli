@@ -91,6 +91,11 @@ test('item 060: query --status --json rows carry claimed_by and review_state', (
   assert.deepEqual(rows[held], ['archy', 'none']);
   assert.deepEqual(rows[reviewed], ['archy', 'requested']);
   assert.deepEqual(rows[free], ['', 'none']);
+  ok(f, ['query', '--phase', reviewed, '--agent', 'zed']); ok(f, ['update', reviewed, '--start-review', '--by', 'zed']);
+  const file = join(f.folder, 'phases', `${free}.md`); // a front matter without the two keys: '' (written by hand here, never by the CLI)
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^claimed_by:.*\n/m, '').replace(/^review_state:.*\n/m, ''));
+  const again = Object.fromEntries(JSON.parse(ok(f, ['query', '--status', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
+  assert.deepEqual([again[reviewed], again[free]], [['archy', 'in_review'], ['', '']]);
 });
 
 test('team pop: an unclaimed in-progress work item is taken; no output names a file of the backlog', () => {

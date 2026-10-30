@@ -2,9 +2,11 @@
 // (front matter team = the team, no stage) with the whole item. Local bare repos.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
@@ -116,4 +118,69 @@ test('item 061: query --phase --json names the team fields an item lacks', () =>
   assert.deepEqual(a.missing, []);
   assert.deepEqual(b.missing, ['review_refs', 'estimate_min', 'definition_of_done']);
   assert.deepEqual(JSON.parse(ok(f, ['query', '--phase', bare, '--json']).stdout).missing, b.missing);
+});
+
+// A wrapper of the CLI for team pop's children (BACKLOG_TEST_SELF): FAIL_ON='<args prefix>' fails that call with FAIL_RC and
+// FAIL_ERR; MOVE_AFTER_CLAIM=<branch> makes the read after a successful claim show the item on another branch.
+const WRAP = `import { spawnSync } from 'node:child_process'; import { existsSync, writeFileSync } from 'node:fs';
+const bin = ${JSON.stringify(resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'))};
+const args = process.argv.slice(2); const e = process.env;
+if (e.FAIL_ON && args.join(' ').startsWith(e.FAIL_ON)) { process.stderr.write(e.FAIL_ERR + '\\n'); process.exit(Number(e.FAIL_RC)); }
+const r = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: e });
+let out = r.stdout;
+if (args[0] === 'update' && args.includes('--claim') && r.status === 0 && e.MOVE_AFTER_CLAIM) writeFileSync(e.MOVE_MARK, '1');
+if (args[0] === 'query' && args.includes('--phase') && e.MOVE_AFTER_CLAIM && existsSync(e.MOVE_MARK)) {
+  const j = JSON.parse(out); j.front_matter.branch = e.MOVE_AFTER_CLAIM; out = JSON.stringify(j);
+}
+process.stdout.write(out); process.stderr.write(r.stderr); process.exit(r.status ?? 1);
+`;
+
+test('team pop: an update error, a failed synchronisation and a scope change are failures (exit 1), never a skip or idle', () => {
+  const f = fixture();
+  const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
+  const s = make(f, 'work item'); ok(f, ['update', s, '--set-team', 't1']);
+  const seam = extra => ({ BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'moved'), ...extra });
+  for (const [extra, text] of [
+    [{ FAIL_ON: `update ${s} --claim`, FAIL_RC: '1', FAIL_ERR: '❌ backlog: disk full' }, /team pop stopped: ❌ backlog: disk full/],
+    [{ FAIL_ON: 'query --status', FAIL_RC: '3', FAIL_ERR: 'could not synchronise the backlog clone' }, /team pop stopped: could not synchronise/],
+  ]) {
+    const r = run(f, ['team', 'pop', '--team', 't1', '--json'], seam(extra));
+    assert.equal(r.status, 1, r.stdout + r.stderr); assert.match(r.stderr, text); assert.equal(r.stdout, '');
+  }
+  assert.equal(fm(f, s).claimed_by, '');
+  const moved = run(f, ['team', 'pop', '--team', 't1', '--json'], seam({ MOVE_AFTER_CLAIM: 'elsewhere' }));
+  assert.equal(moved.status, 1, moved.stdout + moved.stderr); assert.match(moved.stderr, /changed before team pop could show it/);
+});
+
+test('team pop: the claim itself refuses another team\'s item in a team session', () => {
+  const f = fixture();
+  const s = make(f, 'their work item'); ok(f, ['update', s, '--set-team', 't2']);
+  ok(f, ['query', '--phase', s, '--agent', 'lead']);
+  const r = run(f, ['update', s, '--claim', 'lead'], { TEAM_NAME: 't1' });
+  assert.equal(r.status, 1); assert.match(r.stdout, /belongs to team t2, not to this session's team t1/);
+});
+
+test('item 060: ghost rows carry empty team fields; bare files stay paths', () => {
+  const f = fixture();
+  const a = make(f, 'alpha item'); make(f, 'beta item');
+  writeFileSync(join(f.folder, 'phases', 'note.md'), 'a stray note, no front matter\n');
+  const con = db.connect(f.folder); con.prepare('UPDATE phase SET path=? WHERE slug=?').run('phases/gone.md', a); con.close();
+  const j = JSON.parse(ok(f, ['query', '--status', '--json']).stdout);
+  const ghost = j.findings.ghost.find(r => r.slug === a);
+  assert.deepEqual([ghost.claimed_by, ghost.review_state], ['', '']);
+  for (const v of Object.values(j.findings)) for (const x of v) assert.ok(typeof x === 'string' || ('claimed_by' in x && 'review_state' in x), JSON.stringify(x));
+  if (j.findings.bare) assert.ok(j.findings.bare.every(x => typeof x === 'string'), JSON.stringify(j.findings.bare));
+});
+
+test('item 061: an item without depends_on names it; an item whose file is gone has missing null', () => {
+  const f = fixture();
+  const s = make(f, 'hand edited item'); const g = make(f, 'gone item');
+  const file = join(f.folder, 'phases', `${s}.md`);
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^depends_on:.*\n/m, '').replace(/^review_refs:\n(?:- .*\n)*/m, '').replace(/^review_refs:.*\n/m, ''));
+  rmSync(join(f.folder, 'phases', `${g}.md`));
+  assert.ok(!existsSync(join(f.folder, 'phases', `${g}.md`)));
+  const [x, y] = JSON.parse(ok(f, ['query', '--phase', `${s},${g}`, '--json']).stdout);
+  assert.deepEqual(x.missing, ['review_refs', 'depends_on']);
+  assert.equal(y.missing, null);
+  assert.equal(JSON.parse(ok(f, ['query', '--phase', g, '--json']).stdout).missing, null);
 });

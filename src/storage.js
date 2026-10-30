@@ -47,6 +47,8 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
     const marker = `${path}.takeover`; let fd;
     try { fd = openSync(marker, 'wx'); } catch (e) {
       if (e.code !== 'EEXIST') throw e;
+      // shortcut: a takeover suspended for over 30 s between its check and its rename loses the marker; a host that
+      // stalls a process that long has bigger trouble. Upgrade: an fd lock (flock) when Node has one.
       try { if (Date.now() - statSync(marker).mtimeMs > 30000) rmSync(marker, { force: true }); } catch { /* gone already */ }
       return false;
     }

@@ -52,8 +52,8 @@ export function decodeList(value) {
 // repository names it (its seq, or owner/name#seq for another repository): legacy (a done producer without a
 // handoffs key: closed before the rule), missing (no record for the dependent, including handoffs: none and a
 // present but empty handoffs key), unaccepted (a record, no receipt), stale (the last receipt pins another digest,
-// or a record or receipt has no digest), rejected or accepted (the last receipt of the current record). Only
-// accepted and legacy satisfy the edge.
+// or the record's digest is not the sha256 of the record's own fields, including a record or receipt without a
+// digest), rejected or accepted (the last receipt of the current record). Only accepted and legacy satisfy the edge.
 export function edgeState(producerFm, dependentId) {
   const records = decodeList(producerFm.handoffs);
   if (records === null) {
@@ -66,7 +66,8 @@ export function edgeState(producerFm, dependentId) {
   const receipts = (decodeList(producerFm.handoff_receipts) ?? []).filter(r => r && r.dependent === dependentId);
   const last = receipts.at(-1);
   if (!last) return 'unaccepted';
-  if (empty(record.digest) || last.digest !== record.digest) return 'stale'; // an absent digest pins nothing, so undefined !== undefined
+  if (empty(record.digest) || record.digest !== digest(record)) return 'stale'; // a digest that is not the sha256 of the record's own fields pins nothing (review r3)
+  if (last.digest !== record.digest) return 'stale'; // an absent digest pins nothing, so undefined !== undefined
   return last.result === 'accepted' ? 'accepted' : 'rejected'; // only an acceptance of the current record satisfies the edge
 }
 
@@ -117,20 +118,24 @@ export function openEdges(folder, repoId, producerFm) {
 }
 
 // The producer record as the method's DEPENDENCY_HANDOFF v1 body block (source: <owner>/<name>#<seq> of the
-// producer), appended to the producer's item body. branch is the producer item's branch (the record has no branch
-// field); the method doc's inline SESSION sub-field is omitted (the record has no session; the lead's own
-// producer-block format omits it).
-export function recordBlock(record, source, branch = '') {
+// producer), appended to the producer's item body. The record has no branch, session or review field, so the CLI
+// passes them in opts (lead decision 2026-10-30): the PRODUCER_AGENT line carries the session inline when given,
+// BRANCH is always written (the given branch or the text 'unspecified', never a default), and REVIEW is the given
+// value or 'pending'.
+export function recordBlock(record, source, opts = {}) {
+  const agent = opts.session ? `${record.by} ; SESSION: ${opts.session}` : record.by;
+  const branch = opts.branch || 'unspecified';
+  const review = opts.review || 'pending';
   return [
     'DEPENDENCY_HANDOFF v1',
     `SOURCE_ITEM: ${source}`,
     `DEPENDENT_ITEM: ${record.dependent}`,
-    `PRODUCER_AGENT: ${record.by}`,
-    `SOURCE_COMMIT: ${record.commit}${branch ? ` ; BRANCH: ${branch}` : ''}`,
+    `PRODUCER_AGENT: ${agent}`,
+    `SOURCE_COMMIT: ${record.commit} ; BRANCH: ${branch}`,
     `CONTRACT: ${record.contract}`,
     `OUTPUTS: ${record.outputs}`,
     `VERIFICATION: ${record.verification}`,
-    'REVIEW: pending',
+    `REVIEW: ${review}`,
     `PICKUP: ${record.pickup}`,
     `OPEN_RISKS: ${record.risks}`,
     'END_DEPENDENCY_HANDOFF',

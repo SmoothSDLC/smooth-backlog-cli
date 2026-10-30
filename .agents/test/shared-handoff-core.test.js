@@ -136,6 +136,17 @@ test('059.1: edgeState tells a present but empty handoffs key from an absent key
   assert.equal(handoff.edgeState(back, '64'), 'missing', 'the stored form of a present but empty key is missing, not legacy');
 });
 
+test('059.1: edgeState is stale in the stored form when the record digest is not the sha256 of its own fields (review r3)', () => {
+  const rec = record('64');
+  const st = fm => handoff.edgeState({ status: 'done', ...fm }, '64');
+  const changed = { ...rec, contract: 'a changed contract' }; // the fields moved, the old digest kept
+  assert.equal(st({ handoffs: [handoff.encode(changed)], handoff_receipts: [handoff.encode(receipt('64', rec.digest))] }), 'stale', 'a receipt that accepted the old digest does not satisfy a record whose fields changed');
+  const malformed = { ...rec, digest: 'x' }; // a non-hash digest that the record and the receipt both carry
+  assert.equal(st({ handoffs: [handoff.encode(malformed)], handoff_receipts: [handoff.encode(receipt('64', 'x'))] }), 'stale', 'a digest that is not the sha256 of the record fields pins nothing, even when the receipt matches it');
+  assert.equal(handoff.satisfied(st({ handoffs: [handoff.encode(malformed)], handoff_receipts: [handoff.encode(receipt('64', 'x'))] })), false, 'and it does not satisfy the edge');
+  assert.equal(st({ handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', rec.digest))] }), 'accepted', 'a well-formed record with a matching acceptance stays accepted');
+});
+
 test('059.1: edgeState keeps the edge unsatisfied while the record or the last receipt has no digest (review r2)', () => {
   const noDigest = { dependent: '64', commit: COMMIT, contract: 'the exported functions', verification: 'npm test: 0 failures', outputs: '', pickup: '', risks: 'NONE', by: 'cody-card3', at: '2026-10-30T20:00:00Z' };
   const acceptNoDigest = { dependent: '64', result: 'accepted', by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' };
@@ -233,41 +244,31 @@ test('059.1: openEdges accepts the stored front-matter form and gives the same o
   ]);
 });
 
-test('059.1: recordBlock is the DEPENDENCY_HANDOFF v1 body block of the method, with the item branch (review r2)', () => {
+test('059.1: recordBlock writes the branch, the session and the review the integration slice passes in opts (review r3)', () => {
   const r = record('64');
-  // the method doc's block carries the producer's branch on the SOURCE_COMMIT line; the record has no branch
-  // field, so the CLI passes the producer item's branch, and the inline SESSION sub-field is omitted (the lead's
-  // own "How you work" producer block omits it too)
-  assert.equal(handoff.recordBlock(r, 'SmoothSDLC/smooth-backlog-cli#63', 'team-cli-parity-1'), [
+  const src = 'SmoothSDLC/smooth-backlog-cli#63';
+  const block = (agentLine, review = 'pending') => [
     'DEPENDENCY_HANDOFF v1',
-    'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63',
+    `SOURCE_ITEM: ${src}`,
     'DEPENDENT_ITEM: 64',
-    'PRODUCER_AGENT: cody-card3',
+    agentLine,
     `SOURCE_COMMIT: ${COMMIT} ; BRANCH: team-cli-parity-1`,
     'CONTRACT: the exported functions',
     'OUTPUTS: ',
     'VERIFICATION: npm test: 0 failures',
-    'REVIEW: pending',
+    `REVIEW: ${review}`,
     'PICKUP: ',
     'OPEN_RISKS: NONE',
     'END_DEPENDENCY_HANDOFF',
     '',
-  ].join('\n'));
-  assert.equal(handoff.recordBlock(r, 'SmoothSDLC/smooth-backlog-cli#63'), [
-    'DEPENDENCY_HANDOFF v1',
-    'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63',
-    'DEPENDENT_ITEM: 64',
-    'PRODUCER_AGENT: cody-card3',
-    `SOURCE_COMMIT: ${COMMIT}`,
-    'CONTRACT: the exported functions',
-    'OUTPUTS: ',
-    'VERIFICATION: npm test: 0 failures',
-    'REVIEW: pending',
-    'PICKUP: ',
-    'OPEN_RISKS: NONE',
-    'END_DEPENDENCY_HANDOFF',
-    '',
-  ].join('\n'));
+  ].join('\n');
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1' }), block('PRODUCER_AGENT: cody-card3'));
+  // the branch is always written: the given one, or the text 'unspecified' - never a default (lead decision 2026-10-30)
+  assert.equal(handoff.recordBlock(r, src), block('PRODUCER_AGENT: cody-card3').replace('BRANCH: team-cli-parity-1', 'BRANCH: unspecified'));
+  // the session, when given, is the method's inline SESSION sub-field on the PRODUCER_AGENT line
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', session: 'cody59/wt-63' }), block('PRODUCER_AGENT: cody-card3 ; SESSION: cody59/wt-63'));
+  // the review, when given, replaces the pending default
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', review: 'lead acceptance 2026-10-31' }), block('PRODUCER_AGENT: cody-card3', 'lead acceptance 2026-10-31'));
 });
 
 test('059.1: receiptBlock is the HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body block of the method (review r2)', () => {

@@ -261,11 +261,12 @@ async function change(a, con, folder, repo) {
   // hand-off: nothing changes), and set aside again when the change is not published (update() below).
   const claimer = holder || fm.claimed_by || '';
   const own = event === 'review_requested' || (event === 'closed' && (a.by || claimer) === claimer); // the lead closing a member's item locks nobody
-  if (own && fm.team && claimer && claimer !== teamLead() && !heldItems(folder, claimer, { refining: true }).some(h => h.slug !== row.slug && h.state === 'active')) {
-    if (pendingHandoff(claimer, fm.team) === null) { // a lock already there stays as it is, whatever happens to this change
-      const why = markHandoff(fm.team, claimer, row.seq);
+  const lockTeam = before.team || fm.team; // the team the item had when the command began: --set-team in the same call changes nothing here
+  if (own && lockTeam && claimer && claimer !== teamLead() && !heldItems(folder, claimer, { refining: true }).some(h => h.slug !== row.slug && h.state === 'active')) {
+    if (pendingHandoff(claimer, lockTeam) === null) { // a lock already there stays as it is, whatever happens to this change
+      const why = markHandoff(lockTeam, claimer, row.seq);
       if (why) return refuse(`${row.slug}: the hand-off marker of ${claimer} cannot be written (${why}); nothing changed`);
-      a.handoff = { team: fm.team, agent: claimer, text: handoffText(fm.team, claimer) };
+      a.handoff = { team: lockTeam, agent: claimer, text: handoffText(lockTeam, claimer) };
     }
   }
   store.write({ path, fm, body }, folder);

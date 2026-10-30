@@ -267,3 +267,12 @@ test('pop --lead keeps the lock of a member that the default lead name would spa
   ok(f, ['update', a, '--request-review', 'any', '--note', 'n', '--by', 'archy']); // locked, and permitted
   assert.equal(readFileSync(marker(f), 'utf8'), first);
 });
+
+test('a hand-off that also changes the team writes the marker of the team the item had', () => {
+  const f = fixture();
+  config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: 1000 }]);
+  const a = teamItem(f, 'job');
+  ok(f, ['update', a, '--claim', 'archy']);
+  ok(f, ['update', a, '--set-team', '', '--request-review', 'any', '--note', 'x', '--by', 'archy']);
+  assert.ok(existsSync(marker(f)));
+});

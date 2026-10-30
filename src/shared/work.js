@@ -42,15 +42,20 @@ export async function run(argv) {
   try { a = parse(argv); } catch (e) { return die(e.message); }
   if (!a.agent) return die('work needs --agent <your name>');
   if (a.lead && strip(a.lead) !== teamLead()) return die(`--lead ${a.lead} is not the team lead of this session (${teamLead()}; TEAM_LEAD): backlog work acts as the lead the updates know`);
-  const pop = self(['pop', '--agent', a.agent, '--claim-now', '--json', ...a.pass]); // a claim is marked by pop itself
-  let p;
-  try { p = JSON.parse(pop.stdout); } catch { process.stdout.write(pop.stdout); process.stderr.write(pop.stderr); return pop.status ?? 1; }
-  if (![0, 3].includes(pop.status) || !p.action) { process.stdout.write(pop.stdout); process.stderr.write(pop.stderr); return pop.status ?? 1; }
-  let marked = p.action === 'claim' && p.claimed ? `claimed for ${a.agent}` : null;
-  const step = mark(p, a.agent);
-  if (step) {
+  let p; let marked; let step; let status;
+  for (let attempt = 1; ; attempt++) { // the pop and the mark are two commands: a step another agent took meanwhile is asked again
+    const pop = self(['pop', '--agent', a.agent, '--claim-now', '--json', ...a.pass]); // a claim is marked by pop itself
+    try { p = JSON.parse(pop.stdout); } catch { process.stdout.write(pop.stdout); process.stderr.write(pop.stderr); return pop.status ?? 1; }
+    if (![0, 3].includes(pop.status) || !p.action) { process.stdout.write(pop.stdout); process.stderr.write(pop.stderr); return pop.status ?? 1; }
+    status = pop.status;
+    marked = p.action === 'claim' && p.claimed ? `claimed for ${a.agent}` : null;
+    step = mark(p, a.agent);
+    if (!step) break;
     const m = self(step);
-    if (m.status !== 0) { process.stdout.write(m.stdout); process.stderr.write(m.stderr); return m.status ?? 1; } // taken by another agent meanwhile: ask again
+    if (m.status === 0) break;
+    if (attempt === 3) { process.stdout.write(m.stdout); process.stderr.write(m.stderr); return m.status ?? 1; }
+  }
+  if (step) {
     marked = step.slice(2).join(' ');
     // the instruction after the mark: what is left to do, not the start just done
     p.instruction = p.action === 'review'
@@ -70,7 +75,7 @@ export async function run(argv) {
     item = { front_matter: file.fm, body: file.body };
   }
   const out = { ...p, marked, front_matter: item ? item.front_matter : null, body: item ? item.body : null };
-  if (a.json) { process.stdout.write(`${JSON.stringify(out, null, 2)}\n`); return pop.status; }
+  if (a.json) { process.stdout.write(`${JSON.stringify(out, null, 2)}\n`); return status; }
   say(p.item ? `${p.action} ${p.item}` : p.action);
   if (marked) say(`   marked: ${marked}`);
   say(`   ${p.instruction}`);
@@ -82,5 +87,5 @@ export async function run(argv) {
     say(`--- item ${p.item}: body ---`);
     process.stdout.write(`${redact(String(item.body || '').replace(/^\n+/, ''))}${String(item.body || '').endsWith('\n') ? '' : '\n'}`);
   }
-  return pop.status;
+  return status;
 }

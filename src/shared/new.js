@@ -64,7 +64,8 @@ export function hasDefinitionOfDone(text) {
   if (!m) return false;
   const rest = body.slice(m.index + m[0].length);
   const next = /^#{1,6}[ \t]/m.exec(rest);
-  return Boolean((next ? rest.slice(0, next.index) : rest).replace(/^[ \t\r\n:*]+|[ \t\r\n:*]+$/g, ''));
+  const content = (next ? rest.slice(0, next.index) : rest).replace(/^[ \t\r\n:*]+|[ \t\r\n:*]+$/g, '');
+  return Boolean(content) && !/^(?:[-*][ \t]+(?:\[[ x]\][ \t]*)?)?(?:tbd|tba|todo|to ?do|n\/?a|none|-|\.\.\.|…)\.?$/i.test(content); // a placeholder word is no definition of done
 }
 
 // lib_db.py:587-595: by number (a live item before an archived one) or by slug; the mirror database is the lookup.

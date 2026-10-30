@@ -244,6 +244,7 @@ test('hasDefinitionOfDone: a heading or a line with checkable content; the place
     [undefined, false], ['', false], ['## Definition of done\n\n- [ ] <machine-checkable acceptance>\n', false], ['## Definition of done\n\n## Next\nx', false],
     ['## Definition of done\n- [ ] x', true], ['Definition of done: tests pass', true], ['**Definition of done** all green', true], ['- DEFINITION OF DONE\n  x', true],
     ['text definition of done here', false], ['### definition of done:\n', false],
+    ['## Definition of done\nTBD', false], ['## Definition of done\n- [ ] TODO', false], ['## Definition of done\n- [ ] TODO: the parser test', true],
   ]) assert.equal(hasDefinitionOfDone(body), want, JSON.stringify(body));
 });
 

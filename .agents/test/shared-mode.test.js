@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { cli, consumer, env, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, env, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fixture } from './helpers.js';
 
@@ -44,7 +44,7 @@ test('--use-backlog-repo writes the home record and mode.json (same record as se
   assert.equal(read(recordFile(f.tmp)), `${f.home}\n`);
   assert.equal(read(modeFile(f.tmp)), '{"mode":"shared"}');
   const o = py('set_home.py', [f.home], { cwd: f.cons, tmp: f.tmp, env: { XDG_CONFIG_HOME: join(f.tmp, 'oracle-config') } });
-  if (!o) return t.diagnostic('oracle not configured: record parity not compared');
+  if (!o) return t.diagnostic(`${ORACLE_SKIP}: record parity not compared`);
   assert.equal(o.status, 0, o.stderr);
   assert.equal(read(recordFile(f.tmp)), read(join(f.tmp, 'oracle-config', 'smoothsdlc-backlog', 'home')));
 });
@@ -299,7 +299,7 @@ test('a missing home: BACKLOG_HOME set -> exit 2 with the oracle message; defaul
     assert.equal(r.status, code, `${label}: ${r.stderr}`);
     assert.match(r.stderr, pattern, label);
     const o = py('query.py', ['--status'], { cwd: f.cons, tmp: f.tmp, env: extra });
-    if (!o) { t.diagnostic(`${label}: oracle not configured, parity not compared`); continue; }
+    if (!o) { t.diagnostic(`${label}: ${ORACLE_SKIP}: parity not compared`); continue; }
     assert.equal(o.status, code, `${label} oracle`);
     if (differs !== 'text') assert.equal(r.stderr, o.stderr, `${label}: same message as the oracle`);
   }

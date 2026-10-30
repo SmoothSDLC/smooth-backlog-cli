@@ -20,5 +20,11 @@ test('023: the parity rule is written down, and every oracle skip names it', () 
     // a skip reason held in a variable or a { skip } option: any string that names the oracle's parts is ORACLE_SKIP's
     const named = [...text.matchAll(/['"`]([^'"`\n]*(?:SMOOTH_BACKLOG_SCRIPTS|PyYAML)[^'"`\n]*)['"`]/g)].map(m => m[1]).filter(r => /\b(needs|missing|not here|not configured)\b/i.test(r));
     if (f !== 'shared-fixtures.js') assert.deepEqual(named, [], `${f}: an oracle skip reason that is not ORACLE_SKIP`);
+    // in a file that runs the oracle (py(...)), every skip or "not compared" note is ORACLE_SKIP's, or one of the known
+    // reasons that have nothing to do with the oracle (no symlinks on this file system, a platform)
+    if (!/\bpy\(/.test(text)) continue;
+    const reasons = [...text.matchAll(/\b(?:t|ctx)\.(?:skip|diagnostic)\(([^;]*?)\);|\bskip: ([^,}]+)/g)].map(m => (m[1] ?? m[2]).trim());
+    const other = reasons.filter(r => !/ORACLE_SKIP|^skipReason$|cannot create a symlink here|process\.platform/.test(r));
+    assert.deepEqual(other, [], `${f}: a skip or diagnostic in a parity file without the rule`);
   }
 });

@@ -62,7 +62,7 @@ test('044: an unreachable registry is said; a different backlog command earlier 
   assert.match(kept.r.stderr, /could not check .* for a newer release, keeping 1\.2\.0: npm error 401 Unauthorized/);
   const none = run({ installed: null, latest: null });
   assert.equal(none.r.status, 1);
-  assert.match(none.r.stderr, /cannot reach .* \(authenticate with npm login/);
+  assert.match(none.r.stderr, /cannot reach .* \(authenticate: npm login --scope=@smoothsdlc --auth-type=legacy/);
   const other = run({ installed: '1.2.0', latest: '1.2.0', foreign: '7.0.0' });
   assert.equal(other.r.status, 1);
   assert.match(other.r.stderr, /the backlog command on PATH \(.*foreign\/backlog\) is not @smoothsdlc\/smooth-backlog-cli 1\.2\.0/);

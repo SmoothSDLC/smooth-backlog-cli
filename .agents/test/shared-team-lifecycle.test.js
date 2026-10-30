@@ -354,7 +354,9 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   both([B, '--request-review', 'archy', '--note', 'commit 9999999'], undefined, 0);
   both([B, '--review', 'pass', '--by', 'archy', '--comments', 'good (references/review/code.md)'], undefined, 0); // CLOSE NOW line
   // beyond the oracle (item 039): the reviewer never closes (update.py prints the rule but lets it through)
-  assert.match(update(n, [B, '--close', '--by', 'archy', '--summary', 'delivered']).stdout, /only the claimer \(cody\) closes it, else the team lead \(cody\); not archy/);
+  const byReviewer = update(n, [B, '--close', '--by', 'archy', '--summary', 'delivered']);
+  assert.deepEqual([byReviewer.status, byReviewer.stdout], [1, `❌ ${B}: only the claimer (cody) closes it, else the team lead (cody); not archy\n`]);
+  assert.deepEqual(snapshot(n), snapshot(o)); // refused: nothing changed
   both([B, '--close', '--by', 'cody', '--summary', 'delivered'], undefined, 0);
   both([C, '--close', '--summary', 'x'], undefined, 1); // nobody claimed it
   both([C, '--claim', 'cody', '--note', 'n'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'other' }, 1); // outside the team scope
@@ -368,7 +370,7 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   // beyond the oracle (item 033): a stale review is handed on by the team lead (--reassign-review), never taken over
   const stale = update(n, [C, '--start-review', '--by', 'zed'], { BACKLOG_REVIEW_STALE_SECONDS: '-1' });
   assert.equal(stale.status, 1, stale.stdout + stale.stderr);
-  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by cody since \\S+; review another item \\(the review is stale: the team lead hands it on`, 'm'));
+  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by cody since \\S+; review another item \\(the review is stale: the team lead hands it on with backlog update <item> --reassign-review <agent> --by cody --reason "<why>"\\)\\n$`));
   assert.deepEqual(snapshot(n), snapshot(o)); // refused: nothing changed
   // the class options are gone: unrecognized, exit 2 in both (argparse prints its whole usage, the CLI names the option)
   assert.equal(py('update.py', [C, '--claim', 'cody', '--set-work-class', 'docs'], { cwd: o.cons, tmp: o.t }).status, 2);

@@ -29,11 +29,12 @@ test('the product skill is complete: front matter, size, referenced files, fixtu
   assert.ok(cases.length && cases.every(x => x.prompt && x.expected_output && x.assertions));
 });
 test('item 058: the built-in skill and the help name no Python script and no old pattern', async () => {
-  const bad = /\.py\b|python|oracle|backlog\.db|phases\/|scripts\/(query|update|new_phase|lib_db|move|archive)\b/i;
+  const bad = /\.py\b|python|oracle|backlog\.db|phases\/|scripts\/(query|update|new_phase|lib_db|move|archive)|\.transaction\.json|\.smooth-backlog-cli\.lock/i; // the DoD's grep, plus storage file names
   const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
   for (const file of walk(resolve('templates/skills/backlog'))) {
     const hit = readFileSync(file, 'utf8').split('\n').find(l => bad.test(l)); assert.equal(hit, undefined, `${file}: ${hit}`);
   }
+  assert.match(readFileSync(resolve('templates/skills/backlog/SKILL.md'), 'utf8'), /The CLI is the\s+only interface to the backlog/);
   const { HELP } = await import('../../src/help.js');
   for (const [cmd, text] of Object.entries(HELP)) assert.doesNotMatch(text, /python|\.py\b|oracle/i, cmd);
   assert.doesNotMatch(readFileSync(resolve('COMMANDS.md'), 'utf8'), /python|\.py\b|oracle/i);

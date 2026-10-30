@@ -18,7 +18,8 @@ metadata:
 ## Purpose
 
 Keep repository backlog work consistent across people and coding agents. The
-CLI owns validation, priority normalization, storage locking, and update checks.
+CLI owns validation, priority normalization, storage locking, and update checks. The CLI is the
+only interface to the backlog: read and change it only through `backlog` commands, never its files.
 
 ## Prerequisites
 

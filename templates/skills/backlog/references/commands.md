@@ -194,15 +194,11 @@ imply anonymous package access. The CLI never writes registry settings or tokens
 
 ## Storage and output
 
-Manifest and archive files are JSON arrays under `.backlog/`. Every item has GUID,
-priority, name, branch, state, item-state-description, description, ac, tasks,
-outcomes, evidence, references, work_item_id, item_created_at, item_updated_at,
-item_completed_at, and item_archived_at. Tasks contain name/goal strings.
-
-A repository-root `.smooth-backlog-cli.lock` serializes local processes. The CLI
-also acquires the pre-rename lock first to coordinate with older installed
-versions. A durable
-`.backlog/.transaction.json` journal recovers interrupted multi-file writes.
+The CLI owns the backlog's storage: read and change items only through its commands, never
+its files. Every item has GUID, priority, name, branch, state, item-state-description,
+description, ac, tasks, outcomes, evidence, references, work_item_id, item_created_at,
+item_updated_at, item_completed_at, and item_archived_at. Tasks contain name/goal strings.
+The CLI serializes local processes with a lock and recovers interrupted multi-file writes.
 Corrupt JSON, duplicate GUIDs, merge conflicts, unsupported schemas, invalid
 priorities and symlinked destinations fail explicitly instead of resetting data.
 Resolve cross-clone merge conflicts manually; local locking is not distributed

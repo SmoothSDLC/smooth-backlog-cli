@@ -22,8 +22,8 @@ Run the product validator from the repository root:
 node --test .agents/test/integrations.test.js
 ```
 
-It checks bundle structure, referenced resources, Python syntax, and evaluation
-fixtures. If `skills-ref` is installed, it also performs reference validation.
+It checks the bundle structure, the referenced resources, the evaluation fixtures, and
+that the skill names no Python script, item file or backlog storage file (item 058).
 Run `npm test`, `npm run check`, and `npm pack --dry-run` before publishing.
 See `skill-spec-claim-coverage.md` for the current automated coverage and
 `agent-skills-specification-guidance.md` for design guidance.

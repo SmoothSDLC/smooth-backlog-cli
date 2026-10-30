@@ -22,10 +22,10 @@ test('023: the parity rule is written down, and every oracle skip names it', () 
     if (f !== 'shared-fixtures.js') assert.deepEqual(named, [], `${f}: an oracle skip reason that is not ORACLE_SKIP`);
     // in a file that runs the oracle (py(...)), every skip or "not compared" note is ORACLE_SKIP's, or one of the known
     // reasons that have nothing to do with the oracle (no symlinks on this file system, a platform)
-    if (!/\bpy\(|'python3'/.test(text) || f === 'parity-rule.test.js') continue; // this file names the patterns it looks for; a file running Python is one
+    if (!/\bpy\b|python3/.test(text) || f === 'parity-rule.test.js') continue; // this file names the patterns it looks for; a file running Python is one
     // t.skip(...), ctx.skip(...), test.skip(...), it.skip(...), a diagnostic, or a { skip } option; a variable used as the
     // reason counts as ORACLE_SKIP's only when its definition is
-    const reasons = [...text.matchAll(/\b(?:t|ctx|test|it|describe)\.(?:skip|todo|diagnostic)\(([^\n]*)|\bskip\s*:\s*([^,}\n]+)|[{,]\s*(skip)\s*[,}]/g)].map(m => (m[1] ?? m[2] ?? m[3]).trim());
+    const reasons = [...text.matchAll(/\b(?:t|ctx|test|it|describe)\s*\.\s*(?:skip|todo|diagnostic)\s*\(([^\n]*)|\bskip\s*:\s*([^,}\n]+)|[{,]\s*(skip)\s*[,}]/g)].map(m => (m[1] ?? m[2] ?? m[3]).trim());
     // a reason variable counts only when its every string is ORACLE_SKIP: its definition names it and holds no literal text
     const vars = new Set([...text.matchAll(/\bconst (\w+) = ([^\n]*)/g)].filter(m => m[2].includes('ORACLE_SKIP') && !/['"`][^'"`]*[A-Za-z]{3}[^'"`]*['"`]/.test(m[2].replace(/py\([^)]*\)|spawnSync\([^)]*\)/g, ''))).map(m => m[1]));
     const other = reasons.filter(r => !/ORACLE_SKIP|cannot create a symlink here|process\.platform|needs a POSIX shell/.test(r) && !vars.has(r));

@@ -4,7 +4,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -82,4 +82,17 @@ test('043: setup --ask shows the default, uses the answer and records it relativ
   const keep = run(app, ['setup', '--ask'], '\n'); // an empty answer takes the default: the configured clone
   assert.equal(keep.status, 0, keep.stdout + keep.stderr);
   assert.deepEqual(cfg(app), { backlog_repository: '../../clones/backlog' });
+});
+
+test('043: setup removes nothing through a symbolic link in an agent folder', () => {
+  const { t, app, run } = fixture();
+  const outside = join(t, 'outside');
+  mkdirSync(join(outside, 'backlog'), { recursive: true });
+  writeFileSync(join(outside, 'backlog', 'keep.txt'), 'keep');
+  symlinkSync(outside, join(app, '.claude', 'skills'));
+  const r = run(app, ['setup']);
+  assert.notEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stderr, /symbolic link on the way: nothing changed/);
+  assert.equal(readFileSync(join(outside, 'backlog', 'keep.txt'), 'utf8'), 'keep');
+  assert.ok(!existsSync(join(t, 'consumer', 'smoothsdlc-backlog')) && !existsSync(join(app, '.smooth-backlog.json'))); // checked first: nothing changed
 });

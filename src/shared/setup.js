@@ -15,7 +15,8 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'n
 import { createInterface } from 'node:readline/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { atomicWrite } from '../storage.js';
-import { adapters, templateRoot } from '../integrations.js';
+import { adapters, safeTree, templateRoot } from '../integrations.js';
+import { safePath } from '../storage.js';
 import { redact, validateHome } from './safety.js';
 import { setMode } from './store.js';
 
@@ -41,6 +42,14 @@ export async function run(argv) {
   if (other.length) return die(`setup takes only --ask (got ${other.join(' ')})`);
   const top = topOf(process.cwd());
   if (!top) return die('backlog setup runs inside the git repository it sets up');
+  const targets = []; // checked before anything changes: no symbolic link on the way to a skill copy (as backlog init)
+  for (const a of adapters) {
+    const detect = join(top, a.detect);
+    if (!existsSync(detect) || !statSync(detect).isDirectory()) continue;
+    const target = join(top, a.destination);
+    try { await safePath(top, detect); await safeTree(top, target); } catch (e) { return die(`${a.destination}: ${e.message} (a symbolic link on the way: nothing changed)`); }
+    targets.push({ target, destination: a.destination });
+  }
   const kept = configuredHome(top);
   const fallback = kept ?? join(dirname(top), 'smoothsdlc-backlog');
   let home = fallback;
@@ -64,14 +73,11 @@ export async function run(argv) {
     say(`✅ ${CONFIG}: backlog_repository ${value} (commit it, so every clone of this repository finds the backlog repository)`);
   } else say(`ℹ️  ${CONFIG} kept`);
   const deployed = [];
-  for (const a of adapters) {
-    const detect = join(top, a.detect);
-    if (!existsSync(detect) || !statSync(detect).isDirectory()) continue;
-    const target = join(top, a.destination);
+  for (const { target, destination } of targets) {
     rmSync(target, { recursive: true, force: true });
     mkdirSync(dirname(target), { recursive: true });
     cpSync(join(templateRoot, 'skills/backlog'), target, { recursive: true });
-    deployed.push(a.destination);
+    deployed.push(destination);
   }
   say(deployed.length ? `✅ the backlog skill in ${deployed.join(', ')}` : 'ℹ️  no agent folder (.agents, .claude, .github, .qwen) here: no skill copy deployed');
   setMode('shared');

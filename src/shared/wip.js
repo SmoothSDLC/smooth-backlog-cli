@@ -30,15 +30,15 @@ function limitOf(cfg, level, key) {
   return num(v);
 }
 const inProgress = fm => fm.status === 'in_progress' || (fm.stage === 'refining' && fm.refiner && !fm.claimed_by && (fm.status ?? 'pending') === 'pending');
-const holderOf = fm => fm.claimed_by || fm.refiner || '';
+const holderOf = fm => fm.claimed_by || (fm.stage === 'refining' ? fm.refiner : '') || ''; // a finished refinement holds nothing
 // [{repository, slug, fm, path}] of every item in progress in the backlog home
 export function progressItems(home) {
   const out = [];
   let owners = [];
-  try { owners = readdirSync(home, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')); } catch { return out; }
+  try { owners = readdirSync(home, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')); } catch (e) { warn(`${home} cannot be read (${e.message}); no work in progress is counted`); return out; }
   for (const o of owners) {
     let names = [];
-    try { names = readdirSync(join(home, o.name), { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')); } catch { continue; }
+    try { names = readdirSync(join(home, o.name), { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')); } catch (e) { warn(`${join(home, o.name)} cannot be read (${e.message}); its items are not counted against the work-in-progress limits`); continue; }
     for (const n of names) {
       const folder = join(home, o.name, n.name);
       if (!existsSync(join(folder, 'phases'))) continue;

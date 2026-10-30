@@ -310,8 +310,9 @@ Options:
       least one of them under references/review/ (references/review/<type>.md). An item with review documents
       closes only after a passing review; without them it closes without one.
   --depends-on DEPENDS_ON
-      Required: the item numbers or slugs that must be done first, comma-separated, or the word none. The command
-      refuses when a named item is not in this backlog.
+      Required: the item numbers or slugs that must be done first, comma-separated, or the word none. owner/name#seq names
+      an item of another repository's backlog in the same backlog repository. The command refuses when a named item is
+      not in this backlog, or not in the backlog repository.
   --estimate MINUTES
       The estimated minutes of work, an integer (the front matter key estimate_min). Required for team work.
   --complexity {low,medium,high}
@@ -420,8 +421,10 @@ Options:
       Set the review_refs of the item (its definition of done), as comma-separated paths in the cody-coding-model repository.
       At least one of them is a review document under references/review/ (references/review/<type>.md) (team session).
   --set-depends-on IDS
-      Replace the depends_on of the item, as item numbers or slugs, or the word none. The command refuses when a
-      named item is not in this backlog.
+      Replace the depends_on of the item, as item numbers or slugs, owner/name#seq for an item of another repository, or
+      the word none. The command refuses when a named item is not in this backlog, or not in the backlog repository. A
+      not-done item of another repository blocks the claim like one of this backlog, and pop and backlog work name it as
+      the work to do first in its repository.
   --set-estimate MINUTES
       Replace the estimate_min of the item, the estimated minutes of work. It must be greater than 0.
   --set-complexity {low,medium,high}
@@ -549,7 +552,8 @@ Options:
   --critical
       Only the open items with severity critical.
   --phase PHASE
-      One item, given by number or slug. The command refuses when it does not exist.
+      One item, given by number or slug, or several as a comma-separated list (a JSON array). The command refuses when
+      one does not exist.
   --events [EVENTS]
       The event log. With an item (number or slug) it prints the events of that item, newest first; without one it
       prints the latest 50 events of the backlog.
@@ -580,9 +584,10 @@ Options:
   --agent AGENT
       The agent that asks. With --claimable or --reviewable it also switches to team rules: an incomplete item is not offered
       and the agent never reviews its own work. With --pop it is the agent whose next action is answered (team session).
-      With --status (the default view) the agent has read every item listed, and with --all every item a planning move
-      re-ranks: its next write of one is checked against that version. A change of an item's rank alone (another agent's
-      move or reflow) never makes the agent's view stale; a change of its content does.
+      With --phase the agent has read that item (or each of a comma-separated list, printed as a JSON array): its next
+      write of it is checked against that version. A change of an item's rank alone (another agent's move or reflow)
+      never makes the agent's view stale; a change of its content does, and the refusal names every such item of the
+      write in one backlog query --phase <a>,<b> command.
   --plan
       The dispatch plan of the team for this branch: at most one action per member (respond, close, review, claim, and for
       the team lead refine or reassign-review), each item to one member, with the reason and a dispatch key; the members

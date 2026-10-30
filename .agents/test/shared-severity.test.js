@@ -37,3 +37,17 @@ test('046: --severity changes the field, is published with an event, and refuses
   assert.equal(bad.status, 2, bad.stdout + bad.stderr);
   assert.match(bad.stderr + bad.stdout, /invalid choice: 'urgent' \(choose from normal, critical\)/);
 });
+
+test('046: --severity is a field edit: refused on another team\'s item like any other', () => {
+  const t = mkdtempSync(join(tmpdir(), 'severity-'));
+  dirs.push(t);
+  sharedBacklog(t);
+  const cons = consumer(t, 'acme', 'demo', 'main');
+  mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  const run = (args, env = {}) => cli(args, { cwd: cons, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester', TEAM_LEAD: 'lead', ...env } });
+  assert.equal(run(['new', '--name', 'other team item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds', '--team', 't2']).status, 0);
+  run(['query', '--phase', '1', '--agent', 'tester']);
+  const r = run(['update', '1', '--severity', 'critical', '--by', 'tester'], { TEAM_NAME: 't1' });
+  assert.equal(r.status, 1, r.stdout + r.stderr); // another team's item
+});

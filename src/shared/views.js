@@ -79,7 +79,7 @@ export async function teamRows({ open, scope, cap, every, excluded, repo, branch
 // lib_db.py:621-624
 const jobFields = fm => [['estimate', fm.estimate_min], ['complexity', fm.complexity], ['layer', fm.layer]]
   .filter(([, v]) => v != null && v !== '').map(([k, v]) => ` ${k}=${v}${k === 'estimate' ? 'm' : ''}`).join('');
-export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d.item.slug : null, status: d.item ? d.item.status : 'missing', claimed_by: d.fm.claimed_by || '' }));
+export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d.item.slug : null, status: d.item ? d.item.status : 'missing', claimed_by: d.fm.claimed_by || '', ...(d.foreign && d.item ? { repository: d.item.repository } : {}) }));
 
 // Beyond the oracle (topology item 288): the items that wait in stage review-hitl for an owner decision, with the question
 // (the last "Owner decision needed" section of the item), for the morning report. Answer: backlog update <item> --decision.

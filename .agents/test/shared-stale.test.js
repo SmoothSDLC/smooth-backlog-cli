@@ -76,7 +76,7 @@ test('a write to an item another writer changed after the agent read it is refus
   const localBefore = git(f.home, 'rev-parse', 'HEAD');
   const a = run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']);
   assert.equal(a.status, 5, a.stderr + a.stdout);
-  assert.match(a.stderr, /item 001-alpha was changed by bob at \d{4}-\d\d-\d\dT[\d:]+Z after you last read it \(2026-10-01T00:00:00Z\); read it again \(backlog query --phase 001-alpha; backlog query --status --all --agent <you> reads every item a planning move re-ranks\) and retry/);
+  assert.match(a.stderr, /item 001-alpha was changed by bob at \d{4}-\d\d-\d\dT[\d:]+Z after you last read it \(2026-10-01T00:00:00Z\); read it again \(backlog query --phase 001-alpha --agent <you>\) and retry/);
   assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
   assert.ok(!onOrigin(f, 'acme/demo/phases/001-alpha.md').includes('from amy'));
   assert.ok(!readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8').includes('from amy'));
@@ -579,8 +579,25 @@ test('053: after bob closes an item, amy moves another at once; a content change
   assert.equal(content.status, 0, content.stderr + content.stdout);
   const stale = run(f, f.home, ['update', '3', '--append', 'from amy', '--by', 'amy']);
   assert.equal(stale.status, 5, stale.stderr + stale.stdout);
-  assert.match(stale.stderr, /item 003-gamma was changed by bob .*backlog query --status --all --agent <you> reads every item a planning move re-ranks/);
-  assert.equal(run(f, f.home, ['query', '--status', '--all', '--agent', 'amy']).status, 0); // the one command
+  assert.match(stale.stderr, /item 003-gamma was changed by bob .*read it again \(backlog query --phase 003-gamma --agent <you>\)/);
+  assert.equal(run(f, f.home, ['query', '--phase', '3', '--agent', 'amy']).status, 0);
   const again = run(f, f.home, ['update', '3', '--append', 'from amy', '--by', 'amy']);
+  assert.equal(again.status, 0, again.stderr + again.stdout);
+});
+
+test('053: a reflow over several items with new content names them all in one refusal and one command reads them', () => {
+  const f = seed(['alpha', 'beta', 'gamma', 'delta']);
+  for (const item of ['001-alpha', '002-beta', '003-gamma', '004-delta']) assert.equal(run(f, f.home, ['query', '--phase', item, '--agent', 'amy']).status, 0);
+  for (const n of ['2', '3']) {
+    assert.equal(run(f, f.home2, ['query', '--phase', n, '--agent', 'bob']).status, 0);
+    assert.equal(run(f, f.home2, ['update', n, '--append', 'from bob', '--by', 'bob']).status, 0);
+  }
+  const close = run(f, f.home, ['update', '1', '--status', 'done', '--by', 'amy']); // re-ranks 2, 3 and 4
+  assert.equal(close.status, 5, close.stderr + close.stdout);
+  assert.match(close.stderr, /2 items this change re-ranks were changed by another agent .*\(002-beta, 003-gamma\); read them again \(backlog query --phase 002-beta,003-gamma --agent <you>\)/);
+  const read = run(f, f.home, ['query', '--phase', '002-beta,003-gamma', '--agent', 'amy']);
+  assert.equal(read.status, 0, read.stderr + read.stdout);
+  assert.deepEqual(JSON.parse(read.stdout).map(x => x.slug), ['002-beta', '003-gamma']);
+  const again = run(f, f.home, ['update', '1', '--status', 'done', '--by', 'amy']);
   assert.equal(again.status, 0, again.stderr + again.stdout);
 });

@@ -9,7 +9,7 @@ import { actor, check, recordWrites } from './seen.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
 import { branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
 import { pull } from './sync.js';
-import { outsideTeam, strip, teamName, teamScope } from './team.js';
+import { foreignItem, isForeign, outsideTeam, strip, teamName, teamScope } from './team.js';
 
 const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; // lib_db.py:224
@@ -115,7 +115,8 @@ async function create(argv, { home, folder, repo, team }) {
   try {
     const deps = [];
     for (const d of asList(a.dependsOn)) {
-      if (!byIdent(db, d)) return refuse(`--depends-on: no item '${d}' in this backlog`);
+      if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--depends-on: no item '${d}' in the backlog repository`); } // item 042
+      else if (!byIdent(db, d)) return refuse(`--depends-on: no item '${d}' in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }
     let inherited = { objective: '', summary: '', context: '' };

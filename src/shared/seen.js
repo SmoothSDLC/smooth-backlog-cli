@@ -88,7 +88,7 @@ function remapViews(folder, views, pairs) {
 export const view = (agent, folder, repo, row) => record(folder, repo, agent || actor(), [{ slug: row.slug, path: row.path }]);
 
 export function staleError(slug, by, at, was) {
-  return new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was}); read it again (backlog query --phase ${slug}; backlog query --status --all --agent <you> reads every item a planning move re-ranks) and retry`, STALE_EXIT);
+  return new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was}); read it again (backlog query --phase ${slug} --agent <you>) and retry`, STALE_EXIT);
 }
 
 // path: the item file as it is now (after the leading pull).
@@ -112,11 +112,17 @@ export function check(folder, repo, agent, slug, path) {
 export function guardReflow(folder, items) {
   const repo = `${basename(dirname(folder))}/${basename(folder)}`;
   const agent = actor(); const ctx = operation.getStore();
+  const stale = []; // item 053: every item of the write set the agent must read again, in one refusal
   for (const i of items) {
     const path = `${repo}/${i.path}`;
     if (ctx?.created.has(join(folder, i.path)) || ctx?.guard.some(g => g.path === path)) continue;
     const slug = i.fm.phase || basename(i.path, '.md');
-    const before = check(folder, repo, agent, slug, i.path);
+    let before;
+    try { before = check(folder, repo, agent, slug, i.path); } catch (e) { if (e.code !== 'STALE_ITEM') throw e; stale.push({ slug, e }); continue; }
     if (before && ctx) ctx.incidental.set(path, { folder, repo, slug, path: i.path, agent, before });
+  }
+  if (stale.length === 1) throw stale[0].e;
+  if (stale.length) {
+    throw new BacklogError('STALE_ITEM', `${stale.length} items this change re-ranks were changed by another agent after you last read them (${stale.map(s => s.slug).join(', ')}); read them again (backlog query --phase ${stale.map(s => s.slug).join(',')} --agent <you>) and retry`, STALE_EXIT);
   }
 }

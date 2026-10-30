@@ -14,7 +14,7 @@ import { parse } from './frontmatter.js';
 import { publicationGuard, staleError } from './seen.js';
 import { connect, scan } from './db.js';
 import * as store from './store.js';
-import { asList } from './team.js';
+import { asList, foreignItem, isForeign } from './team.js';
 
 const PULL = ['pull', '-q', '--rebase', '--autostash', 'origin', 'main']; // explicit: the clone's tracking branch and push.default are the user's, not ours
 const pad = n => String(n).padStart(3, '0');
@@ -192,7 +192,8 @@ async function renumberFiles(home, stream, added, mirror) {
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
     out.push(pairOf(old, next, folder));
-    moves.push({ folder: name, old, slug: String(mine.fm.phase), next, newSlug: pad(next) + String(mine.fm.phase).replace(/^\d+/, '') });
+    const was = String(mine.fm.phase || posix.basename(path, '.md')); // item 045: an item without a phase field is named by its file
+    moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
   }
   if (moves.length) { // the local dependents of the renumbered items follow them
     const touched = await remapLocal(home, moves, await changedBy(home, ['origin/main', 'HEAD']), 'origin/main', new Set());
@@ -278,7 +279,8 @@ async function repairConflicts(home, folders, names, renumbered) {
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
         process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
         renumbered.push(pairOf(old, next, folder));
-        moves.push({ folder: name, old, slug: String(mine.fm.phase), next, newSlug: pad(next) + String(mine.fm.phase).replace(/^\d+/, '') });
+        const was = String(mine.fm.phase || posix.basename(rel, '.md')); // item 045
+        moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
         written.add(`${name}/${target}`);
       }
       if (moves.length) await remapLocal(home, moves, [...await changedBy(home, ['REBASE_HEAD^', 'REBASE_HEAD']), ...written], 'HEAD', new Set());
@@ -307,7 +309,7 @@ async function validatePublication(home, folders, names, claims, renumbered) {
     try { // --seq checks mirror rows too: a ghost still reserves its number until explicitly repaired.
       reserved = con.prepare('SELECT slug, seq FROM phase').all().filter(r => !items.some(i => slug(i) === r.slug));
     } finally { con.close(); }
-    const resolves = d => Boolean(find(d));
+    const resolves = d => (isForeign(d) ? Boolean(foreignItem(folders[n], d)) : Boolean(find(d))); // item 042: owner/name#seq
     const key = d => /^\d+$/.test(String(d)) ? String(Number(d)) : String(d);
     const lost = new Set();
     // Walk from every write, through unchanged/upstream and archived vertices too. A check of
@@ -369,8 +371,8 @@ async function validatePublication(home, folders, names, claims, renumbered) {
       const item = items.find(i => i.path === path);
       if (!item) reject(`${names[n]}: claimed item ${path} disappeared`);
       for (const d of asList(item.fm.depends_on)) {
-        const target = find(d);
-        if (!target || !['done', 'archived'].includes(target.fm.status)) reject(`${names[n]}: ${slug(item)} dependencies not done: ${d}`);
+        const target = isForeign(d) ? foreignItem(folders[n], d) : find(d);
+        if (!target || !['done', 'archived'].includes(isForeign(d) ? target.status : target.fm.status)) reject(`${names[n]}: ${slug(item)} dependencies not done: ${d}`);
       }
       if (!claim.skipActiveLimit) {
         const held = items.filter(i => i !== item && i.path.startsWith('phases/') && ['pending', 'in_progress'].includes(i.fm.status ?? 'pending')

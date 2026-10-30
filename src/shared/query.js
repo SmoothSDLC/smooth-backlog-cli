@@ -10,6 +10,7 @@ import { assertInside, git, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
+import * as team from './team.js';
 import { teamScope } from './team.js';
 import { SCOPES, teamView } from './views.js';
 
@@ -178,6 +179,21 @@ async function query(argv) {
       return 0;
     }
 
+    if (a.phase && String(a.phase).includes(',')) { // item 053: several items at once, one JSON object each, in an array
+      const out = [];
+      for (const id of String(a.phase).split(',').map(x => x.trim()).filter(Boolean)) {
+        const sel = itemSelector(id);
+        const r = sel && (sel.number !== undefined
+          ? one("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id", sel.number)
+          : one('SELECT * FROM phase WHERE slug=?', sel.slug));
+        if (!r) { say(`❌ no phase ${repr(id)}`); return 1; }
+        const file = store.load(folder).find(i => i.path === r.path);
+        out.push({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null });
+        seen.view(a.agent, folder, repo, r);
+      }
+      dump(out);
+      return 0;
+    }
     if (a.phase) {
       const sel = itemSelector(a.phase);
       const r = sel && (sel.number !== undefined
@@ -219,8 +235,6 @@ async function query(argv) {
     if (!h) { say('ℹ️  backlog not initialized yet (backlog new creates the first item and the phase anchor)'); return 0; }
     const every = all("SELECT * FROM phase WHERE handoff_id=? ORDER BY CASE WHEN status IN ('done','archived') THEN 1 ELSE 0 END, priority ASC, seq ASC", h.id);
     const rows = every.filter(r => !excluded.has(r.id) && (a.all || ((r.repository || '') === repo && (r.branch || '') === branch)));
-    // item 053: with --agent, the agent has now read every item listed (with --all, every item a planning move re-ranks)
-    if (a.agent) seen.record(folder, repo, a.agent, rows.filter(r => r.path && existsSync(join(folder, String(r.path)))).map(r => ({ slug: r.slug, path: r.path })));
     // F6: open items of another branch that is no longer on the origin wait for a decision, in no queue
     const others = every.filter(r => !excluded.has(r.id) && ACTIONABLE.includes(r.status) && r.repository === repo && r.branch !== branch);
     let gone = []; let unreadable = false;
@@ -240,11 +254,20 @@ async function query(argv) {
     say(`📋 ${repo} — branch ${a.all ? '(all)' : redact(branch)} — ${folder}`);
     say(`   objective: ${h.objective}`);
     say(`   phases (${rows.length}) — work queue order, P0 = next:`);
+    let byPath;
     for (const r of rows) {
       const mark = { done: '✅', archived: '📦', in_progress: '🔄' }[r.status] ?? '•';
       const crit = (r.severity || 'normal') === 'critical' && ACTIONABLE.includes(r.status) ? ' ⚠️CRIT' : '';
       say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority, 3)}${crit}  ${r.name}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
+      // item 042: a dependency on another repository's item is shown with its state (the items of this backlog keep PR1's line)
+      if (ACTIONABLE.includes(r.status)) {
+        const deps = (byPath ??= new Map(store.load(folder).map(i => [i.path, i.fm]))).get(r.path)?.depends_on;
+        for (const d of team.asList(deps).filter(team.isForeign)) {
+          const f = team.foreignItem(folder, d);
+          say(`        ⛓ depends on ${d}${f ? ` ${f.slug} (status ${f.status})` : ' (no such item in the backlog repository)'}`);
+        }
+      }
     }
     if (unreadable) say('   ⚠️  the origin could not be read, so items of other branches were not checked');
     if (gone.length) {

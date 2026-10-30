@@ -14,7 +14,7 @@ import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { REVIEW_DIR, asList, handoffText, heldItems, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
+import { REVIEW_DIR, asList, foreignItem, handoffText, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
@@ -215,7 +215,8 @@ async function change(a, con, folder, repo) {
   if (a['set-depends-on'] !== undefined) {
     const deps = [];
     for (const d of asList(a['set-depends-on'])) {
-      if (!find(con, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in this backlog`);
+      if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in the backlog repository`); } // item 042
+      else if (!find(con, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }
     const cycle = dependencyCycle(con, folder, row.id, deps);
@@ -231,7 +232,7 @@ async function change(a, con, folder, repo) {
     changes.review_refs = refs.join(',');
   }
   const holder = fm.claimed_by || '';
-  const todo = step(a, { fm, body, before, slug: row.slug, folder, repo, incomplete, given: SETTABLE.filter(k => a[k] !== undefined) }); // update.py:181-241
+  const todo = step(a, { fm, body, before, slug: row.slug, folder, repo, incomplete, given: [...SETTABLE, 'severity'].filter(k => a[k] !== undefined) }); // --severity is a field edit too (046) // update.py:181-241
   if (todo.refuse) return refuse(todo.refuse);
   const { event } = todo;
   if (todo.text) {

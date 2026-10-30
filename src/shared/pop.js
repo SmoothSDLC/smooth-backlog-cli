@@ -180,6 +180,14 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
       act = { name: 'refine', r, f: repo, say: `refine ${r.seq}, never action it: set ${incomplete.get(r.id).join(', ')} (${REFINE_HOW.replaceAll('<item>', r.slug)}); an incomplete item means the backlog was not filled properly: once complete, record the gap in the item (backlog update <item> --append "GAP: ...")` };
     }
   }
+  // item 042 (owner 2026-10-29): when the work here waits on not-done items of other repositories, the answer names them
+  // as the work to do first (before any chunk work here); the lead ends the session and the team is started there
+  const first = act || (lead && busy.length) ? [] : [...new Map(own.filter(x => !x.fm.claimed_by && x.r.status === 'pending').flatMap(x => x.undone)
+    .filter(d => d.foreign && d.item && d.item.status !== 'done')
+    .map(d => [`${d.item.repository}#${d.item.seq}`, { item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }])).values()];
+  if (!act && first.length) {
+    act = { name: 'idle', r: null, f: repo, say: `the work here waits on ${first.map(x => `${x.item} (${x.slug}, status ${x.status})`).join(', ')}: do that first in repository ${first[0].repository}: ${lead ? 'end the session here; the team is started in that repository' : 'tell the team lead'}` };
+  }
   if (!act && cap !== 'off' && !(lead && busy.length)) { // a busy team's lead waits (spec section 8)
     const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone, f }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length
       && team.offeredTo(fm, f, repo) && team.isReady(fm)); // never another team's chunk item (item 037), nor one before ready (036)
@@ -191,7 +199,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     }
   }
   const waits = new Map(held.filter(h => h.state !== 'active').map(h => [h.slug, { slug: h.slug, text: h.state === 'awaiting-review' ? `awaiting review: ${h.fm.seq}` : h.state.replace(':', ': ') }]));
-  const blocked = act ? [] : [...own.filter(x => x.undone.length && !waits.has(x.r.slug)).map(x => ({ slug: x.r.slug, undone: x.undone })), ...[...waits.values()].map(w => ({ slug: w.slug, text: w.text }))];
+  const blocked = act && !first.length ? [] : [...own.filter(x => x.undone.length && !waits.has(x.r.slug)).map(x => ({ slug: x.r.slug, undone: x.undone })), ...[...waits.values()].map(w => ({ slug: w.slug, text: w.text }))];
   if (!act) {
     act = lead && busy.length ? { name: 'idle', r: null, f: repo, say: `your team works on ${busy.length} item(s) (${busy.map(x => x.r.seq).join(', ')}): end your turn now with a text-only reply and no tool call; do not poll, the dispatcher wakes you` } // spec section 8
       : { name: 'idle', r: null, f: repo, say: `nothing for ${me}: ${blocked.length ? 'message the agents holding the blockers below, or the coordinator' : 'tell the coordinator'}${refusal ? ` (${refusal})` : ''}` };
@@ -203,6 +211,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
       action: name, item: r ? r.slug : null, ...(name === 'refine' ? { missing: incomplete.get(r.id) } : {}), seq: r ? r.seq : null,
       repository: f, branch: r ? r.branch : branch, instruction: act.say, claimed: name === 'claim' && Boolean(a['claim-now']),
       blocked: blocked.map(b => ({ item: b.slug, waiting_on: b.text !== undefined ? [b.text] : waitingOn(b.undone) })),
+      ...(first.length ? { first } : {}),
       held: held.map(h => ({ item: h.slug, seq: h.fm.seq, state: h.state })),
     }))}\n`);
   } else {

@@ -104,10 +104,10 @@ export function foreignItem(folder, id) {
 }
 // Item 042: does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
 // to it? Returns the reference that closes the cycle, or null. Local entries are read in the folder they are written in.
-export function foreignCycle(folder, repoId, seq, deps) {
+// cache: repository -> its items, shared by the calls of one check (a publication checks every changed item)
+export function foreignCycle(folder, repoId, seq, deps, cache = new Map()) {
   const home = dirname(dirname(resolve(folder)));
   const self = `${repoId}#${Number(seq)}`;
-  const cache = new Map();
   const items = repo => { if (!cache.has(repo)) { const dir = join(home, ...repo.split('/')); cache.set(repo, existsSync(dir) ? load(dir) : []); } return cache.get(repo); };
   const nodeOf = (repo, d) => {
     const s = String(d ?? '').trim();

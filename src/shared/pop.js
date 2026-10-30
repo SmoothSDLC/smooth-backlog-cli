@@ -102,7 +102,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   let act = reviews.find(x => x.fm.review_state === 'in_review' && x.fm.reviewer === me);
   if (!lead && team.restarting(me, team.teamLead(a.lead))) act = { name: 'stop', r: null, f: repo, say: team.STOP_TEXT }; // query.py:201-202: handed off, no new work until a fresh session
   // query.py:197-221: the item you work on, your refinement in progress, then your passed and your changes-requested items
-  let mine = own.filter(({ fm }) => fm.claimed_by === me && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on && team.isReady(fm)); // waiting for a verdict or a run is not work; nor an item before ready
+  let mine = own.filter(({ fm, undone }) => fm.claimed_by === me && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on && team.isReady(fm) // waiting for a verdict or a run is not work; nor an item before ready
+    && !undone.some(d => d.foreign && d.item?.status !== 'done')); // item 042: nor one that waits on another repository (named below as the work to do first)
   // query.py:203-211 (item 039, spec section 8): while its team works the split items the lead's work item waits: no busy
   // continue (proof runs 01 and 02 died of qwen-code loop detection while the lead polled), but a passed or
   // changes-requested item of the lead's keeps its action, and items blocked on the lead's own work do not count
@@ -269,13 +270,13 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
     if (idle.length) give(idle[0], 'review', r, reviewSay(r.slug, fm, idle[0]), 'any member but the author');
   }
   const canClaim = Object.fromEntries(members.map(m => [m, m !== lead && !roster[m]?.review_only && team.claimRefusal(folder, m) === null]));
-  for (const { r, fm, undone } of rows) {
   const planned = []; // item 034: the claims this plan gives out count against the limits of the next ones
+  for (const { r, fm, undone } of rows) {
     if (r.status !== 'pending' || fm.claimed_by || undone.length || team.isChunk(fm) || !team.isReady(fm)) continue;
     const free = members.filter(m => !busy.has(m) && canClaim[m] && !wipRefusal(folder, repo, fm, m, r.slug, planned)).sort((x, y) => held[x].length - held[y].length || members.indexOf(x) - members.indexOf(y));
     if (free.length) {
-      give(free[0], 'claim', r, `claim exactly this item (planned for you; do not pop for another): backlog update ${r.slug} --claim ${free[0]}, then start the work and record each step in the item${dod(fm)}`,
       planned.push({ repository: repo, slug: r.slug, fm: { ...fm, status: 'in_progress', claimed_by: free[0] } });
+      give(free[0], 'claim', r, `claim exactly this item (planned for you; do not pop for another): backlog update ${r.slug} --claim ${free[0]}, then start the work and record each step in the item${dod(fm)}`,
         `free member${free.length > 1 && held[free[0]].length < held[free[1]].length ? '; least loaded' : ''}`);
     }
   }

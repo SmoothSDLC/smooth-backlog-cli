@@ -228,7 +228,7 @@ async function change(a, con, folder, repo) {
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }
     const cycle = dependencyCycle(con, folder, row.id, deps);
-    if (!cycle && deps.some(isForeign) && foreignCycle(folder, repo, row.seq, deps)) return refuse(`--set-depends-on: it would make a dependency cycle through another repository's items back to ${repo}#${row.seq}`); // item 042
+    if (!cycle && foreignCycle(folder, repo, row.seq, deps)) return refuse(`--set-depends-on: it would make a dependency cycle through another repository's items back to ${repo}#${row.seq}`); // item 042
     if (cycle) return refuse(`--set-depends-on: ${cycle === row.id ? 'an item cannot depend on itself' : `it would make a dependency cycle through ${cycle}`}`);
     fm.depends_on = deps;
     changes.depends_on = deps.join(',') || 'none';

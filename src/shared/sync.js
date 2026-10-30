@@ -14,7 +14,7 @@ import { parse } from './frontmatter.js';
 import { actor, publicationGuard, staleError, staleViews } from './seen.js';
 import { connect, scan } from './db.js';
 import * as store from './store.js';
-import { asList, foreignItem, isForeign } from './team.js';
+import { asList, foreignCycle, foreignItem, isForeign } from './team.js';
 
 const PULL = ['pull', '-q', '--rebase', '--autostash', 'origin', 'main']; // explicit: the clone's tracking branch and push.default are the user's, not ours
 const pad = n => String(n).padStart(3, '0');
@@ -310,6 +310,7 @@ async function validatePublication(home, folders, names, claims, renumbered) {
       reserved = con.prepare('SELECT slug, seq FROM phase').all().filter(r => !items.some(i => slug(i) === r.slug));
     } finally { con.close(); }
     const resolves = d => (isForeign(d) ? Boolean(foreignItem(folders[n], d)) : Boolean(find(d))); // item 042: owner/name#seq
+    const leaves = items.some(i => asList(i.fm.depends_on).some(isForeign)); const others = new Map();
     const key = d => /^\d+$/.test(String(d)) ? String(Number(d)) : String(d);
     const lost = new Set();
     // Walk from every write, through unchanged/upstream and archived vertices too. A check of
@@ -338,6 +339,8 @@ async function validatePublication(home, folders, names, claims, renumbered) {
         if (sameSlug) reject(`${names[n]}: duplicate slug ${slug(item)} in ${item.path} and ${sameSlug.path}; the slug must stay unique`);
         for (const d of asList(item.fm.depends_on)) if (!resolves(d)) reject(`${names[n]}: ${item.fm.phase} depends on missing item ${d}`);
         acyclic(item);
+        // item 042: a cycle through another repository leaves this one by an item with a foreign dependency
+        if (leaves && foreignCycle(folders[n], names[n], seq(item), item.fm.depends_on, others)) reject(`${names[n]}: dependency cycle through another repository's items back to ${slug(item)}`);
       }
       if (status === 'A') continue; // a new item has no incoming identity to preserve
       const before = await must(home, ['show', `origin/main:${file}`], `read the prior identity of ${file}`);

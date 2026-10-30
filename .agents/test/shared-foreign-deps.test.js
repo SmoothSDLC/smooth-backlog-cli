@@ -4,7 +4,8 @@
 // its repository as the work to do first (owner 2026-10-29). Two fixture repositories, local bare repos only.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -52,6 +53,12 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   run(here, ['query', '--phase', '1', '--agent', 'tester']);
   assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/lib#7', '--by', 'tester'], 1).stdout, /no item 'acme\/lib#7' in the backlog repository/);
   run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester']);
+  // a dependency added after the claim: the holder is not told to go on, the other repository's item is named first
+  run(there, ['new', '--name', 'library follow up', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds']);
+  run(here, ['update', '1', '--set-depends-on', 'acme/lib#2', '--by', 'tester']);
+  const held = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json'], 3).stdout);
+  assert.equal(held.action, 'idle', JSON.stringify(held));
+  assert.equal(held.first[0].item, 'acme/lib#2');
 });
 
 test('042: a lead whose team items wait only on another repository is told to start the team there, not to wait', () => {
@@ -100,4 +107,37 @@ test('042: a dependency cycle through another repository, or on the item itself,
   run(here, ['query', '--phase', '1', '--agent', 'tester']);
   assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester'], 1).stdout, /dependency cycle through another repository's items back to acme\/app#1/);
   assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/app#1', '--by', 'tester'], 1).stdout, /cycle/);
+  // through a local item: app#2 depends on lib#1, which depends on app#1; app#1 -> app#2 closes the cycle
+  run(here, ['new', '--name', 'app second', '--objective', 'o', '--summary', 's', '--depends-on', 'acme/lib#1', '--body', '## Definition of done\n\n- [ ] x']);
+  run(here, ['query', '--phase', '1', '--agent', 'tester']);
+  assert.match(run(here, ['update', '1', '--set-depends-on', '2', '--by', 'tester'], 1).stdout, /dependency cycle through another repository's items back to acme\/app#1/);
+});
+
+test('042: two clones that each add one half of a cycle through another repository: the later publication is refused', () => {
+  const t = mkdtempSync(join(tmpdir(), 'foreign-race-'));
+  dirs.push(t);
+  const home = sharedBacklog(t);
+  const here = consumer(t, 'acme', 'app', 'main');
+  const there = consumer(t, 'acme', 'lib', 'main');
+  mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  const run = (cwd, args, want = 0, env = {}) => {
+    const r = cli(args, { cwd, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester', ...env } });
+    assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
+    return r;
+  };
+  const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x'];
+  run(here, NEW('app item'));
+  run(there, NEW('lib item'));
+  const home2 = join(t, 'home2');
+  spawnSync('git', ['clone', '-q', join(t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2]);
+  run(there, ['query', '--phase', '1', '--agent', 'bob'], 0, { BACKLOG_HOME: home2 });
+  // while tester's push is on its way, bob (the other clone) adds lib#1 -> app#1
+  const hook = join(home, '.git', 'hooks', 'pre-push');
+  const flag = join(t, 'hook-ran');
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${there}' && BACKLOG_HOME='${home2}' XDG_CONFIG_HOME='${join(t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 1 --set-depends-on acme/app#1 --by bob >/dev/null 2>&1\nexit 0\n`);
+  chmodSync(hook, 0o755);
+  run(here, ['query', '--phase', '1', '--agent', 'tester']);
+  const r = run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester'], 3);
+  assert.match(r.stdout + r.stderr, /dependency cycle through another repository's items back to 001-app-item/);
 });

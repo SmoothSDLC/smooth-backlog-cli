@@ -3,7 +3,7 @@
 // writing different items at once both succeed without losing a change. Local bare repos only.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -40,10 +40,41 @@ test('025: the waiting agent is told which agent holds the checkout and since wh
   assert.match(refused.stderr, /locked by another process \(agent amy@t1, pid \d+, .*since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\)/);
 });
 
+test('025: the record names the --by agent of the holder when it has no QWEN_CODE_AGENT_ID', async () => {
+  const f = fixture();
+  const [was, argv] = [process.env.QWEN_CODE_AGENT_ID, process.argv];
+  delete process.env.QWEN_CODE_AGENT_ID;
+  process.argv = [...argv, '--by', 'zoe'];
+  let refused;
+  try {
+    await store.cloneLocked(f.home, async () => {
+      refused = cli(['update', '1', '--note', 'n', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400' } });
+    });
+  } finally { process.argv = argv; if (was !== undefined) process.env.QWEN_CODE_AGENT_ID = was; }
+  assert.match(refused.stderr, /locked by another process \(agent zoe, pid \d+/);
+});
+
+test('025: a lock that a crash left without its record (empty, older than 30 s) is taken over; a new lock is never empty', () => {
+  const f = fixture();
+  const lock = join(f.home, '.git', 'smooth-backlog-cli-run.lock');
+  writeFileSync(lock, '');
+  const old = new Date(Date.now() - 60000); utimesSync(lock, old, old);
+  const r = cli(['update', '1', '--append', 'after the crash', '--by', 'amy'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stderr, /took over a stale lock with an incomplete record older than 30 s/);
+  assert.equal(existsSync(lock), false);
+});
+
 test('025: two agents writing different items at once both succeed, and both changes are on the origin', async () => {
   const f = fixture();
-  const a = cliAsync(['update', '1', '--append', 'from amy', '--by', 'amy'], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: 'amy@t1' } });
-  const b = cliAsync(['update', '2', '--append', 'from bob', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: 'bob@t1' } });
+  let a, b; const ended = new Set();
+  await store.cloneLocked(f.home, async () => { // both start while the checkout is held: each must wait for it
+    a = cliAsync(['update', '1', '--append', 'from amy', '--by', 'amy'], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: 'amy@t1' } });
+    b = cliAsync(['update', '2', '--append', 'from bob', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: 'bob@t1' } });
+    a.done.then(() => ended.add('a')); b.done.then(() => ended.add('b'));
+    await new Promise(res => setTimeout(res, 2000));
+    assert.equal(ended.size, 0, 'neither writer goes past a held checkout');
+  });
   const [ra, rb] = [await a.done, await b.done];
   assert.equal(ra.status, 0, ra.stdout + ra.stderr);
   assert.equal(rb.status, 0, rb.stdout + rb.stderr);

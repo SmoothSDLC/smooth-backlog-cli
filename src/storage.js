@@ -26,11 +26,38 @@ export async function atomicWrite(path, text) {
 // wait: how long to wait for a holder (ms). takeOver: a lock whose pid is no longer running (on this host) is taken over and said so once,
 // instead of refused (shared mode; the local store keeps asking the user to look first).
 let tookOver = false;
+// item 025: the record names the agent (--by or --agent of the command, else QWEN_CODE_AGENT_ID or the user) and the time
+const argOf = flag => { const v = process.argv.find((x, i) => process.argv[i - 1] === flag) ?? process.argv.find(x => x.startsWith(`${flag}=`))?.slice(flag.length + 1); return v && !v.startsWith('--') ? v : ''; };
+const lockRecord = () => JSON.stringify({ pid: process.pid, host: hostname(), command: process.argv[2] ?? '', agent: (argOf('--by') || argOf('--agent') || process.env.QWEN_CODE_AGENT_ID || process.env.USER || '').trim(), since: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
+// The lock file appears with its whole record or not at all (a temp file linked, or renamed over a dead holder's), so a
+// crash never leaves an empty lock behind.
+async function placeLock(path, replace) {
+  const tmp = `${path}.${randomUUID()}.tmp`;
+  await fs.writeFile(tmp, lockRecord(), { mode: 0o600 });
+  try { if (replace) await fs.rename(tmp, path); else await fs.link(tmp, path); } finally { await fs.rm(tmp, { force: true }); }
+}
 export async function locked(path, callback, { wait = 10000, takeOver = false } = {}) {
   await fs.mkdir(dirname(path), { recursive: true });
-  const started = Date.now(); let handle; let holder = '';
+  const started = Date.now(); let holder = '';
+  // takeOver: only the owner of the takeover marker may replace a dead owner's record, and only if the file is still what
+  // was read (a process that created a fresh lock meanwhile is never displaced). A marker its owner died holding is old after 30 s.
+  const replaceIf = async (same, why) => {
+    const marker = `${path}.takeover`; let fd;
+    try { fd = openSync(marker, 'wx'); } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      try { if (Date.now() - statSync(marker).mtimeMs > 30000) rmSync(marker, { force: true }); } catch { /* gone already */ }
+      return false;
+    }
+    closeSync(fd);
+    try {
+      if (!same()) return false;
+      await placeLock(path, true);
+      if (!tookOver) { tookOver = true; process.stderr.write(`backlog: took over a stale lock ${why}: ${path}\n`); }
+      return true;
+    } finally { rmSync(marker, { force: true }); }
+  };
   for (;;) {
-    try { handle = await fs.open(path, 'wx', 0o600); break; }
+    try { await placeLock(path, false); break; }
     catch (e) {
       // Windows can report EPERM while a previous owner's unlink is still pending.
       if (process.platform === 'win32' && e.code === 'EPERM') {
@@ -48,24 +75,8 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
             const current = JSON.parse(await fs.readFile(path, 'utf8'));
             if (current.pid !== record.pid) continue;
             if (takeOver) {
-              // Exclusive: only the owner of the takeover marker may replace the dead owner's record, and only if the file still names that dead pid
-              // (a process that created a fresh lock meanwhile is never displaced). Everyone else keeps waiting. A marker its owner died holding is old after 30 s.
-              const marker = `${path}.takeover`; let fd;
-              try { fd = openSync(marker, 'wx'); } catch (e) {
-                if (e.code !== 'EEXIST') throw e;
-                try { if (Date.now() - statSync(marker).mtimeMs > 30000) rmSync(marker, { force: true }); } catch { /* gone already */ }
-              }
-              if (fd !== undefined) {
-                closeSync(fd);
-                try {
-                  const again = JSON.parse(readFileSync(path, 'utf8'));
-                  if (again.pid === record.pid && again.host === record.host) {
-                    handle = await fs.open(path, 'w', 0o600); // ours now; the record is written below
-                    if (!tookOver) { tookOver = true; process.stderr.write(`backlog: took over a stale lock of process ${record.pid} (no longer running): ${path}\n`); }
-                    break;
-                  }
-                } finally { rmSync(marker, { force: true }); }
-              }
+              const same = () => { try { const again = JSON.parse(readFileSync(path, 'utf8')); return again.pid === record.pid && again.host === record.host; } catch { return false; } };
+              if (await replaceIf(same, `of process ${record.pid} (no longer running)`)) break; // else another takes it over: wait
             } else
             throw new BacklogError('STALE_LOCK', `Lock owner ${record.pid} is no longer running. Verify no backlog process is using this storage, remove ${path}, then rerun; any journal will recover automatically.`, 1);
           }
@@ -74,7 +85,12 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
         if (error.code === 'ENOENT') continue;
         if (error instanceof SyntaxError) {
           let stat; try { stat = await fs.stat(path); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
-          if (Date.now() - stat.mtimeMs > 30000) throw new BacklogError('STALE_LOCK', `Incomplete lock ${path}. Verify no backlog process is running, remove this lock, and rerun to recover its journal.`, 1);
+          if (Date.now() - stat.mtimeMs > 30000) {
+            // an incomplete record (an older CLI that died while it created the lock): taken over like a dead holder's
+            const same = () => { try { const st = statSync(path); if (st.mtimeMs !== stat.mtimeMs) return false; JSON.parse(readFileSync(path, 'utf8')); return false; } catch (e) { return e instanceof SyntaxError; } };
+            if (takeOver) { if (await replaceIf(same, 'with an incomplete record older than 30 s')) break; } else
+            throw new BacklogError('STALE_LOCK', `Incomplete lock ${path}. Verify no backlog process is running, remove this lock, and rerun to recover its journal.`, 1);
+          }
         }
         if (!(error instanceof SyntaxError) && !(process.platform === 'win32' && error.code === 'EPERM')) throw error;
       }
@@ -82,11 +98,9 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
       await delay(20 + Math.random() * 25);
     }
   }
-  // item 025: the record names the agent and the time, for the diagnostic of whoever waits; removed on check-in and, for a
-  // process that died, taken over (takeOver) or reported (STALE_LOCK)
-  const agent = (process.env.QWEN_CODE_AGENT_ID || process.env.USER || '').trim();
-  try { await handle.writeFile(JSON.stringify({ pid: process.pid, host: hostname(), command: process.argv[2] ?? '', agent, since: new Date().toISOString().replace(/\.\d+Z$/, 'Z') })); return await callback(); }
-  finally { await handle.close(); await fs.rm(path, { force: true }); }
+  // removed on check-in; for a process that died, taken over (takeOver) or reported (STALE_LOCK)
+  try { return await callback(); }
+  finally { await fs.rm(path, { force: true }); }
 }
 export async function repositoryLocked(root, callback) {
   const filename = '.smooth-backlog-cli.lock';

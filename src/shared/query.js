@@ -204,7 +204,7 @@ async function query(argv) {
           : one('SELECT * FROM phase WHERE slug=?', sel.slug));
         if (!r) { say(`❌ no phase ${repr(id)}`); return 1; }
         const file = store.load(folder).find(i => i.path === r.path);
-        out.push({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file ? missingFields(file.fm, file.body) : null });
+        out.push({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
       }
       dump(out);
       for (const r of out) seen.view(a.agent, folder, repo, r); // read only once all of them are shown
@@ -218,7 +218,7 @@ async function query(argv) {
       if (!r) { say(`❌ no phase ${repr(a.phase)}`); return 1; }
       // the oracle's row, then the whole item (item 033: a member that may use only the CLI reads its item here)
       const file = store.load(folder).find(i => i.path === r.path);
-      dump({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file ? missingFields(file.fm, file.body) : null }); // item 061
+      dump({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null }); // item 061
       seen.view(a.agent, folder, repo, r); // the agent now holds this version: its next write to the item is checked against it
       return 0;
     }

@@ -2,7 +2,7 @@
 // (front matter team = the team, no stage) with the whole item. Local bare repos.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -188,6 +188,7 @@ test('item 061: an item without depends_on names it; an item whose file is gone 
   assert.deepEqual(x.missing, ['review_refs', 'depends_on']);
   assert.equal(y.missing, null);
   assert.equal(JSON.parse(ok(f, ['query', '--phase', g, '--json']).stdout).missing, null);
+  ok(f, ['query', '--phase', g, '--json']);
   writeFileSync(file, 'the front matter is gone\n'); // a file the CLI cannot read as an item
   assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, null);
 });
@@ -209,4 +210,13 @@ test('team pop: an item taken out of the team before the read is skipped, never 
   spawnSync('git', ['checkout', '-q', '--detach'], { cwd: f.cons });
   const r = run(f, ['team', 'pop', '--team', 't1']);
   assert.equal(r.status, 2, r.stdout + r.stderr); assert.match(r.stderr, /team pop needs a branch/);
+});
+
+test('item 061: an archived item whose file lost its front matter has missing null too', () => {
+  const f = fixture();
+  const s = make(f, 'archived item'); ok(f, ['archive', s.split('-')[0], '--force']);
+  const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
+  const file = walk(join(f.folder, 'archive')).find(x => x.endsWith(`${s}.md`));
+  assert.ok(file, 'the archived file'); writeFileSync(file, 'no front matter\n');
+  assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, null);
 });

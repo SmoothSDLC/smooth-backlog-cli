@@ -548,8 +548,8 @@ Options:
   --phase PHASE
       One item, given by number or slug, or several as a comma-separated list (a JSON array). The command refuses when
       one does not exist. Each item is shown whole: its row, front_matter, body, and missing (the team fields it lacks:
-      review_refs, depends_on, estimate_min, definition_of_done; [] when complete; null when the CLI cannot
-      read the item from its file: no file, or a file without its front matter).
+      review_refs, depends_on, estimate_min, definition_of_done; [] when complete; null when the item's file is
+      gone or has no front matter; a file that cannot be read or parsed fails the command, as every read does).
   --events [EVENTS]
       The event log. With an item (number or slug) it prints the events of that item, newest first; without one it
       prints the latest 50 events of the backlog.
@@ -824,7 +824,8 @@ backlog team pop — the team lead takes its team's next work item, with the who
 Usage:
   backlog team pop --team <name> [--agent <lead>] [--json]
 
-A work item of a team is an item of this repository and branch whose front matter team is the team's name and that has
+A work item of a team is an item of this repository and branch (in a team session the ones it is bound to,
+TEAM_REPOSITORY and TEAM_BRANCH, as for every command) whose front matter team is the team's name and that has
 no stage (backlog update <item> --set-team <name> gives an item to a team; the items split from it carry a stage and are
 the members' work). When the lead holds an open work item of the team, the answer is continue with that item. Otherwise
 the command claims for the lead the team's first open, unclaimed work item in the work order (priority, then seq) whose
@@ -848,7 +849,8 @@ Exit codes:
   0  continue or claim: the lead holds the item.
   1  A command it ran failed for another reason than a refused claim, a synchronisation failure included (the reason
      is printed), or the item changed before it could be shown: run it again.
-  2  Invalid input: a missing --team, an agent other than the lead, another team than TEAM_NAME.
+  2  Invalid input: a missing --team, an agent other than the lead, another team than TEAM_NAME, or no branch (a
+     detached HEAD without TEAM_BRANCH).
   3  idle: no work item of the team to take.
 
 Example:

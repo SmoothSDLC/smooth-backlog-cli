@@ -11,7 +11,7 @@ import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
-import { publicationGuard, staleError } from './seen.js';
+import { actor, publicationGuard, staleError, staleViews } from './seen.js';
 import { connect, scan } from './db.js';
 import * as store from './store.js';
 import { asList, foreignItem, isForeign } from './team.js';
@@ -439,7 +439,9 @@ export async function commit(home, folders, message, reconcile = null, guard = [
         for (const x of guard) if ((await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) hit.push(x);
         if (!hit.length) return;
         const up = parse((await g(home, ['show', `origin/main:${hit[0].path}`])).stdout).fm;
-        throw staleError(hit[0].slug, up.updated_by, up.updated, hit[0].was, hit.map(x => x.slug));
+        const repos = [...new Set(guard.map(x => x.path.split('/').slice(0, 2).join('/')))];
+        const read = repos.flatMap(r => staleViews(join(home, ...r.split('/')), r, actor())); // the other items the agent read that changed
+        throw staleError(hit[0].slug, up.updated_by, up.updated, hit[0].was, [...hit.map(x => x.slug), ...read]);
       };
       const base = (await g(home, ['merge-base', 'HEAD', 'origin/main'])).stdout.trim();
       for (let i = 0; i < 3; i++) {

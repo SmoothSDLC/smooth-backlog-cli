@@ -219,6 +219,8 @@ async function query(argv) {
     if (!h) { say('ℹ️  backlog not initialized yet (backlog new creates the first item and the phase anchor)'); return 0; }
     const every = all("SELECT * FROM phase WHERE handoff_id=? ORDER BY CASE WHEN status IN ('done','archived') THEN 1 ELSE 0 END, priority ASC, seq ASC", h.id);
     const rows = every.filter(r => !excluded.has(r.id) && (a.all || ((r.repository || '') === repo && (r.branch || '') === branch)));
+    // item 053: with --agent, the agent has now read every item listed (with --all, every item a planning move re-ranks)
+    if (a.agent) seen.record(folder, repo, a.agent, rows.filter(r => r.path && existsSync(join(folder, String(r.path)))).map(r => ({ slug: r.slug, path: r.path })));
     // F6: open items of another branch that is no longer on the origin wait for a decision, in no queue
     const others = every.filter(r => !excluded.has(r.id) && ACTIONABLE.includes(r.status) && r.repository === repo && r.branch !== branch);
     let gone = []; let unreadable = false;

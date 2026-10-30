@@ -35,7 +35,11 @@ function read(home, agent) { try { return JSON.parse(readFileSync(viewsFile(home
 
 // views: [{slug, path}] (path from the repository folder) of repo, as the agent now sees them. Never fails the command: the cache is a safety net.
 // The file's hash is part of the view: `updated` has a resolution of one second, so two changes in one second differ only in content.
-const fileView = (folder, path) => { const text = readFileSync(join(folder, path), 'utf8'); return { fm: parse(text).fm, sha: createHash('sha256').update(text).digest('hex') }; };
+// item 053: content is the hash without the fields a reflow rewrites (priority, updated, updated_by): a rank-only change
+// by another agent's planning move is no change of the item for this agent's next write
+const RANK_ONLY = ['priority', 'updated', 'updated_by'];
+const contentOf = doc => { const fm = { ...doc.fm }; for (const k of RANK_ONLY) delete fm[k]; return createHash('sha256').update(JSON.stringify([Object.keys(fm).sort().map(k => [k, fm[k]]), doc.body])).digest('hex'); };
+const fileView = (folder, path) => { const text = readFileSync(join(folder, path), 'utf8'); const doc = parse(text); return { fm: doc.fm, sha: createHash('sha256').update(text).digest('hex'), content: contentOf(doc) }; };
 
 export function record(folder, repo, agent, views) {
   const home = homeOf(folder);
@@ -45,8 +49,8 @@ export function record(folder, repo, agent, views) {
     for (const v of views) { // a view may name another repository folder (a cross-repository move leaves the item there)
       const key = `${v.repo ?? repo}/${v.slug}`;
       if (v.before !== undefined && all[`${v.repo ?? repo}/${v.beforeSlug ?? v.slug}`]?.sha !== v.before) continue;
-      const { fm, sha } = fileView(v.folder ?? folder, v.path);
-      all[key] = { updated: fm.updated ?? null, updated_by: fm.updated_by ?? null, sha, commit, path: v.path, folder: v.folder ?? folder };
+      const { fm, sha, content } = fileView(v.folder ?? folder, v.path);
+      all[key] = { updated: fm.updated ?? null, updated_by: fm.updated_by ?? null, sha, content, commit, path: v.path, folder: v.folder ?? folder };
     }
     const file = viewsFile(home, agent);
     mkdirSync(dirname(file), { recursive: true });
@@ -84,14 +88,14 @@ function remapViews(folder, views, pairs) {
 export const view = (agent, folder, repo, row) => record(folder, repo, agent || actor(), [{ slug: row.slug, path: row.path }]);
 
 export function staleError(slug, by, at, was) {
-  return new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was}); read it again (backlog query --phase ${slug}) and retry`, STALE_EXIT);
+  return new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was}); read it again (backlog query --phase ${slug}; backlog query --status --all --agent <you> reads every item a planning move re-ranks) and retry`, STALE_EXIT);
 }
 
 // path: the item file as it is now (after the leading pull).
 export function check(folder, repo, agent, slug, path) {
   const seen = read(homeOf(folder), agent)[`${repo}/${slug}`];
-  const { fm, sha } = fileView(folder, path);
-  if (seen && seen.sha !== sha) throw staleError(slug, fm.updated_by, fm.updated, `${seen.updated}${seen.updated_by ? ` by ${seen.updated_by}` : ''}`);
+  const { fm, sha, content } = fileView(folder, path);
+  if (seen && seen.sha !== sha && !(seen.content && seen.content === content)) throw staleError(slug, fm.updated_by, fm.updated, `${seen.updated}${seen.updated_by ? ` by ${seen.updated_by}` : ''}`);
   const guard = operation.getStore()?.guard;
   if (guard && !guard.some(g => g.path === `${repo}/${path}`)) {
     // A retry may first encounter this item after rebasing. Protect the upstream

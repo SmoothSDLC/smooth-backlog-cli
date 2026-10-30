@@ -76,7 +76,7 @@ test('a write to an item another writer changed after the agent read it is refus
   const localBefore = git(f.home, 'rev-parse', 'HEAD');
   const a = run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']);
   assert.equal(a.status, 5, a.stderr + a.stdout);
-  assert.match(a.stderr, /item 001-alpha was changed by bob at \d{4}-\d\d-\d\dT[\d:]+Z after you last read it \(2026-10-01T00:00:00Z\); read it again \(backlog query --phase 001-alpha\) and retry/);
+  assert.match(a.stderr, /item 001-alpha was changed by bob at \d{4}-\d\d-\d\dT[\d:]+Z after you last read it \(2026-10-01T00:00:00Z\); read it again \(backlog query --phase 001-alpha; backlog query --status --all --agent <you> reads every item a planning move re-ranks\) and retry/);
   assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
   assert.ok(!onOrigin(f, 'acme/demo/phases/001-alpha.md').includes('from amy'));
   assert.ok(!readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8').includes('from amy'));
@@ -87,29 +87,29 @@ test('a write to an item another writer changed after the agent read it is refus
   assert.equal(run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']).status, 0);
 });
 
-test('replan refuses a stale ordering after its leading pull without changing Bob\'s priorities', () => {
+test('item 053: a replan after another agent\'s rank-only move goes through; a content change still refuses it, changing nothing', () => {
   const f = seed();
   const read = run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
   assert.equal(read.status, 0, read.stderr + read.stdout);
+  const bob = run(f, f.home2, ['update', '1', '--priority', '1', '--by', 'bob']); // ranks only
+  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
+  const amy = run(f, f.home, ['update', '--replan', '1,2', '--by', 'amy']);
+  assert.equal(amy.status, 0, amy.stderr + amy.stdout);
+  assert.match(amy.stdout, /PLANNING EVENT[\s\S]*P0 {2}001-alpha[\s\S]*P1 {2}002-beta/); // the order she set, printed
+  const content = run(f, f.home2, ['update', '1', '--append', 'from bob', '--by', 'bob']);
+  assert.equal(content.status, 0, content.stderr + content.stdout);
   const cache = viewCache(f.home, 'amy');
   const expected = readFileSync(cache, 'utf8');
-  const bob = run(f, f.home2, ['update', '1', '--priority', '1', '--by', 'bob']);
-  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
   const originBefore = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
-
-  const amy = run(f, f.home, ['update', '--replan', '1,2', '--by', 'amy']);
-  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
-  assert.match(amy.stderr, /item 001-alpha was changed by bob .* after you last read it/);
+  const stale = run(f, f.home, ['update', '--replan', '2,1', '--by', 'amy']);
+  assert.equal(stale.status, 5, stale.stderr + stale.stdout);
+  assert.match(stale.stderr, /item 001-alpha was changed by bob .* after you last read it/);
   assert.equal(readFileSync(cache, 'utf8'), expected);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), originBefore);
   assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
-  for (const folder of [f.folder, f.folder2]) {
-    assert.equal(fm(folder, '001-alpha.md').priority, 1);
-    assert.equal(fm(folder, '002-beta.md').priority, 0);
-  }
+  assert.equal(fm(f.folder, '001-alpha.md').priority, 0);
   assert.equal(git(f.home, 'status', '--porcelain'), '');
 });
-
 test('replan guards implicitly reordered items against a push race without a cached view', () => {
   const f = seed();
   const before = git(f.home, 'rev-parse', 'HEAD');
@@ -562,4 +562,25 @@ test('review P2: a renumbered incidental write retains proof of the previously r
     writeFileSync(join(f.folder, path), readFileSync(join(f.folder, path), 'utf8') + '\nanother writer\n');
     assert.throws(() => seen.check(f.folder, 'acme/demo', 'amy', '003-alpha', path), { exitCode: 5 });
   } finally { seen.setActor('nobody'); }
+});
+
+// Item 053: another agent's reflow that changed only ranks is no change for this agent's planning move; a change of an
+// item's content still refuses its write, and the refusal names one command that reads every item a move re-ranks.
+test('053: after bob closes an item, amy moves another at once; a content change still refuses her write until she reads', () => {
+  const f = seed(['alpha', 'beta', 'gamma', 'delta']);
+  for (const item of ['002-beta', '003-gamma', '004-delta']) assert.equal(run(f, f.home, ['query', '--phase', item, '--agent', 'amy']).status, 0);
+  assert.equal(run(f, f.home2, ['query', '--phase', '001-alpha', '--agent', 'bob']).status, 0);
+  const bob = run(f, f.home2, ['update', '1', '--status', 'done', '--by', 'bob']); // the reflow re-ranks beta, gamma and delta
+  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
+  const amy = run(f, f.home, ['update', '4', '--priority', '0', '--by', 'amy']); // reranks beta and gamma again
+  assert.equal(amy.status, 0, amy.stderr + amy.stdout);
+  assert.equal(fm(f.folder, '004-delta.md').priority, 0);
+  const content = run(f, f.home2, ['update', '3', '--append', 'from bob', '--by', 'bob']);
+  assert.equal(content.status, 0, content.stderr + content.stdout);
+  const stale = run(f, f.home, ['update', '3', '--append', 'from amy', '--by', 'amy']);
+  assert.equal(stale.status, 5, stale.stderr + stale.stdout);
+  assert.match(stale.stderr, /item 003-gamma was changed by bob .*backlog query --status --all --agent <you> reads every item a planning move re-ranks/);
+  assert.equal(run(f, f.home, ['query', '--status', '--all', '--agent', 'amy']).status, 0); // the one command
+  const again = run(f, f.home, ['update', '3', '--append', 'from amy', '--by', 'amy']);
+  assert.equal(again.status, 0, again.stderr + again.stdout);
 });

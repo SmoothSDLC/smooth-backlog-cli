@@ -3,7 +3,7 @@
 // -> A query --status --json == B query --status --json (byte for byte) -> everything is on the bare origin, backlog.db
 // committed and agreeing with the item files, no duplicate numbers. Then the same with the tools swapped, and the two
 // runs' item files are compared (parsed: the codec writes strings JSON-quoted where PyYAML writes them plain).
-// Skips only when python3 or SMOOTH_BACKLOG_SCRIPTS (or PyYAML) is missing. Local bare repos only (shared-fixtures.js).
+// Skips (ORACLE_SKIP) only when python3, PyYAML or the Python backlog skill scripts are missing. Local bare repos only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 
@@ -20,8 +20,7 @@ const git = (cwd, ...args) => {
   if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
   return p.stdout.trim();
 };
-const skipReason = process.env.SMOOTH_BACKLOG_SCRIPTS && py('query.py', ['--help']) !== null && spawnSync('python3', ['--version']).status === 0
-  ? false : 'needs python3 with PyYAML and SMOOTH_BACKLOG_SCRIPTS (the Python backlog skill scripts)';
+const skipReason = py('query.py', ['--help']) !== null && spawnSync('python3', ['--version']).status === 0 ? false : ORACLE_SKIP; // item 023: the rule's reason
 
 const PYTHON = { name: 'python', run: (f, script, args) => py(`${script === 'new' ? 'new_phase' : script}.py`, args, { cwd: f.cons, tmp: f.dir }) };
 const NODE = { name: 'node', run: (f, script, args) => cli([script, ...args], { cwd: f.cons, tmp: f.dir }) };

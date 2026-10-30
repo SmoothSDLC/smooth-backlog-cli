@@ -17,5 +17,8 @@ test('023: the parity rule is written down, and every oracle skip names it', () 
     const text = readFileSync(join(dir, f), 'utf8');
     const literal = [...text.matchAll(/\.skip\(\s*['"`]([^'"`]*)['"`]/g)].map(m => m[1]).filter(r => /oracle/i.test(r) && !r.includes('${ORACLE_SKIP}'));
     assert.deepEqual(literal, [], `${f}: an oracle skip without the rule`);
+    // a skip reason held in a variable or a { skip } option: any string that names the oracle's parts is ORACLE_SKIP's
+    const named = [...text.matchAll(/['"`]([^'"`\n]*(?:SMOOTH_BACKLOG_SCRIPTS|PyYAML)[^'"`\n]*)['"`]/g)].map(m => m[1]).filter(r => /\b(needs|missing|not here|not configured)\b/i.test(r));
+    if (f !== 'shared-fixtures.js') assert.deepEqual(named, [], `${f}: an oracle skip reason that is not ORACLE_SKIP`);
   }
 });

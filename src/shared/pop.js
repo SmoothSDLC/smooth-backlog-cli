@@ -148,6 +148,10 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
         + 'backlog update <item> --refinement-review pass|changes --by codex|claude --comments "<findings; thread or session id>"' };
     }
   }
+  if (!act && lead) { // item 033: a stale review of its team is the lead's to hand on (members never take it over)
+    const x = own.find(({ fm }) => team.staleReview(fm) && fm.reviewer !== me);
+    if (x) act = { name: 'reassign-review', r: x.r, f: x.f, say: `the review of ${x.r.seq} by ${x.fm.reviewer} is stale (started ${x.fm.review_started}): hand it on: backlog update ${x.r.slug} --reassign-review <member> --by ${me} --reason "<why>"` };
+  }
   if (!act && lead) { // the lead refines an incomplete item (never actions it): after complete work, before chunk
     const r = open.find(x => incomplete.has(x.id) && (x.repository || '') === repo && x.branch === branch && team.inTeam(files.get(x.path)?.fm ?? {})
       && files.get(x.path)?.fm.stage !== 'review-hitl'); // only its team's (item 037), never one waiting for an owner decision (036)

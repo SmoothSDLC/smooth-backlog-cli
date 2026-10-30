@@ -83,13 +83,9 @@ export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d
 
 // Beyond the oracle (topology item 288): the items that wait in stage review-hitl for an owner decision, with the question
 // (the last "Owner decision needed" section of the item), for the morning report. Answer: backlog update <item> --decision.
-// The question ends at the next section the CLI writes (its heading carries the step's time stamp) or at the DECISION
-// line, not at a heading of the question's own.
-const QUESTION = /^## Owner decision needed \(asked by [^\n]*\)\n\n([\s\S]*?)(?=\n## [^\n]*\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ|\nDECISION \d{4}-|(?![\s\S]))/gm;
 function decisionsView(found, { a, scope, repo, branch, own, say, dump }) {
-  const question = r => { const m = [...(own.get(r.path)?.body ?? '').matchAll(QUESTION)].pop(); return m ? team.strip(m[1]) : ''; };
   const rows = found.map(({ r, fm }) => ({ ...r, team: fm.team || null, decision_requested_by: fm.decision_requested_by || null,
-    decision_requested_at: fm.decision_requested_at || null, question: question(r) }));
+    decision_requested_at: fm.decision_requested_at || null, question: team.strip(String(fm.decision_question ?? '')) }));
   if (a.json) { dump(rows); return 0; }
   const where = a.all ? '(all)' : scope === 'branch' ? redact(branch) : `(scope ${scope})`;
   say(`📋 ${rows.length} owner decision(s) waiting — ${repo}, branch ${where}; answer with backlog update <item> --decision "<answer>":`);

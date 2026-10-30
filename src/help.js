@@ -202,8 +202,12 @@ ${DB}
       The team lead only (--by <lead>, --reason "<why>"): take the item from the agent that holds it and give it to AGENT.
       In a qwen-code team session (QWEN_CODE_AGENT_ID=<name>@<team>) a member acts only as itself: its claim, release,
       refinement, review and close of an item name itself, never another agent.
+  --reassign-review AGENT
+      The team lead only (--by <lead>, --reason "<why>"): hand the review of the item on to AGENT (not its author), for
+      example a stale review; a member never takes over another agent's review.
   --reason REASON
-      Why the lead reassigns or releases another agent's item (with --reassign, or --release AGENT --by <lead>).
+      Why the lead reassigns or releases another agent's item or review (--reassign, --reassign-review, or
+      --release AGENT --by <lead>).
   --release AGENT
       Give the item back, pending and unclaimed (team session). Only AGENT itself, or the team lead with --by <lead> and
       --reason, releases it.

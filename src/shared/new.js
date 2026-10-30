@@ -55,7 +55,7 @@ const asList = v => (v === undefined || v.trim().toLowerCase() === '' || v.trim(
 // oracle (Codex review of item 036): the event lines the CLI appends to an item (a claim, a refinement start, a wait, a
 // decision, a chunk) and an older item's ESTIMATE line are no definition of done, so an item whose body ends in the
 // placeholder stays incomplete.
-const EVENT_LINE = /^(?:Claimed by|Released by|Review started by|Review by \S+ stale|Refinement started by|Refinement review requested by|WAITING |WAIT DONE |DECISION |CHUNK |ESTIMATE:)[^\n]*$/gm;
+const EVENT_LINE = /^[ \t]*(?:Claimed by|Released by|Review started by|Review by \S+ stale|Refinement started by|Refinement review requested by|WAITING |WAIT DONE |DECISION |CHUNK |ESTIMATE:)[^\n]*$/gm;
 export function hasDefinitionOfDone(text) {
   const body = (text || '').replaceAll(DOD_PLACEHOLDER, '').replace(EVENT_LINE, '');
   for (const m of body.matchAll(/^[ \t]*(?:#{1,6}[ \t]*|\*\*|[-*][ \t]+)?definition of done\b/gim)) {

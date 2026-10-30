@@ -60,11 +60,13 @@ test('backlog work: the next action marked as the agent\'s (claim, refinement st
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy']);
   w = work(f, 'zed');
   assert.deepEqual([w.action, w.item, w.marked, fm(f, job).review_state, fm(f, job).reviewer], ['review', job, `--start-review --by zed`, 'in_review', 'zed']);
+  assert.ok(w.instruction.startsWith('you started the review: review the work of archy') && !w.instruction.includes('--start-review'), w.instruction);
   const parent = make(f, 'team work item');
   ok(f, ['update', parent, '--set-team', 't1']);
   const child = make(f, 'child', '--split-from', parent);
   w = work(f, 'cody', { TEAM_NAME: 't1' });
   assert.deepEqual([w.action, w.item, w.marked, fm(f, child).refiner], ['refine', child, '--refine-start --by cody', 'cody']);
+  assert.ok(w.instruction.startsWith('you started refining it: complete its team fields') && !w.instruction.includes('--refine-start'), w.instruction);
   const text = run(f, ['work', '--agent', 'cody'], { TEAM_NAME: 't1' });
   assert.equal(text.status, 0, text.stderr);
   assert.ok(text.stdout.startsWith(`refine ${child}\n`) && text.stdout.includes(`--- item ${child}: front matter ---\n`) && text.stdout.includes('refiner: cody')
@@ -92,6 +94,8 @@ test('the hand-off to review, a changes verdict and a close end the agent\'s ses
   assert.doesNotMatch(r.stdout, STOP); // a pass leads to the close, which ends the session
   r = ok(f, ['update', a, '--close', '--summary', 'done', '--by', 'archy']);
   assert.equal(STOP.exec(r.stdout)?.[1], 'archy');
+  assert.match(r.stdout.trimEnd().split('\n').pop(), STOP); // the last line: nothing after it asks for more work
+  assert.ok(r.stdout.includes('the team lead re-evaluates the order') && !r.stdout.includes('RE-EVALUATE the order now'), r.stdout);
   ok(f, ['update', b, '--claim', 'archy']);
   const c = make(f, 'third job');
   ok(f, ['update', c, '--claim', 'archy', '--force']); // archy holds two active items
@@ -127,4 +131,23 @@ test('in a team session a member acts only as itself; only the lead reassigns or
   assert.ok(readFileSync(join(f.folder, 'phases', `${other}.md`), 'utf8').includes('Released by lead for archy at'));
   no(f, ['update', other, '--claim', 'zed'], 'not as zed', { QWEN_CODE_AGENT_ID: 'archy@t1' });
   ok(f, ['update', other, '--claim', 'zed']); // outside a qwen-code team session the caller is not known: the named agent is taken as given
+});
+
+test('a member never takes over another agent\'s stale review; the lead hands it on with a reason', () => {
+  const f = fixture();
+  const job = make(f, 'reviewed job');
+  ok(f, ['update', job, '--claim', 'archy']);
+  ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy']);
+  ok(f, ['update', job, '--start-review', '--by', 'zed']);
+  const STALE = { BACKLOG_REVIEW_STALE_SECONDS: '-1' };
+  no(f, ['update', job, '--start-review', '--by', 'cody'], 'the review is stale: the team lead hands it on', STALE);
+  assert.notEqual(work(f, 'cody', STALE).action, 'review');
+  const p = JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], STALE).stdout);
+  assert.deepEqual([p.action, p.item], ['reassign-review', job]);
+  no(f, ['update', job, '--reassign-review', 'cody', '--by', 'archy', '--reason', 'x'], '--reassign-review --by <the team lead>');
+  no(f, ['update', job, '--reassign-review', 'archy', '--by', 'lead', '--reason', 'x'], 'cannot review its own work');
+  ok(f, ['update', job, '--reassign-review', 'cody', '--by', 'lead', '--reason', 'zed is stopped'], STALE);
+  assert.deepEqual([fm(f, job).review_state, fm(f, job).reviewer], ['in_review', 'cody']);
+  assert.ok(readFileSync(join(f.folder, 'phases', `${job}.md`), 'utf8').includes('## Review reassigned by lead from zed to cody at'));
+  ok(f, ['update', job, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
 });

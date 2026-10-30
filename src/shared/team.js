@@ -134,7 +134,9 @@ export const age = ts => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(String(ts)) ?
 export const staleReview = fm => fm.review_state === 'in_review' && age(fm.review_started) > Number(process.env.BACKLOG_REVIEW_STALE_SECONDS ?? 1200);
 
 // lib_db.py:726-729: agent may start or continue the review: requested, in review by agent itself, or stale.
-export const reviewOpenTo = (fm, agent) => fm.review_state === 'requested' || (fm.review_state === 'in_review' && (fm.reviewer === agent || staleReview(fm)));
+// Beyond the oracle (item 033: only the team lead takes another agent's work): a stale review is handed on by the lead
+// (backlog update <item> --reassign-review <agent> --by <lead> --reason), never taken over by another member.
+export const reviewOpenTo = (fm, agent) => fm.review_state === 'requested' || (fm.review_state === 'in_review' && fm.reviewer === agent);
 
 // lib_db.py:745-749
 export function describeDependency({ id, item, fm }) {

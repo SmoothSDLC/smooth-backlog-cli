@@ -51,14 +51,19 @@ export async function run(argv) {
     const m = self(step);
     if (m.status !== 0) { process.stdout.write(m.stdout); process.stderr.write(m.stderr); return m.status ?? 1; } // taken by another agent meanwhile: ask again
     marked = step.slice(2).join(' ');
+    // the instruction after the mark: what is left to do, not the start just done
+    p.instruction = p.action === 'review'
+      ? p.instruction.replace(`start the review: backlog update ${p.item} --start-review --by ${a.agent}; then `, 'you started the review: ')
+      : p.instruction.replace(`refine it before anyone works on it: backlog update ${p.item} --refine-start --by ${a.agent}, `, 'you started refining it: ');
   }
   let item = null;
   let own = '';
   try { own = teamScope().repo || repoId(process.cwd()); } catch { own = ''; }
-  if (p.item && p.repository === own) { // an item of another repository (chunk work) is read from its own clone
+  if (p.item && p.repository === own) {
     const q = self(['query', '--phase', p.item, '--agent', a.agent]); // the whole item, and the agent's view of it for its next write
-    if (q.status === 0) { try { item = JSON.parse(q.stdout); } catch { item = null; } }
-  }
+    try { item = JSON.parse(q.stdout); } catch { item = null; }
+    if (q.status !== 0 || !item) { process.stdout.write(q.stdout); process.stderr.write(q.stderr); return q.status || 1; }
+  } else if (p.item) p.instruction += ` (read the item from that repository's clone: backlog query --phase ${p.item} there)`; // chunk work of another repository
   const out = { ...p, marked, front_matter: item ? item.front_matter : null, body: item ? item.body : null };
   if (a.json) { process.stdout.write(`${JSON.stringify(out, null, 2)}\n`); return pop.status; }
   say(p.item ? `${p.action} ${p.item}` : p.action);

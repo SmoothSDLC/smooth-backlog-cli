@@ -6,7 +6,7 @@ import { hasDefinitionOfDone } from './new.js';
 import { now } from './store.js';
 import {
   REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
-  teamLead, teamScope, undoneDependencies,
+  staleReview, teamLead, teamScope, undoneDependencies,
 } from './team.js';
 
 export class Rejected extends Error {}
@@ -109,7 +109,7 @@ export function requestDecision({ fm }, by, question) {
   if (!fm.team || !BEFORE_READY.includes(fm.stage)) reject(`only a team item before ready waits for an owner decision (${inStage(fm)})`);
   if (!strip(question || '')) reject('--request-decision needs the question: what, why, how it came up, the options and a recommendation');
   const t = now();
-  Object.assign(fm, { stage: 'review-hitl', decision_requested_by: by, decision_requested_at: t, refiner: '' });
+  Object.assign(fm, { stage: 'review-hitl', decision_requested_by: by, decision_requested_at: t, decision_question: question, refiner: '' }); // the question in the front matter: --decisions lists it whole
   return { event: 'decision_requested', text: `## Owner decision needed (asked by ${by} at ${t})\n\n${question}` };
 }
 
@@ -117,7 +117,7 @@ export function decision({ fm }, answer) {
   if (fm.stage !== 'review-hitl') reject(`no owner decision is pending (stage ${fm.stage || 'none'})`);
   if (!strip(answer || '')) reject('--decision needs the owner\'s answer');
   const t = now();
-  Object.assign(fm, { stage: 'refining', refiner: '', decided_at: t });
+  Object.assign(fm, { stage: 'refining', refiner: '', decided_at: t, decision_question: '' });
   return { event: 'decided', text: `DECISION ${t.slice(0, 10)}: ${answer}` };
 }
 
@@ -144,6 +144,18 @@ export function reassign({ fm }, agent, { by, reason } = {}) {
   return { event: 'reassigned', text: `## Reassigned by ${by} from ${from} to ${agent} at ${t}\n\n${reason}` };
 }
 
+// item 033: the team lead hands a review on from its reviewer (a stale one, say) to another agent, with the reason.
+export function reassignReview({ fm }, agent, { by, reason } = {}) {
+  if (!by || by !== teamLead()) reject(`--reassign-review --by <the team lead>: only the lead (${teamLead()}; TEAM_LEAD) hands a review on (got ${by || 'none'})`);
+  if (!strip(reason || '')) reject('--reassign-review needs --reason "<why>"');
+  if (!['requested', 'in_review'].includes(fm.review_state)) reject(`no review is requested (review_state ${fm.review_state || 'none'})`);
+  if (isReviewAuthor(fm, agent)) reject(NO_SELF_REVIEW(agent));
+  const from = fm.review_state === 'in_review' ? fm.reviewer || '' : '';
+  const t = now();
+  Object.assign(fm, { review_state: 'in_review', reviewer: agent, review_started: t });
+  return { event: 'review_reassigned', text: `## Review reassigned by ${by} from ${from || 'nobody'} to ${agent} at ${t}\n\n${reason}` };
+}
+
 // item 033: in a qwen-code team session the shell runs with QWEN_CODE_AGENT_ID=<name>@<team>; that agent acts only as
 // itself. Outside a team session (no such id) the caller is not known and the named agent is taken as given.
 export const caller = () => { const id = strip(process.env.QWEN_CODE_AGENT_ID || ''); return /^[^@\s]+@\S+$/.test(id) ? id.split('@')[0] : ''; };
@@ -161,11 +173,12 @@ export function startReview({ fm }, by) {
   if (isReviewAuthor(fm, by)) reject(NO_SELF_REVIEW(by));
   const st = fm.review_state; const rv = fm.reviewer;
   if (!['requested', 'in_review'].includes(st)) reject(`no review is requested (review_state ${st || 'none'})`);
-  if (!reviewOpenTo(fm, by)) reject(`in review by ${rv} since ${fm.review_started}; review another item`);
-  const stale = st === 'in_review' && rv !== by ? `Review by ${rv} stale (started ${fm.review_started}). ` : '';
+  if (!reviewOpenTo(fm, by)) {
+    reject(`in review by ${rv} since ${fm.review_started}; review another item${staleReview(fm) ? ` (the review is stale: the team lead hands it on with backlog update <item> --reassign-review <agent> --by ${teamLead()} --reason "<why>")` : ''}`);
+  }
   const t = now();
   Object.assign(fm, { review_state: 'in_review', reviewer: by, review_started: t });
-  return { event: 'review_started', text: `${stale}Review started by ${by} at ${t}` };
+  return { event: 'review_started', text: `Review started by ${by} at ${t}` };
 }
 
 export function review({ fm }, verdict, { by, comments } = {}) {
@@ -213,9 +226,9 @@ export function closeItem({ fm }, by, summary) {
 // the "❌ ") or {event, text} (event 'state_change' and no text when no action was asked).
 const REFINEMENT_STEPS = ['refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision'];
 // the agent each step acts as (item 033: a member acts only as itself)
-const ACTS_AS = { claim: a => a.claim, release: a => a.by || a.release, reassign: a => a.by, 'request-review': (a, fm) => fm.claimed_by,
+const ACTS_AS = { claim: a => a.claim, release: a => a.by || a.release, reassign: a => a.by, 'reassign-review': a => a.by, 'request-review': (a, fm) => fm.claimed_by,
   close: (a, fm) => a.by || fm.claimed_by, 'waiting-done': (a, fm) => a.by || fm.claimed_by };
-const ACTIONS = ['reassign', 'refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
+const ACTIONS = ['reassign', 'reassign-review', 'refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
   'claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done'];
 export function step(a, { fm, body, slug, folder, repo, incomplete, given, before = fm }) {
   const actions = ACTIONS.filter(k => a[k]);
@@ -259,6 +272,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
       case 'claim': return claim(item, a.claim, { force: a.force });
       case 'release': return release(item, a.release, { by: a.by, reason: a.reason });
       case 'reassign': return reassign(item, a.reassign, { by: a.by, reason: a.reason });
+      case 'reassign-review': return reassignReview(item, a['reassign-review'], { by: a.by, reason: a.reason });
       case 'request-review': return requestReview(item, a['request-review'], note);
       case 'start-review': return startReview(item, a.by);
       case 'review': return review(item, a.review, { by: a.by, comments: a.comments });

@@ -103,7 +103,8 @@ test('parity with update.py and new_phase.py: --set-team, --team and the inherit
     out.push(step('update.py', 'update', ['1', '--claim', 'lead']));
     out.push(step('new_phase.py', 'new', [...NEW('child'), '--split-from', '1']));
     out.push(step('new_phase.py', 'new', [...NEW('other'), '--team', 't2']));
-    out.push(step('update.py', 'update', ['3', '--set-team', '']));
+    out.push(step('update.py', 'update', ['3', '--set-team', 't3'])); // another team; clearing the team of an item in a stage is refused (item 036)
+    out.push(step('update.py', 'update', ['1', '--set-team', '']));
     const items = ['001-work-item', '002-child', '003-other'].map(s => Object.fromEntries(KEYS.map(k => [k, fm(f, s)[k]])));
     return { out, items };
   });

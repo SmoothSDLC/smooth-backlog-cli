@@ -131,7 +131,7 @@ test('the review-hitl stage: an owner decision holds the item and its dependents
   const c = make(f, 'needs a decision', '--split-from', w);
   const dep = make(f, 'waits for it', '--depends-on', c.split('-')[0]);
   up(f, dep, '--set-team', 't1'); // a work item of t1 without a stage: claimable but for its dependency
-  const Q = 'What: keep the old format?\nWhy: the parser needs it.\n## Options\nA keep, B drop.\n## Review by users\nRecommendation: A.'; // the whole question, its own headings included
+  const Q = 'What: keep the old format?\nWhy: the parser needs it.\n## Options\nA keep, B drop.\n## Review by users at 2026-10-01T10:00:00Z\nDECISION 2026-10-01: an earlier answer, quoted\nRecommendation: A.'; // the whole question, its own headings included
   no(f, ['update', c, '--request-decision', Q], '--request-decision needs --by <agent>');
   no(f, ['update', c, '--request-decision', ' ', '--by', 'cody'], '--request-decision needs the question');
   no(f, ['update', make(f, 'plain'), '--request-decision', Q, '--by', 'cody'], 'only a team item before ready waits for an owner decision (team none, stage none)');
@@ -260,9 +260,11 @@ test('refine-done is refused while a field or the definition of done is missing;
   no(f, ['update', c, '--claim', 'cody', '--force'], 'incomplete item, missing definition_of_done');
   no(f, ['update', c, '--status', 'in_progress', '--by', 'cody'], '--status refused'); // nothing but a refinement while incomplete
   no(f, ['update', c, '--append', 'some notes', '--by', 'cody'], '--append refused'); // text that is no definition of done
-  up(f, c, '--append', 'ESTIMATE: 5 min, complexity low', '--by', 'cody'); // an estimate line is refinement, and no definition of done
+  up(f, c, '--append', '  ESTIMATE: 5 min, complexity low', '--by', 'cody'); // an estimate line (indented, too) is refinement, and no definition of done
   no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing definition_of_done');
-  no(f, ['update', c, '--set-team', '', '--status', 'in_progress', '--by', 'cody'], '--status refused'); // clearing the team in the same call does not lift the rule
+  no(f, ['update', c, '--set-team', '', '--status', 'in_progress', '--by', 'cody'], 'an item in stage refining keeps a team'); // clearing the team does not lift the rule
+  no(f, ['update', c, '--set-team', ''], 'an item in stage refining keeps a team'); // nor on its own
+  no(f, ['update', c, '--set-team', 't9', '--status', 'in_progress', '--by', 'cody'], '--status refused'); // another team in the same call: the rule reads the item as it was
   up(f, c, '--summary', 'a better summary', '--by', 'cody'); // the text fields are refinement
   up(f, c, '--append', DOD, '--by', 'cody');
   up(f, c, '--refine-done', '--by', 'cody', '--note', 'definition of done written');

@@ -69,6 +69,27 @@ Retain the returned GUID for subsequent commands if priorities may change.
 - CLI environment variables reach child processes, not the invoking shell. If Git
   cannot determine a branch, provide --branch or set BACKLOG_CLI_BRANCH in the shell.
 
+## Shared mode: team work
+
+With the shared backlog repository (`backlog --use-backlog-repo <path>`) the commands are `new`, `update`,
+`query`, `next`, `pop`, `work`, `move` and `archive`; `backlog <command> --help` is the contract. A team member
+sees and changes the backlog only through them.
+
+- [ ] Next work: `backlog work --agent <you> --json` gives the one next action, marks the item as yours (claim,
+  refinement start or review start) and prints the whole item. `backlog query --phase <item> --agent <you>`
+  reads one item again before you change it.
+- [ ] Refine: `backlog update <item> --refine-start --by <you>`, set what is missing (`--set-review-refs` with
+  the coding model's review documents, `--set-estimate`, `--set-depends-on`, `--append` a definition of done), then
+  `--refine-done --by <you> --note "<what you refined>"`.
+- [ ] Work and hand off: record each step with `--append`, then `--request-review any --note "<commits,
+  evidence>"`. A review is `--review pass|changes --by <you> --comments` citing one of the item's review_refs;
+  the claimer closes with `--close --summary`.
+- [ ] When the output says END THE SESSION NOW, reply with text only and make no further tool call.
+
+Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign`,
+`--reassign-review`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the
+owner's `--decision`.
+
 ## Skill validation
 
 Run `python scripts/validate-skill.py` after modifying the skill package. It checks

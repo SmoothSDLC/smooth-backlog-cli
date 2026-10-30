@@ -19,7 +19,7 @@ import { REVIEW_DIR, asList, heldItems, needsReview, teamLead, teamScope } from 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team'];
 const BOOL = ['dry-run'];
-const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason'];
+const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason', 'reassign-review'];
 const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close', 'refine-start', 'refine-done', 'request-refinement-review'];
 const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'], 'set-chunk': ['yes', 'no'], 'refinement-review': ['pass', 'changes', 'limit'] };
 
@@ -193,7 +193,11 @@ async function change(a, con, folder, repo) {
   }
   const incomplete = missingFields(fm, body); // as the item is before this call
   const before = { team: fm.team, stage: fm.stage };
-  if (a['set-team'] !== undefined) { const name = strip(a['set-team']); fm.team = name; changes.team = name || 'none'; } // update.py:255-258
+  if (a['set-team'] !== undefined) { // update.py:255-258
+    const name = strip(a['set-team']);
+    if (!name && fm.stage) return refuse(`${row.slug}: an item in stage ${fm.stage} keeps a team (the stages are team work); set another team instead`); // beyond the oracle (Codex review of item 036)
+    fm.team = name; changes.team = name || 'none';
+  }
   if (a['set-chunk'] !== undefined) { fm.chunk = a['set-chunk'] === 'yes'; changes.chunk = a['set-chunk']; } // update.py:259-261
   for (const [k, v] of [['estimate_min', a['set-estimate'] === undefined ? undefined : pyInt(a['set-estimate'])], ['complexity', a['set-complexity']], ['layer', a['set-layer']]]) {
     if (v === undefined) continue;
@@ -277,14 +281,18 @@ async function change(a, con, folder, repo) {
   // item 033 (spec section 7): the hand-off to review, a changes verdict and a close end the agent's session, unless it
   // is the lead or still holds another active item
   const ender = event === 'review_requested' ? holder : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
-  if (ender && ender !== teamLead() && !heldItems(folder, ender).some(h => h.slug !== row.slug && h.state === 'active')) say(shutdown(ender));
+  const ends = ender && ender !== teamLead() && !heldItems(folder, ender).some(h => h.slug !== row.slug && h.state === 'active');
   if (completing) {
     say('   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).');
     if (order.length) say(`      backlog now ${order.length} item(s), P0..P${order.length - 1}; next = P0 ${order[0][0]}`);
     else say('      backlog now empty — no actionable phase remains.');
-    say('      RE-EVALUATE the order now (it is a planning step even if nothing changes):');
-    say('        backlog update <phase> --priority <rank>      # promote/demote one');
-    say('        backlog update --replan "<id,id,id,...>"       # set the leading order');
+    if (ends) say('      the team lead re-evaluates the order (backlog update --replan, --priority); not you');
+    else {
+      say('      RE-EVALUATE the order now (it is a planning step even if nothing changes):');
+      say('        backlog update <phase> --priority <rank>      # promote/demote one');
+      say('        backlog update --replan "<id,id,id,...>"       # set the leading order');
+    }
   }
+  if (ends) say(shutdown(ender)); // the last line of the output
   return 0;
 }

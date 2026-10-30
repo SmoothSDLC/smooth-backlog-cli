@@ -174,7 +174,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     }
   }
   if (lead && plain()) { // item 033: a stale review of its team is the lead's to hand on (members never take it over); before its own plain work, never before its close or rework
-    const x = own.find(({ fm }) => team.staleReview(fm) && fm.reviewer !== me);
+    const x = own.find(({ fm, undone }) => team.staleReview(fm) && fm.reviewer !== me && !undone.some(d => d.foreign && d.item?.status !== 'done')); // nor one waiting on another repository (042)
     if (x) act = { name: 'reassign-review', r: x.r, f: x.f, say: `the review of ${x.r.seq} by ${x.fm.reviewer} is stale (started ${x.fm.review_started}): hand it on: backlog update ${x.r.slug} --reassign-review <member> --by ${me} --reason "<why>"` };
   }
   if (!act && lead) { // the lead refines an incomplete item (never actions it): after complete work, before chunk

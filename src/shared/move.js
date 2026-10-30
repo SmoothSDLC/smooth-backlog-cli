@@ -5,7 +5,7 @@
 // must be a plain owner/name (the oracle joins any text onto the home).
 // shortcut: argparse's unique-prefix abbreviations are not accepted; the target number
 // comes from store.nextSeq (phases/, archive/ and the db) where move.py:35-37 ignores archive/.
-import { readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { die, find, pyStr, refuse, say, teamRefusal, usage, valueLike, withBacklog } from './archive.js';
@@ -14,7 +14,7 @@ import { parse as parseDoc } from './frontmatter.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
-import { asList, teamScope } from './team.js';
+import { asList, isForeign, teamScope } from './team.js';
 import { inProgress, wipRefusal } from './wip.js';
 
 const VALUE = ['to-branch', 'all-open-of-branch', 'note'];
@@ -141,6 +141,9 @@ async function move(a, con, ctx) {
   // beyond move.py parity: items of this backlog that list the item (by number or slug, as update --set-depends-on stores it) would be left pointing at nothing
   const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && asList(i.fm.depends_on).some(d => find(con, d)?.id === r.id)).map(i => i.fm.phase ?? i.path);
   if (dependents.length) return refuse(`${dependents.join(', ')} depend${dependents.length > 1 ? '' : 's'} on ${r.slug}, which would leave their depends_on pointing at nothing; clear them first: update <dependent> --set-depends-on ... (the other dependencies, or none)`);
+  // item 042: items of other repositories that name it as owner/name#seq would point at nothing too
+  const elsewhere = foreignDependents(home, repo, r.seq);
+  if (elsewhere.length) return refuse(`${elsewhere.join(', ')} of other repositories depend${elsewhere.length > 1 ? '' : 's'} on ${repo}#${r.seq} (${r.slug}), which would leave them pointing at nothing; clear them first in their repositories: update <dependent> --set-depends-on ...`);
   if (inProgress(fm)) { const full = wipRefusal(tdir, target, { ...fm, repository: target }, fm.claimed_by || fm.refiner || '', r.slug, [], { repository: repo, slug: r.slug }); if (full) return refuse(`${r.slug}: in progress, and in ${target}: ${full}`); } // item 034
   const tail = `-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;
   const seq = store.nextSeqFor(tdir, `${tail}.md`); // never a number whose file name the target already holds
@@ -179,4 +182,21 @@ async function move(a, con, ctx) {
   folders.push(tdir); // ONE commit and push covers the source and the target: never one pushed without the other
   say(`✅ ${r.slug} moved to ${target} as ${slug}`);
   return 0;
+}
+
+// item 042: owner/name#seq of the items in the backlog home outside `repo` whose depends_on names repo#seq
+function foreignDependents(home, repo, seq) {
+  const out = [];
+  let owners = []; try { owners = readdirSync(home, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')); } catch { return out; }
+  for (const o of owners) {
+    let names = []; try { names = readdirSync(join(home, o.name), { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')); } catch { continue; }
+    for (const n of names) {
+      const id = `${o.name}/${n.name}`;
+      if (id === repo || !existsSync(join(home, o.name, n.name, 'phases'))) continue;
+      for (const i of store.load(join(home, o.name, n.name))) {
+        if (asList(i.fm.depends_on).some(d => isForeign(d) && String(d).trim().replace(/#0*(\d+)$/, '#$1') === `${repo}#${Number(seq)}`)) out.push(`${id}#${i.fm.seq}`);
+      }
+    }
+  }
+  return out;
 }

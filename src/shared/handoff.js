@@ -39,8 +39,8 @@ export function makeReceipt({ dependent, digest, result, by, at, checks }) {
 // JSON string in its list (handoffs: ["{...}"], handoff_receipts: ["{...}"]). encode is the string; decodeList reads it back.
 export const encode = obj => JSON.stringify(obj);
 // The stored form of handoffs / handoff_receipts as an array of objects: a list of JSON strings (in-memory objects pass
-// through), the string 'none' or an empty list to [], a missing key to null - the one shape edgeState needs to tell a
-// legacy producer (no handoffs key) from a no-dependents one ('none').
+// through), the string 'none' or an empty list to [], a missing key or a present key with no value to null; edgeState
+// tells a legacy producer (no handoffs key) from a present-but-empty one by the key's presence.
 export function decodeList(value) {
   if (value == null) return null;
   if (typeof value === 'string') return ['', 'none'].includes(strip(value).toLowerCase()) ? [] : [JSON.parse(value)];
@@ -50,19 +50,23 @@ export function decodeList(value) {
 
 // The state of the edge from the producer (its front matter) to dependentId, the dependent as the producer's
 // repository names it (its seq, or owner/name#seq for another repository): legacy (a done producer without a
-// handoffs key: closed before the rule), missing (no record for the dependent, including handoffs: none),
-// unaccepted (a record, no receipt), stale (the last receipt pins another digest), rejected or accepted (the
-// last receipt of the current record). Only accepted and legacy satisfy the edge.
+// handoffs key: closed before the rule), missing (no record for the dependent, including handoffs: none and a
+// present but empty handoffs key), unaccepted (a record, no receipt), stale (the last receipt pins another digest,
+// or a record or receipt has no digest), rejected or accepted (the last receipt of the current record). Only
+// accepted and legacy satisfy the edge.
 export function edgeState(producerFm, dependentId) {
-  const records = decodeList(producerFm.handoffs); // null: no handoffs key - a done producer predates the rule
-  if (records === null) return producerFm.status === 'done' ? 'legacy' : 'missing';
+  const records = decodeList(producerFm.handoffs);
+  if (records === null) {
+    // the codec gives null for a missing key and for a present key with no value; only the missing key is the legacy mark
+    return Object.hasOwn(producerFm, 'handoffs') ? 'missing' : producerFm.status === 'done' ? 'legacy' : 'missing';
+  }
   if (!records.length) return 'missing'; // handoffs: none, or a list without a record for the dependent
   const record = records.filter(r => r && r.dependent === dependentId).at(-1);
   if (!record) return 'missing';
   const receipts = (decodeList(producerFm.handoff_receipts) ?? []).filter(r => r && r.dependent === dependentId);
   const last = receipts.at(-1);
   if (!last) return 'unaccepted';
-  if (last.digest !== record.digest) return 'stale';
+  if (empty(record.digest) || last.digest !== record.digest) return 'stale'; // an absent digest pins nothing, so undefined !== undefined
   return last.result === 'accepted' ? 'accepted' : 'rejected'; // only an acceptance of the current record satisfies the edge
 }
 
@@ -113,14 +117,16 @@ export function openEdges(folder, repoId, producerFm) {
 }
 
 // The producer record as the method's DEPENDENCY_HANDOFF v1 body block (source: <owner>/<name>#<seq> of the
-// producer), appended to the producer's item body.
-export function recordBlock(record, source) {
+// producer), appended to the producer's item body. branch is the producer item's branch (the record has no branch
+// field); the method doc's inline SESSION sub-field is omitted (the record has no session; the lead's own
+// producer-block format omits it).
+export function recordBlock(record, source, branch = '') {
   return [
     'DEPENDENCY_HANDOFF v1',
     `SOURCE_ITEM: ${source}`,
     `DEPENDENT_ITEM: ${record.dependent}`,
     `PRODUCER_AGENT: ${record.by}`,
-    `SOURCE_COMMIT: ${record.commit}`,
+    `SOURCE_COMMIT: ${record.commit}${branch ? ` ; BRANCH: ${branch}` : ''}`,
     `CONTRACT: ${record.contract}`,
     `OUTPUTS: ${record.outputs}`,
     `VERIFICATION: ${record.verification}`,
@@ -131,18 +137,16 @@ export function recordBlock(record, source) {
   ].join('\n') + '\n';
 }
 
-// The lead's receipt as the method's HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body block, appended to the
-// producer's item body.
+// The lead's receipt as the method's HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body block (its field names
+// HANDOFF_REVISION / REVIEWER_LEAD / UTC / RESULT, no END line), appended to the producer's item body.
 export function receiptBlock(receipt, source) {
   const kind = receipt.result === 'accepted' ? 'ACCEPTED' : 'REJECTED';
   return [
     `HANDOFF_${kind} v1`,
-    `SOURCE_ITEM: ${source}`,
-    `DEPENDENT_ITEM: ${receipt.dependent}`,
-    `DIGEST: ${receipt.digest}`,
+    `SOURCE_ITEM: ${source} ; DEPENDENT_ITEM: ${receipt.dependent}`,
+    `HANDOFF_REVISION: ${receipt.digest}`,
+    `REVIEWER_LEAD: ${receipt.by}`,
     `CHECKS: ${receipt.checks}`,
-    `BY: ${receipt.by}`,
-    `AT: ${receipt.at}`,
-    `END_HANDOFF_${kind}`,
+    `UTC: ${receipt.at} ; RESULT: ${kind}`,
   ].join('\n') + '\n';
 }

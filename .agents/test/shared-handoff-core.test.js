@@ -125,6 +125,28 @@ test('059.1: edgeState accepts the stored front-matter form: records and receipt
   assert.equal(handoff.satisfied(st({ handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', rec.digest))] })), true);
 });
 
+test('059.1: edgeState tells a present but empty handoffs key from an absent key, in the stored form (review r2)', () => {
+  const st = fm => handoff.edgeState(fm, '64');
+  assert.equal(st({ status: 'done', handoffs: null }), 'missing', 'a done producer whose handoffs key exists but is empty holds no record for the dependent');
+  assert.equal(handoff.satisfied(st({ status: 'done', handoffs: null })), false, 'and it does not satisfy the edge');
+  assert.equal(st({ status: 'pending', handoffs: null }), 'missing');
+  assert.equal(st({ status: 'done' }), 'legacy', 'the legacy mark stays reserved for an absent key');
+  const back = parse(dump({ status: 'done', handoffs: null }, '## Definition of done\n\n- [ ] x\n')).fm;
+  assert.equal(back.handoffs, null, 'the codec stores a present empty key as null, distinct from an absent key');
+  assert.equal(handoff.edgeState(back, '64'), 'missing', 'the stored form of a present but empty key is missing, not legacy');
+});
+
+test('059.1: edgeState keeps the edge unsatisfied while the record or the last receipt has no digest (review r2)', () => {
+  const noDigest = { dependent: '64', commit: COMMIT, contract: 'the exported functions', verification: 'npm test: 0 failures', outputs: '', pickup: '', risks: 'NONE', by: 'cody-card3', at: '2026-10-30T20:00:00Z' };
+  const acceptNoDigest = { dependent: '64', result: 'accepted', by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' };
+  const st = (handoffs, handoff_receipts) => handoff.edgeState({ status: 'done', handoffs, handoff_receipts }, '64');
+  assert.equal(st([noDigest], [acceptNoDigest]), 'stale', 'two undefined digests must not compare as a pin');
+  assert.equal(handoff.satisfied(st([noDigest], [acceptNoDigest])), false, 'an accepted receipt without a digest does not satisfy the edge');
+  assert.equal(st([handoff.encode(noDigest)], [handoff.encode(acceptNoDigest)]), 'stale', 'the stored form of the same case');
+  assert.equal(st([record('64')], [acceptNoDigest]), 'stale', 'a receipt without a digest pins no record');
+  assert.equal(st([noDigest], [receipt('64', record('64').digest)]), 'stale', 'a record without a digest is pinned by no receipt');
+});
+
 test('059.1: satisfied is accepted and legacy only', () => {
   assert.equal(handoff.satisfied('accepted'), true);
   assert.equal(handoff.satisfied('legacy'), true);
@@ -211,8 +233,26 @@ test('059.1: openEdges accepts the stored front-matter form and gives the same o
   ]);
 });
 
-test('059.1: recordBlock is the DEPENDENCY_HANDOFF v1 body block of the method', () => {
+test('059.1: recordBlock is the DEPENDENCY_HANDOFF v1 body block of the method, with the item branch (review r2)', () => {
   const r = record('64');
+  // the method doc's block carries the producer's branch on the SOURCE_COMMIT line; the record has no branch
+  // field, so the CLI passes the producer item's branch, and the inline SESSION sub-field is omitted (the lead's
+  // own "How you work" producer block omits it too)
+  assert.equal(handoff.recordBlock(r, 'SmoothSDLC/smooth-backlog-cli#63', 'team-cli-parity-1'), [
+    'DEPENDENCY_HANDOFF v1',
+    'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63',
+    'DEPENDENT_ITEM: 64',
+    'PRODUCER_AGENT: cody-card3',
+    `SOURCE_COMMIT: ${COMMIT} ; BRANCH: team-cli-parity-1`,
+    'CONTRACT: the exported functions',
+    'OUTPUTS: ',
+    'VERIFICATION: npm test: 0 failures',
+    'REVIEW: pending',
+    'PICKUP: ',
+    'OPEN_RISKS: NONE',
+    'END_DEPENDENCY_HANDOFF',
+    '',
+  ].join('\n'));
   assert.equal(handoff.recordBlock(r, 'SmoothSDLC/smooth-backlog-cli#63'), [
     'DEPENDENCY_HANDOFF v1',
     'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63',
@@ -230,29 +270,25 @@ test('059.1: recordBlock is the DEPENDENCY_HANDOFF v1 body block of the method',
   ].join('\n'));
 });
 
-test('059.1: receiptBlock is the HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body block', () => {
+test('059.1: receiptBlock is the HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body block of the method (review r2)', () => {
   const digest64 = 'd'.repeat(64);
   assert.equal(handoff.receiptBlock(receipt('64', digest64), 'SmoothSDLC/smooth-backlog-cli#63'), [
     'HANDOFF_ACCEPTED v1',
-    'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63',
-    'DEPENDENT_ITEM: 64',
-    `DIGEST: ${digest64}`,
+    'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63 ; DEPENDENT_ITEM: 64',
+    `HANDOFF_REVISION: ${digest64}`,
+    'REVIEWER_LEAD: lead',
     'CHECKS: npm test: 0 failures',
-    'BY: lead',
-    'AT: 2026-10-30T21:00:00Z',
-    'END_HANDOFF_ACCEPTED',
+    'UTC: 2026-10-30T21:00:00Z ; RESULT: ACCEPTED',
     '',
   ].join('\n'));
   const rej = handoff.makeReceipt({ dependent: '64', digest: digest64, result: 'rejected', by: 'lead', at: '2026-10-30T21:05:00Z', checks: 'npm test failed: 2' });
   assert.equal(handoff.receiptBlock(rej, 'SmoothSDLC/smooth-backlog-cli#63'), [
     'HANDOFF_REJECTED v1',
-    'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63',
-    'DEPENDENT_ITEM: 64',
-    `DIGEST: ${digest64}`,
+    'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63 ; DEPENDENT_ITEM: 64',
+    `HANDOFF_REVISION: ${digest64}`,
+    'REVIEWER_LEAD: lead',
     'CHECKS: npm test failed: 2',
-    'BY: lead',
-    'AT: 2026-10-30T21:05:00Z',
-    'END_HANDOFF_REJECTED',
+    'UTC: 2026-10-30T21:05:00Z ; RESULT: REJECTED',
     '',
   ].join('\n'));
 });

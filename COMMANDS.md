@@ -845,8 +845,8 @@ Options:
 
 Exit codes:
   0  continue or claim: the lead holds the item.
-  1  A command it ran failed for another reason than a refused claim (the reason is printed), or the item changed
-     before it could be shown: run it again.
+  1  A command it ran failed for another reason than a refused claim, a synchronisation failure included (the reason
+     is printed), or the item changed before it could be shown: run it again.
   2  Invalid input: a missing --team, an agent other than the lead, another team than TEAM_NAME.
   3  idle: no work item of the team to take.
 

@@ -40,8 +40,10 @@ export async function run(argv) {
   const me = caller(); // a qwen-code team identity (name@team), as backlog work: a bare QWEN_CODE_AGENT_ID is an actor id, no team member
   if (me && me !== agent) return die(`you are ${me} (QWEN_CODE_AGENT_ID): team pop answers only for yourself, not for ${agent}`);
   if (teamName() && teamName() !== a.team) return die(`this session is team ${teamName()} (TEAM_NAME), not ${a.team}`);
+  // every failure of a command it runs is exit 1 with its reason: exit 3 is idle only (Codex review 2 of 056)
+  const fail = r => { process.stderr.write(r.stderr); return die(`team pop stopped: ${last(r)}`, 1); };
   const fresh = self(['query', '--status', '--json']); // pulls the backlog clone
-  if (fresh.status !== 0) { process.stdout.write(fresh.stdout); process.stderr.write(fresh.stderr); return fresh.status || 1; }
+  if (fresh.status !== 0) return fail(fresh);
   let own; let branch;
   try { own = teamScope().repo || repoId(process.cwd()); branch = gitBranch(process.cwd()); } catch (e) { return die(e.message); }
   const order = (x, y) => (Number(x.fm.priority ?? 1e9) - Number(y.fm.priority ?? 1e9)) || (Number(x.fm.seq) - Number(y.fm.seq));
@@ -54,14 +56,14 @@ export async function run(argv) {
   let action = 'idle'; let item = null;
   const held = work.find(i => strip(i.fm.claimed_by || '') === agent);
   if (held) { action = 'continue'; item = held.fm.phase; }
-  // a failed command other than a refused claim (exit 1) is no reason to skip an item: it ends the command (Codex review of 056)
-  const fail = r => { process.stderr.write(r.stderr); return die(`team pop stopped: ${last(r)}`, r.status || 1); };
+  // a refused claim is update's refusal (exit 1, '❌ <item>: <why>' on stdout); any other failure ends the command (Codex review of 056)
+  const refused = r => r.status === 1 && /^❌ /m.test(r.stdout) && !/❌ backlog:/.test(r.stderr);
   for (const i of held ? [] : work.filter(x => !strip(x.fm.claimed_by || ''))) {
     const r = read(i.fm.phase);
     if (r.status !== 0) return fail(r);
     const c = self(['update', i.fm.phase, '--claim', agent]);
     if (c.status === 0) { action = 'claim'; item = i.fm.phase; if (c.stderr) process.stderr.write(c.stderr); break; }
-    if (c.status !== 1) return fail(c);
+    if (!refused(c)) return fail(c);
     skipped.push({ item: i.fm.phase, reason: last(c) });
   }
   let shown = null;
@@ -70,7 +72,8 @@ export async function run(argv) {
     try { shown = JSON.parse(q.stdout); } catch { shown = null; }
     if (q.status !== 0 || !shown) return fail(q); // only the reason: the read's own output names the item's file
     const f = shown.front_matter || {};
-    if (strip(f.claimed_by || '') !== agent || strip(f.team || '') !== a.team || f.stage || !OPEN.includes(f.status)) {
+    if (strip(f.claimed_by || '') !== agent || strip(f.team || '') !== a.team || f.stage || !OPEN.includes(f.status)
+      || f.repository !== own || (branch && f.branch !== branch)) {
       return die(`${item} changed before team pop could show it (claimed by ${f.claimed_by || 'nobody'}, status ${f.status}); run backlog team pop again`, 1);
     }
   }

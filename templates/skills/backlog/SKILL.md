@@ -22,12 +22,13 @@ CLI owns validation, priority normalization, storage locking, and update checks.
 
 ## Prerequisites
 
-Work inside the target Git working tree with an initialized `.backlog/` folder.
+Local mode: work inside the target Git working tree with an initialized `.backlog/` folder. Shared backlog repository
+mode (every SmoothSDLC repository): see "Shared mode: team work" below; its commands differ.
 When the `backlog` command is missing, run `bash <this skill folder>/scripts/install-backlog-cli.sh` from inside the
 repository: it installs or updates the CLI, then runs `backlog setup` with its arguments (`--ask` asks for the path).
 Run `backlog --help` for the installed command contract. Before unfamiliar operations, read references/commands.md for exact syntax.
 
-## Workflow
+## Workflow (local mode)
 
 - [ ] Inspect: run `backlog --json` to identify the next active item. To inspect
   all current work, run `backlog list --json`. For an independently validated
@@ -61,7 +62,7 @@ Retain the returned GUID for subsequent commands if priorities may change.
 - Entry numbers inside tasks/outcomes/evidence/references start at 1.
 - States are new/open/done/archived. Done and archive rows have GUIDs and no priority.
   Reopening done work puts it first; ordinary new and moved work goes last.
-- `--force` is only a whole-list `set` replacement option. It is invalid for
+- In local mode, `--force` is only a whole-list `set` replacement option. It is invalid for
   archiving and initialization. To edit another branch, work in that branch.
   List/import may select another branch; move explicitly transfers one item.
 - `init clean` removes the ENTIRE backlog, including all branches and backups.
@@ -86,8 +87,8 @@ sees and changes the backlog only through them.
 - [ ] Refine: `backlog update <item> --refine-start --by <you>`, set what is missing (`--set-review-refs` with
   the coding model's review documents, `--set-estimate`, `--set-depends-on`, `--append` a definition of done), then
   `--refine-done --by <you> --note "<what you refined>"`.
-- [ ] Work and hand off: record each step with `--append`; blocked on something, `--waiting "<what>"`, then
-  `--waiting-done`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review
+- [ ] Work and hand off: record each step with `--append`; blocked on something, `--waiting "<what>" --by <you>`,
+  then `--waiting-done --by <you>`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review
   --by <you>`, then `--review pass|changes --by <you> --comments` citing one of the item's review_refs; the claimer
   closes with `--close --summary`.
 - [ ] Your review request, a changes verdict you give and your close end your session: the output's last line says
@@ -97,14 +98,15 @@ sees and changes the backlog only through them.
   item on with `--request-refinement-review --by <you>`, record the verdict with `--refinement-review
   pass|changes|limit --by codex|claude --comments`; ask the owner with `--request-decision "<question>" --by <you>`
   (`backlog query --decisions` lists them; the owner answers with `--decision "<answer>"`); `backlog query --plan` is
-  the team's dispatch plan.
+  the team's dispatch plan; re-rank with `--replan "<id,id,...>"` or `--priority <rank>`, and `--set-team <team>`
+  gives an item to a team.
 
 Work-in-progress limits (wip-limits.json in the backlog repository) refuse a claim or a refinement start past
 them; `backlog query --wip` shows the counts. Only the team lead lifts a team or agent limit for one item
 (`--wip-override "<reason>" --by <lead>`).
 
 Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign <agent> --reason
-"<why>"`, `--reassign-review <agent> --reason "<why>"`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the
+"<why>" --by <lead>`, `--reassign-review <agent> --reason "<why>" --by <lead>`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the
 owner's `--decision`.
 
 ## Skill validation

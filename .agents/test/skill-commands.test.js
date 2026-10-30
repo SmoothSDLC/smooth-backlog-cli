@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { HELP } from '../../src/help.js';
 import { TEAM_BOOL, TEAM_VALUE } from '../../src/shared/update.js';
 
 const dir = fileURLToPath(new URL('../../templates/skills/backlog/', import.meta.url));
@@ -18,9 +19,13 @@ test('040: every team flag of backlog update and every team command is in the sk
   const missing = [...TEAM_VALUE, ...TEAM_BOOL].filter(f => !NOT_TAUGHT.has(f) && !new RegExp(`--${f}(?![\\w-])`).test(skill));
   assert.deepEqual(missing, [], `flags missing from SKILL.md: ${missing.join(', ')}`);
   for (const c of ['backlog setup', 'backlog work --agent', 'backlog query --phase', 'backlog new --split-from', 'backlog query --plan', 'backlog query --decisions', 'backlog query --wip']) assert.ok(skill.includes(c), c);
-  const shared = [...readFileSync(fileURLToPath(new URL('../../COMMANDS.md', import.meta.url)), 'utf8').matchAll(/^### backlog (\S+)$/gm)].map(m => m[1]);
+  // every command of help.js and of COMMANDS.md, and every flag of the update help that a team session or the lead uses
+  const shared = [...new Set([...Object.keys(HELP), ...[...readFileSync(fileURLToPath(new URL('../../COMMANDS.md', import.meta.url)), 'utf8').matchAll(/^### backlog (\S+)$/gm)].map(m => m[1])])];
   assert.ok(shared.length >= 9, shared.join());
-  assert.deepEqual(shared.filter(c => !skill.includes(`\`${c}\``) && !skill.includes(`backlog ${c}`)), [], 'every shared-mode command of COMMANDS.md is named');
+  assert.deepEqual(shared.filter(c => !skill.includes(`\`${c}\``) && !skill.includes(`backlog ${c}`)), [], 'every shared-mode command is named');
+  const teamFlags = HELP.update.split(/\n(?= {2}--)/).filter(b => /team session|lead/.test(b)).map(b => /^ {2}--([\w-]+)/.exec(b)?.[1]).filter(Boolean);
+  assert.ok(teamFlags.length >= 15, teamFlags.join());
+  assert.deepEqual(teamFlags.filter(f => !NOT_TAUGHT.has(f) && !new RegExp(`--${f}(?![\\w-])`).test(skill)), [], 'every team flag of the update help is taught');
   assert.match(skill, /review request, a changes verdict you give and your close end your session/);
   assert.match(skill, /END THE SESSION NOW/);
   assert.match(skill, /Act only as yourself/);

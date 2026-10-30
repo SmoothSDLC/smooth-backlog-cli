@@ -1,4 +1,4 @@
-import { promises as fs, closeSync, openSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { promises as fs, closeSync, openSync, readFileSync, rmSync, statSync, writeSync } from 'node:fs';
 import { join, relative, resolve, dirname, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
@@ -29,6 +29,14 @@ let tookOver = false;
 // item 025: the record names the agent (--by or --agent of the command, else QWEN_CODE_AGENT_ID or the user) and the time
 const argOf = flag => { const v = process.argv.find((x, i) => process.argv[i - 1] === flag) ?? process.argv.find(x => x.startsWith(`${flag}=`))?.slice(flag.length + 1); return v && !v.startsWith('--') ? v : ''; };
 const lockRecord = () => JSON.stringify({ pid: process.pid, host: hostname(), command: process.argv[2] ?? '', agent: (argOf('--by') || argOf('--agent') || process.env.QWEN_CODE_AGENT_ID || process.env.USER || '').trim(), since: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
+const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } };
+// A child that works under its parent's checkout adds itself to the record while it runs, and puts the parent's back.
+export async function asChild(path, fn) {
+  const parent = readFileSync(path, 'utf8');
+  const put = async text => { const tmp = `${path}.${randomUUID()}.tmp`; try { await fs.writeFile(tmp, text, { mode: 0o600 }); await fs.rename(tmp, path); } finally { await fs.rm(tmp, { force: true }); } };
+  await put(JSON.stringify({ ...JSON.parse(parent), child: process.pid }));
+  try { return await fn(); } finally { await put(parent); }
+}
 // The lock file appears with its whole record or not at all (a temp file linked, or renamed over a dead holder's), so a
 // crash never leaves an empty lock behind.
 async function placeLock(path, replace) {
@@ -47,12 +55,16 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
     const marker = `${path}.takeover`; let fd;
     try { fd = openSync(marker, 'wx'); } catch (e) {
       if (e.code !== 'EEXIST') throw e;
-      // shortcut: a takeover suspended for over 30 s between its check and its rename loses the marker; a host that
-      // stalls a process that long has bigger trouble. Upgrade: an fd lock (flock) when Node has one.
-      try { if (Date.now() - statSync(marker).mtimeMs > 30000) rmSync(marker, { force: true }); } catch { /* gone already */ }
+      // the marker names its owner: it is removed only when that process is gone (a stalled owner keeps it), or, without
+      // a readable owner (an older CLI), when it is older than 30 s
+      try {
+        const [pid, host] = readFileSync(marker, 'utf8').split('@');
+        const gone = Number(pid) > 0 ? host === hostname() && !alive(Number(pid)) : Date.now() - statSync(marker).mtimeMs > 30000;
+        if (gone) rmSync(marker, { force: true });
+      } catch { /* gone already */ }
       return false;
     }
-    closeSync(fd);
+    try { writeSync(fd, `${process.pid}@${hostname()}`); } finally { closeSync(fd); }
     try {
       if (!same()) return false;
       await placeLock(path, true);
@@ -74,7 +86,8 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
         operation(Number.isSafeInteger(record.pid) && record.pid > 0, `Invalid lock ${path}; inspect it before removing it.`);
         holder = ` (${record.agent ? `agent ${record.agent}, ` : ''}pid ${record.pid}${record.host && record.host !== hostname() ? ` on ${record.host}` : ''}${record.command ? `, command ${record.command}` : ''}${record.since ? `, since ${record.since}` : ''})`; // item 025: who holds it and since when
         try { if (!record.host || record.host === hostname()) process.kill(record.pid, 0); } catch (error) { // a pid of another host cannot be probed: it counts as alive
-          if (error.code === 'ESRCH') {
+          // a child working under its parent's checkout (pop --claim-now's update) keeps it alive after its parent died
+          if (error.code === 'ESRCH' && !(Number(record.child) > 0 && alive(Number(record.child)))) {
             // Another process may already own this pathname; never unlink a lock based on an old read.
             const current = JSON.parse(await fs.readFile(path, 'utf8'));
             if (current.pid !== record.pid) continue;

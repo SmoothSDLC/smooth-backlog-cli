@@ -8,7 +8,7 @@ import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readF
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { operation } from '../errors.js';
-import { locked } from '../storage.js';
+import { asChild, locked } from '../storage.js';
 import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
 import { actor, created, guarded, guardReflow } from './seen.js';
@@ -70,9 +70,10 @@ const lockPath = home => join(home, '.git', 'smooth-backlog-cli-run.lock');
 export const lockEnv = home => ({ BACKLOG_RUN_LOCK_HELD: `${lockPath(home)}:${process.pid}` });
 export function cloneLocked(home, fn) {
   const path = lockPath(home);
-  // shortcut: a child (pop --claim-now's update) runs under its parent's record; if the parent is killed while the child
-  // writes, a waiter can take the dead parent's lock over. Upgrade (the record lists the child) if that is ever seen.
-  if (held.has(path) || process.env.BACKLOG_RUN_LOCK_HELD === `${path}:${process.ppid}`) return guarded(fn);
+  if (held.has(path)) return guarded(fn);
+  // a child its holder runs and waits for (pop --claim-now's update) names itself in the record while it works, so a
+  // parent killed meanwhile leaves a live holder, never a lock to take over
+  if (process.env.BACKLOG_RUN_LOCK_HELD === `${path}:${process.ppid}`) return asChild(path, () => guarded(fn));
   // a normal update (pull, write, push over the network) can take a while: a command behind it waits, 120 s unless BACKLOG_LOCK_WAIT_MS says otherwise
   return locked(path, async () => {
     held.add(path);

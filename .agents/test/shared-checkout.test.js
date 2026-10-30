@@ -4,7 +4,8 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, gitIn } from './shared-concurrency.js';
@@ -82,4 +83,27 @@ test('025: two agents writing different items at once both succeed, and both cha
   assert.match(gitIn(f.t, '--git-dir', bare, 'show', 'main:acme/demo/phases/001-alpha.md'), /from amy/);
   assert.match(gitIn(f.t, '--git-dir', bare, 'show', 'main:acme/demo/phases/002-beta.md'), /from bob/);
   assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-run.lock')), false); // checked in: no record left
+});
+
+test('025: a dead parent whose child still works, or a takeover whose owner still runs, is waited for, not taken over', () => {
+  const f = fixture();
+  const lock = join(f.home, '.git', 'smooth-backlog-cli-run.lock');
+  const marker = `${lock}.takeover`;
+  const dead = spawnSync(process.execPath, ['-e', '0']).pid; // a pid that was alive a moment ago and is not now
+  const wait = { BACKLOG_LOCK_WAIT_MS: '600' };
+  writeFileSync(lock, JSON.stringify({ pid: dead, host: hostname(), command: 'pop', child: process.pid }));
+  const child = cli(['update', '1', '--append', 'x', '--by', 'amy'], { cwd: f.cons, tmp: f.t, env: wait });
+  assert.equal(child.status, 1, child.stdout + child.stderr);
+  assert.match(child.stderr, /locked by another process/);
+  assert.doesNotMatch(child.stderr, /took over/);
+  writeFileSync(lock, JSON.stringify({ pid: dead, host: hostname(), command: 'pop' }));
+  writeFileSync(marker, `${process.pid}@${hostname()}`); // a live takeover owner, however old its marker
+  const old = new Date(Date.now() - 60000); utimesSync(marker, old, old);
+  const stalled = cli(['update', '1', '--append', 'x', '--by', 'amy'], { cwd: f.cons, tmp: f.t, env: wait });
+  assert.equal(stalled.status, 1, stalled.stdout + stalled.stderr);
+  assert.ok(existsSync(marker));
+  writeFileSync(marker, `${dead}@${hostname()}`); // its owner gone: the marker goes, and the dead holder's lock is taken over
+  const r = cli(['update', '1', '--append', 'after', '--by', 'amy'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stderr, new RegExp(`took over a stale lock of process ${dead}`));
 });

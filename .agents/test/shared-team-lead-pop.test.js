@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
@@ -126,6 +127,10 @@ const WRAP = `import { spawnSync } from 'node:child_process'; import { existsSyn
 const bin = ${JSON.stringify(resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'))};
 const args = process.argv.slice(2); const e = process.env;
 if (e.FAIL_ON && args.join(' ').startsWith(e.FAIL_ON)) { process.stderr.write(e.FAIL_ERR + '\\n'); process.exit(Number(e.FAIL_RC)); }
+if (e.CLEAR_ON_READ && args[0] === 'query' && args.includes('--phase') && !existsSync(e.MOVE_MARK + '.cleared')) {
+  writeFileSync(e.MOVE_MARK + '.cleared', '1'); // another agent takes the item out of the team just before the lead reads it
+  spawnSync(process.execPath, [bin, 'update', args[args.indexOf('--phase') + 1], '--set-team', ''], { env: { ...e, QWEN_CODE_AGENT_ID: 'other', TEAM_NAME: '' } });
+}
 const r = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: e });
 let out = r.stdout;
 if (args[0] === 'update' && args.includes('--claim') && r.status === 0 && e.MOVE_AFTER_CLAIM) writeFileSync(e.MOVE_MARK, '1');
@@ -183,4 +188,16 @@ test('item 061: an item without depends_on names it; an item whose file is gone 
   assert.deepEqual(x.missing, ['review_refs', 'depends_on']);
   assert.equal(y.missing, null);
   assert.equal(JSON.parse(ok(f, ['query', '--phase', g, '--json']).stdout).missing, null);
+});
+
+test('team pop: an item taken out of the team before the read is skipped, never claimed; a detached HEAD is refused', () => {
+  const f = fixture();
+  const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
+  const s = make(f, 'work item'); ok(f, ['update', s, '--set-team', 't1']);
+  const p = pop(f, { BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'm'), CLEAR_ON_READ: '1' }, '--team', 't1');
+  assert.deepEqual([p.action, p.status, fm(f, s).team ?? '', fm(f, s).claimed_by], ['idle', 3, '', '']);
+  assert.match(p.skipped[0].reason, /changed since it was listed/);
+  spawnSync('git', ['checkout', '-q', '--detach'], { cwd: f.cons });
+  const r = run(f, ['team', 'pop', '--team', 't1']);
+  assert.equal(r.status, 2, r.stdout + r.stderr); assert.match(r.stderr, /team pop needs a branch/);
 });

@@ -40,18 +40,21 @@ export async function run(argv) {
   const me = caller(); // a qwen-code team identity (name@team), as backlog work: a bare QWEN_CODE_AGENT_ID is an actor id, no team member
   if (me && me !== agent) return die(`you are ${me} (QWEN_CODE_AGENT_ID): team pop answers only for yourself, not for ${agent}`);
   if (teamName() && teamName() !== a.team) return die(`this session is team ${teamName()} (TEAM_NAME), not ${a.team}`);
+  let own; let branch;
+  try { own = teamScope().repo || repoId(process.cwd()); branch = gitBranch(process.cwd()); } catch (e) { return die(e.message); }
+  if (!branch) return die('team pop needs a branch: check one out here or set TEAM_BRANCH (a detached HEAD names none)');
   // every failure of a command it runs is exit 1 with its reason: exit 3 is idle only (Codex review 2 of 056)
   const fail = r => { process.stderr.write(r.stderr); return die(`team pop stopped: ${last(r)}`, 1); };
   const fresh = self(['query', '--status', '--json']); // pulls the backlog clone
   if (fresh.status !== 0) return fail(fresh);
-  let own; let branch;
-  try { own = teamScope().repo || repoId(process.cwd()); branch = gitBranch(process.cwd()); } catch (e) { return die(e.message); }
   const order = (x, y) => (Number(x.fm.priority ?? 1e9) - Number(y.fm.priority ?? 1e9)) || (Number(x.fm.seq) - Number(y.fm.seq));
   const work = load(repoFolder(resolveHome().home, own))
     .filter(i => i.path.startsWith('phases/') && strip(i.fm.team || '') === a.team && !i.fm.stage && OPEN.includes(i.fm.status)
-      && i.fm.repository === own && (!branch || i.fm.branch === branch))
+      && i.fm.repository === own && i.fm.branch === branch)
     .sort(order);
   const read = slug => self(['query', '--phase', slug, '--agent', agent]); // the agent's view of the item for its write
+  // a work item of the team in scope, unclaimed (or the lead's): checked on the selection and again on the read before the claim
+  const ours = f => strip(f.team || '') === a.team && !f.stage && OPEN.includes(f.status) && f.repository === own && f.branch === branch;
   const skipped = [];
   let action = 'idle'; let item = null;
   const held = work.find(i => strip(i.fm.claimed_by || '') === agent);
@@ -61,8 +64,13 @@ export async function run(argv) {
   for (const i of held ? [] : work.filter(x => !strip(x.fm.claimed_by || ''))) {
     const r = read(i.fm.phase);
     if (r.status !== 0) return fail(r);
+    let f = {};
+    try { f = JSON.parse(r.stdout).front_matter || {}; } catch { return fail(r); }
+    // changed since the selection: not the team's any more, or taken. The claim is checked against this read (a write after
+    // it refuses the claim with exit 5), so what is claimed is what was checked here (Codex review 4 of 056)
+    if (!ours(f) || strip(f.claimed_by || '')) { skipped.push({ item: i.fm.phase, reason: 'changed since it was listed (team, stage, status, branch or holder)' }); continue; }
     // the scope is the claim's precondition, checked inside its locked write: the team (TEAM_NAME), repository and branch
-    const c = self(['update', i.fm.phase, '--claim', agent], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, ...(branch ? { TEAM_BRANCH: branch } : {}) });
+    const c = self(['update', i.fm.phase, '--claim', agent], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, TEAM_BRANCH: branch });
     if (c.status === 0) { action = 'claim'; item = i.fm.phase; if (c.stderr) process.stderr.write(c.stderr); break; }
     if (!refused(c)) return fail(c);
     skipped.push({ item: i.fm.phase, reason: last(c) });
@@ -73,8 +81,7 @@ export async function run(argv) {
     try { shown = JSON.parse(q.stdout); } catch { shown = null; }
     if (q.status !== 0 || !shown) return fail(q); // only the reason: the read's own output names the item's file
     const f = shown.front_matter || {};
-    if (strip(f.claimed_by || '') !== agent || strip(f.team || '') !== a.team || f.stage || !OPEN.includes(f.status)
-      || f.repository !== own || (branch && f.branch !== branch)) {
+    if (strip(f.claimed_by || '') !== agent || !ours(f)) {
       return die(`${item} changed before team pop could show it (claimed by ${f.claimed_by || 'nobody'}, status ${f.status}); run backlog team pop again`, 1);
     }
   }

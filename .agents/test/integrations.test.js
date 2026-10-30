@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fixture } from './helpers.js';
 test('all four detected agent integrations install the backlog skill', t => {
@@ -21,7 +21,7 @@ test('refresh replaces backlog skill edits and leaves unrelated vendor skills al
 test('the product skill is complete: front matter, size, referenced files, fixtures', () => {
   const root = resolve('templates/skills/backlog'); const text = readFileSync(join(root, 'SKILL.md'), 'utf8');
   assert.match(text, /^---\n(?:[\s\S]*?\n)?name: backlog\n[\s\S]*?\n---\n/); assert.ok(text.split('\n').length < 500);
-  for (const ref of new Set(text.match(/(?<![\w./-])(?:scripts|references|assets|evals)\/[\w./-]+/g) || [])) assert.ok(existsSync(join(root, ref)), ref);
+  for (const ref of new Set(text.match(/(?<![\w./-])(?:scripts|references|assets|evals)\/[\w./-]+/g) || [])) assert.ok(existsSync(join(root, ref)) && statSync(join(root, ref)).isFile(), ref); // a file, as the removed validator required
   const queries = JSON.parse(readFileSync(join(root, 'scripts/eval_queries.json'), 'utf8'));
   assert.ok(queries.filter(x => x.should_trigger === true).length >= 10 && queries.filter(x => x.should_trigger === false).length >= 8);
   assert.equal(new Set(queries.map(x => x.query)).size, queries.length);

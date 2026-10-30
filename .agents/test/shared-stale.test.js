@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
@@ -488,6 +488,8 @@ for (const [name, args, target] of [
   const hook = join(f.home, '.git', 'hooks', 'pre-push'); const flag = join(f.t, 'hook-ran');
   writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 2 --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
   chmodSync(hook, 0o755);
+  // an inherited checkout is the record of this test process, as a parent's is for its child (pop --claim-now)
+  if (name.includes('inherited')) writeFileSync(join(f.home, '.git', 'smooth-backlog-cli-run.lock'), JSON.stringify({ pid: process.pid, host: hostname(), command: 'test' }));
   const amy = run(f, f.home, args, { cwd, env: { QWEN_CODE_AGENT_ID: 'amy',
     ...(name.includes('inherited') ? { BACKLOG_RUN_LOCK_HELD: `${join(f.home, '.git', 'smooth-backlog-cli-run.lock')}:${process.pid}` } : {}),
   } });

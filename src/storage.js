@@ -35,7 +35,10 @@ const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { re
 // win: whoever holds the marker second sees the record changed.
 export async function asChild(path, fn) {
   let parent;
-  try { parent = readFileSync(path, 'utf8'); JSON.parse(parent); } catch { return fn(); } // no record of the parent's to amend
+  // the checkout must still be the parent's: a parent that died before this child started may have lost it already
+  try { parent = readFileSync(path, 'utf8'); if (JSON.parse(parent).pid !== process.ppid) throw new Error('another holder'); } catch {
+    throw new BacklogError('LOCKED', `the checkout ${path} is no longer held by the parent process ${process.ppid}; nothing was changed`, 1);
+  }
   const put = async text => { const tmp = `${path}.${randomUUID()}.tmp`; try { await fs.writeFile(tmp, text, { mode: 0o600 }); await fs.rename(tmp, path); } finally { await fs.rm(tmp, { force: true }); } };
   for (let i = 0; ; i++) {
     const held = acquireMarker(path);

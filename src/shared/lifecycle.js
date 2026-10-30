@@ -6,6 +6,7 @@ import { hasDefinitionOfDone } from './new.js';
 import { wipRefusal } from './wip.js';
 import { now } from './store.js';
 import {
+  teamName,
   REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
   STOP_TEXT, restarting, staleReview, teamLead, teamScope, undoneDependencies,
 } from './team.js';
@@ -43,6 +44,8 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
   // spec section 8 (item 039): the lead never claims a split item; the team runner claims the team's work item (no stage) for it
+  // item 056: a team session (TEAM_NAME) claims no other team's item (pop offers only its own; team pop relies on it)
+  if (teamName() && fm.team && strip(fm.team) !== teamName()) reject(`the item belongs to team ${fm.team}, not to this session's team ${teamName()} (TEAM_NAME)`);
   if (agent === teamLead() && fm.team && fm.stage) reject(`the team lead (${agent}) never claims an item of its team's split; a member claims it`);
   if (fm.stage === 'review-hitl') reject('the item waits in stage review-hitl for an owner decision; nobody claims it, --force included (backlog update <item> --decision "<answer>" first)');
   // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages

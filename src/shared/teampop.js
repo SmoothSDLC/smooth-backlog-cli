@@ -10,11 +10,11 @@ import { redact } from './safety.js';
 import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
 import { gitBranch, strip, teamLead, teamName, teamScope } from './team.js';
 
-const BIN = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
+const BIN = process.env.BACKLOG_TEST_SELF || fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)); // the test seam: a wrapper that fails on cue
 const OPEN = ['pending', 'in_progress'];
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const say = text => process.stdout.write(`${redact(text)}\n`);
-const self = args => spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', env: process.env });
+const self = (args, env = {}) => spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
 const last = r => redact(`${r.stdout}${r.stderr}`.trim().split('\n').filter(Boolean).pop() || `exit ${r.status}`);
 
 function parse(argv) {
@@ -61,7 +61,8 @@ export async function run(argv) {
   for (const i of held ? [] : work.filter(x => !strip(x.fm.claimed_by || ''))) {
     const r = read(i.fm.phase);
     if (r.status !== 0) return fail(r);
-    const c = self(['update', i.fm.phase, '--claim', agent]);
+    // the scope is the claim's precondition, checked inside its locked write: the team (TEAM_NAME), repository and branch
+    const c = self(['update', i.fm.phase, '--claim', agent], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, ...(branch ? { TEAM_BRANCH: branch } : {}) });
     if (c.status === 0) { action = 'claim'; item = i.fm.phase; if (c.stderr) process.stderr.write(c.stderr); break; }
     if (!refused(c)) return fail(c);
     skipped.push({ item: i.fm.phase, reason: last(c) });

@@ -91,15 +91,16 @@ sees and changes the backlog only through them.
   then `--waiting-done --by <you>`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review
   --by <you>`, then `--review pass|changes --by <you> --comments` citing one of the item's review_refs; the claimer
   closes with `--close --summary`.
-- [ ] Your review request, a changes verdict you give and your close end your session: the output's last line says
-  END THE SESSION NOW (and `backlog work` answers stop until a fresh session): reply with text only and make no
-  further tool call.
+- [ ] A member's review request, a changes verdict it gives and its close end its session (never the lead's): the
+  output's last line says END THE SESSION NOW (and `backlog work` answers stop until a fresh session): reply with
+  text only and make no further tool call.
 - [ ] Team lead: split with `backlog new --split-from <item>` (the child starts in stage refining); send a refined
-  item on with `--request-refinement-review --by <you>`, record the verdict with `--refinement-review
-  pass|changes|limit --by codex|claude --comments`; ask the owner with `--request-decision "<question>" --by <you>`
+  item on with `--request-refinement-review --by <you>`, record Codex's verdict with `--refinement-review
+  pass|changes --by codex --comments`; only when Codex answers that its limit is exceeded, record that with
+  `--refinement-review limit --by codex`, then Claude's verdict with `--by claude`; ask the owner with `--request-decision "<question>" --by <you>`
   (`backlog query --decisions` lists them; the owner answers with `--decision "<answer>"`); `backlog query --plan` is
-  the team's dispatch plan; re-rank with `--replan "<id,id,...>"` or `--priority <rank>`, and `--set-team <team>`
-  gives an item to a team.
+  the team's dispatch plan; re-rank with `--replan "<id,id,...>"` or `--priority <rank>`, `--set-team <team>`
+  gives an item to a team, and `--set-chunk yes` makes it chunk work any member does between items.
 
 Work-in-progress limits (wip-limits.json in the backlog repository) refuse a claim or a refinement start past
 them; `backlog query --wip` shows the counts. Only the team lead lifts a team or agent limit for one item

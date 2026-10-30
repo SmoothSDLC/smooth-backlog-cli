@@ -28,7 +28,7 @@ function run({ installed, latest, args = [], foreign = null }) {
   put(join(t, 'tools', 'npm'), `#!/bin/sh
 case "$1" in
   ls) if [ -f '${state}' ]; then printf '{"dependencies":{"${PKG}":{"version":"%s"}}}' "$(cat '${state}')"; else echo '{}'; fi ;;
-  view) ${latest ? `echo ${latest}` : "echo 'npm error 401 Unauthorized' >&2; exit 1"} ;;
+  view) ${latest ? `echo 'npm warn config: a warning on stderr' >&2; echo ${latest}` : "echo 'npm error 401 Unauthorized' >&2; exit 1"} ;;
   prefix) echo '${join(t, 'npm-global')}' ;;
   install) echo "npm $*" >> '${log}'; v=\${3#${PKG}@}; [ "$v" = "$3" ] && v=${latest || '0.0.1'}; printf %s "$v" > '${state}' ;;
 esac\n`);

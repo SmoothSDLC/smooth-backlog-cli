@@ -9,9 +9,10 @@ command -v npm >/dev/null 2>&1 || die "npm is missing: install Node.js 24 or lat
 # the installed release of this package (not whatever else is called backlog), and the registry's
 version_of_install() { npm ls --global --depth=0 --json "$pkg" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).dependencies?.["'"$pkg"'"]?.version||"")}catch{}})' || true; }
 installed=$(version_of_install)
-if ! latest=$(npm view "$pkg" version --registry="$registry" 2>&1); then
-  [ -n "$installed" ] || die "cannot reach $registry for $pkg (authenticate with npm login --scope=@smoothsdlc --registry=$registry): $latest"
-  echo "install-backlog-cli: could not check $registry for a newer release, keeping $installed: $latest" >&2; latest=""
+err=$(mktemp); trap 'rm -f "$err"' EXIT
+if ! latest=$(npm view "$pkg" version --registry="$registry" 2>"$err"); then # stdout only: npm's warnings go to stderr
+  [ -n "$installed" ] || die "cannot reach $registry for $pkg (authenticate with npm login --scope=@smoothsdlc --registry=$registry): $(cat "$err")"
+  echo "install-backlog-cli: could not check $registry for a newer release, keeping $installed: $(cat "$err")" >&2; latest=""
 fi
 # newer, by SemVer: build metadata ignored, numbers compared as numbers, a release after its pre-releases, numeric
 # pre-release identifiers as numbers (1.2.0-beta.2 < 1.2.0-beta.10 < 1.2.0)
@@ -34,7 +35,7 @@ want=$(version_of_install)
 bin="$(npm prefix --global)/bin/backlog"
 found=$(command -v backlog || true)
 got=$(backlog --version 2>/dev/null || true)
-if [ -z "$found" ] || [ "$(realpath "$found" 2>/dev/null)" != "$(realpath "$bin" 2>/dev/null)" ] || [ "$got" != "$want" ]; then
+if [ -z "$found" ] || ! [ "$found" -ef "$bin" ] || [ "$got" != "$want" ]; then # -ef: the same file, links followed
   die "the backlog command on PATH (${found:-none}, version ${got:-unknown}) is not $pkg $want ($bin): put npm's global bin first on PATH"
 fi
 exec backlog setup "$@"

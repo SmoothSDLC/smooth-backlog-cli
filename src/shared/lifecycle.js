@@ -286,7 +286,8 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   // spec section 4: outside the refinement stages only the lead refines an incomplete item of its team (a member known by
   // QWEN_CODE_AGENT_ID changes nothing on it)
   const who = me || a.by; // the Qwen caller, else the agent named by --by
-  const edits = strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-'));
+  // the DAG is the lead's (refine-and-split: the lead links the split items), so --set-depends-on is no refinement edit
+  const edits = strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-') && k !== 'set-depends-on');
   // spec section 4: a member, not the lead, refines in the first round; the lead edits a refining item only as its refiner
   if (who === teamLead() && before.team && before.stage === 'refining' && fm.refiner !== who && edits) { // with a step or without
     return { refuse: `${slug}: a member, not the team lead, refines in the first round (spec section 4); the lead edits an item in stage refining only as its refiner` };

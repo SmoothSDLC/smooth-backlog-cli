@@ -156,6 +156,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
       process.stdout.write(redact((c.stdout ?? '') + (c.stderr ?? '')));
       return c.status ?? die(`claim of ${act.r.slug} failed: ${c.error ? c.error.message : `the claim process ended by ${c.signal}`}`, 1);
     }
+    if (c.stderr) process.stderr.write(redact(c.stderr)); // the claim's warnings reach the agent
     const fm = store.load(folder).find(i => i.path === act.r.path)?.fm ?? {};
     act = { ...act, say: `claimed for ${me}: start the work and record each step in the item${dod(fm)}` };
   }

@@ -56,7 +56,7 @@ export async function run(argv) {
     step = mark(p, a.agent);
     if (!step) break;
     const m = self(step);
-    if (m.status === 0) break;
+    if (m.status === 0) { if (m.stderr) process.stderr.write(m.stderr); break; } // the start's warnings reach the agent
     if (attempt === 3) { process.stdout.write(m.stdout); process.stderr.write(m.stderr); return m.status ?? 1; }
   }
   if (step) {

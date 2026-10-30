@@ -28,7 +28,9 @@ test('023: the parity rule is written down, and every oracle skip names it', () 
     const reasons = [...text.matchAll(/\b(?:t|ctx|test|it|describe)\s*\.\s*(?:skip|todo|diagnostic)\s*\(([^\n]*)|\bskip\s*:\s*([^,}\n]+)|[{,]\s*(skip)\s*[,}]/g)].map(m => (m[1] ?? m[2] ?? m[3]).trim());
     // a reason variable counts only when its every string is ORACLE_SKIP: its definition names it and holds no literal text
     const vars = new Set([...text.matchAll(/\bconst (\w+) = ([^\n]*)/g)].filter(m => m[2].includes('ORACLE_SKIP') && !/['"`][^'"`]*[A-Za-z]{3}[^'"`]*['"`]/.test(m[2].replace(/py\([^)]*\)|spawnSync\([^)]*\)/g, ''))).map(m => m[1]));
-    const other = reasons.filter(r => !/ORACLE_SKIP|cannot create a symlink here|process\.platform|needs a POSIX shell/.test(r) && !vars.has(r));
+    // a reason that names ORACLE_SKIP holds no other text of its own (a ternary with another literal is another reason)
+    const ownText = r => /['"`][^'"`]*[A-Za-z]{3}[^'"`]*['"`]/.test(r.replace(/\/\/.*$/, '').replace(/\$\{ORACLE_SKIP\}/g, '')); // comments are no reason
+    const other = reasons.filter(r => !((/ORACLE_SKIP/.test(r) && !ownText(r.replace(/`[^`]*\$\{ORACLE_SKIP\}[^`]*`/g, ''))) || /cannot create a symlink here|process\.platform|needs a POSIX shell/.test(r) || vars.has(r)));
     assert.deepEqual(other, [], `${f}: a skip or diagnostic in a parity file without the rule`);
   }
 });

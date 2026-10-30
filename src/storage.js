@@ -60,6 +60,8 @@ function clearIfGone(marker) {
 }
 // Removes a takeover marker whose owner is gone: renamed to a private name first, so a marker another process created
 // meanwhile is put back, never removed on an old read.
+// shortcut: between the rename and the link back a third waiter can create a marker of its own (two system calls; it
+// needs a dead marker owner and three waiters at once). Node has no file lock; upgrade to one (flock) if Node gets it.
 export function clearMarker(marker, seen) {
   const grab = `${marker}.${process.pid}.${randomUUID()}`;
   try { renameSync(marker, grab); } catch { return; } // gone already

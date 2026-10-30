@@ -185,6 +185,24 @@ test('059.1: dependentsOf finds the same folder by seq and slug, another folder 
   ]);
 });
 
+test('059.1: dependentsOf matches a dependent that names a phase-less producer by its file-name-derived slug (review r5)', () => {
+  const home = store();
+  const producer = { seq: 5, status: 'done', depends_on: [] }; // no phase key: the store's slug is the file name
+  item(home, 'acme', 'app', producer); // written as 005-x.md, so the slug is 005-x
+  item(home, 'acme', 'app', { seq: 6, phase: '006-by-file-slug', status: 'pending', depends_on: ['005-x'] }); // the file-name-derived slug
+  item(home, 'acme', 'app', { seq: 7, phase: '007-by-seq', status: 'pending', depends_on: [5] }); // the seq still names the producer
+  item(home, 'acme', 'app', { seq: 8, phase: '008-other-file', status: 'pending', depends_on: ['005-other'] }); // a different file-name slug is not the producer's
+  assert.deepEqual(handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), [
+    { id: '6', repository: 'acme/app', seq: 6, slug: '006-by-file-slug', status: 'pending' },
+    { id: '7', repository: 'acme/app', seq: 7, slug: '007-by-seq', status: 'pending' },
+  ]);
+  // so openEdges, which builds on dependentsOf, does not miss the dependent the close gate would then forget
+  assert.deepEqual(handoff.openEdges(join(home, 'acme', 'app'), 'acme/app', { ...producer, handoffs: [record('6'), record('7')] }), [
+    { dependent: '6', state: 'unaccepted' },
+    { dependent: '7', state: 'unaccepted' },
+  ]);
+});
+
 test('059.1: dependentsOf propagates a directory-read error of the backlog home, it never skips a repository that vanished', () => {
   const home = store();
   writeFileSync(home, 'a file, not a directory');

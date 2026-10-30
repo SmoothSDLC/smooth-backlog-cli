@@ -84,6 +84,14 @@ export function dependentsOf(folder, repoId, producerFm) {
   const owners = readdirSync(home, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort();
   const seqNum = producerFm.seq != null ? Number(producerFm.seq) : null;
   const digit = s => (/^\d+$/.test(String(s)) ? Number(s) : null); // ids compare numerically: 005 and 5 name the same item
+  // The slug a local dependent can use to name the producer: its phase, or its file name when the front matter has no
+  // phase (the store's slug convention, slugOf in store.js and nodeOf in team.js) - a phase-less producer must be
+  // findable by that file-name slug, or the dependent is missed by the close gate (review r5).
+  let producerSlug = typeof producerFm.phase === 'string' && producerFm.phase !== '' ? producerFm.phase : null;
+  if (producerSlug === null && seqNum !== null) {
+    const self = load(folder).find(i => Number(i.fm.seq) === seqNum);
+    producerSlug = self ? basename(self.path, '.md') : null;
+  }
   for (const owner of owners) {
     const repos = readdirSync(join(home, owner), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort();
     for (const name of repos) {
@@ -93,7 +101,7 @@ export function dependentsOf(folder, repoId, producerFm) {
         const status = Object.hasOwn(it.fm, 'status') ? it.fm.status : 'pending';
         if (status === 'archived') continue;
         const namesProducer = asList(it.fm.depends_on).some(dep => repo === repoId
-          ? (seqNum !== null && digit(dep) === seqNum) || (typeof producerFm.phase === 'string' && producerFm.phase !== '' && dep === producerFm.phase)
+          ? (seqNum !== null && digit(dep) === seqNum) || (producerSlug !== null && dep === producerSlug)
           : seqNum !== null && dep.startsWith(`${repoId}#`) && digit(dep.slice(repoId.length + 1)) === seqNum);
         if (!namesProducer) continue;
         out.push({

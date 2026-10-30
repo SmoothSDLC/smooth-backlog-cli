@@ -4,11 +4,12 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
 import { connect } from './db.js';
 import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
+import { load } from './store.js';
 
 // An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true (owner 2026-10-28).
 export const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR: the review documents of cody-coding-model
@@ -85,11 +86,31 @@ export function mirrorRows(folder) {
   try { return con.prepare('SELECT * FROM phase ORDER BY id').all().map(r => ({ ...r })); } finally { con.close(); }
 }
 
+// Item 042: owner/name#seq names an item of another repository's backlog in the same backlog repository clone.
+const FOREIGN = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
+export const isForeign = id => FOREIGN.test(String(id ?? '').trim());
+// {repository, seq, slug, status, fm} of a foreign reference; null when that repository has no backlog folder or no such
+// item; undefined when id is no foreign reference. folder: this repository's folder of the backlog repository.
+export function foreignItem(folder, id) {
+  const m = FOREIGN.exec(String(id ?? '').trim());
+  if (!m) return undefined;
+  if (!SAFE.test(m[1]) || !SAFE.test(m[2])) return null;
+  const other = join(dirname(dirname(resolve(folder))), m[1], m[2]);
+  if (!existsSync(other)) return null;
+  const hits = load(other).filter(i => Number(i.fm.seq) === Number(m[3]));
+  const it = hits.find(i => i.fm.status !== 'archived') ?? hits[0];
+  return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || basename(it.path, '.md'), status: it.fm.status ?? 'pending', fm: it.fm } : null;
+}
 // lib_db.py:648-655: [{id as written, item: the row or null, fm}] for each depends_on entry that is not done or archived.
-// rows = the mirror rows of folder (the default), or those of another repository's backlog read by the caller.
+// rows = the mirror rows of folder (the default), or those of another repository's backlog read by the caller. A foreign
+// entry (item 042) is read from that repository's folder; its item carries the repository.
 export function undoneDependencies(folder, fm, rows = mirrorRows(folder)) {
-  return asList(fm.depends_on).map(id => ({ id, item: byIdent(rows, id) })).filter(d => !d.item || !DONE_STATES.includes(d.item.status))
-    .map(d => ({ ...d, fm: d.item ? itemFm(folder, d.item) : {} }));
+  return asList(fm.depends_on).map(id => {
+    const f = foreignItem(folder, id);
+    if (f !== undefined) return { id, item: f && { slug: f.slug, seq: f.seq, status: f.status, repository: f.repository }, fm: f ? f.fm : {}, foreign: true };
+    return { id, item: byIdent(rows, id) };
+  }).filter(d => !d.item || !DONE_STATES.includes(d.item.status))
+    .map(d => (d.foreign ? d : { ...d, fm: d.item ? itemFm(folder, d.item) : {} }));
 }
 
 // lib_db.py:658-670: the open rows of the active handoff whose file says agent holds them, on every branch, by number.
@@ -140,8 +161,9 @@ export const staleReview = fm => fm.review_state === 'in_review' && age(fm.revie
 export const reviewOpenTo = (fm, agent) => fm.review_state === 'requested' || (fm.review_state === 'in_review' && fm.reviewer === agent);
 
 // lib_db.py:745-749
-export function describeDependency({ id, item, fm }) {
-  return item ? `${item.slug} (status ${item.status}, claimed by ${fm.claimed_by || 'nobody'})` : `${id} (no such item in this backlog)`;
+export function describeDependency({ id, item, fm, foreign }) {
+  if (foreign && item) return `${item.repository}#${item.seq} ${item.slug} of repository ${item.repository} (status ${item.status}, claimed by ${fm.claimed_by || 'nobody'})`;
+  return item ? `${item.slug} (status ${item.status}, claimed by ${fm.claimed_by || 'nobody'})` : `${id} (no such item in ${isForeign(id) ? 'the backlog repository' : 'this backlog'})`;
 }
 
 // The hand-off lock (item 038; spec 2026-10-28-pr1-learnings.md section 7; PR1 lib_db.py:770-827). A member that hands its
@@ -180,7 +202,7 @@ export function markHandoff(teamName, agent, seq) {
   const tdir = join(teamsRoot(), teamName);
   const m = member(tdir, agent);
   if (m === 'none' && existsSync(tdir)) warn(`${join(tdir, 'config.json')} cannot be read or names no members; no hand-off marker for ${agent}`);
-  if (typeof m === 'object' && m.joined === null) warn(`the session time stamp (joinedAt) of ${agent} is no number; no hand-off marker`);
+  if (typeof m === 'object' && m.joined === null) warn(`the session time stamp (joinedAt) of ${agent} in ${join(tdir, 'config.json')} is no number; no hand-off marker`);
   if (typeof m !== 'object' || m.joined === null) return null; // no registered session to replace: no marker
   if (!Number.isInteger(seq)) return `the item number ${seq} is no whole number`;
   try {

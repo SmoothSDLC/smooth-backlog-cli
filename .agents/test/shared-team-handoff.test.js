@@ -82,6 +82,8 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
   const at = JSON.parse(readFileSync(marker(f), 'utf8')).at_ms;
   config(f, [{ name: 'archy', joinedAt: at }]); // a session not newer than the hand-off: the one valid stop
   assert.equal(pop(f, 'archy', T1).action, 'stop');
+  const roster = join(f.t, 'team.json');
+  writeFileSync(roster, JSON.stringify({ archy: {}, zed: {} }));
   for (const [cfg, mk] of [[null, null], ['{ not json', null], [[], null], [[{ name: 'archy', joinedAt: 1 }], 'garbage'], [[{ name: 'archy', joinedAt: 1 }], '{"at_ms":"bad","seq":1}']]) {
     if (cfg === null) config(f, []); else if (typeof cfg === 'string') writeFileSync(join(f.tdir, 'config.json'), cfg); else config(f, cfg);
     if (mk !== null) writeFileSync(marker(f), mk);
@@ -91,13 +93,21 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
     const w = run(f, ['work', '--agent', 'archy', '--json'], T1);
     assert.notEqual(JSON.parse(w.stdout).action, 'stop');
     assert.match(w.stderr, /stops nobody/); // work passes the warning on
+    const wj = JSON.parse(w.stdout);
+    if (wj.action === 'claim') ok(f, ['update', wj.item, '--release', 'archy'], T1); // give back what work claimed
+    const [mine, theirs] = ['claim job', 'review job'].map(n => teamItem(f, n));
+    ok(f, ['update', mine, '--claim', 'archy'], T1); // no claim refusal
+    ok(f, ['update', mine, '--release', 'archy'], T1);
+    const plan = JSON.parse(run(f, ['query', '--plan', '--roster', roster, '--agents', 'archy', '--json'], T1).stdout);
+    assert.ok(plan.some(e => e.member === 'archy'), JSON.stringify(plan)); // the plan does not leave archy out
+    ok(f, ['update', theirs, '--claim', 'zed'], T1);
+    ok(f, ['update', theirs, '--request-review', 'any', '--note', 'n', '--by', 'zed'], T1);
+    ok(f, ['update', theirs, '--start-review', '--by', 'archy'], T1); // no start-review refusal
+    ok(f, ['update', theirs, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md'], T1); // archy is free again
+    ok(f, ['update', theirs, '--close', '--summary', 'x', '--by', 'zed'], T1); // and zed too
+    if (cfg === null) config(f, []); else if (typeof cfg === 'string') writeFileSync(join(f.tdir, 'config.json'), cfg); else config(f, cfg); // zed's hand-off may have rewritten nothing, but keep the case
+    if (mk !== null) writeFileSync(marker(f), mk);
   }
-  const roster = join(f.t, 'team.json');
-  writeFileSync(roster, JSON.stringify({ archy: {}, zed: {} }));
-  const free = teamItem(f, 'free job');
-  const plan = JSON.parse(run(f, ['query', '--plan', '--roster', roster, '--json'], T1).stdout);
-  assert.deepEqual(plan.map(e => [e.member, e.action, e.item]), [['archy', 'claim', free]]); // the plan does not leave archy out
-  ok(f, ['update', free, '--claim', 'archy']); // and its claim is not refused
 });
 test('no marker for the lead, for a member still active on another item, or for an item without a team', () => {
   const f = fixture();

@@ -188,6 +188,15 @@ test('item 061: an item without depends_on names it; an item whose file is gone 
   assert.deepEqual(x.missing, ['review_refs', 'depends_on']);
   assert.equal(y.missing, null);
   assert.equal(JSON.parse(ok(f, ['query', '--phase', g, '--json']).stdout).missing, null);
+  writeFileSync(file, 'the front matter is gone\n'); // a file the CLI cannot read as an item
+  assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, null);
+});
+test('item 056: in a team session a claim takes only an item of the session\'s team in its repository', () => {
+  const f = fixture();
+  const free = make(f, 'no team item'); ok(f, ['query', '--phase', free, '--agent', 'lead']);
+  const r = run(f, ['update', free, '--claim', 'lead'], { TEAM_NAME: 't1' });
+  assert.equal(r.status, 1); assert.match(r.stdout, /belongs to no team; this session's team t1/);
+  ok(f, ['update', free, '--claim', 'lead']); // outside a team session the claim is as before
 });
 
 test('team pop: an item taken out of the team before the read is skipped, never claimed; a detached HEAD is refused', () => {

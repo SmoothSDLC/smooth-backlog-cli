@@ -147,3 +147,11 @@ test('034: an owner decision past a limit is recorded; the item then waits in re
   f.run('demo', ['update', r, '--decision', 'that way']);
   assert.equal(parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${r}.md`), 'utf8')).fm.refiner, 'lead'); // no limit: the lead re-refines it
 });
+
+test('034: an item in progress is not moved into a repository past its limit', () => {
+  const f = fixture(['demo', 'other']);
+  const a = f.make('demo', 'one');
+  f.run('demo', ['update', a, '--claim', 'amy']);
+  f.limits({ repository: { default: 9, 'acme/other': 0 } });
+  assert.match(f.run('demo', ['move', a, '--to-repository', 'acme/other'], 1).stdout, /in progress, and in acme\/other: the repository work-in-progress limit of acme\/other is 0/);
+});

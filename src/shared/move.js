@@ -15,6 +15,7 @@ import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import { asList, teamScope } from './team.js';
+import { wipRefusal } from './wip.js';
 
 const VALUE = ['to-branch', 'all-open-of-branch', 'note'];
 
@@ -77,6 +78,7 @@ async function toBranch(con, folder, r, branch, note, { repo, guard, wrote }) {
   seen.check(folder, repo, seen.actor(), r.slug, r.path);
   guard.push({ path: `${repo}/${r.path}`, slug: r.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   const old = Object.hasOwn(fm, 'branch') ? fm.branch ?? 'None' : '';
+  if (fm.status === 'in_progress') { const full = wipRefusal(folder, repo, { ...fm, branch }, fm.claimed_by || fm.refiner || '', r.slug); if (full) throw new BacklogError('INVALID_INPUT', `${r.slug}: in progress, and on branch ${branch}: ${full}`, 1); } // item 034
   fm.branch = branch;
   store.stamp(fm);
   store.write({ path, fm, body }, folder);
@@ -139,6 +141,7 @@ async function move(a, con, ctx) {
   // beyond move.py parity: items of this backlog that list the item (by number or slug, as update --set-depends-on stores it) would be left pointing at nothing
   const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && asList(i.fm.depends_on).some(d => find(con, d)?.id === r.id)).map(i => i.fm.phase ?? i.path);
   if (dependents.length) return refuse(`${dependents.join(', ')} depend${dependents.length > 1 ? '' : 's'} on ${r.slug}, which would leave their depends_on pointing at nothing; clear them first: update <dependent> --set-depends-on ... (the other dependencies, or none)`);
+  if (fm.status === 'in_progress') { const full = wipRefusal(tdir, target, { ...fm, repository: target }, fm.claimed_by || fm.refiner || '', r.slug); if (full) return refuse(`${r.slug}: in progress, and in ${target}: ${full}`); } // item 034
   const tail = `-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;
   const seq = store.nextSeqFor(tdir, `${tail}.md`); // never a number whose file name the target already holds
   const slug = `${String(seq).padStart(3, '0')}${tail}`;

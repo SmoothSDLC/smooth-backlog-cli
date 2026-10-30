@@ -248,6 +248,11 @@ test('a marker that cannot be read stops nobody; a failed publication sets aside
     assert.ok(existsSync(marker(f)));
     team.releaseHandoff('t1', 'archy', JSON.stringify({ at_ms: 9000, seq: 2 }));
     assert.ok(!existsSync(marker(f)) && existsSync(join(f.tdir, 'handoff', 'archy.released')));
+    rmSync(join(f.tdir, 'handoff', 'archy.released'), { recursive: true, force: true });
+    mkdirSync(join(f.tdir, 'handoff', 'archy.released', 'x'), { recursive: true }); // a .released folder: the rename onto it fails
+    writeFileSync(marker(f), JSON.stringify({ at_ms: 9100, seq: 3 }));
+    team.releaseHandoff('t1', 'archy', JSON.stringify({ at_ms: 9100, seq: 3 }));
+    assert.ok(!existsSync(marker(f)), 'the unpublished marker is removed even when it cannot be set aside');
   } finally { process.env.HOME = home; }
 });
 test('a marker without a whole seq, or a session time stamp too large for a number, stops nobody', () => {

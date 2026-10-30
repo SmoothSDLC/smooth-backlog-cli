@@ -2,7 +2,7 @@
 // Like the oracle, identity and status come from the rows of the mirror database (backlog.db); the item files give only
 // the metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
@@ -100,6 +100,33 @@ export function foreignItem(folder, id) {
   const hits = load(other).filter(i => Number(i.fm.seq) === Number(m[3]));
   const it = hits.find(i => i.fm.status !== 'archived') ?? hits[0];
   return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || basename(it.path, '.md'), status: it.fm.status ?? 'pending', fm: it.fm } : null;
+}
+// Item 042: does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
+// to it? Returns the reference that closes the cycle, or null. Local entries are read in the folder they are written in.
+export function foreignCycle(folder, repoId, seq, deps) {
+  const home = dirname(dirname(resolve(folder)));
+  const self = `${repoId}#${Number(seq)}`;
+  const cache = new Map();
+  const items = repo => { if (!cache.has(repo)) { const dir = join(home, ...repo.split('/')); cache.set(repo, existsSync(dir) ? load(dir) : []); } return cache.get(repo); };
+  const nodeOf = (repo, d) => {
+    const s = String(d ?? '').trim();
+    const m = FOREIGN.exec(s);
+    if (m) return `${m[1]}/${m[2]}#${Number(m[3])}`;
+    const it = /^\d+$/.test(s) ? items(repo).find(i => Number(i.fm.seq) === Number(s)) : items(repo).find(i => (i.fm.phase || basename(i.path, '.md')) === s);
+    return it ? `${repo}#${Number(it.fm.seq)}` : null;
+  };
+  const seen = new Set();
+  const stack = asList(deps).map(d => nodeOf(repoId, d)).filter(Boolean);
+  while (stack.length) {
+    const node = stack.pop();
+    if (node === self) return self;
+    if (seen.has(node)) continue;
+    seen.add(node);
+    const [repo, n] = [node.slice(0, node.lastIndexOf('#')), Number(node.slice(node.lastIndexOf('#') + 1))];
+    const it = items(repo).find(i => Number(i.fm.seq) === n && i.fm.status !== 'archived');
+    if (it) for (const d of asList(it.fm.depends_on)) { const next = nodeOf(repo, d); if (next) stack.push(next); }
+  }
+  return null;
 }
 // lib_db.py:648-655: [{id as written, item: the row or null, fm}] for each depends_on entry that is not done or archived.
 // rows = the mirror rows of folder (the default), or those of another repository's backlog read by the caller. A foreign
@@ -238,9 +265,19 @@ export function pendingHandoff(agent, teamName) {
 export function releaseHandoff(teamName, agent, text) {
   if (!SAFE.test(teamName || '') || !SAFE.test(agent || '')) return;
   const dir = join(teamsRoot(), teamName, 'handoff');
-  try { // only the marker this change wrote: a later hand-off of the same agent, from another clone, keeps its lock
-    if (readFileSync(join(dir, `${agent}.json`), 'utf8') === text) renameSync(join(dir, `${agent}.json`), join(dir, `${agent}.released`));
-  } catch { /* none there */ }
+  const file = join(dir, `${agent}.json`);
+  const grab = join(dir, `.${agent}.${process.pid}.release`);
+  try { renameSync(file, grab); } catch { return; } // none there
+  // the marker is ours alone now: set it aside if it is the one this change wrote, else put it back (a later hand-off
+  // from another clone, unless an even newer one took the name meanwhile)
+  let mine = false;
+  try { mine = readFileSync(grab, 'utf8') === text; } catch { /* unreadable: not ours */ }
+  if (mine) {
+    try { renameSync(grab, join(dir, `${agent}.released`)); } catch { rmSync(grab, { force: true, recursive: true }); } // never left in place: an unpublished hand-off holds nobody
+  } else {
+    try { linkSync(grab, file); } catch { /* a newer marker is there */ }
+    rmSync(grab, { force: true, recursive: true });
+  }
 }
 export const handoffText = (teamName, agent) => { try { return readFileSync(join(teamsRoot(), teamName, 'handoff', `${agent}.json`), 'utf8'); } catch { return null; } };
 export const restarting = (agent, lead = teamLead()) => agent !== lead && pendingHandoff(agent) !== null; // the lead is never locked

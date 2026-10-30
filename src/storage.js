@@ -76,8 +76,12 @@ export function acquireMarker(path) {
     return null;
   } finally { rmSync(tmp, { force: true }); }
 }
+// from the top level down to its own: a waiter that finds the top level free then holds it, and every waiter below
+// waits on that live owner, so no second owner can take the freed lower level meanwhile
 export function releaseMarker(path, held) {
-  for (let name = held; name.length >= `${path}.takeover`.length; name = name.slice(0, name.lastIndexOf('.'))) rmSync(name, { force: true });
+  const base = `${path}.takeover`;
+  const levels = [base, ...held.slice(base.length + 1).split('.').filter(Boolean).map((_, i, all) => `${base}.${all.slice(0, i + 1).join('.')}`)];
+  for (const name of levels) rmSync(name, { force: true });
 }
 // The lock file appears with its whole record or not at all (a temp file linked, or renamed over a dead holder's), so a
 // crash never leaves an empty lock behind.

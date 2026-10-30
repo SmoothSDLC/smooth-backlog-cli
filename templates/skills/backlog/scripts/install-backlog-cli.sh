@@ -13,8 +13,16 @@ if ! latest=$(npm view "$pkg" version --registry="$registry" 2>&1); then
   [ -n "$installed" ] || die "cannot reach $registry for $pkg (authenticate with npm login --scope=@smoothsdlc --registry=$registry): $latest"
   echo "install-backlog-cli: could not check $registry for a newer release, keeping $installed: $latest" >&2; latest=""
 fi
-# newer: numeric parts first; at equal numbers a release is newer than its pre-releases (1.2.0-beta < 1.2.0)
-newer() { node -e 'const p=v=>{const[a,b=""]=v.split("-");return[...a.split(".").map(Number),b]};const[x,y]=process.argv.slice(1).map(p);for(let i=0;i<3;i++)if(x[i]!==y[i])process.exit(x[i]>y[i]?0:1);process.exit(x[3]!==y[3]&&(x[3]===""||(y[3]!==""&&x[3]>y[3]))?0:1)' "$1" "$2"; }
+# newer, by SemVer: build metadata ignored, numbers compared as numbers, a release after its pre-releases, numeric
+# pre-release identifiers as numbers (1.2.0-beta.2 < 1.2.0-beta.10 < 1.2.0)
+newer() { node -e '
+const p = v => { const [core, pre] = v.split("+")[0].split(/-(.*)/s); return [core.split(".").map(Number), pre ? pre.split(".") : []]; };
+const cmp = (a, b) => { const n = x => /^\d+$/.test(x); return n(a) && n(b) ? Number(a) - Number(b) : n(a) ? -1 : n(b) ? 1 : a < b ? -1 : a > b ? 1 : 0; };
+const [[x, xp], [y, yp]] = process.argv.slice(1).map(p);
+for (let i = 0; i < 3; i++) if (x[i] !== y[i]) process.exit(x[i] > y[i] ? 0 : 1);
+if (!xp.length || !yp.length) process.exit(!xp.length && yp.length ? 0 : 1);
+for (let i = 0; i < Math.max(xp.length, yp.length); i++) { if (i >= xp.length) process.exit(1); if (i >= yp.length) process.exit(0); const c = cmp(xp[i], yp[i]); if (c) process.exit(c > 0 ? 0 : 1); }
+process.exit(1);' "$1" "$2"; }
 if [ -z "$installed" ]; then
   npm install --global "$pkg${latest:+@$latest}" --registry="$registry"
 elif [ -n "$latest" ] && [ "$installed" != "$latest" ] && newer "$latest" "$installed"; then
@@ -22,6 +30,11 @@ elif [ -n "$latest" ] && [ "$installed" != "$latest" ] && newer "$latest" "$inst
 fi
 want=$(version_of_install)
 [ -n "$want" ] || die "$pkg is not installed after npm install"
+# the backlog on PATH must be the one npm installed (same file), not another command of that name or version
+bin="$(npm prefix --global)/bin/backlog"
+found=$(command -v backlog || true)
 got=$(backlog --version 2>/dev/null || true)
-[ "$got" = "$want" ] || die "the backlog command on PATH ($(command -v backlog || echo none), version ${got:-unknown}) is not $pkg $want: put npm's global bin ($(npm prefix --global)/bin) first on PATH"
+if [ -z "$found" ] || [ "$(realpath "$found" 2>/dev/null)" != "$(realpath "$bin" 2>/dev/null)" ] || [ "$got" != "$want" ]; then
+  die "the backlog command on PATH (${found:-none}, version ${got:-unknown}) is not $pkg $want ($bin): put npm's global bin first on PATH"
+fi
 exec backlog setup "$@"

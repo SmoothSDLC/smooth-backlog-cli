@@ -52,6 +52,8 @@ test('044: an older release or a pre-release of the latest is updated; an up-to-
   assert.deepEqual(run({ installed: '1.2.0-beta', latest: '1.2.0' }).calls, [install('1.2.0'), 'backlog', '  [setup]']);
   assert.deepEqual(run({ installed: '1.2.0', latest: '1.2.0', args: ['--ask'] }).calls, ['backlog', '  [setup]', '  [--ask]']);
   assert.deepEqual(run({ installed: '1.10.0', latest: '1.9.0' }).calls, ['backlog', '  [setup]']); // a version order, not text
+  assert.deepEqual(run({ installed: '1.2.0-beta.2', latest: '1.2.0-beta.10' }).calls, [install('1.2.0-beta.10'), 'backlog', '  [setup]']); // SemVer pre-releases
+  assert.deepEqual(run({ installed: '1.2.0+build.5', latest: '1.2.1' }).calls, [install('1.2.1'), 'backlog', '  [setup]']); // build metadata ignored
 });
 
 test('044: an unreachable registry is said; a different backlog command earlier on PATH is refused', () => {
@@ -65,4 +67,7 @@ test('044: an unreachable registry is said; a different backlog command earlier 
   assert.equal(other.r.status, 1);
   assert.match(other.r.stderr, /the backlog command on PATH \(.*foreign\/backlog, version 7\.0\.0\) is not @smoothsdlc\/smooth-backlog-cli 1\.2\.0/);
   assert.deepEqual(other.calls, []); // setup never ran
+  const twin = run({ installed: '1.2.0', latest: '1.2.0', foreign: '1.2.0' }); // the same version is not the same command
+  assert.equal(twin.r.status, 1);
+  assert.match(twin.r.stderr, /foreign\/backlog, version 1\.2\.0\) is not @smoothsdlc\/smooth-backlog-cli 1\.2\.0/);
 });

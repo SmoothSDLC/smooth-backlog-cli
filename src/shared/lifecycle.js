@@ -6,7 +6,7 @@ import { hasDefinitionOfDone } from './new.js';
 import { now } from './store.js';
 import {
   REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
-  staleReview, teamLead, teamScope, undoneDependencies,
+  STOP_TEXT, restarting, staleReview, teamLead, teamScope, undoneDependencies,
 } from './team.js';
 
 export class Rejected extends Error {}
@@ -233,6 +233,10 @@ const ACTIONS = ['reassign', 'reassign-review', 'refine-start', 'refine-done', '
 export function step(a, { fm, body, slug, folder, repo, incomplete, given, before = fm }) {
   const actions = ACTIONS.filter(k => a[k]);
   if (actions.length > 1) return { refuse: `one team-work step at a time (got ${actions.map(k => `--${k}`).join(', ')})` };
+  // item 038: a member waiting for its restart takes no new work (update.py:32-35)
+  for (const [flag, agent] of [['--refine-start', a['refine-start'] && a.by], ['--claim', a.claim], ['--start-review', a['start-review'] && a.by]]) {
+    if (agent && restarting(agent)) return { refuse: `${slug}: ${flag} refused: ${agent} is waiting for its restart; ${STOP_TEXT}` };
+  }
   const me = caller();
   if (me && actions.length && me !== teamLead()) {
     const as = (ACTS_AS[actions[0]] ?? (x => x.by))(a, fm);
@@ -253,6 +257,12 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   // through; Codex review of item 036): a status change, another step or appended text that is no definition of done is
   // refused, so nothing but a refinement completes it.
   const refining = before.team && ['refining', 'review-hitl'].includes(before.stage); // as the item was before this call: --set-team '' does not lift the rule
+  // Beyond the oracle (Codex review of item 036): a team's item before stage ready takes only its refinement steps, complete
+  // or not: no work, review, close or status change until its refinement review passed.
+  if (before.team && before.stage && before.stage !== 'ready') {
+    const work = [...steps.filter(k => !REFINEMENT_STEPS.includes(k) && k !== 'claim').map(k => `--${k}`), ...given.filter(k => k === 'status').map(k => `--${k}`)]; // a claim has its own gate (claim())
+    if (work.length) return { refuse: `${slug}: team ${before.team} item in stage ${before.stage}: before stage ready only its refinement steps run (${work.join(', ')} refused)` };
+  }
   if (incomplete.length && (teamScope().repo || steps.length || refining)) { // team mode: an incomplete item is only refined
     const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k))).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),
       ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k))).map(k => `--${k}`),

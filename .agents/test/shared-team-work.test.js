@@ -151,3 +151,17 @@ test('a member never takes over another agent\'s stale review; the lead hands it
   assert.ok(readFileSync(join(f.folder, 'phases', `${job}.md`), 'utf8').includes('## Review reassigned by lead from zed to cody at'));
   ok(f, ['update', job, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
 });
+
+test('backlog work on chunk work of another repository says where to read the item', () => {
+  const f = fixture();
+  const other = consumer(f.t, 'other', 'thing', 'main');
+  const mine = make(f, 'held here');
+  ok(f, ['update', mine, '--claim', 'zed']); // nothing claimable here
+  writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
+  const r = cli(['new', ...NEW('chunk there'), '--chunk'], { cwd: other, tmp: f.t, env: LEAD });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const far = r.stdout.split('created phase phases/')[1].split('.md')[0];
+  const w = work(f, 'cody', {}, '--scope', 'all');
+  assert.deepEqual([w.action, w.item, w.repository, w.front_matter], ['chunk', far, 'other/thing', null]);
+  assert.ok(w.instruction.endsWith(`(read the item from that repository's clone: backlog query --phase ${far} there)`), w.instruction);
+});

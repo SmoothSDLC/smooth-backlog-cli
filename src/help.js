@@ -215,7 +215,9 @@ ${DB}
       Ask an agent, or any agent, for a review; --note says what to review (team session). The output ends with the
       instruction to end the session now: a review request, a changes verdict (--review changes) and a close each end the
       agent's session, so its next task starts in a fresh one (not for the team lead, nor while the agent holds another
-      active item).
+      active item). A review request or a close by a member of the item's team also writes the hand-off marker
+      ~/.qwen/teams/<team>/handoff/<agent>.json: until Qwen registers a newer session of that agent, its backlog pop and
+      backlog work answer stop, and its --claim, --refine-start and --start-review are refused.
   --start-review
       Record that the agent named by --by starts the requested review (review_state in_review, reviewer and review_started are
       set). Other agents skip it unless the review was started more than 20 minutes ago (team session).
@@ -291,7 +293,8 @@ ${DB}
       The items that wait in stage review-hitl for an owner decision, each with its question, for the morning report; with
       --all every branch. Answer one with backlog update <item> --decision "<answer>".
   --pop
-      The one next action of the agent named by --agent: continue, review, refine, claim, refinement-review, chunk or idle
+      The one next action of the agent named by --agent: continue, review, refine, claim, refinement-review, reassign-review,
+      stop, chunk or idle
       (exit code 3, with the blockers named) (team session).
       It is the same as backlog pop; see backlog pop --help. With --next, --agent does the same.
   --agent AGENT
@@ -377,10 +380,12 @@ on; when its review passed, close it), review (an item another agent asks to hav
 started), refine (a member: the refinement it has started, or the first-round refinement of a team item in stage
 refining that nobody refines; the team lead: an incomplete item that lacks required fields), claim (the open item with the
 lowest priority whose dependencies are done, that is no chunk item, is in stage ready when it has a team, and that nobody
-holds), refinement-review (the team lead: refined items to send to the refinement review), chunk (a small piece
+holds), refinement-review (the team lead: refined items to send to the refinement review), reassign-review (the team
+lead: a stale review of its team to hand on), stop (a member that handed its item off and waits for a fresh session: end
+the turn), chunk (a small piece
 of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or for a run is not
-continued, and the agent claims a new item only when every item it holds waits. A review request older than
-BACKLOG_REVIEW_FIRST_SECONDS (300) is answered before the agent's own work. Incomplete items are never claimed or
+continued, and the agent claims a new item only when every item it holds waits. Another agent's review request comes
+after the agent's own work, however old it is. Incomplete items are never claimed or
 reviewed. With TEAM_NAME set (the team runner sets it), only that team's items of this repository are continued, reviewed
 or claimed. When nothing is left the action is idle, the blockers are named, and the command exits with 3 (see the exit codes below).
 

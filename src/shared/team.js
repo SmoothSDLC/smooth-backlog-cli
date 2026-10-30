@@ -2,7 +2,7 @@
 // Like the oracle, identity and status come from the rows of the mirror database (backlog.db); the item files give only
 // the metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
@@ -142,3 +142,51 @@ export const reviewOpenTo = (fm, agent) => fm.review_state === 'requested' || (f
 export function describeDependency({ id, item, fm }) {
   return item ? `${item.slug} (status ${item.status}, claimed by ${fm.claimed_by || 'nobody'})` : `${id} (no such item in this backlog)`;
 }
+
+// The hand-off lock (item 038; spec 2026-10-28-pr1-learnings.md section 7; PR1 lib_db.py:770-827). A member that hands its
+// item to review or closes it gets ~/.qwen/teams/<team>/handoff/<agent>.json ({"at_ms", "seq"}), and is locked until Qwen
+// registers a session of that agent (config.json members[].joinedAt) newer than the marker. The lead is not a member and
+// gets none. The same files and format as PR1, so its dispatcher and wake loop keep working during the cut-over.
+export const STOP_TEXT = 'your session is being replaced by a fresh one for your next task (you handed your item to review or '
+  + 'closed it): end your turn now with a text-only reply and no other tool call';
+const SAFE = /^[\w.-]+$/; // a team or agent name is one path segment
+const teamsRoot = () => join(homedir(), '.qwen', 'teams');
+export function teamDirs(name) {
+  const t = strip(name || process.env.TEAM_NAME || '');
+  if (t) return SAFE.test(t) && t !== '.' && t !== '..' ? [join(teamsRoot(), t)] : [];
+  try { return readdirSync(teamsRoot(), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => join(teamsRoot(), e.name)).sort(); } catch { return []; }
+}
+// joinedAt of the agent's registered session; null when the name is not registered or config.json cannot be read
+export function memberJoinedMs(tdir, agent) {
+  let cfg;
+  try { cfg = JSON.parse(readFileSync(join(tdir, 'config.json'), 'utf8')); } catch { return null; }
+  const m = (Array.isArray(cfg?.members) ? cfg.members : []).filter(x => x && typeof x === 'object' && x.name === agent);
+  return m.length ? Number(m[0].joinedAt || 0) : null;
+}
+export function markHandoff(teamName, agent, seq) {
+  if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return;
+  const tdir = join(teamsRoot(), teamName);
+  if (memberJoinedMs(tdir, agent) === null) return; // not a member (the lead), or no team folder
+  try {
+    mkdirSync(join(tdir, 'handoff'), { recursive: true });
+    const tmp = join(tdir, 'handoff', `.${agent}.tmp`);
+    writeFileSync(tmp, JSON.stringify({ at_ms: Date.now(), seq }));
+    renameSync(tmp, join(tdir, 'handoff', `${agent}.json`));
+  } catch { /* as PR1: a marker that cannot be written is no failure of the command */ }
+}
+// {tdir, marker} while the agent's hand-off waits for a fresh session, else null. An unreadable config.json or a missing
+// name keeps it locked; a malformed marker counts as written at time 0 (beyond PR1, which skipped one that is no JSON).
+export function pendingHandoff(agent, teamName) {
+  if (!SAFE.test(agent || '')) return null;
+  for (const tdir of teamDirs(teamName)) {
+    let text;
+    try { text = readFileSync(join(tdir, 'handoff', `${agent}.json`), 'utf8'); } catch { continue; }
+    let mk;
+    try { mk = JSON.parse(text); } catch { mk = {}; }
+    if (!mk || typeof mk !== 'object' || Array.isArray(mk)) mk = {};
+    const joined = memberJoinedMs(tdir, agent);
+    if (joined === null || joined <= Number(mk.at_ms || 0)) return { tdir, marker: mk };
+  }
+  return null;
+}
+export const restarting = agent => pendingHandoff(agent) !== null;

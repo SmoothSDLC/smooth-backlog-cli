@@ -84,7 +84,8 @@ sees and changes the backlog only through them.
 - [ ] Work and hand off: record each step with `--append`, then `--request-review any --note "<commits,
   evidence>"`. A review is `--review pass|changes --by <you> --comments` citing one of the item's review_refs;
   the claimer closes with `--close --summary`.
-- [ ] When the output says END THE SESSION NOW, reply with text only and make no further tool call.
+- [ ] When the output says END THE SESSION NOW, or `backlog work` answers stop, reply with text only and make no
+  further tool call.
 
 Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign`,
 `--reassign-review`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the

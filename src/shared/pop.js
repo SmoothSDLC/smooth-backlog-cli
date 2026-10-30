@@ -96,9 +96,10 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   for (const x of own) {
     if (reviewOffer(x.fm, me) !== null) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me) });
   }
-  const first = Number(process.env.BACKLOG_REVIEW_FIRST_SECONDS ?? 300);
-  let act = reviews.find(x => x.fm.review_state === 'in_review' && x.fm.reviewer === me) // your review in progress comes first
-    ?? reviews.find(x => team.age(x.fm.review_requested_at) >= first);
+  // spec section 5 and query.py:199: your review in progress comes first; another member's request, however old, comes
+  // after your own work (item 033; the review-first window of this build is gone)
+  let act = reviews.find(x => x.fm.review_state === 'in_review' && x.fm.reviewer === me);
+  if (!lead && team.restarting(me)) act = { name: 'stop', r: null, f: repo, say: team.STOP_TEXT }; // query.py:201-202: handed off, no new work until a fresh session
   // query.py:197-221: the item you work on, your refinement in progress, then your passed and your changes-requested items
   const mine = own.filter(({ fm }) => fm.claimed_by === me && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on); // waiting for a verdict or a run is not work
   const cont = ({ r, fm, f }) => (fm.review_state === 'passed'
@@ -148,7 +149,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
         + 'backlog update <item> --refinement-review pass|changes --by codex|claude --comments "<findings; thread or session id>"' };
     }
   }
-  if (!act && lead) { // item 033: a stale review of its team is the lead's to hand on (members never take it over)
+  if (lead && (!act || ['continue', 'review'].includes(act.name))) { // item 033: a stale review of its team is the lead's to hand on (members never take it over); before its own work, as the refinement review
     const x = own.find(({ fm }) => team.staleReview(fm) && fm.reviewer !== me);
     if (x) act = { name: 'reassign-review', r: x.r, f: x.f, say: `the review of ${x.r.seq} by ${x.fm.reviewer} is stale (started ${x.fm.review_started}): hand it on: backlog update ${x.r.slug} --reassign-review <member> --by ${me} --reason "<why>"` };
   }

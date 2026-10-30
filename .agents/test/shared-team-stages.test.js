@@ -256,7 +256,7 @@ test('refine-done is refused while a field or the definition of done is missing;
   no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing definition_of_done: complete it before --refine-done');
   up(f, c, '--note', 'a note while refining', '--by', 'cody');
   no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing definition_of_done'); // the event lines after the placeholder do not count
-  no(f, ['update', c, '--request-review', 'any', '--note', 'x', '--by', 'cody'], 'incomplete item, missing definition_of_done'); // only refinement steps while incomplete
+  no(f, ['update', c, '--request-review', 'any', '--note', 'x', '--by', 'cody'], 'before stage ready only its refinement steps run (--request-review refused)'); // only refinement steps
   no(f, ['update', c, '--claim', 'cody', '--force'], 'incomplete item, missing definition_of_done');
   no(f, ['update', c, '--status', 'in_progress', '--by', 'cody'], '--status refused'); // nothing but a refinement while incomplete
   no(f, ['update', c, '--append', 'some notes', '--by', 'cody'], '--append refused'); // text that is no definition of done
@@ -283,4 +283,19 @@ test("Codex's 5-hour limit authorizes Claude for its round only", () => {
   no(f, ['update', c, '--refinement-review', 'pass', '--by', 'claude', '--comments', 'ok'], 'Codex reports its 5-hour limit'); // a new round: Codex first again
   up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready; thread t-2');
   assert.equal(fm(f, c).stage, 'ready');
+});
+
+test('a complete team item before stage ready takes only its refinement steps: no work, review, close or status change', () => {
+  const f = fixture();
+  const w = work(f);
+  const c = make(f, 'complete child', '--split-from', w); // complete, in refining
+  for (const [args, flag] of [[['--status', 'in_progress'], '--status'], [['--request-review', 'any', '--note', 'x'], '--request-review'],
+    [['--close', '--summary', 'x', '--by', 'cody'], '--close'], [['--waiting', 'x', '--by', 'cody'], '--waiting']]) {
+    no(f, ['update', c, ...args], `team t1 item in stage refining: before stage ready only its refinement steps run (${flag} refused)`);
+  }
+  up(f, c, '--refine-start', '--by', 'cody'); up(f, c, '--refine-done', '--by', 'cody', '--note', 'x');
+  no(f, ['update', c, '--status', 'done'], 'item in stage refined: before stage ready only its refinement steps run (--status refused)');
+  up(f, c, '--request-decision', 'Q?', '--by', 'cody');
+  no(f, ['update', c, '--request-review', 'any', '--note', 'x'], 'item in stage review-hitl');
+  up(f, c, '--note', 'notes and text fields stay open', '--summary', 'a better summary');
 });

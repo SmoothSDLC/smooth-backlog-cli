@@ -14,7 +14,7 @@ import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { REVIEW_DIR, asList, heldItems, needsReview, teamLead, teamScope } from './team.js';
+import { REVIEW_DIR, asList, heldItems, markHandoff, needsReview, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team'];
@@ -292,6 +292,11 @@ async function change(a, con, folder, repo) {
       say('        backlog update <phase> --priority <rank>      # promote/demote one');
       say('        backlog update --replan "<id,id,id,...>"       # set the leading order');
     }
+  }
+  // item 038 (update.py:372-378): the claimer's hand-off locks it until a fresh session, unless it still holds another active item
+  const claimer = holder || fm.claimed_by || '';
+  if (['review_requested', 'closed'].includes(event) && fm.team && claimer && !heldItems(folder, claimer).some(h => h.slug !== row.slug && h.state === 'active')) {
+    markHandoff(fm.team, claimer, row.seq);
   }
   if (ends) say(shutdown(ender)); // the last line of the output
   return 0;

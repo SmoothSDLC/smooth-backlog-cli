@@ -83,9 +83,11 @@ export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d
 
 // Beyond the oracle (topology item 288): the items that wait in stage review-hitl for an owner decision, with the question
 // (the last "Owner decision needed" section of the item), for the morning report. Answer: backlog update <item> --decision.
+// a decision asked before the question went into the front matter: everything after its heading
+const legacyQuestion = body => { const i = (body || '').lastIndexOf('## Owner decision needed (asked by '); return i < 0 ? '' : body.slice(body.indexOf('\n', i) + 1); };
 function decisionsView(found, { a, scope, repo, branch, own, say, dump }) {
   const rows = found.map(({ r, fm }) => ({ ...r, team: fm.team || null, decision_requested_by: fm.decision_requested_by || null,
-    decision_requested_at: fm.decision_requested_at || null, question: team.strip(String(fm.decision_question ?? '')) }));
+    decision_requested_at: fm.decision_requested_at || null, question: team.strip(String(fm.decision_question ?? legacyQuestion(own.get(r.path)?.body))) }));
   if (a.json) { dump(rows); return 0; }
   const where = a.all ? '(all)' : scope === 'branch' ? redact(branch) : `(scope ${scope})`;
   say(`📋 ${rows.length} owner decision(s) waiting — ${repo}, branch ${where}; answer with backlog update <item> --decision "<answer>":`);

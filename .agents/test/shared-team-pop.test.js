@@ -214,7 +214,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   r = refuse(f, job, '--set-review-refs', 'references/patterns/y.md');
   assert.ok(r.status === 1 && r.stdout.includes('needs at least one review document'), r.stdout);
   ok(f, job, '--close', '--summary', 'done');
-  // an old review request goes before the agent's own work
+  // the agent's own work goes before another member's review request, however old (spec section 5, query.py:199)
   const mine = make(f, 'js', f.cons, 'own job', []);
   const other = make(f, 'js', f.cons, 'other job', ['--review-refs', 'references/review/code.md']);
   ok(f, other, '--claim', 'archy');
@@ -223,6 +223,9 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   assert.equal(pop(f).item, mine); // fresh request: own work first
   const old = popCli(f, ['--json'], { env: { BACKLOG_REVIEW_FIRST_SECONDS: '0' } });
   p = JSON.parse(old.stdout);
+  assert.deepEqual([p.action, p.item], ['continue', mine]);
+  ok(f, mine, '--request-review', 'any', '--note', 'commit ghi'); // handed off: now the review comes
+  p = pop(f);
   assert.deepEqual([p.action, p.item], ['review', other]);
 });
 

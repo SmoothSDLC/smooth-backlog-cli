@@ -49,7 +49,7 @@ its slug. backlog <command> --help prints every flag of the command, what the fl
   backlog move <item> --to-branch <name>        Move an item (or --all-open-of-branch) to a branch or --to-repository
   backlog archive <item> [--force] [--dry-run]  Archive a finished item
 In shared mode backlog update changes an item; in local mode it updates the CLI. The team flags of update (claim,
-review, close, waiting), the team views of query and backlog pop work; --plan is not in this build.
+review, close, waiting), the team views of query, its dispatch plan (--plan), backlog pop and backlog work work.
 `;
 const clean = value => String(value ?? '—').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ');
 export function human(data) {

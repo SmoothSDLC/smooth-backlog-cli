@@ -97,10 +97,10 @@ test('test_scopes_and_refinement_cap: --scope and the refinement_scope cap of ba
   } finally { rmSync(f.cfg, { force: true }); }
 });
 
-test('--plan stays refused (--pop is shared-team-pop.test.js)', () => {
+test('--agents goes with --plan only (the plan is shared-team-plan.test.js)', () => {
   const f = fixture();
   make(f, 'js', f.cons, 'x', []);
-  for (const args of [['--plan'], ['--agents', 'a,b', '--claimable']]) {
+  for (const args of [['--agents', 'a,b', '--claimable']]) {
     const r = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 2, args.join(' '));
     assert.equal(r.stdout, '');

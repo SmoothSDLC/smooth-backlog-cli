@@ -27,7 +27,7 @@ const COMMANDS = ['new', 'update', 'query', 'next', 'pop', 'work', 'move', 'arch
 // Flags this build refuses (query.js TEAM, pop.js and --headless); --db is internal to the Python scripts (contract section 2).
 const REFUSED = {
   update: ['db'],
-  query: ['plan', 'agents', 'headless', 'db'],
+  query: ['headless', 'db'],
   new: ['db'], move: [], archive: ['db'], pop: [],
 };
 const flagsOf = text => [...new Set((text.match(/--[a-z][\w-]*/g) ?? []).filter(f => !f.endsWith('-')))];
@@ -106,17 +106,14 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
   const roster = join(t, 'roster.json');
   writeFileSync(roster, '{"x": {}}');
   const unknown = /unrecognized arguments: --db/;
-  const plan = (flag, what = 'the team dispatch plan') => new RegExp(`^--${flag}: ${what} is not in this build$`);
   const cases = [
     [['new', '--name', 'n', '--depends-on', 'none', '--db', 'x.db'], unknown],
     [['update', '1', '--note', 'n', '--db', 'x.db'], unknown],
     [['archive', '1', '--force', '--dry-run', '--db', 'x.db'], unknown],
     [['query', '--status', '--db', 'x.db'], unknown],
-    [['query', '--plan', '--roster', roster], plan('plan')],
-    [['query', '--agents', 'x', '--roster', roster], plan('agents')],
+    [['query', '--agents', 'x', '--roster', roster], /^--agents goes with --plan/],
     [['query', '--headless'], /^--headless is not in this build$/],
-    [['pop', '--agent', 'x', '--plan'], plan('plan')],
-    [['pop', '--agent', 'x', '--agents', 'x'], plan('agents')],
+    [['pop', '--agent', 'x', '--agents', 'x'], /^--agents goes with --plan/],
     [['pop', '--agent', 'x', '--headless'], /^--headless is not in this build$/],
     [['pop', '--agent', 'x', '--db', 'x.db'], unknown],
   ];

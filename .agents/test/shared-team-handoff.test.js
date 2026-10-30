@@ -193,3 +193,27 @@ test('a hand-off writes the marker when config.json cannot be read or the sessio
   ok(f, ['update', c, '--request-review', 'any', '--note', 'z', '--by', 'claude']);
   assert.ok(!existsSync(join(f.tdir, 'handoff', 'claude.json')));
 });
+
+test('a marker that cannot be written refuses the hand-off; a hand-off that is not published leaves no lock; the shutdown line is last', () => {
+  const f = fixture();
+  config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: 1000 }]);
+  const [a, b] = ['first', 'second'].map(n => teamItem(f, n));
+  ok(f, ['update', a, '--claim', 'archy']);
+  writeFileSync(join(f.tdir, 'handoff'), 'not a folder'); // the marker cannot be written
+  no(f, ['update', a, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy'], 'the hand-off marker of archy cannot be written');
+  assert.equal(JSON.parse(run(f, ['query', '--phase', a, '--agent', 'archy', '--json']).stdout).front_matter.review_state, 'none');
+  rmSync(join(f.tdir, 'handoff'));
+  const bare = spawnSync('git', ['-C', f.home, 'remote', 'get-url', 'origin'], { encoding: 'utf8' }).stdout.trim();
+  const hook = join(bare, 'hooks', 'pre-receive');
+  writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const r = run(f, ['update', a, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy']);
+  assert.notEqual(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!existsSync(marker(f)), 'an unpublished hand-off locks nobody');
+  assert.ok(!r.stdout.includes('END THE SESSION NOW'), r.stdout);
+  rmSync(hook);
+  const done = ok(f, ['update', a, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy']);
+  assert.ok(existsSync(marker(f)));
+  const lines = done.stdout.trim().split('\n');
+  assert.ok(lines.at(-1).includes('archy: END THE SESSION NOW'), done.stdout); // the shutdown instruction is the last line, after the publication
+  void b;
+});

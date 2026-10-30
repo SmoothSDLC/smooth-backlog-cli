@@ -100,7 +100,7 @@ test('the hand-off to review, a changes verdict and a close end the agent\'s ses
   const c = make(f, 'third job');
   ok(f, ['update', c, '--claim', 'archy', '--force']); // archy holds two active items
   r = ok(f, ['update', b, '--request-review', 'any', '--note', 'commit ghi', '--by', 'archy']);
-  assert.doesNotMatch(r.stdout, STOP); // c is still active: the session goes on
+  assert.equal(STOP.exec(r.stdout)?.[1], 'archy'); // spec section 7: every hand-off ends the session (c being active only spares the lock)
   const d = make(f, "the lead's item");
   ok(f, ['update', d, '--claim', 'lead']);
   r = ok(f, ['update', d, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
@@ -264,4 +264,15 @@ test('039: in a team session a split from an item without a team names its revie
   const team = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   no(f, ['new', '--split-from', plain, '--depends-on', 'none', '--body', DOD], 'in a team session an item names its review documents at creation', team);
   ok(f, ['new', '--split-from', plain, '--depends-on', 'none', '--body', DOD, '--review-refs', 'references/review/code.md'], team);
+});
+
+test('the lead waits while only an incomplete item of its team is open', () => {
+  const f = fixture();
+  const w = make(f, 'team work item');
+  ok(f, ['update', w, '--set-team', 't1']);
+  ok(f, ['update', w, '--claim', 'lead']);
+  const half = NEW('incomplete child').filter((x, i, all) => x !== '--estimate' && all[i - 1] !== '--estimate');
+  ok(f, ['new', ...half, '--team', 't1']); // no estimate: incomplete, never dispatched to a member
+  const p = JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], { TEAM_NAME: 't1' }).stdout);
+  assert.notDeepEqual([p.action, p.item], ['continue', w], p.instruction); // its team's work is open: no busy continue
 });

@@ -2,7 +2,7 @@
 // Like the oracle, identity and status come from the rows of the mirror database (backlog.db); the item files give only
 // the metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
@@ -162,7 +162,7 @@ export function teamDirs(name) {
 // or {joined} (the time stamp of its registered session, null when it is invalid).
 function member(tdir, agent) {
   let text;
-  try { text = readFileSync(join(tdir, 'config.json'), 'utf8'); } catch (e) { return e.code === 'ENOENT' ? 'no-team' : 'unreadable'; }
+  try { text = readFileSync(join(tdir, 'config.json'), 'utf8'); } catch (e) { return e.code === 'ENOENT' && !existsSync(tdir) ? 'no-team' : 'unreadable'; } // a team folder without its config.json fails closed
   let cfg;
   try { cfg = JSON.parse(text); } catch { return 'unreadable'; }
   if (!cfg || typeof cfg !== 'object' || !Array.isArray(cfg.members)) return 'unreadable';
@@ -195,7 +195,7 @@ export function pendingHandoff(agent, teamName) {
   if (!SAFE.test(agent || '')) return null;
   for (const tdir of teamDirs(teamName)) {
     let text;
-    try { text = readFileSync(join(tdir, 'handoff', `${agent}.json`), 'utf8'); } catch { continue; }
+    try { text = readFileSync(join(tdir, 'handoff', `${agent}.json`), 'utf8'); } catch (e) { if (e.code === 'ENOENT') continue; text = ''; } // a marker that cannot be read keeps the lock
     let mk;
     try { mk = JSON.parse(text); } catch { mk = {}; }
     if (!mk || typeof mk !== 'object' || Array.isArray(mk)) mk = {};
@@ -203,5 +203,11 @@ export function pendingHandoff(agent, teamName) {
     if (joined === null || joined <= (ms(mk.at_ms || 0) ?? 0)) return { tdir, marker: mk }; // an invalid at_ms counts as time 0
   }
   return null;
+}
+// A marker whose hand-off was not published is set aside as <agent>.released (the dispatcher's name for a released one).
+export function releaseHandoff(teamName, agent) {
+  if (!SAFE.test(teamName || '') || !SAFE.test(agent || '')) return;
+  const dir = join(teamsRoot(), teamName, 'handoff');
+  try { renameSync(join(dir, `${agent}.json`), join(dir, `${agent}.released`)); } catch { /* none there */ }
 }
 export const restarting = agent => agent !== teamLead() && pendingHandoff(agent) !== null; // the lead is never locked

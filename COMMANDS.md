@@ -466,11 +466,13 @@ Options:
       --reason, releases it.
   --request-review AGENT|any
       Ask an agent, or any agent, for a review; --note says what to review (team session). The output ends with the
-      instruction to end the session now: a review request, a changes verdict (--review changes) and a close each end the
-      agent's session, so its next task starts in a fresh one (not for the team lead, nor while the agent holds another
-      active item). A review request or a close by a member of the item's team also writes the hand-off marker
-      ~/.qwen/teams/<team>/handoff/<agent>.json: until Qwen registers a newer session of that agent, its backlog pop and
-      backlog work answer stop, and its --claim, --refine-start and --start-review are refused.
+      instruction to end the session now, printed after the change is published: a review request, a changes verdict
+      (--review changes) and a close each end the agent's session, so its next task starts in a fresh one (not for the
+      team lead). A review request or a close by a member of the item's team that holds no other active item also writes
+      the hand-off marker ~/.qwen/teams/<team>/handoff/<agent>.json before the change: a marker that cannot be written
+      refuses the change, and a change that is not published leaves no marker. Until Qwen registers a newer session of
+      that agent, its backlog pop and backlog work answer stop, and its --claim, --refine-start and --start-review are
+      refused.
   --start-review
       Record that the agent named by --by starts the requested review (review_state in_review, reviewer and review_started are
       set). Other agents skip it unless the review was started more than 20 minutes ago (team session).
@@ -576,13 +578,14 @@ Options:
       The agent that asks. With --claimable or --reviewable it also switches to team rules: an incomplete item is not offered
       and the agent never reviews its own work. With --pop it is the agent whose next action is answered (team session).
   --plan
-      Not in this build. The dispatch plan of the team for this branch: one action per member (respond, close, review or claim),
-      each item to one member, with the reason; it needs --roster (team session).
+      The dispatch plan of the team for this branch: at most one action per member (respond, close, review, claim, and for
+      the team lead refine or reassign-review), each item to one member, with the reason and a dispatch key; the members
+      are the roster's (--roster, else TEAM_ROSTER), in its order (team session). Read-only.
   --lead LEAD
       With --pop or --plan: the team lead, who alone refines incomplete items and never claims an execution item. The default
       is the environment variable TEAM_LEAD, else cody (team session).
   --agents AGENTS
-      Not in this build. With --plan: the team members present, comma-separated; the default is the whole roster (team session).
+      With --plan: the team members present, comma-separated; the default is the whole roster (team session).
   --claim-now
       With --pop: claim the item when the next action is to claim (team session).
   --roster ROSTER

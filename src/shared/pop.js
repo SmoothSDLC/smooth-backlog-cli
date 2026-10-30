@@ -108,7 +108,9 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   let busy = [];
   if (lead) {
     const leads = new Set(mine.map(x => String(x.r.seq)));
-    busy = own.filter(x => x.fm.team && x.fm.claimed_by !== me && x.r.status !== 'done' && !x.undone.some(d => d.item && leads.has(String(d.item.seq))));
+    // every open item of the team on this branch, incomplete ones included: an incomplete split child is the team's work too
+    busy = here.filter(x => x.fm.team && team.inTeam(x.fm) && x.fm.claimed_by !== me && x.r.status !== 'done' && !leads.has(String(x.r.seq))
+      && !team.undoneDependencies(folder, x.fm).some(d => d.item && leads.has(String(d.item.seq))));
     if (busy.length) mine = mine.filter(x => ['passed', 'changes-requested'].includes(x.fm.review_state));
   }
   // every open item of the team on this branch, incomplete ones included (a split child before its refinement is open work)
@@ -211,15 +213,78 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   return name === 'idle' ? 3 : 0;
 }
 
+// query.py:303-375 team_plan (item 052): the team's dispatch plan for this branch, one action per member, read-only. The
+// team-lead dispatcher sends the lead its refine entry; members take their own work from the pop. Beyond the oracle, the
+// plan follows the rules of this build's pop: a stale review is the lead's to hand on (never a member's), a member's own
+// work goes before another member's review request, a member waiting for its restart gets nothing, and items before
+// stage ready are neither reviewed nor claimed.
+async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
+  const roster = team.loadRoster(a.roster || process.env.TEAM_ROSTER || '');
+  const want = new Set(a.agents ? team.asList(a.agents) : Object.keys(roster));
+  const members = Object.keys(roster).filter(m => want.has(m)); // roster order
+  const lead = team.teamLead(a.lead);
+  const files = new Map(store.load(folder).map(i => [i.path, i]));
+  const every0 = await teamRows({ open: all(OPEN, hid), scope: 'branch', cap: 'off', every: false, excluded, repo, branch, folder, home });
+  const missing = new Map(every0.map(x => { const file = files.get(x.r.path); return [x.r.id, file ? missingFields(file.fm, file.body) : ['the item file']]; }));
+  const every = every0.filter(x => team.inTeam(x.fm)); // only the caller's team's items (TEAM_NAME)
+  const rows = every.filter(x => !missing.get(x.r.id).length); // an incomplete item is never dispatched to a member
+  const held = Object.fromEntries(members.map(m => [m, team.heldItems(folder, m)]));
+  const active = Object.fromEntries(members.map(m => [m, held[m].filter(h => h.state === 'active').length]));
+  const busy = new Set([...rows.filter(x => x.fm.review_state === 'in_review' && !team.staleReview(x.fm)).map(x => x.fm.reviewer),
+    ...members.filter(m => m !== lead && team.restarting(m))]);
+  const out = [];
+  const give = (m, action, r, say, reason, key = '') => {
+    busy.add(m);
+    out.push({ member: m, action, item: r.slug, seq: r.seq, instruction: say, reason, key: `${m} ${action} ${r.seq}${key}` });
+  };
+  for (const { r, fm } of rows) {
+    const m = fm.claimed_by;
+    if (!members.includes(m) || busy.has(m) || fm.wait_on) continue;
+    if (fm.review_state === 'changes-requested') {
+      give(m, 'respond', r, `the review by ${fm.reviewer || 'the reviewer'} asked for changes (${fm.reviewed_at || 'time not recorded'}): read its findings in the item, fix them, record each step (backlog update ${r.slug} --append "..."), then backlog update ${r.slug} --request-review any --note "<what changed>"`,
+        'claimer', fm.reviewed_at ? ` ${fm.reviewed_at}` : '');
+    } else if (fm.review_state === 'passed') give(m, 'close', r, `close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")`, 'claimer');
+  }
+  for (const { r, fm } of rows) {
+    if (!team.isReady(fm)) continue;
+    if (team.staleReview(fm)) {
+      if (want.has(lead) && !busy.has(lead)) give(lead, 'reassign-review', r, `the review of ${r.seq} by ${fm.reviewer} is stale (started ${fm.review_started}): hand it on: backlog update ${r.slug} --reassign-review <member> --by ${lead} --reason "<why>"`, 'stale review');
+      continue;
+    }
+    if (fm.review_state !== 'requested') continue;
+    const idle = members.filter(m => !team.isReviewAuthor(fm, m) && !busy.has(m) && !active[m]); // a member's own work goes first
+    if (idle.length) give(idle[0], 'review', r, reviewSay(r.slug, fm, idle[0]), 'any member but the author');
+  }
+  const canClaim = Object.fromEntries(members.map(m => [m, m !== lead && !roster[m]?.review_only && team.claimRefusal(folder, m) === null]));
+  for (const { r, fm, undone } of rows) {
+    if (r.status !== 'pending' || fm.claimed_by || undone.length || team.isChunk(fm) || !team.isReady(fm)) continue;
+    const free = members.filter(m => !busy.has(m) && canClaim[m]).sort((x, y) => held[x].length - held[y].length || members.indexOf(x) - members.indexOf(y));
+    if (free.length) {
+      give(free[0], 'claim', r, `claim exactly this item (planned for you; do not pop for another): backlog update ${r.slug} --claim ${free[0]}, then start the work and record each step in the item${dod(fm)}`,
+        `free member${free.length > 1 && held[free[0]].length < held[free[1]].length ? '; least loaded' : ''}`);
+    }
+  }
+  if (want.has(lead) && !busy.has(lead)) { // the lead alone refines an incomplete item (one per plan); never one waiting for an owner decision
+    const x = every.find(y => missing.get(y.r.id).length && y.fm.stage !== 'review-hitl');
+    if (x) {
+      const m = missing.get(x.r.id);
+      give(lead, 'refine', x.r, `refine ${x.r.seq}, never action it: set ${m.join(', ')} (${REFINE_HOW.replaceAll('<item>', x.r.slug)}); once complete, record the gap in the item`, `incomplete: ${m.join(',')}`, ` ${m.join(',')}`);
+    }
+  }
+  if (a.json) process.stdout.write(`${dumps(clean(out))}\n`);
+  else for (const e of out) say(`${e.member}: ${e.action} ${e.item} (${e.reason}) - ${e.instruction}`);
+  return 0;
+}
+
 // query.py:405-460 up to the call of pop(); argv is that of `backlog query` (with --pop, or --next --agent) or of `backlog pop`.
 export const run = argv => store.cloneLocked(store.resolveHome().home, () => popCommand(argv)); // a read that pulls waits for a writer of the clone
 async function popCommand(argv) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
   if (a.headless) return die('--headless is not in this build');
-  if (a.plan || a.agents) return die(`--${a.plan ? 'plan' : 'agents'}: the team dispatch plan is not in this build`);
+  if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
   if (a.critical) return die('--critical cannot be combined with --pop in this build');
-  if (!a.agent) return die('--pop needs --agent <your name>');
+  if (!a.agent && !a.plan) return die('--pop needs --agent <your name>');
   const cwd = process.cwd();
   let repo;
   try { repo = team.teamScope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }
@@ -247,7 +312,7 @@ async function popCommand(argv) {
     const all = (sql, ...p) => con.prepare(sql).all(...p).map(r => ({ ...r }));
     const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
     const excluded = excludedIds(all("SELECT * FROM phase WHERE status NOT IN ('archived')"), folder, repo);
-    return await pop(a, { all, hid, excluded, repo, branch, folder, home });
+    return await (a.plan ? plan : pop)(a, { all, hid, excluded, repo, branch, folder, home });
   } catch (e) {
     if (e instanceof BacklogError) return die(e.message, e.exitCode);
     throw e;

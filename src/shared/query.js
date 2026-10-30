@@ -1,7 +1,7 @@
 // Shared-mode read views (cli-parity job 12): `backlog query` and `backlog next`. Port of query.py:361-619
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the backlog.db mirror,
 // the oracle's order: pull, no-backlog check, branch, connect, findings. Output strings and --json match query.py.
-// Never writes an item (the db is opened as lib_db.connect does). The team views are views.js, --pop is pop.js; --plan and --headless are refused.
+// Never writes an item (the db is opened as lib_db.connect does). The team views are views.js, --pop and --plan are pop.js; --headless is refused.
 import { existsSync, realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
@@ -15,8 +15,6 @@ import { SCOPES, teamView } from './views.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'pop', 'plan', 'claim-now', 'headless'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
-// Flags of --plan (not built): refused. --pop is pop.js.
-const TEAM = new Set(['plan', 'agents']);
 const ACTIONABLE = ['pending', 'in_progress'];
 const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
 
@@ -120,9 +118,8 @@ async function query(argv) {
   if (a.next && a.agent) a.pop = true;
   if (a.pop && !a.agent) return die('--pop needs --agent <your name>');
   if (a.headless) return die('--headless is not in this build');
-  const team = Object.keys(a).find(k => TEAM.has(k));
-  if (team) return die(`--${team}: the team dispatch plan is not in this build`);
-  if (a.pop) return (await import('./pop.js')).run(argv); // pop.js repeats the preamble below for its own flags
+  if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
+  if (a.pop || a.plan) return (await import('./pop.js')).run(argv); // pop.js repeats the preamble below for its own flags (--plan: item 052)
 
   const cwd = process.cwd();
   let repo;

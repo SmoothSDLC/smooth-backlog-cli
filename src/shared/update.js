@@ -14,7 +14,7 @@ import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { REVIEW_DIR, asList, heldItems, markHandoff, needsReview, teamLead, teamScope } from './team.js';
+import { REVIEW_DIR, asList, heldItems, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team'];
@@ -107,15 +107,17 @@ async function update(argv) {
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
     let code;
-    try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); throw e; } finally { close(); }
-    if (code || a['dry-run']) { forget(); return code; }
+    const unlock = () => { if (a.handoff) releaseHandoff(a.handoff.team, a.handoff.agent); }; // not published: no hand-off, no lock
+    try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); unlock(); throw e; } finally { close(); }
+    if (code || a['dry-run']) { forget(); unlock(); return code; }
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
-    const pairs = await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '), a.guard, a.claims);
-    seen.recordWrites(folder, repo, seen.actor(), a.wrote ? [a.wrote] : [], pairs); // after the push, including a pure replan
-    if (a.handoff) { // after the push: a change that was not published locks nobody
-      const why = markHandoff(a.handoff.team, a.handoff.agent, a.handoff.seq);
-      if (why) process.stderr.write(`⚠️  backlog: the hand-off marker of ${a.handoff.agent} was not written (${why}); the dispatcher sees no lock\n`);
+    let pairs;
+    try { pairs = await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '), a.guard, a.claims); } catch (e) {
+      unlock();
+      throw e;
     }
+    seen.recordWrites(folder, repo, seen.actor(), a.wrote ? [a.wrote] : [], pairs); // after the push, including a pure replan
+    if (a.shutdown) process.stdout.write(`${shutdown(a.shutdown)}\n`); // after anything the publication prints
     return 0;
   });
 }
@@ -254,6 +256,17 @@ async function change(a, con, folder, repo) {
     return 0;
   }
 
+  // item 038 (update.py:372-378): a member's hand-off of its own item locks it until a fresh session, unless it still holds
+  // another active item; never the lead. The marker is written before the item (a marker that cannot be written refuses the
+  // hand-off: nothing changes), and set aside again when the change is not published (update() below).
+  const claimer = holder || fm.claimed_by || '';
+  const own = event === 'review_requested' || (event === 'closed' && (a.by || claimer) === claimer); // the lead closing a member's item locks nobody
+  if (own && fm.team && claimer && claimer !== teamLead() && !heldItems(folder, claimer).some(h => h.slug !== row.slug && h.state === 'active')) {
+    const locked = pendingHandoff(claimer, fm.team) !== null; // a lock already there stays, whatever happens to this change
+    const why = markHandoff(fm.team, claimer, row.seq);
+    if (why) return refuse(`${row.slug}: the hand-off marker of ${claimer} cannot be written (${why}); nothing changed`);
+    if (!locked) a.handoff = { team: fm.team, agent: claimer };
+  }
   store.write({ path, fm, body }, folder);
   a.wrote = { slug: row.slug, path: row.path };
   const recordChange = () => {
@@ -283,10 +296,9 @@ async function change(a, con, folder, repo) {
 
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
   if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug));
-  // item 033 (spec section 7): the hand-off to review, a changes verdict and a close end the agent's session, unless it
-  // is the lead or still holds another active item
+  // item 033 (spec section 7): the hand-off to review, a changes verdict and a close end the agent's session
   const ender = event === 'review_requested' ? holder : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
-  const ends = ender && ender !== teamLead() && !heldItems(folder, ender).some(h => h.slug !== row.slug && h.state === 'active');
+  const ends = ender && ender !== teamLead(); // spec section 7: these three end the agent's session (the lead is no member)
   if (completing) {
     say('   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).');
     if (order.length) say(`      backlog now ${order.length} item(s), P0..P${order.length - 1}; next = P0 ${order[0][0]}`);
@@ -298,13 +310,6 @@ async function change(a, con, folder, repo) {
       say('        backlog update --replan "<id,id,id,...>"       # set the leading order');
     }
   }
-  // item 038 (update.py:372-378): a member's hand-off of its own item locks it until a fresh session, unless it still holds
-  // another active item; never the lead. The marker is written once the change is published (update() below).
-  const claimer = holder || fm.claimed_by || '';
-  const own = event === 'review_requested' || (event === 'closed' && (a.by || claimer) === claimer); // the lead closing a member's item locks nobody
-  if (own && fm.team && claimer && claimer !== teamLead() && !heldItems(folder, claimer).some(h => h.slug !== row.slug && h.state === 'active')) {
-    a.handoff = { team: fm.team, agent: claimer, seq: row.seq };
-  }
-  if (ends) say(shutdown(ender)); // the last line of the output
+  if (ends) a.shutdown = ender; // printed by update() once the change is published: the last line of the output
   return 0;
 }

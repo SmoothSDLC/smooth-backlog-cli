@@ -153,10 +153,11 @@ test('the review-hitl stage: an owner decision holds the item and its dependents
   for (const line of Q.split('\n')) assert.ok(text.includes(`        ${line}\n`), line);
   assert.deepEqual(JSON.parse(ok(f, ['query', '--decisions', '--json'], { TEAM_NAME: 't2' }).stdout), []); // another team's decisions are not listed for t2
   up(f, c, '--decision', 'A: keep the old format');
-  assert.deepEqual([fm(f, c).stage, fm(f, c).refiner], ['refining', '']);
+  assert.deepEqual([fm(f, c).stage, fm(f, c).refiner], ['refining', 'lead']); // spec section 4: the lead re-refines it with the decision
   assert.match(doc(f, c).body, /\nDECISION \d{4}-\d\d-\d\d: A: keep the old format\n/);
   assert.deepEqual(JSON.parse(ok(f, ['query', '--decisions', '--json']).stdout), []);
-  assert.deepEqual([pop(f, 'archy', T1).action, pop(f, 'archy', T1).item], ['refine', c]); // re-refined with the decision
+  assert.notEqual(pop(f, 'archy', T1).item, c); // not a member's first-round refinement
+  assert.deepEqual([pop(f, 'lead', T1).action, pop(f, 'lead', T1).item], ['refine', c]); // the lead re-refines it with the decision
 });
 
 test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewed or worked; the lead refines, then any member claims', () => {
@@ -239,8 +240,9 @@ test('an incomplete item waiting in review-hitl is not offered to the lead for r
   const env = { ...T1, TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   assert.deepEqual([pop(f, 'lead', env).action, pop(f, 'lead', env).item], ['idle', null]);
   up(f, c, '--decision', 'A');
-  const p = pop(f, 'archy', env);
-  assert.deepEqual([p.action, p.item], ['refine', c]); // back to refining: a member refines it
+  assert.notEqual(pop(f, 'archy', env).item, c);
+  const p = pop(f, 'lead', env);
+  assert.deepEqual([p.action, p.item], ['refine', c]); // back to refining: the lead re-refines it with the decision
 });
 
 test('refine-done is refused while a field or the definition of done is missing; event lines are no definition of done', () => {

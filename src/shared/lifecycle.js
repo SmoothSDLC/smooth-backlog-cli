@@ -41,6 +41,8 @@ export function missingFields(fm, body) {
 export function claim({ fm, folder, repo }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
+  // spec section 8 (item 039): the lead never claims a split item; the team runner claims the team's work item (no stage) for it
+  if (agent === teamLead() && fm.team && fm.stage) reject(`the team lead (${agent}) never claims an item of its team's split; a member claims it`);
   if (fm.stage === 'review-hitl') reject('the item waits in stage review-hitl for an owner decision; nobody claims it, --force included (backlog update <item> --decision "<answer>" first)');
   // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages
   if (!isReady(fm)) reject(`team ${fm.team || ''} item in stage ${fm.stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`);
@@ -57,11 +59,13 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
 // for an owner decision (topology item 288). A member refines first, the lead requests the refinement review, and Codex
 // records the verdict; Claude only after Codex's 5-hour limit is recorded for the round.
 const inStage = fm => `team ${fm.team || 'none'}, stage ${fm.stage || 'none'}`;
-export function refineStart({ fm }, by) {
+export function refineStart({ fm, folder }, by, { force } = {}) {
   if (!by) reject('--refine-start needs --by <agent>');
   if (!fm.team || fm.stage !== 'refining') reject(`only an item of a team in stage refining is refined (${inStage(fm)})`);
   if (fm.claimed_by) reject(`claimed by ${fm.claimed_by}: the work item itself is refined and split by the team lead, not refined here`);
   if (fm.refiner && fm.refiner !== by) reject(`${fm.refiner} is refining it since ${fm.refine_started}; refine another item`);
+  const busy = fm.refiner === by || by === teamLead() ? null : claimRefusal(folder, by); // spec section 6: a refinement is new work too
+  if (busy && !force) reject(busy);
   const t = now();
   Object.assign(fm, { refiner: by, refine_started: t });
   return { event: 'refine_started', text: `Refinement started by ${by} at ${t}` };
@@ -117,7 +121,7 @@ export function decision({ fm }, answer) {
   if (fm.stage !== 'review-hitl') reject(`no owner decision is pending (stage ${fm.stage || 'none'})`);
   if (!strip(answer || '')) reject('--decision needs the owner\'s answer');
   const t = now();
-  Object.assign(fm, { stage: 'refining', refiner: '', decided_at: t, decision_question: '' });
+  Object.assign(fm, { stage: 'refining', refiner: teamLead(), refine_started: t, decided_at: t, decision_question: '' }); // spec section 4: the lead re-refines it with the decision
   return { event: 'decided', text: `DECISION ${t.slice(0, 10)}: ${answer}` };
 }
 
@@ -276,14 +280,14 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   const item = { fm, folder, repo };
   try {
     switch (actions[0]) {
-      case 'refine-start': return refineStart(item, a.by);
+      case 'refine-start': return refineStart(item, a.by, { force: a.force });
       case 'refine-done': return refineDone(item, a.by, note);
       case 'request-refinement-review': return requestRefinementReview(item, a.by);
       case 'refinement-review': return refinementReview(item, a['refinement-review'], { by: a.by, comments: a.comments });
       case 'request-decision': return requestDecision(item, a.by, a['request-decision']);
       case 'decision': return decision(item, a.decision);
       case 'claim': return claim(item, a.claim, { force: a.force });
-      case 'release': return release(item, a.release, { by: a.by, reason: a.reason });
+      case 'release': return release(item, a.release, { by: a.by || caller() || undefined, reason: a.reason });
       case 'reassign': return reassign(item, a.reassign, { by: a.by, reason: a.reason });
       case 'reassign-review': return reassignReview(item, a['reassign-review'], { by: a.by, reason: a.reason });
       case 'request-review': return requestReview(item, a['request-review'], note);
@@ -304,4 +308,4 @@ export const shutdown = agent => `🛑 ${agent}: END THE SESSION NOW. Reply with
 
 // update.py:253-255: printed after a passing review.
 // update.py:379-382: the claimer closes, else the team lead (owner 2026-10-25), never the reviewer (item 039)
-export const closeNow = (fm, slug) => `   ➡️  CLOSE NOW: ${fm.claimed_by || 'the claimer'} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead`;
+export const closeNow = (fm, slug) => (!fm.claimed_by ? `   ➡️  CLOSE NOW: nobody holds it: the team lead closes it (backlog update ${slug} --close --by <lead> --summary "<outcome>")` : `   ➡️  CLOSE NOW: ${fm.claimed_by} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead`);

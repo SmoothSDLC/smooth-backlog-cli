@@ -38,8 +38,9 @@ found=$(command -v backlog || true)
 # -ef: the same file, links followed; another command of that name is never run, not even with --version
 [ -n "$found" ] && [ "$found" -ef "$bin" ] || die "the backlog command on PATH (${found:-none}) is not $pkg $want ($bin): put npm's global bin first on PATH"
 # and that link is this package's command, not another global package's of the same name
-real=$(node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' "$bin" 2>/dev/null || true)
-case "$real" in "$(npm root --global)/$pkg/"*) ;; *) die "$bin is ${real:-no file}, not the command of $pkg: npm install --global $pkg@$want --registry=$registry" ;; esac
+canon() { node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' "$1" 2>/dev/null || true; }
+real=$(canon "$bin"); root=$(canon "$(npm root --global)/$pkg")
+case "$real" in "${root:-/nonexistent}/"*) ;; *) die "$bin is ${real:-no file}, not the command of $pkg: npm install --global $pkg@$want --registry=$registry" ;; esac
 got=$(backlog --version 2>/dev/null || true)
 [ "$got" = "$want" ] || die "backlog --version says ${got:-nothing}, not $want: reinstall with npm install --global $pkg@$want --registry=$registry"
 rm -f "$err" # exec runs no EXIT trap

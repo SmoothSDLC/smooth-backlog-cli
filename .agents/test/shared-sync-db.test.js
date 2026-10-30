@@ -326,9 +326,10 @@ test('review P2: update records its published identity when an added item is ren
 });
 
 // Writer b stops before its first push; writer a runs `aArgs` and pushes first; then b's command (bArgs) rebases onto it.
-async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv } = {}) {
+async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv, afterSeed } = {}) {
   const [a, b, { bare }] = writers(t);
   for (const args of seedArgs) assert.equal(cli(args, { cwd: a.cons, tmp: a.tmp }).status, 0);
+  afterSeed?.(a);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
   const second = cliAsync(bArgs, { cwd: b.cons, tmp: b.tmp, env: bEnv });
@@ -699,6 +700,16 @@ test('publication identity: an upstream archived file cannot duplicate the slug 
 test('publication identity: an upstream slug dependent also prevents changing its target sequence', async t => {
   const { b, bare, result } = await race(t, [NEW('alpha')],
     [...NEW('dependent'), '--depends-on', '001-alpha'], ['update', '1', '--seq', '5']);
+  rejectedPublication(t, b, bare, result, /depends on.*001-alpha/);
+});
+
+test('item 045: an item without a phase field keeps the identity of its file name: renumbering it is refused while an upstream item depends on that slug', async t => {
+  const { b, bare, result } = await race(t, [NEW('alpha')],
+    [...NEW('dependent'), '--depends-on', '001-alpha'], ['update', '1', '--seq', '5'], { afterSeed: a => {
+      const file = join(a.folder, 'phases', '001-alpha.md');
+      writeFileSync(file, readFileSync(file, 'utf8').replace(/^phase: .*\n/m, '')); // an older file: its slug is its file name
+      gitIn(a.home, 'commit', '-qam', 'an item without a phase field'); gitIn(a.home, 'push', '-q');
+    } });
   rejectedPublication(t, b, bare, result, /depends on.*001-alpha/);
 });
 

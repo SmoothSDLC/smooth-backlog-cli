@@ -281,7 +281,8 @@ Options:
       One item, given by number or slug, or several as a comma-separated list (a JSON array). The command refuses when
       one does not exist. Each item is shown whole: its row, front_matter, body, and missing (the team fields it lacks:
       review_refs, depends_on, estimate_min, definition_of_done; [] when complete; null when the item's file is
-      gone or has no front matter; a file that cannot be read or parsed fails the command, as every read does).
+      gone or holds no item: no front matter, or an empty one; a file that cannot be read or parsed fails the
+      command, as every read does).
   --events [EVENTS]
       The event log. With an item (number or slug) it prints the events of that item, newest first; without one it
       prints the latest 50 events of the backlog.

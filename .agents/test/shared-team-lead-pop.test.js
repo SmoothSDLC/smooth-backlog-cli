@@ -191,6 +191,8 @@ test('item 061: an item without depends_on names it; an item whose file is gone 
   ok(f, ['query', '--phase', g, '--json']);
   writeFileSync(file, 'the front matter is gone\n'); // a file the CLI cannot read as an item
   assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, null);
+  writeFileSync(file, '---\n{}\n---\nan empty front matter\n'); // no keys: no item either
+  assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, null);
 });
 test('item 056: in a team session a claim takes only an item of the session\'s team in its repository', () => {
   const f = fixture();

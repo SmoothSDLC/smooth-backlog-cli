@@ -79,26 +79,30 @@ sees and changes the backlog only through them.
 
 - [ ] Next work: `backlog work --agent <you> --json` gives the one next action, marks the item as yours (claim,
   refinement start or review start) and prints the whole item. `backlog query --phase <item> --agent <you>`
-  reads one item again before you change it.
+  reads one item again before you change it. `backlog update <item> --claim <you>` takes an offered item yourself;
+  `--release <you>` gives it back.
 - [ ] Refine: `backlog update <item> --refine-start --by <you>`, set what is missing (`--set-review-refs` with
   the coding model's review documents, `--set-estimate`, `--set-depends-on`, `--append` a definition of done), then
   `--refine-done --by <you> --note "<what you refined>"`.
-- [ ] Work and hand off: record each step with `--append`, then `--request-review any --note "<commits,
-  evidence>"`. A review is `--review pass|changes --by <you> --comments` citing one of the item's review_refs;
-  the claimer closes with `--close --summary`.
-- [ ] When the output says END THE SESSION NOW, or `backlog work` answers stop, reply with text only and make no
+- [ ] Work and hand off: record each step with `--append`; blocked on something, `--waiting "<what>"`, then
+  `--waiting-done`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review
+  --by <you>`, then `--review pass|changes --by <you> --comments` citing one of the item's review_refs; the claimer
+  closes with `--close --summary`.
+- [ ] Your review request, a changes verdict you give and your close end your session: the output's last line says
+  END THE SESSION NOW (and `backlog work` answers stop until a fresh session): reply with text only and make no
   further tool call.
 - [ ] Team lead: split with `backlog new --split-from <item>` (the child starts in stage refining); send a refined
   item on with `--request-refinement-review --by <you>`, record the verdict with `--refinement-review
   pass|changes|limit --by codex|claude --comments`; ask the owner with `--request-decision "<question>" --by <you>`
-  (`backlog query --decisions` lists them); `backlog query --plan` is the team's dispatch plan.
+  (`backlog query --decisions` lists them; the owner answers with `--decision "<answer>"`); `backlog query --plan` is
+  the team's dispatch plan.
 
 Work-in-progress limits (wip-limits.json in the backlog repository) refuse a claim or a refinement start past
 them; `backlog query --wip` shows the counts. Only the team lead lifts a team or agent limit for one item
 (`--wip-override "<reason>" --by <lead>`).
 
-Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign`,
-`--reassign-review`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the
+Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign <agent> --reason
+"<why>"`, `--reassign-review <agent> --reason "<why>"`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the
 owner's `--decision`.
 
 ## Skill validation

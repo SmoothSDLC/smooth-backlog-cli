@@ -19,8 +19,8 @@ import { REVIEW_DIR, asList, foreignCycle, foreignItem, heldItems, isForeign, ma
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
 const BOOL = ['dry-run'];
-const TEAM_VALUE = ['wip-override', 'claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason', 'reassign-review'];
-const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close', 'refine-start', 'refine-done', 'request-refinement-review'];
+export const TEAM_VALUE = ['wip-override', 'claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason', 'reassign-review'];
+export const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close', 'refine-start', 'refine-done', 'request-refinement-review'];
 const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'], 'set-chunk': ['yes', 'no'], severity: ['normal', 'critical'], 'refinement-review': ['pass', 'changes', 'limit'] };
 
 // Python str.strip()/rstrip() whitespace (not JS's: \x1c-\x1f and \x85 count, ﻿ does not).

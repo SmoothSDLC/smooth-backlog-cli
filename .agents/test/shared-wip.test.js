@@ -134,3 +134,16 @@ test('034: a branch limit is keyed owner/name:branch', () => {
   const v = JSON.parse(f.run('demo', ['query', '--wip', '--json']).stdout);
   assert.deepEqual(v.counts.find(c => c.level === 'branch'), { level: 'branch', key: 'acme/demo main', count: 1, limit: 1 });
 });
+
+test('034: an owner decision past a limit is recorded; the item then waits in refining with no refiner', () => {
+  const f = fixture();
+  const [q, r] = ['question', 'another'].map(n => f.make('demo', n, '--team', 't1'));
+  for (const x of [q, r]) f.run('demo', ['update', x, '--request-decision', 'which way, and why', '--by', 'lead']);
+  f.limits({ overall: 0 });
+  f.run('demo', ['update', q, '--decision', 'this way']);
+  const held = parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${q}.md`), 'utf8')).fm;
+  assert.deepEqual([held.stage, held.refiner], ['refining', '']);
+  rmSync(join(f.home, 'wip-limits.json'));
+  f.run('demo', ['update', r, '--decision', 'that way']);
+  assert.equal(parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${r}.md`), 'utf8')).fm.refiner, 'lead'); // no limit: the lead re-refines it
+});

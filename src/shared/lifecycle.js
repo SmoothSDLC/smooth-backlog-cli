@@ -123,12 +123,15 @@ export function requestDecision({ fm }, by, question) {
   return { event: 'decision_requested', text: `## Owner decision needed (asked by ${by} at ${t})\n\n${question}` };
 }
 
-export function decision({ fm }, answer) {
+export function decision({ fm, folder, repo }, answer) {
   if (fm.stage !== 'review-hitl') reject(`no owner decision is pending (stage ${fm.stage || 'none'})`);
   if (!strip(answer || '')) reject('--decision needs the owner\'s answer');
   const t = now();
-  Object.assign(fm, { stage: 'refining', refiner: teamLead(), refine_started: t, decided_at: t, decision_question: '' }); // spec section 4: the lead re-refines it with the decision
-  return { event: 'decided', text: `DECISION ${t.slice(0, 10)}: ${answer}` };
+  // spec section 4: the lead re-refines it with the decision; past a work-in-progress limit (034) the answer is recorded
+  // all the same and the item waits in refining for whoever may start it (the owner's answer is never refused)
+  const full = folder ? wipRefusal(folder, repo, { ...fm, stage: 'refining', refiner: '' }, teamLead(), fm.phase) : null;
+  Object.assign(fm, { stage: 'refining', refiner: full ? '' : teamLead(), refine_started: full ? '' : t, decided_at: t, decision_question: '' });
+  return { event: 'decided', text: `DECISION ${t.slice(0, 10)}: ${answer}${full ? `\n(no refiner yet: ${full})` : ''}` };
 }
 
 export function release({ fm }, agent, { by, reason } = {}) {

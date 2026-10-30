@@ -366,7 +366,10 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
   both([C, '--start-review', '--by', 'cody'], undefined, 0);
   both([C, '--start-review', '--by', 'zed'], undefined, 1); // in review by cody
   // beyond the oracle (item 033): a stale review is handed on by the team lead (--reassign-review), never taken over
-  assert.match(update(n, [C, '--start-review', '--by', 'zed'], { BACKLOG_REVIEW_STALE_SECONDS: '-1' }).stdout, /the review is stale: the team lead hands it on/);
+  const stale = update(n, [C, '--start-review', '--by', 'zed'], { BACKLOG_REVIEW_STALE_SECONDS: '-1' });
+  assert.equal(stale.status, 1, stale.stdout + stale.stderr);
+  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by cody since \\S+; review another item \\(the review is stale: the team lead hands it on`, 'm'));
+  assert.deepEqual(snapshot(n), snapshot(o)); // refused: nothing changed
   // the class options are gone: unrecognized, exit 2 in both (argparse prints its whole usage, the CLI names the option)
   assert.equal(py('update.py', [C, '--claim', 'cody', '--set-work-class', 'docs'], { cwd: o.cons, tmp: o.t }).status, 2);
   const gone = update(n, [C, '--claim', 'cody', '--set-work-class', 'docs']);

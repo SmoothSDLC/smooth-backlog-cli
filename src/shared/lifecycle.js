@@ -263,6 +263,10 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   if (a['refinement-review'] && (a.append || given.length || Object.keys(a).some(k => k.startsWith('set-')))) {
     return { refuse: `${slug}: --refinement-review records the verdict alone; change the item first and have it reviewed again` };
   }
+  // and while the refinement review runs, the item stays as the reviewer reads it
+  if (before.stage === 'refinement-review' && !actions.length && (a.append || given.length || Object.keys(a).some(k => k.startsWith('set-')))) {
+    return { refuse: `${slug}: in stage refinement-review the item stays as the reviewer reads it; a changes verdict returns it to refining` };
+  }
   const steps = actions.filter(k => k !== 'release');
   if (a['refine-done'] && missingFields(fm, body).length) { // a refined item is complete (owner 2026-10-28; update.py:303-307)
     return { refuse: `${slug}: still missing ${missingFields(fm, body).join(', ')}: complete it before --refine-done (${REFINE_HOW})` };

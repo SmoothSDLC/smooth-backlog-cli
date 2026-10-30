@@ -4,6 +4,7 @@
 // is a run of this CLI, so every rule of pop and update applies unchanged; the mark is one locked write of update.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { caller } from './lifecycle.js';
 import { redact } from './safety.js';
 import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
 import { strip, teamLead, teamScope } from './team.js';
@@ -41,6 +42,8 @@ export async function run(argv) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
   if (!a.agent) return die('work needs --agent <your name>');
+  const me = caller();
+  if (me && me !== strip(a.agent)) return die(`you are ${me} (QWEN_CODE_AGENT_ID): backlog work answers only for yourself, not for ${a.agent}`);
   if (a.lead && strip(a.lead) !== teamLead()) return die(`--lead ${a.lead} is not the team lead of this session (${teamLead()}; TEAM_LEAD): backlog work acts as the lead the updates know`);
   let p; let marked; let step; let status;
   for (let attempt = 1; ; attempt++) { // the pop and the mark are two commands: a step another agent took meanwhile is asked again
@@ -75,7 +78,8 @@ export async function run(argv) {
     item = { front_matter: file.fm, body: file.body };
   }
   const fmNow = item?.front_matter ?? {};
-  if (marked && item && ![fmNow.claimed_by, fmNow.refiner, fmNow.reviewer].includes(a.agent)) { // handed on between the mark and the read
+  const holds = { claim: fmNow.claimed_by, review: fmNow.reviewer, refine: fmNow.refiner }[p.action];
+  if (marked && item && holds !== a.agent) { // handed on between the mark and the read
     return die(`${p.item} was handed on before backlog work could read it (claimed by ${fmNow.claimed_by || 'nobody'}); run backlog work again`, 1);
   }
   const out = { ...p, marked, front_matter: item ? item.front_matter : null, body: item ? item.body : null };

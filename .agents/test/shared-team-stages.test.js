@@ -376,3 +376,14 @@ test('a refinement verdict changes nothing else in the same call', () => {
   no(f, ['update', c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok', '--append', '## Definition of done\n- [ ] other'], '--refinement-review records the verdict alone');
   assert.notEqual(fm(f, c).stage, 'ready');
 });
+
+test('in stage refinement-review the item takes no edit until its verdict', () => {
+  const f = fixture();
+  const w = work(f);
+  const c = make(f, 'child', '--split-from', w);
+  up(f, c, '--refine-start', '--by', 'archy');
+  up(f, c, '--refine-done', '--by', 'archy', '--note', 'x');
+  up(f, c, '--request-refinement-review', '--by', 'lead');
+  no(f, ['update', c, '--append', '## Definition of done\n- [ ] other'], 'in stage refinement-review the item stays as the reviewer reads it');
+  no(f, ['update', c, '--set-estimate', '9'], 'in stage refinement-review the item stays as the reviewer reads it');
+});

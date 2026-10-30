@@ -342,3 +342,12 @@ test('a review in progress is not requested again by its holder', () => {
   no(f, ['update', x, '--request-review', 'any', '--note', 'again', '--by', 'archy'], 'zed is reviewing it since');
   assert.deepEqual([fm(f, x).review_state, fm(f, x).reviewer], ['in_review', 'zed']);
 });
+
+test('backlog work answers only for the Qwen caller itself', () => {
+  const f = fixture();
+  const x = make(f, 'zed job');
+  ok(f, ['update', x, '--claim', 'zed']);
+  const r = run(f, ['work', '--agent', 'zed', '--json'], { QWEN_CODE_AGENT_ID: 'archy@t1' });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /you are archy \(QWEN_CODE_AGENT_ID\): backlog work answers only for yourself, not for zed/);
+});

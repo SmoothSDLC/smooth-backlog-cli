@@ -71,7 +71,9 @@ Retain the returned GUID for subsequent commands if priorities may change.
 
 ## Shared mode: team work
 
-With the shared backlog repository (`backlog --use-backlog-repo <path>`) the commands are `new`, `update`,
+Set a repository up once with `backlog setup` (it clones the backlog repository beside the repository when it is
+missing, writes `.smooth-backlog.json` to commit, and deploys this skill; `--ask` asks for the path). With the shared
+backlog repository (`backlog --use-backlog-repo <path>`) the commands are `new`, `update`,
 `query`, `next`, `pop`, `work`, `move` and `archive`; `backlog <command> --help` is the contract. A team member
 sees and changes the backlog only through them.
 

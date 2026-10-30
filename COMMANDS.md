@@ -909,3 +909,36 @@ Exit codes:
 Example:
   backlog archive 12
 ```
+
+### backlog setup
+
+```text
+backlog setup — point this repository at the shared backlog repository and deploy the backlog skill into it
+
+Usage:
+  backlog setup [--ask]
+
+Run inside the git repository to set up; works in local and shared mode. The command:
+  1. finds the backlog repository path: the one in .smooth-backlog.json at the repository's top folder, else
+     ../smoothsdlc-backlog (the clone beside the repository); with --ask it asks for the path, showing that default;
+  2. clones the backlog repository there with git when the path does not exist (from BACKLOG_ORIGIN_URL, default
+     https://github.com/SmoothSDLC/smoothsdlc-backlog.git); an existing clone is left as it is;
+  3. writes .smooth-backlog.json {"backlog_repository": "<path relative to the repository>"} when there is none, or
+     with --ask; otherwise keeps it. Commit it, so every clone of the repository finds the backlog repository, also
+     after the repository and the clone move together;
+  4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's;
+  5. switches on shared mode.
+
+Every shared-mode command finds the backlog repository in this order: BACKLOG_HOME, .smooth-backlog.json, the
+per-user record of --use-backlog-repo, ~/git/smoothsdlc-backlog. When none is there the command names backlog setup.
+
+Options:
+  --ask
+      Ask for the backlog repository path on standard input; an empty answer takes the default shown.
+  --help
+      Print this text and exit. Nothing is read or changed.
+Exit codes: 0 done; 2 a usage error or a folder that is no clone of the backlog repository; 3 the clone failed.
+
+Example:
+  backlog setup
+```

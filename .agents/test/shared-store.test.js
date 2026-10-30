@@ -88,8 +88,8 @@ test('resolveHome: BACKLOG_HOME > home record > ~/git/smoothsdlc-backlog; a miss
   assert.equal(missing.ask.code, 4);
   assert.equal(missing.ask.text,
     `the backlog repository is not at ${dflt}. ASK THE USER: where is the local clone of SmoothSDLC/smoothsdlc-backlog, `
-    + `or should it be cloned to ${dflt}? Then run 'python3 /scripts/set_home.py <path>' (existing clone) or `
-    + `'python3 /scripts/set_home.py --clone [<path>]', and run this command again.`, 'lib_db.py:81-85');
+    + `or should it be cloned to ${dflt}? Then run 'backlog setup' in this repository (it clones it beside the repository) or `
+    + `'backlog setup --ask' (it asks for the path), and run this command again.`, 'item 043: backlog setup, not the Python set_home.py');
   assert.equal(existsSync(dflt), false, 'never clones');
   mkdirSync(dflt, { recursive: true });
   assert.deepEqual(store.resolveHome(), { home: realpathSync(dflt), ask: null });

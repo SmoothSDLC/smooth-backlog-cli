@@ -37,6 +37,7 @@ The items of every repository can live in one Git repository, the backlog reposi
 repository's own .backlog folder. Two options, put before the command, choose the mode; the choice is kept per user.
   backlog --use-backlog-repo <path>   Use the clone of SmoothSDLC/smoothsdlc-backlog at <path> (shared mode)
   backlog --use-local-repo            Go back to the repository's own .backlog folder (local mode)
+  backlog setup [--ask]               Point this repository at the backlog repository (clone it beside it), deploy the skill
 Either option may be followed by a command, which then runs in that mode. In shared mode only the commands below
 exist; each one pulls the backlog repository first and pushes its change before it exits. An item is its number or
 its slug. backlog <command> --help prints every flag of the command, what the flag does, and an example.

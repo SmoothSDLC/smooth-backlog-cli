@@ -12,6 +12,7 @@ import { locked } from '../storage.js';
 import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
 import { actor, created, guarded, guardReflow } from './seen.js';
+import { configuredHome } from './setup.js';
 import { outsideTeam } from './team.js';
 
 const BACKLOG_ORIGIN = 'SmoothSDLC/smoothsdlc-backlog'; // lib_db.py:34
@@ -24,20 +25,20 @@ const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'
 // the caller prints ask.text and exits with ask.code.
 export function resolveHome() {
   let home = process.env.BACKLOG_HOME;
+  if (!home) home = configuredHome() ?? undefined; // item 043: the repository's .smooth-backlog.json comes before the per-user record
   if (!home) {
     try { home = readFileSync(join(configDir(), 'smoothsdlc-backlog', 'home'), 'utf8').trim(); } catch { /* no record */ }
   }
   home = resolve(expand(home || '~/git/smoothsdlc-backlog'));
   // Symlinks above the home (macOS /var, a linked ~) are resolved once here; a link AT the home is kept for validateHome to refuse.
   if (existsSync(home)) return { home: join(realpathSync(dirname(home)), basename(home)), ask: null };
-  const sh = join(process.env.SMOOTH_BACKLOG_SCRIPTS || join(homedir(), 'git', 'smoothsdlc-backlog', 'skill', 'backlog', 'scripts'), 'set_home.py');
   return {
     home,
     ask: {
       code: 4,
       text: `the backlog repository is not at ${home}. ASK THE USER: where is the local clone of ${BACKLOG_ORIGIN}, `
-        + `or should it be cloned to ${home}? Then run 'python3 ${sh} <path>' (existing clone) or `
-        + `'python3 ${sh} --clone [<path>]', and run this command again.`,
+        + `or should it be cloned to ${home}? Then run 'backlog setup' in this repository (it clones it beside the repository) or `
+        + `'backlog setup --ask' (it asks for the path), and run this command again.`,
     },
   };
 }

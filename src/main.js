@@ -20,6 +20,8 @@ export async function run({ installationRoot } = {}) {
       if (code || !mode.rest.length) { process.exitCode = code; return; }
       argv = mode.rest; // the command after the mode options runs in the mode just switched to
     }
+    // item 043: backlog setup works in either mode (it is what points a repository at the backlog repository)
+    if (argv[0] === 'setup') { process.exitCode = await (await import('./shared/setup.js')).run(argv.slice(1)); return; }
     // Shared mode (contract section 1) skips init, withStore and refreshIntegrations: the router owns the command.
     const shared = getMode() === 'shared' ? sharedCommand(argv) : null;
     if (shared) { process.exitCode = await (await import('./shared/router.js')).run(shared.command, shared.argv); return; }

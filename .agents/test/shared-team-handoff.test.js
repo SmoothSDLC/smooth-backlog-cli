@@ -84,6 +84,9 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
   assert.equal(pop(f, 'archy', T1).action, 'stop');
   const roster = join(f.t, 'team.json');
   writeFileSync(roster, JSON.stringify({ archy: {}, zed: {} }));
+  teamItem(f, 'offered job');
+  const stopped = JSON.parse(run(f, ['query', '--plan', '--roster', roster, '--agents', 'archy', '--json'], T1).stdout);
+  assert.ok(!stopped.some(e => e.member === 'archy'), JSON.stringify(stopped)); // the valid stop: the plan gives archy nothing
   for (const [cfg, mk] of [[null, null], ['{ not json', null], [[], null], [[{ name: 'archy', joinedAt: 1 }], 'garbage'], [[{ name: 'archy', joinedAt: 1 }], '{"at_ms":"bad","seq":1}'], [[{ name: 'archy', joinedAt: 'bad' }], 'VALID'], [[{ name: 'archy', joinedAt: 1 }], 'DIR']]) {
     if (cfg === null) config(f, []); else if (typeof cfg === 'string') writeFileSync(join(f.tdir, 'config.json'), cfg); else config(f, cfg);
     const put = () => { if (mk === 'DIR') { rmSync(marker(f), { force: true, recursive: true }); mkdirSync(marker(f), { recursive: true }); } else if (mk === 'VALID') writeFileSync(marker(f), JSON.stringify({ at_ms: Date.now(), seq: 1 })); else if (mk !== null) writeFileSync(marker(f), mk); };

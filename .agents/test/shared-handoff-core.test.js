@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as handoff from '../../src/shared/handoff.js';
 import * as team from '../../src/shared/team.js';
-import { dump } from '../../src/shared/frontmatter.js';
+import { dump, parse } from '../../src/shared/frontmatter.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -71,6 +71,24 @@ test('059.1: makeReceipt takes accepted or rejected with non-empty checks, and n
   assert.throws(() => handoff.makeReceipt({ ...r, checks: '' }), /checks/);
 });
 
+test('059.1: encode and decodeList move records between memory and the stored front-matter form', () => {
+  const rec = record('64');
+  const rcpt = receipt('64', rec.digest);
+  assert.equal(handoff.encode(rec), JSON.stringify(rec), 'encode is the compact JSON string the list stores');
+  assert.equal(handoff.decodeList(undefined), null, 'a missing key stays recognisable: a legacy producer wrote no handoffs');
+  assert.deepEqual(handoff.decodeList('none'), [], 'the string none is the no-dependents mark, not a record');
+  assert.deepEqual(handoff.decodeList([]), []);
+  assert.deepEqual(handoff.decodeList([handoff.encode(rec)]), [rec], 'a list of JSON strings decodes to the objects');
+  assert.deepEqual(handoff.decodeList([handoff.encode(rec), handoff.encode(rcpt)]), [rec, rcpt]);
+  assert.deepEqual(handoff.decodeList([rec]), [rec], 'in-memory objects pass through unchanged');
+  assert.throws(() => handoff.decodeList('not json'), 'a string that is not none and no JSON is a clear error');
+  assert.throws(() => handoff.decodeList(5), 'anything else is a clear error');
+  const text = dump({ seq: 5, phase: '005-x', status: 'done', depends_on: [], handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(rcpt)] }, '## Definition of done\n\n- [ ] x\n');
+  const back = parse(text).fm;
+  assert.deepEqual(handoff.decodeList(back.handoffs), [rec], 'the stored form survives a round-trip through the real front-matter codec');
+  assert.deepEqual(handoff.decodeList(back.handoff_receipts), [rcpt]);
+});
+
 test('059.1: edgeState gives the six edge states of the design', () => {
   const rec = record('64');
   assert.equal(handoff.edgeState({ status: 'done' }, '64'), 'legacy', 'a done producer without a handoffs key predates the rule');
@@ -92,6 +110,19 @@ test('059.1: edgeState takes the last receipt and the last record of the depende
   assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [receipt('64', rec.digest, 'rejected'), receipt('64', rec.digest)] }, '64'), 'accepted');
   const first = record('64', 'the first contract');
   assert.equal(handoff.edgeState({ status: 'done', handoffs: [first, rec], handoff_receipts: [receipt('64', first.digest)] }, '64'), 'stale', 'a replaced record breaks the pin of the receipt that accepted the old one');
+});
+
+test('059.1: edgeState accepts the stored front-matter form: records and receipts as compact JSON strings', () => {
+  const rec = record('64');
+  const older = record('64', 'an older contract');
+  const st = extra => handoff.edgeState({ status: 'done', ...extra }, '64');
+  assert.equal(st({ handoffs: 'none' }), 'missing', 'handoffs: none holds no record for the dependent');
+  assert.equal(st({ handoffs: [] }), 'missing', 'an empty list holds no record for the dependent');
+  assert.equal(st({ handoffs: [handoff.encode(rec)] }), 'unaccepted', 'a stored record with no receipt');
+  assert.equal(st({ handoffs: [handoff.encode(older), handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', older.digest))] }), 'stale', 'the last receipt pins the replaced record');
+  assert.equal(st({ handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', rec.digest, 'rejected'))] }), 'rejected');
+  assert.equal(st({ handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', rec.digest, 'rejected')), handoff.encode(receipt('64', rec.digest))] }), 'accepted', 'the last receipt wins in the stored form');
+  assert.equal(handoff.satisfied(st({ handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', rec.digest))] })), true);
 });
 
 test('059.1: satisfied is accepted and legacy only', () => {
@@ -158,6 +189,23 @@ test('059.1: openEdges lists every dependent whose edge is not accepted, with th
   item(home, 'acme', 'app', { seq: 7, phase: '007-accepted', status: 'pending', depends_on: [5] });
   item(home, 'acme', 'lib', { seq: 2, phase: '002-rejected', status: 'pending', depends_on: ['acme/app#5'] });
   assert.deepEqual(handoff.openEdges(join(home, 'acme', 'app'), 'acme/app', producerFm), [
+    { dependent: '6', state: 'unaccepted' },
+    { dependent: 'acme/lib#2', state: 'rejected' },
+  ]);
+});
+
+test('059.1: openEdges accepts the stored front-matter form and gives the same open edges', () => {
+  const home = store();
+  const rec6 = record('6');
+  const rec7 = record('7');
+  const rec8 = record('acme/lib#2');
+  // the same producer as the object-form test above, but with records and receipts stored as compact JSON strings
+  const storedFm = { seq: 5, phase: '005-producer', status: 'done', depends_on: [], handoffs: [handoff.encode(rec6), handoff.encode(rec7), handoff.encode(rec8)], handoff_receipts: [handoff.encode(receipt('7', rec7.digest)), handoff.encode(receipt('acme/lib#2', rec8.digest, 'rejected'))] };
+  item(home, 'acme', 'app', { seq: 5, phase: '005-producer', status: 'done', depends_on: [] });
+  item(home, 'acme', 'app', { seq: 6, phase: '006-unaccepted', status: 'pending', depends_on: [5] });
+  item(home, 'acme', 'app', { seq: 7, phase: '007-accepted', status: 'pending', depends_on: [5] });
+  item(home, 'acme', 'lib', { seq: 2, phase: '002-rejected', status: 'pending', depends_on: ['acme/app#5'] });
+  assert.deepEqual(handoff.openEdges(join(home, 'acme', 'app'), 'acme/app', storedFm), [
     { dependent: '6', state: 'unaccepted' },
     { dependent: 'acme/lib#2', state: 'rejected' },
   ]);

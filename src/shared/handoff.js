@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { asList } from './team.js';
+import { asList, strip } from './team.js';
 import { load } from './store.js';
 
 const HEX40 = /^[0-9a-f]{40}$/i; // git commit ids are hex, any case
@@ -35,16 +35,31 @@ export function makeReceipt({ dependent, digest, result, by, at, checks }) {
   return { dependent, digest, result, by, at, checks };
 }
 
+// The front-matter codec holds only scalars and lists of scalars, so each record and receipt is stored as one compact
+// JSON string in its list (handoffs: ["{...}"], handoff_receipts: ["{...}"]). encode is the string; decodeList reads it back.
+export const encode = obj => JSON.stringify(obj);
+// The stored form of handoffs / handoff_receipts as an array of objects: a list of JSON strings (in-memory objects pass
+// through), the string 'none' or an empty list to [], a missing key to null - the one shape edgeState needs to tell a
+// legacy producer (no handoffs key) from a no-dependents one ('none').
+export function decodeList(value) {
+  if (value == null) return null;
+  if (typeof value === 'string') return ['', 'none'].includes(strip(value).toLowerCase()) ? [] : [JSON.parse(value)];
+  if (!Array.isArray(value)) throw new Error(`hand-off list: expected a list of JSON strings, the string none, or a missing key, got ${typeof value}`);
+  return value.map(e => (typeof e === 'string' ? JSON.parse(e) : e));
+}
+
 // The state of the edge from the producer (its front matter) to dependentId, the dependent as the producer's
 // repository names it (its seq, or owner/name#seq for another repository): legacy (a done producer without a
 // handoffs key: closed before the rule), missing (no record for the dependent, including handoffs: none),
 // unaccepted (a record, no receipt), stale (the last receipt pins another digest), rejected or accepted (the
 // last receipt of the current record). Only accepted and legacy satisfy the edge.
 export function edgeState(producerFm, dependentId) {
-  if (producerFm.handoffs === undefined) return producerFm.status === 'done' ? 'legacy' : 'missing';
-  const record = Array.isArray(producerFm.handoffs) ? producerFm.handoffs.filter(r => r && r.dependent === dependentId).at(-1) : null;
+  const records = decodeList(producerFm.handoffs); // null: no handoffs key - a done producer predates the rule
+  if (records === null) return producerFm.status === 'done' ? 'legacy' : 'missing';
+  if (!records.length) return 'missing'; // handoffs: none, or a list without a record for the dependent
+  const record = records.filter(r => r && r.dependent === dependentId).at(-1);
   if (!record) return 'missing';
-  const receipts = Array.isArray(producerFm.handoff_receipts) ? producerFm.handoff_receipts.filter(r => r && r.dependent === dependentId) : [];
+  const receipts = (decodeList(producerFm.handoff_receipts) ?? []).filter(r => r && r.dependent === dependentId);
   const last = receipts.at(-1);
   if (!last) return 'unaccepted';
   if (last.digest !== record.digest) return 'stale';

@@ -14,7 +14,7 @@ import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { wipRefusal } from './wip.js';
+import { inProgress, wipRefusal } from './wip.js';
 import { REVIEW_DIR, asList, foreignCycle, foreignItem, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
@@ -216,6 +216,10 @@ async function change(a, con, folder, repo) {
   if (a['set-team'] !== undefined) { // update.py:255-258
     const name = strip(a['set-team']);
     if (!name && fm.stage) return refuse(`${row.slug}: an item in stage ${fm.stage} keeps a team (the stages are team work); set another team instead`); // beyond the oracle (Codex review of item 036)
+    if (name && name !== fm.team && inProgress(fm)) { // item 034: work in progress joins a team only within its limit
+      const full = wipRefusal(folder, repo, { ...fm, team: name }, fm.claimed_by || fm.refiner || '', row.slug);
+      if (full) return refuse(`${row.slug}: in progress, and in team ${name}: ${full}`);
+    }
     fm.team = name; changes.team = name || 'none';
   }
   if (a['set-chunk'] !== undefined) { fm.chunk = a['set-chunk'] === 'yes'; changes.chunk = a['set-chunk']; } // update.py:259-261

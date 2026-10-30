@@ -155,3 +155,15 @@ test('034: an item in progress is not moved into a repository past its limit', (
   f.limits({ repository: { default: 9, 'acme/other': 0 } });
   assert.match(f.run('demo', ['move', a, '--to-repository', 'acme/other'], 1).stdout, /in progress, and in acme\/other: the repository work-in-progress limit of acme\/other is 0/);
 });
+
+test('034: work in progress joins a full team only with the lead; a move counts the moved item once', () => {
+  const f = fixture(['demo', 'other']);
+  const [a, b] = ['one', 'two'].map(n => f.make('demo', n));
+  f.run('demo', ['update', a, '--set-team', 't1']);
+  f.run('demo', ['update', a, '--claim', 'amy']);
+  f.run('demo', ['update', b, '--claim', 'bob']);
+  f.limits({ team: 1 });
+  assert.match(f.run('demo', ['update', b, '--set-team', 't1'], 1).stdout, /in progress, and in team t1: the team work-in-progress limit of t1 is 1/);
+  f.limits({ overall: 2 });
+  f.run('demo', ['move', b, '--to-repository', 'acme/other']); // two in progress, the moved one among them: within the limit
+});

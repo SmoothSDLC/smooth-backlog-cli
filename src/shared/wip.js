@@ -29,7 +29,7 @@ function limitOf(cfg, level, key) {
   if (v && typeof v === 'object') return num(v[key] ?? v.default);
   return num(v);
 }
-const inProgress = fm => fm.status === 'in_progress' || (fm.stage === 'refining' && fm.refiner && !fm.claimed_by && (fm.status ?? 'pending') === 'pending');
+export const inProgress = fm => fm.status === 'in_progress' || (fm.stage === 'refining' && fm.refiner && !fm.claimed_by && (fm.status ?? 'pending') === 'pending');
 const holderOf = fm => fm.claimed_by || (fm.stage === 'refining' ? fm.refiner : '') || ''; // a finished refinement holds nothing
 // [{repository, slug, fm, path}] of every item in progress in the backlog home
 export function progressItems(home) {
@@ -60,11 +60,12 @@ function scopes(repo, fm, agent) {
   };
 }
 // null when the agent may start the item, else why not (the limit, the count and the items holding it).
-export function wipRefusal(folder, repo, fm, agent, slug, extra = []) { // extra: items a plan has already given out
+// extra: items a plan has already given out; self: the item being started where it is now (a move counts it once)
+export function wipRefusal(folder, repo, fm, agent, slug, extra = [], self = { repository: repo, slug }) {
   const home = dirname(dirname(resolve(folder)));
   const cfg = limits(home);
   if (LEVELS.every(l => cfg[l] === undefined)) return null;
-  const now = [...progressItems(home), ...extra].filter(x => !(x.repository === repo && x.slug === slug)); // the item itself does not count
+  const now = [...progressItems(home), ...extra].filter(x => !(x.repository === self.repository && x.slug === self.slug)); // the item itself does not count
   const s = scopes(repo, fm, agent);
   for (const level of LEVELS) {
     if (s[level].skip) continue;

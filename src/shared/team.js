@@ -124,7 +124,7 @@ export function foreignCycle(folder, repoId, seq, deps, cache = new Map()) {
     if (seen.has(node)) continue;
     seen.add(node);
     const [repo, n] = [node.slice(0, node.lastIndexOf('#')), Number(node.slice(node.lastIndexOf('#') + 1))];
-    const it = items(repo).find(i => Number(i.fm.seq) === n && i.fm.status !== 'archived');
+    const it = items(repo).find(i => Number(i.fm.seq) === n); // archived items too: their dependencies are still edges
     if (it) for (const d of asList(it.fm.depends_on)) { const next = nodeOf(repo, d); if (next) stack.push(next); }
   }
   return null;

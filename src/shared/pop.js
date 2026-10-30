@@ -95,7 +95,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const refineHow = slug => REFINE_HOW.replaceAll('<item>', slug);
   const reviews = [];
   for (const x of own) {
-    if (reviewOffer(x.fm, me) !== null && team.isReady(x.fm)) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me) });
+    if (reviewOffer(x.fm, me) !== null && team.isReady(x.fm) && !x.undone.some(d => d.foreign && d.item?.status !== 'done')) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me) }); // item 042: nor a review that waits on another repository
   }
   // spec section 5 and query.py:199: your review in progress comes first; another member's request, however old, comes
   // after your own work (item 033; the review-first window of this build is gone)

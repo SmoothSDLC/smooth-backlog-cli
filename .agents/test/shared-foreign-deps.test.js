@@ -59,6 +59,15 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   const held = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json'], 3).stdout);
   assert.equal(held.action, 'idle', JSON.stringify(held));
   assert.equal(held.first[0].item, 'acme/lib#2');
+  // a requested review of an item that waits on another repository is not offered either: that item is named first
+  run(here, NEW('reviewed app change', 'none'));
+  run(here, ['query', '--phase', '2', '--agent', 'zed']);
+  run(here, ['update', '2', '--claim', 'zed']);
+  run(here, ['update', '2', '--request-review', 'any', '--note', 'n', '--by', 'zed']);
+  run(here, ['query', '--phase', '2', '--agent', 'tester']);
+  run(here, ['update', '2', '--set-depends-on', 'acme/lib#2', '--by', 'tester']);
+  const rev = JSON.parse(run(here, ['pop', '--agent', 'rev', '--json'], 3).stdout);
+  assert.deepEqual([rev.action, rev.first?.[0]?.item], ['idle', 'acme/lib#2'], JSON.stringify(rev));
 });
 
 test('042: a lead whose team items wait only on another repository is told to start the team there, not to wait', () => {
@@ -111,6 +120,9 @@ test('042: a dependency cycle through another repository, or on the item itself,
   run(here, ['new', '--name', 'app second', '--objective', 'o', '--summary', 's', '--depends-on', 'acme/lib#1', '--body', '## Definition of done\n\n- [ ] x']);
   run(here, ['query', '--phase', '1', '--agent', 'tester']);
   assert.match(run(here, ['update', '1', '--set-depends-on', '2', '--by', 'tester'], 1).stdout, /dependency cycle through another repository's items back to acme\/app#1/);
+  // an archived item's dependencies are still edges
+  run(there, ['archive', '1', '--force']);
+  assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester'], 1).stdout, /dependency cycle through another repository's items back to acme\/app#1/);
 });
 
 test('042: two clones that each add one half of a cycle through another repository: the later publication is refused', () => {

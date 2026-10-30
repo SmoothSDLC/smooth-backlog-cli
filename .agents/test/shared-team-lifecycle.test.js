@@ -15,6 +15,7 @@ import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './s
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
+import { shutdown } from '../../src/shared/lifecycle.js';
 import * as team from '../../src/shared/team.js';
 
 const git = (cwd, ...args) => {
@@ -290,7 +291,13 @@ test('twin parity: every lifecycle step prints, refuses and records as update.py
     assert.equal(rn.status, ro.status, `${args.join(' ')}: ${rn.stdout}${rn.stderr}`);
     // beyond the oracle (item 033, spec section 7): a member's hand-off, changes verdict or close ends with the shutdown
     // line, and a member's close leaves the re-ranking to the lead; everything else is the oracle's
-    const mine = rn.stdout.replace(/🛑 \S+: END THE SESSION NOW\. .*\n$/, '').replace('      the team lead re-evaluates the order (backlog update --replan, --priority); not you\n',
+    const ends = args.includes('--request-review') || args.includes('--close') || (args.includes('--review') && args.includes('changes'));
+    const line = rn.stdout.match(/\n(🛑 (\w+): .*)\n$/);
+    if (line) { // exactly the shutdown text, to a member of the fixture, on a step that ends a session
+      assert.ok(ends && ['archy', 'zed'].includes(line[2]), `${args.join(' ')}: an unexpected shutdown line`);
+      assert.equal(line[1], shutdown(line[2]));
+    }
+    const mine = rn.stdout.replace(/\n🛑 \w+: .*\n$/, '\n').replace('      the team lead re-evaluates the order (backlog update --replan, --priority); not you\n',
       '      RE-EVALUATE the order now (it is a planning step even if nothing changes):\n        backlog update <phase> --priority <rank>      # promote/demote one\n        backlog update --replan "<id,id,id,...>"       # set the leading order\n');
     assert.equal(norm(mine), norm(ro.stdout), args.join(' '));
     assert.equal(rn.stderr, ro.stderr, args.join(' '));

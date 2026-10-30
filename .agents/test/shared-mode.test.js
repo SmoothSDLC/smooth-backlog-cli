@@ -301,7 +301,9 @@ test('a missing home: BACKLOG_HOME set -> exit 2 with the oracle message; defaul
     const o = py('query.py', ['--status'], { cwd: f.cons, tmp: f.tmp, env: extra });
     if (!o) { t.diagnostic(`${label}: ${ORACLE_SKIP}: parity not compared`); continue; }
     assert.equal(o.status, code, `${label} oracle`);
-    if (differs !== 'text') assert.equal(r.stderr, o.stderr, `${label}: same message as the oracle`);
+    // the deliberate difference is only the instruction after the question: everything before it is the oracle's
+    if (differs === 'text') assert.equal(r.stderr.split(' Then run ')[0], o.stderr.split(' Then run ')[0], `${label}: same location and question as the oracle`);
+    else assert.equal(r.stderr, o.stderr, `${label}: same message as the oracle`);
   }
   // the home record points at a missing folder: that is the "not the default" ask case too (lib_db.py:81-85)
   mkdirSync(dirname(recordFile(f.tmp)), { recursive: true });

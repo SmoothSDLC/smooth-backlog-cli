@@ -100,7 +100,7 @@ export function branch(cwd) {
 
 function atomicWrite(path, text) { // the semantics of src/storage.js atomicWrite, synchronous
   mkdirSync(dirname(path), { recursive: true });
-  const temp = `${path}.${randomUUID()}.tmp`;
+  const temp = join(dirname(path), `.${randomUUID()}.tmp`); // item 047: never the item's name plus a suffix, which can pass 255 bytes
   try {
     writeFileSync(temp, text, { flag: 'wx', mode: 0o600 });
     renameSync(temp, path);

@@ -78,3 +78,26 @@ test('042: a lead whose team items wait only on another repository is told to st
   assert.deepEqual(p.first?.map(x => x.item), ['acme/lib#1'], JSON.stringify(p));
   assert.match(p.instruction, /end the session here; the team is started in that repository/);
 });
+
+test('042: a dependency cycle through another repository, or on the item itself, is refused', () => {
+  const t = mkdtempSync(join(tmpdir(), 'foreign-cycle-'));
+  dirs.push(t);
+  sharedBacklog(t);
+  const here = consumer(t, 'acme', 'app', 'main');
+  const there = consumer(t, 'acme', 'lib', 'main');
+  mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  const run = (cwd, args, want = 0) => {
+    const r = cli(args, { cwd, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester' } });
+    assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
+    return r;
+  };
+  const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x'];
+  run(here, NEW('app item'));
+  run(there, NEW('lib item'));
+  run(there, ['query', '--phase', '1', '--agent', 'tester']);
+  run(there, ['update', '1', '--set-depends-on', 'acme/app#1', '--by', 'tester']);
+  run(here, ['query', '--phase', '1', '--agent', 'tester']);
+  assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester'], 1).stdout, /dependency cycle through another repository's items back to acme\/app#1/);
+  assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/app#1', '--by', 'tester'], 1).stdout, /cycle/);
+});

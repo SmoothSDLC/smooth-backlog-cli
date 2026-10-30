@@ -184,7 +184,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   // item 042 (owner 2026-10-29): when the work here waits on not-done items of other repositories, the answer names them
   // as the work to do first (before any chunk work here); the lead ends the session and the team is started there
-  const first = act || (lead && busy.length) ? [] : [...new Map(own.filter(x => !x.fm.claimed_by && x.r.status === 'pending').flatMap(x => x.undone)
+  const first = act || (lead && busy.length) ? [] : [...new Map(own.filter(x => x.r.status !== 'done').flatMap(x => x.undone) // claimed ones too: a dependency added after the claim
     .filter(d => d.foreign && d.item && d.item.status !== 'done')
     .map(d => [`${d.item.repository}#${d.item.seq}`, { item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }])).values()];
   if (!act && first.length) {

@@ -14,7 +14,7 @@ import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { REVIEW_DIR, asList, foreignItem, handoffText, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
+import { REVIEW_DIR, asList, foreignCycle, foreignItem, handoffText, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
@@ -220,6 +220,7 @@ async function change(a, con, folder, repo) {
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }
     const cycle = dependencyCycle(con, folder, row.id, deps);
+    if (!cycle && deps.some(isForeign) && foreignCycle(folder, repo, row.seq, deps)) return refuse(`--set-depends-on: it would make a dependency cycle through another repository's items back to ${repo}#${row.seq}`); // item 042
     if (cycle) return refuse(`--set-depends-on: ${cycle === row.id ? 'an item cannot depend on itself' : `it would make a dependency cycle through ${cycle}`}`);
     fm.depends_on = deps;
     changes.depends_on = deps.join(',') || 'none';

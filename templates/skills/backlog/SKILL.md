@@ -91,6 +91,15 @@ sees and changes the backlog only through them.
   then `--waiting-done --by <you>`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review
   --by <you>`, then `--review pass|changes --by <you> --comments "<findings, citing one of the item's review_refs>"`;
   the claimer closes with `--close --summary "<what was delivered>"`.
+- [ ] Dependency hand-off (the gate for dependent work): a dependent is offered or claimed only after the hand-off of
+  every done producer it depends on is accepted, or the producer is a legacy one (done before the rule, with no
+  hand-off records). The producer (its claimer) records `--handoff <dependent> --handoff-commit <commit>
+  --handoff-contract <text> --handoff-verification <text>` (optionally `--handoff-outputs`, `--handoff-pickup`,
+  `--handoff-risks`); the team lead answers on the producer's item with `--accept-handoff <dependent> --checks
+  "<what you checked>"` or `--reject-handoff <dependent> --reason "<why>"`. Close of the producer is refused while a
+  dependent's hand-off is not accepted; a producer without dependents gets the NONE record the CLI writes at close.
+  A claim may pass a done producer's unaccepted hand-off only with `--ignore-dependency-lock "<reason>"` (the lead,
+  or the owner outside a team session); an unfinished dependency is never passed.
 - [ ] A member's review request, a changes verdict it gives and its close end its session (never the lead's): the
   output's last line says END THE SESSION NOW: reply with text only and make no further tool call (when the CLI
   recorded a hand-off for a Qwen team member, `backlog work` also answers stop until its fresh session).

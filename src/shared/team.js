@@ -281,7 +281,9 @@ export function releaseHandoff(teamName, agent, text) {
   if (mine) {
     try { renameSync(grab, join(dir, `${agent}.released`)); } catch { rmSync(grab, { force: true, recursive: true }); } // never left in place: an unpublished hand-off holds nobody
   } else {
-    try { linkSync(grab, file); } catch { /* a newer marker is there */ }
+    try { linkSync(grab, file); } catch (e) { // EEXIST: a newer marker is there; anything else: say whose hand-off is lost
+      if (e.code !== 'EEXIST') warn(`the hand-off marker of ${agent} (another clone's) could not be put back at ${file} (${e.message}): ${agent} is not stopped by it`);
+    }
     rmSync(grab, { force: true, recursive: true });
   }
 }

@@ -25,7 +25,7 @@ test('023: the parity rule is written down, and every oracle skip names it', () 
     if (!/\bpy\b|python3/.test(text) || f === 'parity-rule.test.js') continue; // this file names the patterns it looks for; a file running Python is one
     // t.skip(...), ctx.skip(...), test.skip(...), it.skip(...), a diagnostic, or a { skip } option; a variable used as the
     // reason counts as ORACLE_SKIP's only when its definition is
-    const reasons = [...text.matchAll(/\b\w+\s*(?:\.\s*(?:skip|todo|diagnostic)|\[\s*['"`](?:skip|todo|diagnostic)['"`]\s*\])\s*\(([^\n]*)|\bskip\s*:\s*([^,}\n]+)|[{,]\s*(skip)\s*[,}]/g)].map(m => (m[1] ?? m[2] ?? m[3]).trim());
+    const reasons = [...text.matchAll(/\b\w+\s*(?:\.\s*(?:skip|todo|diagnostic)|\[\s*['"`](?:skip|todo|diagnostic)['"`]\s*\])\s*\(([^\n]*)|(?:\bskip|\[\s*['"`]skip['"`]\s*\])\s*:\s*([^,}\n]+)|[{,]\s*(skip)\s*[,}]/g)].map(m => (m[1] ?? m[2] ?? m[3]).trim());
     // a reason variable counts only when its every string is ORACLE_SKIP: its definition names it and holds no literal text
     const vars = new Set([...text.matchAll(/\bconst (\w+) = ([^\n]*)/g)].filter(m => m[2].includes('ORACLE_SKIP') && !/['"`][^'"`]*[A-Za-z]{3}[^'"`]*['"`]/.test(m[2].replace(/py\([^)]*\)|spawnSync\([^)]*\)/g, ''))).map(m => m[1]));
     // a reason that names ORACLE_SKIP holds no other text of its own (a ternary with another literal is another reason)

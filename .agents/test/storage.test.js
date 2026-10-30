@@ -81,15 +81,20 @@ test('failure writing the owner record leaves no lock and no temp file', async t
   assert.equal(await fs.stat(path).then(() => true, () => false), false);
   assert.deepEqual(readdirSync(f.dir).filter(n => n.startsWith('owner-write.lock')), []);
 });
-test('item 025: a takeover marker is cleared only if it is still the one read; a newer one is put back', async t => {
-  const { clearMarker } = await import('../../src/storage.js');
-  const { readFileSync, existsSync } = await import('node:fs');
-  const f = fixture(t); const marker = join(f.dir, 'run.lock.takeover');
-  writeFileSync(marker, '1@here');
-  clearMarker(marker, '1@here');
-  assert.equal(existsSync(marker), false); // the one read: removed
-  writeFileSync(marker, '2@here'); // another waiter's new marker, after this one read '1@here'
-  clearMarker(marker, '1@here');
-  assert.equal(readFileSync(marker, 'utf8'), '2@here');
-  assert.deepEqual(readdirSync(f.dir).filter(n => n.startsWith('run.lock.takeover.')), []); // no private copy left
+test('item 025: no process removes another\'s takeover marker: a gone owner\'s level is passed by the level below it', async t => {
+  const { acquireMarker, releaseMarker } = await import('../../src/storage.js');
+  const { existsSync } = await import('node:fs');
+  const { spawnSync } = await import('node:child_process');
+  const { hostname } = await import('node:os');
+  const f = fixture(t); const lock = join(f.dir, 'run.lock'); const base = `${lock}.takeover`;
+  writeFileSync(base, `${process.ppid}@${hostname()}`); // a live owner: wait
+  assert.equal(acquireMarker(lock), null);
+  const dead = spawnSync(process.execPath, ['-e', '0']).pid;
+  writeFileSync(base, `${dead}@${hostname()}`); // a gone owner: its marker stays, the next level is taken
+  const held = acquireMarker(lock);
+  assert.equal(held, `${base}.${dead}`);
+  assert.equal(acquireMarker(lock), null); // this process holds that level now: another waiter waits
+  releaseMarker(lock, held);
+  assert.deepEqual([existsSync(held), existsSync(base)], [false, false]); // its level and the gone owners' above it
+  assert.deepEqual(readdirSync(f.dir).filter(n => n.startsWith('run.lock')), []);
 });

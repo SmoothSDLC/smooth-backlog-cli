@@ -1,4 +1,4 @@
-import { promises as fs, closeSync, linkSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync } from 'node:fs';
+import { promises as fs, linkSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, dirname, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
@@ -37,37 +37,44 @@ export async function asChild(path, fn) {
   let parent;
   try { parent = readFileSync(path, 'utf8'); JSON.parse(parent); } catch { return fn(); } // no record of the parent's to amend
   const put = async text => { const tmp = `${path}.${randomUUID()}.tmp`; try { await fs.writeFile(tmp, text, { mode: 0o600 }); await fs.rename(tmp, path); } finally { await fs.rm(tmp, { force: true }); } };
-  const marker = `${path}.takeover`;
   for (let i = 0; ; i++) {
-    let fd; try { fd = openSync(marker, 'wx'); } catch (e) { if (e.code !== 'EEXIST' || i > 400) throw e; clearIfGone(marker); await delay(25); continue; }
+    const held = acquireMarker(path);
+    if (!held) { if (i > 400) throw new BacklogError('LOCKED', `the takeover of ${path} stays held; nothing was changed`, 1); await delay(25); continue; }
     try {
-      writeSync(fd, `${process.pid}@${hostname()}`);
       if (readFileSync(path, 'utf8') !== parent) throw new BacklogError('LOCKED', `the checkout ${path} of the parent process changed hands before its child started; nothing was changed`, 1);
       await put(JSON.stringify({ ...JSON.parse(parent), child: process.pid }));
       break;
-    } finally { closeSync(fd); rmSync(marker, { force: true }); }
+    } finally { releaseMarker(path, held); }
   }
   try { return await fn(); } finally { await put(parent); }
 }
-// The takeover marker names its owner: it is removed only when that process is gone (a stalled owner keeps it), or,
-// without a readable owner (an older CLI), when it is older than 30 s.
-function clearIfGone(marker) {
+// The takeover marker: <lock>.takeover holds "<pid>@<host>" of its owner from the moment it exists (a linked temp file).
+// No process ever removes another's marker: when the owner of a level is gone, the next waiter takes the level below it
+// (<marker>.<dead pid>), so two live processes never hold the takeover of the same dead holder. Every owner removes its
+// own level and the levels above it (their owners are gone) when it is done; by then the lock no longer holds the record
+// they were taking over, so a later owner's check of that record fails. Returns the marker held, or null (wait).
+export function acquireMarker(path) {
+  let name = `${path}.takeover`;
+  const tmp = `${path}.${randomUUID()}.mark`;
+  writeFileSync(tmp, `${process.pid}@${hostname()}`, { mode: 0o600 });
   try {
-    const seen = readFileSync(marker, 'utf8'); const [pid, host] = seen.split('@');
-    const gone = Number(pid) > 0 ? host === hostname() && !alive(Number(pid)) : Date.now() - statSync(marker).mtimeMs > 30000;
-    if (gone) clearMarker(marker, seen);
-  } catch { /* gone already */ }
+    for (let depth = 0; depth < 64; depth++) {
+      try { linkSync(tmp, name); return name; } catch (e) { if (e.code !== 'EEXIST') throw e; }
+      let owner = ''; try { owner = readFileSync(name, 'utf8'); } catch { continue; } // gone meanwhile: try the name again
+      const [pid, host] = owner.split('@');
+      if (!(Number(pid) > 0)) { // an older CLI's marker names no owner: gone when older than 30 s
+        let old = false; try { old = Date.now() - statSync(name).mtimeMs > 30000; } catch { continue; }
+        if (!old) return null;
+        name = `${name}.legacy`; continue;
+      }
+      if (host !== hostname() || alive(Number(pid))) return null; // a live owner (or one this host cannot probe): wait
+      name = `${name}.${pid}`;
+    }
+    return null;
+  } finally { rmSync(tmp, { force: true }); }
 }
-// Removes a takeover marker whose owner is gone: renamed to a private name first, so a marker another process created
-// meanwhile is put back, never removed on an old read.
-// shortcut: between the rename and the link back a third waiter can create a marker of its own (two system calls; it
-// needs a dead marker owner and three waiters at once). Node has no file lock; upgrade to one (flock) if Node gets it.
-export function clearMarker(marker, seen) {
-  const grab = `${marker}.${process.pid}.${randomUUID()}`;
-  try { renameSync(marker, grab); } catch { return; } // gone already
-  let same = false; try { same = readFileSync(grab, 'utf8') === seen; } catch { /* unreadable: not the one read */ }
-  if (!same) { try { linkSync(grab, marker); } catch { /* a newer one is there */ } }
-  rmSync(grab, { force: true });
+export function releaseMarker(path, held) {
+  for (let name = held; name.length >= `${path}.takeover`.length; name = name.slice(0, name.lastIndexOf('.'))) rmSync(name, { force: true });
 }
 // The lock file appears with its whole record or not at all (a temp file linked, or renamed over a dead holder's), so a
 // crash never leaves an empty lock behind.
@@ -82,21 +89,16 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
   await fs.mkdir(dirname(path), { recursive: true });
   const started = Date.now(); let holder = '';
   // takeOver: only the owner of the takeover marker may replace a dead owner's record, and only if the file is still what
-  // was read (a process that created a fresh lock meanwhile is never displaced). A marker is cleared only when its owner is gone (clearIfGone).
+  // was read (a process that created a fresh lock meanwhile is never displaced); see acquireMarker.
   const replaceIf = async (same, why) => {
-    const marker = `${path}.takeover`; let fd;
-    try { fd = openSync(marker, 'wx'); } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
-      clearIfGone(marker);
-      return false;
-    }
-    try { writeSync(fd, `${process.pid}@${hostname()}`); } finally { closeSync(fd); }
+    const held = acquireMarker(path);
+    if (!held) return false;
     try {
       if (!same()) return false;
       await placeLock(path, true);
       if (!tookOver) { tookOver = true; process.stderr.write(`backlog: took over a stale lock ${why}: ${path}\n`); }
       return true;
-    } finally { rmSync(marker, { force: true }); }
+    } finally { releaseMarker(path, held); }
   };
   for (;;) {
     try { await placeLock(path, false); break; }

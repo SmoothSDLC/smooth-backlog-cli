@@ -96,6 +96,12 @@ test('042: a lead whose team items wait only on another repository is told to st
   const p = JSON.parse(run(here, ['pop', '--agent', 'lead', '--json'], 3).stdout);
   assert.deepEqual(p.first?.map(x => x.item), ['acme/lib#1'], JSON.stringify(p));
   assert.match(p.instruction, /end the session here; the team is started in that repository/);
+  // a refined team item that waits on another repository is not sent to the refinement review first either
+  run(here, ['new', '--name', 'refined child', '--objective', 'o', '--summary', 's', '--depends-on', 'acme/lib#1', '--team', 't1', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]);
+  run(here, ['update', '3', '--refine-start', '--by', 'zed']);
+  run(here, ['update', '3', '--refine-done', '--by', 'zed', '--note', 'refined']);
+  const q = JSON.parse(run(here, ['pop', '--agent', 'lead', '--json'], 3).stdout);
+  assert.deepEqual([q.action, q.first?.map(x => x.item)], ['idle', ['acme/lib#1']], JSON.stringify(q));
 });
 
 test('042: a dependency cycle through another repository, or on the item itself, is refused', () => {

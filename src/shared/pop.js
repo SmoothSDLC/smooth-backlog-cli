@@ -164,7 +164,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   // its close and rework never do (spec section 8; beyond query.py:247, which let the refinement review go first)
   const plain = () => !act || act.name === 'review' || (act.name === 'continue' && [undefined, null, '', 'none'].includes(own.find(x => x.r.slug === act.r.slug)?.fm.review_state));
   if (lead && plain()) { // query.py:247-258: the refinement review comes before the lead's own work
-    const rv = here.filter(({ fm }) => fm.team && team.inTeam(fm) && ['refined', 'refinement-review'].includes(fm.stage));
+    const rv = here.filter(x => x.fm.team && team.inTeam(x.fm) && ['refined', 'refinement-review'].includes(x.fm.stage) && !waitsAway(folder, x)); // 042
     if (rv.length) {
       act = { name: 'refinement-review', r: rv[0].r, f: repo, say: `have the refinement of ${rv.map(x => x.r.seq).join(', ')} reviewed before anyone works on them: `
         + `backlog update <item> --request-refinement-review --by ${me} for each refined one; send them to Codex with the codex-agent tool codex `
@@ -180,14 +180,15 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   if (!act && lead) { // the lead refines an incomplete item (never actions it): after complete work, before chunk
     const r = open.find(x => incomplete.has(x.id) && (x.repository || '') === repo && x.branch === branch && team.inTeam(files.get(x.path)?.fm ?? {})
-      && !(files.get(x.path)?.fm.stage ?? '')); // only its team's (item 037), outside the refinement stages: there a member refines (036)
+      && !(files.get(x.path)?.fm.stage ?? '') && !waitsAway(folder, { fm: files.get(x.path)?.fm ?? {} })); // only its team's (item 037), outside the refinement stages: there a member refines (036); nothing waiting on another repository (042)
     if (r) {
       act = { name: 'refine', r, f: repo, say: `refine ${r.seq}, never action it: set ${incomplete.get(r.id).join(', ')} (${REFINE_HOW.replaceAll('<item>', r.slug)}); an incomplete item means the backlog was not filled properly: once complete, record the gap in the item (backlog update <item> --append "GAP: ...")` };
     }
   }
   // item 042 (owner 2026-10-29): when the work here waits on not-done items of other repositories, the answer names them
   // as the work to do first (before any chunk work here); the lead ends the session and the team is started there
-  const first = act || (lead && busy.length) ? [] : [...new Map(own.filter(x => x.r.status !== 'done').flatMap(x => x.undone) // claimed ones too: a dependency added after the claim
+  const notOwn = here.filter(x => team.inTeam(x.fm) && x.r.status !== 'done' && !own.some(o => o.r.slug === x.r.slug)); // incomplete or refining team items too
+  const first = act || (lead && busy.length) ? [] : [...new Map([...own.filter(x => x.r.status !== 'done').flatMap(x => x.undone), ...notOwn.flatMap(x => team.undoneDependencies(folder, x.fm))] // claimed ones too: a dependency added after the claim
     .filter(d => d.foreign && d.item && d.item.status !== 'done')
     .map(d => [`${d.item.repository}#${d.item.seq}`, { item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }])).values()];
   if (!act && first.length) {

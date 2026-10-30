@@ -817,6 +817,43 @@ Example:
   backlog work --agent archy --json
 ```
 
+### backlog team pop
+
+```text
+backlog team pop — the team lead takes its team's next work item, with the whole item
+
+Usage:
+  backlog team pop --team <name> [--agent <lead>] [--json]
+
+A work item of a team is an item of this repository and branch whose front matter team is the team's name and that has
+no stage (backlog update <item> --set-team <name> gives an item to a team; the items split from it carry a stage and are
+the members' work). When the lead holds an open work item of the team, the answer is continue with that item. Otherwise
+the command claims for the lead the team's first open, unclaimed work item in the work order (priority, then seq) whose
+claim backlog update --claim accepts (its dependencies are done, no work-in-progress limit is passed), and the answer
+is claim. The output is the action, the one instruction (refine and split the item with the team), the items not taken
+with the reason, and the whole item: its front matter and its body. When there is no work item to take, the action is
+idle and the command exits with 3. Only the team lead runs it.
+
+Options:
+  --team NAME
+      Required: the team whose work item to take. In a team session (TEAM_NAME set) it must be that team.
+  --agent AGENT
+      The team lead. The default is the environment variable TEAM_LEAD, else cody; any other agent is refused.
+  --json
+      Print one object: action, item, team, repository, branch, instruction, skipped ({item, reason} of each item not
+      taken), front_matter and body.
+  --help
+      Print this text and exit. Nothing is read or changed.
+
+Exit codes:
+  0  continue or claim: the lead holds the item.
+  2  Invalid input: a missing --team, an agent other than the lead, another team than TEAM_NAME.
+  3  idle: no work item of the team to take.
+
+Example:
+  backlog team pop --team cli-1 --json
+```
+
 ### backlog move
 
 ```text

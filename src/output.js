@@ -47,6 +47,7 @@ its slug. backlog <command> --help prints every flag of the command, what the fl
   backlog query [--status|--next|--critical|--phase <item>|--events [item]|--by-branch <name>] [--all] [--json]
   backlog pop --agent <name> [options]                          Ask what one agent does next: continue, review, claim, refine, chunk or idle
   backlog work --agent <you> [options]                          A team member's next work: the action, marked as yours, with the whole item
+  backlog team pop --team <name> [options]                      The team lead takes its team's next work item, with the whole item
   backlog move <item> --to-branch <name>        Move an item (or --all-open-of-branch) to a branch or --to-repository
   backlog archive <item> [--force] [--dry-run]  Archive a finished item
 In shared mode backlog update changes an item; in local mode it updates the CLI. The team flags of update (claim,

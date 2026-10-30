@@ -238,7 +238,7 @@ test('the real ~/.config home record and mode record are unchanged', t => {
   assert.deepEqual(snap(), before);
 });
 
-test('the router: eight shared commands; argv after the command reaches the module unparsed; its exit code is returned', t => {
+test('the router: nine shared commands; argv after the command reaches the module unparsed; its exit code is returned', t => {
   const f = pair(t);
   writeFileSync(join(f.tmp, 'fake.mjs'), 'export const run = async argv => { console.log(JSON.stringify(argv)); return 7; };\n');
   const spec = JSON.stringify(pathToFileURL(join(f.tmp, 'fake.mjs')).href);
@@ -248,7 +248,7 @@ test('the router: eight shared commands; argv after the command reaches the modu
   { BACKLOG_HOME: f.home });
   assert.equal(r.status, 7, r.stderr);
   const [names, argv] = r.stdout.trim().split('\n');
-  assert.equal(names, 'archive,move,new,next,pop,query,update,work');
+  assert.equal(names, 'archive,move,new,next,pop,query,team,update,work');
   assert.deepEqual(JSON.parse(argv), ['--name', 'A b', '--weird=x', '--', '-z']);
   const lead = inproc(f, `process.exitCode = await router.run('dash', ['--json'], { table: { dash: [${spec}, '--next'] } });`, { BACKLOG_HOME: f.home });
   assert.deepEqual(JSON.parse(lead.stdout.trim()), ['--next', '--json']);

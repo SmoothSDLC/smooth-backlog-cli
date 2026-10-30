@@ -23,8 +23,8 @@ writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"sh
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
 const SCRIPT = { new: 'new_phase.py', update: 'update.py', query: 'query.py', move: 'move.py', archive: 'archive.py' };
-const COMMANDS = ['new', 'update', 'query', 'next', 'pop', 'work', 'move', 'archive'];
-// Flags this build refuses (query.js TEAM, pop.js and --headless); --db is internal to the Python scripts (contract section 2).
+const COMMANDS = ['new', 'update', 'query', 'next', 'pop', 'work', 'team', 'move', 'archive'];
+// Flags this build refuses (query.js TEAM, pop.js and --headless); --db is no flag of the CLI (item 058: not in its help).
 const REFUSED = {
   update: [],
   query: ['headless'],

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `backlog team pop --team <name>`: the team lead takes its team's next work item (an item of the team with no stage),
+  claimed for it in the work order, with the whole item; continue while it holds one, idle (exit 3) when none is left.
 - Breaking (Cody 2.0, no backward compatibility): the built-in backlog skill names only CLI commands; its Python
   snapshot helper and skill validator are removed (the integration tests check the skill), and the help no longer
   documents the Python scripts' `--db` flag.

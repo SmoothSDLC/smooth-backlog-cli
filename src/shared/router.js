@@ -10,7 +10,7 @@ import { pull } from './sync.js';
 
 // command -> [module relative to this file, ...arguments put in front of the user's argv]
 export const TABLE = {
-  new: ['./new.js'], update: ['./update.js'], query: ['./query.js'], pop: ['./pop.js'], work: ['./work.js'],
+  new: ['./new.js'], update: ['./update.js'], query: ['./query.js'], pop: ['./pop.js'], work: ['./work.js'], team: ['./teampop.js'],
   next: ['./query.js', '--next'], move: ['./move.js'], archive: ['./archive.js'],
 };
 

@@ -93,7 +93,8 @@ sees and changes the backlog only through them.
 - [ ] A member's review request, a changes verdict it gives and its close end its session (never the lead's): the
   output's last line says END THE SESSION NOW: reply with text only and make no further tool call (when the CLI
   recorded a hand-off for a Qwen team member, `backlog work` also answers stop until its fresh session).
-- [ ] Team lead: split with `backlog new --split-from <item> --depends-on <ids|none>` (a child of a team's item starts in stage refining; give a child of an item without a team `--team <team>`); send a refined
+- [ ] Team lead: take your team's work item with `backlog team pop --team <team>` (claimed for you, shown whole; idle
+  exits 3), then split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of a team's item starts in stage refining; give a child of an item without a team `--team <team>`); send a refined
   item on with `--request-refinement-review --by <you>`, record Codex's verdict with `--refinement-review
   pass|changes --by codex --comments "<findings; thread id>"`; only when Codex answers that its limit is exceeded, record that with
   `--refinement-review limit --by codex --comments "<Codex's answer>"`, then Claude's verdict with `--by claude

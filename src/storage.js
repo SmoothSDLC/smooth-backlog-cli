@@ -32,7 +32,8 @@ const lockRecord = () => JSON.stringify({ pid: process.pid, host: hostname(), co
 const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } };
 // A child that works under its parent's checkout adds itself to the record while it runs, and puts the parent's back.
 export async function asChild(path, fn) {
-  const parent = readFileSync(path, 'utf8');
+  let parent;
+  try { parent = readFileSync(path, 'utf8'); JSON.parse(parent); } catch { return fn(); } // no record of the parent's to amend
   const put = async text => { const tmp = `${path}.${randomUUID()}.tmp`; try { await fs.writeFile(tmp, text, { mode: 0o600 }); await fs.rename(tmp, path); } finally { await fs.rm(tmp, { force: true }); } };
   await put(JSON.stringify({ ...JSON.parse(parent), child: process.pid }));
   try { return await fn(); } finally { await put(parent); }

@@ -10,7 +10,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { asList } from './team.js';
 import { load } from './store.js';
 
-const HEX40 = /^[0-9a-f]{40}$/;
+const HEX40 = /^[0-9a-f]{40}$/i; // git commit ids are hex, any case
 const empty = v => !v || !String(v).trim();
 
 // The sha256 hex of the seven fields a receipt pins; a replacement record changes one of them and so its digest.
@@ -48,7 +48,7 @@ export function edgeState(producerFm, dependentId) {
   const last = receipts.at(-1);
   if (!last) return 'unaccepted';
   if (last.digest !== record.digest) return 'stale';
-  return last.result === 'rejected' ? 'rejected' : 'accepted';
+  return last.result === 'accepted' ? 'accepted' : 'rejected'; // only an acceptance of the current record satisfies the edge
 }
 
 export const satisfied = state => state === 'accepted' || state === 'legacy';
@@ -60,23 +60,21 @@ export const satisfied = state => state === 'accepted' || state === 'legacy';
 export function dependentsOf(folder, repoId, producerFm) {
   const home = dirname(dirname(resolve(folder)));
   const out = [];
-  const seq = producerFm.seq != null ? String(producerFm.seq) : null;
-  let owners = [];
-  try { owners = readdirSync(home, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch { return out; }
+  // An unreadable home or folder propagates: a skipped repository could hold a dependent the close gate then misses (review r1).
+  const owners = readdirSync(home, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort();
+  const seqNum = producerFm.seq != null ? Number(producerFm.seq) : null;
+  const digit = s => (/^\d+$/.test(String(s)) ? Number(s) : null); // ids compare numerically: 005 and 5 name the same item
   for (const owner of owners) {
-    let repos = [];
-    try { repos = readdirSync(join(home, owner), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch { continue; }
+    const repos = readdirSync(join(home, owner), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort();
     for (const name of repos) {
       const repo = `${owner}/${name}`;
-      let items = [];
-      try { items = load(join(home, owner, name)); } catch { continue; }
+      const items = load(join(home, owner, name));
       for (const it of items) {
         const status = Object.hasOwn(it.fm, 'status') ? it.fm.status : 'pending';
         if (status === 'archived') continue;
-        const deps = asList(it.fm.depends_on);
-        const namesProducer = repo === repoId
-          ? (seq !== null && deps.includes(seq)) || (typeof producerFm.phase === 'string' && producerFm.phase !== '' && deps.includes(producerFm.phase))
-          : seq !== null && deps.includes(`${repoId}#${seq}`);
+        const namesProducer = asList(it.fm.depends_on).some(dep => repo === repoId
+          ? (seqNum !== null && digit(dep) === seqNum) || (typeof producerFm.phase === 'string' && producerFm.phase !== '' && dep === producerFm.phase)
+          : seqNum !== null && dep.startsWith(`${repoId}#`) && digit(dep.slice(repoId.length + 1)) === seqNum);
         if (!namesProducer) continue;
         out.push({
           id: repo === repoId ? String(it.fm.seq) : `${repo}#${it.fm.seq}`,

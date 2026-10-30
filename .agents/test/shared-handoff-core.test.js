@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as handoff from '../../src/shared/handoff.js';
+import * as team from '../../src/shared/team.js';
 import { dump } from '../../src/shared/frontmatter.js';
 
 const dirs = [];
@@ -33,6 +34,8 @@ test('059.1: digest is stable, 64 hex, and changes with every one of the seven p
   const f = { dependent: '64', commit: COMMIT, contract: 'c', verification: 'v', outputs: 'o', pickup: 'p', risks: 'NONE' };
   const d = handoff.digest(f);
   assert.match(d, /^[0-9a-f]{64}$/);
+  // Oracle: the sha256 of the exact JSON.stringify of the seven fields, computed independently of the digest code.
+  assert.equal(d, '352dea4b059fbbcce48eebfeb3007b3b59126f50429733da031d2011699dcd72');
   assert.equal(handoff.digest({ ...f }), d, 'the same fields give the same digest');
   for (const [k, v] of Object.entries({ dependent: '65', commit: 'b'.repeat(40), contract: 'c2', verification: 'v2', outputs: 'o2', pickup: 'p2', risks: 'a risk' }))
     assert.notEqual(handoff.digest({ ...f, [k]: v }), d, `changing ${k} changes the digest`);
@@ -45,6 +48,9 @@ test('059.1: makeRecord pins the digest of the seven fields and defaults outputs
   assert.equal(r.risks, 'NONE');
   assert.equal(r.digest, handoff.digest(r), 'the record carries its own digest');
   assert.deepEqual(Object.keys(r).sort(), ['at', 'by', 'commit', 'contract', 'dependent', 'digest', 'outputs', 'pickup', 'risks', 'verification']);
+  const up = handoff.makeRecord({ dependent: '64', commit: 'A'.repeat(40), contract: 'c', verification: 'v', by: 'cody-card3', at: '2026-10-30T20:00:00Z' });
+  assert.equal(up.commit, 'A'.repeat(40), 'a 40-hex commit id is accepted in uppercase');
+  assert.equal(up.digest, handoff.digest(up), 'the uppercase commit is pinned as written');
 });
 
 test('059.1: makeRecord names the field when dependent, contract or verification is empty, or commit is not 40 hex', () => {
@@ -75,6 +81,10 @@ test('059.1: edgeState gives the six edge states of the design', () => {
   assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [receipt('64', 'b'.repeat(64))] }, '64'), 'stale', 'the last receipt pins another digest');
   assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [receipt('64', rec.digest, 'rejected')] }, '64'), 'rejected');
   assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [receipt('64', rec.digest)] }, '64'), 'accepted');
+  const pending = { dependent: '64', digest: rec.digest, result: 'pending', by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' };
+  const st = handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [pending] }, '64');
+  assert.notEqual(st, 'accepted', 'a receipt with a result other than accepted does not accept the edge');
+  assert.equal(handoff.satisfied(st), false, 'and it does not satisfy the edge');
 });
 
 test('059.1: edgeState takes the last receipt and the last record of the dependent', () => {
@@ -98,13 +108,43 @@ test('059.1: dependentsOf finds the same folder by seq and slug, another folder 
   item(home, 'acme', 'app', { seq: 7, phase: '007-by-slug', status: 'pending', depends_on: ['005-producer'] });
   item(home, 'acme', 'app', { seq: 8, phase: '008-archived', status: 'archived', depends_on: [5] });
   item(home, 'acme', 'app', { seq: 9, phase: '009-foreign-spelling', status: 'pending', depends_on: ['acme/app#5'] }); // the same folder names the producer by seq or slug only
+  item(home, 'acme', 'app', { seq: 10, phase: '010-zero-padded', status: 'pending', depends_on: ['005'] }); // the local seq, zero-padded spelling
   item(home, 'acme', 'lib', { seq: 2, phase: '002-cross-repo', status: 'pending', depends_on: ['acme/app#5'] });
   item(home, 'acme', 'lib', { seq: 3, phase: '003-not-a-dep', status: 'pending', depends_on: ['acme/lib#2'] });
+  item(home, 'acme', 'lib', { seq: 4, phase: '004-foreign-zero-padded', status: 'pending', depends_on: ['acme/app#005'] }); // the foreign spelling, zero-padded seq
   assert.deepEqual(handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), [
     { id: '6', repository: 'acme/app', seq: 6, slug: '006-by-seq', status: 'pending' },
     { id: '7', repository: 'acme/app', seq: 7, slug: '007-by-slug', status: 'pending' },
+    { id: '10', repository: 'acme/app', seq: 10, slug: '010-zero-padded', status: 'pending' },
     { id: 'acme/lib#2', repository: 'acme/lib', seq: 2, slug: '002-cross-repo', status: 'pending' },
+    { id: 'acme/lib#4', repository: 'acme/lib', seq: 4, slug: '004-foreign-zero-padded', status: 'pending' },
   ]);
+});
+
+test('059.1: dependentsOf propagates a directory-read error of the backlog home, it never skips a repository that vanished', () => {
+  const home = store();
+  writeFileSync(home, 'a file, not a directory');
+  const producer = { seq: 5, phase: '005-producer', status: 'done', depends_on: [] };
+  assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), e => e.code === 'ENOTDIR', 'the unreadable home propagates, so the dependent cannot be missed');
+});
+
+test('059.1: dependentsOf propagates a load error of a sibling repository folder, it never skips it', () => {
+  const home = store();
+  const producer = { seq: 5, phase: '005-producer', status: 'done', depends_on: [] };
+  item(home, 'acme', 'app', producer);
+  item(home, 'acme', 'app', { seq: 6, phase: '006-dep', status: 'pending', depends_on: [5] });
+  mkdirSync(join(home, 'acme', 'lib', 'phases'), { recursive: true });
+  writeFileSync(join(home, 'acme', 'lib', 'phases', '004-broken.md'), '---\nnot a pair\n---\nbody\n');
+  assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), /front matter line 1 is not a 'key: value' pair/, 'a folder that cannot be loaded propagates, so its dependents cannot be missed');
+});
+
+test('059.1: the zero-padded foreign spelling resolves through the item 042 pattern (team.js foreignItem)', () => {
+  const home = store();
+  const other = join(home, 'acme', 'lib');
+  mkdirSync(join(other, 'phases'), { recursive: true });
+  writeFileSync(join(other, 'phases', '004-x.md'), dump({ seq: 4, phase: '004-x', status: 'pending', depends_on: [] }, '## Definition of done\n\n- [ ] x\n'));
+  const hit = team.foreignItem(join(home, 'acme', 'app'), 'acme/lib#04');
+  assert.equal(hit?.seq, 4, 'owner/name#04 names the item with seq 4, compared numerically');
 });
 
 test('059.1: openEdges lists every dependent whose edge is not accepted, with the state that holds it open', () => {

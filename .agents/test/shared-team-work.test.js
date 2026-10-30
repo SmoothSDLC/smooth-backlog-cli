@@ -332,3 +332,13 @@ test('an unclaimed team item names who asks for its review, who then never revie
   const p = JSON.parse(run(f, ['pop', '--agent', 'archy', '--json'], { TEAM_NAME: 't1' }).stdout);
   assert.notEqual(p.item, c, p.instruction);
 });
+
+test('a review in progress is not requested again by its holder', () => {
+  const f = fixture();
+  const x = make(f, 'reviewed item');
+  ok(f, ['update', x, '--claim', 'archy']);
+  ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'archy']);
+  ok(f, ['update', x, '--start-review', '--by', 'zed']);
+  no(f, ['update', x, '--request-review', 'any', '--note', 'again', '--by', 'archy'], 'zed is reviewing it since');
+  assert.deepEqual([fm(f, x).review_state, fm(f, x).reviewer], ['in_review', 'zed']);
+});

@@ -6,7 +6,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -199,10 +199,11 @@ test('a marker that cannot be written refuses the hand-off; a hand-off that is n
   config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: 1000 }]);
   const [a, b] = ['first', 'second'].map(n => teamItem(f, n));
   ok(f, ['update', a, '--claim', 'archy']);
-  writeFileSync(join(f.tdir, 'handoff'), 'not a folder'); // the marker cannot be written
+  mkdirSync(join(f.tdir, 'handoff'), { recursive: true });
+  chmodSync(join(f.tdir, 'handoff'), 0o555); // no marker there, and none can be written
   no(f, ['update', a, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy'], 'the hand-off marker of archy cannot be written');
   assert.equal(JSON.parse(run(f, ['query', '--phase', a, '--agent', 'archy', '--json']).stdout).front_matter.review_state, 'none');
-  rmSync(join(f.tdir, 'handoff'));
+  chmodSync(join(f.tdir, 'handoff'), 0o755);
   const bare = spawnSync('git', ['-C', f.home, 'remote', 'get-url', 'origin'], { encoding: 'utf8' }).stdout.trim();
   const hook = join(bare, 'hooks', 'pre-receive');
   writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
@@ -246,4 +247,23 @@ test('a marker without a whole seq, or a session time stamp too large for a numb
     config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: joined }]);
     assert.equal(pop(f, 'archy', T1).action, 'stop', JSON.stringify([mk, joined]));
   }
+});
+
+test('pop --lead keeps the lock of a member that the default lead name would spare; a locked member\'s second hand-off keeps the first marker', () => {
+  const f = fixture();
+  config(f, [{ name: 'cody', agentId: 'cody@t1', joinedAt: 1000 }, { name: 'archy', agentId: 'archy@t1', joinedAt: 1000 }]);
+  teamItem(f, 'work');
+  mkdirSync(join(f.tdir, 'handoff'), { recursive: true });
+  writeFileSync(join(f.tdir, 'handoff', 'cody.json'), JSON.stringify({ at_ms: Date.now(), seq: 1 }));
+  const r = JSON.parse(run(f, ['pop', '--agent', 'cody', '--lead', 'lead', '--json'], { TEAM_LEAD: '', ...T1 }).stdout);
+  assert.equal(r.action, 'stop');
+  const [a, b] = ['first', 'second'].map(n => teamItem(f, n));
+  ok(f, ['update', a, '--claim', 'archy']);
+  ok(f, ['update', b, '--claim', 'archy', '--force']);
+  ok(f, ['update', a, '--waiting', 'x', '--by', 'archy']);
+  ok(f, ['update', b, '--request-review', 'any', '--note', 'n', '--by', 'archy']);
+  const first = readFileSync(marker(f), 'utf8');
+  ok(f, ['update', a, '--waiting-done', '--by', 'archy']);
+  ok(f, ['update', a, '--request-review', 'any', '--note', 'n', '--by', 'archy']); // locked, and permitted
+  assert.equal(readFileSync(marker(f), 'utf8'), first);
 });

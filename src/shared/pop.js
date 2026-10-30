@@ -99,7 +99,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   // spec section 5 and query.py:199: your review in progress comes first; another member's request, however old, comes
   // after your own work (item 033; the review-first window of this build is gone)
   let act = reviews.find(x => x.fm.review_state === 'in_review' && x.fm.reviewer === me);
-  if (!lead && team.restarting(me)) act = { name: 'stop', r: null, f: repo, say: team.STOP_TEXT }; // query.py:201-202: handed off, no new work until a fresh session
+  if (!lead && team.restarting(me, team.teamLead(a.lead))) act = { name: 'stop', r: null, f: repo, say: team.STOP_TEXT }; // query.py:201-202: handed off, no new work until a fresh session
   // query.py:197-221: the item you work on, your refinement in progress, then your passed and your changes-requested items
   let mine = own.filter(({ fm }) => fm.claimed_by === me && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on && team.isReady(fm)); // waiting for a verdict or a run is not work; nor an item before ready
   // query.py:203-211 (item 039, spec section 8): while its team works the split items the lead's work item waits: no busy
@@ -231,7 +231,7 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   const held = Object.fromEntries(members.map(m => [m, team.heldItems(folder, m, { refining: true })]));
   const active = Object.fromEntries(members.map(m => [m, held[m].filter(h => h.state === 'active').length]));
   const busy = new Set([...rows.filter(x => x.fm.review_state === 'in_review' && !team.staleReview(x.fm)).map(x => x.fm.reviewer),
-    ...members.filter(m => m !== lead && team.restarting(m))]);
+    ...members.filter(m => m !== lead && team.restarting(m, lead))]);
   const out = [];
   const give = (m, action, r, say, reason, key = '') => {
     busy.add(m);
@@ -240,6 +240,7 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   for (const { r, fm } of rows) {
     const m = fm.claimed_by;
     if (!members.includes(m) || busy.has(m) || fm.wait_on || !team.isReady(fm)) continue; // nothing before stage ready (036)
+    if (held[m].some(h => !h.fm.claimed_by && h.fm.refiner === m)) continue; // a refinement in progress comes first (spec section 5)
     if (fm.review_state === 'changes-requested') {
       give(m, 'respond', r, `the review by ${fm.reviewer || 'the reviewer'} asked for changes (${fm.reviewed_at || 'time not recorded'}): read its findings in the item, fix them, record each step (backlog update ${r.slug} --append "..."), then backlog update ${r.slug} --request-review any --note "<what changed>"`,
         'claimer', fm.reviewed_at ? ` ${fm.reviewed_at}` : '');

@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { redact } from './safety.js';
 import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
-import { teamScope } from './team.js';
+import { strip, teamLead, teamScope } from './team.js';
 
 const BIN = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
 const VALUE = ['agent', 'lead', 'roster', 'scope', 'branch'];
@@ -41,7 +41,7 @@ export async function run(argv) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
   if (!a.agent) return die('work needs --agent <your name>');
-  if (a.lead) process.env.TEAM_LEAD = a.lead; // the marking update knows the same lead as the pop
+  if (a.lead && strip(a.lead) !== teamLead()) return die(`--lead ${a.lead} is not the team lead of this session (${teamLead()}; TEAM_LEAD): backlog work acts as the lead the updates know`);
   const pop = self(['pop', '--agent', a.agent, '--claim-now', '--json', ...a.pass]); // a claim is marked by pop itself
   let p;
   try { p = JSON.parse(pop.stdout); } catch { process.stdout.write(pop.stdout); process.stderr.write(pop.stderr); return pop.status ?? 1; }

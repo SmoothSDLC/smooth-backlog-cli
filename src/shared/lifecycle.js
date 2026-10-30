@@ -167,6 +167,7 @@ export const caller = () => { const id = strip(process.env.QWEN_CODE_AGENT_ID ||
 
 export function requestReview({ fm }, reviewer, note, by = '') {
   if (!strip(note || '')) reject('--request-review needs --note "<what to review: commits, deployed evidence>"');
+  if (fm.review_state === 'in_review') reject(`${fm.reviewer} is reviewing it since ${fm.review_started}: wait for the verdict; the team lead hands a stale review on (--reassign-review)`);
   // item 033: the one who asks never reviews it and ends its session, so an unclaimed team item names it
   if (fm.team && !fm.claimed_by && !by) reject('--request-review of an unclaimed team item needs --by <agent>, the one who asks');
   const t = now();
@@ -276,13 +277,18 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   // spec section 4: outside the refinement stages only the lead refines an incomplete item of its team (a member known by
   // QWEN_CODE_AGENT_ID changes nothing on it)
   const who = me || a.by; // the Qwen caller, else the agent named by --by
+  const edits = strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-'));
+  // spec section 4: a member, not the lead, refines in the first round; the lead edits a refining item only as its refiner
+  if (who === teamLead() && before.team && before.stage === 'refining' && fm.refiner !== who && !actions.length && edits) {
+    return { refuse: `${slug}: a member, not the team lead, refines in the first round (spec section 4); the lead edits an item in stage refining only as its refiner` };
+  }
   if (incomplete.length && (before.team || teamScope().repo) && !refining && who && who !== teamLead() && (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-')))) {
     return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: only the team lead (${teamLead()}) refines it, not ${who}` };
   }
   if (incomplete.length && (teamScope().repo || steps.length || refining)) { // team mode: an incomplete item is only refined
     const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k))).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),
       ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k))).map(k => `--${k}`),
-      ...(a.append && !a.append.includes('ESTIMATE:') && !hasDefinitionOfDone(a.append) ? ['--append'] : [])];
+      ...(a.append && !/^(?:[ \t]*ESTIMATE:[^\n]*(?:\n|$))+$/.test(a.append.trim()) && !hasDefinitionOfDone(a.append) ? ['--append'] : [])]; // only ESTIMATE lines pass as such
     if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${REFINE_HOW}` };
   }
   if (!actions.length) return { event: 'state_change' };

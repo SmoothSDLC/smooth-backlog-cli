@@ -583,7 +583,7 @@ Options:
       are the roster's (--roster, else TEAM_ROSTER). Entries come by action (respond and close, review, claim, refine), a
       claim to the member holding the fewest items, then in roster order (team session). Read-only.
   --lead LEAD
-      With --pop or --plan: the team lead, who alone refines incomplete items and never claims an execution item. The default
+      With --pop or --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default
       is the environment variable TEAM_LEAD, else cody (team session).
   --agents AGENTS
       With --plan: the team members present, comma-separated; the default is the whole roster (team session).
@@ -720,7 +720,7 @@ Options:
   --agent AGENT
       The agent that asks. Required.
   --lead LEAD
-      The team lead, who alone refines incomplete items and never claims an execution item. The default is the environment
+      The team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the environment
       variable TEAM_LEAD, else cody.
   --roster ROSTER
       The team roster as a JSON file {agent: {...}}, the team's members in order; the default is the file named by TEAM_ROSTER.

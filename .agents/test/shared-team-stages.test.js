@@ -340,12 +340,28 @@ test('a team split with review documents and no body starts in refining; --by na
   ok(f, ['update', bare, '--set-estimate', '5', '--by', 'lead'], TR);
 });
 
-test('backlog work --lead: the marking update knows the same lead as the pop', () => {
+test('backlog work --lead names only the lead the updates know; pop --lead keeps a member\'s lock', () => {
   const f = fixture();
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1');
   const c = make(f, 'child', '--split-from', w);
   const r = run(f, ['work', '--agent', 'cody', '--lead', 'lead', '--json'], { TEAM_LEAD: '', TEAM_NAME: 't1' });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.deepEqual([JSON.parse(r.stdout).item, fm(f, c).refiner], [c, 'cody']);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /--lead lead is not the team lead of this session \(cody; TEAM_LEAD\)/);
+  const ok2 = run(f, ['work', '--agent', 'cody', '--lead', 'lead', '--json'], T1);
+  assert.equal(ok2.status, 0, ok2.stdout + ok2.stderr);
+  assert.deepEqual([JSON.parse(ok2.stdout).item, fm(f, c).refiner], [c, 'cody']);
+});
+
+test('the lead edits a refining item only as its refiner; an append of ESTIMATE lines plus text is no estimate note', () => {
+  const f = fixture();
+  const w = make(f, 'team work item');
+  up(f, w, '--set-team', 't1');
+  const c = make(f, 'child', '--split-from', w);
+  no(f, ['update', c, '--set-estimate', '5', '--by', 'lead'], 'a member, not the team lead, refines in the first round');
+  const inc = ok(f, ['new', '--name', 'incomplete', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  up(f, inc, '--set-team', 't1');
+  const TR = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  no(f, ['update', inc, '--append', 'ESTIMATE: 5 min\nAdditional context', '--by', 'lead'], '--append', TR);
+  ok(f, ['update', inc, '--append', 'ESTIMATE: 5 min', '--by', 'lead'], TR);
 });

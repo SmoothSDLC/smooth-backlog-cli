@@ -217,4 +217,4 @@ export function releaseHandoff(teamName, agent, text) {
   } catch { /* none there */ }
 }
 export const handoffText = (teamName, agent) => { try { return readFileSync(join(teamsRoot(), teamName, 'handoff', `${agent}.json`), 'utf8'); } catch { return null; } };
-export const restarting = agent => agent !== teamLead() && pendingHandoff(agent) !== null; // the lead is never locked
+export const restarting = (agent, lead = teamLead()) => agent !== lead && pendingHandoff(agent) !== null; // the lead is never locked

@@ -262,10 +262,11 @@ async function change(a, con, folder, repo) {
   const claimer = holder || fm.claimed_by || '';
   const own = event === 'review_requested' || (event === 'closed' && (a.by || claimer) === claimer); // the lead closing a member's item locks nobody
   if (own && fm.team && claimer && claimer !== teamLead() && !heldItems(folder, claimer, { refining: true }).some(h => h.slug !== row.slug && h.state === 'active')) {
-    const locked = pendingHandoff(claimer, fm.team) !== null; // a lock already there stays, whatever happens to this change
-    const why = markHandoff(fm.team, claimer, row.seq);
-    if (why) return refuse(`${row.slug}: the hand-off marker of ${claimer} cannot be written (${why}); nothing changed`);
-    if (!locked) a.handoff = { team: fm.team, agent: claimer, text: handoffText(fm.team, claimer) };
+    if (pendingHandoff(claimer, fm.team) === null) { // a lock already there stays as it is, whatever happens to this change
+      const why = markHandoff(fm.team, claimer, row.seq);
+      if (why) return refuse(`${row.slug}: the hand-off marker of ${claimer} cannot be written (${why}); nothing changed`);
+      a.handoff = { team: fm.team, agent: claimer, text: handoffText(fm.team, claimer) };
+    }
   }
   store.write({ path, fm, body }, folder);
   a.wrote = { slug: row.slug, path: row.path };

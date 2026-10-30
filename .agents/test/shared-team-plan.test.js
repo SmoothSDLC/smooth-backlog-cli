@@ -180,3 +180,16 @@ test('two review requests at once go to two members, neither to its author', () 
   const p = plan(f).filter(e => e.action === 'review');
   assert.deepEqual(p.map(e => [e.member, e.item]), [['archy', a], ['zed', b]]);
 });
+
+test('a member refining an item gets no respond or close in the plan', () => {
+  const f = fixture();
+  const x = make(f, 'reviewed job');
+  ok(f, ['update', x, '--claim', 'zed']);
+  ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'zed']);
+  const w = make(f, 'team work item');
+  ok(f, ['update', w, '--set-team', 't1']);
+  const c = make(f, 'child', '--split-from', w);
+  ok(f, ['update', c, '--refine-start', '--by', 'zed']);
+  ok(f, ['update', x, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md']);
+  assert.ok(!plan(f).some(e => e.member === 'zed' && ['respond', 'close'].includes(e.action)), JSON.stringify(plan(f)));
+});

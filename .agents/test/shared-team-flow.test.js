@@ -94,26 +94,29 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
     const r = as('archy', ['update', c1, '--review', 'changes', '--by', 'archy', '--comments', 'add the empty-input case (references/review/tests.md)']);
     assert.equal(STOP.exec(r.stdout)?.[1], 'archy');
   });
-  await step('S20 a fresh session: rework, --request-review, --review pass', () => {
+  const doc = slug => readFileSync(join(home, 'acme', 'demo', 'phases', `${slug}.md`), 'utf8');
+  await step('S20 a fresh session: rework, the dependency hand-off before the final review, --request-review, --review pass', () => {
     session(Date.now() + 1000);
     assert.equal(json('zed', ['pop', '--agent', 'zed', '--json']).item, c1);
-    as('zed', ['update', c1, '--request-review', 'any', '--note', 'commit def: empty input', '--by', 'zed']);
+    // the producer records its hand-off in the consumer's item before the final review (topology 240's consumer-item rule)
+    as('zed', ['update', c2, '--append', `DEPENDENCY_HANDOFF v1 from ${c1} (revision 1): interface parse(text); commit def; tests parser.test (pass); pickup: import parse`, '--by', 'zed']);
+    assert.match(doc(c2), /DEPENDENCY_HANDOFF v1 from .*\(revision 1\)/);
+    as('zed', ['update', c1, '--request-review', 'any', '--note', 'commit def: empty input; hand-off recorded in the consumer item', '--by', 'zed']);
     session(Date.now() + 2000);
     as('archy', ['update', c1, '--start-review', '--by', 'archy']);
     const r = as('archy', ['update', c1, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md']);
     assert.match(r.stdout, /CLOSE NOW: zed closes it/);
   });
-  await step('S20a the dependency hand-off: the producer records it in the consumer item, the lead records its receipt in both', () => {
-    const doc = slug => readFileSync(join(home, 'acme', 'demo', 'phases', `${slug}.md`), 'utf8');
-    as('zed', ['update', c2, '--append', `DEPENDENCY_HANDOFF v1 from ${c1}: parser at commit def, tests parser.test, pickup: import the parser`, '--by', 'zed']);
-    for (const slug of [c1, c2]) as('lead', ['update', slug, '--append', `HANDOFF_ACCEPTED ${c1} -> ${c2} by lead at commit def`, '--by', 'lead']);
-    assert.match(doc(c2), /DEPENDENCY_HANDOFF v1 from /);
-    for (const slug of [c1, c2]) assert.match(doc(slug), /HANDOFF_ACCEPTED /);
+  await step('S20a the lead records HANDOFF_ACCEPTED with actor, time, SHA, consumer and hand-off revision in both items', () => {
+    const at = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+    const receipt = `HANDOFF_ACCEPTED actor=lead at=${at} producer=${c1} consumer=${c2} sha=def handoff=v1 revision 1`;
+    for (const slug of [c1, c2]) as('lead', ['update', slug, '--append', receipt, '--by', 'lead']);
+    for (const slug of [c1, c2]) assert.ok(doc(slug).includes(receipt), slug);
   });
   await step('S21 the claimer closes', () => {
     session(Date.now() + 3000);
     as('archy', ['update', c1, '--close', '--summary', 'x', '--by', 'archy'], 1);
-    // zed wrote c2 in S20a, the lead after it: the close re-ranks c2 too, so zed reads c2 again first (stale-view guard; item 053)
+    // zed wrote c2 in S20, the lead after it: the close re-ranks c2 too, so zed reads c2 again first (stale-view guard; item 053)
     as('zed', ['query', '--phase', c2, '--agent', 'zed']);
     as('zed', ['update', c1, '--close', '--summary', 'parser done', '--by', 'zed']);
     assert.equal(fm(c1).status, 'done');

@@ -80,3 +80,15 @@ test('team pop: only the lead, only its team, only itself', () => {
     assert.equal(r.status, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.match(r.stderr, text);
   }
 });
+
+test('item 060: query --status --json rows carry claimed_by and review_state', () => {
+  const f = fixture();
+  const held = make(f, 'held item'); const reviewed = make(f, 'reviewed item'); const free = make(f, 'free item');
+  ok(f, ['query', '--phase', reviewed, '--agent', 'archy']); ok(f, ['update', reviewed, '--claim', 'archy']);
+  ok(f, ['update', reviewed, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy']); // it waits: archy may pull new work
+  ok(f, ['query', '--phase', held, '--agent', 'archy']); ok(f, ['update', held, '--claim', 'archy']);
+  const rows = Object.fromEntries(JSON.parse(ok(f, ['query', '--status', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
+  assert.deepEqual(rows[held], ['archy', 'none']);
+  assert.deepEqual(rows[reviewed], ['archy', 'requested']);
+  assert.deepEqual(rows[free], ['', 'none']);
+});

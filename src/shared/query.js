@@ -261,7 +261,10 @@ async function query(argv) {
       }
     }
     if (a.json) {
-      dump({ handoff: h, repository: repo, branch: redact(branch), phases: rows, gone_branch_items: gone, findings: bad });
+      // item 060: who holds each item and whether it is in review, so no caller reads the item files for them
+      const fms = new Map(store.load(folder).map(i => [i.path, i.fm]));
+      const teamFields = r => ({ ...r, claimed_by: fms.get(r.path)?.claimed_by ?? '', review_state: fms.get(r.path)?.review_state ?? '' });
+      dump({ handoff: h, repository: repo, branch: redact(branch), phases: rows.map(teamFields), gone_branch_items: gone, findings: bad });
       return 0;
     }
     criticalBanner(critical());

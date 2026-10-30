@@ -273,7 +273,8 @@ Options:
       command says so (with --json it prints {}). Open items of a branch that no longer exists on the origin
       are in no queue.
   --status
-      The full stack of the branch (this is the default view).
+      The full stack of the branch (this is the default view). With --json each row also carries claimed_by and
+      review_state, from the item's front matter ('' when unset).
   --critical
       Only the open items with severity critical.
   --phase PHASE

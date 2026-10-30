@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `backlog query --status --json` rows carry `claimed_by` and `review_state` (item 060), so no caller reads item files.
 - `backlog team pop --team <name>`: the team lead takes its team's next work item (an item of the team with no stage),
   claimed for it in the work order, with the whole item; continue while it holds one, idle (exit 3) when none is left.
 - Breaking (Cody 2.0, no backward compatibility): the built-in backlog skill names only CLI commands; its Python

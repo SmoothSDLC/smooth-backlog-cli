@@ -69,7 +69,7 @@ test('a review request writes the marker of PR1, and the member gets stop until 
   ok(f, ['update', b, '--claim', 'archy']);
 });
 
-test('the lock holds for a missing name, an unreadable config.json and an older session; a malformed marker never releases it', () => {
+test('owner 2026-10-30: only a valid marker of a registered member stops it; a missing name, an unreadable config.json or a malformed marker stops nobody', () => {
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
   const a = teamItem(f, 'job');
@@ -79,21 +79,17 @@ test('the lock holds for a missing name, an unreadable config.json and an older 
   ok(f, ['update', a, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
   assert.ok(!existsSync(marker(f))); // a verdict writes none
   ok(f, ['update', a, '--close', '--summary', 'done', '--by', 'archy']); // a close writes it
-  assert.ok(existsSync(marker(f)));
   const at = JSON.parse(readFileSync(marker(f), 'utf8')).at_ms;
-  config(f, []); // the name is not registered (between its removal and its new spawn)
+  config(f, [{ name: 'archy', joinedAt: at }]); // a session not newer than the hand-off: the one valid stop
   assert.equal(pop(f, 'archy', T1).action, 'stop');
-  writeFileSync(join(f.tdir, 'config.json'), '{ not json');
-  assert.equal(pop(f, 'archy', T1).action, 'stop');
-  config(f, [{ name: 'archy', joinedAt: at }]); // not newer than the hand-off
-  assert.equal(pop(f, 'archy', T1).action, 'stop');
-  writeFileSync(marker(f), 'garbage');
-  config(f, [{ name: 'archy', joinedAt: 0 }]);
-  assert.equal(pop(f, 'archy', T1).action, 'stop');
-  config(f, [{ name: 'archy', joinedAt: Date.now() + 1e9 }]);
-  assert.equal(pop(f, 'archy', T1).action, 'stop'); // item 038: a malformed marker never releases the lock, whatever the session
+  for (const [cfg, mk] of [[null, null], ['{ not json', null], [[], null], [[{ name: 'archy', joinedAt: 1 }], 'garbage'], [[{ name: 'archy', joinedAt: 1 }], '{"at_ms":"bad","seq":1}']]) {
+    if (cfg === null) config(f, []); else if (typeof cfg === 'string') writeFileSync(join(f.tdir, 'config.json'), cfg); else config(f, cfg);
+    if (mk !== null) writeFileSync(marker(f), mk);
+    const r = run(f, ['pop', '--agent', 'archy', '--json'], T1);
+    assert.notEqual(JSON.parse(r.stdout).action, 'stop', JSON.stringify([cfg, mk]));
+    if (mk !== null) assert.match(r.stderr, /stops nobody/);
+  }
 });
-
 test('no marker for the lead, for a member still active on another item, or for an item without a team', () => {
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }]);
@@ -138,30 +134,26 @@ test('the marker is the one PR1 reads: lib_db.restarting sees the lock the CLI w
   assert.equal(pop(f, 'zed', T1).action, 'stop'); // PR1's marker locks the CLI's pop
 });
 
-test('invalid time stamps never release the lock; the lead is never locked; a lead closing a member\'s item locks nobody', () => {
+test('an invalid time stamp stops nobody; the lead is never stopped; a lead closing a member\'s item stops nobody', () => {
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
   const [a, l, z] = ['job', "lead's job", "zed's job"].map(n => teamItem(f, n));
   ok(f, ['update', a, '--claim', 'archy']);
   ok(f, ['update', a, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
-  writeFileSync(marker(f), JSON.stringify({ at_ms: 'bad', seq: 1 }));
   config(f, [{ name: 'archy', joinedAt: 'bad' }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
-  assert.equal(pop(f, 'archy', T1).action, 'stop'); // an invalid joinedAt is no fresh session
-  config(f, [{ name: 'archy', joinedAt: 5 }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
-  assert.equal(pop(f, 'archy', T1).action, 'stop'); // an invalid at_ms never releases the lock
+  assert.notEqual(pop(f, 'archy', T1).action, 'stop'); // an invalid joinedAt: no registered session to wait for
   ok(f, ['update', l, '--claim', 'lead']);
   ok(f, ['update', l, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
   assert.ok(!existsSync(join(f.tdir, 'handoff', 'lead.json'))); // the lead, even when it is listed among the members
   writeFileSync(join(f.tdir, 'handoff', 'lead.json'), JSON.stringify({ at_ms: Date.now() + 1e9, seq: 1 }));
-  assert.notEqual(pop(f, 'lead', T1).action, 'stop'); // and never locked
+  assert.notEqual(pop(f, 'lead', T1).action, 'stop'); // and never stopped
   ok(f, ['update', z, '--claim', 'zed']);
   ok(f, ['update', z, '--request-review', 'any', '--note', 'x', '--by', 'zed']);
   rmSync(join(f.tdir, 'handoff', 'zed.json')); // zed has had its fresh session
   ok(f, ['update', z, '--review', 'pass', '--by', 'archy', '--comments', 'fine per references/review/code.md']);
   ok(f, ['update', z, '--close', '--summary', 'closed for zed', '--by', 'lead']); // the lead closes when the claimer has not
-  assert.ok(!existsSync(join(f.tdir, 'handoff', 'zed.json'))); // a lead's close locks nobody
+  assert.ok(!existsSync(join(f.tdir, 'handoff', 'zed.json'))); // a lead's close stops nobody
 });
-
 test('--refine-start is refused while the member waits for its restart, and . or .. is no team folder', () => {
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }]);
@@ -173,27 +165,24 @@ test('--refine-start is refused while the member waits for its restart, and . or
   for (const name of ['.', '..']) assert.notEqual(pop(f, 'archy', { TEAM_NAME: name }).action, 'stop', name); // looked up nowhere
 });
 
-test('a hand-off writes the marker when config.json cannot be read or the session time stamp is invalid; a non-scalar time stamp is none', () => {
+test('no marker without a registered session to replace: an unreadable config.json, an invalid time stamp, an agent outside the team', () => {
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }]);
   const [a, b] = ['one', 'two'].map(n => teamItem(f, n));
   ok(f, ['update', a, '--claim', 'archy']);
   writeFileSync(join(f.tdir, 'config.json'), '{ broken');
   ok(f, ['update', a, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
-  assert.ok(existsSync(marker(f)), 'fail closed: an unreadable config.json still locks');
-  rmSync(marker(f));
+  assert.ok(!existsSync(marker(f)));
   config(f, [{ name: 'archy', joinedAt: [9999999999999] }]);
-  ok(f, ['update', b, '--claim', 'archy', '--force']);
+  ok(f, ['update', b, '--claim', 'archy']);
   ok(f, ['update', b, '--request-review', 'any', '--note', 'y', '--by', 'archy']);
-  assert.ok(existsSync(marker(f)), 'a registered member with an invalid time stamp is locked too');
-  assert.equal(pop(f, 'archy', T1).action, 'stop'); // and [9999999999999] is no fresh session
+  assert.ok(!existsSync(marker(f)));
   config(f, [{ name: 'zed', joinedAt: 1000 }]); // archy is not registered: Claude or Codex working the team's item
   const c = teamItem(f, 'three');
   ok(f, ['update', c, '--claim', 'claude']);
   ok(f, ['update', c, '--request-review', 'any', '--note', 'z', '--by', 'claude']);
   assert.ok(!existsSync(join(f.tdir, 'handoff', 'claude.json')));
 });
-
 test('a marker that cannot be written refuses the hand-off; a hand-off that is not published leaves no lock; the shutdown line is last', () => {
   const f = fixture();
   config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: 1000 }]);
@@ -219,12 +208,12 @@ test('a marker that cannot be written refuses the hand-off; a hand-off that is n
   void b;
 });
 
-test('a marker that cannot be read keeps the lock; a failed publication sets aside only the marker it wrote', async () => {
+test('a marker that cannot be read stops nobody; a failed publication sets aside only the marker it wrote', async () => {
   const f = fixture();
   config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: 5000 }]);
   teamItem(f, 'work');
   mkdirSync(marker(f), { recursive: true }); // EISDIR: no marker text to read
-  assert.equal(pop(f, 'archy', T1).action, 'stop');
+  assert.notEqual(pop(f, 'archy', T1).action, 'stop');
   rmSync(marker(f), { recursive: true });
   const home = process.env.HOME;
   process.env.HOME = f.user;
@@ -237,18 +226,16 @@ test('a marker that cannot be read keeps the lock; a failed publication sets asi
     assert.ok(!existsSync(marker(f)) && existsSync(join(f.tdir, 'handoff', 'archy.released')));
   } finally { process.env.HOME = home; }
 });
-
-test('a marker without a whole seq, or a session time stamp too large for a number, never releases the lock', () => {
+test('a marker without a whole seq, or a session time stamp too large for a number, stops nobody', () => {
   const f = fixture();
   teamItem(f, 'work');
   mkdirSync(join(f.tdir, 'handoff'), { recursive: true });
-  for (const [mk, joined] of [[{ at_ms: 1 }, 2], [{ at_ms: 1, seq: {} }, 2], [{ at_ms: 1, seq: 1 }, '9'.repeat(400)]]) {
+  for (const [mk, joined] of [[{ at_ms: 1 }, 0], [{ at_ms: 1, seq: {} }, 0], [{ at_ms: 1, seq: 1 }, '9'.repeat(400)]]) {
     writeFileSync(marker(f), JSON.stringify(mk));
     config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: joined }]);
-    assert.equal(pop(f, 'archy', T1).action, 'stop', JSON.stringify([mk, joined]));
+    assert.notEqual(pop(f, 'archy', T1).action, 'stop', JSON.stringify([mk, joined]));
   }
 });
-
 test('pop --lead keeps the lock of a member that the default lead name would spare; a locked member\'s second hand-off keeps the first marker', () => {
   const f = fixture();
   config(f, [{ name: 'cody', agentId: 'cody@t1', joinedAt: 1000 }, { name: 'archy', agentId: 'archy@t1', joinedAt: 1000 }]);

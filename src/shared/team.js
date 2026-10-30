@@ -159,29 +159,28 @@ export function teamDirs(name) {
   if (t) return SAFE.test(t) ? [join(teamsRoot(), t)] : [];
   try { return readdirSync(teamsRoot(), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => join(teamsRoot(), e.name)).sort(); } catch { return []; }
 }
-// What config.json says of the agent: 'no-team' (no config.json: no Qwen team), 'unreadable', 'absent' (not registered),
-// or {joined} (the time stamp of its registered session, null when it is invalid).
+// What config.json says of the agent: 'none' (no config.json, or one that cannot be read or has no members list),
+// 'absent' (not registered), or {joined} (the time stamp of its registered session, null when it is invalid).
 function member(tdir, agent) {
-  let text;
-  try { text = readFileSync(join(tdir, 'config.json'), 'utf8'); } catch (e) { return e.code === 'ENOENT' && !existsSync(tdir) ? 'no-team' : 'unreadable'; } // a team folder without its config.json fails closed
   let cfg;
-  try { cfg = JSON.parse(text); } catch { return 'unreadable'; }
-  if (!cfg || typeof cfg !== 'object' || !Array.isArray(cfg.members)) return 'unreadable';
+  try { cfg = JSON.parse(readFileSync(join(tdir, 'config.json'), 'utf8')); } catch { return 'none'; }
+  if (!cfg || typeof cfg !== 'object' || !Array.isArray(cfg.members)) return 'none';
   const m = cfg.members.filter(x => x && typeof x === 'object' && x.name === agent);
-  return m.length ? { joined: ms(m[0].joinedAt ?? 0) } : 'absent';
+  return m.length ? { joined: ms(m[0].joinedAt) } : 'absent';
 }
-// joinedAt of the agent's registered session; null when it is not registered, its time stamp is invalid, or config.json
-// cannot be read: no fresh session
 export function memberJoinedMs(tdir, agent) { const m = member(tdir, agent); return typeof m === 'object' ? m.joined : null; }
-// Returns null when written or when the agent is no registered member of a Qwen team (Claude or Codex working a team's
-// item, or the lead), else why it was not written (as PR1, the command does not fail; update.js warns).
+const warned = new Set();
+const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
+// Owner 2026-10-30: nothing locks a member but a valid hand-off. The marker is written only for a registered member of
+// a Qwen team whose session time stamp is valid; else no marker (Claude, Codex, the lead, a team the CLI cannot read).
+// Returns null when written or not needed, else why the marker cannot be written: the CLI then refuses the hand-off.
 export function markHandoff(teamName, agent, seq) {
-  if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return `no team folder for team ${teamName || '(none)'} and agent ${agent || '(none)'}`;
+  if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return null; // no team folder: nothing to mark
   if (agent === teamLead()) return null; // the lead is not a member
   const tdir = join(teamsRoot(), teamName);
   const m = member(tdir, agent);
-  if (m === 'no-team' || m === 'absent') return null; // no registered member of a Qwen team (Claude, Codex): nothing to lock
-  // a registered member (with a valid time stamp or not), or a config.json that cannot be read: lock (fail closed)
+  if (typeof m !== 'object' || m.joined === null) return null; // no registered session to replace: no marker
+  if (!Number.isInteger(seq)) return `the item number ${seq} is no whole number`;
   try {
     mkdirSync(join(tdir, 'handoff'), { recursive: true });
     const tmp = join(tdir, 'handoff', `.${agent}.tmp`);
@@ -190,21 +189,21 @@ export function markHandoff(teamName, agent, seq) {
     return null;
   } catch (e) { return e.message; }
 }
-// {tdir, marker} while the agent's hand-off waits for a fresh session, else null. An unreadable config.json or a missing
-// name keeps it locked, and so does a malformed marker (beyond PR1, which skipped one that is no JSON).
+// {tdir, marker} while the agent's valid hand-off waits for a fresh session, else null. Owner 2026-10-30: only a valid
+// marker ({at_ms, seq}) of a registered member with a valid session time stamp not newer than the marker stops it; a
+// marker that cannot be read or is malformed, an unreadable config.json and a missing name stop nobody (a warning names
+// the file, which the CLI never writes malformed).
 export function pendingHandoff(agent, teamName) {
   if (!SAFE.test(agent || '')) return null;
   for (const tdir of teamDirs(teamName)) {
-    let text;
-    try { text = readFileSync(join(tdir, 'handoff', `${agent}.json`), 'utf8'); } catch (e) { if (e.code === 'ENOENT') continue; return { tdir, marker: {} }; } // a marker that cannot be read keeps the lock
+    const file = join(tdir, 'handoff', `${agent}.json`);
     let mk;
-    try { mk = JSON.parse(text); } catch { mk = {}; }
-    if (!mk || typeof mk !== 'object' || Array.isArray(mk)) mk = {};
-    const at = ms(mk.at_ms);
-    const joined = memberJoinedMs(tdir, agent);
-    // item 038's definition of done: a malformed marker or time stamp never releases the lock (stricter than PR1 and
-    // spec section 7's time 0); the dispatcher sets such a marker aside
-    if (at === null || !Number.isInteger(mk.seq) || joined === null || joined <= at) return { tdir, marker: mk };
+    try { mk = JSON.parse(readFileSync(file, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') warn(`${file} cannot be read or is no JSON; it stops nobody`); continue; }
+    const at = mk && typeof mk === 'object' && !Array.isArray(mk) ? ms(mk.at_ms) : null;
+    if (at === null || !Number.isInteger(mk.seq)) { warn(`${file} is no hand-off marker ({"at_ms", "seq"}); it stops nobody`); continue; }
+    const m = member(tdir, agent);
+    if (typeof m !== 'object' || m.joined === null) continue; // no registered session with a valid time stamp: nothing to wait for
+    if (m.joined <= at) return { tdir, marker: mk };
   }
   return null;
 }

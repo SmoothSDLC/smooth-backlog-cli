@@ -74,9 +74,10 @@ PR1 implements this with a hand-off marker:
   `~/.qwen/teams/<team>/`). Two exceptions: no marker while the claimer still holds another active item; never one for the
   lead, who is not a member.
 - Until Qwen registers a session of that agent whose `joinedAt` is newer than the marker, the agent's next-work answers
-  `stop`, and claim, refine-start and start-review are refused. A missing name or an unreadable config.json keeps the lock
-  shut, and so does a malformed marker or time stamp (item 038's definition of done; PR1 skipped a marker that is no
-  JSON, and an earlier version of this line counted it as written at time 0).
+  `stop`, and claim, refine-start and start-review are refused. Owner 2026-10-30: nothing else ever holds a member. Only
+  a valid marker (`{"at_ms", "seq"}`) of a registered member with a valid session time stamp stops it; a missing name,
+  an unreadable config.json, an unreadable or malformed marker and an invalid time stamp stop nobody (the CLI warns).
+  The CLI never writes a malformed marker, and a marker it cannot write refuses the hand-off, so the agent retries.
 - The dispatcher resets from the markers (they survive its restarts), tells the lead again every 10 minutes, and sends
   cody-alert after 20 minutes without a fresh session. It renames a released marker to `<agent>.released`, and only if it
   is still the marker it read.

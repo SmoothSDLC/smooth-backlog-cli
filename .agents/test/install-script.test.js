@@ -5,7 +5,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,19 +17,24 @@ const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 
 // installed: the package's installed version or null; latest: the registry's version, or null when it cannot be reached
-function run({ installed, latest, args = [], foreign = null }) {
+function run({ installed, latest, args = [], foreign = null, thief = false }) {
   const t = mkdtempSync(join(tmpdir(), 'install-cli-')); dirs.push(t);
   const bin = join(t, 'npm-global', 'bin'); mkdirSync(bin, { recursive: true });
   const state = join(t, 'installed'); const log = join(t, 'calls.log');
   const put = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); chmodSync(path, 0o755); };
   // the CLI: --version prints the installed version; setup records each argument on its own line
-  put(join(bin, 'backlog'), `#!/bin/sh\n[ "$1" = --version ] && { cat '${state}'; exit 0; }\necho "backlog" >> '${log}'; for a in "$@"; do echo "  [$a]" >> '${log}'; done\n`);
+  // the package's command in npm's global root, linked from npm's global bin (as npm installs it)
+  const cmd = join(t, 'npm-global', 'lib', 'node_modules', PKG, 'bin', 'backlog.js');
+  put(cmd, `#!/bin/sh\n[ "$1" = --version ] && { cat '${state}'; exit 0; }\necho "backlog" >> '${log}'; for a in "$@"; do echo "  [$a]" >> '${log}'; done\n`);
+  if (thief) { put(join(t, 'npm-global', 'lib', 'node_modules', 'other-pkg', 'backlog.js'), `#!/bin/sh\necho "thief $*" >> '${log}'; cat '${state}'\n`); symlinkSync(join(t, 'npm-global', 'lib', 'node_modules', 'other-pkg', 'backlog.js'), join(bin, 'backlog')); }
+  else symlinkSync(cmd, join(bin, 'backlog'));
   if (installed) writeFileSync(state, installed);
   put(join(t, 'tools', 'npm'), `#!/bin/sh
 case "$1" in
   ls) if [ -f '${state}' ]; then printf '{"dependencies":{"${PKG}":{"version":"%s"}}}' "$(cat '${state}')"; else echo '{}'; fi ;;
   view) ${latest ? `echo 'npm warn config: a warning on stderr' >&2; echo ${latest}` : "echo 'npm error 401 Unauthorized' >&2; exit 1"} ;;
   prefix) echo '${join(t, 'npm-global')}' ;;
+  root) echo '${join(t, 'npm-global', 'lib', 'node_modules')}' ;;
   install) echo "npm $*" >> '${log}'; v=\${3#${PKG}@}; [ "$v" = "$3" ] && v=${latest || '0.0.1'}; printf %s "$v" > '${state}' ;;
 esac\n`);
   if (foreign) put(join(t, 'foreign', 'backlog'), `#!/bin/sh\necho "foreign $*" >> '${log}'\necho ${foreign}\n`); // never to be run
@@ -70,4 +75,8 @@ test('044: an unreachable registry is said; a different backlog command earlier 
   const twin = run({ installed: '1.2.0', latest: '1.2.0', foreign: '1.2.0' }); // the same version is not the same command
   assert.equal(twin.r.status, 1);
   assert.match(twin.r.stderr, /foreign\/backlog\) is not @smoothsdlc\/smooth-backlog-cli 1\.2\.0/);
+  const taken = run({ installed: '1.2.0', latest: '1.2.0', thief: true }); // another global package took over npm's backlog link
+  assert.equal(taken.r.status, 1);
+  assert.match(taken.r.stderr, /other-pkg\/backlog\.js, not the command of @smoothsdlc\/smooth-backlog-cli/);
+  assert.deepEqual(taken.calls, []);
 });

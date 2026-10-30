@@ -14,7 +14,7 @@ import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { REVIEW_DIR, asList, foreignCycle, foreignItem, handoffText, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
+import { REVIEW_DIR, asList, foreignCycle, foreignItem, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
@@ -276,11 +276,9 @@ async function change(a, con, folder, repo) {
   const lockTeam = before.team || fm.team; // the team the item had when the command began: --set-team in the same call changes nothing here
   if (own && lockTeam && claimer && claimer !== teamLead() && !heldItems(folder, claimer, { refining: true }).some(h => h.slug !== row.slug && h.state === 'active')) {
     if (pendingHandoff(claimer, lockTeam) === null) { // a lock already there stays as it is, whatever happens to this change
-      const was = handoffText(lockTeam, claimer);
-      const why = markHandoff(lockTeam, claimer, row.seq);
+      const { text, why } = markHandoff(lockTeam, claimer, row.seq);
       if (why) return refuse(`${row.slug}: the hand-off marker of ${claimer} cannot be written (${why}); nothing changed`);
-      const now = handoffText(lockTeam, claimer);
-      if (now !== null && now !== was) a.handoff = { team: lockTeam, agent: claimer, text: now }; // only a marker this change wrote is set aside on failure
+      if (text) a.handoff = { team: lockTeam, agent: claimer, text }; // only the marker this change wrote is set aside on failure
     }
   }
   store.write({ path, fm, body }, folder);

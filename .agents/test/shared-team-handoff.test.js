@@ -97,20 +97,22 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
     const wj = JSON.parse(w.stdout);
     if (wj.action === 'claim') ok(f, ['update', wj.item, '--release', 'archy'], T1); // give back what work claimed
     const [mine, theirs] = ['claim job', 'review job'].map(n => teamItem(f, n));
-    ok(f, ['update', mine, '--claim', 'archy'], T1); // no claim refusal
+    assert.match(ok(f, ['update', mine, '--claim', 'archy'], T1).stderr, /stops nobody/); // no claim refusal, and the case is named
     ok(f, ['update', mine, '--release', 'archy'], T1);
-    const plan = JSON.parse(run(f, ['query', '--plan', '--roster', roster, '--agents', 'archy', '--json'], T1).stdout);
+    const pr = run(f, ['query', '--plan', '--roster', roster, '--agents', 'archy', '--json'], T1);
+    assert.match(pr.stderr, /stops nobody/);
+    const plan = JSON.parse(pr.stdout);
     assert.ok(plan.some(e => e.member === 'archy'), JSON.stringify(plan)); // the plan does not leave archy out
     ok(f, ['update', theirs, '--claim', 'zed'], T1);
     ok(f, ['update', theirs, '--request-review', 'any', '--note', 'n', '--by', 'zed'], T1);
-    ok(f, ['update', theirs, '--start-review', '--by', 'archy'], T1); // no start-review refusal
+    assert.match(ok(f, ['update', theirs, '--start-review', '--by', 'archy'], T1).stderr, /stops nobody/); // no start-review refusal
     ok(f, ['update', theirs, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md'], T1); // archy is free again
     ok(f, ['update', theirs, '--close', '--summary', 'x', '--by', 'zed'], T1); // and zed too
     if (cfg === null) config(f, []); else if (typeof cfg === 'string') writeFileSync(join(f.tdir, 'config.json'), cfg); else config(f, cfg); // zed's hand-off may have rewritten nothing, but keep the case
     put();
     const w2 = teamItem(f, 'work item');
     const child = make(f, 'child', '--split-from', w2);
-    ok(f, ['update', child, '--refine-start', '--by', 'archy'], T1); // no refine-start refusal
+    assert.match(ok(f, ['update', child, '--refine-start', '--by', 'archy'], T1).stderr, /stops nobody/); // no refine-start refusal
     ok(f, ['update', child, '--refine-done', '--by', 'archy', '--note', 'x'], T1);
   }
 });

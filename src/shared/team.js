@@ -2,6 +2,7 @@
 // Like the oracle, identity and status come from the rows of the mirror database (backlog.db); the item files give only
 // the metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
@@ -222,23 +223,25 @@ const warned = new Set();
 const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
 // Owner 2026-10-30: nothing locks a member but a valid hand-off. The marker is written only for a registered member of
 // a Qwen team whose session time stamp is valid; else no marker (Claude, Codex, the lead, a team the CLI cannot read).
-// Returns null when written or not needed, else why the marker cannot be written: the CLI then refuses the hand-off.
+// Returns {text} (the marker written, null when none is needed) or {why} (why it cannot be written: the CLI then refuses
+// the hand-off).
 export function markHandoff(teamName, agent, seq) {
-  if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return null; // no team folder: nothing to mark
-  if (agent === teamLead()) return null; // the lead is not a member
+  if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return { text: null }; // no team folder: nothing to mark
+  if (agent === teamLead()) return { text: null }; // the lead is not a member
   const tdir = join(teamsRoot(), teamName);
   const m = member(tdir, agent);
   if (m === 'none' && existsSync(tdir)) warn(`${join(tdir, 'config.json')} cannot be read or names no members; no hand-off marker for ${agent}`);
   if (typeof m === 'object' && m.joined === null) warn(`the session time stamp (joinedAt) of ${agent} in ${join(tdir, 'config.json')} is no number; no hand-off marker`);
-  if (typeof m !== 'object' || m.joined === null) return null; // no registered session to replace: no marker
-  if (!Number.isInteger(seq)) return `the item number ${seq} is no whole number`;
+  if (typeof m !== 'object' || m.joined === null) return { text: null }; // no registered session to replace: no marker
+  if (!Number.isInteger(seq)) return { why: `the item number ${seq} is no whole number` };
+  const tmp = join(tdir, 'handoff', `.${agent}.${randomUUID()}.tmp`); // one per writer: two clones never share a temp file
   try {
     mkdirSync(join(tdir, 'handoff'), { recursive: true });
-    const tmp = join(tdir, 'handoff', `.${agent}.tmp`);
-    writeFileSync(tmp, JSON.stringify({ at_ms: Date.now(), seq }));
+    const text = JSON.stringify({ at_ms: Date.now(), seq });
+    writeFileSync(tmp, text);
     renameSync(tmp, join(tdir, 'handoff', `${agent}.json`));
-    return null;
-  } catch (e) { return e.message; }
+    return { text };
+  } catch (e) { rmSync(tmp, { force: true }); return { why: e.message }; }
 }
 // {tdir, marker} while the agent's valid hand-off waits for a fresh session, else null. Owner 2026-10-30: only a valid
 // marker ({at_ms, seq}) of a registered member with a valid session time stamp not newer than the marker stops it; a
@@ -267,7 +270,10 @@ export function releaseHandoff(teamName, agent, text) {
   const dir = join(teamsRoot(), teamName, 'handoff');
   const file = join(dir, `${agent}.json`);
   const grab = join(dir, `.${agent}.${process.pid}.release`);
-  try { renameSync(file, grab); } catch { return; } // none there
+  try { renameSync(file, grab); } catch (e) { // none there, or one this change cannot set aside: say so, it would stop the member
+    if (e.code !== 'ENOENT') warn(`${file} of a hand-off that was not published cannot be set aside (${e.message}); remove it, or ${agent} is stopped until a fresh session registers`);
+    return;
+  }
   // the marker is ours alone now: set it aside if it is the one this change wrote, else put it back (a later hand-off
   // from another clone, unless an even newer one took the name meanwhile)
   let mine = false;
@@ -279,5 +285,4 @@ export function releaseHandoff(teamName, agent, text) {
     rmSync(grab, { force: true, recursive: true });
   }
 }
-export const handoffText = (teamName, agent) => { try { return readFileSync(join(teamsRoot(), teamName, 'handoff', `${agent}.json`), 'utf8'); } catch { return null; } };
 export const restarting = (agent, lead = teamLead()) => agent !== lead && pendingHandoff(agent) !== null; // the lead is never locked

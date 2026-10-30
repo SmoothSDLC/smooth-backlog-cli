@@ -38,4 +38,5 @@ found=$(command -v backlog || true)
 [ -n "$found" ] && [ "$found" -ef "$bin" ] || die "the backlog command on PATH (${found:-none}) is not $pkg $want ($bin): put npm's global bin first on PATH"
 got=$(backlog --version 2>/dev/null || true)
 [ "$got" = "$want" ] || die "backlog --version says ${got:-nothing}, not $want: reinstall with npm install --global $pkg@$want --registry=$registry"
+rm -f "$err" # exec runs no EXIT trap
 exec backlog setup "$@"

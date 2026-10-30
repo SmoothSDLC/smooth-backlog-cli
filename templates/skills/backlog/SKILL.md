@@ -80,8 +80,8 @@ backlog repository (`backlog --use-backlog-repo <path>`) the commands are `new`,
 `query`, `next`, `pop`, `work`, `move` and `archive`; `backlog <command> --help` is the contract. A team member
 sees and changes the backlog only through them.
 
-- [ ] Next work: `backlog work --agent <you> --json` gives the one next action, marks the item as yours (claim,
-  refinement start or review start) and prints the whole item. `backlog query --phase <item> --agent <you>`
+- [ ] Next work: `backlog work --agent <you> --json` gives the one next action; when it is a claim, a refinement or a
+  review, it marks the item as yours (claim, refinement start or review start) and prints the whole item. `backlog query --phase <item> --agent <you>`
   reads one item again before you change it. `backlog update <item> --claim <you>` takes an offered item yourself;
   `--release <you>` gives it back.
 - [ ] Refine: `backlog update <item> --refine-start --by <you>`, set what is missing (`--set-review-refs` with
@@ -92,8 +92,8 @@ sees and changes the backlog only through them.
   --by <you>`, then `--review pass|changes --by <you> --comments "<findings, citing one of the item's review_refs>"`;
   the claimer closes with `--close --summary "<what was delivered>"`.
 - [ ] A member's review request, a changes verdict it gives and its close end its session (never the lead's): the
-  output's last line says END THE SESSION NOW: reply with text only and make no further tool call (in a Qwen team,
-  `backlog work` also answers stop until the member's fresh session).
+  output's last line says END THE SESSION NOW: reply with text only and make no further tool call (when the CLI
+  recorded a hand-off for a Qwen team member, `backlog work` also answers stop until its fresh session).
 - [ ] Team lead: split with `backlog new --split-from <item> --depends-on <ids|none>` (a child of a team's item starts in stage refining; give a child of an item without a team `--team <team>`); send a refined
   item on with `--request-refinement-review --by <you>`, record Codex's verdict with `--refinement-review
   pass|changes --by codex --comments "<findings; thread id>"`; only when Codex answers that its limit is exceeded, record that with

@@ -41,7 +41,7 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
       try {
         const record = JSON.parse(await fs.readFile(path, 'utf8'));
         operation(Number.isSafeInteger(record.pid) && record.pid > 0, `Invalid lock ${path}; inspect it before removing it.`);
-        holder = ` (pid ${record.pid}${record.host && record.host !== hostname() ? ` on ${record.host}` : ''}${record.command ? `, command ${record.command}` : ''})`;
+        holder = ` (${record.agent ? `agent ${record.agent}, ` : ''}pid ${record.pid}${record.host && record.host !== hostname() ? ` on ${record.host}` : ''}${record.command ? `, command ${record.command}` : ''}${record.since ? `, since ${record.since}` : ''})`; // item 025: who holds it and since when
         try { if (!record.host || record.host === hostname()) process.kill(record.pid, 0); } catch (error) { // a pid of another host cannot be probed: it counts as alive
           if (error.code === 'ESRCH') {
             // Another process may already own this pathname; never unlink a lock based on an old read.
@@ -82,7 +82,10 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
       await delay(20 + Math.random() * 25);
     }
   }
-  try { await handle.writeFile(JSON.stringify({ pid: process.pid, host: hostname(), command: process.argv[2] ?? '' })); return await callback(); }
+  // item 025: the record names the agent and the time, for the diagnostic of whoever waits; removed on check-in and, for a
+  // process that died, taken over (takeOver) or reported (STALE_LOCK)
+  const agent = (process.env.QWEN_CODE_AGENT_ID || process.env.USER || '').trim();
+  try { await handle.writeFile(JSON.stringify({ pid: process.pid, host: hostname(), command: process.argv[2] ?? '', agent, since: new Date().toISOString().replace(/\.\d+Z$/, 'Z') })); return await callback(); }
   finally { await handle.close(); await fs.rm(path, { force: true }); }
 }
 export async function repositoryLocked(root, callback) {

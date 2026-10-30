@@ -446,7 +446,8 @@ test('review P1: a lock left by a dead process is taken over (said once); a live
   let refused;
   await store.cloneLocked(f.home, async () => { refused = cli(['query', '--all'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400' } }); });
   assert.equal(refused.status, 1, refused.stdout + refused.stderr);
-  assert.match(refused.stderr, new RegExp(`locked by another process \\(pid ${process.pid}[,)]`));
+  assert.match(refused.stderr, new RegExp(`locked by another process \\((agent [^,]+, )?pid ${process.pid}[,)]`));
+  assert.match(refused.stderr, /since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\)/); // item 025: since when
   // a holder that finishes inside the configured wait: the command waits and succeeds
   let ok;
   await store.cloneLocked(f.home, async () => {

@@ -370,3 +370,10 @@ test('a member names nobody else as the one asking for a review', () => {
   const r = ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'archy'], { QWEN_CODE_AGENT_ID: 'archy@t1' });
   assert.equal(STOP.exec(r.stdout)?.[1], 'archy');
 });
+
+test("a member asks for no review of another member's item", () => {
+  const f = fixture();
+  const x = make(f, 'archy job');
+  ok(f, ['update', x, '--claim', 'archy']);
+  no(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'zed'], 'archy holds it: only the holder, or the team lead, asks for its review (not zed)');
+});

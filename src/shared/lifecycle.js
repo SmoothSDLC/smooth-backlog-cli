@@ -170,6 +170,7 @@ export function requestReview({ fm }, reviewer, note, by = '') {
   if (fm.review_state === 'in_review') reject(`${fm.reviewer} is reviewing it since ${fm.review_started}: wait for the verdict; the team lead hands a stale review on (--reassign-review)`);
   // item 033: the one who asks never reviews it and ends its session, so an unclaimed team item names it
   if (fm.team && !fm.claimed_by && !by) reject('--request-review of an unclaimed team item needs --by <agent>, the one who asks');
+  if (fm.claimed_by && by && by !== fm.claimed_by && by !== teamLead()) reject(`${fm.claimed_by} holds it: only the holder, or the team lead, asks for its review (not ${by})`);
   const t = now();
   // review_author outlives a release: the one who asked for the review never reviews it, whatever claimed_by says later
   Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: fm.claimed_by || by || fm.review_author || '' });

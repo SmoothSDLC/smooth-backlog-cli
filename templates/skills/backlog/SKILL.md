@@ -86,6 +86,10 @@ sees and changes the backlog only through them.
   the claimer closes with `--close --summary`.
 - [ ] When the output says END THE SESSION NOW, or `backlog work` answers stop, reply with text only and make no
   further tool call.
+- [ ] Team lead: split with `backlog new --split-from <item>` (the child starts in stage refining); send a refined
+  item on with `--request-refinement-review --by <you>`, record the verdict with `--refinement-review
+  pass|changes|limit --by codex|claude --comments`; ask the owner with `--request-decision "<question>" --by <you>`
+  (`backlog query --decisions` lists them); `backlog query --plan` is the team's dispatch plan.
 
 Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign`,
 `--reassign-review`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the

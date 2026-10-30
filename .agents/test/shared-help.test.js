@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import { HELP } from '../../src/help.js';
 
 const dirs = [];
@@ -37,7 +37,7 @@ const block = (text, flag) => new RegExp(`^  --${flag}(?: .*)?\\n((?:      .*\\n
 for (const [command, script] of Object.entries(SCRIPT)) {
   test(`backlog ${command} --help lists every flag of ${script} --help`, ctx => {
     const o = py(script, ['--help'], { cwd: cons, tmp: t, env: { COLUMNS: '1000' } });
-    if (!o) return ctx.skip('oracle not configured (python3 with PyYAML and SMOOTH_BACKLOG_SCRIPTS): flags not compared');
+    if (!o) return ctx.skip(`${ORACLE_SKIP}: flags not compared`);
     assert.equal(o.status, 0, o.stderr);
     const r = backlog(command, '--help');
     assert.equal(r.status, 0, r.stderr);
@@ -64,7 +64,7 @@ const tokensOf = d => [...new Set([...d.replace(/See SKILL\.md '[^']*'\./, '').m
 for (const [command, script] of Object.entries(SCRIPT)) {
   test(`backlog ${command} --help keeps the description of every flag of ${script} --help (numbers, defaults, rules, shapes)`, ctx => {
     const o = py(script, ['--help'], { cwd: cons, tmp: t, env: { COLUMNS: '1000' } });
-    if (!o) return ctx.skip('oracle not configured (python3 with PyYAML and SMOOTH_BACKLOG_SCRIPTS): descriptions not compared');
+    if (!o) return ctx.skip(`${ORACLE_SKIP}: descriptions not compared`);
     const text = backlog(command, '--help').stdout;
     const missing = [];
     for (const [flag, d] of Object.entries(oracleDescriptions(o.stdout))) {

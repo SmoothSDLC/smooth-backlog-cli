@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -129,7 +129,7 @@ test("with TEAM_NAME another team's item is never planned, and nothing before st
 });
 
 test('parity with query.py --plan where the rules agree: claims, a review, a changes verdict, a close, the lead\'s refinement', t => {
-  if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
+  if (!oracle) return t.skip(ORACLE_SKIP);
   const outs = ['py', 'js'].map(side => {
     const f = fixture(`team-plan-${side}-`);
     const step = (script, args) => {

@@ -15,7 +15,7 @@ import { parse } from '../../src/shared/frontmatter.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
-import { cli, consumer, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -201,7 +201,7 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
 });
 
 test('parity with update.py: the stage steps print, refuse and write the front matter as the oracle', t => {
-  if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
+  if (!oracle) return t.skip(ORACLE_SKIP);
   const KEYS = ['team', 'stage', 'refiner', 'refinement_reviewed_by', 'claimed_by', 'status'];
   const STEPS = [
     ['update.py', 'update', ['1', '--set-team', 't1']], ['update.py', 'update', ['1', '--claim', 'lead']],

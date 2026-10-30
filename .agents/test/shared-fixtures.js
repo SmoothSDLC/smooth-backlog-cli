@@ -9,6 +9,9 @@ import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+// Item 023 (owner decision 9b): CI has no Python oracle, so the parity tests skip there; the skip names the review rule.
+export const ORACLE_SKIP = 'the Python backlog skill (the parity oracle) is not here (SMOOTH_BACKLOG_SCRIPTS, python3 with PyYAML). '
+  + 'Review rule (item 023): an item that changes the storage or the backlog format needs a local parity run on BigFan, its output cited in the review';
 export const BACKLOG_OWNER = 'SmoothSDLC';
 export const BACKLOG_NAME = 'smoothsdlc-backlog';
 export const GIT_IDENTITY = {

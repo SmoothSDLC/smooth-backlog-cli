@@ -15,7 +15,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { consumer, env, py, sharedBacklog } from './shared-fixtures.js';
+import { consumer, env, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
@@ -43,7 +43,7 @@ function fixturePair(t) {
 // Runs the oracle; skips the calling test when it is not configured.
 function oracle(t, f, script, args) {
   const r = py(script, args, { cwd: f.cons, tmp: f.t });
-  if (!r) { t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing'); return null; }
+  if (!r) { t.skip(ORACLE_SKIP); return null; }
   assert.equal(r.status, 0, `${script} ${args.join(' ')} failed: ${r.stdout}${r.stderr}`);
   return r;
 }

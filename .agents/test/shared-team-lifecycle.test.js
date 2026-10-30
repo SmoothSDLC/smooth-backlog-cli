@@ -11,7 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
@@ -263,7 +263,7 @@ test('review P2: a holder whose item file has malformed front matter still block
 });
 
 test('twin parity: every lifecycle step prints, refuses and records as update.py', t => {
-  if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
+  if (!oracle) return t.skip(ORACLE_SKIP);
   const o = fixture(); const n = fixture();
   const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
   const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA').replace(/cwd=\S+/g, 'cwd=X').replace(/\b[0-9a-f]{40}\b/g, 'SHA40').replace(/,?"review_author":"[^"]*"/g, "");  // review_author: beyond the oracle (who asked for a review survives a release)

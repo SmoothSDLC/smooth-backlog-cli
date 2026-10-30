@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -89,7 +89,7 @@ test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimabl
 });
 
 test('parity with update.py and new_phase.py: --set-team, --team and the inherited team write the same front matter', t => {
-  if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
+  if (!oracle) return t.skip(ORACLE_SKIP);
   const KEYS = ['team', 'stage', 'refiner', 'claimed_by'];
   const sides = ['py', 'js'].map(side => {
     const f = fixture(`team-teams-${side}-`);

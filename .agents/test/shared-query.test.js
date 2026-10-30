@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 
@@ -70,7 +70,7 @@ const fx = () => (shared ??= build(true));
 
 // Runs the oracle and the Node view on the same fixture; null (and a skip) without the oracle.
 function both(t, f, args) {
-  if (f.noOracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
+  if (f.noOracle) return t.skip(ORACLE_SKIP);
   const o = py('query.py', args, { cwd: f.cons, tmp: f.t });
   const n = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
   return { o, n };
@@ -173,7 +173,7 @@ test('--events (all, and for one item) and --by-branch match query.py', t => {
 
 test('a repository without a backlog folder prints {} or the info line, exit 0', t => {
   const f = fx();
-  if (f.noOracle) return t.skip('oracle not configured');
+  if (f.noOracle) return t.skip(ORACLE_SKIP);
   const other = consumer(f.t, 'acme', 'fresh', 'main');
   for (const args of [['--status'], ['--next', '--json'], ['--status', '--json']]) {
     const o = py('query.py', args, { cwd: other, tmp: f.t });
@@ -185,7 +185,7 @@ test('a repository without a backlog folder prints {} or the info line, exit 0',
 
 test('a detached HEAD without --branch or --all is exit 2 with the oracle message', t => {
   const f = fx();
-  if (f.noOracle) return t.skip('oracle not configured');
+  if (f.noOracle) return t.skip(ORACLE_SKIP);
   const head = git(f.cons, 'rev-parse', 'HEAD');
   git(f.cons, 'checkout', '-q', '--detach');
   try {
@@ -199,7 +199,7 @@ test('a detached HEAD without --branch or --all is exit 2 with the oracle messag
 
 test('a read view pulls first: an item pushed from another clone is shown, and no item or db file is written', t => {
   const f = build(false);
-  if (f.noOracle) return t.skip('oracle not configured');
+  if (f.noOracle) return t.skip(ORACLE_SKIP);
   const home2 = join(f.t, 'home2');
   git(f.t, 'clone', '-q', join(f.t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2);
   const r = py('new_phase.py', ['--name', 'Pushed', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_HOME: realpathSync(home2) } });
@@ -313,7 +313,7 @@ test('review P2: input echoed in a diagnostic is redacted (flags, missing items)
 
 test('review P3: --json escapes U+007F like json.dumps', t => {
   const f = build(false);
-  if (f.noOracle) return t.skip('oracle not configured');
+  if (f.noOracle) return t.skip(ORACLE_SKIP);
   const con = db.connect(f.folder);
   con.prepare("UPDATE phase SET name=? WHERE slug='001-alpha'").run('a\x7fb \x80 é');
   con.close();

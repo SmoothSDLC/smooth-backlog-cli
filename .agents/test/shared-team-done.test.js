@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import { dump, parse } from '../../src/shared/frontmatter.js';
 
 const dirs = [];
@@ -55,7 +55,7 @@ test('--status done on an item without review_refs finishes as before (port of t
 });
 
 test('both cases print and exit as update.py', t => {
-  if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
+  if (!oracle) return t.skip(ORACLE_SKIP);
   const norm = s => String(s).replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g, 'TS');
   const reviewed = ['--review-refs', 'references/review/code.md'];
   const outs = ['py', 'js'].map(side => {

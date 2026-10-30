@@ -17,6 +17,13 @@ public integration templates are under `templates/`. Tests are in `.agents/test/
 the release verifier is `.agents/scripts/verify-published-package.mjs`. Development-only documents
 are kept in `.agents/docs/`; public usage documentation stays at the root.
 
+## Parity with the Python backlog skill (review rule, owner decision 9b)
+
+The parity tests compare the CLI with the Python backlog skill of the topology (the oracle). CI has no oracle, so they
+skip there with a reason that names this rule. Every item that changes the storage or the backlog format (the item
+files, their front matter, the mirror database, the commit and publication of a change) needs a local parity run on
+BigFan, where the oracle is configured (`SMOOTH_BACKLOG_SCRIPTS`), and the review of the item cites its output.
+
 GitHub Actions validates the supported operating systems and Node.js versions
 before publishing tagged releases. The first-party release verifier downloads
 published packages and exercises the installed CLI independently of source code.

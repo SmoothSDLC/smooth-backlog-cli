@@ -9,7 +9,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { setTimeout as sleep } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { consumer, env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { consumer, env, GIT_IDENTITY, ORACLE_SKIP, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -186,7 +186,7 @@ const pyNewPhase = (f, home, cons) => new Promise(done => { // async: new_phase.
 
 test('Python first, overlapping: Node (stale clone) is held at its push while new_phase.py creates and pushes 1; Node ends renumbered to 2', async t => {
   const f = fixture(t);
-  if (!oracle()) { t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing'); return; }
+  if (!oracle()) { t.skip(ORACLE_SKIP); return; }
   const cons = consumer(f.dir, 'acme', 'demo', 'main');
   const g = gate(f);
   putItem(f.folder2, 1, 'nodeitem');
@@ -201,7 +201,7 @@ test('Python first, overlapping: Node (stale clone) is held at its push while ne
 
 test('Node first, overlapping: Node has scanned backlog.db and is held at its push while new_phase.py takes the next number', async t => {
   const f = fixture(t);
-  if (!oracle()) { t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing'); return; }
+  if (!oracle()) { t.skip(ORACLE_SKIP); return; }
   const cons = consumer(f.dir, 'acme', 'demo', 'main');
   const g = gate(f);
   putItem(f.folder, 1, 'nodeitem');

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 import { HELP } from '../../src/help.js';
-import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -336,7 +336,7 @@ function states() {
 }
 
 test('parity with query.py --pop: every action prints, refuses and exits alike', t => {
-  if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
+  if (!oracle) return t.skip(ORACLE_SKIP);
   const f = states();
   const roster = join(f.t, 'roster.json');
   const actions = new Set();
@@ -418,7 +418,7 @@ test('parity with query.py --pop: every action prints, refuses and exits alike',
 });
 
 test('--claim-now after the oracle claimed: the held item is continued, not claimed twice', t => {
-  if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
+  if (!oracle) return t.skip(ORACLE_SKIP);
   const f = fixture();
   const job = make(f, 'py', f.cons, 'claim now twin', []);
   // the oracle claims in its own run; the CLI then finds the item held by cody and offers continue, claimed false

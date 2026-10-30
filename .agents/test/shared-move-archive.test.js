@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
@@ -120,7 +120,7 @@ function pair(t, o, n, script, args, { loose = false, rankless = false } = {}) {
   return rn;
 }
 function twins(t) {
-  if (!oracle) { t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing'); return null; }
+  if (!oracle) { t.skip(ORACLE_SKIP); return null; }
   return [seed(), seed()];
 }
 const run = (f, script, args) => cli([script, ...args], { cwd: f.cons, tmp: f.t });
@@ -157,7 +157,7 @@ test('archive --force, an already archived item, refusals and --dry-run match ar
 });
 
 test('after a Node archive, Python query.py --status no longer lists the item as open and archive/phases holds it', t => {
-  if (!oracle) return t.skip('Python backlog skill oracle not configured');
+  if (!oracle) return t.skip(ORACLE_SKIP);
   const f = seed();
   const row = () => pyJson(f, 'query.py', ['--status', '--json']).phases.find(p => p.slug === '002-beta'); // query.py lists archived items last
   assert.deepEqual([row().status, row().path], ['pending', 'phases/002-beta.md']);

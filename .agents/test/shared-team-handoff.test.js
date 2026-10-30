@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, ORACLE_SKIP, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -140,7 +140,7 @@ test('the marker is the one PR1 reads: lib_db.restarting sees the lock the CLI w
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }]);
   if (!existsSync(join(scripts, 'lib_db.py')) || spawnSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }).status !== 0) {
-    return t.skip('the PR1 oracle is not here (SMOOTH_BACKLOG_SCRIPTS) or PyYAML is missing');
+    return t.skip(ORACLE_SKIP);
   }
   const probe = pyRestarting(f, 'archy');
   assert.equal(probe.status, 0, probe.stderr); // an oracle that is here but broken fails the test

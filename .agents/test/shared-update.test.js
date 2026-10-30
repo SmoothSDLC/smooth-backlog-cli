@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, readdirSy
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cli, consumer, GIT_IDENTITY, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
@@ -107,7 +107,7 @@ function pair(t, o, n, args, { loose = false } = {}) {
   return rn;
 }
 function twins(t) {
-  if (!oracle) { t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing'); return null; }
+  if (!oracle) { t.skip(ORACLE_SKIP); return null; }
   return [seed(), seed()];
 }
 const run = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });

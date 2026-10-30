@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { BACKLOG_NAME, BACKLOG_OWNER, consumer, env, py, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, consumer, env, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
 
 test('shared fixtures: a new phase lands on the local bare and the real backlog stays untouched', t => {
   const tmp = mkdtempSync(join(tmpdir(), 'backlog-shared-fixtures-'));
@@ -25,7 +25,7 @@ test('shared fixtures: a new phase lands on the local bare and the real backlog 
 
   const r = py('new_phase.py', ['--name', 'x', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: repo, tmp });
   // CI has no oracle: the skill lives in the private SmoothSDLC/smoothsdlc-backlog repo.
-  if (!r) { t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing'); return; }
+  if (!r) { t.skip(ORACLE_SKIP); return; }
   assert.equal(r.status, 0, `new_phase.py failed: ${r.stdout}${r.stderr}`);
 
   const m = r.stdout.match(/created phase (phases\/[A-Za-z0-9._-]+\.md)/);

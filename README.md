@@ -22,6 +22,23 @@ GitHub Packages requires authentication even for public packages. When npm login
 asks for a password, use a GitHub personal access token (classic) with
 `read:packages`.
 
+### Install a pinned release, and roll back
+
+An installation that must not move on its own (an agent host, a team runner) pins the release it installs and rolls
+back by installing the release before. In the shared backlog repository mode the CLI never updates itself (the
+update notices and automatic installation are the local mode's).
+
+```sh
+npm install --global @smoothsdlc/smooth-backlog-cli@<version> --registry=https://npm.pkg.github.com
+backlog --version                # the pinned release
+# roll back: the same command with the previous release
+npm install --global @smoothsdlc/smooth-backlog-cli@<previous version> --registry=https://npm.pkg.github.com
+```
+
+In a repository, `bash <skill folder>/scripts/install-backlog-cli.sh` (shipped with the backlog skill) installs the
+CLI when it is missing or older than the registry's release and then runs `backlog setup`, which points the
+repository at the shared backlog repository (`.smooth-backlog.json`) and deploys the skill; `--ask` asks for the path.
+
 ## Get started
 
 Run these commands inside your Git working tree:

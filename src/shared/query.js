@@ -176,7 +176,10 @@ async function query(argv) {
         say(a.json ? '{}' : `ℹ️  no actionable item for ${repo}${a.all ? '' : `, branch ${redact(branch)}; --all shows every branch`}`);
         return 0;
       }
-      if (a.json) { dump(r); return 0; }
+      // item 042: the next item may wait on another repository's item: that is named as the work to do first
+      const away = team.undoneDependencies(folder, store.load(folder).find(i => i.path === r.path)?.fm ?? {}).filter(d => d.foreign && d.item && d.item.status !== 'done')
+        .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
+      if (a.json) { dump(away.length ? { ...r, first: away } : r); return 0; }
       if (process.env.BACKLOG_HEADLESS === '1') return die('BACKLOG_HEADLESS=1 is not in this build');
       criticalBanner(critical());
       say(`➡️  NEXT: P${r.priority} (rank 0 = next) — [${pad(r.seq, 3)}] ${r.slug}  (${r.status})${(r.severity || 'normal') === 'critical' ? '  ⚠️ CRITICAL' : ''}`);
@@ -185,6 +188,7 @@ async function query(argv) {
       say(`    summary:   ${r.summary}`);
       say(`    file:      ${r.path}`);
       if (r.branch || r.commit_sha || r.location) say(`    progress:  branch=${r.branch} commit=${sha7(r)} loc=${r.location}`);
+      for (const x of away) say(`    ⛓ waits on ${x.item} (${x.slug}, status ${x.status}): do that first in repository ${x.repository}`);
       say(MANDATE);
       return 0;
     }

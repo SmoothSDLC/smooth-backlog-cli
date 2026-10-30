@@ -32,6 +32,8 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.match(run(here, NEW('needs a missing item', 'acme/lib#9'), 1).stdout, /no item 'acme\/lib#9' in the backlog repository/);
   run(here, NEW('app change', 'acme/lib#1'));
   assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status pending\)/);
+  assert.equal(JSON.parse(run(here, ['next', '--json']).stdout).first[0].item, 'acme/lib#1'); // next names it too
+  assert.match(run(here, ['next']).stdout, /⛓ waits on acme\/lib#1 \(001-library-change, status pending\): do that first in repository acme\/lib/);
   run(here, ['query', '--phase', '1', '--agent', 'archy']);
   assert.match(run(here, ['update', '1', '--claim', 'archy'], 1).stdout, /dependencies not done/);
   const p = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json'], 3).stdout);

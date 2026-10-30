@@ -446,7 +446,7 @@ export async function commit(home, folders, message, reconcile = null, guard = [
         if (!hit.length) return;
         const up = parse((await g(home, ['show', `origin/main:${hit[0].path}`])).stdout).fm;
         const repoOf = x => x.path.split('/').slice(0, 2).join('/');
-        const repos = [...new Set(guard.map(repoOf))];
+        const repos = [...new Set([...guard.map(repoOf), ...names])]; // every folder of the publication (a move's destination too)
         const read = repos.flatMap(r => staleViews(join(home, ...r.split('/')), r, actor(), 'origin/main').map(slug => ({ repo: r, slug }))); // the other items the agent read that changed upstream
         throw staleError(hit[0].slug, up.updated_by, up.updated, hit[0].was, [...hit.map(x => ({ repo: repoOf(x), slug: x.slug })), ...read], repoOf(hit[0]));
       };

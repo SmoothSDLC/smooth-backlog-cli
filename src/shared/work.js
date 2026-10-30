@@ -74,6 +74,10 @@ export async function run(argv) {
     if (!file) return die(`${p.item}: no such item in the backlog of ${p.repository}`, 1);
     item = { front_matter: file.fm, body: file.body };
   }
+  const fmNow = item?.front_matter ?? {};
+  if (marked && item && ![fmNow.claimed_by, fmNow.refiner, fmNow.reviewer].includes(a.agent)) { // handed on between the mark and the read
+    return die(`${p.item} was handed on before backlog work could read it (claimed by ${fmNow.claimed_by || 'nobody'}); run backlog work again`, 1);
+  }
   const out = { ...p, marked, front_matter: item ? item.front_matter : null, body: item ? item.body : null };
   if (a.json) { process.stdout.write(`${JSON.stringify(out, null, 2)}\n`); return status; }
   say(p.item ? `${p.action} ${p.item}` : p.action);

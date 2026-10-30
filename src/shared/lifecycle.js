@@ -259,6 +259,10 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
     const why = outsideTeam(fm);
     if (why) return { refuse: `${slug}: ${why}` };
   }
+  // a refinement verdict is about the item as the reviewer saw it: nothing changes in the same call (Codex review of item 036)
+  if (a['refinement-review'] && (a.append || given.length || Object.keys(a).some(k => k.startsWith('set-')))) {
+    return { refuse: `${slug}: --refinement-review records the verdict alone; change the item first and have it reviewed again` };
+  }
   const steps = actions.filter(k => k !== 'release');
   if (a['refine-done'] && missingFields(fm, body).length) { // a refined item is complete (owner 2026-10-28; update.py:303-307)
     return { refuse: `${slug}: still missing ${missingFields(fm, body).join(', ')}: complete it before --refine-done (${REFINE_HOW})` };

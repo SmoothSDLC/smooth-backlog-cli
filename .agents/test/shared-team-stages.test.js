@@ -365,3 +365,14 @@ test('the lead edits a refining item only as its refiner; an append of ESTIMATE 
   no(f, ['update', inc, '--append', 'ESTIMATE: 5 min\nAdditional context', '--by', 'lead'], '--append', TR);
   ok(f, ['update', inc, '--append', 'ESTIMATE: 5 min', '--by', 'lead'], TR);
 });
+
+test('a refinement verdict changes nothing else in the same call', () => {
+  const f = fixture();
+  const w = work(f);
+  const c = make(f, 'child', '--split-from', w);
+  up(f, c, '--refine-start', '--by', 'archy');
+  up(f, c, '--refine-done', '--by', 'archy', '--note', 'x');
+  up(f, c, '--request-refinement-review', '--by', 'lead');
+  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok', '--append', '## Definition of done\n- [ ] other'], '--refinement-review records the verdict alone');
+  assert.notEqual(fm(f, c).stage, 'ready');
+});

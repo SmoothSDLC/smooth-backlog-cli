@@ -19,7 +19,7 @@ import { REVIEW_DIR, asList, foreignCycle, foreignItem, handoffText, heldItems, 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
 const BOOL = ['dry-run'];
-const TEAM_VALUE = ['claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason', 'reassign-review'];
+const TEAM_VALUE = ['wip-override', 'claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason', 'reassign-review'];
 const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close', 'refine-start', 'refine-done', 'request-refinement-review'];
 const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'], 'set-chunk': ['yes', 'no'], severity: ['normal', 'critical'], 'refinement-review': ['pass', 'changes', 'limit'] };
 
@@ -199,6 +199,14 @@ async function change(a, con, folder, repo) {
   }
   const incomplete = missingFields(fm, body); // as the item is before this call
   const before = { team: fm.team, stage: fm.stage };
+  if (a['wip-override'] !== undefined) { // item 034: the lead lifts the team and agent limits for this item, with a recorded reason
+    const who = a.by || caller();
+    if (who !== teamLead()) return refuse(`${row.slug}: only the team lead (${teamLead()}) lifts the team and agent work-in-progress limits for an item (got ${who || 'nobody'}; --by <lead>)`);
+    const reason = strip(a['wip-override']);
+    if (!reason) return refuse(`${row.slug}: --wip-override needs the reason`);
+    Object.assign(fm, { wip_override: reason, wip_override_by: who, wip_override_at: store.now() });
+    changes.wip_override = reason;
+  }
   if (a['set-team'] !== undefined) { // update.py:255-258
     const name = strip(a['set-team']);
     if (!name && fm.stage) return refuse(`${row.slug}: an item in stage ${fm.stage} keeps a team (the stages are team work); set another team instead`); // beyond the oracle (Codex review of item 036)

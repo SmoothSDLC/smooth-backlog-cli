@@ -284,7 +284,7 @@ function applyDense(dir, items, inScope, beforeApply) {
   guardReflow(dir, writes);
   beforeApply?.(writes);
   return items.map((i, rank) => {
-    if (changes[rank]) write({ path: join(dir, i.path), fm: stamp({ ...i.fm, priority: rank }), body: i.body }, dir);
+    if (changes[rank]) write({ path: join(dir, i.path), fm: { ...i.fm, priority: rank }, body: i.body }, dir); // item 034: a rank is no change of the item: updated stays
     return [slugOf(i), rank];
   });
 }

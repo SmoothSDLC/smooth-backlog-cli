@@ -3,6 +3,7 @@
 // Each action takes item = {fm, folder, repo}, changes item.fm and returns {event, text}, or throws Rejected(message) with
 // the refusal text; step() runs the guards and one action, and update.js writes the front matter and appends the text.
 import { hasDefinitionOfDone } from './new.js';
+import { wipRefusal } from './wip.js';
 import { now } from './store.js';
 import {
   REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
@@ -51,6 +52,8 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   if (undone.length) reject(`dependencies not done: ${undone.map(describeDependency).join('; ')}`);
   const refusal = who === agent ? null : claimRefusal(folder, agent);
   if (refusal && !force) reject(refusal);
+  const wip = who === agent ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // item 034: --force never passes a limit
+  if (wip) reject(wip);
   Object.assign(fm, { status: 'in_progress', claimed_by: agent, claimed_at: t });
   return { event: 'claimed', text: `Claimed by ${agent} at ${t} repository=${repo} branch=${gitBranch(process.cwd()) || '(detached)'} cwd=${process.cwd()}${refusal ? ` (--force past the claim rule: ${refusal.split(';')[0]})` : ''}` };
 }
@@ -59,7 +62,7 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
 // for an owner decision (topology item 288). A member refines first, the lead requests the refinement review, and Codex
 // records the verdict; Claude only after Codex's 5-hour limit is recorded for the round.
 const inStage = fm => `team ${fm.team || 'none'}, stage ${fm.stage || 'none'}`;
-export function refineStart({ fm, folder }, by, { force } = {}) {
+export function refineStart({ fm, folder, repo }, by, { force } = {}) {
   if (!by) reject('--refine-start needs --by <agent>');
   if (!fm.team || fm.stage !== 'refining') reject(`only an item of a team in stage refining is refined (${inStage(fm)})`);
   if (fm.claimed_by) reject(`claimed by ${fm.claimed_by}: the work item itself is refined and split by the team lead, not refined here`);
@@ -67,6 +70,8 @@ export function refineStart({ fm, folder }, by, { force } = {}) {
   if (by === teamLead() && fm.refiner !== by) reject(`a member, not the team lead, refines in the first round (spec section 4); the lead re-refines only an item an owner decision returned to it`);
   const busy = fm.refiner === by || by === teamLead() ? null : claimRefusal(folder, by); // spec section 6: a refinement is new work too
   if (busy && !force) reject(busy);
+  const wip = fm.refiner === by ? null : wipRefusal(folder, repo, fm, by, fm.phase); // item 034
+  if (wip) reject(wip);
   const t = now();
   Object.assign(fm, { refiner: by, refine_started: t });
   return { event: 'refine_started', text: `Refinement started by ${by} at ${t}` };

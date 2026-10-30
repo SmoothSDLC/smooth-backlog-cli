@@ -16,6 +16,7 @@ import * as store from './store.js';
 import * as sync from './sync.js';
 import * as team from './team.js';
 import { OPEN, SCOPES, refinementCap, reviewOffer, teamRows, waitingOn } from './views.js';
+import { wipRefusal } from './wip.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'pop', 'plan', 'claim-now', 'headless'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
@@ -133,14 +134,14 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   if (!act) { const x = pick('passed') ?? mine.find(({ fm }) => !['passed', null, '', 'none', undefined].includes(fm.review_state)); if (x) act = cont(x); }
   if (!act && reviews.length) act = reviews[0];
   if (!act && !noClaim && team.claimRefusal(folder, me) === null) { // query.py:222-227: first-round refinement of a team item, before new work (one active item: spec section 6)
-    const x = teamRefining.find(({ fm }) => !fm.refiner);
+    const x = teamRefining.find(({ r, fm }) => !fm.refiner && !wipRefusal(folder, repo, fm, me, r.slug)); // never past a limit (034)
     if (x) act = { name: 'refine', r: x.r, f: repo, say: `refine it before anyone works on it: backlog update ${x.r.slug} --refine-start --by ${me}, complete its team fields and definition of done (${refineHow(x.r.slug)}), then backlog update ${x.r.slug} --refine-done --by ${me} --note "<what you refined>"` };
   }
   const refusal = act || noClaim ? null : team.claimRefusal(folder, me);
   if (!act && !refusal && !noClaim) {
     for (const { r, fm, undone, f } of own) {
       // chunk items are offered as chunk work below
-      if (r.status === 'pending' && !fm.claimed_by && !undone.length && !team.isChunk(fm) && team.isReady(fm)) { // a team's item only in stage ready
+      if (r.status === 'pending' && !fm.claimed_by && !undone.length && !team.isChunk(fm) && team.isReady(fm) && !wipRefusal(folder, repo, fm, me, r.slug)) { // a team's item only in stage ready; never past a limit (034)
         act = { name: 'claim', r, f, say: `claim it: backlog update ${r.slug} --claim ${me}${dod(fm)}` };
         break;
       }
@@ -269,10 +270,12 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   const canClaim = Object.fromEntries(members.map(m => [m, m !== lead && !roster[m]?.review_only && team.claimRefusal(folder, m) === null]));
   for (const { r, fm, undone } of rows) {
+  const planned = []; // item 034: the claims this plan gives out count against the limits of the next ones
     if (r.status !== 'pending' || fm.claimed_by || undone.length || team.isChunk(fm) || !team.isReady(fm)) continue;
-    const free = members.filter(m => !busy.has(m) && canClaim[m]).sort((x, y) => held[x].length - held[y].length || members.indexOf(x) - members.indexOf(y));
+    const free = members.filter(m => !busy.has(m) && canClaim[m] && !wipRefusal(folder, repo, fm, m, r.slug, planned)).sort((x, y) => held[x].length - held[y].length || members.indexOf(x) - members.indexOf(y));
     if (free.length) {
       give(free[0], 'claim', r, `claim exactly this item (planned for you; do not pop for another): backlog update ${r.slug} --claim ${free[0]}, then start the work and record each step in the item${dod(fm)}`,
+      planned.push({ repository: repo, slug: r.slug, fm: { ...fm, status: 'in_progress', claimed_by: free[0] } });
         `free member${free.length > 1 && held[free[0]].length < held[free[1]].length ? '; least loaded' : ''}`);
     }
   }

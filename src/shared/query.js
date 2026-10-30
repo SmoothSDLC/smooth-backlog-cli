@@ -13,8 +13,9 @@ import * as sync from './sync.js';
 import * as team from './team.js';
 import { teamScope } from './team.js';
 import { SCOPES, teamView } from './views.js';
+import { wipView } from './wip.js';
 
-const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'pop', 'plan', 'claim-now', 'headless'];
+const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'pop', 'plan', 'claim-now', 'headless', 'wip'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
 const ACTIONABLE = ['pending', 'in_progress'];
 const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
@@ -127,6 +128,15 @@ async function query(argv) {
   try { repo = teamScope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }
   const { home } = store.resolveHome();
   try { await sync.pull(home); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
+  if (a.wip) { // item 034: the counts against every work-in-progress limit and the stale in-progress items, whole backlog home
+    const v = wipView(home);
+    if (a.json) { dump(v); return 0; }
+    say(`📊 work in progress — ${v.limits_file}${existsSync(v.limits_file) ? '' : ' (none: no limits)'}`);
+    for (const c of v.counts) say(`   ${c.level.padEnd(10)} ${String(c.key).padEnd(48)} ${String(c.count).padStart(3)}${c.limit === null ? '' : ` / ${c.limit}${c.count >= c.limit ? '  ⚠️ at the limit' : ''}`}`);
+    say(`   stale (no change of their own for more than ${v.stale_hours} h): ${v.stale.length}`);
+    for (const x of v.stale) say(`      - ${x.item} ${x.slug} (${x.holder || 'nobody'}, updated ${x.updated})`);
+    return 0;
+  }
   let folder;
   try { folder = store.folder(home, repo); } catch (e) { return die(e.message); } // TEAM_REPOSITORY=../x passes the owner/name pattern; the folder must stay inside the home
   if (!existsSync(join(folder, 'backlog.db'))) {

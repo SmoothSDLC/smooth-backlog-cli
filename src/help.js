@@ -180,6 +180,10 @@ ${DB}
       Replace the layer of the item: 1 to 5, or the word process.
   --set-chunk {yes,no}
       Mark the item as chunk work (small pieces any member does between items) or not.
+  --wip-override REASON
+      The team lead lifts the team and agent work-in-progress limits for this one item, with the reason recorded in
+      the item (wip_override, wip_override_by, wip_override_at); --by <lead>. The overall, repository and branch limits
+      stay: only the owner changes them, in wip-limits.json of the backlog repository.
   --severity {normal,critical}
       Change the item's severity (backlog new sets it, and starts a critical item at P0; backlog query --critical lists
       the critical items). The item does not move: change its place with --priority.
@@ -302,6 +306,11 @@ ${DB}
   --decisions
       The items that wait in stage review-hitl for an owner decision, each with its question, for the morning report; with
       --all every branch. Answer one with backlog update <item> --decision "<answer>".
+  --wip
+      The work in progress of the whole backlog repository against its limits (wip-limits.json at its top folder:
+      overall, repository, branch, team, agent, each a number or {"default": n, "<key>": n}, and stale_hours), and the
+      items in progress without a change of their own for longer than stale_hours (default 48). A claim or a
+      refinement start past a limit is refused, naming the limit and the items holding it.
   --pop
       The one next action of the agent named by --agent: continue, review, refine, claim, refinement-review, reassign-review,
       stop, chunk or idle

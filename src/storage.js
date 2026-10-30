@@ -33,8 +33,10 @@ const lockRecord = () => JSON.stringify({ pid: process.pid, host: hostname(), co
 // crash never leaves an empty lock behind.
 async function placeLock(path, replace) {
   const tmp = `${path}.${randomUUID()}.tmp`;
-  await fs.writeFile(tmp, lockRecord(), { mode: 0o600 });
-  try { if (replace) await fs.rename(tmp, path); else await fs.link(tmp, path); } finally { await fs.rm(tmp, { force: true }); }
+  try {
+    await fs.writeFile(tmp, lockRecord(), { mode: 0o600, flag: 'wx' });
+    if (replace) await fs.rename(tmp, path); else await fs.link(tmp, path); // link: EEXIST while another holds the name
+  } finally { await fs.rm(tmp, { force: true }); }
 }
 export async function locked(path, callback, { wait = 10000, takeOver = false } = {}) {
   await fs.mkdir(dirname(path), { recursive: true });

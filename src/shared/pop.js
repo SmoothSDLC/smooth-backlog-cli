@@ -110,8 +110,10 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     const leads = new Set(mine.map(x => String(x.r.seq)));
     // every open item of the team on this branch, incomplete ones included: an incomplete split child is the team's work too
     busy = here.filter(x => x.fm.team && team.inTeam(x.fm) && x.fm.claimed_by !== me && x.r.status !== 'done' && !leads.has(String(x.r.seq))
-      && !team.undoneDependencies(folder, x.fm).some(d => d.item && leads.has(String(d.item.seq))));
-    if (busy.length) mine = mine.filter(x => ['passed', 'changes-requested'].includes(x.fm.review_state));
+      && !team.undoneDependencies(folder, x.fm).some(d => (d.item && !d.foreign && leads.has(String(d.item.seq))) || d.foreign)); // an item that waits on another repository is no work of the team here (item 042)
+    // item 042: team items that wait only on other repositories: the lead does not go on here, it is told where to go
+    const away = here.filter(x => x.fm.team && team.inTeam(x.fm) && x.r.status !== 'done' && !leads.has(String(x.r.seq)) && team.undoneDependencies(folder, x.fm).some(d => d.foreign));
+    if (busy.length || away.length) mine = mine.filter(x => ['passed', 'changes-requested'].includes(x.fm.review_state));
   }
   // every open item of the team on this branch, incomplete ones included (a split child before its refinement is open work)
   const teamDone = ({ r, fm }) => lead && fm.team && !busy.length && !here.some(x => x.r.slug !== r.slug && x.fm.team === fm.team);

@@ -45,9 +45,36 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   run(there, ['query', '--phase', '1', '--agent', 'tester']);
   run(there, ['update', '1', '--status', 'done', '--by', 'tester']);
   assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status done\)/);
+  const offered = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json']).stdout); // done: next-work offers the item
+  assert.deepEqual([offered.action, offered.item, offered.first], ['claim', '001-app-change', undefined]);
   run(here, ['query', '--phase', '1', '--agent', 'archy']);
-  run(here, ['update', '1', '--claim', 'archy']); // done: no longer blocks
+  run(here, ['update', '1', '--claim', 'archy']); // and the claim goes through
   run(here, ['query', '--phase', '1', '--agent', 'tester']);
   assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/lib#7', '--by', 'tester'], 1).stdout, /no item 'acme\/lib#7' in the backlog repository/);
   run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester']);
+});
+
+test('042: a lead whose team items wait only on another repository is told to start the team there, not to wait', () => {
+  const t = mkdtempSync(join(tmpdir(), 'foreign-lead-'));
+  dirs.push(t);
+  sharedBacklog(t);
+  const here = consumer(t, 'acme', 'app', 'main');
+  const there = consumer(t, 'acme', 'lib', 'main');
+  mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  const run = (cwd, args, want = 0) => {
+    const r = cli(args, { cwd, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester', TEAM_LEAD: 'lead', TEAM_NAME: 't1' } });
+    assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
+    return r;
+  };
+  const DOD = '## Definition of done\n\n- [ ] it holds';
+  run(there, ['new', '--name', 'library change', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]);
+  run(here, ['new', '--name', 'work item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]);
+  run(here, ['update', '1', '--set-team', 't1']);
+  run(here, ['update', '1', '--claim', 'lead']);
+  run(here, ['new', '--name', 'team child', '--objective', 'o', '--summary', 's', '--depends-on', 'acme/lib#1', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]);
+  run(here, ['update', '2', '--set-team', 't1']);
+  const p = JSON.parse(run(here, ['pop', '--agent', 'lead', '--json'], 3).stdout);
+  assert.deepEqual(p.first?.map(x => x.item), ['acme/lib#1'], JSON.stringify(p));
+  assert.match(p.instruction, /end the session here; the team is started in that repository/);
 });

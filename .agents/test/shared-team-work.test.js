@@ -312,3 +312,23 @@ test('a member acts only as itself on an unclaimed item; a request outside a Qwe
   const p = JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], { TEAM_NAME: 't1' }).stdout);
   assert.notEqual(p.action, 'chunk', p.instruction); // its team works on inc: the lead waits
 });
+
+test('an unclaimed team item names who asks for its review, who then never reviews it; an agent with active work is offered no refinement', () => {
+  const f = fixture();
+  const x = make(f, 'unclaimed team item');
+  ok(f, ['update', x, '--set-team', 't1']);
+  no(f, ['update', x, '--request-review', 'any', '--note', 'y'], 'needs --by <agent>, the one who asks');
+  ok(f, ['update', x, '--request-review', 'any', '--note', 'y', '--by', 'cody']);
+  assert.equal(fm(f, x).review_author, 'cody');
+  no(f, ['update', x, '--start-review', '--by', 'cody'], 'cody');
+  const w = make(f, 'team work item');
+  ok(f, ['update', w, '--set-team', 't1']);
+  const c = make(f, 'child', '--split-from', w);
+  const job = make(f, 'archy job');
+  ok(f, ['update', job, '--set-team', 't1']);
+  ok(f, ['update', job, '--claim', 'archy']);
+  ok(f, ['update', job, '--waiting', 'a run', '--by', 'archy']);
+  ok(f, ['update', make(f, 'other branch work'), '--claim', 'archy', '--force']); // active work
+  const p = JSON.parse(run(f, ['pop', '--agent', 'archy', '--json'], { TEAM_NAME: 't1' }).stdout);
+  assert.notEqual(p.item, c, p.instruction);
+});

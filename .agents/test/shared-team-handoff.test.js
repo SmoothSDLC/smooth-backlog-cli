@@ -236,3 +236,14 @@ test('a marker that cannot be read keeps the lock; a failed publication sets asi
     assert.ok(!existsSync(marker(f)) && existsSync(join(f.tdir, 'handoff', 'archy.released')));
   } finally { process.env.HOME = home; }
 });
+
+test('a marker without a whole seq, or a session time stamp too large for a number, never releases the lock', () => {
+  const f = fixture();
+  teamItem(f, 'work');
+  mkdirSync(join(f.tdir, 'handoff'), { recursive: true });
+  for (const [mk, joined] of [[{ at_ms: 1 }, 2], [{ at_ms: 1, seq: {} }, 2], [{ at_ms: 1, seq: 1 }, '9'.repeat(400)]]) {
+    writeFileSync(marker(f), JSON.stringify(mk));
+    config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: joined }]);
+    assert.equal(pop(f, 'archy', T1).action, 'stop', JSON.stringify([mk, joined]));
+  }
+});

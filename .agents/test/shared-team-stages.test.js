@@ -314,3 +314,16 @@ test("the lead never starts a first-round refinement nor is offered a member's c
   assert.notEqual(pop(f, 'lead', T1).item, c); // a member's first-round refinement
   assert.deepEqual([pop(f, 'archy', T1).action, pop(f, 'archy', T1).item], ['refine', c]);
 });
+
+test('in a team session a split of a team item may keep the placeholder, a split of another item may not; only the lead changes an incomplete item there', () => {
+  const f = fixture();
+  const TR = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const w = make(f, 'team work item');
+  up(f, w, '--set-team', 't1');
+  const plain = make(f, 'plain item');
+  const c = ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none'], TR).stdout.split('created phase phases/')[1].split('.md')[0];
+  assert.deepEqual([fm(f, c).team, fm(f, c).stage], ['t1', 'refining']);
+  no(f, ['new', '--name', 'bare split', '--split-from', plain, '--depends-on', 'none'], '--body must hold a definition of done', TR);
+  const bare = ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0]; // no team field
+  no(f, ['update', bare, '--set-estimate', '5'], 'only the team lead (lead) refines it, not archy', { ...TR, QWEN_CODE_AGENT_ID: 'archy@t1' });
+});

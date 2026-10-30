@@ -165,11 +165,13 @@ export function reassignReview({ fm }, agent, { by, reason } = {}) {
 // itself. Outside a team session (no such id) the caller is not known and the named agent is taken as given.
 export const caller = () => { const id = strip(process.env.QWEN_CODE_AGENT_ID || ''); return /^[^@\s]+@\S+$/.test(id) ? id.split('@')[0] : ''; };
 
-export function requestReview({ fm }, reviewer, note) {
+export function requestReview({ fm }, reviewer, note, by = '') {
   if (!strip(note || '')) reject('--request-review needs --note "<what to review: commits, deployed evidence>"');
+  // item 033: the one who asks never reviews it and ends its session, so an unclaimed team item names it
+  if (fm.team && !fm.claimed_by && !by) reject('--request-review of an unclaimed team item needs --by <agent>, the one who asks');
   const t = now();
   // review_author outlives a release: the one who asked for the review never reviews it, whatever claimed_by says later
-  Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: fm.claimed_by || fm.review_author || '' });
+  Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: fm.claimed_by || by || fm.review_author || '' });
   return { event: 'review_requested', text: `## Review requested by ${fm.claimed_by || 'unknown'} at ${t} (reviewer: ${reviewer})\n\n${note}` };
 }
 
@@ -273,7 +275,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   }
   // spec section 4: outside the refinement stages only the lead refines an incomplete item of its team (a member known by
   // QWEN_CODE_AGENT_ID changes nothing on it)
-  if (incomplete.length && before.team && !refining && me && me !== teamLead() && (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-')))) {
+  if (incomplete.length && (before.team || teamScope().repo) && !refining && me && me !== teamLead() && (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-')))) {
     return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: only the team lead (${teamLead()}) refines it, not ${me}` };
   }
   if (incomplete.length && (teamScope().repo || steps.length || refining)) { // team mode: an incomplete item is only refined
@@ -296,7 +298,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
       case 'release': return release(item, a.release, { by: a.by || caller() || undefined, reason: a.reason });
       case 'reassign': return reassign(item, a.reassign, { by: a.by, reason: a.reason });
       case 'reassign-review': return reassignReview(item, a['reassign-review'], { by: a.by, reason: a.reason });
-      case 'request-review': return requestReview(item, a['request-review'], note);
+      case 'request-review': return requestReview(item, a['request-review'], note, a.by || caller());
       case 'start-review': return startReview(item, a.by);
       case 'review': return review(item, a.review, { by: a.by, comments: a.comments });
       case 'waiting': return waiting(item, a.by, a.waiting);

@@ -171,3 +171,12 @@ test('test_plan_gives_a_review_to_the_first_idle_member_but_the_author; a member
   ok(f, ['update', c, '--refine-start', '--by', 'zed']); // zed refines: active work too
   assert.deepEqual(reviewers(), []);
 });
+
+test('two review requests at once go to two members, neither to its author', () => {
+  const f = fixture();
+  const [a, b] = ['first review job', 'second review job'].map(n => make(f, n));
+  ok(f, ['update', b, '--set-review-refs', 'references/review/contract.md']);
+  for (const s of [a, b]) { ok(f, ['update', s, '--claim', 'cody']); ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'cody']); }
+  const p = plan(f).filter(e => e.action === 'review');
+  assert.deepEqual(p.map(e => [e.member, e.item]), [['archy', a], ['zed', b]]);
+});

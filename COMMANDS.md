@@ -580,7 +580,8 @@ Options:
   --plan
       The dispatch plan of the team for this branch: at most one action per member (respond, close, review, claim, and for
       the team lead refine or reassign-review), each item to one member, with the reason and a dispatch key; the members
-      are the roster's (--roster, else TEAM_ROSTER), in its order (team session). Read-only.
+      are the roster's (--roster, else TEAM_ROSTER). Entries come by action (respond and close, review, claim, refine), a
+      claim to the member holding the fewest items, then in roster order (team session). Read-only.
   --lead LEAD
       With --pop or --plan: the team lead, who alone refines incomplete items and never claims an execution item. The default
       is the environment variable TEAM_LEAD, else cody (team session).

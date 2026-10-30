@@ -130,7 +130,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   if (!act) { const x = pick('passed') ?? mine.find(({ fm }) => !['passed', null, '', 'none', undefined].includes(fm.review_state)); if (x) act = cont(x); }
   if (!act && reviews.length) act = reviews[0];
-  if (!act && !noClaim) { // query.py:222-227: first-round refinement of a team item, before new work
+  if (!act && !noClaim && team.claimRefusal(folder, me) === null) { // query.py:222-227: first-round refinement of a team item, before new work (one active item: spec section 6)
     const x = teamRefining.find(({ fm }) => !fm.refiner);
     if (x) act = { name: 'refine', r: x.r, f: repo, say: `refine it before anyone works on it: backlog update ${x.r.slug} --refine-start --by ${me}, complete its team fields and definition of done (${refineHow(x.r.slug)}), then backlog update ${x.r.slug} --refine-done --by ${me} --note "<what you refined>"` };
   }

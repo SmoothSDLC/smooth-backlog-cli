@@ -152,7 +152,7 @@ export const STOP_TEXT = 'your session is being replaced by a fresh one for your
   + 'closed it): end your turn now with a text-only reply and no other tool call';
 const SAFE = /^(?!\.{1,2}$)[\w.-]+$/; // a team or agent name is one path segment, never . or ..
 // a time stamp is a finite number or a string of digits; anything else (an array, an object, text) is no time stamp
-const ms = v => (typeof v === 'number' ? (Number.isFinite(v) ? v : null) : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : null);
+const ms = v => { const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : NaN; return Number.isFinite(n) ? n : null; };
 const teamsRoot = () => join(homedir(), '.qwen', 'teams');
 export function teamDirs(name) {
   const t = strip(name || process.env.TEAM_NAME || '');
@@ -204,7 +204,7 @@ export function pendingHandoff(agent, teamName) {
     const joined = memberJoinedMs(tdir, agent);
     // item 038's definition of done: a malformed marker or time stamp never releases the lock (stricter than PR1 and
     // spec section 7's time 0); the dispatcher sets such a marker aside
-    if (at === null || joined === null || joined <= at) return { tdir, marker: mk };
+    if (at === null || !Number.isInteger(mk.seq) || joined === null || joined <= at) return { tdir, marker: mk };
   }
   return null;
 }

@@ -1,7 +1,8 @@
 // Item 034 (spec section 10): work-in-progress limits overall (every repository of the backlog home), per repository,
 // per branch, per team and per agent, checked by every step that starts work (a claim, a refinement start). The limits
 // are <backlog home>/wip-limits.json; a level without a number has no limit (the default for every level):
-//   {"overall": 40, "repository": 15 | {"default": 15, "owner/name": 20}, "branch": 8, "team": 3 | {"default": 3, "t1": 4},
+//   {"overall": 40, "repository": 15 | {"default": 15, "owner/name": 20}, "branch": 8 | {"default": 8, "owner/name:branch": 2},
+//    "team": 3 | {"default": 3, "t1": 4},
 //    "agent": 2 | {"default": 2, "cody": 1}, "stale_hours": 48}
 // Only the owner edits the file. The team lead lifts the team and agent limits for one item with a recorded reason
 // (backlog update <item> --wip-override "<reason>" --by <lead>). Work in progress: an item with status in_progress, or
@@ -68,7 +69,7 @@ export function wipRefusal(folder, repo, fm, agent, slug, extra = []) { // extra
   for (const level of LEVELS) {
     if (s[level].skip) continue;
     if ((level === 'team' || level === 'agent') && String(fm.wip_override ?? '').trim()) continue; // the lead's recorded override
-    const key = level === 'team' ? fm.team : level === 'agent' ? agent : level === 'repository' ? repo : undefined;
+    const key = level === 'team' ? fm.team : level === 'agent' ? agent : level === 'repository' ? repo : level === 'branch' ? `${repo}:${fm.branch || ''}` : undefined;
     const max = limitOf(cfg, level, key);
     if (max === null) continue;
     const held = now.filter(s[level].of);
@@ -88,7 +89,7 @@ export function wipView(home, { now = Date.now() } = {}) {
   const rows = [
     { level: 'overall', key: 'all', count: items.length, limit: limitOf(cfg, 'overall') },
     ...group(x => x.repository).map(r => ({ level: 'repository', key: r, count: count(x => x.repository === r), limit: limitOf(cfg, 'repository', r) })),
-    ...group(x => `${x.repository} ${x.fm.branch || ''}`).map(b => ({ level: 'branch', key: b, count: count(x => `${x.repository} ${x.fm.branch || ''}` === b), limit: limitOf(cfg, 'branch') })),
+    ...group(x => `${x.repository} ${x.fm.branch || ''}`).map(b => ({ level: 'branch', key: b, count: count(x => `${x.repository} ${x.fm.branch || ''}` === b), limit: limitOf(cfg, 'branch', b.replace(' ', ':')) })),
     ...group(x => x.fm.team).map(t => ({ level: 'team', key: t, count: count(x => x.fm.team === t), limit: limitOf(cfg, 'team', t) })),
     ...group(x => holderOf(x.fm)).map(a => ({ level: 'agent', key: a, count: count(x => holderOf(x.fm) === a), limit: limitOf(cfg, 'agent', a) })),
   ];

@@ -124,3 +124,13 @@ test('034: a reclaim of an item set back to pending is a start; a combined start
   f.run('demo', ['update', b, '--set-team', 't1']);
   assert.match(f.run('demo', ['update', c, '--status', 'in_progress', '--set-team', 't1', '--by', 'cat'], 1).stdout, /the team work-in-progress limit of t1 is 1/);
 });
+
+test('034: a branch limit is keyed owner/name:branch', () => {
+  const f = fixture();
+  const [a, b] = ['one', 'two'].map(n => f.make('demo', n));
+  f.limits({ branch: { default: 9, 'acme/demo:main': 1 } });
+  f.run('demo', ['update', a, '--claim', 'amy']);
+  assert.match(f.run('demo', ['update', b, '--claim', 'bob'], 1).stdout, /the branch work-in-progress limit of acme\/demo branch main is 1/);
+  const v = JSON.parse(f.run('demo', ['query', '--wip', '--json']).stdout);
+  assert.deepEqual(v.counts.find(c => c.level === 'branch'), { level: 'branch', key: 'acme/demo main', count: 1, limit: 1 });
+});

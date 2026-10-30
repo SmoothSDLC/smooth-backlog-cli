@@ -584,8 +584,9 @@ Options:
       --all every branch. Answer one with backlog update <item> --decision "<answer>".
   --wip
       The work in progress of the whole backlog repository against its limits (wip-limits.json at its top folder:
-      overall, repository, branch, team, agent, each a number or {"default": n, "<key>": n}, and stale_hours), and the
-      items in progress without a change of their own for longer than stale_hours (default 48). A claim or a
+      overall, repository, branch, team, agent, each a number or {"default": n, "<key>": n} with the key owner/name, the
+      owner/name:branch, the team or the agent, and stale_hours), and the items in progress without a change of their own
+      for longer than stale_hours (default 48). A claim or a
       refinement start past a limit is refused, naming the limit and the items holding it.
   --pop
       The one next action of the agent named by --agent: continue, review, refine, claim, refinement-review, reassign-review,

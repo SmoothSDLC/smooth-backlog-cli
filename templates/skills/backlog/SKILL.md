@@ -23,6 +23,8 @@ CLI owns validation, priority normalization, storage locking, and update checks.
 ## Prerequisites
 
 Work inside the target Git working tree with an initialized `.backlog/` folder.
+When the `backlog` command is missing, run `bash <this skill folder>/scripts/install-backlog-cli.sh` from inside the
+repository: it installs or updates the CLI, then runs `backlog setup` with its arguments (`--ask` asks for the path).
 Run `backlog --help` for the installed command contract. Before unfamiliar operations, read references/commands.md for exact syntax.
 
 ## Workflow

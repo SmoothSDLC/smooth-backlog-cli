@@ -15,7 +15,7 @@ after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 const DOD = "## Definition of done\n\n- [ ] the parser test passes";
 const STOP = /🛑 (\S+): END THE SESSION NOW/;
 
-test('051: the team workflow through the CLI only, step by step', () => {
+test('051: the team workflow through the CLI only, step by step', async ctx => {
   const t = mkdtempSync(join(tmpdir(), 'team-flow-'));
   dirs.push(t);
   const home = sharedBacklog(t);
@@ -41,60 +41,60 @@ test('051: the team workflow through the CLI only, step by step', () => {
   const fm = slug => parse(readFileSync(join(home, 'acme', 'demo', 'phases', `${slug}.md`), 'utf8')).fm;
   const slugOf = r => r.stdout.split('created phase phases/')[1].split('.md')[0];
   const steps = [];
-  const step = (id, fn) => { fn(); steps.push(id); };
+  const step = async (id, fn) => { await ctx.test(id, fn); steps.push(id); }; // one TAP line per step
 
   let w; let c1; let c2;
-  step('S01 new work item', () => { w = slugOf(as('lead', ['new', '--name', 'parser work', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '90', '--complexity', 'medium', '--body', DOD])); });
-  step('S02 runner: --set-team and --claim for the lead', () => { as('lead', ['update', w, '--set-team', 't1']); as('lead', ['update', w, '--claim', 'lead']); assert.equal(fm(w).claimed_by, 'lead'); });
-  step('S03 query --status --json', () => { assert.ok(JSON.stringify(json('lead', ['query', '--status', '--json'])).includes(w)); });
-  step('S04 split: new --split-from (stage refining)', () => {
+  await step('S01 new work item', () => { w = slugOf(as('lead', ['new', '--name', 'parser work', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '90', '--complexity', 'medium', '--body', DOD])); });
+  await step('S02 runner: --set-team and --claim for the lead', () => { as('lead', ['update', w, '--set-team', 't1']); as('lead', ['update', w, '--claim', 'lead']); assert.equal(fm(w).claimed_by, 'lead'); });
+  await step('S03 query --status --json', () => { assert.ok(JSON.stringify(json('lead', ['query', '--status', '--json'])).includes(w)); });
+  await step('S04 split: new --split-from (stage refining)', () => {
     c1 = slugOf(as('lead', ['new', '--name', 'parser child', '--split-from', w, '--depends-on', 'none']));
     c2 = slugOf(as('lead', ['new', '--name', 'printer child', '--split-from', w, '--depends-on', 'none', '--review-refs', 'references/review/code.md',
       '--estimate', '20', '--complexity', 'low', '--body', '## Definition of done\n\n- [ ] the printer prints the sample'])); // complete at creation, still refined
     assert.deepEqual([fm(c1).team, fm(c1).stage], ['t1', 'refining']);
   });
-  step('S05 --set-depends-on (the DAG)', () => { as('lead', ['update', c2, '--set-depends-on', c1]); assert.deepEqual(fm(c2).depends_on.map(String), [c1]); });
-  step('S06 an owner question: --request-decision holds the item in review-hitl', () => {
+  await step('S05 --set-depends-on (the DAG)', () => { as('lead', ['update', c2, '--set-depends-on', c1]); assert.deepEqual(fm(c2).depends_on.map(String), [c1]); });
+  await step('S06 an owner question: --request-decision holds the item in review-hitl', () => {
     as('lead', ['update', c2, '--request-decision', 'Which printer format? Options: A, B. Recommendation: A.', '--by', 'lead']);
     assert.equal(fm(c2).stage, 'review-hitl');
   });
-  step('S07 pop: a member refines first; the lead waits', () => {
+  await step('S07 pop: a member refines first; the lead waits', () => {
     assert.deepEqual([json('archy', ['pop', '--agent', 'archy', '--json']).action], ['refine']);
     assert.equal(json('lead', ['pop', '--agent', 'lead', '--json']).action, 'idle');
   });
-  step('S08 work marks --refine-start', () => { const p = json('archy', ['work', '--agent', 'archy', '--json']); assert.equal(p.item, c1); assert.equal(fm(c1).refiner, 'archy'); });
-  step('S09 refine: --set-review-refs, --set-estimate, --set-complexity, --append the definition of done', () => {
+  await step('S08 work marks --refine-start', () => { const p = json('archy', ['work', '--agent', 'archy', '--json']); assert.equal(p.item, c1); assert.equal(fm(c1).refiner, 'archy'); });
+  await step('S09 refine: --set-review-refs, --set-estimate, --set-complexity, --append the definition of done', () => {
     as('archy', ['update', c1, '--set-review-refs', 'references/review/code.md,references/review/tests.md', '--set-estimate', '30', '--set-complexity', 'low', '--by', 'archy']);
     as('archy', ['update', c1, '--append', '## Definition of done\n\n- [ ] the parser reads the sample', '--by', 'archy']);
   });
-  step('S10 --refine-done', () => { as('archy', ['update', c1, '--refine-done', '--by', 'archy', '--note', 'fields and DoD set']); assert.equal(fm(c1).stage, 'refined'); });
-  step('S11 lead: --request-refinement-review', () => { as('lead', ['update', c1, '--request-refinement-review', '--by', 'lead']); assert.equal(fm(c1).stage, 'refinement-review'); });
-  step('S12 lead records Codex: --refinement-review pass --by codex', () => { as('lead', ['update', c1, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'checkable (codex thread t-1)']); assert.equal(fm(c1).stage, 'ready'); });
-  step('S13 query --plan gives the ready item to one member', () => {
+  await step('S10 --refine-done', () => { as('archy', ['update', c1, '--refine-done', '--by', 'archy', '--note', 'fields and DoD set']); assert.equal(fm(c1).stage, 'refined'); });
+  await step('S11 lead: --request-refinement-review', () => { as('lead', ['update', c1, '--request-refinement-review', '--by', 'lead']); assert.equal(fm(c1).stage, 'refinement-review'); });
+  await step('S12 lead records Codex: --refinement-review pass --by codex', () => { as('lead', ['update', c1, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'checkable (codex thread t-1)']); assert.equal(fm(c1).stage, 'ready'); });
+  await step('S13 query --plan gives the ready item to one member', () => {
     const p = json('lead', ['query', '--plan', '--roster', roster, '--json']);
     assert.deepEqual(p.filter(e => e.item === c1).map(e => e.action), ['claim']);
   });
-  step('S14 pop --roster --claim-now claims the ready item', () => {
+  await step('S14 pop --roster --claim-now claims the ready item', () => {
     const p = json('zed', ['pop', '--agent', 'zed', '--roster', roster, '--claim-now', '--json']);
     assert.deepEqual([p.action, p.item, p.claimed, fm(c1).claimed_by], ['claim', c1, true, 'zed']);
   });
-  step('S15 --waiting and --waiting-done', () => { as('zed', ['update', c1, '--waiting', 'ci run 7', '--by', 'zed']); as('zed', ['update', c1, '--waiting-done', '--by', 'zed']); assert.ok(!fm(c1).wait_on); });
-  step('S16 query --blocked names the dependency', () => { assert.ok(json('archy', ['query', '--blocked', '--json']).some(b => b.slug === c2)); });
-  step('S17 --append evidence, --request-review: the session ends, the marker is written', () => {
+  await step('S15 --waiting and --waiting-done', () => { as('zed', ['update', c1, '--waiting', 'ci run 7', '--by', 'zed']); as('zed', ['update', c1, '--waiting-done', '--by', 'zed']); assert.ok(!fm(c1).wait_on); });
+  await step('S16 query --blocked names the dependency', () => { assert.ok(json('archy', ['query', '--blocked', '--json']).some(b => b.slug === c2)); });
+  await step('S17 --append evidence, --request-review: the session ends, the marker is written', () => {
     as('zed', ['update', c1, '--append', 'commit abc: parser and its test', '--by', 'zed']);
     const r = as('zed', ['update', c1, '--request-review', 'any', '--note', 'commit abc', '--by', 'zed']);
     assert.equal(STOP.exec(r.stdout.trim().split('\n').at(-1))?.[1], 'zed');
     assert.ok(existsSync(join(tdir, 'handoff', 'zed.json')));
     assert.equal(json('zed', ['pop', '--agent', 'zed', '--json']).action, 'stop');
   });
-  step('S18 query --reviewable for another member', () => { assert.ok(json('archy', ['query', '--reviewable', '--agent', 'archy', '--json']).some(r => r.slug === c1)); });
-  step('S19 --start-review, --review changes citing a review_ref', () => {
+  await step('S18 query --reviewable for another member', () => { assert.ok(json('archy', ['query', '--reviewable', '--agent', 'archy', '--json']).some(r => r.slug === c1)); });
+  await step('S19 --start-review, --review changes citing a review_ref', () => {
     as('archy', ['update', c1, '--start-review', '--by', 'archy']);
     assert.match(as('archy', ['update', c1, '--review', 'changes', '--by', 'archy', '--comments', 'add a case'], 1).stdout, /must cite/); // a verdict cites a review_ref
     const r = as('archy', ['update', c1, '--review', 'changes', '--by', 'archy', '--comments', 'add the empty-input case (references/review/tests.md)']);
     assert.equal(STOP.exec(r.stdout)?.[1], 'archy');
   });
-  step('S20 a fresh session: rework, --request-review, --review pass', () => {
+  await step('S20 a fresh session: rework, --request-review, --review pass', () => {
     session(Date.now() + 1000);
     assert.equal(json('zed', ['pop', '--agent', 'zed', '--json']).item, c1);
     as('zed', ['update', c1, '--request-review', 'any', '--note', 'commit def: empty input', '--by', 'zed']);
@@ -103,18 +103,27 @@ test('051: the team workflow through the CLI only, step by step', () => {
     const r = as('archy', ['update', c1, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md']);
     assert.match(r.stdout, /CLOSE NOW: zed closes it/);
   });
-  step('S21 the claimer closes', () => {
+  await step('S20a the dependency hand-off: the producer records it in the consumer item, the lead records its receipt in both', () => {
+    const doc = slug => readFileSync(join(home, 'acme', 'demo', 'phases', `${slug}.md`), 'utf8');
+    as('zed', ['update', c2, '--append', `DEPENDENCY_HANDOFF v1 from ${c1}: parser at commit def, tests parser.test, pickup: import the parser`, '--by', 'zed']);
+    for (const slug of [c1, c2]) as('lead', ['update', slug, '--append', `HANDOFF_ACCEPTED ${c1} -> ${c2} by lead at commit def`, '--by', 'lead']);
+    assert.match(doc(c2), /DEPENDENCY_HANDOFF v1 from /);
+    for (const slug of [c1, c2]) assert.match(doc(slug), /HANDOFF_ACCEPTED /);
+  });
+  await step('S21 the claimer closes', () => {
     session(Date.now() + 3000);
     as('archy', ['update', c1, '--close', '--summary', 'x', '--by', 'archy'], 1);
+    // zed wrote c2 in S20a, the lead after it: the close re-ranks c2 too, so zed reads c2 again first (stale-view guard; item 053)
+    as('zed', ['query', '--phase', c2, '--agent', 'zed']);
     as('zed', ['update', c1, '--close', '--summary', 'parser done', '--by', 'zed']);
     assert.equal(fm(c1).status, 'done');
   });
-  step('S22 query --decisions lists the question; --decision returns the item to the lead', () => {
+  await step('S22 query --decisions lists the question; --decision returns the item to the lead', () => {
     assert.ok(json('lead', ['query', '--decisions', '--json']).some(d => d.slug === c2));
     as('lead', ['update', c2, '--decision', 'A']);
     assert.deepEqual([fm(c2).stage, fm(c2).refiner], ['refining', 'lead']);
   });
-  step('S23 the lead re-refines with the decision, the review passes, a member works it', () => {
+  await step('S23 the lead re-refines with the decision, the review passes, a member works it', () => {
     as('lead', ['update', c2, '--set-review-refs', 'references/review/code.md', '--set-estimate', '20', '--set-complexity', 'low', '--by', 'lead']);
     as('lead', ['update', c2, '--append', '## Definition of done\n\n- [ ] the printer prints format A', '--by', 'lead']);
     as('lead', ['update', c2, '--refine-done', '--by', 'lead', '--note', 'decision A']);
@@ -129,7 +138,7 @@ test('051: the team workflow through the CLI only, step by step', () => {
     session(Date.now() + 6000);
     as('archy', ['update', c2, '--close', '--summary', 'printer done', '--by', 'archy']);
   });
-  step('S24 every child done: the lead has its work item reviewed and closes it', () => {
+  await step('S24 every child done: the lead has its work item reviewed and closes it', () => {
     const p = json('lead', ['pop', '--agent', 'lead', '--json']);
     assert.deepEqual([p.action, p.item], ['continue', w]);
     as('lead', ['update', w, '--request-review', 'any', '--note', 'children and their evidence', '--by', 'lead']);
@@ -138,5 +147,5 @@ test('051: the team workflow through the CLI only, step by step', () => {
     as('lead', ['update', w, '--close', '--summary', 'parser and printer done', '--by', 'lead']);
     assert.equal(fm(w).status, 'done');
   });
-  assert.equal(steps.length, 24);
+  assert.equal(steps.length, 25);
 });

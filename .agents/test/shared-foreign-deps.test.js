@@ -71,6 +71,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   run(here, ['update', '2', '--set-depends-on', 'acme/lib#2', '--by', 'tester']);
   const rev = JSON.parse(run(here, ['pop', '--agent', 'rev', '--json'], 3).stdout);
   assert.deepEqual([rev.action, rev.first?.[0]?.item], ['idle', 'acme/lib#2'], JSON.stringify(rev));
+  assert.deepEqual(JSON.parse(run(here, ['query', '--reviewable', '--agent', 'rev', '--json']).stdout), []); // nor listed as reviewable
 });
 
 test('042: a lead whose team items wait only on another repository is told to start the team there, not to wait', () => {

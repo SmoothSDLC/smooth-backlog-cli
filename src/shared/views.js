@@ -114,7 +114,7 @@ export async function teamView(a, { all, hid, excluded, repo, branch, folder, ho
         }
         if (!team.offeredTo(fm, f, repo)) return false; // another team's item (TEAM_NAME)
         if (a.claimable) return r.status === 'pending' && !fm.claimed_by && !undone.length && team.isReady(fm) && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
-        return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) : undone.length > 0; // never a review of an item before ready (036)
+        return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) && !undone.some(d => d.foreign && d.item?.status !== 'done') : undone.length > 0; // never a review of an item before ready (036), nor of one waiting on another repository (042)
       });
     if (a.decisions) return decisionsView(found, { a, scope, repo, branch, own, say, dump });
     if (a.json) {

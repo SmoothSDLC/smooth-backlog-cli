@@ -37,7 +37,7 @@ export async function run(argv) {
   if (!a.team) return die('team pop needs --team <name>');
   const agent = a.agent || teamLead();
   if (agent !== teamLead()) return die(`only the team lead (${teamLead()}; TEAM_LEAD) takes its team's work item, not ${agent}`);
-  const me = caller();
+  const me = caller(); // a qwen-code team identity (name@team), as backlog work: a bare QWEN_CODE_AGENT_ID is an actor id, no team member
   if (me && me !== agent) return die(`you are ${me} (QWEN_CODE_AGENT_ID): team pop answers only for yourself, not for ${agent}`);
   if (teamName() && teamName() !== a.team) return die(`this session is team ${teamName()} (TEAM_NAME), not ${a.team}`);
   const fresh = self(['query', '--status', '--json']); // pulls the backlog clone
@@ -54,17 +54,25 @@ export async function run(argv) {
   let action = 'idle'; let item = null;
   const held = work.find(i => strip(i.fm.claimed_by || '') === agent);
   if (held) { action = 'continue'; item = held.fm.phase; }
-  for (const i of held ? [] : work.filter(x => x.fm.status === 'pending' && !strip(x.fm.claimed_by || ''))) {
-    read(i.fm.phase);
+  // a failed command other than a refused claim (exit 1) is no reason to skip an item: it ends the command (Codex review of 056)
+  const fail = r => { process.stderr.write(r.stderr); return die(`team pop stopped: ${last(r)}`, r.status || 1); };
+  for (const i of held ? [] : work.filter(x => !strip(x.fm.claimed_by || ''))) {
+    const r = read(i.fm.phase);
+    if (r.status !== 0) return fail(r);
     const c = self(['update', i.fm.phase, '--claim', agent]);
     if (c.status === 0) { action = 'claim'; item = i.fm.phase; if (c.stderr) process.stderr.write(c.stderr); break; }
+    if (c.status !== 1) return fail(c);
     skipped.push({ item: i.fm.phase, reason: last(c) });
   }
   let shown = null;
   if (item) {
     const q = read(item);
     try { shown = JSON.parse(q.stdout); } catch { shown = null; }
-    if (q.status !== 0 || !shown) { process.stdout.write(q.stdout); process.stderr.write(q.stderr); return q.status || 1; }
+    if (q.status !== 0 || !shown) return fail(q); // only the reason: the read's own output names the item's file
+    const f = shown.front_matter || {};
+    if (strip(f.claimed_by || '') !== agent || strip(f.team || '') !== a.team || f.stage || !OPEN.includes(f.status)) {
+      return die(`${item} changed before team pop could show it (claimed by ${f.claimed_by || 'nobody'}, status ${f.status}); run backlog team pop again`, 1);
+    }
   }
   const instruction = item
     ? `you hold ${item}, the work item of team ${a.team}: refine and split it into items of at most 45 minutes `

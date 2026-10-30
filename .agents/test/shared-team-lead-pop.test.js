@@ -92,3 +92,13 @@ test('item 060: query --status --json rows carry claimed_by and review_state', (
   assert.deepEqual(rows[reviewed], ['archy', 'requested']);
   assert.deepEqual(rows[free], ['', 'none']);
 });
+
+test('team pop: an unclaimed in-progress work item is taken; no output names a file of the backlog', () => {
+  const f = fixture();
+  const s = make(f, 'started work item'); ok(f, ['update', s, '--set-team', 't1']);
+  ok(f, ['query', '--phase', s, '--agent', 'lead']); ok(f, ['update', s, '--status', 'in_progress']);
+  assert.deepEqual([fm(f, s).status, fm(f, s).claimed_by], ['in_progress', '']);
+  const j = run(f, ['team', 'pop', '--team', 't1', '--json']); const text = run(f, ['team', 'pop', '--team', 't1']);
+  assert.equal(JSON.parse(j.stdout).action, 'claim'); assert.equal(text.status, 0, text.stderr);
+  for (const out of [j.stdout, j.stderr, text.stdout, text.stderr]) assert.ok(!out.includes('phases/') && !out.includes(f.home), out);
+});

@@ -1,31 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fixture, bin } from './helpers.js';
-const python = process.platform === 'win32' ? 'python' : 'python3';
-test('all four detected agent integrations install a working snapshot helper', t => {
+import { fixture } from './helpers.js';
+test('all four detected agent integrations install the backlog skill', t => {
   const f = fixture(t);
   for (const name of ['.agents', '.claude', '.github', '.qwen']) mkdirSync(join(f.root, name));
-  assert.equal(f.cli('init').installed_agents.length, 4); f.create('Task'); f.cli('add', '0', 'tasks', 'Implement,Tests pass');
-  for (const name of ['.agents', '.claude', '.github', '.qwen']) {
-    const script = join(f.root, name, 'skills/backlog/scripts/snapshot.py');
-    const p = spawnSync(python, [script, '--cli', bin], { cwd: f.root, env: f.env, encoding: 'utf8' });
-    assert.equal(p.status, 0, p.stderr); const result = JSON.parse(p.stdout);
-    assert.equal(result.data.items[0].name, 'Task'); assert.equal(result.data.summary.tasks, 1);
-  }
+  assert.equal(f.cli('init').installed_agents.length, 4);
+  const skill = readFileSync(resolve('templates/skills/backlog/SKILL.md'), 'utf8');
+  for (const name of ['.agents', '.claude', '.github', '.qwen']) assert.equal(readFileSync(join(f.root, name, 'skills/backlog/SKILL.md'), 'utf8'), skill, name);
   const manifest = f.json('skills/agent-types/manifest.json'); assert.equal(manifest.agents.length, 4);
-});
-test('skill snapshot supports done/archive and reports errors without mutating data', t => {
-  const f = fixture(t); f.cli('init'); const item = f.create('Done'); f.cli('done', item.id);
-  const script = f.file('skills/backlog/scripts/snapshot.py');
-  const result = spawnSync(python, [script, '--cli', bin, '--state', 'done'], { cwd: f.root, env: f.env, encoding: 'utf8' });
-  assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout).data.items[0].id, item.id);
-  const text = readFileSync(f.file('backlog_manifest.json'), 'utf8');
-  const error = spawnSync(python, [script, '--cli', bin, '--branch', 'missing'], { cwd: f.root, env: f.env, encoding: 'utf8' });
-  assert.equal(error.status, 0); assert.equal(JSON.parse(error.stdout).data.summary.items, 0);
-  assert.equal(readFileSync(f.file('backlog_manifest.json'), 'utf8'), text);
 });
 test('refresh replaces backlog skill edits and leaves unrelated vendor skills alone', t => {
   const f = fixture(t); mkdirSync(join(f.root, '.qwen/skills/other'), { recursive: true });
@@ -34,9 +18,25 @@ test('refresh replaces backlog skill edits and leaves unrelated vendor skills al
   assert.match(readFileSync(join(f.root, '.qwen/skills/backlog/SKILL.md'), 'utf8'), /name: backlog/);
   assert.equal(readFileSync(join(f.root, '.qwen/skills/other/SKILL.md'), 'utf8'), 'unrelated');
 });
-test('product skill self-validator checks the complete installed bundle', t => {
-  const script = resolve('templates/skills/backlog/scripts/validate-skill.py');
-  const result = spawnSync(python, [script], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr || result.stdout);
+test('the product skill is complete: front matter, size, referenced files, fixtures', () => {
+  const root = resolve('templates/skills/backlog'); const text = readFileSync(join(root, 'SKILL.md'), 'utf8');
+  assert.match(text, /^---\n(?:[\s\S]*?\n)?name: backlog\n[\s\S]*?\n---\n/); assert.ok(text.split('\n').length < 500);
+  for (const ref of new Set(text.match(/(?<![\w./-])(?:scripts|references|assets|evals)\/[\w./-]+/g) || [])) assert.ok(existsSync(join(root, ref)), ref);
+  const queries = JSON.parse(readFileSync(join(root, 'scripts/eval_queries.json'), 'utf8'));
+  assert.ok(queries.filter(x => x.should_trigger === true).length >= 10 && queries.filter(x => x.should_trigger === false).length >= 8);
+  assert.equal(new Set(queries.map(x => x.query)).size, queries.length);
+  const cases = JSON.parse(readFileSync(join(root, 'evals/evals.json'), 'utf8')).evals;
+  assert.ok(cases.length && cases.every(x => x.prompt && x.expected_output && x.assertions));
+});
+test('item 058: the built-in skill and the help name no Python script and no old pattern', async () => {
+  const bad = /\.py\b|python|oracle|backlog\.db|phases\/|scripts\/(query|update|new_phase|lib_db|move|archive)\b/i;
+  const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
+  for (const file of walk(resolve('templates/skills/backlog'))) {
+    const hit = readFileSync(file, 'utf8').split('\n').find(l => bad.test(l)); assert.equal(hit, undefined, `${file}: ${hit}`);
+  }
+  const { HELP } = await import('../../src/help.js');
+  for (const [cmd, text] of Object.entries(HELP)) assert.doesNotMatch(text, /python|\.py\b|oracle/i, cmd);
+  assert.doesNotMatch(readFileSync(resolve('COMMANDS.md'), 'utf8'), /python|\.py\b|oracle/i);
 });
 test('using a new CLI version refreshes stale generated integrations', async t => {
   const { refreshIntegrations } = await import('../../src/integrations.js'); const f = fixture(t); f.cli('init');

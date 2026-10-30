@@ -23,10 +23,6 @@ const EXIT = `Exit codes:
      names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
      without the check (its first write).`;
 
-const DB = `  --db DB
-      Not in this build. The Python scripts use this flag for an internal database path; the shared mode always
-      reads and writes the backlog database in the folder of this repository.`;
-
 const HELP_FLAG = `  --help
       Print this text and exit. Nothing is read or changed.`;
 
@@ -48,7 +44,6 @@ branch instead, and then --body must hold a definition of done.
 ${SHARED}
 
 Options:
-${DB}
   --name NAME
       The name of the item, in human-readable words. Required, unless --split-from is given.
   --objective OBJECTIVE
@@ -122,7 +117,6 @@ Both are planning events, so look at the order again afterwards. The item may be
 ${SHARED}
 
 Options:
-${DB}
   --status STATUS
       The new status of the item. Open items are pending or in_progress, a finished item is done. Setting done
       completes the item; the command refuses when the item has review documents (review_refs) and no passing review.
@@ -274,7 +268,6 @@ With --json the command prints the data itself, without any wrapper.
 ${SHARED}
 
 Options:
-${DB}
   --next
       The next actionable item: the open item with the lowest priority on the branch. When the queue is empty the
       command says so (with --json it prints {}). Open items of a branch that no longer exists on the origin
@@ -565,7 +558,6 @@ Argument:
       The item to archive, by number or slug.
 
 Options:
-${DB}
   --force
       Archive the item even if its status is not done.
   --dry-run

@@ -278,9 +278,6 @@ Run the command from inside the repository whose backlog you mean; its folder in
 from the origin of that repository.
 
 Options:
-  --db DB
-      Not in this build. The Python scripts use this flag for an internal database path; the shared mode always
-      reads and writes the backlog database in the folder of this repository.
   --name NAME
       The name of the item, in human-readable words. Required, unless --split-from is given.
   --objective OBJECTIVE
@@ -373,9 +370,6 @@ Run the command from inside the repository whose backlog you mean; its folder in
 from the origin of that repository.
 
 Options:
-  --db DB
-      Not in this build. The Python scripts use this flag for an internal database path; the shared mode always
-      reads and writes the backlog database in the folder of this repository.
   --status STATUS
       The new status of the item. Open items are pending or in_progress, a finished item is done. Setting done
       completes the item; the command refuses when the item has review documents (review_refs) and no passing review.
@@ -546,9 +540,6 @@ Run the command from inside the repository whose backlog you mean; its folder in
 from the origin of that repository.
 
 Options:
-  --db DB
-      Not in this build. The Python scripts use this flag for an internal database path; the shared mode always
-      reads and writes the backlog database in the folder of this repository.
   --next
       The next actionable item: the open item with the lowest priority on the branch. When the queue is empty the
       command says so (with --json it prints {}). Open items of a branch that no longer exists on the origin
@@ -896,9 +887,6 @@ Argument:
       The item to archive, by number or slug.
 
 Options:
-  --db DB
-      Not in this build. The Python scripts use this flag for an internal database path; the shared mode always
-      reads and writes the backlog database in the folder of this repository.
   --force
       Archive the item even if its status is not done.
   --dry-run

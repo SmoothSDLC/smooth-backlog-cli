@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Breaking (Cody 2.0, no backward compatibility): the built-in backlog skill names only CLI commands; its Python
+  snapshot helper and skill validator are removed (the integration tests check the skill), and the help no longer
+  documents the Python scripts' `--db` flag.
 - Shared mode team workflow (Cody 2.0): `backlog work --agent <you>` gives the one next action; refinement stages
   (refining, refinement-review, ready, review-hitl) with the lead's split, refinement review and owner decisions;
   only the team lead hands another agent's item or review on (`--reassign`, `--reassign-review`); a member's review

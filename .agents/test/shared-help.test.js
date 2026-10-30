@@ -26,9 +26,9 @@ const SCRIPT = { new: 'new_phase.py', update: 'update.py', query: 'query.py', mo
 const COMMANDS = ['new', 'update', 'query', 'next', 'pop', 'work', 'move', 'archive'];
 // Flags this build refuses (query.js TEAM, pop.js and --headless); --db is internal to the Python scripts (contract section 2).
 const REFUSED = {
-  update: ['db'],
-  query: ['headless', 'db'],
-  new: ['db'], move: [], archive: ['db'], pop: [],
+  update: [],
+  query: ['headless'],
+  new: [], move: [], archive: [], pop: [],
 };
 const flagsOf = text => [...new Set((text.match(/--[a-z][\w-]*/g) ?? []).filter(f => !f.endsWith('-')))];
 // The block of one flag: its header line `  --flag ...` and the lines indented by six spaces below it.
@@ -43,7 +43,7 @@ for (const [command, script] of Object.entries(SCRIPT)) {
     assert.equal(r.status, 0, r.stderr);
     const flags = flagsOf(o.stdout);
     assert.ok(flags.length > 3, `no flags found in the ${script} help`);
-    for (const flag of flags) assert.ok(block(r.stdout, flag.slice(2)), `${command}: ${flag} has no block in the help`);
+    for (const flag of flags.filter(f => f !== '--db')) assert.ok(block(r.stdout, flag.slice(2)), `${command}: ${flag} has no block in the help`);
   });
 }
 

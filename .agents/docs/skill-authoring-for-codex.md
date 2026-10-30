@@ -1,7 +1,7 @@
 # Maintaining the product agent integration
 
-The public skill is under `templates/skills/backlog/`. Its instructions, snapshot
-helper, validation script, and evaluation fixtures ship with the npm package and
+The public skill is under `templates/skills/backlog/`. Its instructions, the CLI install
+script and the evaluation fixtures ship with the npm package and
 are installed by `backlog init`. Keep them independent of development-only tools.
 
 Use `license: Apache-2.0` for project-authored skills. Keep the skill description
@@ -12,12 +12,12 @@ current product integration and supported maintenance commands.
 Validate from the repository root:
 
 ```sh
-python3 templates/skills/backlog/scripts/validate-skill.py
+node --test .agents/test/integrations.test.js
 npm test
 npm run check
 npm pack --dry-run
 ```
 
-The bundled validator uses Python's standard library. If `skills-ref` is installed,
-it also runs reference validation. Product integration tests exercise the installed
-snapshot helper and all four supported agent destinations.
+The skill names only CLI commands (no Python script, item file or backlog path; item 058).
+The integration tests check the skill's structure and that pattern, and the copies in all
+four supported agent destinations.

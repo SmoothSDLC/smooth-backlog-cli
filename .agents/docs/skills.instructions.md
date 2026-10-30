@@ -10,10 +10,8 @@ are installed into consumers' repositories by `backlog init`.
   the backlog explicitly. Keep the description within the Agent Skills limits.
 - Keep SKILL.md under 500 lines. Put command details in the bundled
   `references/commands.md`, and keep its content aligned with root `COMMANDS.md`.
-- Keep deterministic work in the bundled snapshot helper. Use only documented
-  interfaces and preserve the CLI's JSON envelope and branch isolation.
-- Keep script dependencies explicit. The shipped Python helpers use the standard
-  library; consumers do not need a development framework.
+- The skill names only CLI commands: no Python script, item file or backlog path
+  (item 058; the integration tests check it).
 - Verify every referenced bundled resource exists. Maintain trigger examples and
   output evaluation cases alongside the skill.
 - Keep development documents and tests in `.agents/`, outside the package allowlist.
@@ -21,7 +19,7 @@ are installed into consumers' repositories by `backlog init`.
 Run the product validator from the repository root:
 
 ```sh
-python3 templates/skills/backlog/scripts/validate-skill.py
+node --test .agents/test/integrations.test.js
 ```
 
 It checks bundle structure, referenced resources, Python syntax, and evaluation

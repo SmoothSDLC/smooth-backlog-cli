@@ -6,7 +6,7 @@ description: >
   without naming the backlog. Manage branch-local tasks and evidence through
   smooth-backlog-cli. It does not manage unrelated project trackers or Git branch cleanup.
 license: Apache-2.0
-compatibility: Requires Node.js 24+, Git, and the backlog executable. Optional skill helpers require Python 3.8+.
+compatibility: Requires Node.js 24+, Git, and the backlog executable.
 metadata:
   team: SmoothSDLC
   version: "1.0.0"
@@ -31,8 +31,7 @@ Run `backlog --help` for the installed command contract. Before unfamiliar opera
 ## Workflow (local mode)
 
 - [ ] Inspect: run `backlog --json` to identify the next active item. To inspect
-  all current work, run `backlog list --json`. For an independently validated
-  read-only JSON snapshot, run `python scripts/snapshot.py` from this skill folder.
+  all current work, run `backlog list --json`.
 - [ ] Plan: retain the selected item's GUID and describe the intended field or
   list changes. Check its branch, state, and task-entry numbers against current
   `backlog list --json` output before mutation.
@@ -110,11 +109,3 @@ them; `backlog query --wip` shows the counts. Only the team lead lifts a team or
 Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign <agent> --reason
 "<why>" --by <lead>`, `--reassign-review <agent> --reason "<why>" --by <lead>`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the
 owner's `--decision`.
-
-## Skill validation
-
-Run `python scripts/validate-skill.py` after modifying the skill package. It checks
-structure and local references; when installed, skills-ref also checks metadata.
-Trigger fixtures are in `scripts/eval_queries.json`; output cases are in
-`evals/evals.json`. Model-based trigger/output evaluation requires an evaluation
-harness and is separate from structural checks.

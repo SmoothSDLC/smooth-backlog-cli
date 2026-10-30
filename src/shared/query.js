@@ -267,7 +267,7 @@ async function query(argv) {
       // each row's own file, inside the folder only (a row that leaves it is a ghost: no file is read for it)
       const fmOf = r => (present(folder, r.path) ? parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8')).fm : {});
       const teamFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
-      const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(teamFields) : v]));
+      const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(x => (x && typeof x === 'object' ? teamFields(x) : x)) : v])); // bare files stay paths
       dump({ handoff: h, repository: repo, branch: redact(branch), phases: rows.map(teamFields), gone_branch_items: gone.map(teamFields), findings: each(bad) });
       return 0;
     }

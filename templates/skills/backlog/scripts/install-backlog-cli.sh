@@ -24,6 +24,7 @@ for (let i = 0; i < 3; i++) if (x[i] !== y[i]) process.exit(x[i] > y[i] ? 0 : 1)
 if (!xp.length || !yp.length) process.exit(!xp.length && yp.length ? 0 : 1);
 for (let i = 0; i < Math.max(xp.length, yp.length); i++) { if (i >= xp.length) process.exit(1); if (i >= yp.length) process.exit(0); const c = cmp(xp[i], yp[i]); if (c) process.exit(c > 0 ? 0 : 1); }
 process.exit(1);' "$1" "$2"; }
+[ -n "$installed" ] && ! [ -e "$(npm prefix --global)/bin/backlog" ] && installed="" # listed, but its command link is gone: install again
 if [ -z "$installed" ]; then
   npm install --global "$pkg${latest:+@$latest}" --registry="$registry"
 elif [ -n "$latest" ] && [ "$installed" != "$latest" ] && newer "$latest" "$installed"; then

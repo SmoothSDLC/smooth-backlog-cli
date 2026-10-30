@@ -32,7 +32,7 @@ case "$1" in
   prefix) echo '${join(t, 'npm-global')}' ;;
   install) echo "npm $*" >> '${log}'; v=\${3#${PKG}@}; [ "$v" = "$3" ] && v=${latest || '0.0.1'}; printf %s "$v" > '${state}' ;;
 esac\n`);
-  if (foreign) put(join(t, 'foreign', 'backlog'), `#!/bin/sh\necho ${foreign}\n`);
+  if (foreign) put(join(t, 'foreign', 'backlog'), `#!/bin/sh\necho "foreign $*" >> '${log}'\necho ${foreign}\n`); // never to be run
   const node = dirname(process.execPath);
   const path = [foreign ? join(t, 'foreign') : null, join(t, 'tools'), bin, node, '/usr/bin', '/bin'].filter(Boolean).join(':');
   const repo = join(t, 'repo'); mkdirSync(repo); spawnSync('git', ['init', '-q'], { cwd: repo });
@@ -65,9 +65,9 @@ test('044: an unreachable registry is said; a different backlog command earlier 
   assert.match(none.r.stderr, /cannot reach .* \(authenticate with npm login/);
   const other = run({ installed: '1.2.0', latest: '1.2.0', foreign: '7.0.0' });
   assert.equal(other.r.status, 1);
-  assert.match(other.r.stderr, /the backlog command on PATH \(.*foreign\/backlog, version 7\.0\.0\) is not @smoothsdlc\/smooth-backlog-cli 1\.2\.0/);
+  assert.match(other.r.stderr, /the backlog command on PATH \(.*foreign\/backlog\) is not @smoothsdlc\/smooth-backlog-cli 1\.2\.0/);
   assert.deepEqual(other.calls, []); // setup never ran
   const twin = run({ installed: '1.2.0', latest: '1.2.0', foreign: '1.2.0' }); // the same version is not the same command
   assert.equal(twin.r.status, 1);
-  assert.match(twin.r.stderr, /foreign\/backlog, version 1\.2\.0\) is not @smoothsdlc\/smooth-backlog-cli 1\.2\.0/);
+  assert.match(twin.r.stderr, /foreign\/backlog\) is not @smoothsdlc\/smooth-backlog-cli 1\.2\.0/);
 });

@@ -34,8 +34,8 @@ want=$(version_of_install)
 # the backlog on PATH must be the one npm installed (same file), not another command of that name or version
 bin="$(npm prefix --global)/bin/backlog"
 found=$(command -v backlog || true)
+# -ef: the same file, links followed; another command of that name is never run, not even with --version
+[ -n "$found" ] && [ "$found" -ef "$bin" ] || die "the backlog command on PATH (${found:-none}) is not $pkg $want ($bin): put npm's global bin first on PATH"
 got=$(backlog --version 2>/dev/null || true)
-if [ -z "$found" ] || ! [ "$found" -ef "$bin" ] || [ "$got" != "$want" ]; then # -ef: the same file, links followed
-  die "the backlog command on PATH (${found:-none}, version ${got:-unknown}) is not $pkg $want ($bin): put npm's global bin first on PATH"
-fi
+[ "$got" = "$want" ] || die "backlog --version says ${got:-nothing}, not $want: reinstall with npm install --global $pkg@$want --registry=$registry"
 exec backlog setup "$@"

@@ -594,7 +594,11 @@ test('053: a reflow over several items with new content names them all in one re
   }
   const close = run(f, f.home, ['update', '1', '--status', 'done', '--by', 'amy']); // re-ranks 2, 3 and 4
   assert.equal(close.status, 5, close.stderr + close.stdout);
-  assert.match(close.stderr, /2 items this change re-ranks were changed by another agent .*\(002-beta, 003-gamma\); read them again \(backlog query --phase 002-beta,003-gamma --agent <you>\)/);
+  assert.match(close.stderr, /item 002-beta was changed by bob .*1 other item\(s\) you read changed too \(003-gamma\); read them again \(backlog query --phase 002-beta,003-gamma --agent <you>\)/);
+  const failed = run(f, f.home, ['query', '--phase', '002-beta,999', '--agent', 'amy']); // a list with an unknown item shows nothing and reads nothing
+  assert.equal(failed.status, 1, failed.stderr + failed.stdout);
+  assert.equal(run(f, f.home, ['update', '2', '--append', 'from amy', '--by', 'amy']).status, 5); // a primary write names the other stale item too
+  assert.match(run(f, f.home, ['update', '2', '--append', 'from amy', '--by', 'amy']).stderr, /read them again \(backlog query --phase 002-beta,003-gamma --agent <you>\)/);
   const read = run(f, f.home, ['query', '--phase', '002-beta,003-gamma', '--agent', 'amy']);
   assert.equal(read.status, 0, read.stderr + read.stdout);
   assert.deepEqual(JSON.parse(read.stdout).map(x => x.slug), ['002-beta', '003-gamma']);

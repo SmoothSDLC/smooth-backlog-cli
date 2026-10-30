@@ -434,12 +434,12 @@ export async function commit(home, folders, message, reconcile = null, guard = [
       }
       const renumbered = []; let err = ''; let settled = 0;
       const staleHit = async () => { for (const x of guard) if ((await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) return x; return null; };
-      const staleCheck = async () => {
-        for (const x of guard) {
-          if (!(await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) continue;
-          const up = parse((await g(home, ['show', `origin/main:${x.path}`])).stdout).fm;
-            throw staleError(x.slug, up.updated_by, up.updated, x.was);
-        }
+      const staleCheck = async () => { // item 053: one refusal names every guarded item that changed upstream
+        const hit = [];
+        for (const x of guard) if ((await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) hit.push(x);
+        if (!hit.length) return;
+        const up = parse((await g(home, ['show', `origin/main:${hit[0].path}`])).stdout).fm;
+        throw staleError(hit[0].slug, up.updated_by, up.updated, hit[0].was, hit.map(x => x.slug));
       };
       const base = (await g(home, ['merge-base', 'HEAD', 'origin/main'])).stdout.trim();
       for (let i = 0; i < 3; i++) {

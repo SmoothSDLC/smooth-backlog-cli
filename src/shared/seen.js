@@ -87,15 +87,28 @@ function remapViews(folder, views, pairs) {
 // A command showed the item (a mirror row) to `agent`.
 export const view = (agent, folder, repo, row) => record(folder, repo, agent || actor(), [{ slug: row.slug, path: row.path }]);
 
-export function staleError(slug, by, at, was) {
-  return new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was}); read it again (backlog query --phase ${slug} --agent <you>) and retry`, STALE_EXIT);
+// item 053: the refusal names every item of this folder the agent has read whose content changed since, in one command
+export function staleError(slug, by, at, was, others = []) {
+  const all = [slug, ...others.filter(o => o !== slug)];
+  const also = all.length > 1 ? `; ${all.length - 1} other item(s) you read changed too (${all.slice(1).join(', ')})` : '';
+  return new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was})${also}; read ${all.length > 1 ? 'them' : 'it'} again (backlog query --phase ${all.join(',')} --agent <you>) and retry`, STALE_EXIT);
+}
+// The items of folder the agent has read whose content changed since (or that are gone), by slug.
+export function staleViews(folder, repo, agent) {
+  const out = [];
+  for (const [key, v] of Object.entries(read(homeOf(folder), agent))) {
+    if (!key.startsWith(`${repo}/`) || (v.folder && resolve(v.folder) !== resolve(folder))) continue;
+    if (operation.getStore()?.guard.some(g => g.path === `${repo}/${v.path}`)) continue; // already checked in this command (and maybe written by it)
+    try { const { sha, content } = fileView(folder, v.path); if (sha !== v.sha && !(v.content && v.content === content)) out.push(key.slice(repo.length + 1)); } catch { /* gone: a write to it fails on its own */ }
+  }
+  return out;
 }
 
 // path: the item file as it is now (after the leading pull).
 export function check(folder, repo, agent, slug, path) {
   const seen = read(homeOf(folder), agent)[`${repo}/${slug}`];
   const { fm, sha, content } = fileView(folder, path);
-  if (seen && seen.sha !== sha && !(seen.content && seen.content === content)) throw staleError(slug, fm.updated_by, fm.updated, `${seen.updated}${seen.updated_by ? ` by ${seen.updated_by}` : ''}`);
+  if (seen && seen.sha !== sha && !(seen.content && seen.content === content)) throw staleError(slug, fm.updated_by, fm.updated, `${seen.updated}${seen.updated_by ? ` by ${seen.updated_by}` : ''}`, staleViews(folder, repo, agent));
   const guard = operation.getStore()?.guard;
   if (guard && !guard.some(g => g.path === `${repo}/${path}`)) {
     // A retry may first encounter this item after rebasing. Protect the upstream
@@ -121,8 +134,5 @@ export function guardReflow(folder, items) {
     try { before = check(folder, repo, agent, slug, i.path); } catch (e) { if (e.code !== 'STALE_ITEM') throw e; stale.push({ slug, e }); continue; }
     if (before && ctx) ctx.incidental.set(path, { folder, repo, slug, path: i.path, agent, before });
   }
-  if (stale.length === 1) throw stale[0].e;
-  if (stale.length) {
-    throw new BacklogError('STALE_ITEM', `${stale.length} items this change re-ranks were changed by another agent after you last read them (${stale.map(s => s.slug).join(', ')}); read them again (backlog query --phase ${stale.map(s => s.slug).join(',')} --agent <you>) and retry`, STALE_EXIT);
-  }
+  if (stale.length) throw stale[0].e; // its message names every item of the folder the agent read that changed since
 }

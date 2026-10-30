@@ -189,9 +189,9 @@ async function query(argv) {
         if (!r) { say(`❌ no phase ${repr(id)}`); return 1; }
         const file = store.load(folder).find(i => i.path === r.path);
         out.push({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null });
-        seen.view(a.agent, folder, repo, r);
       }
       dump(out);
+      for (const r of out) seen.view(a.agent, folder, repo, r); // read only once all of them are shown
       return 0;
     }
     if (a.phase) {

@@ -59,6 +59,9 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   const held = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json'], 3).stdout);
   assert.equal(held.action, 'idle', JSON.stringify(held));
   assert.equal(held.first[0].item, 'acme/lib#2');
+  const roster = join(t, 'roster.json'); writeFileSync(roster, JSON.stringify({ archy: {} }));
+  const planned = JSON.parse(run(here, ['query', '--plan', '--roster', roster, '--json']).stdout);
+  assert.ok(!planned.some(e => e.item === '001-app-change'), JSON.stringify(planned)); // the plan offers it no more than pop does
   // a requested review of an item that waits on another repository is not offered either: that item is named first
   run(here, NEW('reviewed app change', 'none'));
   run(here, ['query', '--phase', '2', '--agent', 'zed']);

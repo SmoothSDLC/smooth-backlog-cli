@@ -191,7 +191,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     .filter(d => d.foreign && d.item && d.item.status !== 'done')
     .map(d => [`${d.item.repository}#${d.item.seq}`, { item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }])).values()];
   if (!act && first.length) {
-    act = { name: 'idle', r: null, f: repo, say: `the work here waits on ${first.map(x => `${x.item} (${x.slug}, status ${x.status})`).join(', ')}: do that first in repository ${first[0].repository}: ${lead ? 'end the session here; the team is started in that repository' : 'tell the team lead'}` };
+    act = { name: 'idle', r: null, f: repo, say: `the work here waits on ${first.map(x => `${x.item} (${x.slug}, status ${x.status})`).join(', ')}: do that first in ${[...new Set(first.map(x => x.repository))].map(r => `repository ${r}`).join(' and ')}: ${lead ? 'end the session here; the team is started in that repository' : 'tell the team lead'}` };
   }
   if (!act && cap !== 'off' && !(lead && busy.length)) { // a busy team's lead waits (spec section 8)
     const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone, f }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length
@@ -241,7 +241,8 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   const every0 = await teamRows({ open: all(OPEN, hid), scope: 'branch', cap: 'off', every: false, excluded, repo, branch, folder, home });
   const missing = new Map(every0.map(x => { const file = files.get(x.r.path); return [x.r.id, file ? missingFields(file.fm, file.body) : ['the item file']]; }));
   const every = every0.filter(x => team.inTeam(x.fm)); // only the caller's team's items (TEAM_NAME)
-  const rows = every.filter(x => !missing.get(x.r.id).length); // an incomplete item is never dispatched to a member
+  const rows = every.filter(x => !missing.get(x.r.id).length // an incomplete item is never dispatched to a member
+    && !(x.undone ?? []).some(d => d.foreign && d.item?.status !== 'done')); // nor one that waits on another repository (042): pop names that first
   const held = Object.fromEntries(members.map(m => [m, team.heldItems(folder, m, { refining: true })]));
   const active = Object.fromEntries(members.map(m => [m, held[m].filter(h => h.state === 'active').length]));
   const busy = new Set([...rows.filter(x => x.fm.review_state === 'in_review' && !team.staleReview(x.fm)).map(x => x.fm.reviewer),

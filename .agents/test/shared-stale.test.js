@@ -176,6 +176,20 @@ test('push race on the same item: one wins, the other is refused, and its change
   assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
 });
 
+test('053: a publication refusal also names another item the agent read that changed only upstream', () => {
+  const f = seed();
+  run(f, f.home, ['query', '--phase', '001-alpha,002-beta', '--agent', 'amy']);
+  // while amy's push is on its way, bob changes both items she read
+  const hook = join(f.home, '.git', 'hooks', 'pre-push');
+  const flag = join(f.t, 'hook-ran');
+  const bob = n => `BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update ${n} --append 'bob ${n}' --by bob >/dev/null 2>&1`;
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && ${bob(1)} && ${bob(2)}\nexit 0\n`);
+  chmodSync(hook, 0o755);
+  const a = run(f, f.home, ['update', '1', '--append', 'amy lost', '--by', 'amy']);
+  assert.equal(a.status, 5, a.stderr + a.stdout);
+  assert.match(a.stderr, /item 001-alpha was changed by bob .*1 other item\(s\) you read changed too \(002-beta\); read them again \(backlog query --phase 001-alpha,002-beta --agent <you>\)/);
+});
+
 test('a move never replaces an item of the target that holds the file name, even after update --seq freed its number', () => {
   const f = seed(['temp', 'beta'], 'dest');
   const src = consumer(f.t, 'acme', 'demo', 'main');
@@ -357,6 +371,8 @@ for (const [name, args, target] of [
   const amy = run(f, f.home, args, { cwd, env: { QWEN_CODE_AGENT_ID: 'amy' } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
   assert.match(amy.stderr, /item 002-beta was changed by bob/);
+  // 053: the command reads the item from inside its own repository (a move runs in the source repository)
+  assert.match(amy.stderr, target ? /\(in repository acme\/demo: backlog query --phase 002-beta --agent <you>\)/ : /\(backlog query --phase 002-beta --agent <you>\)/);
   assert.equal(readFileSync(cache, 'utf8'), expected);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
   assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), before);

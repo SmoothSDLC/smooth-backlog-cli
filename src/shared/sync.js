@@ -439,9 +439,10 @@ export async function commit(home, folders, message, reconcile = null, guard = [
         for (const x of guard) if ((await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) hit.push(x);
         if (!hit.length) return;
         const up = parse((await g(home, ['show', `origin/main:${hit[0].path}`])).stdout).fm;
-        const repos = [...new Set(guard.map(x => x.path.split('/').slice(0, 2).join('/')))];
-        const read = repos.flatMap(r => staleViews(join(home, ...r.split('/')), r, actor())); // the other items the agent read that changed
-        throw staleError(hit[0].slug, up.updated_by, up.updated, hit[0].was, [...hit.map(x => x.slug), ...read]);
+        const repoOf = x => x.path.split('/').slice(0, 2).join('/');
+        const repos = [...new Set(guard.map(repoOf))];
+        const read = repos.flatMap(r => staleViews(join(home, ...r.split('/')), r, actor(), 'origin/main').map(slug => ({ repo: r, slug }))); // the other items the agent read that changed upstream
+        throw staleError(hit[0].slug, up.updated_by, up.updated, hit[0].was, [...hit.map(x => ({ repo: repoOf(x), slug: x.slug })), ...read], repoOf(hit[0]));
       };
       const base = (await g(home, ['merge-base', 'HEAD', 'origin/main'])).stdout.trim();
       for (let i = 0; i < 3; i++) {

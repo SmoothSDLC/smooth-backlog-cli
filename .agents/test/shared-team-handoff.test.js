@@ -69,7 +69,7 @@ test('a review request writes the marker of PR1, and the member gets stop until 
   ok(f, ['update', b, '--claim', 'archy']);
 });
 
-test('the lock holds for a missing name, an unreadable config.json and an older session; a malformed marker counts as time 0', () => {
+test('the lock holds for a missing name, an unreadable config.json and an older session; a malformed marker never releases it', () => {
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
   const a = teamItem(f, 'job');
@@ -89,9 +89,9 @@ test('the lock holds for a missing name, an unreadable config.json and an older 
   assert.equal(pop(f, 'archy', T1).action, 'stop');
   writeFileSync(marker(f), 'garbage');
   config(f, [{ name: 'archy', joinedAt: 0 }]);
-  assert.equal(pop(f, 'archy', T1).action, 'stop'); // time 0 and a session of time 0: still locked
-  config(f, [{ name: 'archy', joinedAt: 5 }]);
-  assert.notEqual(pop(f, 'archy', T1).action, 'stop'); // any registered session is newer than time 0
+  assert.equal(pop(f, 'archy', T1).action, 'stop');
+  config(f, [{ name: 'archy', joinedAt: Date.now() + 1e9 }]);
+  assert.equal(pop(f, 'archy', T1).action, 'stop'); // item 038: a malformed marker never releases the lock, whatever the session
 });
 
 test('no marker for the lead, for a member still active on another item, or for an item without a team', () => {
@@ -148,7 +148,7 @@ test('invalid time stamps never release the lock; the lead is never locked; a le
   config(f, [{ name: 'archy', joinedAt: 'bad' }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
   assert.equal(pop(f, 'archy', T1).action, 'stop'); // an invalid joinedAt is no fresh session
   config(f, [{ name: 'archy', joinedAt: 5 }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
-  assert.notEqual(pop(f, 'archy', T1).action, 'stop'); // an invalid at_ms counts as time 0
+  assert.equal(pop(f, 'archy', T1).action, 'stop'); // an invalid at_ms never releases the lock
   ok(f, ['update', l, '--claim', 'lead']);
   ok(f, ['update', l, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
   assert.ok(!existsSync(join(f.tdir, 'handoff', 'lead.json'))); // the lead, even when it is listed among the members

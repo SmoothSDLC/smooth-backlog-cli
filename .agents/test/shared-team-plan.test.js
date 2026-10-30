@@ -155,3 +155,19 @@ test('parity with query.py --plan where the rules agree: claims, a review, a cha
   });
   outs[1].forEach((p, i) => assert.deepEqual(p, outs[0][i], `plan ${i}`));
 });
+
+test('test_plan_gives_a_review_to_the_first_idle_member_but_the_author; a member refining an item is not idle', () => {
+  const f = fixture();
+  const job = make(f, 'plan review job');
+  ok(f, ['update', job, '--claim', 'cody']);
+  ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'cody']);
+  const reviewers = () => plan(f).filter(e => e.item === job).map(e => [e.member, e.reason]);
+  assert.deepEqual(reviewers(), [['archy', 'any member but the author']]);
+  ok(f, ['update', make(f, 'archy busy job'), '--claim', 'archy']); // archy is not idle
+  assert.deepEqual(reviewers(), [['zed', 'any member but the author']]);
+  const w = make(f, 'team work item');
+  ok(f, ['update', w, '--set-team', 't1']);
+  const c = make(f, 'child', '--split-from', w);
+  ok(f, ['update', c, '--refine-start', '--by', 'zed']); // zed refines: active work too
+  assert.deepEqual(reviewers(), []);
+});

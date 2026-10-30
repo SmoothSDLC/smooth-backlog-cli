@@ -293,3 +293,22 @@ test('a refinement in progress is active work; an unclaimed hand-off ends the ca
   const r = ok(f, ['update', u, '--request-review', 'any', '--note', 'y', '--by', 'cody'], { QWEN_CODE_AGENT_ID: 'cody@t1' });
   assert.equal(STOP.exec(r.stdout)?.[1], 'cody');
 });
+
+test('a member acts only as itself on an unclaimed item; a request outside a Qwen session ends the session of --by; only the lead refines an incomplete team item; a busy lead gets no chunk', () => {
+  const f = fixture();
+  const u = make(f, 'unclaimed item');
+  no(f, ['update', u, '--request-review', 'any', '--note', 'y', '--by', 'zed'], 'not as zed', { QWEN_CODE_AGENT_ID: 'cody@t1' });
+  const r = ok(f, ['update', u, '--request-review', 'any', '--note', 'y', '--by', 'zed']);
+  assert.equal(STOP.exec(r.stdout)?.[1], 'zed');
+  const half = NEW('incomplete team item').filter((x, i, all) => x !== '--estimate' && all[i - 1] !== '--estimate');
+  const inc = ok(f, ['new', ...half]).stdout.split('created phase phases/')[1].split('.md')[0];
+  ok(f, ['update', inc, '--set-team', 't1']); // stage-less and incomplete
+  no(f, ['update', inc, '--set-estimate', '5'], 'only the team lead (lead) refines it, not archy', { QWEN_CODE_AGENT_ID: 'archy@t1' });
+  ok(f, ['update', inc, '--set-estimate', '5'], { QWEN_CODE_AGENT_ID: 'lead@t1' });
+  const w = make(f, 'team work item');
+  ok(f, ['update', w, '--set-team', 't1']);
+  ok(f, ['update', w, '--claim', 'lead']);
+  make(f, 'chunk item', '--chunk');
+  const p = JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], { TEAM_NAME: 't1' }).stdout);
+  assert.notEqual(p.action, 'chunk', p.instruction); // its team works on inc: the lead waits
+});

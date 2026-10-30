@@ -234,7 +234,7 @@ export function closeItem({ fm }, by, summary) {
 // the "❌ ") or {event, text} (event 'state_change' and no text when no action was asked).
 const REFINEMENT_STEPS = ['refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision'];
 // the agent each step acts as (item 033: a member acts only as itself)
-const ACTS_AS = { claim: a => a.claim, release: a => a.by || a.release, reassign: a => a.by, 'reassign-review': a => a.by, 'request-review': (a, fm) => fm.claimed_by,
+const ACTS_AS = { claim: a => a.claim, release: a => a.by || a.release, reassign: a => a.by, 'reassign-review': a => a.by, 'request-review': (a, fm) => fm.claimed_by || a.by,
   close: (a, fm) => a.by || fm.claimed_by, 'waiting-done': (a, fm) => a.by || fm.claimed_by };
 const ACTIONS = ['reassign', 'reassign-review', 'refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
   'claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done'];
@@ -270,6 +270,11 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   if (before.team && before.stage && before.stage !== 'ready') {
     const work = [...steps.filter(k => !REFINEMENT_STEPS.includes(k) && k !== 'claim').map(k => `--${k}`), ...given.filter(k => k === 'status').map(k => `--${k}`)]; // a claim has its own gate (claim())
     if (work.length) return { refuse: `${slug}: team ${before.team} item in stage ${before.stage}: before stage ready only its refinement steps run (${work.join(', ')} refused)` };
+  }
+  // spec section 4: outside the refinement stages only the lead refines an incomplete item of its team (a member known by
+  // QWEN_CODE_AGENT_ID changes nothing on it)
+  if (incomplete.length && before.team && !refining && me && me !== teamLead() && (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-')))) {
+    return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: only the team lead (${teamLead()}) refines it, not ${me}` };
   }
   if (incomplete.length && (teamScope().repo || steps.length || refining)) { // team mode: an incomplete item is only refined
     const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k))).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),

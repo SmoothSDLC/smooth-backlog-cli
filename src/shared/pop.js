@@ -180,7 +180,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
       act = { name: 'refine', r, f: repo, say: `refine ${r.seq}, never action it: set ${incomplete.get(r.id).join(', ')} (${REFINE_HOW.replaceAll('<item>', r.slug)}); an incomplete item means the backlog was not filled properly: once complete, record the gap in the item (backlog update <item> --append "GAP: ...")` };
     }
   }
-  if (!act && cap !== 'off') {
+  if (!act && cap !== 'off' && !(lead && busy.length)) { // a busy team's lead waits (spec section 8)
     const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone, f }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length
       && team.offeredTo(fm, f, repo) && team.isReady(fm)); // never another team's chunk item (item 037), nor one before ready (036)
     if (chunks.length || !noClaim) { // query.py:271: a member with nothing else does small-chunk work; the lead does not
@@ -228,7 +228,7 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   const missing = new Map(every0.map(x => { const file = files.get(x.r.path); return [x.r.id, file ? missingFields(file.fm, file.body) : ['the item file']]; }));
   const every = every0.filter(x => team.inTeam(x.fm)); // only the caller's team's items (TEAM_NAME)
   const rows = every.filter(x => !missing.get(x.r.id).length); // an incomplete item is never dispatched to a member
-  const held = Object.fromEntries(members.map(m => [m, team.heldItems(folder, m)]));
+  const held = Object.fromEntries(members.map(m => [m, team.heldItems(folder, m, { refining: true })]));
   const active = Object.fromEntries(members.map(m => [m, held[m].filter(h => h.state === 'active').length]));
   const busy = new Set([...rows.filter(x => x.fm.review_state === 'in_review' && !team.staleReview(x.fm)).map(x => x.fm.reviewer),
     ...members.filter(m => m !== lead && team.restarting(m))]);
@@ -265,7 +265,7 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
     }
   }
   if (want.has(lead) && !busy.has(lead)) { // the lead alone refines an incomplete item (one per plan); never one waiting for an owner decision
-    const x = every.find(y => missing.get(y.r.id).length && y.fm.stage !== 'review-hitl');
+    const x = every.find(y => missing.get(y.r.id).length && !y.fm.stage); // outside the refinement stages: there a member refines (036)
     if (x) {
       const m = missing.get(x.r.id);
       give(lead, 'refine', x.r, `refine ${x.r.seq}, never action it: set ${m.join(', ')} (${REFINE_HOW.replaceAll('<item>', x.r.slug)}); once complete, record the gap in the item`, `incomplete: ${m.join(',')}`, ` ${m.join(',')}`);

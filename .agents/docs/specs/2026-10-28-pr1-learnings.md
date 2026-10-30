@@ -75,7 +75,8 @@ PR1 implements this with a hand-off marker:
   lead, who is not a member.
 - Until Qwen registers a session of that agent whose `joinedAt` is newer than the marker, the agent's next-work answers
   `stop`, and claim, refine-start and start-review are refused. A missing name or an unreadable config.json keeps the lock
-  shut. A malformed marker counts as written at time 0.
+  shut, and so does a malformed marker or time stamp (item 038's definition of done; PR1 skipped a marker that is no
+  JSON, and an earlier version of this line counted it as written at time 0).
 - The dispatcher resets from the markers (they survive its restarts), tells the lead again every 10 minutes, and sends
   cody-alert after 20 minutes without a fresh session. It renames a released marker to `<agent>.released`, and only if it
   is still the marker it read.

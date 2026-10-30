@@ -252,7 +252,7 @@ Either option may be followed by a command, which then runs in that mode. `--use
 path is a clone of the backlog repository on its `main` branch and pulls it. In shared mode nothing is written into
 the consuming repository. Only the commands below exist in this mode; each pulls the backlog repository first, and a
 command that changes an item commits and pushes the change before it exits. An item is named by its number or its
-slug. With `--json`, the shared-mode commands print the data itself and not the `{"ok","data"}` envelope of the local mode. The team flags of `update`, the team views of `query` and `pop` work; `--plan` and the other
+slug. With `--json`, the shared-mode commands print the data itself and not the `{"ok","data"}` envelope of the local mode. The team flags of `update`, the team views of `query` (`--plan` included) and `pop` work; the
 flags that a list below marks "Not in this build" are refused. In shared mode `backlog update` changes an item, while in local mode
 it updates the CLI itself. The text of each command below is what `backlog <command> --help` prints.
 

@@ -191,7 +191,7 @@ export function markHandoff(teamName, agent, seq) {
   } catch (e) { return e.message; }
 }
 // {tdir, marker} while the agent's hand-off waits for a fresh session, else null. An unreadable config.json or a missing
-// name keeps it locked; a malformed marker counts as written at time 0 (beyond PR1, which skipped one that is no JSON).
+// name keeps it locked, and so does a malformed marker (beyond PR1, which skipped one that is no JSON).
 export function pendingHandoff(agent, teamName) {
   if (!SAFE.test(agent || '')) return null;
   for (const tdir of teamDirs(teamName)) {
@@ -200,8 +200,11 @@ export function pendingHandoff(agent, teamName) {
     let mk;
     try { mk = JSON.parse(text); } catch { mk = {}; }
     if (!mk || typeof mk !== 'object' || Array.isArray(mk)) mk = {};
+    const at = ms(mk.at_ms);
     const joined = memberJoinedMs(tdir, agent);
-    if (joined === null || joined <= (ms(mk.at_ms || 0) ?? 0)) return { tdir, marker: mk }; // an invalid at_ms counts as time 0
+    // item 038's definition of done: a malformed marker or time stamp never releases the lock (stricter than PR1 and
+    // spec section 7's time 0); the dispatcher sets such a marker aside
+    if (at === null || joined === null || joined <= at) return { tdir, marker: mk };
   }
   return null;
 }

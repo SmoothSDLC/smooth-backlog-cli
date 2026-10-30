@@ -2,15 +2,6 @@
 
 ## Unreleased
 
-- Dependency hand-off gate (item 059): a dependent is offered or claimed only when every producer edge is satisfied
-  (the hand-off of every done producer is accepted, or the producer is a legacy one, done before the rule with no
-  hand-off records); the producer (its claimer) records `--handoff <dependent>` with `--handoff-commit`,
-  `--handoff-contract` and `--handoff-verification` (optionally `--handoff-outputs`, `--handoff-pickup`,
-  `--handoff-risks`), and the team lead answers on the producer's item with `--accept-handoff <dependent> --checks
-  "<text>"` or `--reject-handoff <dependent> --reason "<text>"`. `--close` and `--status done` refuse an unaccepted
-  dependent; the CLI writes the NONE record for a producer without dependents. `--claim --ignore-dependency-lock
-  "<reason>"` (the lead, or the owner outside a team session) passes a done producer whose hand-off is not accepted,
-  never an unfinished dependency. Documented in the `backlog update` help, COMMANDS.md and the built-in skill.
 - `backlog query --phase --json` names the team fields each item lacks (`missing`, item 061).
 - `backlog query --status --json` rows carry `claimed_by` and `review_state` (item 060), so no caller reads item files.
 - `backlog team pop --team <name>`: the team lead takes its team's next work item (an item of the team with no stage),

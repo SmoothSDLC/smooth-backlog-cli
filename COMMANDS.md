@@ -368,9 +368,7 @@ from the origin of that repository.
 Options:
   --status STATUS
       The new status of the item. Open items are pending or in_progress, a finished item is done. Setting done
-      completes the item; the command refuses when the item has review documents (review_refs) and no passing review,
-      and while a dependent's hand-off is not accepted (the dependency gate, as for --close); an item without
-      dependents gets the NONE record the CLI writes at close.
+      completes the item; the command refuses when the item has review documents (review_refs) and no passing review.
   --branch BRANCH
       Refused by design: the branch of an item is not changed here. Use backlog move --to-branch instead.
   --commit COMMIT
@@ -403,41 +401,6 @@ Options:
       otherwise the item becomes in progress and claimed by that agent.
   --force
       Together with --claim: claim although the agent already holds active items (never before stage ready).
-  --ignore-dependency-lock REASON
-      With --claim: the team lead, or the owner (an actor without a qwen-code team identity outside a team session),
-      claims although a done producer's hand-off is not yet accepted: those edges pass, an unfinished dependency
-      never does, and the override is recorded in the item (dependency_lock_overrides: by, at, reason, edges) and in
-      the body.
-  --handoff DEPENDENT
-      The producer (its claimer, --by) records that its work is handed to DEPENDENT, a real dependent of this item:
-      an item number or slug of this backlog, or owner/name#seq of another repository's item. It needs
-      --handoff-commit, --handoff-contract and --handoff-verification; --handoff-outputs, --handoff-pickup and
-      --handoff-risks are optional. A new record for the same dependent replaces the earlier one; the record (with a
-      digest of its contents) is written into the front matter (handoffs) and the body (DEPENDENCY_HANDOFF v1). The
-      team lead then answers it on this item with --accept-handoff or --reject-handoff.
-  --handoff-commit COMMIT
-      The 40-hex commit id of the handed-over work: the state of the branch the dependent starts from (with
-      --handoff).
-  --handoff-contract CONTRACT
-      What the dependent may rely on: the exported functions and their return values, with the file and line
-      (with --handoff).
-  --handoff-verification VERIFICATION
-      The commands and their results that prove the contract at --handoff-commit (with --handoff).
-  --handoff-outputs OUTPUTS
-      The files the dependent builds on (with --handoff).
-  --handoff-pickup PICKUP
-      Exactly how the dependent takes the work up: which call, where (with --handoff).
-  --handoff-risks RISKS
-      What the dependent must watch out for; the default is the word NONE (with --handoff).
-  --accept-handoff DEPENDENT
-      The team lead (--by <lead>) accepts the producer's hand-off record for DEPENDENT: it needs a record of the
-      current producer for that dependent and --checks, what the lead checked. The receipt (HANDOFF_ACCEPTED v1) is
-      appended to the front matter (handoff_receipts, append-only) and the body; only the latest receipt for a
-      dependent counts.
-  --reject-handoff DEPENDENT
-      The team lead (--by <lead>) rejects the producer's hand-off record for DEPENDENT, the reason in the existing
-      --reason: it needs a record of the current producer for that dependent. The receipt (HANDOFF_REJECTED v1) is
-      appended like an acceptance.
   --waiting WHAT
       Record that the holder of the item (named with --by) waits for something asynchronous, for example a workflow run or a
       deployment. The wait is cleared by the next --note, --review, --close or --request-review of the item, or by
@@ -522,12 +485,8 @@ Options:
   --comments COMMENTS
       The review findings (--review); they must cite one of the review references of the item (team session).
   --close
-      Complete the item; --summary says what was delivered. It needs a passing review when the item has review
-      documents (review_refs) (team session), and it is refused while a dependent's hand-off is not accepted: a
-      producer closes only after the team lead accepted the hand-off record of every dependent. An item without
-      dependents closes with the NONE record the CLI writes: handoffs: none in the front matter and the body line
-      DEPENDENCY_HANDOFF: NONE (no dependent items; checked by the CLI at close). Only the claimer closes its item,
-      else the team lead (--by <lead>); never the reviewer.
+      Complete the item; --summary says what was delivered. It needs a passing review when the item has review documents (review_refs) (team session).
+      Only the claimer closes its item, else the team lead (--by <lead>); never the reviewer.
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
   --help
@@ -536,17 +495,6 @@ Options:
 A call takes at most one team step (--claim, --release, --request-review, --start-review, --review, --close, --waiting, --waiting-done).
 A session with TEAM_REPOSITORY (and TEAM_BRANCH) set works only on items of that repository and branch: every change to another item is refused, field edits and --append as much as team steps.
 On success the command prints a line that starts with a check mark, the slug and the fields it set.
-
-The dependency hand-off gate: a dependent item is offered or claimed only when the edge to every producer it
-depends on is satisfied: the hand-off of every done producer is accepted (the team lead's receipt accepts the
-producer's current hand-off record for that dependent), or the producer is a legacy one, done before this rule
-with no hand-off records at all. For each edge the CLI reports one of six states: accepted and legacy (both
-satisfy the gate), missing (no record for the dependent), unaccepted (a record, no receipt yet), stale (the
-latest receipt names an earlier record) or rejected (the latest receipt rejects the current record); a done
-producer whose edge is not satisfied is treated like an unfinished dependency by claim, pop, work, plan,
-backlog query --claimable and backlog next, and the command names the state. The producer records its
-hand-off as its claimer (--handoff, --by); the team lead answers on the producer's item with --accept-handoff
-or --reject-handoff.
 
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.

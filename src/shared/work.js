@@ -51,6 +51,7 @@ export async function run(argv) {
     try { p = JSON.parse(pop.stdout); } catch { process.stdout.write(pop.stdout); process.stderr.write(pop.stderr); return pop.status ?? 1; }
     if (![0, 3].includes(pop.status) || !p.action) { process.stdout.write(pop.stdout); process.stderr.write(pop.stderr); return pop.status ?? 1; }
     status = pop.status;
+    if (pop.stderr) process.stderr.write(pop.stderr); // the pop's warnings reach the agent
     marked = p.action === 'claim' && p.claimed ? `claimed for ${a.agent}` : null;
     step = mark(p, a.agent);
     if (!step) break;

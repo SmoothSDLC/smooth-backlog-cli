@@ -179,6 +179,8 @@ export function markHandoff(teamName, agent, seq) {
   if (agent === teamLead()) return null; // the lead is not a member
   const tdir = join(teamsRoot(), teamName);
   const m = member(tdir, agent);
+  if (m === 'none' && existsSync(tdir)) warn(`${join(tdir, 'config.json')} cannot be read or names no members; no hand-off marker for ${agent}`);
+  if (typeof m === 'object' && m.joined === null) warn(`the session time stamp (joinedAt) of ${agent} is no number; no hand-off marker`);
   if (typeof m !== 'object' || m.joined === null) return null; // no registered session to replace: no marker
   if (!Number.isInteger(seq)) return `the item number ${seq} is no whole number`;
   try {
@@ -202,7 +204,10 @@ export function pendingHandoff(agent, teamName) {
     const at = mk && typeof mk === 'object' && !Array.isArray(mk) ? ms(mk.at_ms) : null;
     if (at === null || !Number.isInteger(mk.seq)) { warn(`${file} is no hand-off marker ({"at_ms", "seq"}); it stops nobody`); continue; }
     const m = member(tdir, agent);
-    if (typeof m !== 'object' || m.joined === null) continue; // no registered session with a valid time stamp: nothing to wait for
+    const cfg = join(tdir, 'config.json');
+    if (m === 'none') { warn(`${cfg} cannot be read or names no members; the hand-off marker ${file} stops nobody`); continue; }
+    if (m === 'absent') { warn(`${agent} is not registered in ${cfg}; its hand-off marker stops nobody`); continue; }
+    if (m.joined === null) { warn(`the session time stamp (joinedAt) of ${agent} in ${cfg} is no number; its hand-off marker stops nobody`); continue; }
     if (m.joined <= at) return { tdir, marker: mk };
   }
   return null;

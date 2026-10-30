@@ -87,8 +87,17 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
     if (mk !== null) writeFileSync(marker(f), mk);
     const r = run(f, ['pop', '--agent', 'archy', '--json'], T1);
     assert.notEqual(JSON.parse(r.stdout).action, 'stop', JSON.stringify([cfg, mk]));
-    if (mk !== null) assert.match(r.stderr, /stops nobody/);
+    assert.match(r.stderr, /stops nobody/, JSON.stringify([cfg, mk])); // every case is named
+    const w = run(f, ['work', '--agent', 'archy', '--json'], T1);
+    assert.notEqual(JSON.parse(w.stdout).action, 'stop');
+    assert.match(w.stderr, /stops nobody/); // work passes the warning on
   }
+  const roster = join(f.t, 'team.json');
+  writeFileSync(roster, JSON.stringify({ archy: {}, zed: {} }));
+  const free = teamItem(f, 'free job');
+  const plan = JSON.parse(run(f, ['query', '--plan', '--roster', roster, '--json'], T1).stdout);
+  assert.deepEqual(plan.map(e => [e.member, e.action, e.item]), [['archy', 'claim', free]]); // the plan does not leave archy out
+  ok(f, ['update', free, '--claim', 'archy']); // and its claim is not refused
 });
 test('no marker for the lead, for a member still active on another item, or for an item without a team', () => {
   const f = fixture();

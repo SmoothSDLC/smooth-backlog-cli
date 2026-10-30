@@ -15,6 +15,7 @@ import { actor, publicationGuard, staleError, staleViews } from './seen.js';
 import { connect, scan } from './db.js';
 import * as store from './store.js';
 import { asList, foreignCycle, foreignItem, isForeign } from './team.js';
+import { wipRefusal } from './wip.js';
 
 const PULL = ['pull', '-q', '--rebase', '--autostash', 'origin', 'main']; // explicit: the clone's tracking branch and push.default are the user's, not ours
 const pad = n => String(n).padStart(3, '0');
@@ -377,6 +378,8 @@ async function validatePublication(home, folders, names, claims, renumbered) {
         const target = isForeign(d) ? foreignItem(folders[n], d) : find(d);
         if (!target || !['done', 'archived'].includes(isForeign(d) ? target.status : target.fm.status)) reject(`${names[n]}: ${slug(item)} dependencies not done: ${d}`);
       }
+      const wip = claim.reclaim ? null : wipRefusal(folders[n], names[n], item.fm, claim.agent, slug(item)); // item 034: a concurrent start elsewhere counts
+      if (wip) reject(`${names[n]}: ${slug(item)}: ${wip}`);
       if (!claim.skipActiveLimit) {
         const held = items.filter(i => i !== item && i.path.startsWith('phases/') && ['pending', 'in_progress'].includes(i.fm.status ?? 'pending')
           && i.fm.claimed_by === claim.agent && !['requested', 'in_review'].includes(i.fm.review_state) && !i.fm.wait_on);

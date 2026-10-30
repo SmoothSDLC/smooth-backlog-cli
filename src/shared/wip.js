@@ -11,10 +11,15 @@ import { dirname, join, resolve } from 'node:path';
 import { load } from './store.js';
 
 const LEVELS = ['overall', 'repository', 'branch', 'team', 'agent'];
+const warned = new Set();
+const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
 export const limitsFile = home => join(home, 'wip-limits.json');
 export function limits(home) {
   let raw = {};
-  try { raw = JSON.parse(readFileSync(limitsFile(home), 'utf8')) ?? {}; } catch { raw = {}; }
+  try { raw = JSON.parse(readFileSync(limitsFile(home), 'utf8')) ?? {}; } catch (e) { // owner 2026-10-30: never hold work over it, but say so
+    if (e.code !== 'ENOENT') warn(`${limitsFile(home)} cannot be read or is no JSON (${e.message}); no work-in-progress limit applies until it is fixed`);
+    raw = {};
+  }
   return raw && typeof raw === 'object' ? raw : {};
 }
 const num = v => (Number.isInteger(v) && v >= 0 ? v : null);
@@ -37,7 +42,7 @@ export function progressItems(home) {
       const folder = join(home, o.name, n.name);
       if (!existsSync(join(folder, 'phases'))) continue;
       let items = [];
-      try { items = load(folder); } catch { continue; }
+      try { items = load(folder); } catch (e) { warn(`the items of ${o.name}/${n.name} cannot be read (${e.message}); they are not counted against the work-in-progress limits`); continue; }
       for (const i of items) if (i.path.startsWith('phases/') && inProgress(i.fm)) out.push({ repository: `${o.name}/${n.name}`, slug: i.fm.phase || i.path.slice(7, -3), fm: i.fm, path: i.path });
     }
   }

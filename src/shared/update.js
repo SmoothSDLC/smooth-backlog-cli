@@ -14,6 +14,7 @@ import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
+import { wipRefusal } from './wip.js';
 import { REVIEW_DIR, asList, foreignCycle, foreignItem, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
@@ -174,7 +175,7 @@ async function change(a, con, folder, repo) {
   if (!a.named && a['request-review'] !== undefined) seen.setActor(fm.claimed_by); // only the holder asks for a review of its work
   seen.check(folder, repo, seen.actor(), row.slug, row.path); // refuses (exit 5) when someone else changed the item since this agent read it
   a.guard = [{ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` }];
-  a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim }] : [];
+  a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: fm.claimed_by === a.claim }] : [];
   let body = text;
   const changes = {};
   let moveTarget = null; // --priority is a move-to-rank, applied via reflow (stays dense)
@@ -186,6 +187,10 @@ async function change(a, con, folder, repo) {
     let n;
     if (['priority', 'seq', 'size_score'].includes(k) && (n = pyInt(v)) === null) throw new BacklogError('INVALID_INPUT', `invalid literal for int() with base 10: ${pyStr(v)}`, 1);
     if (k === 'status' && !['pending', 'in_progress', 'done'].includes(v)) return refuse(`--status ${pyStr(v)}: use pending, in_progress or done (backlog archive moves a finished item to archive/)`);
+    if (k === 'status' && v === 'in_progress' && fm.status !== 'in_progress') { // item 034: starting work by status is starting work
+      const wip = wipRefusal(folder, repo, fm, fm.claimed_by || a.by || caller(), row.slug);
+      if (wip) return refuse(`${row.slug}: ${wip}`);
+    }
     if (k === 'seq') { // the number selects the item: another item (archived ones too) holding it would make every numeric selector ambiguous
       const held = con.prepare('SELECT slug FROM phase WHERE seq=? AND id<>?').get(n, row.id)?.slug
         ?? store.load(folder).find(i => Number(i.fm.seq) === n && i.fm.phase !== row.slug)?.fm.phase;
@@ -201,6 +206,7 @@ async function change(a, con, folder, repo) {
   const before = { team: fm.team, stage: fm.stage };
   if (a['wip-override'] !== undefined) { // item 034: the lead lifts the team and agent limits for this item, with a recorded reason
     const who = a.by || caller();
+    if (caller() && caller() !== who) return refuse(`${row.slug}: you are ${caller()} (QWEN_CODE_AGENT_ID): a member acts only as itself, not as ${who}`);
     if (who !== teamLead()) return refuse(`${row.slug}: only the team lead (${teamLead()}) lifts the team and agent work-in-progress limits for an item (got ${who || 'nobody'}; --by <lead>)`);
     const reason = strip(a['wip-override']);
     if (!reason) return refuse(`${row.slug}: --wip-override needs the reason`);

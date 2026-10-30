@@ -4,7 +4,8 @@
 // stale items; a renumbering leaves `updated` of the items it only re-ranks. Local bare repos only.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
@@ -28,7 +29,7 @@ function fixture(repos = ['demo']) {
   };
   const make = (repo, name, ...extra) => run(repo, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', '## Definition of done\n\n- [ ] x', ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
   const limits = l => writeFileSync(join(home, 'wip-limits.json'), JSON.stringify(l));
-  return { t, home, run, make, limits };
+  return { t, home, cons, run, make, limits };
 }
 
 test('034: each of the five levels refuses the claim past its limit; the lead\'s recorded override lifts team and agent', () => {
@@ -51,12 +52,18 @@ test('034: each of the five levels refuses the claim past its limit; the lead\'s
   f.run('demo', ['update', b, '--claim', 'bob']);
   assert.match(f.run('demo', ['update', c, '--claim', 'cat'], 1).stdout, /the team work-in-progress limit of t1 is 1 and 1 item\(s\) are in progress/);
   assert.match(f.run('demo', ['update', c, '--wip-override', 'urgent fix', '--by', 'bob'], 1).stdout, /only the team lead \(lead\) lifts/);
+  // a member cannot record the lead's override as the lead
+  assert.match(f.run('demo', ['update', c, '--wip-override', 'mine', '--by', 'lead'], 1, { QWEN_CODE_AGENT_ID: 'bob@t1' }).stdout, /you are bob \(QWEN_CODE_AGENT_ID\): a member acts only as itself, not as lead/);
   f.run('demo', ['update', c, '--wip-override', 'the release needs it today', '--by', 'lead']);
   f.run('demo', ['update', c, '--claim', 'cat']); // lifted for this item, recorded
   const fm = parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${c}.md`), 'utf8')).fm;
   assert.deepEqual([fm.wip_override, fm.wip_override_by], ['the release needs it today', 'lead']);
   f.limits({ overall: 1 });
   assert.match(f.run('other', ['update', o, '--claim', 'dan'], 1).stdout, /overall work-in-progress limit/); // only the owner's file changes overall
+  assert.match(f.run('other', ['update', o, '--status', 'in_progress', '--by', 'dan'], 1).stdout, /overall work-in-progress limit/); // a status change starts work too
+  // a limits file that cannot be read holds nobody (owner 2026-10-30), and says so
+  writeFileSync(join(f.home, 'wip-limits.json'), '{ not json');
+  assert.match(f.run('other', ['update', o, '--claim', 'dan']).stderr, /wip-limits\.json cannot be read or is no JSON .*no work-in-progress limit applies until it is fixed/);
 });
 
 test('034: with a team limit of three, pop offers no fourth item while three are in progress', () => {
@@ -87,4 +94,20 @@ test('034: query --wip prints the counts and the stale items; a renumbering leav
   const before = [b, c].map(upd);
   f.run('demo', ['update', '--replan', `${c},${b},${a}`]); // re-ranks b and c only
   assert.deepEqual([b, c].map(upd), before);
+});
+
+test('034: a start that another clone made while this one published counts: the later publication is refused', () => {
+  const f = fixture();
+  const [a, b] = ['one', 'two'].map(n => f.make('demo', n));
+  const home2 = join(f.t, 'home2');
+  spawnSync('git', ['clone', '-q', join(f.t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2]);
+  f.run('demo', ['query', '--phase', b, '--agent', 'bob'], 0, { BACKLOG_HOME: home2 });
+  f.limits({ repository: 1 });
+  // while amy's push is on its way, bob (the other clone, which has no limits file) claims the other item
+  const hook = join(f.home, '.git', 'hooks', 'pre-push');
+  const flag = join(f.t, 'hook-ran');
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons.demo}' && TEAM_LEAD=lead BACKLOG_HOME='${home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update ${b} --claim bob >/dev/null 2>&1\nexit 0\n`);
+  chmodSync(hook, 0o755);
+  const r = f.run('demo', ['update', a, '--claim', 'amy'], 3);
+  assert.match(r.stdout + r.stderr, /the repository work-in-progress limit of acme\/demo is 1 and 1 item\(s\) are in progress/);
 });

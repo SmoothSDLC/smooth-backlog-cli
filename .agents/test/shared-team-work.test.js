@@ -360,3 +360,13 @@ test("the lead asking for the review of a member's item ends no session and lock
   const r = ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'lead']);
   assert.doesNotMatch(r.stdout, STOP);
 });
+
+test('a member names nobody else as the one asking for a review', () => {
+  const f = fixture();
+  const x = make(f, 'member job');
+  ok(f, ['update', x, '--set-team', 't1']);
+  ok(f, ['update', x, '--claim', 'archy']);
+  no(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'lead'], 'not as lead', { QWEN_CODE_AGENT_ID: 'archy@t1' });
+  const r = ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'archy'], { QWEN_CODE_AGENT_ID: 'archy@t1' });
+  assert.equal(STOP.exec(r.stdout)?.[1], 'archy');
+});

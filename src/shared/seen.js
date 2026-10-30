@@ -105,7 +105,18 @@ export function staleError(slug, by, at, was, others = [], repo) {
   const all = [...groups].flatMap(([r, ss]) => ss.map(s => (r === repo ? s : `${s} of ${r}`)));
   const also = all.length > 1 ? `; ${all.length - 1} other item(s) you read changed too (${all.slice(1).join(', ')})` : '';
   const how = [...groups].map(([r, ss]) => `${r && r !== here ? `in repository ${r}: ` : ''}backlog query --phase ${ss.join(',')} --agent <you>`).join('; ');
-  return new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was})${also}; read ${all.length > 1 ? 'them' : 'it'} again (${how}) and retry`, STALE_EXIT);
+  const e = new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was})${also}; read ${all.length > 1 ? 'them' : 'it'} again (${how}) and retry`, STALE_EXIT);
+  e.stale = { slug, by, at, was, groups, repo };
+  return e;
+}
+// A refusal of a command over several repository folders (a cross-repository move) names the changed items the agent
+// read in each of them, not only in the folder checked first: [[folder, repo], ...]
+export function widen(e, folders = []) {
+  if (e?.code !== 'STALE_ITEM' || !e.stale || !folders.length) return e;
+  const { slug, by, at, was, groups, repo } = e.stale;
+  const others = [...groups].flatMap(([r, ss]) => ss.map(s => ({ repo: r, slug: s })));
+  for (const [f, r] of folders) others.push(...staleViews(f, r, actor()).map(s => ({ repo: r, slug: s })));
+  return staleError(slug, by, at, was, others, repo);
 }
 // The items of folder the agent has read whose content changed since (or that are gone), by slug.
 // rev: compare with that revision of the backlog home (a publication: origin/main), not the working tree

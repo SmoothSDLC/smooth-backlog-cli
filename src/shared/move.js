@@ -40,10 +40,11 @@ function parse(argv) { // move.py:67-74 argparse; --to-repository takes an optio
 }
 
 export async function run(argv) {
+  let a;
   try {
-    const a = parse(argv);
+    a = parse(argv);
     return await withBacklog((con, ctx) => move(a, con, ctx), ['move.py', ...argv.slice(0, 2)].join(' '));
-  } catch (e) { return die(e.message, e instanceof BacklogError ? e.exitCode : 1); }
+  } catch (err) { const e = seen.widen(err, a?.folders); return die(e.message, e instanceof BacklogError ? e.exitCode : 1); } // item 053: both folders of a move
 }
 
 // Branch names on the origin of the consuming repository (lib_db.py:287-293): a Set, or the git error text.
@@ -123,6 +124,7 @@ async function move(a, con, ctx) {
   if (bound) return refuse(bound);
   let tdir;
   try { tdir = store.folder(home, target); } catch (e) { throw usage(e.message); } // owner/name only: the target is the user's text or a file's data
+  a.folders = [[folder, repo], [tdir, target]]; // item 053: a stale-view refusal names what the agent read in both
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target file is named from it`); // mirror data: no path in it
 
   // move.py:32-64

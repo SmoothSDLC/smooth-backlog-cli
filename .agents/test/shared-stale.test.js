@@ -380,6 +380,23 @@ for (const [name, args, target] of [
   assert.equal(git(f.home, 'status', '--porcelain'), '');
 });
 
+test('053: a cross-repository move refused for its own item also names the changed item it read in the destination', () => {
+  const f = seed();
+  const cwd = consumer(f.t, 'acme', 'source');
+  const folder = join(f.home, 'acme', 'source');
+  store.write({ path: join(folder, 'phases', '001-source.md'), fm: { ...fm(f.folder, '001-alpha.md'), phase: '001-source', repository: 'acme/source' }, body: '\nSource item\n' }, folder);
+  const con = db.connect(folder); db.scan(con, folder); con.close();
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'move source'); git(f.home, 'push', '-q');
+  assert.equal(run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']).status, 0);
+  assert.equal(run(f, f.home, ['query', '--phase', '001-source', '--agent', 'amy'], { cwd }).status, 0);
+  assert.equal(run(f, f.home2, ['update', '2', '--append', 'bob', '--by', 'bob']).status, 0);
+  const src2 = run(f, f.home2, ['update', '1', '--append', 'bob', '--by', 'bob'], { cwd });
+  assert.equal(src2.status, 0, src2.stderr + src2.stdout);
+  const amy = run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd, env: { QWEN_CODE_AGENT_ID: 'amy' } });
+  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
+  assert.match(amy.stderr, /item 001-source was changed by bob .*1 other item\(s\) you read changed too \(002-beta of acme\/demo\); read them again \(backlog query --phase 001-source --agent <you>; in repository acme\/demo: backlog query --phase 002-beta --agent <you>\)/);
+});
+
 // A timestamp or author is not evidence of a read. The ranking refresh may update
 // beta's matching view, but must not sweep an unread change to the done item into it.
 for (const [name, args] of [

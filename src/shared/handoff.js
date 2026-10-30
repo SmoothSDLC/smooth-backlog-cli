@@ -1,0 +1,135 @@
+// The hand-off data rules of item 059 (the item-dependency-handoff method; spec
+// 2026-10-26-atomic-item-execution-dependency-handoffs.md): for every depends_on edge "dependent D depends on
+// producer P", P's front matter holds a hand-off record for D (key handoffs, or 'none' when P has no dependents)
+// and the team lead's append-only receipts (key handoff_receipts) pin the record's digest; D's edge is satisfied
+// only while the last receipt for D accepts the current record. Item 059.1: pure functions, no command yet —
+// nothing calls these.
+import { createHash } from 'node:crypto';
+import { readdirSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { asList } from './team.js';
+import { load } from './store.js';
+
+const HEX40 = /^[0-9a-f]{40}$/;
+const empty = v => !v || !String(v).trim();
+
+// The sha256 hex of the seven fields a receipt pins; a replacement record changes one of them and so its digest.
+export const digest = fields => createHash('sha256')
+  .update(JSON.stringify([fields.dependent, fields.commit, fields.contract, fields.verification, fields.outputs, fields.pickup, fields.risks]))
+  .digest('hex');
+
+// The producer's record for one dependent (a handoffs list item): the seven fields above plus by, at and its digest.
+export function makeRecord({ dependent, commit, contract, verification, outputs = '', pickup = '', risks = 'NONE', by, at }) {
+  if (empty(dependent)) throw new Error("handoff record: 'dependent' is empty");
+  if (!HEX40.test(String(commit ?? ''))) throw new Error(`handoff record: 'commit' must be a 40-hex commit id, got '${commit}'`);
+  if (empty(contract)) throw new Error("handoff record: 'contract' is empty");
+  if (empty(verification)) throw new Error("handoff record: 'verification' is empty");
+  return { dependent, commit, contract, verification, outputs, pickup, risks, by, at, digest: digest({ dependent, commit, contract, verification, outputs, pickup, risks }) };
+}
+
+// The team lead's receipt for one dependent (a handoff_receipts item, append-only): pins the record's digest; the
+// last receipt for a dependent is the one that counts for the edge.
+export function makeReceipt({ dependent, digest, result, by, at, checks }) {
+  if (result !== 'accepted' && result !== 'rejected') throw new Error(`handoff receipt: 'result' must be 'accepted' or 'rejected', got '${result}'`);
+  if (empty(checks)) throw new Error("handoff receipt: 'checks' is empty");
+  return { dependent, digest, result, by, at, checks };
+}
+
+// The state of the edge from the producer (its front matter) to dependentId, the dependent as the producer's
+// repository names it (its seq, or owner/name#seq for another repository): legacy (a done producer without a
+// handoffs key: closed before the rule), missing (no record for the dependent, including handoffs: none),
+// unaccepted (a record, no receipt), stale (the last receipt pins another digest), rejected or accepted (the
+// last receipt of the current record). Only accepted and legacy satisfy the edge.
+export function edgeState(producerFm, dependentId) {
+  if (producerFm.handoffs === undefined) return producerFm.status === 'done' ? 'legacy' : 'missing';
+  const record = Array.isArray(producerFm.handoffs) ? producerFm.handoffs.filter(r => r && r.dependent === dependentId).at(-1) : null;
+  if (!record) return 'missing';
+  const receipts = Array.isArray(producerFm.handoff_receipts) ? producerFm.handoff_receipts.filter(r => r && r.dependent === dependentId) : [];
+  const last = receipts.at(-1);
+  if (!last) return 'unaccepted';
+  if (last.digest !== record.digest) return 'stale';
+  return last.result === 'rejected' ? 'rejected' : 'accepted';
+}
+
+export const satisfied = state => state === 'accepted' || state === 'legacy';
+
+// Every not-archived item of any repository folder of the backlog repository that names the producer in
+// depends_on: in the producer's own folder by its seq or slug, in another folder as <producer repoId>#<seq>.
+// The id is the dependent as the producer's repository names it (its seq, or owner/name#seq for another
+// repository). folder: the producer's folder <home>/<owner>/<name>; the other folders are its siblings under home.
+export function dependentsOf(folder, repoId, producerFm) {
+  const home = dirname(dirname(resolve(folder)));
+  const out = [];
+  const seq = producerFm.seq != null ? String(producerFm.seq) : null;
+  let owners = [];
+  try { owners = readdirSync(home, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch { return out; }
+  for (const owner of owners) {
+    let repos = [];
+    try { repos = readdirSync(join(home, owner), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch { continue; }
+    for (const name of repos) {
+      const repo = `${owner}/${name}`;
+      let items = [];
+      try { items = load(join(home, owner, name)); } catch { continue; }
+      for (const it of items) {
+        const status = Object.hasOwn(it.fm, 'status') ? it.fm.status : 'pending';
+        if (status === 'archived') continue;
+        const deps = asList(it.fm.depends_on);
+        const namesProducer = repo === repoId
+          ? (seq !== null && deps.includes(seq)) || (typeof producerFm.phase === 'string' && producerFm.phase !== '' && deps.includes(producerFm.phase))
+          : seq !== null && deps.includes(`${repoId}#${seq}`);
+        if (!namesProducer) continue;
+        out.push({
+          id: repo === repoId ? String(it.fm.seq) : `${repo}#${it.fm.seq}`,
+          repository: repo,
+          seq: Number(it.fm.seq),
+          slug: it.fm.phase || basename(it.path, '.md'),
+          status,
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => (a.repository === b.repository ? a.seq - b.seq : a.repository < b.repository ? -1 : 1));
+}
+
+// The dependents of the producer whose edge is not accepted: what a producer still owes them before they may be
+// offered or claimed.
+export function openEdges(folder, repoId, producerFm) {
+  return dependentsOf(folder, repoId, producerFm)
+    .map(d => ({ dependent: d.id, state: edgeState(producerFm, d.id) }))
+    .filter(e => e.state !== 'accepted');
+}
+
+// The producer record as the method's DEPENDENCY_HANDOFF v1 body block (source: <owner>/<name>#<seq> of the
+// producer), appended to the producer's item body.
+export function recordBlock(record, source) {
+  return [
+    'DEPENDENCY_HANDOFF v1',
+    `SOURCE_ITEM: ${source}`,
+    `DEPENDENT_ITEM: ${record.dependent}`,
+    `PRODUCER_AGENT: ${record.by}`,
+    `SOURCE_COMMIT: ${record.commit}`,
+    `CONTRACT: ${record.contract}`,
+    `OUTPUTS: ${record.outputs}`,
+    `VERIFICATION: ${record.verification}`,
+    'REVIEW: pending',
+    `PICKUP: ${record.pickup}`,
+    `OPEN_RISKS: ${record.risks}`,
+    'END_DEPENDENCY_HANDOFF',
+  ].join('\n') + '\n';
+}
+
+// The lead's receipt as the method's HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body block, appended to the
+// producer's item body.
+export function receiptBlock(receipt, source) {
+  const kind = receipt.result === 'accepted' ? 'ACCEPTED' : 'REJECTED';
+  return [
+    `HANDOFF_${kind} v1`,
+    `SOURCE_ITEM: ${source}`,
+    `DEPENDENT_ITEM: ${receipt.dependent}`,
+    `DIGEST: ${receipt.digest}`,
+    `CHECKS: ${receipt.checks}`,
+    `BY: ${receipt.by}`,
+    `AT: ${receipt.at}`,
+    `END_HANDOFF_${kind}`,
+  ].join('\n') + '\n';
+}

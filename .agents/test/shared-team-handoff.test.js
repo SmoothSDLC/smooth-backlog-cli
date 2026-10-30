@@ -84,9 +84,10 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
   assert.equal(pop(f, 'archy', T1).action, 'stop');
   const roster = join(f.t, 'team.json');
   writeFileSync(roster, JSON.stringify({ archy: {}, zed: {} }));
-  for (const [cfg, mk] of [[null, null], ['{ not json', null], [[], null], [[{ name: 'archy', joinedAt: 1 }], 'garbage'], [[{ name: 'archy', joinedAt: 1 }], '{"at_ms":"bad","seq":1}']]) {
+  for (const [cfg, mk] of [[null, null], ['{ not json', null], [[], null], [[{ name: 'archy', joinedAt: 1 }], 'garbage'], [[{ name: 'archy', joinedAt: 1 }], '{"at_ms":"bad","seq":1}'], [[{ name: 'archy', joinedAt: 'bad' }], 'VALID'], [[{ name: 'archy', joinedAt: 1 }], 'DIR']]) {
     if (cfg === null) config(f, []); else if (typeof cfg === 'string') writeFileSync(join(f.tdir, 'config.json'), cfg); else config(f, cfg);
-    if (mk !== null) writeFileSync(marker(f), mk);
+    const put = () => { if (mk === 'DIR') { rmSync(marker(f), { force: true, recursive: true }); mkdirSync(marker(f), { recursive: true }); } else if (mk === 'VALID') writeFileSync(marker(f), JSON.stringify({ at_ms: Date.now(), seq: 1 })); else if (mk !== null) writeFileSync(marker(f), mk); };
+    put();
     const r = run(f, ['pop', '--agent', 'archy', '--json'], T1);
     assert.notEqual(JSON.parse(r.stdout).action, 'stop', JSON.stringify([cfg, mk]));
     assert.match(r.stderr, /stops nobody/, JSON.stringify([cfg, mk])); // every case is named
@@ -106,7 +107,11 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
     ok(f, ['update', theirs, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md'], T1); // archy is free again
     ok(f, ['update', theirs, '--close', '--summary', 'x', '--by', 'zed'], T1); // and zed too
     if (cfg === null) config(f, []); else if (typeof cfg === 'string') writeFileSync(join(f.tdir, 'config.json'), cfg); else config(f, cfg); // zed's hand-off may have rewritten nothing, but keep the case
-    if (mk !== null) writeFileSync(marker(f), mk);
+    put();
+    const w2 = teamItem(f, 'work item');
+    const child = make(f, 'child', '--split-from', w2);
+    ok(f, ['update', child, '--refine-start', '--by', 'archy'], T1); // no refine-start refusal
+    ok(f, ['update', child, '--refine-done', '--by', 'archy', '--note', 'x'], T1);
   }
 });
 test('no marker for the lead, for a member still active on another item, or for an item without a team', () => {

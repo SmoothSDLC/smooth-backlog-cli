@@ -267,9 +267,11 @@ async function change(a, con, folder, repo) {
   const lockTeam = before.team || fm.team; // the team the item had when the command began: --set-team in the same call changes nothing here
   if (own && lockTeam && claimer && claimer !== teamLead() && !heldItems(folder, claimer, { refining: true }).some(h => h.slug !== row.slug && h.state === 'active')) {
     if (pendingHandoff(claimer, lockTeam) === null) { // a lock already there stays as it is, whatever happens to this change
+      const was = handoffText(lockTeam, claimer);
       const why = markHandoff(lockTeam, claimer, row.seq);
       if (why) return refuse(`${row.slug}: the hand-off marker of ${claimer} cannot be written (${why}); nothing changed`);
-      a.handoff = { team: lockTeam, agent: claimer, text: handoffText(lockTeam, claimer) };
+      const now = handoffText(lockTeam, claimer);
+      if (now !== null && now !== was) a.handoff = { team: lockTeam, agent: claimer, text: now }; // only a marker this change wrote is set aside on failure
     }
   }
   store.write({ path, fm, body }, folder);

@@ -387,3 +387,10 @@ test('in stage refinement-review the item takes no edit until its verdict', () =
   no(f, ['update', c, '--append', '## Definition of done\n- [ ] other'], 'in stage refinement-review the item stays as the reviewer reads it');
   no(f, ['update', c, '--set-estimate', '9'], 'in stage refinement-review the item stays as the reviewer reads it');
 });
+
+test('the lead edits nothing of a first-round refinement, with a step or without', () => {
+  const f = fixture();
+  const w = work(f);
+  const c = make(f, 'child', '--split-from', w);
+  no(f, ['update', c, '--request-decision', 'Q?', '--set-estimate', '9', '--by', 'lead'], 'a member, not the team lead, refines in the first round');
+});

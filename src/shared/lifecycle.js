@@ -287,7 +287,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   const who = me || a.by; // the Qwen caller, else the agent named by --by
   const edits = strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-'));
   // spec section 4: a member, not the lead, refines in the first round; the lead edits a refining item only as its refiner
-  if (who === teamLead() && before.team && before.stage === 'refining' && fm.refiner !== who && !actions.length && edits) {
+  if (who === teamLead() && before.team && before.stage === 'refining' && fm.refiner !== who && edits) { // with a step or without
     return { refuse: `${slug}: a member, not the team lead, refines in the first round (spec section 4); the lead edits an item in stage refining only as its refiner` };
   }
   if (incomplete.length && (before.team || teamScope().repo) && !refining && who && who !== teamLead() && (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-')))) {

@@ -351,3 +351,12 @@ test('backlog work answers only for the Qwen caller itself', () => {
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.match(r.stderr, /you are archy \(QWEN_CODE_AGENT_ID\): backlog work answers only for yourself, not for zed/);
 });
+
+test("the lead asking for the review of a member's item ends no session and locks nobody", () => {
+  const f = fixture();
+  const x = make(f, 'member job');
+  ok(f, ['update', x, '--set-team', 't1']);
+  ok(f, ['update', x, '--claim', 'archy']);
+  const r = ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'lead']);
+  assert.doesNotMatch(r.stdout, STOP);
+});

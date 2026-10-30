@@ -260,7 +260,8 @@ async function change(a, con, folder, repo) {
   // another active item; never the lead. The marker is written before the item (a marker that cannot be written refuses the
   // hand-off: nothing changes), and set aside again when the change is not published (update() below).
   const claimer = holder || fm.claimed_by || '';
-  const own = event === 'review_requested' || (event === 'closed' && (a.by || claimer) === claimer); // the lead closing a member's item locks nobody
+  const actor = a.by || caller() || claimer;
+  const own = ['review_requested', 'closed'].includes(event) && actor === claimer; // the lead handing on a member's item locks nobody
   const lockTeam = before.team || fm.team; // the team the item had when the command began: --set-team in the same call changes nothing here
   if (own && lockTeam && claimer && claimer !== teamLead() && !heldItems(folder, claimer, { refining: true }).some(h => h.slug !== row.slug && h.state === 'active')) {
     if (pendingHandoff(claimer, lockTeam) === null) { // a lock already there stays as it is, whatever happens to this change
@@ -299,7 +300,7 @@ async function change(a, con, folder, repo) {
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
   if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug));
   // item 033 (spec section 7): the hand-off to review, a changes verdict and a close end the agent's session
-  const ender = event === 'review_requested' ? holder || a.by || caller() : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
+  const ender = event === 'review_requested' ? a.by || caller() || holder : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
   const ends = ender && ender !== teamLead(); // spec section 7: these three end the agent's session (the lead is no member)
   if (completing) {
     say('   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).');

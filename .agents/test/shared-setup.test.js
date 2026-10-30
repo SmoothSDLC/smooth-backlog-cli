@@ -4,7 +4,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,7 +76,8 @@ test('043: setup --ask shows the default, uses the answer and records it relativ
   const elsewhere = join(t, 'clones', 'backlog');
   const r = run(app, ['setup', '--ask'], `${elsewhere}\n`);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stderr, new RegExp(`Backlog repository path \\[${join(t, 'consumer', 'smoothsdlc-backlog').replace(/[/.]/g, '\\$&')}\\]: `));
+  // the CLI prints the real path (macOS: /var is /private/var)
+  assert.match(r.stderr, new RegExp(`Backlog repository path \\[${join(realpathSync(t), 'consumer', 'smoothsdlc-backlog').replace(/[/.]/g, '\\$&')}\\]: `));
   assert.ok(existsSync(join(elsewhere, '.git')));
   assert.deepEqual(cfg(app), { backlog_repository: '../../clones/backlog' });
   const keep = run(app, ['setup', '--ask'], '\n'); // an empty answer takes the default: the configured clone

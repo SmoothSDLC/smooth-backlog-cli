@@ -271,7 +271,7 @@ async function query(argv) {
       say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority, 3)}${crit}  ${r.name}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
       // item 042: a dependency on another repository's item is shown with its state (the items of this backlog keep PR1's line)
-      if (ACTIONABLE.includes(r.status)) {
+      { // every status: a done item still shows what it depended on
         const deps = (byPath ??= new Map(store.load(folder).map(i => [i.path, i.fm]))).get(r.path)?.depends_on;
         for (const d of team.asList(deps).filter(team.isForeign)) {
           const f = team.foreignItem(folder, d);

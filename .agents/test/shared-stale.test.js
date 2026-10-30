@@ -4,7 +4,7 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
@@ -489,9 +489,11 @@ for (const [name, args, target] of [
   writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 2 --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
   chmodSync(hook, 0o755);
   // an inherited checkout is the record of this test process, as a parent's is for its child (pop --claim-now)
-  if (name.includes('inherited')) writeFileSync(join(f.home, '.git', 'smooth-backlog-cli-run.lock'), JSON.stringify({ pid: process.pid, host: hostname(), command: 'test' }));
+  // the real path, as the CLI resolves its home (macOS: /var is /private/var)
+  const runLock = join(realpathSync(f.home), '.git', 'smooth-backlog-cli-run.lock');
+  if (name.includes('inherited')) writeFileSync(runLock, JSON.stringify({ pid: process.pid, host: hostname(), command: 'test' }));
   const amy = run(f, f.home, args, { cwd, env: { QWEN_CODE_AGENT_ID: 'amy',
-    ...(name.includes('inherited') ? { BACKLOG_RUN_LOCK_HELD: `${join(f.home, '.git', 'smooth-backlog-cli-run.lock')}:${process.pid}` } : {}),
+    ...(name.includes('inherited') ? { BACKLOG_RUN_LOCK_HELD: `${runLock}:${process.pid}` } : {}),
   } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
   assert.match(amy.stderr, /item 002-beta was changed by bob/);

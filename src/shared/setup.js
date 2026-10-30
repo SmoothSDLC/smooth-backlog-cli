@@ -11,7 +11,7 @@
 // - the template skill replaces the copy in every agent folder present (.agents, .claude, .github, .qwen), and shared
 //   mode is switched on. A second setup does the same and keeps the config unless --ask is given.
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { atomicWrite } from '../storage.js';
@@ -68,7 +68,7 @@ export async function run(argv) {
   } else say(`ℹ️  the backlog repository is at ${home} (left unchanged)`);
   try { await validateHome(home); } catch (e) { return die(e.message); }
   if (!kept || ask) { // a second setup keeps the config unless --ask
-    const value = relative(top, home); // relative to the repository: portable
+    const value = relative(top, realpathSync(home)); // relative to the repository: portable (both real paths: macOS /var is /private/var)
     await atomicWrite(join(top, CONFIG), `${JSON.stringify({ backlog_repository: value || '.' }, null, 2)}\n`);
     say(`✅ ${CONFIG}: backlog_repository ${value} (commit it, so every clone of this repository finds the backlog repository)`);
   } else say(`ℹ️  ${CONFIG} kept`);

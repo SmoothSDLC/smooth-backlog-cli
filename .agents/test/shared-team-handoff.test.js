@@ -217,3 +217,22 @@ test('a marker that cannot be written refuses the hand-off; a hand-off that is n
   assert.ok(lines.at(-1).includes('archy: END THE SESSION NOW'), done.stdout); // the shutdown instruction is the last line, after the publication
   void b;
 });
+
+test('a marker that cannot be read keeps the lock; a failed publication sets aside only the marker it wrote', async () => {
+  const f = fixture();
+  config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: 5000 }]);
+  teamItem(f, 'work');
+  mkdirSync(marker(f), { recursive: true }); // EISDIR: no marker text to read
+  assert.equal(pop(f, 'archy', T1).action, 'stop');
+  rmSync(marker(f), { recursive: true });
+  const home = process.env.HOME;
+  process.env.HOME = f.user;
+  try {
+    const team = await import('../../src/shared/team.js');
+    writeFileSync(marker(f), JSON.stringify({ at_ms: 9000, seq: 2 })); // a later hand-off, from another clone
+    team.releaseHandoff('t1', 'archy', JSON.stringify({ at_ms: 8000, seq: 1 }));
+    assert.ok(existsSync(marker(f)));
+    team.releaseHandoff('t1', 'archy', JSON.stringify({ at_ms: 9000, seq: 2 }));
+    assert.ok(!existsSync(marker(f)) && existsSync(join(f.tdir, 'handoff', 'archy.released')));
+  } finally { process.env.HOME = home; }
+});

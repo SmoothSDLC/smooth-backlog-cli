@@ -94,20 +94,21 @@ export function undoneDependencies(folder, fm, rows = mirrorRows(folder)) {
 
 // lib_db.py:658-670: the open rows of the active handoff whose file says agent holds them, on every branch, by number.
 // state: awaiting-review, waiting:<what>, active.
-export function heldItems(folder, agent) {
+export function heldItems(folder, agent, { refining = false } = {}) {
   const con = connect(folder);
   let rows;
   try {
     const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
     rows = con.prepare(`SELECT * FROM phase WHERE handoff_id=? AND status IN (${ACTIONABLE.map(() => '?')}) ORDER BY seq`).all(hid, ...ACTIONABLE).map(r => ({ ...r }));
   } finally { con.close(); }
-  return rows.map(r => ({ ...r, fm: itemFm(folder, r) })).filter(r => r.fm.claimed_by === agent)
+  const refines = fm => refining && !fm.claimed_by && fm.refiner === agent && fm.stage === 'refining'; // a refinement in progress is active work too (item 039)
+  return rows.map(r => ({ ...r, fm: itemFm(folder, r) })).filter(r => r.fm.claimed_by === agent || refines(r.fm))
     .map(r => ({ ...r, state: ['requested', 'in_review'].includes(r.fm.review_state) ? 'awaiting-review' : r.fm.wait_on ? `waiting:${r.fm.wait_on}` : 'active' }));
 }
 
 // lib_db.py:673-680: null when agent may claim, else why not.
 export function claimRefusal(folder, agent) {
-  const active = heldItems(folder, agent).filter(h => h.state === 'active').map(h => h.slug);
+  const active = heldItems(folder, agent, { refining: true }).filter(h => h.state === 'active').map(h => h.slug);
   if (!active.length) return null;
   return `${agent} holds ${active.length} active item(s): ${active.join(', ')}; pull new work only when every item you hold waits (review requested, or backlog update <item> --waiting "<what>" --by ${agent}); --force overrides`;
 }
@@ -195,7 +196,7 @@ export function pendingHandoff(agent, teamName) {
   if (!SAFE.test(agent || '')) return null;
   for (const tdir of teamDirs(teamName)) {
     let text;
-    try { text = readFileSync(join(tdir, 'handoff', `${agent}.json`), 'utf8'); } catch (e) { if (e.code === 'ENOENT') continue; text = ''; } // a marker that cannot be read keeps the lock
+    try { text = readFileSync(join(tdir, 'handoff', `${agent}.json`), 'utf8'); } catch (e) { if (e.code === 'ENOENT') continue; return { tdir, marker: {} }; } // a marker that cannot be read keeps the lock
     let mk;
     try { mk = JSON.parse(text); } catch { mk = {}; }
     if (!mk || typeof mk !== 'object' || Array.isArray(mk)) mk = {};
@@ -205,9 +206,12 @@ export function pendingHandoff(agent, teamName) {
   return null;
 }
 // A marker whose hand-off was not published is set aside as <agent>.released (the dispatcher's name for a released one).
-export function releaseHandoff(teamName, agent) {
+export function releaseHandoff(teamName, agent, text) {
   if (!SAFE.test(teamName || '') || !SAFE.test(agent || '')) return;
   const dir = join(teamsRoot(), teamName, 'handoff');
-  try { renameSync(join(dir, `${agent}.json`), join(dir, `${agent}.released`)); } catch { /* none there */ }
+  try { // only the marker this change wrote: a later hand-off of the same agent, from another clone, keeps its lock
+    if (readFileSync(join(dir, `${agent}.json`), 'utf8') === text) renameSync(join(dir, `${agent}.json`), join(dir, `${agent}.released`));
+  } catch { /* none there */ }
 }
+export const handoffText = (teamName, agent) => { try { return readFileSync(join(teamsRoot(), teamName, 'handoff', `${agent}.json`), 'utf8'); } catch { return null; } };
 export const restarting = agent => agent !== teamLead() && pendingHandoff(agent) !== null; // the lead is never locked

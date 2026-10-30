@@ -601,7 +601,7 @@ Options:
   --help
       Print this text and exit. Nothing is read or changed.
 
-The options --plan, --agents and --headless are refused with exit code 2 in this build.
+The option --headless is refused with exit code 2 in this build.
 
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.

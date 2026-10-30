@@ -58,12 +58,13 @@ const asList = v => (v === undefined || v.trim().toLowerCase() === '' || v.trim(
 const EVENT_LINE = /^[ \t]*(?:Claimed by|Released by|Review started by|Review by \S+ stale|Refinement started by|Refinement review requested by|WAITING |WAIT DONE |DECISION |CHUNK |ESTIMATE:)[^\n]*$/gm;
 export function hasDefinitionOfDone(text) {
   const body = (text || '').replaceAll(DOD_PLACEHOLDER, '').replace(EVENT_LINE, '');
-  for (const m of body.matchAll(/^[ \t]*(?:#{1,6}[ \t]*|\*\*|[-*][ \t]+)?definition of done\b/gim)) {
-    const rest = body.slice(m.index + m[0].length);
-    const next = /^#{1,6}[ \t]/m.exec(rest);
-    if ((next ? rest.slice(0, next.index) : rest).replace(/^[ \t\r\n:*]+|[ \t\r\n:*]+$/g, '')) return true;
-  }
-  return false;
+  // beyond the oracle (Codex review of item 036): the last one decides, since a split child carries its parent's body,
+  // definition of done included, before its own section
+  const m = [...body.matchAll(/^[ \t]*(?:#{1,6}[ \t]*|\*\*|[-*][ \t]+)?definition of done\b/gim)].at(-1);
+  if (!m) return false;
+  const rest = body.slice(m.index + m[0].length);
+  const next = /^#{1,6}[ \t]/m.exec(rest);
+  return Boolean((next ? rest.slice(0, next.index) : rest).replace(/^[ \t\r\n:*]+|[ \t\r\n:*]+$/g, ''));
 }
 
 // lib_db.py:587-595: by number (a live item before an archived one) or by slug; the mirror database is the lookup.

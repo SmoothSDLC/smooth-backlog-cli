@@ -128,7 +128,7 @@ test("with TEAM_NAME another team's item is never planned, and nothing before st
   assert.ok(c);
 });
 
-test('parity with query.py --plan where the rules agree: claims, a review, a changes verdict, a close', t => {
+test('parity with query.py --plan where the rules agree: claims, a review, a changes verdict, a close, the lead\'s refinement', t => {
   if (!oracle) return t.skip('Python backlog skill oracle not configured (set SMOOTH_BACKLOG_SCRIPTS) or PyYAML missing');
   const outs = ['py', 'js'].map(side => {
     const f = fixture(`team-plan-${side}-`);
@@ -148,6 +148,9 @@ test('parity with query.py --plan where the rules agree: claims, a review, a cha
     step('update.py', ['1', '--request-review', 'any', '--note', 'y', '--by', 'zed']);
     step('update.py', ['1', '--review', 'pass', '--by', 'cody', '--comments', 'ok (references/review/code.md)']);
     p();
+    writeFileSync(f.roster, JSON.stringify({ cody: {}, archy: {}, zed: {}, lead: {} })); // the lead plans its refinement
+    step('new_phase.py', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']); // incomplete
+    plans.push(JSON.parse(step('query.py', ['--plan', '--agents', 'lead', '--roster', f.roster, '--json'])));
     return plans;
   });
   outs[1].forEach((p, i) => assert.deepEqual(p, outs[0][i], `plan ${i}`));

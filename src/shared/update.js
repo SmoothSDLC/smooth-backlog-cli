@@ -9,12 +9,12 @@ import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { teamRefusal } from './archive.js';
-import { closeNow, headline, missingFields, shutdown, step } from './lifecycle.js';
+import { caller, closeNow, headline, missingFields, shutdown, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { REVIEW_DIR, asList, heldItems, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
+import { REVIEW_DIR, asList, handoffText, heldItems, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team'];
@@ -107,7 +107,7 @@ async function update(argv) {
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
     let code;
-    const unlock = () => { if (a.handoff) releaseHandoff(a.handoff.team, a.handoff.agent); }; // not published: no hand-off, no lock
+    const unlock = () => { if (a.handoff) releaseHandoff(a.handoff.team, a.handoff.agent, a.handoff.text); }; // not published: no hand-off, no lock
     try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); unlock(); throw e; } finally { close(); }
     if (code || a['dry-run']) { forget(); unlock(); return code; }
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
@@ -265,7 +265,7 @@ async function change(a, con, folder, repo) {
     const locked = pendingHandoff(claimer, fm.team) !== null; // a lock already there stays, whatever happens to this change
     const why = markHandoff(fm.team, claimer, row.seq);
     if (why) return refuse(`${row.slug}: the hand-off marker of ${claimer} cannot be written (${why}); nothing changed`);
-    if (!locked) a.handoff = { team: fm.team, agent: claimer };
+    if (!locked) a.handoff = { team: fm.team, agent: claimer, text: handoffText(fm.team, claimer) };
   }
   store.write({ path, fm, body }, folder);
   a.wrote = { slug: row.slug, path: row.path };
@@ -297,7 +297,7 @@ async function change(a, con, folder, repo) {
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
   if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug));
   // item 033 (spec section 7): the hand-off to review, a changes verdict and a close end the agent's session
-  const ender = event === 'review_requested' ? holder : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
+  const ender = event === 'review_requested' ? holder || caller() : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
   const ends = ender && ender !== teamLead(); // spec section 7: these three end the agent's session (the lead is no member)
   if (completing) {
     say('   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).');

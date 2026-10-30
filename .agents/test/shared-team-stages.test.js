@@ -12,6 +12,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
+import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import { cli, consumer, py, sharedBacklog } from './shared-fixtures.js';
@@ -300,4 +301,16 @@ test('a complete team item before stage ready takes only its refinement steps: n
   up(f, c, '--request-decision', 'Q?', '--by', 'cody');
   no(f, ['update', c, '--request-review', 'any', '--note', 'x'], 'item in stage review-hitl');
   up(f, c, '--note', 'notes and text fields stay open', '--summary', 'a better summary');
+});
+
+test("the lead never starts a first-round refinement nor is offered a member's child; the parent's definition of done is no child's", () => {
+  const f = fixture();
+  const w = make(f, 'team work item'); // its body has a definition of done
+  up(f, w, '--set-team', 't1');
+  const c = ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  assert.ok(doc(f, c).body.includes("- [ ] the test's check holds")); // the parent's definition of done, inherited as context
+  assert.ok(!hasDefinitionOfDone(doc(f, c).body)); // only the placeholder is the child's own
+  no(f, ['update', c, '--refine-start', '--by', 'lead'], 'a member, not the team lead, refines in the first round');
+  assert.notEqual(pop(f, 'lead', T1).item, c); // a member's first-round refinement
+  assert.deepEqual([pop(f, 'archy', T1).action, pop(f, 'archy', T1).item], ['refine', c]);
 });

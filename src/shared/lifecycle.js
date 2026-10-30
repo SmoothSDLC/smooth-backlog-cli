@@ -64,6 +64,7 @@ export function refineStart({ fm, folder }, by, { force } = {}) {
   if (!fm.team || fm.stage !== 'refining') reject(`only an item of a team in stage refining is refined (${inStage(fm)})`);
   if (fm.claimed_by) reject(`claimed by ${fm.claimed_by}: the work item itself is refined and split by the team lead, not refined here`);
   if (fm.refiner && fm.refiner !== by) reject(`${fm.refiner} is refining it since ${fm.refine_started}; refine another item`);
+  if (by === teamLead() && fm.refiner !== by) reject(`a member, not the team lead, refines in the first round (spec section 4); the lead re-refines only an item an owner decision returned to it`);
   const busy = fm.refiner === by || by === teamLead() ? null : claimRefusal(folder, by); // spec section 6: a refinement is new work too
   if (busy && !force) reject(busy);
   const t = now();

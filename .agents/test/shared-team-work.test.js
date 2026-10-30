@@ -276,3 +276,20 @@ test('the lead waits while only an incomplete item of its team is open', () => {
   const p = JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], { TEAM_NAME: 't1' }).stdout);
   assert.notDeepEqual([p.action, p.item], ['continue', w], p.instruction); // its team's work is open: no busy continue
 });
+
+test('a refinement in progress is active work; an unclaimed hand-off ends the caller\'s session', () => {
+  const f = fixture();
+  const w = make(f, 'team work item');
+  ok(f, ['update', w, '--set-team', 't1']);
+  const c = make(f, 'child', '--split-from', w);
+  ok(f, ['update', c, '--refine-start', '--by', 'archy']);
+  const x = make(f, 'ready team item');
+  ok(f, ['update', x, '--set-team', 't1']);
+  no(f, ['update', x, '--claim', 'archy'], `archy holds 1 active item(s): ${c}`);
+  ok(f, ['update', x, '--claim', 'zed']);
+  ok(f, ['update', x, '--request-review', 'any', '--note', 'x', '--by', 'zed']);
+  ok(f, ['update', x, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md']);
+  const u = make(f, 'unclaimed item');
+  const r = ok(f, ['update', u, '--request-review', 'any', '--note', 'y', '--by', 'cody'], { QWEN_CODE_AGENT_ID: 'cody@t1' });
+  assert.equal(STOP.exec(r.stdout)?.[1], 'cody');
+});

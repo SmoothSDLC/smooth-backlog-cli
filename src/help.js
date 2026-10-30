@@ -326,7 +326,7 @@ ${DB}
       the same way by the human-readable --next view.
 ${HELP_FLAG}
 
-The options --plan, --agents and --headless are refused with exit code 2 in this build.
+The option --headless is refused with exit code 2 in this build.
 
 ${EXIT}
 

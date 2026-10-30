@@ -102,3 +102,13 @@ test('team pop: an unclaimed in-progress work item is taken; no output names a f
   assert.equal(JSON.parse(j.stdout).action, 'claim'); assert.equal(text.status, 0, text.stderr);
   for (const out of [j.stdout, j.stderr, text.stdout, text.stderr]) assert.ok(!out.includes('phases/') && !out.includes(f.home), out);
 });
+
+test('item 061: query --phase --json names the team fields an item lacks', () => {
+  const f = fixture();
+  const full = make(f, 'complete item');
+  const bare = ok(f, ['new', '--name', 'bare item', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  const [a, b] = JSON.parse(ok(f, ['query', '--phase', `${full},${bare}`, '--json']).stdout);
+  assert.deepEqual(a.missing, []);
+  assert.deepEqual(b.missing, ['review_refs', 'estimate_min', 'definition_of_done']);
+  assert.deepEqual(JSON.parse(ok(f, ['query', '--phase', bare, '--json']).stdout).missing, b.missing);
+});

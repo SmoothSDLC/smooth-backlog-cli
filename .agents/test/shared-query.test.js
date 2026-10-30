@@ -78,7 +78,7 @@ function both(t, f, args) {
 // --phase prints the oracle's row and then the whole item (front_matter and body, item 033): the row part is the oracle's.
 const rowOnly = (args, out) => {
   if (!args.includes('--phase') || !out.startsWith('{')) return out;
-  const { front_matter: _f, body: _b, ...row } = JSON.parse(out); // eslint-disable-line no-unused-vars
+  const { front_matter: _f, body: _b, missing: _m, ...row } = JSON.parse(out); // eslint-disable-line no-unused-vars
   return `${JSON.stringify(row, null, 2)}\n`;
 };
 function same(t, f, args) {

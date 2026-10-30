@@ -6,7 +6,9 @@ import { join } from 'node:path';
 import { fixture } from './helpers.js';
 // Stub recorder: appends its argv to $RECORD_OUT, like /opt/cody/bin/script_runs.py would record the run.
 const STUB = "import os, sys\nopen(os.environ['RECORD_OUT'], 'a').write(' '.join(sys.argv[1:4]) + '\\n')\n";
-async function waitFor(file) { for (let i = 0; i < 100 && !existsSync(file); i++) await new Promise(r => setTimeout(r, 50)); }
+// the stub creates the file before it writes the line: wait for the whole line, not the file (a CI run read it empty)
+const written = file => existsSync(file) && readFileSync(file, 'utf8').endsWith('\n');
+async function waitFor(file) { for (let i = 0; i < 100 && !written(file); i++) await new Promise(r => setTimeout(r, 50)); }
 function setup(t) {
   const f = fixture(t); const d = mkdtempSync(join(tmpdir(), 'script-runs-')); t.after(() => rmSync(d, { recursive: true, force: true }));
   writeFileSync(join(d, 'stub.py'), STUB); const out = join(d, 'out.txt');

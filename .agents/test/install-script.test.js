@@ -1,42 +1,68 @@
 // Item 044: the skill's install script installs the CLI when it is missing, updates it when the registry has a newer
-// release, leaves an up-to-date one alone, and then runs `backlog setup` with its own arguments. A stub npm and a stub
-// backlog on PATH record their calls; the fixture repository is a plain git repository.
+// release (a pre-release before its release), leaves an up-to-date or newer one alone, says when the registry cannot be
+// reached, refuses a different backlog command earlier on PATH, and then runs `backlog setup` with its own arguments.
+// A stub npm (its global install is a state file) and a stub backlog record their calls in a fixture repository.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT = fileURLToPath(new URL('../../templates/skills/backlog/scripts/install-backlog-cli.sh', import.meta.url));
+const PKG = '@smoothsdlc/smooth-backlog-cli';
+const REG = '--registry=https://npm.pkg.github.com';
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 
-// installed: null (no backlog command) or its version; latest: the registry's version
-function run(installed, latest, args) {
+// installed: the package's installed version or null; latest: the registry's version, or null when it cannot be reached
+function run({ installed, latest, args = [], foreign = null }) {
   const t = mkdtempSync(join(tmpdir(), 'install-cli-')); dirs.push(t);
-  const bin = join(t, 'bin'); mkdirSync(bin);
-  const log = join(t, 'calls.log');
-  const backlog = v => `#!/bin/sh\n[ "$1" = --version ] && { echo ${v}; exit 0; }\necho "backlog $*" >> '${log}'\n`;
-  const put = (name, text) => { writeFileSync(join(bin, name), text); chmodSync(join(bin, name), 0o755); };
-  if (installed) put('backlog', backlog(installed));
-  // npm view prints the registry's version; npm install puts a backlog of that version on PATH
-  put('npm', `#!/bin/sh\necho "npm $*" >> '${log}'\nif [ "$1" = view ]; then echo ${latest}; exit 0; fi\nprintf '%s' '${backlog(latest).replace(/'/g, "'\\''")}' > '${join(bin, 'backlog')}'; chmod +x '${join(bin, 'backlog')}'\n`);
+  const bin = join(t, 'npm-global', 'bin'); mkdirSync(bin, { recursive: true });
+  const state = join(t, 'installed'); const log = join(t, 'calls.log');
+  const put = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); chmodSync(path, 0o755); };
+  // the CLI: --version prints the installed version; setup records each argument on its own line
+  put(join(bin, 'backlog'), `#!/bin/sh\n[ "$1" = --version ] && { cat '${state}'; exit 0; }\necho "backlog" >> '${log}'; for a in "$@"; do echo "  [$a]" >> '${log}'; done\n`);
+  if (installed) writeFileSync(state, installed);
+  put(join(t, 'tools', 'npm'), `#!/bin/sh
+case "$1" in
+  ls) if [ -f '${state}' ]; then printf '{"dependencies":{"${PKG}":{"version":"%s"}}}' "$(cat '${state}')"; else echo '{}'; fi ;;
+  view) ${latest ? `echo ${latest}` : "echo 'npm error 401 Unauthorized' >&2; exit 1"} ;;
+  prefix) echo '${join(t, 'npm-global')}' ;;
+  install) echo "npm $*" >> '${log}'; v=\${3#${PKG}@}; [ "$v" = "$3" ] && v=${latest || '0.0.1'}; printf %s "$v" > '${state}' ;;
+esac\n`);
+  if (foreign) put(join(t, 'foreign', 'backlog'), `#!/bin/sh\necho ${foreign}\n`);
+  const node = dirname(process.execPath);
+  const path = [foreign ? join(t, 'foreign') : null, join(t, 'tools'), bin, node, '/usr/bin', '/bin'].filter(Boolean).join(':');
   const repo = join(t, 'repo'); mkdirSync(repo); spawnSync('git', ['init', '-q'], { cwd: repo });
-  const r = spawnSync('bash', [SCRIPT, ...args], { cwd: repo, encoding: 'utf8', env: { PATH: `${bin}:/usr/bin:/bin`, HOME: t } });
-  let calls = []; try { calls = readFileSync(log, 'utf8').trim().split('\n'); } catch { /* none */ }
-  return { r, calls: calls.filter(c => !c.startsWith('npm view')) };
+  const r = spawnSync('bash', [SCRIPT, ...args], { cwd: repo, encoding: 'utf8', env: { PATH: path, HOME: t } });
+  return { r, calls: existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [] };
 }
+const install = v => `npm install --global ${PKG}@${v} ${REG}`;
 
-test('044: missing -> installed, then backlog setup gets the script\'s arguments', () => {
-  const { r, calls } = run(null, '1.2.0', ['--ask']);
+test('044: missing -> installed, then backlog setup gets each argument as given', () => {
+  const { r, calls } = run({ installed: null, latest: '1.2.0', args: ['--ask', 'a path with spaces', ''] });
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(calls, ['npm install --global @smoothsdlc/smooth-backlog-cli@1.2.0 --registry=https://npm.pkg.github.com', 'backlog setup --ask']);
+  assert.deepEqual(calls, [install('1.2.0'), 'backlog', '  [setup]', '  [--ask]', '  [a path with spaces]', '  []']);
 });
 
-test('044: an older CLI is updated, an up-to-date or newer one is left alone; setup always runs', () => {
-  assert.deepEqual(run('1.1.9', '1.2.0', []).calls, ['npm install --global @smoothsdlc/smooth-backlog-cli@1.2.0 --registry=https://npm.pkg.github.com', 'backlog setup']);
-  assert.deepEqual(run('1.2.0', '1.2.0', ['--ask']).calls, ['backlog setup --ask']);
-  assert.deepEqual(run('1.10.0', '1.9.0', []).calls, ['backlog setup']); // a version sort, not a text sort
+test('044: an older release or a pre-release of the latest is updated; an up-to-date or newer one is left alone', () => {
+  assert.deepEqual(run({ installed: '1.1.9', latest: '1.2.0' }).calls, [install('1.2.0'), 'backlog', '  [setup]']);
+  assert.deepEqual(run({ installed: '1.2.0-beta', latest: '1.2.0' }).calls, [install('1.2.0'), 'backlog', '  [setup]']);
+  assert.deepEqual(run({ installed: '1.2.0', latest: '1.2.0', args: ['--ask'] }).calls, ['backlog', '  [setup]', '  [--ask]']);
+  assert.deepEqual(run({ installed: '1.10.0', latest: '1.9.0' }).calls, ['backlog', '  [setup]']); // a version order, not text
+});
+
+test('044: an unreachable registry is said; a different backlog command earlier on PATH is refused', () => {
+  const kept = run({ installed: '1.2.0', latest: null });
+  assert.equal(kept.r.status, 0, kept.r.stderr);
+  assert.match(kept.r.stderr, /could not check .* for a newer release, keeping 1\.2\.0: npm error 401 Unauthorized/);
+  const none = run({ installed: null, latest: null });
+  assert.equal(none.r.status, 1);
+  assert.match(none.r.stderr, /cannot reach .* \(authenticate with npm login/);
+  const other = run({ installed: '1.2.0', latest: '1.2.0', foreign: '7.0.0' });
+  assert.equal(other.r.status, 1);
+  assert.match(other.r.stderr, /the backlog command on PATH \(.*foreign\/backlog, version 7\.0\.0\) is not @smoothsdlc\/smooth-backlog-cli 1\.2\.0/);
+  assert.deepEqual(other.calls, []); // setup never ran
 });

@@ -217,6 +217,8 @@ export function closeItem({ fm }, by, summary) {
   }
   const closer = by || fm.claimed_by || '';
   if (!closer) reject('nobody claimed this item: pass --by <agent>');
+  // item 039 (spec section 9, owner 2026-10-25): only the claimer closes its item, else the team lead
+  if (fm.claimed_by && closer !== fm.claimed_by && closer !== teamLead()) reject(`only the claimer (${fm.claimed_by}) closes it, else the team lead (${teamLead()}); not ${closer}`);
   fm.status = 'done';
   return { event: 'closed', text: `## Closed by ${closer} at ${now()}\n\n${summary}` };
 }
@@ -300,4 +302,5 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
 export const shutdown = agent => `🛑 ${agent}: END THE SESSION NOW. Reply with text only and make no further tool call; your next task starts in a fresh session.`;
 
 // update.py:253-255: printed after a passing review.
-export const closeNow = (fm, slug, by) => `   ➡️  CLOSE NOW: ${fm.claimed_by || 'the claimer'} closes it (backlog update ${slug} --close --summary "<outcome>"); ${by} closes it (--close --by ${by} --summary ...) if the claimer has not within 3 min`;
+// update.py:379-382: the claimer closes, else the team lead (owner 2026-10-25), never the reviewer (item 039)
+export const closeNow = (fm, slug) => `   ➡️  CLOSE NOW: ${fm.claimed_by || 'the claimer'} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead`;

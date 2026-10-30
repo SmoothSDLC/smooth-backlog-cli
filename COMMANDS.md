@@ -482,6 +482,7 @@ Options:
       The review findings (--review); they must cite one of the review references of the item (team session).
   --close
       Complete the item; --summary says what was delivered. It needs a passing review when the item has review documents (review_refs) (team session).
+      Only the claimer closes its item, else the team lead (--by <lead>); never the reviewer.
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
   --help
@@ -696,7 +697,10 @@ of refinement work of at most ten minutes) or idle. An item the agent holds that
 continued, and the agent claims a new item only when every item it holds waits. Another agent's review request comes
 after the agent's own work, however old it is. Incomplete items are never claimed or
 reviewed. With TEAM_NAME set (the team runner sets it), only that team's items of this repository are continued, reviewed
-or claimed. When nothing is left the action is idle, the blockers are named, and the command exits with 3 (see the exit codes below).
+or claimed. The team lead never claims; while its team works the split items, its work item is no busy continue and its
+answer is idle with the instruction to end the turn without polling (a passed or changes-requested item of the lead's keeps
+its close or rework), and when every item of its team is done it is told to have the work item reviewed and close it.
+When nothing is left the action is idle, the blockers are named, and the command exits with 3 (see the exit codes below).
 
 Without --json the first line is the action and the item, the second line says what to do, and one line per blocked item
 follows. With --json the command prints one object with the keys action, item, seq, repository, branch, instruction,

@@ -11,7 +11,7 @@ import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 
 // An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true (owner 2026-10-28).
-export const REVIEW_DIR = 'references/review/';
+export const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR: the review documents of cody-coding-model
 // lib_db.STAGES and the review-hitl stage of topology item 288; REFINEMENT_REVIEWERS record a refinement verdict.
 export const STAGES = ['refining', 'refined', 'refinement-review', 'review-hitl', 'ready'];
 export const REFINEMENT_REVIEWERS = ['codex', 'claude'];
@@ -19,7 +19,7 @@ export const REFINEMENT_REVIEWERS = ['codex', 'claude'];
 // for the lead) or its refinement review passed. The items the lead splits off start in stage refining.
 export const isReady = fm => [undefined, null, '', 'ready'].includes(fm.stage);
 // lib_db.team_lead: --lead, else env TEAM_LEAD, else cody. Only the lead refines an incomplete item and requests the refinement review.
-export const teamLead = name => strip(name || process.env.TEAM_LEAD || 'cody'); // lib_db.py REVIEW_DIR: the review documents of cody-coding-model
+export const teamLead = name => strip(name || process.env.TEAM_LEAD || 'cody');
 const DONE_STATES = ['done', 'archived'];
 const ACTIONABLE = ['pending', 'in_progress'];
 
@@ -149,11 +149,12 @@ export function describeDependency({ id, item, fm }) {
 // gets none. The same files and format as PR1, so its dispatcher and wake loop keep working during the cut-over.
 export const STOP_TEXT = 'your session is being replaced by a fresh one for your next task (you handed your item to review or '
   + 'closed it): end your turn now with a text-only reply and no other tool call';
-const SAFE = /^[\w.-]+$/; // a team or agent name is one path segment
+const SAFE = /^(?!\.{1,2}$)[\w.-]+$/; // a team or agent name is one path segment, never . or ..
+const ms = v => (Number.isFinite(Number(v)) ? Number(v) : null);
 const teamsRoot = () => join(homedir(), '.qwen', 'teams');
 export function teamDirs(name) {
   const t = strip(name || process.env.TEAM_NAME || '');
-  if (t) return SAFE.test(t) && t !== '.' && t !== '..' ? [join(teamsRoot(), t)] : [];
+  if (t) return SAFE.test(t) ? [join(teamsRoot(), t)] : [];
   try { return readdirSync(teamsRoot(), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => join(teamsRoot(), e.name)).sort(); } catch { return []; }
 }
 // joinedAt of the agent's registered session; null when the name is not registered or config.json cannot be read
@@ -161,18 +162,22 @@ export function memberJoinedMs(tdir, agent) {
   let cfg;
   try { cfg = JSON.parse(readFileSync(join(tdir, 'config.json'), 'utf8')); } catch { return null; }
   const m = (Array.isArray(cfg?.members) ? cfg.members : []).filter(x => x && typeof x === 'object' && x.name === agent);
-  return m.length ? Number(m[0].joinedAt || 0) : null;
+  return m.length ? ms(m[0].joinedAt || 0) : null; // an invalid joinedAt is no session
 }
+// Returns null when written or when the agent is no registered member of a Qwen team (Claude or Codex working a team's
+// item, or the lead), else why it was not written (as PR1, the command does not fail; update.js warns).
 export function markHandoff(teamName, agent, seq) {
-  if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return;
+  if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return `no team folder for team ${teamName || '(none)'} and agent ${agent || '(none)'}`;
+  if (agent === teamLead()) return null; // the lead is not a member
   const tdir = join(teamsRoot(), teamName);
-  if (memberJoinedMs(tdir, agent) === null) return; // not a member (the lead), or no team folder
+  if (memberJoinedMs(tdir, agent) === null) return null; // no registered member of a Qwen team: nothing to lock
   try {
     mkdirSync(join(tdir, 'handoff'), { recursive: true });
     const tmp = join(tdir, 'handoff', `.${agent}.tmp`);
     writeFileSync(tmp, JSON.stringify({ at_ms: Date.now(), seq }));
     renameSync(tmp, join(tdir, 'handoff', `${agent}.json`));
-  } catch { /* as PR1: a marker that cannot be written is no failure of the command */ }
+    return null;
+  } catch (e) { return e.message; }
 }
 // {tdir, marker} while the agent's hand-off waits for a fresh session, else null. An unreadable config.json or a missing
 // name keeps it locked; a malformed marker counts as written at time 0 (beyond PR1, which skipped one that is no JSON).
@@ -185,8 +190,8 @@ export function pendingHandoff(agent, teamName) {
     try { mk = JSON.parse(text); } catch { mk = {}; }
     if (!mk || typeof mk !== 'object' || Array.isArray(mk)) mk = {};
     const joined = memberJoinedMs(tdir, agent);
-    if (joined === null || joined <= Number(mk.at_ms || 0)) return { tdir, marker: mk };
+    if (joined === null || joined <= (ms(mk.at_ms || 0) ?? 0)) return { tdir, marker: mk }; // an invalid at_ms counts as time 0
   }
   return null;
 }
-export const restarting = agent => pendingHandoff(agent) !== null;
+export const restarting = agent => agent !== teamLead() && pendingHandoff(agent) !== null; // the lead is never locked

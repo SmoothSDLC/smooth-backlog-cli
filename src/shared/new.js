@@ -9,7 +9,7 @@ import { actor, check, recordWrites } from './seen.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
 import { branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
 import { pull } from './sync.js';
-import { outsideTeam, strip, teamScope } from './team.js';
+import { outsideTeam, strip, teamName, teamScope } from './team.js';
 
 const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; // lib_db.py:224
@@ -102,6 +102,12 @@ async function create(argv, { home, folder, repo, team }) {
   if (refs.length && !refs.some(r => r.startsWith(REVIEW_DIR))) return refuse(`--review-refs needs at least one review document (${REVIEW_DIR}<type>.md in cody-coding-model)`); // new_phase.py: the creator names how it is reviewed
   if (!hasDefinitionOfDone(a.body) && (team.repo || refs.length)) {
     return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
+  }
+  // item 039 (beyond the oracle): in a named team session (TEAM_NAME, set by the team runner) the creator names how the
+  // item is reviewed; an item that starts in stage refining (--split-from, --team) gets its review documents in the
+  // members' refinement. TEAM_REPOSITORY alone (a write into another repository's folder) is no team session here.
+  if (teamName() && !refs.length && !a.splitFrom && !a.team) {
+    return refuse(`in a team session an item names its review documents at creation: --review-refs ${REVIEW_DIR}<type>.md (a split item, or a team's item made with --team, gets them in its refinement)`);
   }
 
   const forget = freshDb(folder);

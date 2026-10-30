@@ -152,7 +152,7 @@ test('a member never takes over another agent\'s stale review; the lead hands it
   ok(f, ['update', job, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
 });
 
-test('backlog work on chunk work of another repository says where to read the item', () => {
+test('backlog work on chunk work of another repository prints that item too', () => {
   const f = fixture();
   const other = consumer(f.t, 'other', 'thing', 'main');
   const mine = make(f, 'held here');
@@ -162,6 +162,60 @@ test('backlog work on chunk work of another repository says where to read the it
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const far = r.stdout.split('created phase phases/')[1].split('.md')[0];
   const w = work(f, 'cody', {}, '--scope', 'all');
-  assert.deepEqual([w.action, w.item, w.repository, w.front_matter], ['chunk', far, 'other/thing', null]);
-  assert.ok(w.instruction.endsWith(`(read the item from that repository's clone: backlog query --phase ${far} there)`), w.instruction);
+  assert.deepEqual([w.action, w.item, w.repository, w.front_matter.phase], ['chunk', far, 'other/thing', far]);
+  assert.ok(w.body.includes('Body of chunk there.'), w.body); // the whole item, read from that repository's folder
+});
+
+// item 039: the review, close and lead rules (spec sections 2, 6, 8, 9)
+test('only the claimer closes its item, else the team lead; the close-now line names the claimer, else the lead, never the reviewer', () => {
+  const f = fixture();
+  const job = make(f, 'close job');
+  ok(f, ['update', job, '--claim', 'archy']);
+  ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy']);
+  const r = ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
+  assert.ok(r.stdout.includes('CLOSE NOW: archy closes it') && r.stdout.includes('if the claimer has not, the team lead closes it when available (--close --by <lead>')
+    && !r.stdout.includes('zed closes it'), r.stdout);
+  no(f, ['update', job, '--close', '--summary', 'x', '--by', 'zed'], 'only the claimer (archy) closes it, else the team lead (lead); not zed');
+  ok(f, ['update', job, '--close', '--summary', 'done', '--by', 'lead']);
+  assert.equal(fm(f, job).status, 'done');
+});
+
+test("the lead never claims, waits without polling while its team works, keeps its close and rework, and closes the work item when every item is done", () => {
+  const f = fixture();
+  const T = { TEAM_NAME: 't1' };
+  const w = make(f, 'team work item');
+  ok(f, ['update', w, '--set-team', 't1']);
+  ok(f, ['update', w, '--claim', 'lead']);
+  const pl = () => JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], T).stdout);
+  const kid = make(f, 'ready child'); // a team item without a stage: ready
+  ok(f, ['update', kid, '--set-team', 't1']);
+  let p = pl();
+  assert.deepEqual([p.action, p.item], ['idle', null]); // no claim of kid, no busy continue of the work item
+  assert.match(p.instruction, /^your team works on 1 item\(s\) \(\d+\): end your turn now with a text-only reply and no tool call; do not poll/);
+  ok(f, ['update', kid, '--claim', 'archy']);
+  assert.equal(pl().action, 'idle');
+  ok(f, ['update', kid, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
+  ok(f, ['update', kid, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
+  ok(f, ['update', kid, '--close', '--summary', 'kid done', '--by', 'archy']);
+  p = pl();
+  assert.deepEqual([p.action, p.item], ['continue', w]); // every item of the team is done
+  assert.ok(p.instruction.startsWith(`every item of team t1 is done: have ${fm(f, w).seq} reviewed`), p.instruction);
+  ok(f, ['update', w, '--request-review', 'any', '--note', 'the items and their evidence', '--by', 'lead']);
+  ok(f, ['update', w, '--review', 'changes', '--by', 'zed', '--comments', 'one more test per references/review/code.md']);
+  const kid2 = make(f, 'second child');
+  ok(f, ['update', kid2, '--set-team', 't1']); // the team works again
+  p = pl();
+  assert.deepEqual([p.action, p.item], ['continue', w]); // a changes-requested item of the lead's keeps its rework
+  assert.ok(p.instruction.startsWith('you hold it'), p.instruction);
+});
+
+test('in a team session an item names its review documents at creation, unless it starts in stage refining', () => {
+  const f = fixture();
+  const team = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const base = ['new', '--name', 'x', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--body', DOD];
+  no(f, base, 'in a team session an item names its review documents at creation', team);
+  ok(f, [...base, '--review-refs', 'references/review/code.md'], team);
+  ok(f, [...base, '--team', 't1'], team);
+  ok(f, base); // outside a team session the item is refined later
+  ok(f, base, { TEAM_REPOSITORY: 'acme/demo' }); // TEAM_REPOSITORY alone writes into a repository's folder: no team session
 });

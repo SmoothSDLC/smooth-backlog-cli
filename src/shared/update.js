@@ -112,6 +112,10 @@ async function update(argv) {
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
     const pairs = await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '), a.guard, a.claims);
     seen.recordWrites(folder, repo, seen.actor(), a.wrote ? [a.wrote] : [], pairs); // after the push, including a pure replan
+    if (a.handoff) { // after the push: a change that was not published locks nobody
+      const why = markHandoff(a.handoff.team, a.handoff.agent, a.handoff.seq);
+      if (why) process.stderr.write(`⚠️  backlog: the hand-off marker of ${a.handoff.agent} was not written (${why}); the dispatcher sees no lock\n`);
+    }
     return 0;
   });
 }
@@ -277,7 +281,7 @@ async function change(a, con, folder, repo) {
   if (order) db.scan(con, folder); else recordChange();
 
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
-  if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug, a.by));
+  if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug));
   // item 033 (spec section 7): the hand-off to review, a changes verdict and a close end the agent's session, unless it
   // is the lead or still holds another active item
   const ender = event === 'review_requested' ? holder : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
@@ -293,10 +297,12 @@ async function change(a, con, folder, repo) {
       say('        backlog update --replan "<id,id,id,...>"       # set the leading order');
     }
   }
-  // item 038 (update.py:372-378): the claimer's hand-off locks it until a fresh session, unless it still holds another active item
+  // item 038 (update.py:372-378): a member's hand-off of its own item locks it until a fresh session, unless it still holds
+  // another active item; never the lead. The marker is written once the change is published (update() below).
   const claimer = holder || fm.claimed_by || '';
-  if (['review_requested', 'closed'].includes(event) && fm.team && claimer && !heldItems(folder, claimer).some(h => h.slug !== row.slug && h.state === 'active')) {
-    markHandoff(fm.team, claimer, row.seq);
+  const own = event === 'review_requested' || (event === 'closed' && (a.by || claimer) === claimer); // the lead closing a member's item locks nobody
+  if (own && fm.team && claimer && claimer !== teamLead() && !heldItems(folder, claimer).some(h => h.slug !== row.slug && h.state === 'active')) {
+    a.handoff = { team: fm.team, agent: claimer, seq: row.seq };
   }
   if (ends) say(shutdown(ender)); // the last line of the output
   return 0;

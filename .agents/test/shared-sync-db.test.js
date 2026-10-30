@@ -32,7 +32,7 @@ const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's'
 function holdFirstPush(w) {
   const marker = join(w.tmp, 'pushed-once'); const go = join(w.tmp, 'go');
   const hook = join(w.home, '.git', 'hooks', 'pre-push');
-  writeFileSync(hook, `#!/bin/sh\n[ -f '${marker}' ] && exit 0\ntouch '${marker}'\nwhile [ ! -f '${go}' ]; do sleep 0.1; done\n`);
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${marker}' ] && exit 0\ntouch '${marker}'\nwhile [ ! -f '${go}' ] && [ -d '${w.tmp}' ]; do sleep 0.1; done\n`); // a test that failed before release() removed w.tmp: stop waiting, or the file never ends
   chmodSync(hook, 0o755);
   return { held: async () => { for (let i = 0; i < 300 && !existsSync(marker); i++) await sleep(100); assert.ok(existsSync(marker), 'b reached its push'); }, release: () => writeFileSync(go, '') };
 }
@@ -142,8 +142,9 @@ test('review P1: a backlog.db conflict does not resurrect the source row of an i
   const hold = holdFirstPush(b);
   const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
   await hold.held(); // b has moved the item out and committed both folders
-  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // a pushes a backlog.db that still has the row
-  hold.release();
+  const beta = cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }); // a pushes a backlog.db that still has the row
+  hold.release(); // first: a failed assertion must not leave b's push waiting
+  assert.equal(beta.status, 0, beta.stdout + beta.stderr);
   const r = await second.done;
   assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
 

@@ -119,8 +119,11 @@ test('the marker is the one PR1 reads: lib_db.restarting sees the lock the CLI w
     { encoding: 'utf8', env: { ...process.env, HOME: f.user, TEAM_NAME: 't1' } });
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }]);
+  if (!existsSync(join(scripts, 'lib_db.py')) || spawnSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }).status !== 0) {
+    return t.skip('the PR1 oracle is not here (SMOOTH_BACKLOG_SCRIPTS) or PyYAML is missing');
+  }
   const probe = pyRestarting(f, 'archy');
-  if (probe.status !== 0) return t.skip(`the PR1 oracle cannot run here: ${probe.stderr.trim().split('\n').pop()}`);
+  assert.equal(probe.status, 0, probe.stderr); // an oracle that is here but broken fails the test
   assert.equal(probe.stdout.trim(), 'False');
   const a = teamItem(f, 'job');
   ok(f, ['update', a, '--claim', 'archy']);
@@ -133,4 +136,39 @@ test('the marker is the one PR1 reads: lib_db.restarting sees the lock the CLI w
     { encoding: 'utf8', env: { ...process.env, HOME: f.user } });
   assert.equal(w.status + w2.status, 0, w.stderr + w2.stderr);
   assert.equal(pop(f, 'zed', T1).action, 'stop'); // PR1's marker locks the CLI's pop
+});
+
+test('invalid time stamps never release the lock; the lead is never locked; a lead closing a member\'s item locks nobody', () => {
+  const f = fixture();
+  config(f, [{ name: 'archy', joinedAt: 1000 }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
+  const [a, l, z] = ['job', "lead's job", "zed's job"].map(n => teamItem(f, n));
+  ok(f, ['update', a, '--claim', 'archy']);
+  ok(f, ['update', a, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
+  writeFileSync(marker(f), JSON.stringify({ at_ms: 'bad', seq: 1 }));
+  config(f, [{ name: 'archy', joinedAt: 'bad' }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
+  assert.equal(pop(f, 'archy', T1).action, 'stop'); // an invalid joinedAt is no fresh session
+  config(f, [{ name: 'archy', joinedAt: 5 }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
+  assert.notEqual(pop(f, 'archy', T1).action, 'stop'); // an invalid at_ms counts as time 0
+  ok(f, ['update', l, '--claim', 'lead']);
+  ok(f, ['update', l, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
+  assert.ok(!existsSync(join(f.tdir, 'handoff', 'lead.json'))); // the lead, even when it is listed among the members
+  writeFileSync(join(f.tdir, 'handoff', 'lead.json'), JSON.stringify({ at_ms: Date.now() + 1e9, seq: 1 }));
+  assert.notEqual(pop(f, 'lead', T1).action, 'stop'); // and never locked
+  ok(f, ['update', z, '--claim', 'zed']);
+  ok(f, ['update', z, '--request-review', 'any', '--note', 'x', '--by', 'zed']);
+  rmSync(join(f.tdir, 'handoff', 'zed.json')); // zed has had its fresh session
+  ok(f, ['update', z, '--review', 'pass', '--by', 'archy', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', z, '--close', '--summary', 'closed for zed', '--by', 'lead']); // the lead closes when the claimer has not
+  assert.ok(!existsSync(join(f.tdir, 'handoff', 'zed.json'))); // a lead's close locks nobody
+});
+
+test('--refine-start is refused while the member waits for its restart, and . or .. is no team folder', () => {
+  const f = fixture();
+  config(f, [{ name: 'archy', joinedAt: 1000 }]);
+  const w = teamItem(f, 'work item');
+  const c = make(f, 'child', '--split-from', w);
+  mkdirSync(join(f.tdir, 'handoff'), { recursive: true });
+  writeFileSync(join(f.tdir, 'handoff', 'archy.json'), JSON.stringify({ at_ms: Date.now(), seq: 9 }));
+  no(f, ['update', c, '--refine-start', '--by', 'archy'], '--refine-start refused: archy is waiting for its restart');
+  for (const name of ['.', '..']) assert.notEqual(pop(f, 'archy', { TEAM_NAME: name }).action, 'stop', name); // looked up nowhere
 });

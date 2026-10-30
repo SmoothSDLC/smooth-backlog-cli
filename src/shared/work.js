@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { redact } from './safety.js';
-import { repoId } from './store.js';
+import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
 import { teamScope } from './team.js';
 
 const BIN = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
@@ -63,7 +63,11 @@ export async function run(argv) {
     const q = self(['query', '--phase', p.item, '--agent', a.agent]); // the whole item, and the agent's view of it for its next write
     try { item = JSON.parse(q.stdout); } catch { item = null; }
     if (q.status !== 0 || !item) { process.stdout.write(q.stdout); process.stderr.write(q.stderr); return q.status || 1; }
-  } else if (p.item) p.instruction += ` (read the item from that repository's clone: backlog query --phase ${p.item} there)`; // chunk work of another repository
+  } else if (p.item) { // chunk work of another repository: its item file in that repository's folder of the backlog repository
+    const file = load(repoFolder(resolveHome().home, p.repository)).find(i => i.fm.phase === p.item || i.path.endsWith(`/${p.item}.md`));
+    if (!file) return die(`${p.item}: no such item in the backlog of ${p.repository}`, 1);
+    item = { front_matter: file.fm, body: file.body };
+  }
   const out = { ...p, marked, front_matter: item ? item.front_matter : null, body: item ? item.body : null };
   if (a.json) { process.stdout.write(`${JSON.stringify(out, null, 2)}\n`); return pop.status; }
   say(p.item ? `${p.action} ${p.item}` : p.action);

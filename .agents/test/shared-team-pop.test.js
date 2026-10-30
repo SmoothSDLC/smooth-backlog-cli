@@ -209,7 +209,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   r = refuse(f, job, '--review', 'pass', '--by', 'cody', '--comments', 'looks fine'); // must cite a ref
   assert.ok(r.status === 1 && r.stdout.includes('must cite'), r.stdout);
   r = ok(f, job, '--review', 'pass', '--by', 'cody', '--comments', 'per references/patterns/x.md: fine');
-  assert.ok(r.stdout.includes('CLOSE NOW: archy closes it') && r.stdout.includes('cody closes it (--close --by cody'));
+  assert.ok(r.stdout.includes('CLOSE NOW: archy closes it') && r.stdout.includes('if the claimer has not, the team lead closes it') && !r.stdout.includes('cody closes it')); // item 039: never the reviewer
   ok(f, job, '--set-review-refs', 'references/review/contract.md');
   r = refuse(f, job, '--set-review-refs', 'references/patterns/y.md');
   assert.ok(r.status === 1 && r.stdout.includes('needs at least one review document'), r.stdout);

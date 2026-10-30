@@ -94,15 +94,29 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const refineHow = slug => REFINE_HOW.replaceAll('<item>', slug);
   const reviews = [];
   for (const x of own) {
-    if (reviewOffer(x.fm, me) !== null) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me) });
+    if (reviewOffer(x.fm, me) !== null && team.isReady(x.fm)) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me) });
   }
   // spec section 5 and query.py:199: your review in progress comes first; another member's request, however old, comes
   // after your own work (item 033; the review-first window of this build is gone)
   let act = reviews.find(x => x.fm.review_state === 'in_review' && x.fm.reviewer === me);
   if (!lead && team.restarting(me)) act = { name: 'stop', r: null, f: repo, say: team.STOP_TEXT }; // query.py:201-202: handed off, no new work until a fresh session
   // query.py:197-221: the item you work on, your refinement in progress, then your passed and your changes-requested items
-  const mine = own.filter(({ fm }) => fm.claimed_by === me && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on); // waiting for a verdict or a run is not work
-  const cont = ({ r, fm, f }) => (fm.review_state === 'passed'
+  let mine = own.filter(({ fm }) => fm.claimed_by === me && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on && team.isReady(fm)); // waiting for a verdict or a run is not work; nor an item before ready
+  // query.py:203-211 (item 039, spec section 8): while its team works the split items the lead's work item waits: no busy
+  // continue (proof runs 01 and 02 died of qwen-code loop detection while the lead polled), but a passed or
+  // changes-requested item of the lead's keeps its action, and items blocked on the lead's own work do not count
+  let busy = [];
+  if (lead) {
+    const leads = new Set(mine.map(x => String(x.r.seq)));
+    busy = own.filter(x => x.fm.team && x.fm.claimed_by !== me && x.r.status !== 'done' && !x.undone.some(d => d.item && leads.has(String(d.item.seq))));
+    if (busy.length) mine = mine.filter(x => ['passed', 'changes-requested'].includes(x.fm.review_state));
+  }
+  const teamDone = ({ r, fm }) => lead && fm.team && !busy.length && !own.some(x => x.r.slug !== r.slug && x.fm.team === fm.team && x.r.status !== 'done');
+  const cont = ({ r, fm, f }) => (teamDone({ r, fm }) && !['passed', 'changes-requested'].includes(fm.review_state) // item 039: the lead closes the work item when every item of its team is done
+    ? { name: 'continue', r, f, say: team.needsReview(fm)
+      ? `every item of team ${fm.team} is done: have ${r.seq} reviewed (backlog update ${r.slug} --request-review any --note "<the items and their evidence>"), then close it after the pass`
+      : `every item of team ${fm.team} is done: close ${r.seq} (backlog update ${r.slug} --close --summary "<outcome>")` }
+    : fm.review_state === 'passed'
     ? { name: 'continue', r, f, say: `close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")` }
     : { name: 'continue', r, f, say: `you hold it: keep working and record each step in the item (backlog update ${r.slug} --append "..."), then --request-review or --close${dod(fm)}` });
   const pick = (...states) => mine.find(({ fm }) => states.includes(fm.review_state ?? null));
@@ -149,7 +163,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
         + 'backlog update <item> --refinement-review pass|changes --by codex|claude --comments "<findings; thread or session id>"' };
     }
   }
-  if (lead && (!act || ['continue', 'review'].includes(act.name))) { // item 033: a stale review of its team is the lead's to hand on (members never take it over); before its own work, as the refinement review
+  if (lead && (!act || act.name === 'review' || (act.name === 'continue' && act.say.startsWith('you hold it')))) { // item 033: a stale review of its team is the lead's to hand on (members never take it over); before its own plain work, never before its close or rework
     const x = own.find(({ fm }) => team.staleReview(fm) && fm.reviewer !== me);
     if (x) act = { name: 'reassign-review', r: x.r, f: x.f, say: `the review of ${x.r.seq} by ${x.fm.reviewer} is stale (started ${x.fm.review_started}): hand it on: backlog update ${x.r.slug} --reassign-review <member> --by ${me} --reason "<why>"` };
   }
@@ -173,7 +187,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const waits = new Map(held.filter(h => h.state !== 'active').map(h => [h.slug, { slug: h.slug, text: h.state === 'awaiting-review' ? `awaiting review: ${h.fm.seq}` : h.state.replace(':', ': ') }]));
   const blocked = act ? [] : [...own.filter(x => x.undone.length && !waits.has(x.r.slug)).map(x => ({ slug: x.r.slug, undone: x.undone })), ...[...waits.values()].map(w => ({ slug: w.slug, text: w.text }))];
   if (!act) {
-    act = { name: 'idle', r: null, f: repo, say: `nothing for ${me}: ${blocked.length ? 'message the agents holding the blockers below, or the coordinator' : 'tell the coordinator'}${refusal ? ` (${refusal})` : ''}` };
+    act = lead && busy.length ? { name: 'idle', r: null, f: repo, say: `your team works on ${busy.length} item(s) (${busy.map(x => x.r.seq).join(', ')}): end your turn now with a text-only reply and no tool call; do not poll, the dispatcher wakes you` } // spec section 8
+      : { name: 'idle', r: null, f: repo, say: `nothing for ${me}: ${blocked.length ? 'message the agents holding the blockers below, or the coordinator' : 'tell the coordinator'}${refusal ? ` (${refusal})` : ''}` };
   }
   const { name, r, f } = act;
   if (r && f === repo) seen.view(me, folder, repo, r); // shown to the agent

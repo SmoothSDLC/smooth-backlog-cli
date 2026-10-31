@@ -485,7 +485,7 @@ test('invalid command lines exit 2 or 1', () => {
   assert.equal(step(f, ['2', '3']).status, 2);
   assert.equal(step(f, ['2', '--status']).status, 2);
   assert.equal(step(f, ['2', '--set-complexity', 'huge']).status, 2);
-  assert.equal(step(f, ['2', '--priority', 'abc']).status, 1); // python: ValueError traceback
+  assert.equal(step(f, ['2', '--priority', 'abc']).status, 1); // a priority that is not a number is refused
 });
 
 test('--note on an item that waits clears the wait with a WAIT DONE line', () => {

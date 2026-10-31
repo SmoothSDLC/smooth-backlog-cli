@@ -370,3 +370,9 @@ test('the JSON of the pop stays valid when a credential follows a non-ASCII char
     assert.ok(!(r.stdout + r.stderr).includes('review_dummy'), r.stdout + r.stderr);
   }
 });
+
+test('pop --scope with an unknown scope exits 2 and names the choices', () => {
+  const f = fixture();
+  const galaxy = cli(['pop', '--agent', 'x', '--scope', 'galaxy'], { cwd: f.cons, tmp: f.t });
+  assert.ok(galaxy.status === 2 && galaxy.stderr.includes("argument --scope: invalid choice: 'galaxy' (choose from 'branch', 'repo', 'all')"), galaxy.stderr);
+});

@@ -213,7 +213,7 @@ const HANDOFF_NEEDS = {
   missing: 'the producer has not recorded a hand-off for this item; it records one and the team lead accepts it',
   unaccepted: 'the team lead has not accepted the producer\'s hand-off',
   stale: 'the producer re-recorded its hand-off after the last acceptance; the team lead must accept it again',
-  rejected: 'the team lead rejected the producer\'s hand-off; a new hand-off and acceptance are needed',
+  rejected: 'the team lead rejected the producer\'s hand-off; the team lead must accept the current record (or the producer records a new one and the lead accepts that)',
 };
 
 // lib_db.py:745-749; item 059: a done producer with an unsatisfied edge is described by its edge state and

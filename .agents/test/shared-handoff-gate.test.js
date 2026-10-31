@@ -1,9 +1,10 @@
 // Item 059.4: the offer and claim gate. Claim and every offer treat a done producer whose hand-off is
 // not accepted like an unfinished dependency: for missing, unaccepted, stale and rejected, update --claim is
 // refused naming the edge state, and pop, work, query --plan, query --claimable and next do not offer the
-// dependent; an accepted and a legacy (done, no handoffs key) producer let it be offered and claimed.
-// Local bare repositories only; the producer's hand-off front matter is written as another writer would,
-// committed and pushed in the fixture's backlog clone.
+// dependent; an accepted and a legacy (done, no handoffs key) producer let it be offered and claimed. The
+// dependent leads the queue in the unsatisfied cases, so a broken gate offers it first: every command must
+// skip it to offer h. Local bare repositories only; the producer's hand-off front matter is written as
+// another writer would, committed and pushed in the fixture's backlog clone.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -53,10 +54,10 @@ function producerDone(f, p, state, depSeq) {
   const rec = handoff.makeRecord({ dependent: who, commit: hex(1), contract: 'the contract', verification: 'the check', by: 'prod', at: '2026-10-30T00:00:00Z' });
   const replaced = handoff.makeRecord({ dependent: who, commit: hex(2), contract: 'the contract', verification: 'the check', by: 'prod', at: '2026-10-30T00:00:00Z' });
   const rcpt = (r, result = 'accepted') => handoff.makeReceipt({ dependent: who, digest: r.digest, result, by: 'lead', at: '2026-10-30T00:00:00Z', checks: 'verified' });
-  const keys = { handoffs: state === 'missing' ? 'none' : handoff.encode(state === 'stale' ? replaced : rec) };
+  const keys = { handoffs: state === 'missing' ? 'none' : [handoff.encode(state === 'stale' ? replaced : rec)] };
   if (state === 'unaccepted') return setFront(f, p, keys); // a record, no receipt
-  if (state === 'stale') return setFront(f, p, { ...keys, handoff_receipts: handoff.encode(rcpt(rec)) }); // the acceptance pins the replaced record
-  keys.handoff_receipts = state === 'accepted' ? handoff.encode(rcpt(rec)) : handoff.encode(rcpt(rec, 'rejected'));
+  if (state === 'stale') return setFront(f, p, { ...keys, handoff_receipts: [handoff.encode(rcpt(rec))] }); // the acceptance pins the replaced record
+  keys.handoff_receipts = state === 'accepted' ? [handoff.encode(rcpt(rec))] : [handoff.encode(rcpt(rec, 'rejected'))];
   setFront(f, p, keys);
 }
 // The gate over every offer command. With a satisfied edge the dependent (the only open item) is offered by
@@ -74,6 +75,7 @@ function gate(f, state, p, d, h) {
     assert.equal(claim.status, 1, claim.stdout + claim.stderr);
     assert.match(claim.stdout, /dependencies not done/);
     assert.match(claim.stdout, new RegExp(`hand-off ${state}`));
+    if (state === 'rejected') assert.match(claim.stdout, /must accept the current record/); // the lead may accept the existing record, not only a new one
     const blockedView = run(f, ['query', '--blocked']).stdout; // the view names the held-back item and the edge state
     assert.match(blockedView, new RegExp(`${d} \\(pending\\)`));
     assert.match(blockedView, new RegExp(`waits on ${p} \\(done, hand-off ${state}:`));
@@ -98,8 +100,8 @@ for (const state of ['missing', 'unaccepted', 'stale', 'rejected']) {
   test(`059.4: a done producer with a ${state} edge is an unfinished dependency: claim refused, the dependent is offered by nothing`, () => {
     const f = fixture();
     const p = make(f, 'hand-off producer', 'none');
-    const h = make(f, 'higher priority item', 'none', [...COMPLETE]); // the work that is not held back, leads the queue
-    const d = make(f, 'dependent job', p, [...COMPLETE]); // the dependent, below the higher item
+    const d = make(f, 'dependent job', p, [...COMPLETE]); // the dependent leads the queue: a broken gate offers it first
+    const h = make(f, 'behind the dependent', 'none', [...COMPLETE]); // the work that is not held back, behind it
     producerDone(f, p, state, d.split('-')[0]);
     gate(f, state, p, d, h);
   });

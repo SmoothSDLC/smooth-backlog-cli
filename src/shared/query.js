@@ -173,13 +173,17 @@ async function query(argv) {
     if (a.claimable || a.reviewable || a.blocked || a.decisions) return teamView(a, { all, hid, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
 
     if (a.next) {
-      const r = all(OPEN, hid).find(x => !excluded.has(x.id) && (a.all || ((x.repository || '') === repo && (x.branch || '') === branch)));
+      const items = new Map(store.load(folder).map(i => [i.path, i.fm]));
+      // item 059.4: a done producer whose hand-off the lead has not accepted holds the dependent back like an
+      // unfinished dependency: next skips it, the way pop, work, plan and --claimable already do
+      const r = all(OPEN, hid).find(x => !excluded.has(x.id) && (a.all || ((x.repository || '') === repo && (x.branch || '') === branch))
+        && !team.undoneDependencies(folder, items.get(x.path) ?? {}).some(d => d.handoff));
       if (!r) {
         say(a.json ? '{}' : `ℹ️  no actionable item for ${repo}${a.all ? '' : `, branch ${redact(branch)}; --all shows every branch`}`);
         return 0;
       }
       // item 042: the next item may wait on another repository's item: that is named as the work to do first
-      const away = team.undoneDependencies(folder, store.load(folder).find(i => i.path === r.path)?.fm ?? {}).filter(d => d.foreign && d.item && d.item.status !== 'done')
+      const away = team.undoneDependencies(folder, items.get(r.path) ?? {}).filter(d => d.foreign && d.item && d.item.status !== 'done')
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
       if (a.json) { dump(away.length ? { ...r, first: away } : r); return 0; }
       if (process.env.BACKLOG_HEADLESS === '1') return die('BACKLOG_HEADLESS=1 is not in this build');

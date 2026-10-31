@@ -2,8 +2,63 @@
 
 ## Unreleased
 
+- The optional run recorder hook of `bin/backlog.js` spawns a child process only when
+  `CODY_SCRIPT_RUNS_MODULE` names a module, and no child process when the variable is unset;
+  the help, the built-in skill and the README confine the claim to the hook (item 086). A
+  proof test preloads a module that records every child process the CLI starts and shows the
+  hook is the only one (local mode starts none, shared mode only git); the PATH-fake
+  no-child-process test stays.
+- The help and the output of `backlog new`, `backlog pop` and `backlog update` name the
+  repository of the review documents neutrally as "the review-documents repository" instead of
+  a private repository name (item 086).
+- `backlog update` records dependency hand-offs and the team lead's receipts: the producer's claimer records
+  `--handoff <dependent>` with `--handoff-commit`, `--handoff-contract` and `--handoff-verification` (and optional
+  `--handoff-outputs`, `--handoff-pickup`, `--handoff-risks`); the team lead accepts it with `--accept-handoff
+  <dependent> --checks "<text>" --by <lead>` only after the producer's review passed, or rejects it with
+  `--reject-handoff <dependent> --reason "<text>" --by <lead>`; the accept and reject need the lead's `--by`
+  (a member acts only as itself), and a re-recorded hand-off makes an earlier receipt stale (item 077).
+- `backlog query --phase --json` names the team fields each item lacks (`missing`, item 061).
+- `backlog query --status --json` rows carry `claimed_by` and `review_state` (item 060), so no caller reads item files.
+- `backlog team pop --team <name>`: the team lead takes its team's next work item (an item of the team with no stage),
+  claimed for it in the work order, with the whole item; continue while it holds one, idle (exit 3) when none is left.
+- Breaking (Cody 2.0, no backward compatibility): the built-in backlog skill names only CLI commands; its Python
+  snapshot helper and skill validator are removed (the integration tests check the skill), and the help no longer
+  documents the Python scripts' `--db` flag.
+- Shared mode team workflow (Cody 2.0): `backlog work --agent <you>` gives the one next action; refinement stages
+  (refining, refinement-review, ready, review-hitl) with the lead's split, refinement review and owner decisions;
+  only the team lead hands another agent's item or review on (`--reassign`, `--reassign-review`); a member's review
+  request, changes verdict and close end its session, and the hand-off marker holds a member only while that
+  hand-off is valid (anything malformed stops nobody and is named on stderr).
+- Work-in-progress limits per level (`wip-limits.json` in the backlog repository), the lead's recorded
+  `--wip-override`, and `backlog query --wip`; a re-rank no longer stamps `updated`.
+- Dependencies on items of other repositories (`owner/name#seq`): they block claims and next work, are shown in
+  the status, and the work to do first in the other repository is named; cross-repository cycles are refused.
+- A stale-view refusal names every item the agent read whose content changed, with one read command; a rank-only
+  change never makes a view stale.
+- `backlog setup` (and `.smooth-backlog.json`) points a repository at the shared backlog repository; the skill
+  carries `scripts/install-backlog-cli.sh`.
+- The run lock names the agent holding the backlog and since when, appears whole or not at all, and a lock a
+  crash left behind is taken over.
+- `update --severity`, the template skill teaches every team step, and the parity review rule is written down.
+- Known limit: a reference owner/name#seq from another repository is checked when an item is moved, but not when an
+  item is renumbered (update --seq) or when two clones publish a move and such a reference at the same time.
+
+- Shared mode revalidates every publication against the merged backlog, refusing sequence/slug collisions, dangling dependencies, dependency cycles, and claims whose dependencies or active-work limit changed concurrently. Split parent reads are guarded too. Rejected publication preflights restore starting files, databases, and staging.
+
+- Shared mode rolls back unpublished changes after a failed push, preserving starting working edits and staging. Legacy unpublished commits are refused with explicit recovery commands; cross-repository moves publish both folders together.
+- Shared mode keeps write views at their published slug and path after collision recovery, including cross-repository moves and incidental reflows, so later stale writes are refused.
+
+- Add the shared backlog repository mode: `backlog --use-backlog-repo <path>` keeps every repository's items in
+  one Git backlog repository (`SmoothSDLC/smoothsdlc-backlog`), with `new`, `update`, `query`, `next`, `pop`,
+  `move` and `archive` matching the Python backlog skill, including the team flags (claim, review, waiting,
+  hand-back) and the team views; `--use-local-repo` switches back. See COMMANDS.md.
+- Read and write item front matter compatibly with the Python skill's PyYAML files, keep the SQLite mirror in step,
+  and commit and push each change before exiting, with collision renumbering and a run lock per repository.
+- Refuse symlinked or escaping paths inside the backlog home and redact credentials in every diagnostic.
 - Fix intermittent permission errors when concurrent commands acquire locks on Windows.
 - Preserve existing backlog data and lock coordination after the project rename.
+- Shared mode: every item write records `updated_by`; a write to an item that somebody else changed after the agent read it (or while the command pushes) is refused with exit code 5. No move, new, archive or sync renumbering replaces an item that holds the file name, and a release ends the holder's wait.
+- Shared mode: completion and close validate every reflowed item against the agent's cached view and guard the whole write set during push; pulling never counts as reading an item.
 - Refresh package documentation and repository references for npm registry installation.
 
 ## 1.0.1

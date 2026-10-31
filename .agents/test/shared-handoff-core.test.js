@@ -1,0 +1,313 @@
+// Item 059.1: the hand-off core of item 059 (src/shared/handoff.js, pure functions, no command yet): the digest that
+// pins a producer record, the record and receipt builders, the six edge states, the dependents of a producer across
+// the repository folders of the backlog repository, and the DEPENDENCY_HANDOFF / HANDOFF_ACCEPTED / HANDOFF_REJECTED
+// body blocks of the item-dependency-handoff method.
+import test, { after } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import * as handoff from '../../src/shared/handoff.js';
+import * as team from '../../src/shared/team.js';
+import { dump, parse } from '../../src/shared/frontmatter.js';
+
+const dirs = [];
+after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
+
+// A backlog-repository home: <home>/<owner>/<name>/phases/*.md, written through the codec the CLI itself uses.
+function store() {
+  const t = mkdtempSync(join(tmpdir(), 'handoff-core-'));
+  dirs.push(t);
+  return join(t, 'home');
+}
+const item = (home, owner, name, fm) => {
+  const dir = join(home, owner, name);
+  mkdirSync(join(dir, 'phases'), { recursive: true });
+  writeFileSync(join(dir, 'phases', `${String(fm.seq).padStart(3, '0')}-x.md`), dump(fm, '## Definition of done\n\n- [ ] x\n'));
+};
+
+const COMMIT = 'a'.repeat(40);
+const record = (dependent, contract = 'the exported functions') => handoff.makeRecord({ dependent, commit: COMMIT, contract, verification: 'npm test: 0 failures', by: 'agent-c', at: '2026-10-30T20:00:00Z' });
+const receipt = (dependent, digest, result = 'accepted') => handoff.makeReceipt({ dependent, digest, result, by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' });
+
+test('059.1: digest is stable, 64 hex, and changes with every one of the seven pinned fields', () => {
+  const f = { dependent: '64', commit: COMMIT, contract: 'c', verification: 'v', outputs: 'o', pickup: 'p', risks: 'NONE' };
+  const d = handoff.digest(f);
+  assert.match(d, /^[0-9a-f]{64}$/);
+  // Oracle: the sha256 of the exact JSON.stringify of the seven fields, computed independently of the digest code.
+  assert.equal(d, '352dea4b059fbbcce48eebfeb3007b3b59126f50429733da031d2011699dcd72');
+  assert.equal(handoff.digest({ ...f }), d, 'the same fields give the same digest');
+  for (const [k, v] of Object.entries({ dependent: '65', commit: 'b'.repeat(40), contract: 'c2', verification: 'v2', outputs: 'o2', pickup: 'p2', risks: 'a risk' }))
+    assert.notEqual(handoff.digest({ ...f, [k]: v }), d, `changing ${k} changes the digest`);
+});
+
+test('059.1: makeRecord pins the digest of the seven fields and defaults outputs, pickup and risks', () => {
+  const r = handoff.makeRecord({ dependent: '64', commit: COMMIT, contract: 'c', verification: 'v', by: 'agent-c', at: '2026-10-30T20:00:00Z' });
+  assert.equal(r.outputs, '');
+  assert.equal(r.pickup, '');
+  assert.equal(r.risks, 'NONE');
+  assert.equal(r.digest, handoff.digest(r), 'the record carries its own digest');
+  assert.deepEqual(Object.keys(r).sort(), ['at', 'by', 'commit', 'contract', 'dependent', 'digest', 'outputs', 'pickup', 'risks', 'verification']);
+  const up = handoff.makeRecord({ dependent: '64', commit: 'A'.repeat(40), contract: 'c', verification: 'v', by: 'agent-c', at: '2026-10-30T20:00:00Z' });
+  assert.equal(up.commit, 'A'.repeat(40), 'a 40-hex commit id is accepted in uppercase');
+  assert.equal(up.digest, handoff.digest(up), 'the uppercase commit is pinned as written');
+});
+
+test('059.1: makeRecord names the field when dependent, contract or verification is empty, or commit is not 40 hex', () => {
+  const base = { dependent: '64', commit: COMMIT, contract: 'c', verification: 'v', by: 'x', at: '2026-10-30T20:00:00Z' };
+  for (const [field, bad, pattern] of [
+    ['dependent', '', /dependent/],
+    ['contract', '', /contract/],
+    ['verification', '', /verification/],
+    ['commit', 'a'.repeat(39), /commit/],
+    ['commit', 'g'.repeat(40), /commit/],
+  ]) assert.throws(() => handoff.makeRecord({ ...base, [field]: bad }), pattern, field);
+});
+
+test('059.1: makeReceipt takes accepted or rejected with non-empty checks, and names the field otherwise', () => {
+  const r = handoff.makeReceipt({ dependent: '64', digest: 'd'.repeat(64), result: 'accepted', by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' });
+  assert.deepEqual(r, { dependent: '64', digest: 'd'.repeat(64), result: 'accepted', by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' });
+  assert.throws(() => handoff.makeReceipt({ ...r, result: 'ok' }), /result/);
+  assert.throws(() => handoff.makeReceipt({ ...r, checks: '' }), /checks/);
+});
+
+test('059.1: encode and decodeList move records between memory and the stored front-matter form', () => {
+  const rec = record('64');
+  const rcpt = receipt('64', rec.digest);
+  assert.equal(handoff.encode(rec), JSON.stringify(rec), 'encode is the compact JSON string the list stores');
+  assert.equal(handoff.decodeList(undefined), null, 'a missing key stays recognisable: a legacy producer wrote no handoffs');
+  assert.deepEqual(handoff.decodeList('none'), [], 'the string none is the no-dependents mark, not a record');
+  assert.deepEqual(handoff.decodeList([]), []);
+  assert.deepEqual(handoff.decodeList([handoff.encode(rec)]), [rec], 'a list of JSON strings decodes to the objects');
+  assert.deepEqual(handoff.decodeList([handoff.encode(rec), handoff.encode(rcpt)]), [rec, rcpt]);
+  assert.deepEqual(handoff.decodeList([rec]), [rec], 'in-memory objects pass through unchanged');
+  assert.throws(() => handoff.decodeList('not json'), 'a string that is not none and no JSON is a clear error');
+  assert.throws(() => handoff.decodeList(5), 'anything else is a clear error');
+  const text = dump({ seq: 5, phase: '005-x', status: 'done', depends_on: [], handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(rcpt)] }, '## Definition of done\n\n- [ ] x\n');
+  const back = parse(text).fm;
+  assert.deepEqual(handoff.decodeList(back.handoffs), [rec], 'the stored form survives a round-trip through the real front-matter codec');
+  assert.deepEqual(handoff.decodeList(back.handoff_receipts), [rcpt]);
+});
+
+test('059.1: edgeState gives the six edge states of the design', () => {
+  const rec = record('64');
+  assert.equal(handoff.edgeState({ status: 'done' }, '64'), 'legacy', 'a done producer without a handoffs key predates the rule');
+  assert.equal(handoff.edgeState({ status: 'pending' }, '64'), 'missing', 'an open producer without a handoffs key');
+  assert.equal(handoff.edgeState({ status: 'done', handoffs: 'none' }, '64'), 'missing', 'handoffs: none holds no record for the dependent');
+  assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec] }, '65'), 'missing', 'a list without a record for the dependent');
+  assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec] }, '64'), 'unaccepted', 'a record with no receipt');
+  assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [receipt('64', 'b'.repeat(64))] }, '64'), 'stale', 'the last receipt pins another digest');
+  assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [receipt('64', rec.digest, 'rejected')] }, '64'), 'rejected');
+  assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [receipt('64', rec.digest)] }, '64'), 'accepted');
+  const pending = { dependent: '64', digest: rec.digest, result: 'pending', by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' };
+  const st = handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [pending] }, '64');
+  assert.notEqual(st, 'accepted', 'a receipt with a result other than accepted does not accept the edge');
+  assert.equal(handoff.satisfied(st), false, 'and it does not satisfy the edge');
+});
+
+test('059.1: edgeState takes the last receipt and the last record of the dependent', () => {
+  const rec = record('64', 'the second contract');
+  assert.equal(handoff.edgeState({ status: 'done', handoffs: [rec], handoff_receipts: [receipt('64', rec.digest, 'rejected'), receipt('64', rec.digest)] }, '64'), 'accepted');
+  const first = record('64', 'the first contract');
+  assert.equal(handoff.edgeState({ status: 'done', handoffs: [first, rec], handoff_receipts: [receipt('64', first.digest)] }, '64'), 'stale', 'a replaced record breaks the pin of the receipt that accepted the old one');
+});
+
+test('059.1: edgeState accepts the stored front-matter form: records and receipts as compact JSON strings', () => {
+  const rec = record('64');
+  const older = record('64', 'an older contract');
+  const st = extra => handoff.edgeState({ status: 'done', ...extra }, '64');
+  assert.equal(st({ handoffs: 'none' }), 'missing', 'handoffs: none holds no record for the dependent');
+  assert.equal(st({ handoffs: [] }), 'missing', 'an empty list holds no record for the dependent');
+  assert.equal(st({ handoffs: [handoff.encode(rec)] }), 'unaccepted', 'a stored record with no receipt');
+  assert.equal(st({ handoffs: [handoff.encode(older), handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', older.digest))] }), 'stale', 'the last receipt pins the replaced record');
+  assert.equal(st({ handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', rec.digest, 'rejected'))] }), 'rejected');
+  assert.equal(st({ handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', rec.digest, 'rejected')), handoff.encode(receipt('64', rec.digest))] }), 'accepted', 'the last receipt wins in the stored form');
+  assert.equal(handoff.satisfied(st({ handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', rec.digest))] })), true);
+});
+
+test('059.1: edgeState tells a present but empty handoffs key from an absent key, in the stored form (review r2)', () => {
+  const st = fm => handoff.edgeState(fm, '64');
+  assert.equal(st({ status: 'done', handoffs: null }), 'missing', 'a done producer whose handoffs key exists but is empty holds no record for the dependent');
+  assert.equal(handoff.satisfied(st({ status: 'done', handoffs: null })), false, 'and it does not satisfy the edge');
+  assert.equal(st({ status: 'pending', handoffs: null }), 'missing');
+  assert.equal(st({ status: 'done' }), 'legacy', 'the legacy mark stays reserved for an absent key');
+  const back = parse(dump({ status: 'done', handoffs: null }, '## Definition of done\n\n- [ ] x\n')).fm;
+  assert.equal(back.handoffs, null, 'the codec stores a present empty key as null, distinct from an absent key');
+  assert.equal(handoff.edgeState(back, '64'), 'missing', 'the stored form of a present but empty key is missing, not legacy');
+});
+
+test('059.1: edgeState is stale in the stored form when the record digest is not the sha256 of its own fields (review r3)', () => {
+  const rec = record('64');
+  const st = fm => handoff.edgeState({ status: 'done', ...fm }, '64');
+  const changed = { ...rec, contract: 'a changed contract' }; // the fields moved, the old digest kept
+  assert.equal(st({ handoffs: [handoff.encode(changed)], handoff_receipts: [handoff.encode(receipt('64', rec.digest))] }), 'stale', 'a receipt that accepted the old digest does not satisfy a record whose fields changed');
+  const malformed = { ...rec, digest: 'x' }; // a non-hash digest that the record and the receipt both carry
+  assert.equal(st({ handoffs: [handoff.encode(malformed)], handoff_receipts: [handoff.encode(receipt('64', 'x'))] }), 'stale', 'a digest that is not the sha256 of the record fields pins nothing, even when the receipt matches it');
+  assert.equal(handoff.satisfied(st({ handoffs: [handoff.encode(malformed)], handoff_receipts: [handoff.encode(receipt('64', 'x'))] })), false, 'and it does not satisfy the edge');
+  assert.equal(st({ handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('64', rec.digest))] }), 'accepted', 'a well-formed record with a matching acceptance stays accepted');
+});
+
+test('059.1: edgeState keeps the edge unsatisfied while the record or the last receipt has no digest (review r2)', () => {
+  const noDigest = { dependent: '64', commit: COMMIT, contract: 'the exported functions', verification: 'npm test: 0 failures', outputs: '', pickup: '', risks: 'NONE', by: 'agent-c', at: '2026-10-30T20:00:00Z' };
+  const acceptNoDigest = { dependent: '64', result: 'accepted', by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' };
+  const st = (handoffs, handoff_receipts) => handoff.edgeState({ status: 'done', handoffs, handoff_receipts }, '64');
+  assert.equal(st([noDigest], [acceptNoDigest]), 'stale', 'two undefined digests must not compare as a pin');
+  assert.equal(handoff.satisfied(st([noDigest], [acceptNoDigest])), false, 'an accepted receipt without a digest does not satisfy the edge');
+  assert.equal(st([handoff.encode(noDigest)], [handoff.encode(acceptNoDigest)]), 'stale', 'the stored form of the same case');
+  assert.equal(st([record('64')], [acceptNoDigest]), 'stale', 'a receipt without a digest pins no record');
+  assert.equal(st([noDigest], [receipt('64', record('64').digest)]), 'stale', 'a record without a digest is pinned by no receipt');
+});
+
+test('059.1: satisfied is accepted and legacy only', () => {
+  assert.equal(handoff.satisfied('accepted'), true);
+  assert.equal(handoff.satisfied('legacy'), true);
+  for (const s of ['missing', 'unaccepted', 'stale', 'rejected']) assert.equal(handoff.satisfied(s), false, s);
+});
+
+test('059.1: dependentsOf finds the same folder by seq and slug, another folder by owner/name#seq, and skips archived', () => {
+  const home = store();
+  const producer = { seq: 5, phase: '005-producer', status: 'done', depends_on: [] };
+  item(home, 'acme', 'app', producer);
+  item(home, 'acme', 'app', { seq: 6, phase: '006-by-seq', status: 'pending', depends_on: [5] });
+  item(home, 'acme', 'app', { seq: 7, phase: '007-by-slug', status: 'pending', depends_on: ['005-producer'] });
+  item(home, 'acme', 'app', { seq: 8, phase: '008-archived', status: 'archived', depends_on: [5] });
+  item(home, 'acme', 'app', { seq: 9, phase: '009-foreign-spelling', status: 'pending', depends_on: ['acme/app#5'] }); // the same folder names the producer by seq or slug only
+  item(home, 'acme', 'app', { seq: 10, phase: '010-zero-padded', status: 'pending', depends_on: ['005'] }); // the local seq, zero-padded spelling
+  item(home, 'acme', 'lib', { seq: 2, phase: '002-cross-repo', status: 'pending', depends_on: ['acme/app#5'] });
+  item(home, 'acme', 'lib', { seq: 3, phase: '003-not-a-dep', status: 'pending', depends_on: ['acme/lib#2'] });
+  item(home, 'acme', 'lib', { seq: 4, phase: '004-foreign-zero-padded', status: 'pending', depends_on: ['acme/app#005'] }); // the foreign spelling, zero-padded seq
+  assert.deepEqual(handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), [
+    { id: '6', repository: 'acme/app', seq: 6, slug: '006-by-seq', status: 'pending' },
+    { id: '7', repository: 'acme/app', seq: 7, slug: '007-by-slug', status: 'pending' },
+    { id: '10', repository: 'acme/app', seq: 10, slug: '010-zero-padded', status: 'pending' },
+    { id: 'acme/lib#2', repository: 'acme/lib', seq: 2, slug: '002-cross-repo', status: 'pending' },
+    { id: 'acme/lib#4', repository: 'acme/lib', seq: 4, slug: '004-foreign-zero-padded', status: 'pending' },
+  ]);
+});
+
+test('059.1: dependentsOf matches a dependent that names a phase-less producer by its file-name-derived slug (review r5)', () => {
+  const home = store();
+  const producer = { seq: 5, status: 'done', depends_on: [] }; // no phase key: the store's slug is the file name
+  item(home, 'acme', 'app', producer); // written as 005-x.md, so the slug is 005-x
+  item(home, 'acme', 'app', { seq: 6, phase: '006-by-file-slug', status: 'pending', depends_on: ['005-x'] }); // the file-name-derived slug
+  item(home, 'acme', 'app', { seq: 7, phase: '007-by-seq', status: 'pending', depends_on: [5] }); // the seq still names the producer
+  item(home, 'acme', 'app', { seq: 8, phase: '008-other-file', status: 'pending', depends_on: ['005-other'] }); // a different file-name slug is not the producer's
+  assert.deepEqual(handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), [
+    { id: '6', repository: 'acme/app', seq: 6, slug: '006-by-file-slug', status: 'pending' },
+    { id: '7', repository: 'acme/app', seq: 7, slug: '007-by-seq', status: 'pending' },
+  ]);
+  // so openEdges, which builds on dependentsOf, does not miss the dependent the close gate would then forget
+  assert.deepEqual(handoff.openEdges(join(home, 'acme', 'app'), 'acme/app', { ...producer, handoffs: [record('6'), record('7')] }), [
+    { dependent: '6', state: 'unaccepted' },
+    { dependent: '7', state: 'unaccepted' },
+  ]);
+});
+
+test('059.1: dependentsOf propagates a directory-read error of the backlog home, it never skips a repository that vanished', () => {
+  const home = store();
+  writeFileSync(home, 'a file, not a directory');
+  const producer = { seq: 5, phase: '005-producer', status: 'done', depends_on: [] };
+  assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), e => e.code === 'ENOTDIR', 'the unreadable home propagates, so the dependent cannot be missed');
+});
+
+test('059.1: dependentsOf propagates a load error of a sibling repository folder, it never skips it', () => {
+  const home = store();
+  const producer = { seq: 5, phase: '005-producer', status: 'done', depends_on: [] };
+  item(home, 'acme', 'app', producer);
+  item(home, 'acme', 'app', { seq: 6, phase: '006-dep', status: 'pending', depends_on: [5] });
+  mkdirSync(join(home, 'acme', 'lib', 'phases'), { recursive: true });
+  writeFileSync(join(home, 'acme', 'lib', 'phases', '004-broken.md'), '---\nnot a pair\n---\nbody\n');
+  assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), /front matter line 1 is not a 'key: value' pair/, 'a folder that cannot be loaded propagates, so its dependents cannot be missed');
+});
+
+test('059.1: the zero-padded foreign spelling resolves through the item 042 pattern (team.js foreignItem)', () => {
+  const home = store();
+  const other = join(home, 'acme', 'lib');
+  mkdirSync(join(other, 'phases'), { recursive: true });
+  writeFileSync(join(other, 'phases', '004-x.md'), dump({ seq: 4, phase: '004-x', status: 'pending', depends_on: [] }, '## Definition of done\n\n- [ ] x\n'));
+  const hit = team.foreignItem(join(home, 'acme', 'app'), 'acme/lib#04');
+  assert.equal(hit?.seq, 4, 'owner/name#04 names the item with seq 4, compared numerically');
+});
+
+test('059.1: openEdges lists every dependent whose edge is not accepted, with the state that holds it open', () => {
+  const home = store();
+  const rec6 = record('6');
+  const rec7 = record('7');
+  const rec8 = record('acme/lib#2');
+  const producerFm = { seq: 5, phase: '005-producer', status: 'done', depends_on: [], handoffs: [rec6, rec7, rec8], handoff_receipts: [receipt('7', rec7.digest), receipt('acme/lib#2', rec8.digest, 'rejected')] };
+  item(home, 'acme', 'app', { seq: 5, phase: '005-producer', status: 'done', depends_on: [] });
+  item(home, 'acme', 'app', { seq: 6, phase: '006-unaccepted', status: 'pending', depends_on: [5] });
+  item(home, 'acme', 'app', { seq: 7, phase: '007-accepted', status: 'pending', depends_on: [5] });
+  item(home, 'acme', 'lib', { seq: 2, phase: '002-rejected', status: 'pending', depends_on: ['acme/app#5'] });
+  assert.deepEqual(handoff.openEdges(join(home, 'acme', 'app'), 'acme/app', producerFm), [
+    { dependent: '6', state: 'unaccepted' },
+    { dependent: 'acme/lib#2', state: 'rejected' },
+  ]);
+});
+
+test('059.1: openEdges accepts the stored front-matter form and gives the same open edges', () => {
+  const home = store();
+  const rec6 = record('6');
+  const rec7 = record('7');
+  const rec8 = record('acme/lib#2');
+  // the same producer as the object-form test above, but with records and receipts stored as compact JSON strings
+  const storedFm = { seq: 5, phase: '005-producer', status: 'done', depends_on: [], handoffs: [handoff.encode(rec6), handoff.encode(rec7), handoff.encode(rec8)], handoff_receipts: [handoff.encode(receipt('7', rec7.digest)), handoff.encode(receipt('acme/lib#2', rec8.digest, 'rejected'))] };
+  item(home, 'acme', 'app', { seq: 5, phase: '005-producer', status: 'done', depends_on: [] });
+  item(home, 'acme', 'app', { seq: 6, phase: '006-unaccepted', status: 'pending', depends_on: [5] });
+  item(home, 'acme', 'app', { seq: 7, phase: '007-accepted', status: 'pending', depends_on: [5] });
+  item(home, 'acme', 'lib', { seq: 2, phase: '002-rejected', status: 'pending', depends_on: ['acme/app#5'] });
+  assert.deepEqual(handoff.openEdges(join(home, 'acme', 'app'), 'acme/app', storedFm), [
+    { dependent: '6', state: 'unaccepted' },
+    { dependent: 'acme/lib#2', state: 'rejected' },
+  ]);
+});
+
+test('059.1: recordBlock writes the branch, the session and the review the integration slice passes in opts (review r3)', () => {
+  const r = record('64');
+  const src = 'SmoothSDLC/smooth-backlog-cli#63';
+  const block = (agentLine, review = 'pending') => [
+    'DEPENDENCY_HANDOFF v1',
+    `SOURCE_ITEM: ${src}`,
+    'DEPENDENT_ITEM: 64',
+    agentLine,
+    `SOURCE_COMMIT: ${COMMIT} ; BRANCH: team-cli-parity-1`,
+    'CONTRACT: the exported functions',
+    'OUTPUTS: ',
+    'VERIFICATION: npm test: 0 failures',
+    `REVIEW: ${review}`,
+    'PICKUP: ',
+    'OPEN_RISKS: NONE',
+    'END_DEPENDENCY_HANDOFF',
+    '',
+  ].join('\n');
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1' }), block('PRODUCER_AGENT: agent-c'));
+  // the branch is always written: the given one, or the text 'unspecified' - never a default (lead decision 2026-10-30)
+  assert.equal(handoff.recordBlock(r, src), block('PRODUCER_AGENT: agent-c').replace('BRANCH: team-cli-parity-1', 'BRANCH: unspecified'));
+  // the session, when given, is the method's inline SESSION sub-field on the PRODUCER_AGENT line
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', session: 'cody59/wt-63' }), block('PRODUCER_AGENT: agent-c ; SESSION: cody59/wt-63'));
+  // the review, when given, replaces the pending default
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', review: 'lead acceptance 2026-10-31' }), block('PRODUCER_AGENT: agent-c', 'lead acceptance 2026-10-31'));
+});
+
+test('059.1: receiptBlock is the HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body block of the method (review r2)', () => {
+  const digest64 = 'd'.repeat(64);
+  assert.equal(handoff.receiptBlock(receipt('64', digest64), 'SmoothSDLC/smooth-backlog-cli#63'), [
+    'HANDOFF_ACCEPTED v1',
+    'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63 ; DEPENDENT_ITEM: 64',
+    `HANDOFF_REVISION: ${digest64}`,
+    'REVIEWER_LEAD: lead',
+    'CHECKS: npm test: 0 failures',
+    'UTC: 2026-10-30T21:00:00Z ; RESULT: ACCEPTED',
+    '',
+  ].join('\n'));
+  const rej = handoff.makeReceipt({ dependent: '64', digest: digest64, result: 'rejected', by: 'lead', at: '2026-10-30T21:05:00Z', checks: 'npm test failed: 2' });
+  assert.equal(handoff.receiptBlock(rej, 'SmoothSDLC/smooth-backlog-cli#63'), [
+    'HANDOFF_REJECTED v1',
+    'SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#63 ; DEPENDENT_ITEM: 64',
+    `HANDOFF_REVISION: ${digest64}`,
+    'REVIEWER_LEAD: lead',
+    'CHECKS: npm test failed: 2',
+    'UTC: 2026-10-30T21:05:00Z ; RESULT: REJECTED',
+    '',
+  ].join('\n'));
+});

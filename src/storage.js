@@ -1,13 +1,15 @@
-import { promises as fs } from 'node:fs';
-import { join, relative, resolve, dirname, sep } from 'node:path';
+import { promises as fs, linkSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve, dirname, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { operation, BacklogError } from './errors.js';
 import { validateStore } from './schema.js';
 export const exists = async path => { try { await fs.lstat(path); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; } };
 export async function safePath(root, target) {
   const rel = relative(resolve(root), resolve(target));
-  operation(rel !== '..' && !rel.startsWith(`..${sep}`) && !resolve(target).startsWith(`${resolve(root)}${sep}..${sep}`), `Unsafe path: ${target}.`);
+  // isAbsolute: on Windows relative() across drives returns the target itself.
+  operation(!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`) && !resolve(target).startsWith(`${resolve(root)}${sep}..${sep}`), `Unsafe path: ${target}.`);
   let current = resolve(root);
   for (const part of rel.split(sep).filter(Boolean)) {
     current = join(current, part);
@@ -21,11 +23,92 @@ export async function atomicWrite(path, text) {
   try { await handle.writeFile(text); await handle.sync(); } finally { await handle.close(); }
   try { await fs.rename(temp, path); } finally { await fs.rm(temp, { force: true }); }
 }
-export async function locked(path, callback) {
+// wait: how long to wait for a holder (ms). takeOver: a lock whose pid is no longer running (on this host) is taken over and said so once,
+// instead of refused (shared mode; the local store keeps asking the user to look first).
+let tookOver = false;
+// item 025: the record names the agent (--by or --agent of the command, else QWEN_CODE_AGENT_ID or the user) and the time
+const argOf = flag => { const v = process.argv.find((x, i) => process.argv[i - 1] === flag) ?? process.argv.find(x => x.startsWith(`${flag}=`))?.slice(flag.length + 1); return v && !v.startsWith('--') ? v : ''; };
+const lockRecord = () => JSON.stringify({ pid: process.pid, host: hostname(), command: process.argv[2] ?? '', agent: (argOf('--by') || argOf('--agent') || process.env.QWEN_CODE_AGENT_ID || process.env.USER || '').trim(), since: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
+const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } };
+// A child that works under its parent's checkout adds itself to the record while it works, and puts the parent's back.
+// It registers holding the takeover marker, so a waiter that takes a dead parent's lock over and the child never both
+// win: whoever holds the marker second sees the record changed.
+export async function asChild(path, fn) {
+  let parent;
+  // the checkout must still be the parent's: a parent that died before this child started may have lost it already
+  try { parent = readFileSync(path, 'utf8'); if (JSON.parse(parent).pid !== process.ppid) throw new Error('another holder'); } catch {
+    throw new BacklogError('LOCKED', `the checkout ${path} is no longer held by the parent process ${process.ppid}; nothing was changed`, 1);
+  }
+  const put = async text => { const tmp = `${path}.${randomUUID()}.tmp`; try { await fs.writeFile(tmp, text, { mode: 0o600 }); await fs.rename(tmp, path); } finally { await fs.rm(tmp, { force: true }); } };
+  for (let i = 0; ; i++) {
+    const held = acquireMarker(path);
+    if (!held) { if (i > 400) throw new BacklogError('LOCKED', `the takeover of ${path} stays held; nothing was changed`, 1); await delay(25); continue; }
+    try {
+      if (readFileSync(path, 'utf8') !== parent) throw new BacklogError('LOCKED', `the checkout ${path} of the parent process changed hands before its child started; nothing was changed`, 1);
+      await put(JSON.stringify({ ...JSON.parse(parent), child: process.pid }));
+      break;
+    } finally { releaseMarker(path, held); }
+  }
+  try { return await fn(); } finally { await put(parent); }
+}
+// The takeover marker: <lock>.takeover holds "<pid>@<host>" of its owner from the moment it exists (a linked temp file).
+// No process ever removes another's marker: when the owner of a level is gone, the next waiter takes the level below it
+// (<marker>.<dead pid>), so two live processes never hold the takeover of the same dead holder. Every owner removes its
+// own level and the levels above it (their owners are gone) when it is done; by then the lock no longer holds the record
+// they were taking over, so a later owner's check of that record fails. Returns the marker held, or null (wait).
+export function acquireMarker(path) {
+  let name = `${path}.takeover`;
+  const tmp = `${path}.${randomUUID()}.mark`;
+  writeFileSync(tmp, `${process.pid}@${hostname()}`, { mode: 0o600 });
+  try {
+    for (let depth = 0; depth < 64; depth++) {
+      try { linkSync(tmp, name); return name; } catch (e) { if (e.code !== 'EEXIST') throw e; }
+      let owner = ''; try { owner = readFileSync(name, 'utf8'); } catch { continue; } // gone meanwhile: try the name again
+      const [pid, host] = owner.split('@');
+      if (!(Number(pid) > 0)) { // an older CLI's marker names no owner: gone when older than 30 s
+        let old = false; try { old = Date.now() - statSync(name).mtimeMs > 30000; } catch { continue; }
+        if (!old) return null;
+        name = `${name}.legacy`; continue;
+      }
+      if (host !== hostname() || alive(Number(pid))) return null; // a live owner (or one this host cannot probe): wait
+      name = `${name}.${pid}`;
+    }
+    return null;
+  } finally { rmSync(tmp, { force: true }); }
+}
+// from the top level down to its own: a waiter that finds the top level free then holds it, and every waiter below
+// waits on that live owner, so no second owner can take the freed lower level meanwhile
+export function releaseMarker(path, held) {
+  const base = `${path}.takeover`;
+  const levels = [base, ...held.slice(base.length + 1).split('.').filter(Boolean).map((_, i, all) => `${base}.${all.slice(0, i + 1).join('.')}`)];
+  for (const name of levels) rmSync(name, { force: true });
+}
+// The lock file appears with its whole record or not at all (a temp file linked, or renamed over a dead holder's), so a
+// crash never leaves an empty lock behind.
+async function placeLock(path, replace) {
+  const tmp = `${path}.${randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(tmp, lockRecord(), { mode: 0o600, flag: 'wx' });
+    if (replace) await fs.rename(tmp, path); else await fs.link(tmp, path); // link: EEXIST while another holds the name
+  } finally { await fs.rm(tmp, { force: true }); }
+}
+export async function locked(path, callback, { wait = 10000, takeOver = false } = {}) {
   await fs.mkdir(dirname(path), { recursive: true });
-  const started = Date.now(); let handle;
+  const started = Date.now(); let holder = '';
+  // takeOver: only the owner of the takeover marker may replace a dead owner's record, and only if the file is still what
+  // was read (a process that created a fresh lock meanwhile is never displaced); see acquireMarker.
+  const replaceIf = async (same, why) => {
+    const held = acquireMarker(path);
+    if (!held) return false;
+    try {
+      if (!same()) return false;
+      await placeLock(path, true);
+      if (!tookOver) { tookOver = true; process.stderr.write(`backlog: took over a stale lock ${why}: ${path}\n`); }
+      return true;
+    } finally { releaseMarker(path, held); }
+  };
   for (;;) {
-    try { handle = await fs.open(path, 'wx', 0o600); break; }
+    try { await placeLock(path, false); break; }
     catch (e) {
       // Windows can report EPERM while a previous owner's unlink is still pending.
       if (process.platform === 'win32' && e.code === 'EPERM') {
@@ -36,11 +119,17 @@ export async function locked(path, callback) {
       try {
         const record = JSON.parse(await fs.readFile(path, 'utf8'));
         operation(Number.isSafeInteger(record.pid) && record.pid > 0, `Invalid lock ${path}; inspect it before removing it.`);
-        try { process.kill(record.pid, 0); } catch (error) {
-          if (error.code === 'ESRCH') {
+        holder = ` (${record.agent ? `agent ${record.agent}, ` : ''}pid ${record.pid}${record.host && record.host !== hostname() ? ` on ${record.host}` : ''}${record.command ? `, command ${record.command}` : ''}${record.since ? `, since ${record.since}` : ''})`; // item 025: who holds it and since when
+        try { if (!record.host || record.host === hostname()) process.kill(record.pid, 0); } catch (error) { // a pid of another host cannot be probed: it counts as alive
+          // a child working under its parent's checkout (pop --claim-now's update) keeps it alive after its parent died
+          if (error.code === 'ESRCH' && !(Number(record.child) > 0 && alive(Number(record.child)))) {
             // Another process may already own this pathname; never unlink a lock based on an old read.
             const current = JSON.parse(await fs.readFile(path, 'utf8'));
             if (current.pid !== record.pid) continue;
+            if (takeOver) {
+              const same = () => { try { const again = JSON.parse(readFileSync(path, 'utf8')); return again.pid === record.pid && again.host === record.host && !(Number(again.child) > 0 && alive(Number(again.child))); } catch { return false; } }; // a child registered meanwhile keeps it
+              if (await replaceIf(same, `of process ${record.pid} (no longer running)`)) break; // else another takes it over: wait
+            } else
             throw new BacklogError('STALE_LOCK', `Lock owner ${record.pid} is no longer running. Verify no backlog process is using this storage, remove ${path}, then rerun; any journal will recover automatically.`, 1);
           }
         }
@@ -48,16 +137,22 @@ export async function locked(path, callback) {
         if (error.code === 'ENOENT') continue;
         if (error instanceof SyntaxError) {
           let stat; try { stat = await fs.stat(path); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
-          if (Date.now() - stat.mtimeMs > 30000) throw new BacklogError('STALE_LOCK', `Incomplete lock ${path}. Verify no backlog process is running, remove this lock, and rerun to recover its journal.`, 1);
+          if (Date.now() - stat.mtimeMs > 30000) {
+            // an incomplete record (an older CLI that died while it created the lock): taken over like a dead holder's
+            const same = () => { try { const st = statSync(path); if (st.mtimeMs !== stat.mtimeMs) return false; JSON.parse(readFileSync(path, 'utf8')); return false; } catch (e) { return e instanceof SyntaxError; } };
+            if (takeOver) { if (await replaceIf(same, 'with an incomplete record older than 30 s')) break; } else
+            throw new BacklogError('STALE_LOCK', `Incomplete lock ${path}. Verify no backlog process is running, remove this lock, and rerun to recover its journal.`, 1);
+          }
         }
         if (!(error instanceof SyntaxError) && !(process.platform === 'win32' && error.code === 'EPERM')) throw error;
       }
-      if (Date.now() - started > 10000) throw new BacklogError('LOCKED', `Backlog is locked by another process: ${path}. Retry after it finishes.`, 1);
+      if (Date.now() - started > wait) throw new BacklogError('LOCKED', `Backlog is locked by another process${holder}: ${path}. Retry after it finishes, or raise BACKLOG_LOCK_WAIT_MS.`, 1);
       await delay(20 + Math.random() * 25);
     }
   }
-  try { await handle.writeFile(JSON.stringify({ pid: process.pid })); return await callback(); }
-  finally { await handle.close(); await fs.rm(path, { force: true }); }
+  // removed on check-in; for a process that died, taken over (takeOver) or reported (STALE_LOCK)
+  try { return await callback(); }
+  finally { await fs.rm(path, { force: true }); }
 }
 export async function repositoryLocked(root, callback) {
   const filename = '.smooth-backlog-cli.lock';

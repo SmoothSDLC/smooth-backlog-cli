@@ -4,7 +4,7 @@ Keep a backlog of tasks, priorities, progress, and evidence alongside your code.
 Each Git branch has its own work list, shared by people and coding agents through
 version-controlled files in `.backlog/`.
 
-Requires **Node.js 24+**, npm, and Git. Supports Linux, macOS, and Windows.
+Requires **Node.js 24+**, npm, and Git. Supports Linux and macOS. Windows is not supported or tested right now: CI does not run on Windows until Windows support for the shared backlog mode is done (backlog item 024).
 The package is **`@smoothsdlc/smooth-backlog-cli`**; the command is **`backlog`**.
 
 ## Install
@@ -21,6 +21,23 @@ backlog --version
 GitHub Packages requires authentication even for public packages. When npm login
 asks for a password, use a GitHub personal access token (classic) with
 `read:packages`.
+
+### Install a pinned release, and roll back
+
+An installation that must not move on its own (an agent host, a team runner) pins the release it installs and rolls
+back by installing the release before. In the shared backlog repository mode the CLI never updates itself (the
+update notices and automatic installation are the local mode's).
+
+```sh
+npm install --global @smoothsdlc/smooth-backlog-cli@<version> --registry=https://npm.pkg.github.com
+backlog --version                # the pinned release
+# roll back: the same command with the previous release
+npm install --global @smoothsdlc/smooth-backlog-cli@<previous version> --registry=https://npm.pkg.github.com
+```
+
+In a repository, `bash <skill folder>/scripts/install-backlog-cli.sh` (shipped with the backlog skill) installs the
+CLI when it is missing or older than the registry's release and then runs `backlog setup`, which points the
+repository at the shared backlog repository (`.smooth-backlog.json`) and deploys the skill; `--ask` asks for the path.
 
 ## Get started
 
@@ -58,10 +75,20 @@ arguments to see the next active item.
   `.agents`, `.claude`, `.github`, and `.qwen` folders, plus `.backlog/skills`.
   Commit your backlog data and generated skills to share them. Preserve custom
   skill edits through Git because initialization and updates can replace them.
+- **Run reporting:** the executable reports each run to an optional run recorder hook.
 
 If the backlog already exists, `backlog init backup` preserves its data and
 backs up existing files before replacing the generated skills. **`backlog init
 clean` deletes the entire backlog, including every branch and contained backups.**
+
+**Shared backlog repository:** `backlog --use-backlog-repo <path>` switches to a shared mode where the items of
+every repository live in one Git backlog repository instead of each repository's `.backlog/` folder.
+`backlog --use-local-repo` switches back. [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode)
+describes the mode and its commands. Every shared change succeeds only after it is committed and pushed.
+A failed publication rolls back the change and restores starting edits and staging. Existing unpublished commits
+require an explicit publish or drop decision before another command can change the backlog.
+
+In shared mode, a write to an item that somebody else changed after you last read it is refused with exit code 5 (read it again, then retry); every write records `updated_by`. See [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode).
 
 ## Command help
 

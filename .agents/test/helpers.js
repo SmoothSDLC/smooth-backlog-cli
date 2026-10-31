@@ -9,7 +9,7 @@ export function fixture(t) {
   const root = join(dir, 'repo'); mkdirSync(root);
   const configHome = join(dir, 'config'); mkdirSync(join(configHome, 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(configHome, 'smooth-backlog-cli/config.json'), JSON.stringify({ schema_version: 1, weekly: false, auto: false }));
-  const env = { ...process.env, XDG_CONFIG_HOME: configHome, APPDATA: configHome, BACKLOG_CLI_BRANCH: '', BACKLOG_CLI_REPONAME: '' };
+  const env = { ...process.env, XDG_CONFIG_HOME: configHome, APPDATA: configHome, BACKLOG_CLI_BRANCH: '', BACKLOG_CLI_REPONAME: '', CODY_SCRIPT_RUNS_FILE: '/dev/null' };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const git = (...args) => { const p = spawnSync('git', args, { cwd: root, encoding: 'utf8' }); assert.equal(p.status, 0, p.stderr); return p.stdout.trim(); };
   git('init', '-b', 'main'); git('config', 'user.email', 'test@example.com'); git('config', 'user.name', 'CLI Test'); git('commit', '--allow-empty', '-m', 'fixture root');

@@ -396,3 +396,39 @@ test('--claim-now on an item the agent already holds continues it and does not c
   assert.equal(JSON.parse(n.stdout).action, 'continue');
   assert.equal(JSON.parse(n.stdout).claimed, false);
 });
+
+// Every pop state in one backlog, built with the CLI: held, requested reviews, a pass, a wait, chunks, other branches and repositories.
+function states() {
+  const f = fixture();
+  const m = (cwd, name, extra) => make(f, cwd, name, extra);
+  const a = m(f.cons, 'dep first', []);
+  m(f.cons, 'needs first', ['--depends-on', '1']);
+  m(f.cons, 'free impl', []);
+  const d = m(f.cons, 'ui held', ['--review-refs', 'references/review/ui.md,references/review/code.md']);
+  const g = m(f.cons, 'busy item', ['--review-refs', 'references/review/code.md']);
+  const h = m(f.cons, 'sleepy item', []);
+  const p = m(f.cons, 'passed item', []);
+  const w = m(f.cons, 'waiting item', []);
+  m(f.cons, 'chunk item', ['--chunk']);
+  m(f.cons, 'bare', ['--no-review-refs']);
+  ok(f, a, '--claim', 'archy');
+  ok(f, d, '--claim', 'holder');
+  ok(f, d, '--request-review', 'any', '--note', 'ready', '--by', 'holder');
+  ok(f, g, '--claim', 'busy');
+  ok(f, h, '--claim', 'sleepy');
+  ok(f, h, '--request-review', 'any', '--note', 'ready', '--by', 'sleepy');
+  ok(f, p, '--claim', 'closer');
+  ok(f, p, '--request-review', 'any', '--note', 'ready', '--by', 'closer');
+  ok(f, p, '--review', 'pass', '--by', 'archy', '--comments', 'ok references/review/code.md');
+  ok(f, w, '--claim', 'waiter');
+  ok(f, w, '--waiting', 'run 9', '--by', 'waiter');
+  return f;
+}
+
+test('in a backlog with every pop state, the requested reviews are started and the free item is claimed', () => {
+  const f = states();
+  for (const args of [['004-ui-held', '--start-review', '--by', 'rev'], ['006-sleepy-item', '--start-review', '--by', 'rev2'], ['003-free-impl', '--claim', 'free3']]) {
+    const r = cli(['update', ...args], { cwd: f.cons, tmp: f.t });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  }
+});

@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog, spawnedPids, spawnedGroups } from './shared-fixtures.js';
+import { cli, consumer, recordSpawned, sharedBacklog, spawnedPids, spawnedGroups } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
@@ -53,27 +53,28 @@ async function settleScenarioChildren(d, procRoot = '/proc', rounds = 25) {
 
 // item 76 review: where /proc is absent (macOS) the env scan sees nothing - the scenario's child processes are settled through the
 // process groups the fixture spawns the CLI children in; group liveness is checked with kill(-pid, 0), which needs no /proc.
-// The fixture records [pid, child] pairs, and a group is signalled only while the fixture owns its number (item 76
-// review r4: a reused group number is an unrelated same-user group) - the leader dead means a live group holds only
-// the child's chain (a new group number would need a live process carrying it), and the leader alive means the group
-// is ours only if the leader is still the retained child the fixture spawned.
+// The fixture records [pid, child, groupAliveAtLeaderDeath], and a group is signalled only while the fixture owns a
+// recorded process of it (item 76 review r4/r5: a reused group number is an unrelated same-user group) - the leader
+// alive means the group is ours only if the leader is still the retained child the fixture spawned; the leader dead
+// means the group is ours only if the fixture saw it still alive when the recorded leader died (the child's chain) -
+// a group dead at the leader's death is a number the fixture owns no live process of.
 async function settleScenarioGroups(d, groups, rounds = 25) {
   const groupAlive = p => { try { process.kill(-p, 0); return true; } catch { return false; } };
   const leaderAlive = p => { try { process.kill(p, 0); return true; } catch { return false; } };
-  const owned = (pid, child) => {
+  const owned = (pid, child, groupAliveAtLeaderDeath) => {
     if (!groupAlive(pid)) return false;
-    if (!leaderAlive(pid)) return true;
-    return !!child && child.pid === pid && child.exitCode === null && child.signalCode === null;
+    if (leaderAlive(pid)) return !!child && child.pid === pid && child.exitCode === null && child.signalCode === null;
+    return groupAliveAtLeaderDeath === true;
   };
   for (let round = 0; round < rounds; round++) {
-    if (!groups.some(([p, c]) => owned(p, c))) return;
-    for (const [p, c] of groups) {
-      if (!owned(p, c)) continue;
+    if (!groups.some(([p, c, f]) => owned(p, c, f))) return;
+    for (const [p, c, f] of groups) {
+      if (!owned(p, c, f)) continue;
       try { process.kill(-p, round ? 'SIGKILL' : 'SIGTERM'); } catch { /* exited in the meantime */ }
     }
     await sleep(100);
   }
-  const alive = groups.filter(([p, c]) => owned(p, c)).map(([p]) => p);
+  const alive = groups.filter(([p, c, f]) => owned(p, c, f)).map(([p]) => p);
   if (alive.length) throw new Error(`the scenario's child processes are still alive after the settle (${rounds} rounds of SIGTERM, then SIGKILL), scenario ${d}: process groups ${alive.join(', ')}`);
 }
 // The scenario cleanup's settle: the /proc env scan where /proc exists, the process groups where it does not (item 76 review).
@@ -955,13 +956,13 @@ test('cleanup: the child processes of a killed CLI child are settled through its
   assert.doesNotThrow(() => process.kill(writer, 0), 'the writer is alive before the settle');
   parent.kill('SIGKILL'); // the CLI child dies mid-push: the writer survives in the group
   await new Promise(r => parent.once('exit', r));
-  await settleScenarioGroups(d, [[parent.pid]]); // item 76 review: the no-/proc settle must kill the group before the folders are removed
+  recordSpawned(d, parent.pid); // item 76 review r5: the fixture's record captures the group as alive at the leader's death (the writer is still running) - the settle settles only the groups it owns a recorded process of
+  await settleScenarioGroups(d, spawnedGroups(d)); // item 76 review: the no-/proc settle must kill the group before the folders are removed
   assert.throws(() => process.kill(-parent.pid, 0), 'every child process of the group is settled, without /proc');
 });
 
 test('cleanup: a group member that survives the no-/proc settle is reported loudly, not removed silently (item 76 review)', async t => {
   const d = mkdtempSync(join(tmpdir(), 'dbconf-g-'));
-  t.after(() => rmSync(d, { recursive: true, force: true }));
   // the writer traps SIGTERM and marks itself ready only after the trap: one SIGTERM round of the settle cannot
   // kill it, so the surviving group must be reported loudly (item 76 review: a silent return races the folder removal)
   const ready = join(d, 'gate-ready');
@@ -969,10 +970,14 @@ test('cleanup: a group member that survives the no-/proc settle is reported loud
     `require("node:child_process").spawn("sh", ["-c", 'trap "" TERM; touch ${ready}; i=0; while :; do touch ${join(d, 'probe')}-$i 2>/dev/null; i=$((i+1)); sleep 0.001; done'], { stdio: "ignore" }); setTimeout(() => {}, 1e9)`,
   ], { env: { ...process.env, BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore', detached: true });
   parent.unref();
+  // item 76 review r5: the group-kill fallback is registered BEFORE the folder removal - on a failure while the
+  // infinite writer is active, the hooks run in registration order, and the writer is still touching d when the
+  // removal would run (the preceding group test has this order; the writers' cleanup settles before the removal)
   t.after(() => { try { process.kill(-parent.pid, 'SIGKILL'); } catch {} });
+  t.after(() => rmSync(d, { recursive: true, force: true }));
   for (let i = 0; i < 100 && !existsSync(ready); i++) await sleep(50);
   assert.ok(existsSync(ready), 'the writer traps SIGTERM before the settle starts');
-  await assert.rejects(settleScenarioGroups(d, [[parent.pid, parent]], 1), /still alive/);
+  await assert.rejects(settleScenarioGroups(d, [[parent.pid, parent, true]], 1), /still alive/);
   try { process.kill(-parent.pid, 'SIGKILL'); } catch {}
   for (let i = 0; i < 40; i++) { try { process.kill(-parent.pid, 0); } catch { break; } await sleep(50); }
   assert.throws(() => process.kill(-parent.pid, 0), 'the test left no group behind');
@@ -999,6 +1004,43 @@ test('cleanup: a live process group whose leader is not the recorded child is no
   try { process.kill(foreign.pid, 'SIGKILL'); } catch {}
   for (let i = 0; i < 40; i++) { try { process.kill(foreign.pid, 0); } catch { break; } await sleep(50); }
   assert.throws(() => process.kill(foreign.pid, 0), 'the test left no child behind');
+});
+
+test('cleanup: a live group whose number was recorded under an exited leader is not signalled by the no-/proc settle (item 76 review)', async t => {
+  const d = mkdtempSync(join(tmpdir(), 'dbconf-g-'));
+  // a detached child that exits with no members: its group number is recorded, and the group was dead when the
+  // recorded leader died - the fixture owns no live process of that number (item 76 review r5: a group dead at
+  // the leader's death may have been re-issued to an unrelated same-user group)
+  const ready = join(d, 'leader-ready');
+  const leader = spawn(process.execPath, ['-e', 'require("node:fs").writeFileSync(process.argv[1], "")', ready],
+    { env: { ...process.env, BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore', detached: true });
+  leader.unref();
+  for (let i = 0; i < 100 && !existsSync(ready); i++) await sleep(50);
+  assert.ok(existsSync(ready), 'the recorded leader ran');
+  for (let i = 0; i < 100; i++) { try { process.kill(-leader.pid, 0); } catch { break; } await sleep(50); }
+  assert.throws(() => process.kill(-leader.pid, 0), 'the recorded leader exited and its group is dead (no members remained)');
+  // the settle is given the pair as the fixture would hold it after the number is re-issued: a live group whose
+  // leader exited while its members remain, recorded under a leader whose group was dead at its death. The
+  // writer traps SIGTERM and marks it if a signal reaches a group the settle does not own
+  const marker = join(d, 'signalled');
+  const readyW = join(d, 'writer-ready');
+  const foreign = spawn(process.execPath, ['-e',
+    `require("node:child_process").spawn("sh", ["-c", \`trap "touch ${marker}" TERM; touch ${readyW}; i=0; while :; do touch ${join(d, 'probe')}-$i 2>/dev/null; i=$((i+1)); sleep 0.001; done\`], { stdio: "ignore" }); setTimeout(() => {}, 1e9)`,
+  ], { env: { ...process.env, BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore', detached: true });
+  foreign.unref();
+  t.after(() => { try { process.kill(-foreign.pid, 'SIGKILL'); } catch {} });
+  t.after(() => rmSync(d, { recursive: true, force: true }));
+  for (let i = 0; i < 100 && !existsSync(readyW); i++) await sleep(50);
+  assert.ok(existsSync(readyW), 'the foreign writer traps SIGTERM before the settle starts');
+  foreign.kill('SIGKILL'); // the group's leader exits while its members remain: a reused group number
+  await new Promise(r => foreign.once('exit', r));
+  assert.doesNotThrow(() => process.kill(-foreign.pid, 0), 'the group is alive with the leader exited (the writer remains)');
+  await settleScenarioGroups(d, [[foreign.pid, leader, false]], 2);
+  assert.ok(!existsSync(marker), 'no SIGTERM reached a group the fixture owns no recorded process of (item 76 review)');
+  assert.doesNotThrow(() => process.kill(-foreign.pid, 0), 'the settle settled only the groups it owns a recorded process of');
+  try { process.kill(-foreign.pid, 'SIGKILL'); } catch {}
+  for (let i = 0; i < 40; i++) { try { process.kill(-foreign.pid, 0); } catch { break; } await sleep(50); }
+  assert.throws(() => process.kill(-foreign.pid, 0), 'the test left no group behind');
 });
 
 test('cleanup: the writers settle the surviving git chain of a killed CLI child through the process groups, without /proc (item 76 review)', async t => {

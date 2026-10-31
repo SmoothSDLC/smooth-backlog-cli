@@ -71,9 +71,7 @@ Retain the returned GUID for subsequent commands if priorities may change.
   Updates run at CLI execution under user preferences, not through skill hooks.
 - CLI environment variables reach child processes, not the invoking shell. If Git
   cannot determine a branch, provide --branch or set BACKLOG_CLI_BRANCH in the shell.
-- Run reporting: the executable reports each run to an optional run recorder hook. The hook spawns a
-  child process only when the environment variable `CODY_SCRIPT_RUNS_MODULE` names a module; with the
-  variable unset the hook spawns no child process.
+- Run reporting: the executable reports each run to an optional run recorder hook.
 
 ## Shared mode: team work
 
@@ -88,7 +86,7 @@ sees and changes the backlog only through them.
   reads one item again before you change it. `backlog update <item> --claim <you>` takes an offered item yourself;
   `--release <you>` gives it back.
 - [ ] Refine: `backlog update <item> --refine-start --by <you>`, set what is missing (`--set-review-refs` with
-  the coding model's review documents, `--set-estimate`, `--set-depends-on`, `--append` a definition of done), then
+  the review-documents repository's review documents, `--set-estimate`, `--set-depends-on`, `--append` a definition of done), then
   `--refine-done --by <you> --note "<what you refined>"`.
 - [ ] Work and hand off: record each step with `--append`; blocked on something, `--waiting "<what>" --by <you>`,
   then `--waiting-done --by <you>`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review

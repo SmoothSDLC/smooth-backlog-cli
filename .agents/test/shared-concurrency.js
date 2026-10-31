@@ -3,7 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { env, GIT_IDENTITY } from './shared-fixtures.js';
+import { env, GIT_IDENTITY, recordSpawned } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 
@@ -18,7 +18,8 @@ export const gitIn = (cwd, ...args) => {
 
 // The CLI as a child that does not block this process: { child, done } where done resolves to { status, stdout, stderr }.
 export function cliAsync(args, { cwd, tmp, env: extra = {} }) {
-  const child = spawn(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, ...env(tmp), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, ...env(tmp), ...extra }, stdio: ['ignore', 'pipe', 'pipe'], detached: true }); // item 76 review: own process group, settled by the scenario cleanup without /proc
+  recordSpawned(tmp, child.pid);
   let stdout = ''; let stderr = ''; let exited = false;
   child.stdout.on('data', d => { stdout += d; });
   child.stderr.on('data', d => { stderr += d; });

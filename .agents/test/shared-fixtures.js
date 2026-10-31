@@ -81,6 +81,18 @@ export function env(tmp) {
   return { ...GIT_IDENTITY, BACKLOG_HOME: home, XDG_CONFIG_HOME: join(t, 'config') };
 }
 
+// item 76 review: the pids the fixture spawned, by the scenario tmp dir whose BACKLOG_HOME they carry. Where /proc
+// is absent (macOS) the scenario cleanup of shared-sync-db.test.js settles them by process group: the children are
+// spawned detached (their own group), so the group covers the whole chain of the child's git processes.
+const spawned = new Map();
+export function recordSpawned(tmp, pid) {
+  if (!tmp) return;
+  const set = spawned.get(tmp) ?? new Set();
+  spawned.set(tmp, set);
+  set.add(pid);
+}
+export const spawnedPids = tmp => spawned.get(tmp) ?? new Set();
+
 let calls = 0;
 // Runs node bin/backlog.js (this repository's CLI) from a consumer checkout.
 export function cli(args = [], opts = {}) {
@@ -92,7 +104,9 @@ export function cli(args = [], opts = {}) {
     stdin: 'ignore',
     encoding: 'utf8',
     timeout: opts.timeout ?? 60000,
+    detached: true, // item 76 review: own process group, so the scenario cleanup can settle the child's git chain without /proc
   });
+  recordSpawned(opts.tmp, p.pid);
   return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
 }
 

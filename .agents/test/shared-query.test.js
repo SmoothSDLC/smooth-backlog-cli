@@ -393,7 +393,24 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
   const v = JSON.parse(view(f, ['--status', '--all', '--json']).stdout);
   assert.deepEqual(v.phases.map(x => [x.slug, x.branch, x.priority]), [['002-beta', 'main', 0], ['001-alpha', 'main', 1], ['003-gamma', 'main', 2], ['005-feat', 'feature', 3], ['004-delta', 'main', 3]]);
   assert.deepEqual(v.gone_branch_items, [], 'with --all the gone-branch item is in the queue');
-  assert.deepEqual(JSON.parse(view(f, ['--status', '--branch', 'feature', '--json']).stdout).phases.map(x => x.slug), ['005-feat']);
+  // the branch view's JSON, whole: the handoff, the branch, that branch's queue only, no gone-branch items, and the findings
+  assert.deepEqual(normJson(view(f, ['--status', '--branch', 'feature', '--json']).stdout), {
+    handoff: { id: 1, slug: 'BACKLOG', title: 'Backlog', objective: 'phase anchor (no document)', path: '', sha: '', status: 'active', source_context: '', created_at: 'TS', updated_at: 'TS' },
+    repository: 'acme/demo',
+    branch: 'feature',
+    phases: [{
+      id: 5, handoff_id: 1, slug: '005-feat', seq: 5, name: 'Feat', objective: 'Caf\u00e9 \u2615 Feat', summary: 'sum Feat',
+      status: 'pending', severity: 'normal', priority: 3, path: 'phases/005-feat.md', sha: 'SHA', branch: 'feature', commit_sha: 'SHA',
+      location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
+      claimed_by: '', review_state: 'none'
+    }],
+    gone_branch_items: [],
+    findings: {
+      foreign: [{ id: 7, handoff_id: 1, slug: '007-foreign', seq: 7, name: 'foreign', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/007-foreign.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'other/thing', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
+      untagged: [{ id: 8, handoff_id: 1, slug: '008-untagged', seq: 8, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/008-untagged.md', sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
+      ghost: [{ id: 6, handoff_id: 1, slug: '006-ghost', seq: 6, name: 'Ghost', objective: 'Caf\u00e9 \u2615 Ghost', summary: 'sum Ghost', status: 'pending', severity: 'normal', priority: 4, path: 'phases/006-ghost.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }]
+    }
+  });
 });
 
 test('075: --next --json prints the queue head; --next text prints the findings, the item and the mandate', () => {
@@ -497,8 +514,14 @@ test('075: a repository without a backlog folder prints the info line or {}, exi
   const f = fx();
   const other = consumer(f.t, 'acme', 'fresh', 'main');
   const info = `ℹ️  acme/fresh has no backlog yet (no folder ${join(f.home, 'acme', 'fresh')})\n`;
-  assert.equal(cli(['query', '--status'], { cwd: other, tmp: f.t }).stdout, info);
-  assert.equal(cli(['query', '--next'], { cwd: other, tmp: f.t }).stdout, info);
+  const s1 = cli(['query', '--status'], { cwd: other, tmp: f.t });
+  assert.equal(s1.status, 0, s1.stdout + s1.stderr);
+  assert.equal(s1.stderr, '', 'a successful query prints nothing to stderr');
+  assert.equal(s1.stdout, info);
+  const s2 = cli(['query', '--next'], { cwd: other, tmp: f.t });
+  assert.equal(s2.status, 0, s2.stdout + s2.stderr);
+  assert.equal(s2.stderr, '', 'a successful query prints nothing to stderr');
+  assert.equal(s2.stdout, info);
   assert.equal(view(f, ['--status', '--json'], 0, other).stdout.trim(), '{}');
   assert.equal(view(f, ['--next', '--json'], 0, other).stdout.trim(), '{}');
 });

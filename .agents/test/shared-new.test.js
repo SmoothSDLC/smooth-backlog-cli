@@ -316,6 +316,7 @@ test('075: --split-from copies the objective, summary and body of the source and
   assert.equal(node(a, first).status, 0);
   const r = node(a, split);
   assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stderr, '');
   assert.equal(r.stdout, '✅ created phase phases/002-1-cont.md (seq 2) — inserted at P0, now at P0\n'
     + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 1 (re)ingested\n');
   const [, child] = items(a);

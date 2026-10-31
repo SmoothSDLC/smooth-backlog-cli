@@ -165,21 +165,21 @@ test('059.2: recordHandoff refuses an empty or non-40-hex commit, and an empty c
   assert.match(recordHandoff(p.ctx, { dependent: '2', ...RECORD, verification: '' }).refuse, /verification/);
 });
 
-test('059.2: the acceptance receipt records the reviewer, the verdict and the reviewed commit the review reviewed', () => {
+test('059.2: the acceptance receipt records the reviewer, the verdict and the hand-off commit - the record\'s commit, which differs from the item\'s commit (lead ruling 2026-10-31)', () => {
   const f = fixture();
   const p = pair(f);
-  // the producer's work: a real commit of the consumer checkout (the work the hand-off names)
+  // the producer's work: a real commit of the consumer checkout - the commit the hand-off record names
   const work = workCommit(f);
-  // the producer requests the review, naming the work commit (what to review: commits); the review
-  // operation stores the verdict and the reviewer, but no reviewed commit (lifecycle.js)
+  // the review operation stores the verdict and the reviewer, but no reviewed commit (lifecycle.js), so
+  // the acceptance does not claim that a commit was reviewed (lead ruling 2026-10-31)
   ok(f, ['update', p.producer, '--request-review', 'codex', '--note', `review work commit ${work} and its contract`, '--by', 'cody-card1']);
   ok(f, ['update', p.producer, '--start-review', '--by', 'codex']);
   ok(f, ['update', p.producer, '--review', 'pass', '--by', 'codex', '--comments', 'the exported functions hold; references/review/code.md']);
   const ctx = ctxOf(f, 1);
   assert.equal(ctx.fm.review_state, 'passed', 'the review operation stored the verdict');
   assert.equal(ctx.fm.reviewer, 'codex', 'the review operation stored the reviewer');
-  // no work after the review: the producer records the hand-off at the reviewed commit, not a later one (review r2)
-  assert.equal(head(f.cons), work, 'no work after the review: the record names the reviewed commit');
+  // the ruling's test: a hand-off record whose commit differs from the item's commit front matter (the creation HEAD)
+  assert.notEqual(work, ctx.fm.commit, 'the hand-off record\'s commit differs from the item\'s commit front matter');
   const rec = recordHandoff(ctx, { dependent: '2', commit: work, contract: 'the exported functions', verification: 'npm test: 0 failures', by: 'cody-card1' });
   assert.ok(!rec.refuse, rec.refuse);
   const r = acceptHandoff({ ...ctx, fm: { ...ctx.fm, ...rec.fm } }, { dependent: '2', checks: 'npm test: 0 failures', by: 'lead', lead: 'lead' });
@@ -193,37 +193,35 @@ test('059.2: the acceptance receipt records the reviewer, the verdict and the re
   assert.equal(rcpt.checks, 'npm test: 0 failures');
   assert.equal(rcpt.reviewer, ctx.fm.reviewer, 'the receipt records the reviewer the review operation stored');
   assert.equal(rcpt.verdict, ctx.fm.review_state, 'the receipt records the verdict the review operation stored');
-  assert.equal(rcpt.commit, work, 'the reviewed commit is the commit the review request named and the review reviewed (review r2)');
+  assert.equal(rcpt.commit, work, 'the receipt names the record\'s commit as the hand-off commit - not the item\'s commit, and nothing calls it reviewed');
   assert.match(rcpt.commit, /^[0-9a-f]{40}$/);
-  // the evidence in the item: the review request named the work commit, and the review passed on it
-  assert.ok(ctx.body.includes(`commit ${work}`), 'the review request named the work commit');
-  assert.ok(ctx.body.includes('## Review by codex: PASS'), 'the review passed');
-  // the body block: the method's HANDOFF_ACCEPTED v1 block plus the ruling's reviewer, verdict and reviewed
+  assert.ok(!r.text.includes('REVIEWED_COMMIT'), 'the block does not claim the commit was reviewed (lead ruling 2026-10-31)');
+  // the body block: the method's HANDOFF_ACCEPTED v1 block plus the ruling's reviewer, verdict and hand-off
   // commit, directly after the receipt block - no blank line (review r2)
   assert.equal(r.text, handoff.receiptBlock(rcpt, 'acme/demo#1')
-    + `REVIEWER: ${rcpt.reviewer} ; VERDICT: ${rcpt.verdict} ; REVIEWED_COMMIT: ${rcpt.commit}\n`, r.text);
+    + `REVIEWER: ${rcpt.reviewer} ; VERDICT: ${rcpt.verdict} ; HANDOFF_COMMIT: ${rcpt.commit}\n`, r.text);
   // the stored form survives the real front-matter codec
   const back = parse(dump({ ...ctx.fm, ...rec.fm, ...r.fm }, ctx.body + rec.text + r.text)).fm;
   assert.deepEqual(handoff.decodeList(back.handoff_receipts), [rcpt]);
 });
 
-test('059.2: a record without a commit takes the item\'s commit front matter - the creation HEAD the review request named', () => {
+test('059.2: acceptHandoff refuses a hand-off record without a commit, naming the field - no fallback to the item\'s creation commit (lead ruling 2026-10-31)', () => {
   const f = fixture();
   const p = pair(f);
   // no work after the creation: the item's commit front matter is the creation HEAD (new.js)
   const created = rootCommit(f.cons);
   assert.equal(ctxOf(f, 1).fm.commit, created, 'the item\'s commit front matter is the creation HEAD (new.js)');
-  // the review request names the creation HEAD (the state the review reviewed) and the review passes
+  // the review passes on the creation HEAD
   ok(f, ['update', p.producer, '--request-review', 'codex', '--note', `review commit ${created}`, '--by', 'cody-card1']);
   ok(f, ['update', p.producer, '--start-review', '--by', 'codex']);
   ok(f, ['update', p.producer, '--review', 'pass', '--by', 'codex', '--comments', 'holds; references/review/code.md']);
   const ctx = ctxOf(f, 1);
-  // a stored-form record without a commit (the record command makes no such record): the receipt still
-  // names a reviewed commit - the item's commit front matter, the creation HEAD the review request named (review r2)
+  // a stored-form record without a commit (the record command makes no such record): the acceptance is
+  // refused, naming the missing field - no fallback to the item's creation commit (lead ruling 2026-10-31)
   const bare = { dependent: '2', commit: '', contract: 'c', verification: 'v', outputs: '', pickup: '', risks: 'NONE', by: 'cody-card1', at: '2026-10-31T00:00:00Z', digest: 'd'.repeat(64) };
   const r = acceptHandoff({ ...ctx, fm: { ...ctx.fm, handoffs: [handoff.encode(bare)] } }, { dependent: '2', checks: 'npm test: 0 failures', by: 'lead', lead: 'lead' });
-  assert.ok(!r.refuse, r.refuse);
-  assert.equal(handoff.decodeList(r.fm.handoff_receipts)[0].commit, created, 'a record without a commit: the item\'s commit front matter (the creation HEAD the review request named) is the reviewed commit');
+  assert.ok(r.refuse, 'a hand-off record without a commit is refused');
+  assert.match(r.refuse, /commit/, 'the refusal names the missing field');
 });
 
 test('059.2: acceptHandoff refuses a missing actor or lead, a non-lead actor, a missing record, empty checks, and a review that has not passed', () => {

@@ -47,10 +47,10 @@ export function recordHandoff(ctx, { dependent, commit, contract, verification, 
 // The team lead accepts a hand-off: only the lead (a missing actor or lead identity is refused on its own,
 // review r1), only while a record exists, and only after the producer's review passed (lead ruling
 // 2026-10-30). The receipt pins the current record's digest and is appended to handoff_receipts
-// (append-only); it records the reviewer and the verdict the review operation stored, and the reviewed
-// commit - the record's commit, the one the review request named and the review reviewed (the producer
-// records the hand-off at that commit, and no work after the review is labeled reviewed, review r2);
-// a record without a commit takes the item's commit front matter, the creation HEAD (new.js).
+// (append-only); it records the reviewer and the verdict the review operation stored, and the hand-off
+// commit - the record's commit; the CLI records no reviewed commit (the review operation stores no commit,
+// lifecycle.js), so a hand-off record without a commit is refused, naming the field, with no fallback to
+// the item's creation commit (lead ruling 2026-10-31 after the codex round 3).
 export function acceptHandoff(ctx, { dependent, checks, by, lead }) {
   const { fm } = ctx;
   if (!strip(by || '')) return { refuse: 'a hand-off is accepted by the team lead: --by <agent> is missing' };
@@ -61,17 +61,19 @@ export function acceptHandoff(ctx, { dependent, checks, by, lead }) {
   if (!strip(checks || '')) return { refuse: 'the acceptance of a hand-off needs its checks (--checks "<text>")' };
   if (fm.review_state !== 'passed') return { refuse: `the producer's review has not passed (review_state ${fm.review_state || 'none'}); the hand-off is accepted only after it` };
   const record = currentRecord(fm, dependent);
+  if (!strip(record.commit || '')) return { refuse: `the hand-off record for dependent '${dependent}' has no commit; a hand-off without its commit on record is not accepted (--handoff-commit <sha>)` };
   const receipt = {
     ...makeReceipt({ dependent, digest: record.digest, result: 'accepted', by, at: now(), checks }),
     reviewer: fm.reviewer || '',
     verdict: fm.review_state,
-    commit: record.commit || fm.commit,
+    commit: record.commit,
   };
-  // The ruling's reviewer, verdict and reviewed commit: 059.1's receiptBlock does not output them
+  // The ruling's reviewer, verdict and hand-off commit: 059.1's receiptBlock does not output them
   // (review r1), so the block appends them directly after the receipt block, which already ends in a
-  // newline (no blank line, review r2).
+  // newline (no blank line, review r2). The label is HANDOFF_COMMIT - the CLI does not claim the commit
+  // was reviewed (lead ruling 2026-10-31 after the codex round 3).
   const text = receiptBlock(receipt, source(ctx))
-    + `REVIEWER: ${receipt.reviewer} ; VERDICT: ${receipt.verdict} ; REVIEWED_COMMIT: ${receipt.commit}\n`;
+    + `REVIEWER: ${receipt.reviewer} ; VERDICT: ${receipt.verdict} ; HANDOFF_COMMIT: ${receipt.commit}\n`;
   return { fm: { handoff_receipts: appendReceipts(fm, receipt) }, text, event: 'handoff-accepted' };
 }
 

@@ -444,7 +444,7 @@ test('overlapping, the other writer first: a commit held at its push while backl
   assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-otheritem.md', seq: 1 }, { file: '002-nodeitem.md', seq: 2 }]);
 });
 
-test('overlapping, this writer first: a commit that scanned backlog.db and is held at its push keeps 1 while another clone publishes 2', async t => {
+test('overlapping, this writer first: a commit held at its push keeps 1 when a second git writer in the same clone publishes it with item 2 on top', async t => {
   const f = fixture(t);
   const g = gate(f);
   putItem(f.folder, 1, 'nodeitem');
@@ -453,8 +453,9 @@ test('overlapping, this writer first: a commit that scanned backlog.db and is he
   let other, err;
   try {
     await g.entered(); // held inside its first push
-    putItem(f.folder2, 2, 'otheritem'); // the second writer, on the other clone, takes the next number
-    other = await sync.commit(f.home2, f.folder2, 'new otheritem');
+    putItem(f.folder, 2, 'otheritem'); // the second writer, in the same clone: its push carries the held commit too
+    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'acme/demo: new otheritem'); git(f.home, 'push', '-q', 'origin', 'HEAD:main');
+    other = [];
   } catch (e) { err = e; } finally { g.release(); }
   const held = await settled; // the held commit settles before the test can end
   if (err) throw err;

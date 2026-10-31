@@ -356,16 +356,17 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
 test('075: the successful lifecycle steps print exactly what they record', t => {
   const f = fixture();
   const norm = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(f.cons, '<cwd>');
+  const step = (args, expected) => { const r = update(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); assert.equal(r.stderr, ''); assert.equal(norm(r.stdout), expected); };
   const job = make(f, 'lifecycle job', []);
-  assert.equal(norm(update(f, [job, '--claim', 'cody']).stdout), `✅ ${job} updated (claimed=Claimed by cody at TS repository=acme/demo branch=main cwd=<cwd>)\n`);
-  assert.equal(norm(update(f, [job, '--request-review', 'any', '--note', 'ready']).stdout), `✅ ${job} updated (review_requested=Review requested by cody at TS (reviewer: any))\n`);
-  assert.equal(norm(update(f, [job, '--start-review', '--by', 'archy']).stdout), `✅ ${job} updated (review_started=Review started by archy at TS)\n`);
-  assert.equal(norm(update(f, [job, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md']).stdout),
+  step([job, '--claim', 'cody'], `✅ ${job} updated (claimed=Claimed by cody at TS repository=acme/demo branch=main cwd=<cwd>)\n`);
+  step([job, '--request-review', 'any', '--note', 'ready'], `✅ ${job} updated (review_requested=Review requested by cody at TS (reviewer: any))\n`);
+  step([job, '--start-review', '--by', 'archy'], `✅ ${job} updated (review_started=Review started by archy at TS)\n`);
+  step([job, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md'],
     `✅ ${job} updated (reviewed=Review by archy: PASS (TS))\n   ➡️  CLOSE NOW: cody closes it (backlog update ${job} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead\n`);
-  assert.equal(norm(update(f, [job, '--close', '--summary', 'delivered with tests']).stdout),
+  step([job, '--close', '--summary', 'delivered with tests'],
     `✅ ${job} updated (summary=delivered with tests, closed=Closed by cody at TS)\n   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).\n      backlog now empty — no actionable phase remains.\n      RE-EVALUATE the order now (it is a planning step even if nothing changes):\n        backlog update <phase> --priority <rank>      # promote/demote one\n        backlog update --replan "<id,id,id,...>"       # set the leading order\n`);
   const w = make(f, 'lifecycle waiting job', []);
-  assert.equal(norm(update(f, [w, '--claim', 'zed']).stdout), `✅ ${w} updated (claimed=Claimed by zed at TS repository=acme/demo branch=main cwd=<cwd>)\n`);
-  assert.equal(norm(update(f, [w, '--waiting', 'run 9', '--by', 'zed']).stdout), `✅ ${w} updated (waiting=WAITING TS zed: run 9)\n`);
-  assert.equal(norm(update(f, [w, '--waiting-done', '--by', 'zed']).stdout), `✅ ${w} updated (wait_done=WAIT DONE TS zed)\n`);
+  step([w, '--claim', 'zed'], `✅ ${w} updated (claimed=Claimed by zed at TS repository=acme/demo branch=main cwd=<cwd>)\n`);
+  step([w, '--waiting', 'run 9', '--by', 'zed'], `✅ ${w} updated (waiting=WAITING TS zed: run 9)\n`);
+  step([w, '--waiting-done', '--by', 'zed'], `✅ ${w} updated (wait_done=WAIT DONE TS zed)\n`);
 });

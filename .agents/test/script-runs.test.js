@@ -8,6 +8,10 @@ import { fixture } from './helpers.js';
 const STUB = "import os, sys\nopen(os.environ['RECORD_OUT'], 'a').write(' '.join(sys.argv[1:4]) + '\\n')\n";
 // Fake python3: when it is the only python3 on the child's PATH, any spawn of python3 writes one line, so a test can see whether a child process was spawned.
 const FAKE_PYTHON3 = '#!/bin/sh\nprintf "%s\\n" "$@" >> "$RECORD_OUT"\n';
+// The executables the no-child-process test tracks: each fake records its own name, so a spawn of any of
+// them is visible. The command's PATH names only the fakes, so a spawn of a name outside this list is the
+// only one the test cannot see (the exit status assertion catches a spawn that changes the behaviour).
+const SPAWN_NAMES = ['python3', 'python', 'node', 'sh', 'bash', 'dash', 'git', 'npm'];
 // the stub creates the file before it writes the line: wait for the whole line, not the file (a CI run read it empty)
 const written = file => existsSync(file) && readFileSync(file, 'utf8').endsWith('\n');
 async function waitFor(file) { for (let i = 0; i < 100 && !written(file); i++) await new Promise(r => setTimeout(r, 50)); }
@@ -36,9 +40,11 @@ for (const [label, args, rc] of [['success', ['--json', '--version'], '0'], ['fa
     const out = join(dir, 'unset-out.txt');
     const fakebin = join(dir, 'fakebin');
     mkdirSync(fakebin);
-    writeFileSync(join(fakebin, 'python3'), FAKE_PYTHON3);
-    chmodSync(join(fakebin, 'python3'), 0o755);
-    const env = { ...f.env, RECORD_OUT: out, PATH: `${fakebin}:${f.env.PATH}` };
+    for (const name of SPAWN_NAMES) {
+      writeFileSync(join(fakebin, name), `#!/bin/sh\nprintf "${name}\\n" >> "$RECORD_OUT"\n`);
+      chmodSync(join(fakebin, name), 0o755);
+    }
+    const env = { ...f.env, RECORD_OUT: out, PATH: fakebin };
     delete env.CODY_SCRIPT_RUNS_MODULE;
     const p = f.raw(args, { env });
     await waitFor(out);

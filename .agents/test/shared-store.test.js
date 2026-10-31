@@ -423,13 +423,27 @@ test('075: archive reflows the queue: archiving the last item is a no-op; archiv
   assert.ok(existsSync(join(b.folder, 'archive', 'phases', '002-two.md')), '002 is in archive/');
 });
 
-test('reorder: slugs and item numbers lead, the rest keeps its order, unknown idents are skipped', t => {
+test('075: replan: slugs and item numbers lead, the rest keeps its order, unknown idents are skipped', t => {
   const f = fixturePair(t);
   const s = threeItems(f);
   const { slugs } = s;
-  assert.deepEqual(store.reorder(f.folder, [slugs[2], '1']), [slugs[2], slugs[0], slugs[1]].map((x, i) => [x, i]), 'slug, then number 1 = the first item');
-  assert.deepEqual(store.reorder(f.folder, ['999', slugs[1], slugs[1]]), [slugs[1], slugs[2], slugs[0]].map((x, i) => [x, i]));
-  assert.deepEqual(store.reorder(f.folder, ['003']).map(x => x[0]), [slugs[2], slugs[1], slugs[0]], 'zero-padded numbers resolve');
+  // slug, then number 1 = the first item
+  let r = cli(['update', '--replan', `${slugs[2]},1`], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stderr, '');
+  assert.equal(r.stdout, `📋 PLANNING EVENT — backlog re-prioritized (P0 = next):\n   P0  ${slugs[2]}\n   P1  ${slugs[0]}\n   P2  ${slugs[1]}\n`);
+  assert.match(readItem(f.folder, `phases/${slugs[2]}.md`), /^priority: 0$/m);
+  // unknown ident skipped, a repeated ident leads once
+  r = cli(['update', '--replan', `999,${slugs[1]},${slugs[1]}`], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stderr, '');
+  assert.equal(r.stdout, `📋 PLANNING EVENT — backlog re-prioritized (P0 = next):\n   P0  ${slugs[1]}\n   P1  ${slugs[2]}\n   P2  ${slugs[0]}\n`);
+  // zero-padded numbers resolve
+  r = cli(['update', '--replan', '003'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stderr, '');
+  assert.equal(r.stdout, `📋 PLANNING EVENT — backlog re-prioritized (P0 = next):\n   P0  ${slugs[2]}\n   P1  ${slugs[1]}\n   P2  ${slugs[0]}\n`);
+  assert.match(readItem(f.folder, `phases/${slugs[0]}.md`), /^priority: 2$/m);
 });
 
 test('review P2: reflow keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
@@ -440,10 +454,13 @@ test('review P2: reflow keeps the rank of a row whose file was moved to archive/
   assert.equal(sha256File(join(f.folder, 'phases', s.files[2])), live, 'no live file is rewritten');
 });
 
-test('review P2: reorder keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
+test('075: replan keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
   const x = archivedOutside(t);
   const { f, s } = x;
-  assert.deepEqual(store.reorder(f.folder, [s.slugs[2]]), [s.slugs[2], s.slugs[0], s.slugs[1]].map((n, i) => [n, i]));
+  const r = cli(['update', '--replan', s.slugs[2]], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stderr, '');
+  assert.equal(r.stdout, `📋 PLANNING EVENT — backlog re-prioritized (P0 = next):\n   P0  ${s.slugs[2]}\n   P1  ${s.slugs[0]}\n   P2  ${s.slugs[1]}\n`);
   assert.match(readItem(f.folder, `phases/${s.files[0]}`), /^priority: 1$/m);
 });
 
@@ -464,14 +481,28 @@ test('075: nextSeq: an archived item keeps its number: after archiving 2, the ne
   assert.equal(git('rev-parse', 'origin/main'), git('rev-parse', 'HEAD'), 'published');
 });
 
-test('findings: an item of another repository is foreign, an item without repository and branch is untagged', t => {
+test('075: findings: an item of another repository is foreign, an item without repository and branch is untagged', t => {
   const f = fixturePair(t);
   threeItems(f);
   writeFileSync(join(f.folder, 'phases/004-foreign.md'),
     '---\nphase: "004-foreign"\nseq: 4\nname: "Foreign"\nstatus: "pending"\nrepository: "acme/other"\nbranch: "main"\n---\n');
   writeFileSync(join(f.folder, 'phases/005-untagged.md'),
     '---\nphase: "005-untagged"\nseq: 5\nname: "Untagged"\nstatus: "pending"\n---\n');
-  const fd = store.findings(f.folder);
-  assert.deepEqual(fd.foreign.map(i => i.fm.phase), ['004-foreign']);
-  assert.deepEqual(fd.untagged.map(i => i.fm.phase), ['005-untagged']);
+  // the hand-written files reach the mirror when the next write command rescans
+  cli(['update', '1', '--note', 'the mirror rescan'], { cwd: f.cons, tmp: f.t });
+  const r = cli(['query'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stderr, '');
+  assert.equal(r.stdout.replace(f.folder, '<folder>'),
+    `⚠️  CRITICAL: phases/004-foreign.md says repository acme/other but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 004-foreign --to-repository\n`
+    + `⚠️  item 005-untagged records no repository or branch; it is out of the queue until its repository and branch are filled in\n`
+    + `📋 acme/demo — branch main — <folder>\n`
+    + `   objective: phase anchor (no document)\n`
+    + `   phases (3) — work queue order, P0 = next:\n`
+    + `   • [  1] 001-one                      pending      P  0  one\n`
+    + `        ↳ s\n`
+    + `   • [  2] 002-two                      pending      P  1  two\n`
+    + `        ↳ s\n`
+    + `   • [  3] 003-three                    pending      P  2  three\n`
+    + `        ↳ s\n`);
 });

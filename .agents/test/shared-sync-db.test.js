@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -16,25 +16,30 @@ import * as store from '../../src/shared/store.js';
 // sleep — that outlive the CLI's node child (the fixture's spawnSync timeout kill mid-push, an unsettled
 // chain) and still write into the temp folder when the test's cleanup removes it. Every process of the chain
 // inherits the CLI child's BACKLOG_HOME env; settleScenarioChildren kills the ones still alive (SIGTERM, then
-// SIGKILL) so the removal cannot race with them.
-function scenarioPids(d) {
+// SIGKILL) so the removal cannot race with them, and fails loudly if the chain is still alive after the settle.
+// Where /proc is absent (macOS, CI), scenarioPids finds nothing and the settle is a no-op, not an error.
+function scenarioPids(d, procRoot = '/proc') {
   const mark = `BACKLOG_HOME=${join(d, 'home')}`;
   const out = [];
-  for (const pid of readdirSync('/proc')) {
+  let entries;
+  try { entries = readdirSync(procRoot); } catch { return out; } // no /proc (macOS, CI): nothing to settle; the cleanup still removes the folders
+  for (const pid of entries) {
     if (!/^\d+$/.test(pid) || Number(pid) === process.pid) continue;
     let env = '';
-    try { env = readFileSync(`/proc/${pid}/environ`, 'utf8'); } catch { continue; }
+    try { env = readFileSync(join(procRoot, pid, 'environ'), 'utf8'); } catch { continue; }
     if (env.includes(mark)) out.push(Number(pid));
   }
   return out;
 }
-async function settleScenarioChildren(d) {
-  for (let round = 0; round < 25; round++) {
+async function settleScenarioChildren(d, rounds = 25) {
+  for (let round = 0; round < rounds; round++) {
     const pids = scenarioPids(d);
     if (!pids.length) return;
     for (const p of pids) { try { process.kill(p, round ? 'SIGKILL' : 'SIGTERM'); } catch { /* exited in the meantime */ } }
     await sleep(100);
   }
+  const pids = scenarioPids(d); // item 76 review: verify the writers stopped; fail loudly instead of removing the folders silently
+  if (pids.length) throw new Error(`the scenario's child processes are still alive after the settle (${rounds} rounds of SIGTERM, then SIGKILL): pids ${pids.join(', ')}`);
 }
 
 // Two writers (a, b): separate temp dirs, each with its own clone of ONE backlog bare remote and its own consumer clone of acme/demo.
@@ -823,7 +828,38 @@ test('cleanup: a CLI child killed mid-push leaves its child git process writing 
   chmodSync(gate, 0o755);
   const r = cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp, timeout: 2500 }); // the fixture's spawnSync timeout kills the CLI child mid-push
   assert.notEqual(r.status, 0, `the CLI child must be killed mid-push: ${r.stdout}${r.stderr}`);
+  const onProc = existsSync('/proc'); // the chain is visible only where /proc exists (macOS, CI: the cleanup must still work without it)
+  // writers' t.after was registered first and runs first (hooks are FIFO): it settles the chain and removes the
+  // folders, and only then does this hook check the ABSENCE of the chain — without the settle the chain is still
+  // alive after the rmSync and this assertion fails (item 76 review: the absence was never checked)
+  t.after(() => { if (onProc) assert.equal(scenarioPids(a.tmp).length, 0, 'the cleanup settled every child process of the killed CLI child (item 76)'); });
+  if (!onProc) t.skip('no /proc on this platform: the surviving chain cannot be seen (item 76)');
   assert.ok(scenarioPids(a.tmp).length >= 1, 'the child git process of the killed CLI child is still alive');
-  // writers' t.after cleanup settles the chain before the rmSync: the folders are removed without ENOTEMPTY
   void b;
+});
+
+test('cleanup settle: a child process that survives the settle is reported loudly, not removed silently (item 76 review)', async t => {
+  const d = mkdtempSync(join(tmpdir(), 'dbconf-s-'));
+  t.after(() => rmSync(d, { recursive: true, force: true }));
+  // a node child that traps SIGTERM and carries the fixture env: the settle's first round (SIGTERM) cannot clear it
+  const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); setTimeout(() => {}, 1000)'],
+    { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
+  child.unref();
+  for (let i = 0; i < 50 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
+  assert.ok(scenarioPids(d).includes(child.pid), 'the SIGTERM-surviving child is visible to the settle');
+  await assert.rejects(settleScenarioChildren(d, 1), /still alive/);
+  child.kill('SIGKILL');
+  for (let i = 0; i < 20 && scenarioPids(d).length; i++) await sleep(50);
+  assert.equal(scenarioPids(d).length, 0);
+});
+
+test('cleanup: scenarioPids sees the processes carrying the fixture env; without /proc (macOS) it sees none (item 76 review)', async t => {
+  const d = mkdtempSync(join(tmpdir(), 'dbconf-p-'));
+  t.after(() => rmSync(d, { recursive: true, force: true }));
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 1000)'], { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
+  child.unref();
+  for (let i = 0; i < 50 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
+  assert.ok(scenarioPids(d).includes(child.pid), 'a process carrying the fixture env is found through /proc');
+  assert.deepStrictEqual(scenarioPids(d, '/no-such-proc'), [], 'no /proc (macOS, CI): nothing to settle, and no throw');
+  child.kill('SIGKILL');
 });

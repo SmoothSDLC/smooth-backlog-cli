@@ -356,3 +356,16 @@ test('the lead edits nothing of a first-round refinement, with a step or without
   const c = make(f, 'child', '--split-from', w);
   no(f, ['update', c, '--request-decision', 'Q?', '--set-estimate', '9', '--by', 'lead'], 'a member, not the team lead, refines in the first round');
 });
+
+test('075: the successful stage steps print exactly what they record', () => {
+  const f = fixture();
+  const w = make(f, 'work item');
+  assert.equal(up(f, w, '--set-team', 't1').stdout, `✅ ${w} updated (team=t1)\n`);
+  const c = make(f, 'child', '--split-from', w);
+  const TS = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS');
+  assert.equal(TS(up(f, c, '--refine-start', '--by', 'cody').stdout), `✅ ${c} updated (refine_started=Refinement started by cody at TS)\n`);
+  assert.equal(TS(up(f, c, '--refine-done', '--by', 'cody', '--note', 'checked').stdout), `✅ ${c} updated (refined=Refined by cody at TS)\n`);
+  assert.equal(TS(up(f, c, '--request-refinement-review', '--by', 'lead').stdout), `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (Codex first; Claude only when Codex's 5-hour limit is exceeded))\n`);
+  assert.equal(TS(up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready').stdout), `✅ ${c} updated (refinement_reviewed=Refinement review by codex: PASS: ready (TS))\n`);
+  assert.equal(fm(f, c).stage, 'ready');
+});

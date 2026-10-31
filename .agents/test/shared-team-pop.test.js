@@ -384,3 +384,15 @@ test('pop --roster with a missing roster file exits 2 and names the file', () =>
   assert.equal(gone.status, 2);
   assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'nope.json')}: `), gone.stderr);
 });
+
+test('--claim-now on an item the agent already holds continues it and does not claim it twice', () => {
+  const f = fixture();
+  const job = make(f, f.cons, 'claim now held', []);
+  const first = cli(['pop', '--agent', 'cody', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  assert.equal(JSON.parse(first.stdout).claimed, true);
+  assert.equal(item(f, job).fm.claimed_by, 'cody');
+  const n = cli(['pop', '--agent', 'cody', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
+  assert.equal(JSON.parse(n.stdout).action, 'continue');
+  assert.equal(JSON.parse(n.stdout).claimed, false);
+});

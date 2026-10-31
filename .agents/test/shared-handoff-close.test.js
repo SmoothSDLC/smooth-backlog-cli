@@ -32,7 +32,7 @@ const make = (f, owner, name, fm) => {
 const gate = (f, fm) => closeGate({ fm, folder: f.folder, repo: REPO, slug: SLUG });
 
 const COMMIT = 'a'.repeat(40);
-const record = (dependent, contract = 'the exported functions') => handoff.makeRecord({ dependent, commit: COMMIT, contract, verification: 'npm test: 0 failures', by: 'cody-card2', at: '2026-10-30T20:00:00Z' });
+const record = (dependent, contract = 'the exported functions') => handoff.makeRecord({ dependent, commit: COMMIT, contract, verification: 'npm test: 0 failures', by: 'agent-b', at: '2026-10-30T20:00:00Z' });
 const receipt = (dependent, digest, result = 'accepted') => handoff.makeReceipt({ dependent, digest, result, by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' });
 // The next commands the refusal must name (item 059's design): missing and rejected edges need (a new) hand-off
 // record from the producer; unaccepted and stale edges need the lead's acceptance of the record that is there.

@@ -38,14 +38,14 @@ const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdou
 const item = (f, seq) => store.load(f.folder).find(i => i.fm.seq === seq);
 const ctxOf = (f, seq) => { const it = item(f, seq); return { fm: it.fm, body: it.body, slug: it.fm.phase, folder: f.folder, repo: f.repo }; };
 
-// The producer (seq 1, claimed by cody-card1) and its dependent (seq 2, depends on the producer).
+// The producer (seq 1, claimed by agent-a) and its dependent (seq 2, depends on the producer).
 function pair(f) {
   const producer = make(f, 'producer item');
   make(f, 'dependent item', '--depends-on', producer.split('-')[0]);
-  ok(f, ['update', producer, '--claim', 'cody-card1']);
+  ok(f, ['update', producer, '--claim', 'agent-a']);
   return { f, producer, ctx: ctxOf(f, 1) };
 }
-const RECORD = { commit: 'b'.repeat(40), contract: 'the exported functions', verification: 'npm test: 0 failures', by: 'cody-card1' };
+const RECORD = { commit: 'b'.repeat(40), contract: 'the exported functions', verification: 'npm test: 0 failures', by: 'agent-a' };
 // recordHandoff reads the CLI session from the environment; the tests pin it and restore it afterwards.
 function withSession(value, fn) {
   const saved = process.env.QWEN_CODE_SESSION_ID;
@@ -81,14 +81,14 @@ test('059.2: recordHandoff records the hand-off for a real dependent, in the sto
   assert.equal(rec.outputs, '', 'outputs defaults to empty');
   assert.equal(rec.pickup, '', 'pickup defaults to empty');
   assert.equal(rec.risks, 'NONE', 'risks defaults to NONE');
-  assert.equal(rec.by, 'cody-card1');
+  assert.equal(rec.by, 'agent-a');
   assert.match(rec.at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
   assert.equal(rec.digest, handoff.digest(rec), 'the record carries the sha256 of its own fields');
   // the body block is the method's DEPENDENCY_HANDOFF v1 block, naming the item's real branch and the CLI session (lead ruling 2026-10-30)
   const source = 'acme/demo#1';
   assert.equal(r.text, handoff.recordBlock(rec, source, { branch: p.ctx.fm.branch, session: 'cody59/wt-68' }));
   assert.ok(r.text.includes(`SOURCE_COMMIT: ${RECORD.commit} ; BRANCH: ${p.ctx.fm.branch}`), r.text);
-  assert.ok(r.text.includes('PRODUCER_AGENT: cody-card1 ; SESSION: cody59/wt-68'), r.text);
+  assert.ok(r.text.includes('PRODUCER_AGENT: agent-a ; SESSION: cody59/wt-68'), r.text);
   // the stored form survives the real front-matter codec
   const back = parse(dump({ ...p.ctx.fm, ...r.fm }, p.ctx.body + r.text)).fm;
   assert.deepEqual(handoff.decodeList(back.handoffs), [rec]);
@@ -99,7 +99,7 @@ test('059.2: the record block names the producing agent as the session when the 
   const p = pair(f);
   const r = withSession(undefined, () => recordHandoff(p.ctx, { dependent: '2', ...RECORD }));
   assert.ok(!r.refuse, r.refuse);
-  assert.ok(r.text.includes('PRODUCER_AGENT: cody-card1 ; SESSION: cody-card1'), r.text);
+  assert.ok(r.text.includes('PRODUCER_AGENT: agent-a ; SESSION: agent-a'), r.text);
 });
 
 test('059.2: recordHandoff turns handoffs: none into a list when the producer records its hand-off', () => {
@@ -142,7 +142,7 @@ test('059.2: recordHandoff refuses without a --by, for an archived item, and for
   const archived = recordHandoff({ ...p.ctx, fm: { ...p.ctx.fm, status: 'archived' } }, { dependent: '2', ...RECORD });
   assert.match(archived.refuse, /archived/);
   const other = recordHandoff(p.ctx, { dependent: '2', ...RECORD, by: 'other-agent' });
-  assert.match(other.refuse, /claimed by cody-card1/);
+  assert.match(other.refuse, /claimed by agent-a/);
   assert.ok(!other.refuse.includes('not one of'), 'the claimer refusal, not the dependents refusal');
 });
 
@@ -172,7 +172,7 @@ test('059.2: the acceptance receipt records the reviewer, the verdict and the ha
   const work = workCommit(f);
   // the review operation stores the verdict and the reviewer, but no reviewed commit (lifecycle.js), so
   // the acceptance does not claim that a commit was reviewed (lead ruling 2026-10-31)
-  ok(f, ['update', p.producer, '--request-review', 'codex', '--note', `review work commit ${work} and its contract`, '--by', 'cody-card1']);
+  ok(f, ['update', p.producer, '--request-review', 'codex', '--note', `review work commit ${work} and its contract`, '--by', 'agent-a']);
   ok(f, ['update', p.producer, '--start-review', '--by', 'codex']);
   ok(f, ['update', p.producer, '--review', 'pass', '--by', 'codex', '--comments', 'the exported functions hold; references/review/code.md']);
   const ctx = ctxOf(f, 1);
@@ -180,7 +180,7 @@ test('059.2: the acceptance receipt records the reviewer, the verdict and the ha
   assert.equal(ctx.fm.reviewer, 'codex', 'the review operation stored the reviewer');
   // the ruling's test: a hand-off record whose commit differs from the item's commit front matter (the creation HEAD)
   assert.notEqual(work, ctx.fm.commit, 'the hand-off record\'s commit differs from the item\'s commit front matter');
-  const rec = recordHandoff(ctx, { dependent: '2', commit: work, contract: 'the exported functions', verification: 'npm test: 0 failures', by: 'cody-card1' });
+  const rec = recordHandoff(ctx, { dependent: '2', commit: work, contract: 'the exported functions', verification: 'npm test: 0 failures', by: 'agent-a' });
   assert.ok(!rec.refuse, rec.refuse);
   const r = acceptHandoff({ ...ctx, fm: { ...ctx.fm, ...rec.fm } }, { dependent: '2', checks: 'npm test: 0 failures', by: 'lead', lead: 'lead' });
   assert.ok(!r.refuse, r.refuse);
@@ -212,13 +212,13 @@ test('059.2: acceptHandoff refuses a hand-off record without a commit, naming th
   const created = rootCommit(f.cons);
   assert.equal(ctxOf(f, 1).fm.commit, created, 'the item\'s commit front matter is the creation HEAD (new.js)');
   // the review passes on the creation HEAD
-  ok(f, ['update', p.producer, '--request-review', 'codex', '--note', `review commit ${created}`, '--by', 'cody-card1']);
+  ok(f, ['update', p.producer, '--request-review', 'codex', '--note', `review commit ${created}`, '--by', 'agent-a']);
   ok(f, ['update', p.producer, '--start-review', '--by', 'codex']);
   ok(f, ['update', p.producer, '--review', 'pass', '--by', 'codex', '--comments', 'holds; references/review/code.md']);
   const ctx = ctxOf(f, 1);
   // a stored-form record without a commit (the record command makes no such record): the acceptance is
   // refused, naming the missing field - no fallback to the item's creation commit (lead ruling 2026-10-31)
-  const bare = { dependent: '2', commit: '', contract: 'c', verification: 'v', outputs: '', pickup: '', risks: 'NONE', by: 'cody-card1', at: '2026-10-31T00:00:00Z', digest: 'd'.repeat(64) };
+  const bare = { dependent: '2', commit: '', contract: 'c', verification: 'v', outputs: '', pickup: '', risks: 'NONE', by: 'agent-a', at: '2026-10-31T00:00:00Z', digest: 'd'.repeat(64) };
   const r = acceptHandoff({ ...ctx, fm: { ...ctx.fm, handoffs: [handoff.encode(bare)] } }, { dependent: '2', checks: 'npm test: 0 failures', by: 'lead', lead: 'lead' });
   assert.ok(r.refuse, 'a hand-off record without a commit is refused');
   assert.match(r.refuse, /commit/, 'the refusal names the missing field');
@@ -235,7 +235,7 @@ test('059.2: acceptHandoff refuses a missing actor or lead, a non-lead actor, a 
   assert.match(acceptHandoff(ctx, { dependent: '2', checks: 'c', by: undefined, lead: 'lead' }).refuse, /--by <agent> is missing/);
   assert.match(acceptHandoff(ctx, { dependent: '2', checks: 'c', by: 'lead', lead: undefined }).refuse, /team lead identity is missing/);
   assert.match(acceptHandoff(ctx, { dependent: '2', checks: 'c' }).refuse, /--by <agent> is missing/);
-  assert.match(acceptHandoff(ctx, { dependent: '2', checks: 'c', by: 'cody-card1', lead: 'lead' }).refuse, /team lead \(lead\)/);
+  assert.match(acceptHandoff(ctx, { dependent: '2', checks: 'c', by: 'agent-a', lead: 'lead' }).refuse, /team lead \(lead\)/);
   assert.match(acceptHandoff(p.ctx, { dependent: '2', checks: 'c', by: 'lead', lead: 'lead' }).refuse, /no hand-off record/);
   assert.match(acceptHandoff(ctx, { dependent: '2', checks: '   ', by: 'lead', lead: 'lead' }).refuse, /checks/);
   assert.match(acceptHandoff({ ...ctx, fm: { ...fm0, review_state: 'none' } }, { dependent: '2', checks: 'c', by: 'lead', lead: 'lead' }).refuse, /review_state/);
@@ -273,7 +273,7 @@ test('059.2: rejectHandoff refuses a missing actor or lead, a non-lead actor, a 
   assert.match(rejectHandoff(ctx, { dependent: '2', reason: 'r', by: undefined, lead: 'lead' }).refuse, /--by <agent> is missing/);
   assert.match(rejectHandoff(ctx, { dependent: '2', reason: 'r', by: 'lead', lead: undefined }).refuse, /team lead identity is missing/);
   assert.match(rejectHandoff(ctx, { dependent: '2', reason: 'r' }).refuse, /--by <agent> is missing/);
-  assert.match(rejectHandoff(ctx, { dependent: '2', reason: 'r', by: 'cody-card1', lead: 'lead' }).refuse, /team lead \(lead\)/);
+  assert.match(rejectHandoff(ctx, { dependent: '2', reason: 'r', by: 'agent-a', lead: 'lead' }).refuse, /team lead \(lead\)/);
   assert.match(rejectHandoff(p.ctx, { dependent: '2', reason: 'r', by: 'lead', lead: 'lead' }).refuse, /no hand-off record/);
   assert.match(rejectHandoff(ctx, { dependent: '2', reason: '', by: 'lead', lead: 'lead' }).refuse, /reason/);
 });

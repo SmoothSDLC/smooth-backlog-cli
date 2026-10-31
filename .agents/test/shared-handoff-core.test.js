@@ -27,7 +27,7 @@ const item = (home, owner, name, fm) => {
 };
 
 const COMMIT = 'a'.repeat(40);
-const record = (dependent, contract = 'the exported functions') => handoff.makeRecord({ dependent, commit: COMMIT, contract, verification: 'npm test: 0 failures', by: 'cody-card3', at: '2026-10-30T20:00:00Z' });
+const record = (dependent, contract = 'the exported functions') => handoff.makeRecord({ dependent, commit: COMMIT, contract, verification: 'npm test: 0 failures', by: 'agent-c', at: '2026-10-30T20:00:00Z' });
 const receipt = (dependent, digest, result = 'accepted') => handoff.makeReceipt({ dependent, digest, result, by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' });
 
 test('059.1: digest is stable, 64 hex, and changes with every one of the seven pinned fields', () => {
@@ -42,13 +42,13 @@ test('059.1: digest is stable, 64 hex, and changes with every one of the seven p
 });
 
 test('059.1: makeRecord pins the digest of the seven fields and defaults outputs, pickup and risks', () => {
-  const r = handoff.makeRecord({ dependent: '64', commit: COMMIT, contract: 'c', verification: 'v', by: 'cody-card3', at: '2026-10-30T20:00:00Z' });
+  const r = handoff.makeRecord({ dependent: '64', commit: COMMIT, contract: 'c', verification: 'v', by: 'agent-c', at: '2026-10-30T20:00:00Z' });
   assert.equal(r.outputs, '');
   assert.equal(r.pickup, '');
   assert.equal(r.risks, 'NONE');
   assert.equal(r.digest, handoff.digest(r), 'the record carries its own digest');
   assert.deepEqual(Object.keys(r).sort(), ['at', 'by', 'commit', 'contract', 'dependent', 'digest', 'outputs', 'pickup', 'risks', 'verification']);
-  const up = handoff.makeRecord({ dependent: '64', commit: 'A'.repeat(40), contract: 'c', verification: 'v', by: 'cody-card3', at: '2026-10-30T20:00:00Z' });
+  const up = handoff.makeRecord({ dependent: '64', commit: 'A'.repeat(40), contract: 'c', verification: 'v', by: 'agent-c', at: '2026-10-30T20:00:00Z' });
   assert.equal(up.commit, 'A'.repeat(40), 'a 40-hex commit id is accepted in uppercase');
   assert.equal(up.digest, handoff.digest(up), 'the uppercase commit is pinned as written');
 });
@@ -148,7 +148,7 @@ test('059.1: edgeState is stale in the stored form when the record digest is not
 });
 
 test('059.1: edgeState keeps the edge unsatisfied while the record or the last receipt has no digest (review r2)', () => {
-  const noDigest = { dependent: '64', commit: COMMIT, contract: 'the exported functions', verification: 'npm test: 0 failures', outputs: '', pickup: '', risks: 'NONE', by: 'cody-card3', at: '2026-10-30T20:00:00Z' };
+  const noDigest = { dependent: '64', commit: COMMIT, contract: 'the exported functions', verification: 'npm test: 0 failures', outputs: '', pickup: '', risks: 'NONE', by: 'agent-c', at: '2026-10-30T20:00:00Z' };
   const acceptNoDigest = { dependent: '64', result: 'accepted', by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' };
   const st = (handoffs, handoff_receipts) => handoff.edgeState({ status: 'done', handoffs, handoff_receipts }, '64');
   assert.equal(st([noDigest], [acceptNoDigest]), 'stale', 'two undefined digests must not compare as a pin');
@@ -280,13 +280,13 @@ test('059.1: recordBlock writes the branch, the session and the review the integ
     'END_DEPENDENCY_HANDOFF',
     '',
   ].join('\n');
-  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1' }), block('PRODUCER_AGENT: cody-card3'));
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1' }), block('PRODUCER_AGENT: agent-c'));
   // the branch is always written: the given one, or the text 'unspecified' - never a default (lead decision 2026-10-30)
-  assert.equal(handoff.recordBlock(r, src), block('PRODUCER_AGENT: cody-card3').replace('BRANCH: team-cli-parity-1', 'BRANCH: unspecified'));
+  assert.equal(handoff.recordBlock(r, src), block('PRODUCER_AGENT: agent-c').replace('BRANCH: team-cli-parity-1', 'BRANCH: unspecified'));
   // the session, when given, is the method's inline SESSION sub-field on the PRODUCER_AGENT line
-  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', session: 'cody59/wt-63' }), block('PRODUCER_AGENT: cody-card3 ; SESSION: cody59/wt-63'));
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', session: 'cody59/wt-63' }), block('PRODUCER_AGENT: agent-c ; SESSION: cody59/wt-63'));
   // the review, when given, replaces the pending default
-  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', review: 'lead acceptance 2026-10-31' }), block('PRODUCER_AGENT: cody-card3', 'lead acceptance 2026-10-31'));
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', review: 'lead acceptance 2026-10-31' }), block('PRODUCER_AGENT: agent-c', 'lead acceptance 2026-10-31'));
 });
 
 test('059.1: receiptBlock is the HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body block of the method (review r2)', () => {

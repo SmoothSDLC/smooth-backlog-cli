@@ -399,17 +399,28 @@ function archivedOutside(t) {
   return { f, s };
 }
 
-test('reflow: a no-op keeps the priorities and rewrites no file; a move re-densifies', t => {
-  const f = fixturePair(t);
-  const s = threeItems(f);
-  const { files, slugs } = s;
-  const before = files.map(x => sha256File(join(f.folder, 'phases', x)));
-  assert.deepEqual(store.reflow(f.folder), slugs.map((x, i) => [x, i]));
-  assert.deepEqual(files.map(x => sha256File(join(f.folder, 'phases', x))), before, 'unchanged priorities are not rewritten');
-  assert.deepEqual(store.reflow(f.folder, { slug: slugs[2], target: 0 }), [slugs[2], slugs[0], slugs[1]].map((x, i) => [x, i]));
-  assert.match(readItem(f.folder, `phases/${files[0]}`), /^priority: 1$/m);
-  assert.match(readItem(f.folder, `phases/${files[2]}`), /^priority: 0$/m);
-  assert.match(readItem(f.folder, `phases/${files[0]}`), /^updated: "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"$/m, 'a rewritten file gets updated=now');
+test('075: archive reflows the queue: archiving the last item is a no-op; archiving a middle one re-densifies and rewrites', t => {
+  // no-op: archive the last item (003); the survivors (001 at P0, 002 at P1) are already dense, so no file is rewritten
+  const a = fixturePair(t);
+  threeItems(a);
+  const sha = rel => sha256File(join(a.folder, rel));
+  const before = ['phases/001-one.md', 'phases/002-two.md'].map(sha);
+  const ra = cli(['archive', '3', '--force'], { cwd: a.cons, tmp: a.t });
+  assert.equal(ra.status, 0, ra.stdout + ra.stderr);
+  assert.equal(ra.stdout, '📦 003-three archived -> archive/phases/003-three.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
+  assert.equal(ra.stderr, '');
+  assert.deepEqual(['phases/001-one.md', 'phases/002-two.md'].map(sha), before, 'a no-op reflow rewrites no file');
+
+  // re-densify: archive a middle item (002); 003 is pulled down from P2 to P1 and its file is rewritten
+  const b = fixturePair(t);
+  threeItems(b);
+  const rb = cli(['archive', '2', '--force'], { cwd: b.cons, tmp: b.t });
+  assert.equal(rb.status, 0, rb.stdout + rb.stderr);
+  assert.equal(rb.stdout, '📦 002-two archived -> archive/phases/002-two.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
+  assert.equal(rb.stderr, '');
+  assert.match(readItem(b.folder, 'phases/003-three.md'), /^priority: 1$/m, '003 is re-densified from P2 to P1');
+  assert.ok(!existsSync(join(b.folder, 'phases', '002-two.md')), '002 left phases/');
+  assert.ok(existsSync(join(b.folder, 'archive', 'phases', '002-two.md')), '002 is in archive/');
 });
 
 test('reorder: slugs and item numbers lead, the rest keeps its order, unknown idents are skipped', t => {
@@ -436,14 +447,17 @@ test('review P2: reorder keeps the rank of a row whose file was moved to archive
   assert.match(readItem(f.folder, `phases/${s.files[0]}`), /^priority: 1$/m);
 });
 
-test('075: nextSeq: items built by the CLI; an archived item keeps its number', t => {
+test('075: nextSeq: an archived item keeps its number: after archiving 2, the next new takes 4', t => {
   const f = fixturePair(t);
-  const s = threeItems(f);
-  const r = cli(['archive', '2', '--force'], { cwd: f.cons, tmp: f.t });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.ok(!existsSync(join(f.folder, 'phases', s.files[1])));
-  assert.ok(existsSync(join(f.folder, 'archive', 'phases', s.files[1])));
-  assert.equal(store.nextSeq(f.folder), 4, 'archived items still hold their numbers');
+  threeItems(f);
+  const a = cli(['archive', '2', '--force'], { cwd: f.cons, tmp: f.t });
+  assert.equal(a.status, 0, a.stdout + a.stderr);
+  assert.equal(a.stdout, '📦 002-two archived -> archive/phases/002-two.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
+  assert.equal(a.stderr, '');
+  const n = cli(['new', '--name', 'Four', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });
+  assert.equal(n.status, 0, n.stdout + n.stderr);
+  assert.equal(n.stdout, '✅ created phase phases/004-four.md (seq 4) — appended, now at P2\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n   rescan: 3 phase(s) tracked, 1 (re)ingested\n');
+  assert.equal(n.stderr, '');
 });
 
 test('findings: an item of another repository is foreign, an item without repository and branch is untagged', t => {

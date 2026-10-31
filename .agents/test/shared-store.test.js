@@ -454,19 +454,26 @@ test('review P2: reflow keeps the rank of a row whose file was moved to archive/
   assert.equal(sha256File(join(f.folder, 'phases', s.files[2])), live, 'no live file is rewritten');
 });
 
-test('075: reflow: a row whose file was moved to archive/ outside the CLI keeps its rank when the CLI archives the last item', t => {
-  const x = archivedOutside(t);
-  const { f, s } = x;
+test('075: reflow: a row whose file was moved to archive/ outside the CLI keeps its rank: the item after it stays P2 when the CLI archives the last item', t => {
+  const f = fixturePair(t);
+  const s = threeItems(f);
+  const four = cli(['new', '--name', 'four', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });
+  assert.equal(four.status, 0, four.stdout + four.stderr);
+  mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
+  renameSync(join(f.folder, 'phases', s.files[1]), join(f.folder, 'archive', 'phases', s.files[1])); // 002-two leaves phases/ outside the CLI
   const one = sha256File(join(f.folder, 'phases', s.files[0]));
-  const r = cli(['archive', '3', '--force'], { cwd: f.cons, tmp: f.t });
+  const three = sha256File(join(f.folder, 'phases', s.files[2]));
+  const r = cli(['archive', '4', '--force'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
-  assert.equal(r.stdout, '📦 003-three archived -> archive/phases/003-three.md\n   rescan: 0 (re)ingested, 1 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
+  assert.equal(r.stdout, '📦 004-four archived -> archive/phases/004-four.md\n   rescan: 0 (re)ingested, 1 missing\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n');
   assert.match(readItem(f.folder, 'phases/001-one.md'), /^priority: 0$/m, 'the survivor keeps its rank');
+  assert.match(readItem(f.folder, 'phases/003-three.md'), /^priority: 2$/m, 'the item after the missing row stays P2: the missing row held P1');
   assert.equal(sha256File(join(f.folder, 'phases', s.files[0])), one, 'no live file is rewritten');
-  assert.ok(!existsSync(join(f.folder, 'phases', s.files[2])), '003 left phases/');
+  assert.equal(sha256File(join(f.folder, 'phases', s.files[2])), three, 'no live file is rewritten');
+  assert.ok(!existsSync(join(f.folder, 'phases', '004-four.md')), '004 left phases/');
   assert.ok(existsSync(join(f.folder, 'archive', 'phases', s.files[1])), 'the outside-CLI move is left as it was');
-  assert.ok(existsSync(join(f.folder, 'archive', 'phases', s.files[2])), '003 is in archive/');
+  assert.ok(existsSync(join(f.folder, 'archive', 'phases', '004-four.md')), '004 is in archive/');
 });
 
 test('075: replan keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {

@@ -495,14 +495,17 @@ test('review P2: move and the reflow add the keys they set (branch, repository, 
   assert.equal(typeof moved.priority, 'number');
 });
 
-test('review P2: archive with a ghost row (a pending mirror row whose file is gone) is still ranked: the survivors keep their ranks', t => {
+test('075: archive with a ghost row (a pending mirror row whose file is gone) is still ranked: exact output, empty stderr, one commit', () => {
   const ghost = f => { git(f.home, 'rm', '-q', 'acme/demo/phases/001-alpha.md'); git(f.home, 'commit', '-q', '-m', 'file gone'); git(f.home, 'push', '-q'); };
   const f = seed(); ghost(f);
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, '📦 005-epsilon archived -> archive/phases/005-epsilon.md\n   rescan: 0 (re)ingested, 1 missing\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
+  assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'phases/002-beta.md').fm.priority, 1, 'the ghost still holds P0');
   assert.deepEqual(['003-gamma', '004-delta', '007-eta'].map(n => fm(f.folder, `phases/${n}.md`).fm.priority), [2, 3, 4]);
-  assert.match(r.stdout, /re-densified to 5 item\(s\) \(P0\.\.P4\)/, 'the ghost row is counted');
+  assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['archive 5']);
+  assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'), 'published');
 });
 
 test('075: archive of a done item: git mv, status stamp, reflow, one commit', () => {
@@ -510,6 +513,7 @@ test('075: archive of a done item: git mv, status stamp, reflow, one commit', ()
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, '📦 005-epsilon archived -> archive/phases/005-epsilon.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
+  assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
   assert.ok(!existsSync(join(f.folder, 'phases/005-epsilon.md')));
   const row = () => { const con = db.connect(f.folder); try { return { ...con.prepare("SELECT status, path FROM phase WHERE slug='005-epsilon'").get() }; } finally { con.close(); } };
@@ -540,6 +544,7 @@ test('075: archive of an already archived item: an info line, exit 0, nothing ch
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'ℹ️  005-epsilon already archived (archive/phases/005-epsilon.md)\n');
+  assert.equal(r.stderr, '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
@@ -548,6 +553,7 @@ test('075: move --to-branch and --all-open-of-branch print what moved, and the m
   const r = run(f, 'move', ['2', '--to-branch', 'release']);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, "✅ 002-beta now belongs to branch 'release'\n");
+  assert.equal(r.stderr, '');
   const row = () => { const con = db.connect(f.folder); try { return { ...con.prepare("SELECT branch, status FROM phase WHERE slug='002-beta'").get() }; } finally { con.close(); } };
   assert.deepEqual(row(), { branch: 'release', status: 'pending' });
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['move 2 --to-branch']);
@@ -556,6 +562,7 @@ test('075: move --to-branch and --all-open-of-branch print what moved, and the m
   const all = run(g, 'move', ['--all-open-of-branch', 'main', '--to-branch', 'release']);
   assert.equal(all.status, 0, all.stderr);
   assert.equal(all.stdout, "✅ moved 3 open item(s) of 'main' to 'release'\n");
+  assert.equal(all.stderr, '');
   assert.equal(git(g.home, 'log', '-1', '--format=%s'), SUBJECT['move --all-open-of-branch main']);
   const con = db.connect(g.folder);
   try {
@@ -579,6 +586,7 @@ test('075: move --to-repository: new number in the target, source file gone, one
   const r = run(f, 'move', ['7', '--to-repository']); // default: the repository the item names
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, '✅ 007-eta moved to other/proj as 002-eta\n');
+  assert.equal(r.stderr, '');
   assert.ok(existsSync(join(f.other, 'phases/002-eta.md')));
   assert.ok(!existsSync(join(f.folder, 'phases/007-eta.md')));
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['move 7 --to-repository']);

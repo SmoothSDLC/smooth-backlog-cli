@@ -841,25 +841,32 @@ test('cleanup: a CLI child killed mid-push leaves its child git process writing 
 test('cleanup settle: a child process that survives the settle is reported loudly, not removed silently (item 76 review)', async t => {
   const d = mkdtempSync(join(tmpdir(), 'dbconf-s-'));
   t.after(() => rmSync(d, { recursive: true, force: true }));
-  // a node child that traps SIGTERM and carries the fixture env: the settle's first round (SIGTERM) cannot clear it
-  const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); setTimeout(() => {}, 1000)'],
+  if (!existsSync('/proc')) t.skip('no /proc on this platform (macOS): the settle is a no-op there (item 76)');
+  // a node child that traps SIGTERM and carries the fixture env: the settle's first round (SIGTERM) cannot clear it.
+  // It lives 10s (CI finding at 25d7554): the child must outlive the spawn wait and the settle on a slow stock
+  // Linux runner, so the test does not depend on a 1s lifetime racing the process start-up.
+  const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); setTimeout(() => {}, 10000)'],
     { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
   child.unref();
-  for (let i = 0; i < 50 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
+  t.after(() => { try { child.kill('SIGKILL'); } catch {} });
+  for (let i = 0; i < 100 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
   assert.ok(scenarioPids(d).includes(child.pid), 'the SIGTERM-surviving child is visible to the settle');
   await assert.rejects(settleScenarioChildren(d, 1), /still alive/);
   child.kill('SIGKILL');
-  for (let i = 0; i < 20 && scenarioPids(d).length; i++) await sleep(50);
+  for (let i = 0; i < 40 && scenarioPids(d).length; i++) await sleep(50);
   assert.equal(scenarioPids(d).length, 0);
 });
 
 test('cleanup: scenarioPids sees the processes carrying the fixture env; without /proc (macOS) it sees none (item 76 review)', async t => {
   const d = mkdtempSync(join(tmpdir(), 'dbconf-p-'));
   t.after(() => rmSync(d, { recursive: true, force: true }));
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 1000)'], { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
-  child.unref();
-  for (let i = 0; i < 50 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
-  assert.ok(scenarioPids(d).includes(child.pid), 'a process carrying the fixture env is found through /proc');
+  // platform-independent: without /proc (macOS, CI) scenarioPids returns [] instead of throwing
   assert.deepStrictEqual(scenarioPids(d, '/no-such-proc'), [], 'no /proc (macOS, CI): nothing to settle, and no throw');
+  if (!existsSync('/proc')) t.skip('no /proc on this platform (macOS): the env scan cannot run (item 76)');
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
+  child.unref();
+  t.after(() => { try { child.kill('SIGKILL'); } catch {} });
+  for (let i = 0; i < 100 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
+  assert.ok(scenarioPids(d).includes(child.pid), 'a process carrying the fixture env is found through /proc');
   child.kill('SIGKILL');
 });

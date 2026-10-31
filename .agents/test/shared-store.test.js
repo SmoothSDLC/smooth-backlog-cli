@@ -458,6 +458,10 @@ test('075: nextSeq: an archived item keeps its number: after archiving 2, the ne
   assert.equal(n.status, 0, n.stdout + n.stderr);
   assert.equal(n.stdout, '✅ created phase phases/004-four.md (seq 4) — appended, now at P2\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n   rescan: 3 phase(s) tracked, 1 (re)ingested\n');
   assert.equal(n.stderr, '');
+  const git = (...args) => execFileSync('git', args, { cwd: f.home, encoding: 'utf8' }).trim();
+  assert.ok(existsSync(join(f.folder, 'phases/004-four.md')), 'the created file exists');
+  assert.match(git('show', '--name-only', '--format=', 'HEAD'), /phases\/004-four\.md/, 'the commit carries the created file');
+  assert.equal(git('rev-parse', 'origin/main'), git('rev-parse', 'HEAD'), 'published');
 });
 
 test('findings: an item of another repository is foreign, an item without repository and branch is untagged', t => {

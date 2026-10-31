@@ -209,6 +209,55 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
   r = cli(['query', '--blocked', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
-  const j = JSON.parse(r.stdout);
-  assert.deepEqual(j.map(x => [x.slug, x.waiting_on]), [[blocked, [{ id: String(Number(held.split('-')[0])), slug: held, status: 'in_progress', claimed_by: 'archy' }]]]);
+  // timestamps and content hashes differ between runs; the rest of the output is asserted word for word
+  const exact = s => s
+    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS')
+    .replace(/"(sha|commit_sha)": "[0-9a-f]+"/g, '"$1": "SHA"');
+  assert.equal(exact(r.stdout), `[
+  {
+    "id": 3,
+    "handoff_id": 1,
+    "slug": "${blocked}",
+    "seq": 3,
+    "name": "scope blocked job",
+    "objective": "o",
+    "summary": "s",
+    "status": "pending",
+    "severity": "normal",
+    "priority": 2,
+    "path": "phases/${blocked}.md",
+    "sha": "SHA",
+    "branch": "main",
+    "commit_sha": "SHA",
+    "location": "",
+    "repository": "acme/demo",
+    "size_score": 0,
+    "created_at": "TS",
+    "updated_at": "TS",
+    "completed_at": null,
+    "chunk": null,
+    "review_refs": [
+      "references/review/code.md"
+    ],
+    "depends_on": [
+      ${Number(held.split('-')[0])}
+    ],
+    "claimed_by": "",
+    "claimed_at": "",
+    "review_state": "none",
+    "reviewer": "",
+    "estimate_min": 5,
+    "complexity": "low",
+    "layer": null,
+    "waiting_on": [
+      {
+        "id": "${Number(held.split('-')[0])}",
+        "slug": "${held}",
+        "status": "in_progress",
+        "claimed_by": "archy"
+      }
+    ]
+  }
+]
+`);
 });

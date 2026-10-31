@@ -33,3 +33,29 @@ REVIEW: pending
 PICKUP: 57's slices A and B read output in the shared-new, shared-move-archive, shared-query, shared-team-pop and shared-team-work tests; the 075 tests in those files assert the line with the path - 57 edits the expected strings when the path leaves the line; createdSlug stays the one place that tolerates both forms
 OPEN_RISKS: NONE
 END_DEPENDENCY_HANDOFF
+
+DEPENDENCY_HANDOFF v1
+SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#75
+DEPENDENT_ITEM: SmoothSDLC/smooth-backlog-cli#74
+PRODUCER_AGENT: cody-card2
+SOURCE_COMMIT: cf637c5 ; BRANCH: team-cli-parity-1
+CONTRACT: unchanged by the codex round 1 review round (2026-10-31): every commit-subject assertion in .agents/test/shared-move-archive.test.js and .agents/test/shared-new.test.js still goes through the one per-file SUBJECT constant (SUBJECT['archive 5'], SUBJECT['move 2 --to-branch'], SUBJECT['move --all-open-of-branch main'], SUBJECT['move 7 --to-repository'], and SUBJECT.newName(name), SUBJECT.newDependsNone(), SUBJECT.newSplitFrom(phase)); when the subjects stop naming the python scripts, edit only those SUBJECT values. The review round touched only exact-output assertions in shared-new, shared-store, shared-sync and shared-team-scope (one commit per file: 25e5695, 305e748, 145364c, cf637c5); shared-move-archive.test.js is unchanged in this round.
+OUTPUTS: same as the 3ceecff block above (the eight 075 test files plus createdSlug in shared-fixtures.js); this round's commits: 25e5695 (shared-new), 305e748 (shared-store), 145364c (shared-sync), cf637c5 (shared-team-scope)
+VERIFICATION: at cf637c5 on Node 24 (the card shell's BACKLOG_HEADLESS unset): the four files together (node --test): tests 104, pass 104, fail 0, skipped 0; the full suite (npm test, the shared checkout with item 076's work on top): tests 756, pass 756, fail 0, skipped 0; npm run check exits 0; a mutation check broke one source per new or changed 075 test (each mutation made its test fail, the source was restored before the commit)
+REVIEW: pending
+PICKUP: slice 74 edits the subject lines in shared-update.test.js, shared-move-archive.test.js and shared-sync-db.test.js; in shared-move-archive.test.js only the SUBJECT values change (one line per subject); the SUBJECT constant in shared-new.test.js is left unless a new subject changes; nothing in this round's four commits changes how the subjects are read
+OPEN_RISKS: NONE
+END_DEPENDENCY_HANDOFF
+
+DEPENDENCY_HANDOFF v1
+SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#75
+DEPENDENT_ITEM: SmoothSDLC/smooth-backlog-cli#57
+PRODUCER_AGENT: cody-card2
+SOURCE_COMMIT: cf637c5 ; BRANCH: team-cli-parity-1
+CONTRACT: unchanged by the codex round 1 review round (2026-10-31): createdSlug in .agents/test/shared-fixtures.js stays the one place that tolerates both "created phase phases/<slug>.md" and "created phase <slug>"; the exact-output assertions that contain the full "created phase phases/<slug>.md" line (in shared-new.test.js, shared-move-archive.test.js and the new shared-sync.test.js publication tests) are the current contract - 57 edits those expected strings when the path leaves the line, after 75 has closed and the files are free. The review round (25e5695, 305e748, 145364c, cf637c5) changed only assertions in the four files; createdSlug and shared-fixtures.js are unchanged in this round.
+OUTPUTS: .agents/test/shared-fixtures.js (createdSlug, unchanged this round), .agents/test/shared-new.test.js and .agents/test/shared-sync.test.js (the created-phase lines they assert)
+VERIFICATION: same run as the 74 block above (the four files 104/0/0, the full suite 756/0/0 at cf637c5)
+REVIEW: pending
+PICKUP: 57's slices A and B read output in the shared-new, shared-move-archive, shared-query, shared-team-pop and shared-team-work tests; the 075 tests in shared-new.test.js and shared-sync.test.js now assert the created-phase line word for word (a successful new prints it to stdout and nothing to stderr) - 57 edits those expected strings when the path leaves the line; createdSlug stays the one place that tolerates both forms
+OPEN_RISKS: NONE
+END_DEPENDENCY_HANDOFF

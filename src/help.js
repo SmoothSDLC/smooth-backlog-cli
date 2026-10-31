@@ -7,9 +7,9 @@
 const SHARED = `In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: it spawns
-a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module; with the variable
-unset it spawns no child process.`;
+from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
+spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+child process when the variable is unset.`;
 
 const EXIT = `Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.

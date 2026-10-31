@@ -76,8 +76,8 @@ arguments to see the next active item.
   Commit your backlog data and generated skills to share them. Preserve custom
   skill edits through Git because initialization and updates can replace them.
 - **Run reporting:** the executable reports each run to an optional run recorder
-  hook. It starts a child process only when `CODY_SCRIPT_RUNS_MODULE` names a
-  module; with the variable unset it spawns none.
+  hook. The hook starts a child process only when `CODY_SCRIPT_RUNS_MODULE`
+  names a module; with the variable unset the hook starts none.
 
 If the backlog already exists, `backlog init backup` preserves its data and
 backs up existing files before replacing the generated skills. **`backlog init

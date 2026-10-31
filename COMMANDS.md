@@ -271,9 +271,9 @@ branch instead, and then --body must hold a definition of done.
 In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: it spawns
-a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module; with the variable
-unset it spawns no child process.
+from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
+spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+child process when the variable is unset.
 
 Options:
   --name NAME
@@ -365,9 +365,9 @@ Both are planning events, so look at the order again afterwards. The item may be
 In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: it spawns
-a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module; with the variable
-unset it spawns no child process.
+from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
+spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+child process when the variable is unset.
 
 Options:
   --status STATUS
@@ -564,9 +564,9 @@ With --json the command prints the data itself, without any wrapper.
 In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: it spawns
-a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module; with the variable
-unset it spawns no child process.
+from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
+spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+child process when the variable is unset.
 
 Options:
   --next
@@ -692,9 +692,9 @@ that agent instead, see backlog pop --help. The other options of backlog query a
 In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: it spawns
-a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module; with the variable
-unset it spawns no child process.
+from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
+spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+child process when the variable is unset.
 
 Options:
   --all
@@ -764,9 +764,9 @@ print the same.
 In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: it spawns
-a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module; with the variable
-unset it spawns no child process.
+from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
+spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+child process when the variable is unset.
 
 Options:
   --agent AGENT
@@ -914,9 +914,9 @@ Every move is recorded as an event in the history of the item.
 In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: it spawns
-a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module; with the variable
-unset it spawns no child process.
+from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
+spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+child process when the variable is unset.
 
 Argument:
   <item>
@@ -960,9 +960,9 @@ status is not done and --force was not given.
 In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: it spawns
-a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module; with the variable
-unset it spawns no child process.
+from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
+spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+child process when the variable is unset.
 
 Argument:
   <item>

@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-- The exit-hook run recorder of `bin/backlog.js` spawns its child process only when
-  `CODY_SCRIPT_RUNS_MODULE` names a module; with the variable unset no child process is spawned
-  (item 086). The shared-mode help, the built-in skill and the README document the hook the
-  same way; the no-child-process test covers spawns of the tracked executables, not only
-  `python3`.
+- The optional run recorder hook of `bin/backlog.js` spawns a child process only when
+  `CODY_SCRIPT_RUNS_MODULE` names a module, and no child process when the variable is unset;
+  the help, the built-in skill and the README confine the claim to the hook (item 086). A
+  proof test preloads a module that records every child process the CLI starts and shows the
+  hook is the only one (local mode starts none, shared mode only git); the PATH-fake
+  no-child-process test stays.
 - The help and the output of `backlog new`, `backlog pop` and `backlog update` name the
   repository of the review documents neutrally as "the review-documents repository" instead of
   a private repository name (item 086).

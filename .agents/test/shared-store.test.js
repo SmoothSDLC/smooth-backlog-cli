@@ -436,6 +436,16 @@ test('review P2: reorder keeps the rank of a row whose file was moved to archive
   assert.match(readItem(f.folder, `phases/${s.files[0]}`), /^priority: 1$/m);
 });
 
+test('075: nextSeq: items built by the CLI; an archived item keeps its number', t => {
+  const f = fixturePair(t);
+  const s = threeItems(f);
+  const r = cli(['archive', '2', '--force'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!existsSync(join(f.folder, 'phases', s.files[1])));
+  assert.ok(existsSync(join(f.folder, 'archive', 'phases', s.files[1])));
+  assert.equal(store.nextSeq(f.folder), 4, 'archived items still hold their numbers');
+});
+
 test('findings: an item of another repository is foreign, an item without repository and branch is untagged', t => {
   const f = fixturePair(t);
   threeItems(f);

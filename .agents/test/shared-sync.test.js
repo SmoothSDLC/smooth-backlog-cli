@@ -467,12 +467,15 @@ test('075: CLI steps publish a clean, in-sync state: after new, archive and an o
   const cons = consumer(f.dir, 'acme', 'demo', 'main');
   mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(f.dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  const run = args => { const r = cli(args, { cwd: cons, tmp: f.dir }); assert.equal(r.status, 0, r.stdout + r.stderr); assert.equal(r.stderr, ''); };
-  run(['new', '--name', 'Alpha', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
+  const run = (args, exact) => { const r = cli(args, { cwd: cons, tmp: f.dir }); assert.equal(r.status, 0, r.stdout + r.stderr); assert.equal(r.stdout, exact); assert.equal(r.stderr, ''); };
+  run(['new', '--name', 'Alpha', '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
+    '✅ created phase phases/001-alpha.md (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
   assertPublish(f, f.home, f.folder, ['acme/demo/phases/001-alpha.md']);
-  run(['new', '--name', 'Beta', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
+  run(['new', '--name', 'Beta', '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
+    '✅ created phase phases/002-beta.md (seq 2) — appended, now at P1\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 1 (re)ingested\n');
   assertPublish(f, f.home, f.folder, ['acme/demo/phases/001-alpha.md', 'acme/demo/phases/002-beta.md']);
-  run(['archive', '2', '--force']);
+  run(['archive', '2', '--force'],
+    '📦 002-beta archived -> archive/phases/002-beta.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   assertPublish(f, f.home, f.folder, ['acme/demo/archive/phases/002-beta.md', 'acme/demo/phases/001-alpha.md']);
   // overlapping writers: two `new` in the same clone overlap on the run lock; both land and the state stays published
   const g = gate(f);
@@ -483,8 +486,10 @@ test('075: CLI steps publish a clean, in-sync state: after new, archive and an o
     g.release(); // the first publishes 003-gamma, then the second acquires the lock and publishes 004-delta
     const [a, b] = await Promise.all([aP, bP]);
     assert.equal(a.status, 0, a.out + a.err);
+    assert.equal(a.out, '✅ created phase phases/003-gamma.md (seq 3) — appended, now at P1\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 1 (re)ingested\n');
     assert.equal(a.err, '');
     assert.equal(b.status, 0, b.out + b.err);
+    assert.equal(b.out, '✅ created phase phases/004-delta.md (seq 4) — appended, now at P2\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n   rescan: 3 phase(s) tracked, 1 (re)ingested\n');
     assert.equal(b.err, '');
     assertPublish(f, f.home, f.folder, ['acme/demo/archive/phases/002-beta.md', 'acme/demo/phases/001-alpha.md', 'acme/demo/phases/003-gamma.md', 'acme/demo/phases/004-delta.md']);
   } finally { g.release(); } // never leave the held push (and its hook) running

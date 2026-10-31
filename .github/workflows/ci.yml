@@ -1,10 +1,9 @@
 name: CI
+# Owner 2026-10-31: CI runs only when started by hand (or called by another workflow). Agents commit on every change
+# and every backlog update, so a run per push costs without adding value; the pull request's final validation item
+# starts this workflow and checks its result.
 on:
-  push:
-    branches-ignore: [master]
-    tags-ignore: ['**']
-  pull_request:
-    branches-ignore: [master]
+  workflow_dispatch:
   workflow_call:
 permissions:
   contents: read

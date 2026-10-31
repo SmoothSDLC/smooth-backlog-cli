@@ -33,7 +33,7 @@ function fixture() {
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-// The lifecycle parity driver reads the write set as the named agent; stale-view refusals have their own regression suite.
+// update() reads the write set as the named agent first; stale-view refusals have their own regression suite.
 const update = (f, args, env) => {
   const named = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
   const who = named ?? (args.includes('--request-review') ? 'cody' : undefined); // a review is requested by the one working on the item (cody here)

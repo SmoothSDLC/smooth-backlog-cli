@@ -182,3 +182,21 @@ test('a team session whose repository id leaves the home (../x) is refused with 
   assert.equal(up.status, 2);
   assert.match(up.stderr, /^❌ backlog: not an owner\/name repository id: \.\.\/x/);
 });
+
+test('075: the claimable, reviewable and blocked views print their exact rows, and the blocked JSON names the edge it waits on', () => {
+  const f = fixture();
+  const here = make(f, f.cons, 'scope here', []);
+  const held = make(f, f.cons, 'scope held job', []);
+  const blocked = make(f, f.cons, 'scope blocked job', ['--depends-on', held.split('-')[0]]);
+  const up = (...a) => { const r = cli(['update', held, ...a], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
+  up('--claim', 'archy');
+  up('--request-review', 'any', '--note', 'ready');
+  assert.equal(cli(['query', '--claimable'], { cwd: f.cons, tmp: f.t }).stdout,
+    `📋 1 claimable item(s) — acme/demo, branch main, P0 = next:\n   P0   ${here} (pending) — scope here\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n`);
+  assert.equal(cli(['query', '--reviewable', '--agent', 'cody'], { cwd: f.cons, tmp: f.t }).stdout,
+    `📋 1 reviewable item(s) — acme/demo, branch main, P0 = next:\n   P1   ${held} (in_progress) — scope held job\n        review_refs=references/review/code.md claimed_by=archy review=requested reviewer=any estimate=5m complexity=low\n`);
+  assert.equal(cli(['query', '--blocked'], { cwd: f.cons, tmp: f.t }).stdout,
+    `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P2   ${blocked} (pending) — scope blocked job\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n        waits on ${held} (status in_progress, claimed by archy)\n`);
+  const j = JSON.parse(cli(['query', '--blocked', '--json'], { cwd: f.cons, tmp: f.t }).stdout);
+  assert.deepEqual(j.map(x => [x.slug, x.waiting_on]), [[blocked, [{ id: String(Number(held.split('-')[0])), slug: held, status: 'in_progress', claimed_by: 'archy' }]]]);
+});

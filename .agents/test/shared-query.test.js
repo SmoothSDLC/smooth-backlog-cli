@@ -66,10 +66,11 @@ function build(withFindings) {
 let shared;
 const fx = () => (shared ??= build(true));
 
-// Runs a read view of the CLI; asserts its exit status.
+// Runs a read view of the CLI; asserts its exit status, and for a successful view the exact (empty) stderr.
 function view(f, args, status = 0, cwd = f.cons) {
   const n = cli(['query', ...args], { cwd, tmp: f.t });
   assert.equal(n.status, status, `${args.join(' ')}: ${n.stderr}`);
+  if (status === 0) assert.equal(n.stderr, '', `${args.join(' ')}: a successful query prints nothing to stderr`);
   return n;
 }
 // The parts that differ between runs: timestamps, hex shas (any length, 7 or more chars) and the writing agent id.
@@ -119,24 +120,231 @@ const MANDATE = '================ NEXT-STEPS-MANDATE (NON-OPTIONAL — DO NOT SK
 
 test('075: --status --json prints handoff, repository, branch, phases, gone_branch_items and findings', () => {
   const f = fx();
-  const v = normJson(view(f, ['--status', '--json']).stdout);
-  assert.deepEqual(Object.keys(v), ['handoff', 'repository', 'branch', 'phases', 'gone_branch_items', 'findings']);
-  assert.deepEqual(v.handoff, { id: 1, slug: 'BACKLOG', title: 'Backlog', objective: 'phase anchor (no document)', path: '', sha: '', status: 'active', source_context: '', created_at: 'TS', updated_at: 'TS' });
-  assert.deepEqual([v.repository, v.branch], ['acme/demo', 'main']);
-  assert.deepEqual(v.phases.map(x => [x.slug, x.status, x.severity, x.priority, x.path, x.branch]), [
-    ['002-beta', 'pending', 'critical', 0, 'phases/002-beta.md', 'main'],
-    ['001-alpha', 'pending', 'normal', 1, 'phases/001-alpha.md', 'main'],
-    ['003-gamma', 'in_progress', 'normal', 2, 'phases/003-gamma.md', 'main'],
-    ['004-delta', 'done', 'normal', 3, 'phases/004-delta.md', 'main']]);
-  assert.deepEqual(v.phases.map(x => [x.sha, x.commit_sha, x.size_score, x.location, x.repository, x.claimed_by, x.review_state]),
-    v.phases.map(() => ['SHA', 'SHA', 0, '', 'acme/demo', '', 'none']));
-  assert.equal(v.phases[3].completed_at, 'TS', 'the done item carries its completion time');
-  assert.deepEqual(v.gone_branch_items.map(x => [x.slug, x.branch]), [['005-feat', 'feature']]);
-  assert.deepEqual(Object.keys(v.findings), ['foreign', 'untagged', 'ghost']);
-  assert.deepEqual([v.findings.foreign.length, v.findings.untagged.length, v.findings.ghost.length], [1, 1, 1]);
-  assert.deepEqual(v.findings.foreign.map(x => x.slug), ['007-foreign']);
-  assert.deepEqual(v.findings.untagged.map(x => x.slug), ['008-untagged']);
-  assert.deepEqual(v.findings.ghost.map(x => x.slug), ['006-ghost']);
+  // timestamps, content hashes and the writing agent id differ between runs; the rest of the output is asserted word for word
+  const exact = s => s
+    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS')
+    .replace(/"(sha|commit_sha)": "[0-9a-f]+"/g, '"$1": "SHA"');
+  assert.equal(exact(view(f, ['--status', '--json']).stdout), String.raw`{
+  "handoff": {
+    "id": 1,
+    "slug": "BACKLOG",
+    "title": "Backlog",
+    "objective": "phase anchor (no document)",
+    "path": "",
+    "sha": "",
+    "status": "active",
+    "source_context": "",
+    "created_at": "TS",
+    "updated_at": "TS"
+  },
+  "repository": "acme/demo",
+  "branch": "main",
+  "phases": [
+    {
+      "id": 2,
+      "handoff_id": 1,
+      "slug": "002-beta",
+      "seq": 2,
+      "name": "Beta",
+      "objective": "Caf\u00e9 \u2615 Beta",
+      "summary": "sum Beta",
+      "status": "pending",
+      "severity": "critical",
+      "priority": 0,
+      "path": "phases/002-beta.md",
+      "sha": "SHA",
+      "branch": "main",
+      "commit_sha": "SHA",
+      "location": "",
+      "repository": "acme/demo",
+      "size_score": 0,
+      "created_at": "TS",
+      "updated_at": "TS",
+      "completed_at": null,
+      "claimed_by": "",
+      "review_state": "none"
+    },
+    {
+      "id": 1,
+      "handoff_id": 1,
+      "slug": "001-alpha",
+      "seq": 1,
+      "name": "Alpha",
+      "objective": "Caf\u00e9 \u2615 Alpha",
+      "summary": "sum Alpha",
+      "status": "pending",
+      "severity": "normal",
+      "priority": 1,
+      "path": "phases/001-alpha.md",
+      "sha": "SHA",
+      "branch": "main",
+      "commit_sha": "SHA",
+      "location": "",
+      "repository": "acme/demo",
+      "size_score": 0,
+      "created_at": "TS",
+      "updated_at": "TS",
+      "completed_at": null,
+      "claimed_by": "",
+      "review_state": "none"
+    },
+    {
+      "id": 3,
+      "handoff_id": 1,
+      "slug": "003-gamma",
+      "seq": 3,
+      "name": "Gamma",
+      "objective": "Caf\u00e9 \u2615 Gamma",
+      "summary": "sum Gamma",
+      "status": "in_progress",
+      "severity": "normal",
+      "priority": 2,
+      "path": "phases/003-gamma.md",
+      "sha": "SHA",
+      "branch": "main",
+      "commit_sha": "SHA",
+      "location": "",
+      "repository": "acme/demo",
+      "size_score": 0,
+      "created_at": "TS",
+      "updated_at": "TS",
+      "completed_at": null,
+      "claimed_by": "",
+      "review_state": "none"
+    },
+    {
+      "id": 4,
+      "handoff_id": 1,
+      "slug": "004-delta",
+      "seq": 4,
+      "name": "Delta",
+      "objective": "Caf\u00e9 \u2615 Delta",
+      "summary": "sum Delta",
+      "status": "done",
+      "severity": "normal",
+      "priority": 3,
+      "path": "phases/004-delta.md",
+      "sha": "SHA",
+      "branch": "main",
+      "commit_sha": "SHA",
+      "location": "",
+      "repository": "acme/demo",
+      "size_score": 0,
+      "created_at": "TS",
+      "updated_at": "TS",
+      "completed_at": "TS",
+      "claimed_by": "",
+      "review_state": "none"
+    }
+  ],
+  "gone_branch_items": [
+    {
+      "id": 5,
+      "handoff_id": 1,
+      "slug": "005-feat",
+      "seq": 5,
+      "name": "Feat",
+      "objective": "Caf\u00e9 \u2615 Feat",
+      "summary": "sum Feat",
+      "status": "pending",
+      "severity": "normal",
+      "priority": 3,
+      "path": "phases/005-feat.md",
+      "sha": "SHA",
+      "branch": "feature",
+      "commit_sha": "SHA",
+      "location": "",
+      "repository": "acme/demo",
+      "size_score": 0,
+      "created_at": "TS",
+      "updated_at": "TS",
+      "completed_at": null,
+      "claimed_by": "",
+      "review_state": "none"
+    }
+  ],
+  "findings": {
+    "foreign": [
+      {
+        "id": 7,
+        "handoff_id": 1,
+        "slug": "007-foreign",
+        "seq": 7,
+        "name": "foreign",
+        "objective": "o",
+        "summary": "s",
+        "status": "pending",
+        "severity": "normal",
+        "priority": 9,
+        "path": "phases/007-foreign.md",
+        "sha": "SHA",
+        "branch": "main",
+        "commit_sha": "SHA",
+        "location": "",
+        "repository": "other/thing",
+        "size_score": 0,
+        "created_at": "TS",
+        "updated_at": "TS",
+        "completed_at": null,
+        "claimed_by": "",
+        "review_state": ""
+      }
+    ],
+    "untagged": [
+      {
+        "id": 8,
+        "handoff_id": 1,
+        "slug": "008-untagged",
+        "seq": 8,
+        "name": "untagged",
+        "objective": "o",
+        "summary": "s",
+        "status": "pending",
+        "severity": "normal",
+        "priority": 9,
+        "path": "phases/008-untagged.md",
+        "sha": "SHA",
+        "branch": "",
+        "commit_sha": "SHA",
+        "location": "",
+        "repository": "acme/demo",
+        "size_score": 0,
+        "created_at": "TS",
+        "updated_at": "TS",
+        "completed_at": null,
+        "claimed_by": "",
+        "review_state": ""
+      }
+    ],
+    "ghost": [
+      {
+        "id": 6,
+        "handoff_id": 1,
+        "slug": "006-ghost",
+        "seq": 6,
+        "name": "Ghost",
+        "objective": "Caf\u00e9 \u2615 Ghost",
+        "summary": "sum Ghost",
+        "status": "pending",
+        "severity": "normal",
+        "priority": 4,
+        "path": "phases/006-ghost.md",
+        "sha": "SHA",
+        "branch": "main",
+        "commit_sha": "SHA",
+        "location": "",
+        "repository": "acme/demo",
+        "size_score": 0,
+        "created_at": "TS",
+        "updated_at": "TS",
+        "completed_at": null,
+        "claimed_by": "",
+        "review_state": ""
+      }
+    ]
+  }
+}
+`);
 });
 
 test('075: --status text: the findings, the critical banner, the queue and the gone-branch warning, exactly', () => {

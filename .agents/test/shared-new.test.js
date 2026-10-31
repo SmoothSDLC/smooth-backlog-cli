@@ -47,30 +47,29 @@ const rows = (f, sql) => { const con = db.connect(f.folder); try { return con.pr
 // ---------------------------------------------------------------- refusals
 
 const REFUSALS = [
-  ['no --depends-on', BASE, 1, 'stdout', '--depends-on is required'],
-  ['no --name', ['--depends-on', 'none'], 1, 'stdout', '--name is required (or --split-from <phase>)'],
-  ['a work class (the classes are gone)', [...NONE, '--work-class', 'docs'], 2, 'stderr', 'unrecognized arguments: --work-class docs'],
-  ['a review class (the classes are gone)', [...NONE, '--review-classes', 'code'], 2, 'stderr', 'unrecognized arguments: --review-classes code'],
-  ['review refs that name no review document', [...NONE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x'], 1, 'stdout', '--review-refs needs at least one review document (references/review/<type>.md in cody-coding-model)'],
-  ['a dependency that is not there', [...BASE, '--depends-on', 'no-such-item'], 1, 'stdout', "no item 'no-such-item'"],
-  ['a number that is not there', [...BASE, '--depends-on', '99'], 1, 'stdout', "no item '99'"],
-  ['--split-from not found', [...NONE, '--split-from', 'nope'], 1, 'stdout', "--split-from: no phase 'nope'"],
-  ['review refs without a definition of done', [...NONE, '--review-refs', 'references/review/code.md'], 1, 'stdout', '--body must hold a definition of done'],
-  ['an unknown option', [...NONE, '--bogus', 'x'], 2, 'stderr', 'unrecognized arguments: --bogus x'],
-  ['an invalid choice', [...NONE, '--severity', 'urgent'], 2, 'stderr', "invalid choice: 'urgent'"],
-  ['an invalid integer', [...NONE, '--priority', 'soon'], 2, 'stderr', "invalid int value: 'soon'"],
-  ['a missing value', [...NONE, '--summary'], 2, 'stderr', 'expected one argument'],
+  ['no --depends-on', BASE, 1, '❌ --depends-on is required: the item numbers or slugs this work needs done first, or --depends-on none\n', ''],
+  ['no --name', ['--depends-on', 'none'], 1, '❌ --name is required (or --split-from <phase>)\n', ''],
+  ['a work class (the classes are gone)', [...NONE, '--work-class', 'docs'], 2, '', '❌ backlog: unrecognized arguments: --work-class docs\n'],
+  ['a review class (the classes are gone)', [...NONE, '--review-classes', 'code'], 2, '', '❌ backlog: unrecognized arguments: --review-classes code\n'],
+  ['review refs that name no review document', [...NONE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x'], 1, '❌ --review-refs needs at least one review document (references/review/<type>.md in cody-coding-model)\n', ''],
+  ['a dependency that is not there', [...BASE, '--depends-on', 'no-such-item'], 1, "❌ --depends-on: no item 'no-such-item' in this backlog\n", ''],
+  ['a number that is not there', [...BASE, '--depends-on', '99'], 1, "❌ --depends-on: no item '99' in this backlog\n", ''],
+  ['--split-from not found', [...NONE, '--split-from', 'nope'], 1, "❌ --split-from: no phase 'nope'\n", ''],
+  ['review refs without a definition of done', [...NONE, '--review-refs', 'references/review/code.md'], 1, "❌ --body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written\n", ''],
+  ['an unknown option', [...NONE, '--bogus', 'x'], 2, '', '❌ backlog: unrecognized arguments: --bogus x\n'],
+  ['an invalid choice', [...NONE, '--severity', 'urgent'], 2, '', "❌ backlog: argument --severity: invalid choice: 'urgent' (choose from 'normal', 'critical')\n"],
+  ['an invalid integer', [...NONE, '--priority', 'soon'], 2, '', "❌ backlog: argument --priority: invalid int value: 'soon'\n"],
+  ['a missing value', [...NONE, '--summary'], 2, '', '❌ backlog: argument --summary: expected one argument\n'],
 ];
 
-for (const [title, args, code, stream, text] of REFUSALS) {
-  test(`refusal: ${title}: exit ${code}, message on ${stream}, nothing written or committed`, t => {
+for (const [title, args, code, out, err] of REFUSALS) {
+  test(`075: refusal: ${title}: exit ${code}, the exact output, nothing written or committed`, t => {
     const f = fixture(t);
     const before = subject(f);
     const r = node(f, args);
-    assert.equal(r.status, code, r.stdout + r.stderr);
-    assert.ok(r[stream].includes(text), r.stdout + r.stderr);
-    if (stream === 'stdout') assert.ok(r.stdout.startsWith('❌ ') && r.stderr === '');
-    else assert.ok(r.stderr.startsWith('❌ backlog: ') && r.stdout === '');
+    assert.equal(r.status, code);
+    assert.equal(r.stdout, out);
+    assert.equal(r.stderr, err);
     assert.deepEqual(items(f), []);
     assert.equal(subject(f), before);
     assert.equal(git(f.home, 'status', '--porcelain', '--', 'acme/demo/phases'), '');
@@ -281,21 +280,30 @@ test('review P1: new --split-from an item of another team (TEAM_BRANCH differs) 
   assert.deepEqual(readdirSync(join(f.folder, 'phases')), ['001-alpha-job.md']);
 });
 
-test('team mode: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the branch, an item without a definition of done is refused', t => {
+test('075: team mode: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the branch, an item without a definition of done is refused', t => {
   const f = fixture(t); const env = { TEAM_REPOSITORY: 'acme/other', TEAM_BRANCH: 'team-1' };
   const refused = node(f, NONE, env);
-  assert.equal(refused.status, 1); assert.match(refused.stdout, /^❌ --body must hold a definition of done/);
+  assert.equal(refused.status, 1);
+  assert.equal(refused.stdout, "❌ --body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written\n");
+  assert.equal(refused.stderr, '');
   const ok = node(f, [...NONE, '--body', '## Definition of done\n- [ ] x'], env);
-  assert.equal(ok.status, 0, ok.stderr);
+  assert.equal(ok.status, 0);
+  assert.equal(ok.stdout, '✅ created phase phases/001-alpha-job.md (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+  assert.equal(ok.stderr, '');
   const [item] = store.load(join(f.home, 'acme', 'other'));
   assert.equal(item.fm.repository, 'acme/other'); assert.equal(item.fm.branch, 'team-1');
-  assert.equal(node(f, NONE, { TEAM_REPOSITORY: '../x' }).status, 2);
+  const bad = node(f, NONE, { TEAM_REPOSITORY: '../x' });
+  assert.equal(bad.status, 2);
+  assert.equal(bad.stdout, '');
+  assert.equal(bad.stderr, '❌ backlog: not an owner/name repository id: ../x\n');
 });
 
-test('review P2: a skills.md review document is accepted and persisted; no class field is written', t => {
+test('075: a skills.md review document is accepted and persisted; no class field is written', t => {
   const f = fixture(t);
   const r = node(f, [...NONE, '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
-  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout, '✅ created phase phases/001-alpha-job.md (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+  assert.equal(r.stderr, '');
   const [item] = items(f);
   assert.deepEqual(item.fm.review_refs, ['references/review/skills.md']);
   assert.ok(!('work_class' in item.fm) && !('review_classes' in item.fm) && !('chunk' in item.fm));
@@ -331,9 +339,10 @@ const SCENARIOS = {
 for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
   test(`075: new: ${title}: the exact output, the published commit and the queue`, t => {
     const f = fixture(t);
-    for (const s of setup) { const r = node(f, s); assert.equal(r.status, 0, r.stdout + r.stderr); }
+    for (const s of setup) { const r = node(f, s); assert.equal(r.status, 0, r.stdout + r.stderr); assert.equal(r.stderr, ''); }
     const r = node(f, args);
     assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(r.stderr, '', 'a successful new prints nothing to stderr');
     if (title === 'a dry run') {
       assert.equal(r.stdout, 'ℹ️  [dry-run] would create phase phases/001-alpha-job.md (seq 1)\n');
       assert.equal(existsSync(f.folder), false, 'a dry run writes nothing');
@@ -367,6 +376,8 @@ test('075: new: every flag, appended: the item carries the carried context, the 
   const r = node(f, [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--chunk',
     '--review-refs', 'references/review/code.md,references/review/tests.example.md', '--estimate', '30', '--complexity', 'medium', '--layer', '3']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stdout, '✅ created phase phases/001-alpha-job.md (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+  assert.equal(r.stderr, '');
   const [item] = items(f);
   assert.deepEqual(fmNorm(item.fm), { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
     status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: 0, location: '',

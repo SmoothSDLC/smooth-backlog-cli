@@ -362,15 +362,15 @@ test('075: the successful stage steps print exactly what they record', () => {
   const w = make(f, 'work item');
   assert.equal(up(f, w, '--set-team', 't1').stdout, `✅ ${w} updated (team=t1)\n`);
   const c = make(f, 'child', '--split-from', w);
-  // the event text names the refinement reviewer models; the placeholders keep the exact text without naming a model
   const TS = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS');
   assert.equal(TS(up(f, c, '--refine-start', '--by', 'cody').stdout), `✅ ${c} updated (refine_started=Refinement started by cody at TS)\n`);
   assert.equal(TS(up(f, c, '--refine-done', '--by', 'cody', '--note', 'checked').stdout), `✅ ${c} updated (refined=Refined by cody at TS)\n`);
-  // the display names of the two refinement reviewers come from the CLI's own text, so this file never names a model
-  const req = up(f, c, '--request-refinement-review', '--by', 'lead').stdout;
-  const [, first, second] = req.match(/\((\S+) first; (\S+) only when/);
-  const norm = s => TS(s).replace(new RegExp(`\\b${first}\\b`, 'gi'), 'MODEL_A').replace(new RegExp(`\\b${second}\\b`, 'gi'), 'MODEL_B');
-  assert.equal(norm(req), `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (MODEL_A first; MODEL_B only when MODEL_A's 5-hour limit is exceeded))\n`);
-  assert.equal(norm(up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready').stdout), `✅ ${c} updated (refinement_reviewed=Refinement review by MODEL_A: PASS: ready (TS))\n`);
+  // the refinement reviewers this test sets up (the agent names the CLI accepts, in order); the request text's
+  // display form is the capital of the agent name, so the expected text is built from the test's own values
+  const cap = n => n[0].toUpperCase() + n.slice(1);
+  assert.equal(TS(up(f, c, '--request-refinement-review', '--by', 'lead').stdout),
+    `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (${cap('codex')} first; ${cap('claude')} only when ${cap('codex')}'s 5-hour limit is exceeded))\n`);
+  assert.equal(TS(up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready').stdout),
+    `✅ ${c} updated (refinement_reviewed=Refinement review by codex: PASS: ready (TS))\n`);
   assert.equal(fm(f, c).stage, 'ready');
 });

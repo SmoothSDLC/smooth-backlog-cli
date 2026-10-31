@@ -256,7 +256,8 @@ const REFINEMENT_STEPS = ['refine-start', 'refine-done', 'request-refinement-rev
 // the agent each step acts as (item 033: a member acts only as itself)
 const ACTS_AS = { claim: a => a.claim, release: a => a.by || a.release, reassign: a => a.by, 'reassign-review': a => a.by, 'request-review': (a, fm) => a.by || fm.claimed_by,
   close: (a, fm) => a.by || fm.claimed_by, 'waiting-done': (a, fm) => a.by || fm.claimed_by,
-  'accept-handoff': a => a.by, 'reject-handoff': a => a.by }; // the accept and reject act as --by, the team lead (item 059.V1)
+  'handoff': (a, fm) => a.by || fm.claimed_by, // the record acts as the claimer (item 059.V1)
+  'accept-handoff': a => a.by, 'reject-handoff': a => a.by }; // the accept and reject act as --by, the team lead, and need it (item 059.V1, review r1)
 const ACTIONS = ['reassign', 'reassign-review', 'refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
   'claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done', 'handoff', 'accept-handoff', 'reject-handoff'];
 // The hand-off steps (item 059.2, src/shared/handoff-commands.js) are pure: they return {refuse} (the refusal
@@ -275,6 +276,11 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
     if (agent && restarting(agent)) return { refuse: `${slug}: ${flag} refused: ${agent} is waiting for its restart; ${STOP_TEXT}` };
   }
   const me = caller();
+  if (actions.length && (actions[0] === 'accept-handoff' || actions[0] === 'reject-handoff') && !a.by) {
+    // Item 059.V1 review r1: the receipt is the team lead's - the lead's --by is required, with no fallback to the
+    // claimer (a member without --by would otherwise act as the claimer when the lead holds the item).
+    return { refuse: `${slug}: --${actions[0]} needs --by <the team lead>` };
+  }
   if (me && actions.length && me !== teamLead()) {
     const as = (ACTS_AS[actions[0]] ?? (x => x.by))(a, fm);
     if (as && as !== me) return { refuse: `${slug}: you are ${me} (QWEN_CODE_AGENT_ID): a member acts only as itself, not as ${as}; only the team lead (${teamLead()}) takes or gives another agent's work (backlog update <item> --reassign <agent> --by <lead> --reason "<why>")` };
@@ -345,12 +351,13 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
       case 'review': return review(item, a.review, { by: a.by, comments: a.comments });
       case 'waiting': return waiting(item, a.by, a.waiting);
       case 'waiting-done': return waitingDone(item, a.by);
-      // Item 059.V1: the hand-off steps. The record is made by the claimer (--by, else the claimer), the accept and
-      // reject by the team lead (teamLead()); the functions are pure (059.2), handoffStep applies their front matter.
+      // Item 059.V1: the hand-off steps. The record is made by the claimer (--by, else the claimer); the accept and
+      // reject act as --by, the team lead, which the step requires (refused above, review r1). The functions are pure
+      // (059.2), handoffStep applies their front matter.
       case 'handoff': return handoffStep(slug, item, recordHandoff(item, { dependent: a.handoff, commit: a['handoff-commit'], contract: a['handoff-contract'], verification: a['handoff-verification'],
         outputs: a['handoff-outputs'], pickup: a['handoff-pickup'], risks: a['handoff-risks'], by: a.by || fm.claimed_by }));
-      case 'accept-handoff': return handoffStep(slug, item, acceptHandoff(item, { dependent: a['accept-handoff'], checks: a.checks, by: a.by || fm.claimed_by, lead: teamLead() }));
-      case 'reject-handoff': return handoffStep(slug, item, rejectHandoff(item, { dependent: a['reject-handoff'], reason: a.reason, by: a.by || fm.claimed_by, lead: teamLead() }));
+      case 'accept-handoff': return handoffStep(slug, item, acceptHandoff(item, { dependent: a['accept-handoff'], checks: a.checks, by: a.by, lead: teamLead() }));
+      case 'reject-handoff': return handoffStep(slug, item, rejectHandoff(item, { dependent: a['reject-handoff'], reason: a.reason, by: a.by, lead: teamLead() }));
       default: return closeItem(item, a.by, a.summary);
     }
   } catch (e) {

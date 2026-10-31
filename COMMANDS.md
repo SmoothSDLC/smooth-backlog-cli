@@ -496,12 +496,12 @@ Options:
   --handoff-risks RISKS
       The open risks of the hand-off. The default is NONE. Optional with --handoff.
   --accept-handoff DEPENDENT
-      The team lead accepts the producer's hand-off for DEPENDENT (--by <lead>, --checks "<what was checked>"); the
-      producer's review must have passed. It records a receipt that pins the current hand-off record; a re-recorded
-      hand-off makes it stale.
+      The team lead accepts the producer's hand-off for DEPENDENT. It needs --by <lead> and --checks
+      "<what was checked>"; the producer's review must have passed. It records a receipt that pins the current
+      hand-off record; a re-recorded hand-off makes it stale.
   --reject-handoff DEPENDENT
-      The team lead rejects the producer's hand-off for DEPENDENT (--by <lead>, --reason "<why>"); it records a
-      receipt that pins the current hand-off record.
+      The team lead rejects the producer's hand-off for DEPENDENT. It needs --by <lead> and --reason "<why>"; it
+      records a receipt that pins the current hand-off record.
   --checks CHECKS
       The checks the team lead did before accepting a hand-off (--accept-handoff).
   --by AGENT

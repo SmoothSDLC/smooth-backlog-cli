@@ -5,8 +5,9 @@
 - `backlog update` records dependency hand-offs and the team lead's receipts: the producer's claimer records
   `--handoff <dependent>` with `--handoff-commit`, `--handoff-contract` and `--handoff-verification` (and optional
   `--handoff-outputs`, `--handoff-pickup`, `--handoff-risks`); the team lead accepts it with `--accept-handoff
-  <dependent> --checks "<text>"` only after the producer's review passed, or rejects it with `--reject-handoff
-  <dependent> --reason "<text>"`; a re-recorded hand-off makes an earlier receipt stale (item 077).
+  <dependent> --checks "<text>" --by <lead>` only after the producer's review passed, or rejects it with
+  `--reject-handoff <dependent> --reason "<text>" --by <lead>`; the accept and reject need the lead's `--by`
+  (a member acts only as itself), and a re-recorded hand-off makes an earlier receipt stale (item 077).
 - `backlog query --phase --json` names the team fields each item lacks (`missing`, item 061).
 - `backlog query --status --json` rows carry `claimed_by` and `review_state` (item 060), so no caller reads item files.
 - `backlog team pop --team <name>`: the team lead takes its team's next work item (an item of the team with no stage),

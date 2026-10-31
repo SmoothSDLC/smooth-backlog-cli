@@ -51,9 +51,9 @@ function producerWithHandoff(f, commit, session) {
     { QWEN_CODE_SESSION_ID: session });
   return { p, d, record };
 }
-// The producer's review passing: request, start and a pass verdict, through the CLI.
-function reviewPass(f, p) {
-  ok(f, ['update', p, '--request-review', 'codex', '--note', 'the hand-off wiring', '--by', 'producer']);
+// The producer's review passing: request, start and a pass verdict, through the CLI (by = the claimer who requests).
+function reviewPass(f, p, by = 'producer') {
+  ok(f, ['update', p, '--request-review', 'codex', '--note', 'the hand-off wiring', '--by', by]);
   ok(f, ['query', '--phase', p, '--agent', 'codex']);
   ok(f, ['update', p, '--start-review', '--by', 'codex']);
   ok(f, ['update', p, '--review', 'pass', '--by', 'codex', '--comments', 'PASS (references/review/code.md)']);
@@ -151,5 +151,57 @@ test('059.V1: a member cannot accept or reject a hand-off', () => {
   const reject = run(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'why not', '--by', 'producer']);
   assert.equal(reject.status, 1, reject.stdout + reject.stderr);
   assert.match(reject.stdout, /a hand-off is rejected by the team lead \(lead\), not by producer/);
+  assert.equal(receipts(f, p).length, 0);
+});
+
+// Review round 1 (codex at e3c0fc1): the hand-off steps resolve the actor before the identity check, so a
+// member in a team session (QWEN_CODE_AGENT_ID) without --by acts as itself, never as another claimer - and
+// the accept and reject need the lead's --by.
+
+test('059.V1: the claimer records its hand-off without --by; the record is by the claimer', () => {
+  const f = fixture();
+  const p = make(f, 'producer item');
+  const d = make(f, 'dependent item', '--depends-on', seq(p));
+  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['update', p, '--claim', 'producer']);
+  const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
+    '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
+    { QWEN_CODE_AGENT_ID: 'producer@team77' });
+  assert.match(record.stdout, /handoff=DEPENDENCY_HANDOFF v1/);
+  const records = handoffs(f, p);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].by, 'producer'); // the claimer acts as itself without --by
+  assert.equal(edgeState(fm(f, p), String(seq(d))), 'unaccepted');
+});
+
+test('059.V1: a member without --by cannot record another claimer\'s hand-off', () => {
+  const f = fixture();
+  const p = make(f, 'producer item');
+  const d = make(f, 'dependent item', '--depends-on', seq(p));
+  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['update', p, '--claim', 'producer']);
+  const r = run(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
+    '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
+    { QWEN_CODE_AGENT_ID: 'other@team77' });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /you are other \(QWEN_CODE_AGENT_ID\): a member acts only as itself, not as producer/);
+  assert.equal(handoffs(f, p).length, 0);
+});
+
+test('059.V1: a member without --by cannot accept or reject as the lead claimer', () => {
+  const f = fixture();
+  const p = make(f, 'producer item');
+  const d = make(f, 'dependent item', '--depends-on', seq(p));
+  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['update', p, '--claim', 'lead']);
+  ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
+    '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--by', 'lead']);
+  reviewPass(f, p, 'lead');
+  const accept = run(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked'], { QWEN_CODE_AGENT_ID: 'other@team77' });
+  assert.equal(accept.status, 1, accept.stdout + accept.stderr);
+  assert.match(accept.stdout, /--accept-handoff needs --by <the team lead>/);
+  const reject = run(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'why not'], { QWEN_CODE_AGENT_ID: 'other@team77' });
+  assert.equal(reject.status, 1, reject.stdout + reject.stderr);
+  assert.match(reject.stdout, /--reject-handoff needs --by <the team lead>/);
   assert.equal(receipts(f, p).length, 0);
 });

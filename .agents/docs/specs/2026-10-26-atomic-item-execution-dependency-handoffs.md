@@ -1,6 +1,6 @@
 # Atomic backlog item execution and dependency handoff contract (owner, 2026-10-26)
 
-**State:** required target contract; NOT evidence that any runtime, CLI, Python skill or BigFan deployment currently enforces it. Scope: backlog CLI PR #3, coding-model refinement/review methods, topology Qwen team-lifecycle PR #1, and authoritative backlog skill. Owner approval required before PR #3 merge/release and before BigFan deployment.
+**State:** required target contract; NOT evidence that any runtime, CLI, Python skill or deployment to the owner's workstation currently enforces it. Scope: backlog CLI PR #3, coding-model refinement/review methods, topology Qwen team-lifecycle PR #1, and authoritative backlog skill. Owner approval required before PR #3 merge/release and before a deployment to the owner's workstation.
 
 ## 1. Atomic units and authority
 
@@ -49,7 +49,7 @@ An agent may **review other items** while eligible within its existing claimed w
 | `smooth-backlog-cli` PR3, `team-cli-parity-1` | New/update/split/depends-on, claim/close/review invariant and merged-remote checks; portable public CLI with organization-specific configuration; deterministic isolation, race and rejection tests; no session spawning |
 | `smoothsdlc-backlog` authoritative Python skill | Same item, claim and closure contracts at least until full CLI cutover; procedure for dependency artifacts, no direct Markdown/SQLite edits; preserve historical `SmoothSDLC/backlog-cli` folder mapping |
 | `cody-coding-model` active refinement methods | Refine source -> create distinct child items -> reviewed dependency outputs, independent review and final lead gate |
-| `cody-topology-bigfan-linux` draft Qwen PR1 | Team lead/member skills, dispatcher/wake, Qwen same-name release patch, dependency approval dispatch barrier, proof suite + deployed upgrade/rollback gate |
+| the topology repository, draft Qwen PR1 | Team lead/member skills, dispatcher/wake, Qwen same-name release patch, dependency approval dispatch barrier, proof suite + deployed upgrade/rollback gate |
 
 CLI/skill inconsistencies are **known unresolved** at baseline 2026-10-26: `src/shared/lifecycle.js` accepts arbitrary closer and emits 3-minute fallback text; `src/shared/update.js` accepts direct status done; `src/shared/team.js`/sync claim limit excludes waits/reviews and permits force. Topology draft PR1 has unrun Qwen source/bundle tests and is **not deployed**. No validation here constitutes passing executable tests.
 
@@ -59,7 +59,7 @@ CLI/skill inconsistencies are **known unresolved** at baseline 2026-10-26: `src/
 - Review/closure: no unclaimed/nonclaimer/reviewer close, no direct done bypass, one outstanding claim including waiting/review; enforce after Git rebase/concurrent writes; CLI/Python compatible.
 - Handoff: missing, wrong-SHA, unreviewed, changed-after-review, wrong consumer/branch, failed publication, cycle and incomplete parent refuse dependent dispatch/claim; approval persistence is auditable.
 - Runtime: 20 consecutive same-name terminate/release/respawn cycles without stale task/roster/inbox/context; close with dependent handoff; shutdown or release failure blocks replacement; no stale dispatch to an expired incarnation.
-- Integration: disposable BigFan-like shared checkout, independent cloud clones, lost-push-reply, crash/restart, conflicting concurrent producers, disconnected network and retained unrelated staged files. Run Qwen source tests, bundle build/typecheck, Node/Python tests and controlled BigFan proof **before deployment**. Never merge PR3 automatically; merge may publish npm release.
+- Integration: disposable owner-workstation-like shared checkout, independent cloud clones, lost-push-reply, crash/restart, conflicting concurrent producers, disconnected network and retained unrelated staged files. Run Qwen source tests, bundle build/typecheck, Node/Python tests and controlled owner-workstation proof **before deployment**. Never merge PR3 automatically; merge may publish npm release.
 
 ## 6. Pending design decisions (fail closed until accepted)
 

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The self-review rule is per session: `--claim` and `--request-review` record the session name in a new
+  front-matter list `session_authors` (kept on release, like `review_author`); the session that claimed the item
+  or asked for the review is refused with "the same session cannot review its own work; a new session may", and a
+  new session (a new name) may start or pass the review; items without session names keep the old agent-name rule
+  (item 082).
 - Agent and team names may contain a colon in addition to letters, digits, `.`, `_` and `-` (a card's session
   names and a team name carry colons): the name works in the front matter, the event log, the commit subject
   (which now carries the agent a `--claim`, `--release` or `--by` command names), the hand-off marker file name

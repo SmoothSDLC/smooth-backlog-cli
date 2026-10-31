@@ -193,9 +193,12 @@ export function loadRoster(path) {
   } catch (e) { throw new BacklogError('INVALID_INPUT', `roster ${path}: ${e.message}`); }
 }
 
-// Whether agent wrote the work under review: the current claimer, or whoever asked for the review (review_author survives a release).
-// The one predicate behind every offer, dispatch and refusal of a review.
-export const isReviewAuthor = (fm, agent) => (fm.claimed_by || '') === (agent || '') || (Boolean(agent) && fm.review_author === agent);
+// Whether agent wrote the work under review: the current claimer, whoever asked for the review (review_author
+// survives a release), or a session that claimed or asked before a continuation took over claimed_by
+// (session_authors, item 082: the self-review rule is per session, and the block still applies to every earlier
+// session name of the item). The one predicate behind every offer, dispatch and refusal of a review.
+export const isReviewAuthor = (fm, agent) => (fm.claimed_by || '') === (agent || '')
+  || (Boolean(agent) && (fm.review_author === agent || asList(fm.session_authors).includes(agent)));
 
 // lib_db.py:710-715: seconds since a front-matter time stamp; -1 when there is none.
 export const age = ts => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(String(ts)) ? (Date.now() - Date.parse(ts)) / 1000 : -1);

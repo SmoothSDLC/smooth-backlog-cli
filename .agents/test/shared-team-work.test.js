@@ -122,7 +122,8 @@ test('in a team session a member acts only as itself; only the lead reassigns or
   assert.ok(readFileSync(join(f.folder, 'phases', `${job}.md`), 'utf8').includes('## Reassigned by lead from cody to archy at'), r.stdout);
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy'], ARCHY);
   no(f, ['update', job, '--start-review', '--by', 'zed'], 'not as zed', CODY);
-  ok(f, ['update', job, '--start-review', '--by', 'cody'], CODY);
+  no(f, ['update', job, '--start-review', '--by', 'cody'], 'the same session cannot review its own work', CODY); // cody claimed the job before the reassign (session_authors)
+  ok(f, ['update', job, '--start-review', '--by', 'zed']); // a new session starts it
   const other = make(f, 'second job');
   ok(f, ['update', other, '--claim', 'archy', '--force'], ARCHY);
   no(f, ['update', other, '--release', 'archy', '--by', 'lead'], 'only the team lead (lead) does, with --reason', LEADS);
@@ -225,7 +226,7 @@ test('039: the claimer never reviews its own item; a reviewed item finishes only
   const job = make(f, 'reviewed job');
   ok(f, ['update', job, '--claim', 'archy']);
   ok(f, ['update', job, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
-  no(f, ['update', job, '--start-review', '--by', 'archy'], 'archy claimed this item and cannot review its own work');
+  no(f, ['update', job, '--start-review', '--by', 'archy'], 'archy: the same session cannot review its own work; a new session may');
   no(f, ['update', job, '--review', 'pass', '--by', 'archy', '--comments', 'fine per references/review/code.md'], 'cannot review its own work');
   no(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine'], 'must cite at least one of the item');
   ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);

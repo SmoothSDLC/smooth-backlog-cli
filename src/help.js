@@ -154,7 +154,8 @@ Options:
       otherwise the item becomes in progress and claimed by that agent. An agent or team name may contain letters,
       digits, a period, an underscore, a hyphen and a colon (a card's session names and a team name carry colons);
       the name works in the front matter, the event log, the commit subject, the hand-off marker file name and
-      every --claim, --release and --by value.
+      every --claim, --release and --by value. The claiming session joins the item's session_authors list; the
+      sessions in that list, and the one who asked for the review, never review the item.
   --force
       Together with --claim: claim although the agent already holds active items (never before stage ready).
   --waiting WHAT
@@ -232,7 +233,10 @@ Options:
       refused.
   --start-review
       Record that the agent named by --by starts the requested review (review_state in_review, reviewer and review_started are
-      set). Other agents skip it unless the review was started more than 20 minutes ago (team session).
+      set). Other agents skip it unless the review was started more than 20 minutes ago (team session). The self-review rule
+      is per session: the session that claimed the item or asked for the review (recorded in session_authors, kept on
+      release like review_author) is refused with "the same session cannot review its own work; a new session may"; a new
+      session, with a new name, may start the review (team session).
   --review {pass,changes}
       Record a review verdict; it needs --by and --comments (team session).
   --handoff DEPENDENT

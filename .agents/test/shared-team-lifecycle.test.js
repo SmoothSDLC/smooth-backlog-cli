@@ -340,13 +340,13 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   both([C, '--claim', 'archy'], undefined, 0);
   both([C, '--dry-run', '--release', 'archy'], undefined, 0);
   both([C, '--request-review', 'any', '--note', 'ready'], undefined, 0);
-  both([C, '--start-review', '--by', 'cody'], undefined, 0);
-  both([C, '--start-review', '--by', 'zed'], undefined, 1); // in review by cody
+  both([C, '--start-review', '--by', 'cody'], undefined, 1); // cody claimed C before its release: the same session cannot review
+  both([C, '--start-review', '--by', 'zed'], undefined, 0); // a new session starts it
   // item 033: a stale review is handed on by the team lead (--reassign-review), never taken over
   held = snapshot(n);
-  const stale = update(n, [C, '--start-review', '--by', 'zed'], { BACKLOG_REVIEW_STALE_SECONDS: '-1' });
+  const stale = update(n, [C, '--start-review', '--by', 'bob'], { BACKLOG_REVIEW_STALE_SECONDS: '-1' });
   assert.equal(stale.status, 1, stale.stdout + stale.stderr);
-  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by cody since \\S+; review another item \\(the review is stale: the team lead hands it on with backlog update <item> --reassign-review <agent> --by cody --reason "<why>"\\)\\n$`));
+  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by zed since \\S+; review another item \\(the review is stale: the team lead hands it on with backlog update <item> --reassign-review <agent> --by cody --reason "<why>"\\)\\n$`));
   assert.deepEqual(snapshot(n), held); // refused: nothing changed
   // the class options are gone: unrecognized, exit 2
   const gone = update(n, [C, '--claim', 'cody', '--set-work-class', 'docs']);

@@ -14,7 +14,10 @@ import {
 
 export class Rejected extends Error {}
 const reject = message => { throw new Rejected(message); };
-const NO_SELF_REVIEW = by => `${by} claimed this item and cannot review its own work; another agent reviews it`;
+// Item 082: the rule is per session (the agent name is the session name); a new session of the same card is a new name.
+const NO_SELF_REVIEW = by => `${by}: the same session cannot review its own work; a new session may`;
+// The item's list of every session name that claimed it or asked for its review (item 082); append, no duplicates.
+const withSession = (list, name) => (name ? [...asList(list).filter(n => n !== name), name] : asList(list));
 // lib_db.py:258-260
 export const REFINE_HOW = 'backlog update <item> --set-review-refs references/review/<type>.md,.. / '
   + '--set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / '
@@ -53,8 +56,9 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   }
   if (agent === teamLead() && fm.team && fm.stage) reject(`the team lead (${agent}) never claims an item of its team's split; a member claims it`);
   if (fm.stage === 'review-hitl') reject('the item waits in stage review-hitl for an owner decision; nobody claims it, --force included (backlog update <item> --decision "<answer>" first)');
-  // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages
-  if (!isReady(fm)) reject(`team ${fm.team || ''} item in stage ${fm.stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`);
+  // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages.
+  // Item 088: a split slice is in stage refining with or without a team field, so the gate covers it too.
+  if (!isReady(fm)) reject(`team ${fm.team || 'none'} item in stage ${fm.stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`);
   if (who && who !== agent) reject(`claimed by ${who} since ${fm.claimed_at}; message ${who} or pick another item`);
   const undone = undoneDependencies(folder, fm);
   if (undone.length) reject(`dependencies not done: ${undone.map(describeDependency).join('; ')}`);
@@ -62,7 +66,9 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   if (refusal && !force) reject(refusal);
   const wip = who === agent && fm.status === 'in_progress' ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // item 034: --force never passes a limit; a reclaim of a pending item is a start
   if (wip) reject(wip);
-  Object.assign(fm, { status: 'in_progress', claimed_by: agent, claimed_at: t });
+  // item 082: the claiming session joins the list; item 088: the claim's session becomes the author session - a
+  // Cody review by that same session is refused (the same card reviews only in a fresh session).
+  Object.assign(fm, { status: 'in_progress', claimed_by: agent, claimed_at: t, session_authors: withSession(fm.session_authors, agent), author_session: callerSession() });
   return { event: 'claimed', text: `Claimed by ${agent} at ${t} repository=${repo} branch=${gitBranch(process.cwd()) || '(detached)'} cwd=${process.cwd()}${refusal ? ` (--force past the claim rule: ${refusal.split(';')[0]})` : ''}` };
 }
 
@@ -72,7 +78,8 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
 const inStage = fm => `team ${fm.team || 'none'}, stage ${fm.stage || 'none'}`;
 export function refineStart({ fm, folder, repo }, by, { force } = {}) {
   if (!by) reject('--refine-start needs --by <agent>');
-  if (!fm.team || fm.stage !== 'refining') reject(`only an item of a team in stage refining is refined (${inStage(fm)})`);
+  // item 088: a split slice is in stage refining with or without a team field - both refine through the same stages.
+  if (fm.stage !== 'refining') reject(`only an item of a team in stage refining is refined (${inStage(fm)})`);
   if (fm.claimed_by) reject(`claimed by ${fm.claimed_by}: the work item itself is refined and split by the team lead, not refined here`);
   if (fm.refiner && fm.refiner !== by) reject(`${fm.refiner} is refining it since ${fm.refine_started}; refine another item`);
   if (by === teamLead() && fm.refiner !== by) reject(`a member, not the team lead, refines in the first round (spec section 4); the lead re-refines only an item an owner decision returned to it`);
@@ -181,6 +188,27 @@ export function reassignReview({ fm }, agent, { by, reason } = {}) {
 // itself. Outside a team session (no such id) the caller is not known and the named agent is taken as given.
 export const caller = () => { const id = strip(process.env.QWEN_CODE_AGENT_ID || ''); return /^[^@\s]+@\S+$/.test(id) ? id.split('@')[0] : ''; };
 
+// item 082/088: the session of the caller. QWEN_CODE_SESSION_ID names it outright; else the session part of
+// QWEN_CODE_AGENT_ID (<name>@<session>); '' when unknown.
+export const callerSession = () => {
+  const env = strip(process.env.QWEN_CODE_SESSION_ID || '');
+  if (env) return env;
+  const id = strip(process.env.QWEN_CODE_AGENT_ID || '');
+  return id.includes('@') ? strip(id.split('@').pop()) : '';
+};
+
+// item 088: two review stages before any close - (a) a Cody review, then (b) an external review by codex or claude on
+// the same commit. A pass pins the item's work commit; the gate compares the pins to the current commit.
+// '' = both stages passed for the current commit, else the refusal naming the missing stage.
+export const stageRefusal = fm => {
+  const missing = fm.cody_pass_commit === (fm.commit || '')
+    ? (fm.external_pass_commit === (fm.commit || '') ? '' : 'external')
+    : 'cody';
+  if (missing === 'cody') return 'missing the Cody review stage: a Cody agent (not the author session) must pass the review first, then codex or claude';
+  if (missing === 'external') return 'missing the external review stage: after the Cody pass, codex or claude must pass on the same commit';
+  return '';
+};
+
 export function requestReview({ fm }, reviewer, note, by = '') {
   if (!strip(note || '')) reject('--request-review needs --note "<what to review: commits, deployed evidence>"');
   if (fm.review_state === 'in_review') reject(`${fm.reviewer} is reviewing it since ${fm.review_started}: wait for the verdict; the team lead hands a stale review on (--reassign-review)`);
@@ -188,8 +216,10 @@ export function requestReview({ fm }, reviewer, note, by = '') {
   if (fm.team && !fm.claimed_by && !by) reject('--request-review of an unclaimed team item needs --by <agent>, the one who asks');
   if (fm.claimed_by && by && by !== fm.claimed_by && by !== teamLead()) reject(`${fm.claimed_by} holds it: only the holder, or the team lead, asks for its review (not ${by})`);
   const t = now();
-  // review_author outlives a release: the one who asked for the review never reviews it, whatever claimed_by says later
-  Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: fm.claimed_by || by || fm.review_author || '' });
+  // review_author outlives a release: the one who asked for the review never reviews it, whatever claimed_by says later;
+  // item 082: the asking session joins session_authors, the list that keeps the block for every earlier session
+  const asked = fm.claimed_by || by || fm.review_author || '';
+  Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: asked, session_authors: withSession(fm.session_authors, asked) });
   return { event: 'review_requested', text: `## Review requested by ${fm.claimed_by || 'unknown'} at ${t} (reviewer: ${reviewer})\n\n${note}` };
 }
 
@@ -217,8 +247,24 @@ export function review({ fm }, verdict, { by, comments } = {}) {
   if (!['requested', 'in_review'].includes(fm.review_state)) {
     reject(`no review is requested (review_state ${fm.review_state || 'none'}); the agent working on it runs --request-review first`);
   }
+  // item 088: two stages - (a) a Cody agent (not the author session), then (b) codex or claude, only after (a) passed
+  // on the current commit. A pass pins the item's work commit; a changes verdict at either stage re-runs both.
+  const codyStage = by.toLowerCase().startsWith('cody');
+  const externalStage = ['codex', 'claude'].includes(by);
+  if (externalStage && fm.cody_pass_commit !== (fm.commit || '')) {
+    reject('the external review runs only after the Cody review passed on the current commit: a Cody agent (not the author session) reviews it first');
+  }
+  if (codyStage && fm.author_session) {
+    const session = callerSession();
+    if (session && session === fm.author_session) reject(`${by} reviews in the author session: a Cody review runs in a fresh session (same card, new session)`);
+  }
   const t = now();
-  Object.assign(fm, { review_state: verdict === 'pass' ? 'passed' : 'changes-requested', reviewer: by, review_started: '', reviewed_at: t });
+  Object.assign(fm, {
+    review_state: verdict === 'pass' ? 'passed' : 'changes-requested', reviewer: by, review_started: '', reviewed_at: t,
+    ...(codyStage && verdict === 'pass' ? { cody_pass_commit: fm.commit || '' } : {}),
+    ...(externalStage && verdict === 'pass' ? { external_pass_commit: fm.commit || '' } : {}),
+    ...((codyStage || externalStage) && verdict === 'changes' ? { cody_pass_commit: '', external_pass_commit: '' } : {}),
+  });
   return { event: 'reviewed', text: `## Review by ${by}: ${verdict === 'pass' ? 'PASS' : 'CHANGES REQUESTED'} (${t})\n\n${comments}` };
 }
 

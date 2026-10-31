@@ -123,3 +123,6 @@ Session names: a card's sessions are named `<item, 3 digits><card id>:<increment
 name) and a team joins its card ids with colons. The colon is part of the name: it works in every command, in the
 front matter, the event log, the commit subject (which carries the agent a `--claim`, `--release` or `--by`
 command names) and the hand-off marker file name `~/.qwen/teams/<team>/handoff/<agent>.json`.
+The self-review rule is per session: `--claim` and `--request-review` record the session name on the item
+(`session_authors`, kept on release like `review_author`); the session that claimed or asked is refused with
+"the same session cannot review its own work; a new session may", and a new session (a new name) reviews it.

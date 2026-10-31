@@ -1,6 +1,6 @@
 # PR1 learnings: the acceptance contract for the backlog CLI (PR3) (2026-10-28)
 
-PR1 of the topology repository (merged 2026-10-28) proved that qwen-code can stop a team member and start
+PR1 of the topology repository (merged 2026-10-28) proved that Qwen Code can stop a team member and start
 it again under the same name, and built the team workflow into the Python backlog scripts of that repository's
 `cody/skills/backlog/scripts` (update.py, query.py, lib_db.py, new_phase.py), the team-lead dispatcher
 (`cody/skills/team-lead/scripts/dispatcher.py`) and the team-member wake loop (`cody/skills/team-member/scripts/wake_hook.py`).
@@ -21,8 +21,8 @@ are in its `docs/owner/DECISIONS.md` ("Decided 2026-10-28" and earlier).
   shared-team-*.test.js files): that is the first thing to remove.
 
 ## 2. Review documents, and who reviews
-- Every team item names its review documents in `review_refs`: `references/review/<type>.md` of SmoothSDLC/cody-coding-model
-  (code, contract, delivery, docs, iac, tests, ...). Creation in team mode is refused without one (PR1: new_phase.py).
+- Every team item names its review documents in `review_refs`: `references/review/<type>.md` of the coding-model
+  repository (code, contract, delivery, docs, iac, tests, ...). Creation in team mode is refused without one (PR1: new_phase.py).
 - Any team member but the author (the claimer) reviews any item. Start-review and review are refused for the claimer
   (PR1: update.py `--start-review`, `--review`).
 - A review's comments must cite at least one of the item's `review_refs` (PR1: update.py `--review`).
@@ -70,9 +70,9 @@ than one active item, it may only review or do chunk work (owner 2026-10-22; PR1
 ## 7. Every task in a fresh session (the hand-off lock)
 Owner 2026-10-25/28: every task starts in a fresh session, and a member that hands its item to review releases its session.
 PR1 implements this with a hand-off marker:
-- A review request or a close by the item's claimer writes `<team>/handoff/<agent>.json` (`{"at_ms", "seq"}`, under
-  `~/.qwen/teams/<team>/`). Two exceptions: no marker while the claimer still holds another active item; never one for the
-  lead, who is not a member.
+- A review request or a close by the item's claimer writes `<team>/handoff/<agent>.json` (`{"at_ms", "seq"}`) in the
+  `teams/<team>/` directory of the Qwen Code home on the owner's workstation. Two exceptions: no marker while the
+  claimer still holds another active item; never one for the lead, who is not a member.
 - Until Qwen registers a session of that agent whose `joinedAt` is newer than the marker, the agent's next-work answers
   `stop`, and claim, refine-start and start-review are refused. Owner 2026-10-30: nothing else ever holds a member. Only
   a valid marker (`{"at_ms", "seq"}`) of a registered member with a valid session time stamp stops it; a missing name,
@@ -88,7 +88,7 @@ PR1 implements this with a hand-off marker:
 - The lead never claims an item. Only the lead may take an item from one agent and give it to another (item 033 refuses
   it to members).
 - While its team works, the lead waits by ending its turn with a text-only reply, never by polling with a tool call.
-  Proof runs 01 and 02 ended in qwen-code loop detection when it polled.
+  Proof runs 01 and 02 ended in Qwen Code loop detection when it polled.
 - The lead's next-work holds back only its busy "continue" on the work item, and only for team items it does not itself
   block. A passed or changes-requested item of the lead's keeps its close or rework action.
 - The lead closes the work item when every child is done.
@@ -104,8 +104,8 @@ command lists the counts and the in-progress items without a recorded step for 4
 ## 11. The backlog as a black box
 Team members know the backlog only through this CLI. The skills name only CLI commands: no backlog path, file, repository,
 git command or script (owner 2026-10-28; item 033). This CLI's `templates/skills/backlog` becomes the one source of the
-backlog skill. The topology installs it to `~/.qwen/skills/backlog` and to the backlog repository's `skill/backlog`, which
-Claude and Codex link to.
+backlog skill. The topology installs it to the Qwen Code skills directory on the owner's workstation and to the
+backlog repository's `skill/backlog`, which Claude and Codex link to.
 
 ## 12. Run reporting and monitoring
 Every run of the CLI where the run-recording variable is set reports its name, exit code and times to the

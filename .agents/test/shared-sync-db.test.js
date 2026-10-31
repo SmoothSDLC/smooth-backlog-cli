@@ -11,10 +11,39 @@ import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 
+// Item 76 (ENOTEMPTY cleanup at 1566552 / 6c031b1): the writer is the child git process of a scenario CLI
+// child — the git-push / git-receive-pack chain, and, where a push gate is used, the gate's sh hook and its
+// sleep — that outlive the CLI's node child (the fixture's spawnSync timeout kill mid-push, an unsettled
+// chain) and still write into the temp folder when the test's cleanup removes it. Every process of the chain
+// inherits the CLI child's BACKLOG_HOME env; settleScenarioChildren kills the ones still alive (SIGTERM, then
+// SIGKILL) so the removal cannot race with them.
+function scenarioPids(d) {
+  const mark = `BACKLOG_HOME=${join(d, 'home')}`;
+  const out = [];
+  for (const pid of readdirSync('/proc')) {
+    if (!/^\d+$/.test(pid) || Number(pid) === process.pid) continue;
+    let env = '';
+    try { env = readFileSync(`/proc/${pid}/environ`, 'utf8'); } catch { continue; }
+    if (env.includes(mark)) out.push(Number(pid));
+  }
+  return out;
+}
+async function settleScenarioChildren(d) {
+  for (let round = 0; round < 25; round++) {
+    const pids = scenarioPids(d);
+    if (!pids.length) return;
+    for (const p of pids) { try { process.kill(p, round ? 'SIGKILL' : 'SIGTERM'); } catch { /* exited in the meantime */ } }
+    await sleep(100);
+  }
+}
+
 // Two writers (a, b): separate temp dirs, each with its own clone of ONE backlog bare remote and its own consumer clone of acme/demo.
 function writers(t) {
   const dirs = [mkdtempSync(join(tmpdir(), 'dbconf-a-')), mkdtempSync(join(tmpdir(), 'dbconf-b-'))];
-  t.after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
+  t.after(async () => {
+    for (const d of dirs) await settleScenarioChildren(d); // item 76: the child git process of a killed or unsettled CLI child still writes the folder — the ENOTEMPTY writer of the cleanup
+    dirs.forEach(d => rmSync(d, { recursive: true, force: true }));
+  });
   const home = sharedBacklog(dirs[0]);
   const bare = join(dirs[0], 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
   gitIn(dirs[1], 'clone', '-q', bare, join(dirs[1], 'home'));
@@ -780,4 +809,21 @@ for (const [name, args, change] of [
   assert.deepEqual(state(b.home), before, 'stale-view rollback retains the established pre-command snapshot');
   assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
   assert.doesNotMatch(gitIn(bare, 'log', '-1', '--format=%s'), /update.py|new --name/);
+});
+
+test('cleanup: a CLI child killed mid-push leaves its child git process writing the dbconf-* folder; the cleanup settles it, no ENOTEMPTY (item 76)', t => {
+  const [a, b, { bare }] = writers(t);
+  assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  // A pre-receive gate that keeps a's push in flight and writes a new probe file into the shared bare
+  // (inside dbconf-a-*) every millisecond: when the CLI child dies mid-push, its child git process
+  // (git-push / git-receive-pack and the gate's sh + sleep) outlives it and keeps creating entries in
+  // the folder — the ENOTEMPTY writer of the cleanup (observed at 1566552 and 6c031b1).
+  const gate = join(bare, 'hooks', 'pre-receive');
+  writeFileSync(gate, `#!/bin/sh\ni=0\nwhile :; do touch ${join(bare, 'refs', 'probe')}-$i 2>/dev/null; i=$((i+1)); sleep 0.001; done\n`);
+  chmodSync(gate, 0o755);
+  const r = cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp, timeout: 2500 }); // the fixture's spawnSync timeout kills the CLI child mid-push
+  assert.notEqual(r.status, 0, `the CLI child must be killed mid-push: ${r.stdout}${r.stderr}`);
+  assert.ok(scenarioPids(a.tmp).length >= 1, 'the child git process of the killed CLI child is still alive');
+  // writers' t.after cleanup settles the chain before the rmSync: the folders are removed without ENOTEMPTY
+  void b;
 });

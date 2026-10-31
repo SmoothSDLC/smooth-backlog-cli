@@ -10,7 +10,7 @@ import { parse } from '../../src/shared/frontmatter.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -36,10 +36,10 @@ const run = (f, args, env = {}) => {
   if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
-const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
+const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.equal(r.stderr, '', `${args.join(' ')}: ${r.stderr}`); return r; };
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const up = (f, slug, ...args) => ok(f, ['update', slug, ...args]);
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
 const doc = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const fm = (f, slug) => doc(f, slug).fm;
 const pop = (f, agent, env) => { const r = run(f, ['query', '--pop', '--agent', agent, '--json'], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
@@ -159,7 +159,7 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
   const f = fixture();
   const team = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const base = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
-  const newBare = (...args) => ok(f, ['new', ...args]).stdout.split('created phase phases/')[1].split('.md')[0];
+  const newBare = (...args) => createdSlug(ok(f, ['new', ...args]).stdout);
   const gaps = {
     review_refs: newBare(...base('complete no review_refs'), '--estimate', '5', '--complexity', 'low', '--body', DOD),
     estimate_min: newBare(...base('complete no estimate'), '--review-refs', 'references/review/code.md', '--complexity', 'low', '--body', `no estimate here\n\n${DOD}`),
@@ -198,7 +198,7 @@ test('an incomplete item waiting in review-hitl is not offered to the lead for r
   const f = fixture();
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1'); // not held by the lead: nothing comes before the lead's refinement of incomplete items
-  const c = ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0]; // incomplete
+  const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout); // incomplete
   up(f, c, '--request-decision', 'What: which parser? Options: A, B. Recommendation: A.', '--by', 'cody');
   const env = { ...T1, TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   assert.deepEqual([pop(f, 'lead', env).action, pop(f, 'lead', env).item], ['idle', null]);
@@ -210,7 +210,7 @@ test('an incomplete item waiting in review-hitl is not offered to the lead for r
 
 test('refine-done is refused while a field or the definition of done is missing; event lines are no definition of done', () => {
   const f = fixture();
-  const bare = (...args) => ok(f, ['new', ...args, '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  const bare = (...args) => createdSlug(ok(f, ['new', ...args, '--depends-on', 'none']).stdout);
   const w = bare('--name', 'bare work item'); // no definition of done: its split child inherits only the placeholder
   up(f, w, '--set-team', 't1');
   const c = bare('--name', 'bare child', '--split-from', w);
@@ -269,7 +269,7 @@ test("the lead never starts a first-round refinement nor is offered a member's c
   const f = fixture();
   const w = make(f, 'team work item'); // its body has a definition of done
   up(f, w, '--set-team', 't1');
-  const c = ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout);
   assert.ok(doc(f, c).body.includes("- [ ] the test's check holds")); // the parent's definition of done, inherited as context
   assert.ok(!hasDefinitionOfDone(doc(f, c).body)); // only the placeholder is the child's own
   no(f, ['update', c, '--refine-start', '--by', 'lead'], 'a member, not the team lead, refines in the first round');
@@ -283,10 +283,10 @@ test('in a team session a split of a team item may keep the placeholder, a split
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1');
   const plain = make(f, 'plain item');
-  const c = ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none'], TR).stdout.split('created phase phases/')[1].split('.md')[0];
+  const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none'], TR).stdout);
   assert.deepEqual([fm(f, c).team, fm(f, c).stage], ['t1', 'refining']);
   no(f, ['new', '--name', 'bare split', '--split-from', plain, '--depends-on', 'none'], '--body must hold a definition of done', TR);
-  const bare = ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0]; // no team field
+  const bare = createdSlug(ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout); // no team field
   no(f, ['update', bare, '--set-estimate', '5'], 'only the team lead (lead) refines it, not archy', { ...TR, QWEN_CODE_AGENT_ID: 'archy@t1' });
 });
 
@@ -295,9 +295,9 @@ test('a team split with review documents and no body starts in refining; --by na
   const TR = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1');
-  const c = ok(f, ['new', '--name', 'child', '--split-from', w, '--depends-on', 'none', '--review-refs', 'references/review/code.md'], TR).stdout.split('created phase phases/')[1].split('.md')[0];
+  const c = createdSlug(ok(f, ['new', '--name', 'child', '--split-from', w, '--depends-on', 'none', '--review-refs', 'references/review/code.md'], TR).stdout);
   assert.equal(fm(f, c).stage, 'refining');
-  const bare = ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  const bare = createdSlug(ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout);
   no(f, ['update', bare, '--set-estimate', '5', '--by', 'archy'], 'only the team lead (lead) refines it, not archy', TR);
   ok(f, ['update', bare, '--set-estimate', '5', '--by', 'lead'], TR);
 });
@@ -321,7 +321,7 @@ test('the lead edits a refining item only as its refiner; an append of ESTIMATE 
   up(f, w, '--set-team', 't1');
   const c = make(f, 'child', '--split-from', w);
   no(f, ['update', c, '--set-estimate', '5', '--by', 'lead'], 'a member, not the team lead, refines in the first round');
-  const inc = ok(f, ['new', '--name', 'incomplete', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  const inc = createdSlug(ok(f, ['new', '--name', 'incomplete', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout);
   up(f, inc, '--set-team', 't1');
   const TR = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   no(f, ['update', inc, '--append', 'ESTIMATE: 5 min\nAdditional context', '--by', 'lead'], '--append', TR);
@@ -363,10 +363,14 @@ test('075: the successful stage steps print exactly what they record', () => {
   assert.equal(up(f, w, '--set-team', 't1').stdout, `✅ ${w} updated (team=t1)\n`);
   const c = make(f, 'child', '--split-from', w);
   // the event text names the refinement reviewer models; the placeholders keep the exact text without naming a model
-  const TS = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(/\b(Codex|codex)\b/g, 'MODEL_A').replace(/\b(Claude|claude)\b/g, 'MODEL_B');
+  const TS = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS');
   assert.equal(TS(up(f, c, '--refine-start', '--by', 'cody').stdout), `✅ ${c} updated (refine_started=Refinement started by cody at TS)\n`);
   assert.equal(TS(up(f, c, '--refine-done', '--by', 'cody', '--note', 'checked').stdout), `✅ ${c} updated (refined=Refined by cody at TS)\n`);
-  assert.equal(TS(up(f, c, '--request-refinement-review', '--by', 'lead').stdout), `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (MODEL_A first; MODEL_B only when MODEL_A's 5-hour limit is exceeded))\n`);
-  assert.equal(TS(up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready').stdout), `✅ ${c} updated (refinement_reviewed=Refinement review by MODEL_A: PASS: ready (TS))\n`);
+  // the display names of the two refinement reviewers come from the CLI's own text, so this file never names a model
+  const req = up(f, c, '--request-refinement-review', '--by', 'lead').stdout;
+  const [, first, second] = req.match(/\((\S+) first; (\S+) only when/);
+  const norm = s => TS(s).replace(new RegExp(`\\b${first}\\b`, 'gi'), 'MODEL_A').replace(new RegExp(`\\b${second}\\b`, 'gi'), 'MODEL_B');
+  assert.equal(norm(req), `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (MODEL_A first; MODEL_B only when MODEL_A's 5-hour limit is exceeded))\n`);
+  assert.equal(norm(up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready').stdout), `✅ ${c} updated (refinement_reviewed=Refinement review by MODEL_A: PASS: ready (TS))\n`);
   assert.equal(fm(f, c).stage, 'ready');
 });

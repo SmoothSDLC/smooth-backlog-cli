@@ -8,7 +8,7 @@
 
 Use authenticated private GitHub access or an isolated disposable checkout; confirm PR3 current HEAD, newest review threads and test status, and the source item 030 in `SmoothSDLC/smoothsdlc-backlog`. Read current `src/shared/{team,lifecycle,update,pop,sync,new}.js`, `src/args.js`, `COMMANDS.md`, existing .agents tests and the Python oracle `skill/backlog/scripts/`. Do not assume 2026-10-25 SHAs describe current HEAD. Record source-derived versus actually executed evidence.
 
-No source modification should be accepted without a **deterministic red test** for the current defect and green proof on the patched head. Keep the whole formerly passing regression suite green. Run `npm test`, `npm run check`, and Python-oracle checks with `SMOOTH_BACKLOG_SCRIPTS` set; tests skipped without the oracle are not passes. Use Node CI and independent review. Do not run live destructive tests, access BigFan credentials or mistake GitHub inspection for executable verification.
+No source modification should be accepted without a **deterministic red test** for the current defect and green proof on the patched head. Keep the whole formerly passing regression suite green. Run `npm test`, `npm run check`, and Python-oracle checks with `SMOOTH_BACKLOG_SCRIPTS` set; tests skipped without the oracle are not passes. Use Node CI and independent review. Do not run live destructive tests, access the owner's workstation credentials or mistake GitHub inspection for executable verification.
 
 ## 1. Team lead's initial refinement (a required work phase, not an optional prelude)
 
@@ -57,6 +57,6 @@ Keep original 50-UC coverage checkpoints (UC-001..050, 051..100, 101..150, 151..
 
 When the claimed child has PASS and any required producer handoff approval: its **claimer** executes `--close`, returns `CLOSED <seq>`, makes no next tool call. The lead/dispatcher requests shutdown and verifies Qwen process/task cleanup, serialized roster removal, persistence, canonical-name release. Only then may a new same-name member session spawn with no prior context. Consumer item becomes eligible only when **all published dependency and approved handoff gates** are satisfied. Independent ready children may execute concurrently.
 
-The Qwen release source patch in `SmoothSDLC/cody-topology-bigfan-linux` draft PR #1 is a separate runtime implementation, still subject to build/typecheck, vendored bundle regeneration, unit fixture proofs, 20 same-name respawns and controlled live BigFan rollback checks; no deployment or merge from this PR3 work.
+The Qwen release source patch in the topology repository, draft PR #1, is a separate runtime implementation, still subject to build/typecheck, vendored bundle regeneration, unit fixture proofs, 20 same-name respawns and controlled live rollback checks on the owner's workstation; no deployment or merge from this PR3 work.
 
 Owner acceptance of **original item 030** occurs only after all created implementation children, downstream integration/deployment/verification items, independent peer and adversarial review gates, final test/cutover evidence and approved handoffs pass. The lead then completes any approved original-parent close semantics and ends the team session. `idle` is never team completion. **Do not merge PR3 or publish a release without owner review.**

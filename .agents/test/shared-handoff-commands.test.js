@@ -174,32 +174,40 @@ test('059.2: acceptHandoff appends the lead\'s receipt, pinning the record\'s di
   assert.equal(rcpt.checks, 'npm test: 0 failures');
   assert.equal(rcpt.reviewer, 'codex', 'the receipt records the reviewer (lead ruling 2026-10-30)');
   assert.equal(rcpt.verdict, 'passed', 'the receipt records the verdict');
-  assert.equal(rcpt.commit, fm0.commit, 'the reviewed commit is the item\'s commit front matter');
+  assert.equal(rcpt.commit, RECORD.commit, 'the reviewed commit is the record\'s commit, not the item\'s creation HEAD (review r1)');
   assert.match(rcpt.commit, /^[0-9a-f]{40}$/);
-  assert.equal(r.text, handoff.receiptBlock(rcpt, 'acme/demo#1'), 'the body block is the method\'s HANDOFF_ACCEPTED v1 block');
+  // the body block is the method's HANDOFF_ACCEPTED v1 block plus the ruling's reviewer, verdict and reviewed
+  // commit - 059.1's receiptBlock does not output them (review r1)
+  assert.equal(r.text, handoff.receiptBlock(rcpt, 'acme/demo#1')
+    + `\nREVIEWER: ${rcpt.reviewer} ; VERDICT: ${rcpt.verdict} ; REVIEWED_COMMIT: ${rcpt.commit}`, r.text);
   // the stored form survives the real front-matter codec
   const back = parse(dump({ ...fm0, ...r.fm }, p.ctx.body + rec.text + r.text)).fm;
   assert.deepEqual(handoff.decodeList(back.handoff_receipts), [rcpt]);
 });
 
-test('059.2: the reviewed commit falls back to the record\'s commit when the item has no commit front matter', () => {
+test('059.2: the reviewed commit falls back to the item\'s commit front matter when the record has no commit', () => {
   const f = fixture();
   const p = pair(f);
-  const rec = recordHandoff(p.ctx, { dependent: '2', ...RECORD });
-  assert.ok(!rec.refuse, rec.refuse);
-  const fm0 = { ...p.ctx.fm, ...rec.fm, review_state: 'passed', reviewer: 'codex', commit: '' };
+  // a stored-form record without a commit (the record command makes no such record): the receipt still
+  // names a reviewed commit - the item's commit front matter (review r1)
+  const bare = { dependent: '2', commit: '', contract: 'c', verification: 'v', outputs: '', pickup: '', risks: 'NONE', by: 'cody-card1', at: '2026-10-31T00:00:00Z', digest: 'd'.repeat(64) };
+  const fm0 = { ...p.ctx.fm, handoffs: [handoff.encode(bare)], review_state: 'passed', reviewer: 'codex' };
   const r = acceptHandoff({ ...p.ctx, fm: fm0 }, { dependent: '2', checks: 'npm test: 0 failures', by: 'lead', lead: 'lead' });
   assert.ok(!r.refuse, r.refuse);
-  assert.equal(handoff.decodeList(r.fm.handoff_receipts)[0].commit, RECORD.commit, 'no item commit: the record\'s commit is the reviewed commit');
+  assert.equal(handoff.decodeList(r.fm.handoff_receipts)[0].commit, fm0.commit, 'a record without a commit: the item commit front matter is the reviewed commit');
 });
 
-test('059.2: acceptHandoff refuses a non-lead actor, a missing record, empty checks, and a review that has not passed', () => {
+test('059.2: acceptHandoff refuses a missing actor or lead, a non-lead actor, a missing record, empty checks, and a review that has not passed', () => {
   const f = fixture();
   const p = pair(f);
   const rec = recordHandoff(p.ctx, { dependent: '2', ...RECORD });
   assert.ok(!rec.refuse, rec.refuse);
   const fm0 = { ...p.ctx.fm, ...rec.fm, review_state: 'passed', reviewer: 'codex' };
   const ctx = { ...p.ctx, fm: fm0 };
+  // review r1: a missing actor or a missing team lead identity is refused on its own - both missing no longer authorizes a receipt
+  assert.match(acceptHandoff(ctx, { dependent: '2', checks: 'c', by: undefined, lead: 'lead' }).refuse, /--by <agent> is missing/);
+  assert.match(acceptHandoff(ctx, { dependent: '2', checks: 'c', by: 'lead', lead: undefined }).refuse, /team lead identity is missing/);
+  assert.match(acceptHandoff(ctx, { dependent: '2', checks: 'c' }).refuse, /--by <agent> is missing/);
   assert.match(acceptHandoff(ctx, { dependent: '2', checks: 'c', by: 'cody-card1', lead: 'lead' }).refuse, /team lead \(lead\)/);
   assert.match(acceptHandoff(p.ctx, { dependent: '2', checks: 'c', by: 'lead', lead: 'lead' }).refuse, /no hand-off record/);
   assert.match(acceptHandoff(ctx, { dependent: '2', checks: '   ', by: 'lead', lead: 'lead' }).refuse, /checks/);
@@ -228,12 +236,16 @@ test('059.2: handoff_receipts keeps every receipt: an acceptance, a rejection an
   assert.equal(rej.text, handoff.receiptBlock(rejRcpt, 'acme/demo#1'));
 });
 
-test('059.2: rejectHandoff refuses a non-lead actor, a missing record, and an empty reason', () => {
+test('059.2: rejectHandoff refuses a missing actor or lead, a non-lead actor, a missing record, and an empty reason', () => {
   const f = fixture();
   const p = pair(f);
   const rec = recordHandoff(p.ctx, { dependent: '2', ...RECORD });
   assert.ok(!rec.refuse, rec.refuse);
   const ctx = { ...p.ctx, fm: { ...p.ctx.fm, ...rec.fm } };
+  // review r1: a missing actor or a missing team lead identity is refused on its own - both missing no longer authorizes a receipt
+  assert.match(rejectHandoff(ctx, { dependent: '2', reason: 'r', by: undefined, lead: 'lead' }).refuse, /--by <agent> is missing/);
+  assert.match(rejectHandoff(ctx, { dependent: '2', reason: 'r', by: 'lead', lead: undefined }).refuse, /team lead identity is missing/);
+  assert.match(rejectHandoff(ctx, { dependent: '2', reason: 'r' }).refuse, /--by <agent> is missing/);
   assert.match(rejectHandoff(ctx, { dependent: '2', reason: 'r', by: 'cody-card1', lead: 'lead' }).refuse, /team lead \(lead\)/);
   assert.match(rejectHandoff(p.ctx, { dependent: '2', reason: 'r', by: 'lead', lead: 'lead' }).refuse, /no hand-off record/);
   assert.match(rejectHandoff(ctx, { dependent: '2', reason: '', by: 'lead', lead: 'lead' }).refuse, /reason/);

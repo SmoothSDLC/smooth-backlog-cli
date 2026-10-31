@@ -44,13 +44,17 @@ export function recordHandoff(ctx, { dependent, commit, contract, verification, 
   return { fm: { handoffs: records.map(encode) }, text: block, event: 'handoff' };
 }
 
-// The team lead accepts a hand-off: only the lead, only while a record exists, and only after the
-// producer's review passed (lead ruling 2026-10-30). The receipt pins the current record's digest and is
-// appended to handoff_receipts (append-only); it records the reviewer, the verdict and the reviewed commit
-// - the item's commit front matter, else the record's commit.
+// The team lead accepts a hand-off: only the lead (a missing actor or lead identity is refused on its own,
+// review r1), only while a record exists, and only after the producer's review passed (lead ruling
+// 2026-10-30). The receipt pins the current record's digest and is appended to handoff_receipts
+// (append-only); it records the reviewer, the verdict and the reviewed commit - the record's commit
+// (the item's commit front matter is the creation HEAD, new.js, and can name the wrong commit, review r1),
+// else the item's commit front matter for a record without a commit.
 export function acceptHandoff(ctx, { dependent, checks, by, lead }) {
   const { fm } = ctx;
-  if (by !== lead) return { refuse: `a hand-off is accepted by the team lead (${lead}), not by ${by || 'nobody'}` };
+  if (!strip(by || '')) return { refuse: 'a hand-off is accepted by the team lead: --by <agent> is missing' };
+  if (!strip(lead || '')) return { refuse: 'a hand-off is accepted by the team lead: the team lead identity is missing' };
+  if (by !== lead) return { refuse: `a hand-off is accepted by the team lead (${lead}), not by ${by}` };
   const missing = noRecord(ctx, dependent);
   if (missing) return missing;
   if (!strip(checks || '')) return { refuse: 'the acceptance of a hand-off needs its checks (--checks "<text>")' };
@@ -60,16 +64,22 @@ export function acceptHandoff(ctx, { dependent, checks, by, lead }) {
     ...makeReceipt({ dependent, digest: record.digest, result: 'accepted', by, at: now(), checks }),
     reviewer: fm.reviewer || '',
     verdict: fm.review_state,
-    commit: fm.commit || record.commit,
+    commit: record.commit || fm.commit,
   };
-  return { fm: { handoff_receipts: appendReceipts(fm, receipt) }, text: receiptBlock(receipt, source(ctx)), event: 'handoff-accepted' };
+  // The ruling's reviewer, verdict and reviewed commit: 059.1's receiptBlock does not output them
+  // (review r1), so the block appends them.
+  const text = receiptBlock(receipt, source(ctx))
+    + `\nREVIEWER: ${receipt.reviewer} ; VERDICT: ${receipt.verdict} ; REVIEWED_COMMIT: ${receipt.commit}`;
+  return { fm: { handoff_receipts: appendReceipts(fm, receipt) }, text, event: 'handoff-accepted' };
 }
 
 // The team lead rejects a hand-off: only the lead, only while a record exists; the receipt's checks hold
 // the reason of the rejection.
 export function rejectHandoff(ctx, { dependent, reason, by, lead }) {
   const { fm } = ctx;
-  if (by !== lead) return { refuse: `a hand-off is rejected by the team lead (${lead}), not by ${by || 'nobody'}` };
+  if (!strip(by || '')) return { refuse: 'a hand-off is rejected by the team lead: --by <agent> is missing' };
+  if (!strip(lead || '')) return { refuse: 'a hand-off is rejected by the team lead: the team lead identity is missing' };
+  if (by !== lead) return { refuse: `a hand-off is rejected by the team lead (${lead}), not by ${by}` };
   const missing = noRecord(ctx, dependent);
   if (missing) return missing;
   if (!strip(reason || '')) return { refuse: 'the rejection of a hand-off needs its reason (--reason "<text>")' };

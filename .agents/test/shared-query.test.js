@@ -72,32 +72,134 @@ function view(f, args, status = 0, cwd = f.cons) {
   assert.equal(n.status, status, `${args.join(' ')}: ${n.stderr}`);
   return n;
 }
+// The parts that differ between runs: timestamps, hex shas (any length, 7 or more chars) and the writing agent id.
+const norm = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS')
+  .replace(/commit=[0-9a-f]+/g, 'commit=SHA')
+  .replace(/sha drift [0-9a-f]+->[0-9a-f]+/g, 'sha drift SHA->SHA');
+const normJson = s => JSON.parse(s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(/"updated_by": "[^"]*"/g, '"updated_by": "UPD"'),
+  (k, v) => (typeof v === 'string' && /^[0-9a-f]{7,}$/.test(v) ? 'SHA' : v));
+const STATUS_FINDINGS = '⚠️  CRITICAL: phases/007-foreign.md says repository other/thing but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 007-foreign --to-repository\n'
+  + '⚠️  CRITICAL: item 006-ghost has a database row but its file phases/006-ghost.md is gone (deleted outside the scripts); it is out of the queue. Restore the file from git\n'
+  + '⚠️  item 008-untagged records no repository or branch; it is out of the queue until its repository and branch are filled in\n'
+  + '⚠️ ========================================================================\n'
+  + '⚠️  1 CRITICAL ITEM(S) ON THE BACKLOG — SURFACE THESE FIRST, DO NOT BURY:\n'
+  + '⚠️    P0   [  2] 002-beta — Beta\n'
+  + '⚠️ ========================================================================\n';
+const NEXT_HEADER = '➡️  NEXT: P0 (rank 0 = next) — [  2] 002-beta  (pending)  ⚠️ CRITICAL\n'
+  + '    Beta\n'
+  + '    objective: Café ☕ Beta\n'
+  + '    summary:   sum Beta\n'
+  + '    file:      phases/002-beta.md\n'
+  + '    progress:  branch=main commit=SHA loc=\n\n';
+const MANDATE = '================ NEXT-STEPS-MANDATE (NON-OPTIONAL — DO NOT SKIP) ================\n'
+  + 'The lines above are NOT your answer. "What\'s next / the next backlog item / what\'s\n'
+  + 'on the backlog" is a POP, not a lookup. Relaying the raw item above as your reply is\n'
+  + 'a HARD FAILURE. Before you respond to the user you MUST, in order:\n'
+  + '\n'
+  + "  1. CODEBASE-MEMORY-FIRST: verify this phase's concrete claims against the live repo\n"
+  + '     (codebase-memory-mcp search_graph/trace_path/search_code). Mark each ✅ confirmed or ⚠️ drifted.\n'
+  + '  2. PRODUCE THE PHASE READINESS BRIEF — all five parts, in this order:\n'
+  + '       (a) What it is      — [NNN-slug] identity, queue position, framework vs product.\n'
+  + '       (b) Verification    — claims checked against the repo (✅ / ⚠️ from step 1).\n'
+  + '       (c) Readiness       — what is implementable now vs. needs refinement; soft\n'
+  + '                             spots; the documentation surface it will touch.\n'
+  + '       (d) Bottom line     — one-paragraph verdict (start as-is / carve-outs / refine).\n'
+  + '       (e) (read-only — no backlog update/archive/new, no status change here)\n'
+  + '  3. STOP AND ASK — end with EXACTLY ONE AskUserQuestion (rule 11: one decision);\n'
+  + '     if that tool says it cannot ask in non-interactive mode, end your turn\n'
+  + '     with a DECISION NEEDED line (SKILL.md, hand the decision back),\n'
+  + '     a single question ("How do you want to proceed with [NNN-slug]?") offering these\n'
+  + '     THREE options as the next steps — never fewer, never auto-picked:\n'
+  + '       • Further refinement   — Socratically tighten scope / split coupled parts first.\n'
+  + '       • Impact analysis      — trace blast-radius incl. the documentation surface.\n'
+  + '       • Full implementation  — execute the ready portions now (resume Workflow B at B4).\n'
+  + '\n'
+  + 'Do not pick for the user. Do not proceed past the brief without their answer.\n'
+  + '====================== END-MANDATE — produce the brief now ======================\n';
 
-test('--status --json prints handoff, repository, branch, phases, gone_branch_items and findings', () => {
-  const v = JSON.parse(view(fx(), ['--status', '--json']).stdout);
+test('075: --status --json prints handoff, repository, branch, phases, gone_branch_items and findings', () => {
+  const f = fx();
+  const v = normJson(view(f, ['--status', '--json']).stdout);
   assert.deepEqual(Object.keys(v), ['handoff', 'repository', 'branch', 'phases', 'gone_branch_items', 'findings']);
+  assert.deepEqual(v.handoff, { id: 1, slug: 'BACKLOG', title: 'Backlog', objective: 'phase anchor (no document)', path: '', sha: '', status: 'active', source_context: '', created_at: 'TS', updated_at: 'TS' });
+  assert.deepEqual([v.repository, v.branch], ['acme/demo', 'main']);
+  assert.deepEqual(v.phases.map(x => [x.slug, x.status, x.severity, x.priority, x.path, x.branch]), [
+    ['002-beta', 'pending', 'critical', 0, 'phases/002-beta.md', 'main'],
+    ['001-alpha', 'pending', 'normal', 1, 'phases/001-alpha.md', 'main'],
+    ['003-gamma', 'in_progress', 'normal', 2, 'phases/003-gamma.md', 'main'],
+    ['004-delta', 'done', 'normal', 3, 'phases/004-delta.md', 'main']]);
+  assert.deepEqual(v.phases.map(x => [x.sha, x.commit_sha, x.size_score, x.location, x.repository, x.claimed_by, x.review_state]),
+    v.phases.map(() => ['SHA', 'SHA', 0, '', 'acme/demo', '', 'none']));
+  assert.equal(v.phases[3].completed_at, 'TS', 'the done item carries its completion time');
+  assert.deepEqual(v.gone_branch_items.map(x => [x.slug, x.branch]), [['005-feat', 'feature']]);
   assert.deepEqual(Object.keys(v.findings), ['foreign', 'untagged', 'ghost']);
-  assert.deepEqual(v.gone_branch_items.map(x => x.slug), ['005-feat']);
   assert.deepEqual([v.findings.foreign.length, v.findings.untagged.length, v.findings.ghost.length], [1, 1, 1]);
+  assert.deepEqual(v.findings.foreign.map(x => x.slug), ['007-foreign']);
+  assert.deepEqual(v.findings.untagged.map(x => x.slug), ['008-untagged']);
+  assert.deepEqual(v.findings.ghost.map(x => x.slug), ['006-ghost']);
 });
 
-test('--status text shows the critical banner', () => {
-  assert.match(view(fx(), ['--status']).stdout, /CRITICAL ITEM\(S\) ON THE BACKLOG/);
-});
-
-test('--status with no view flag, --all and --branch exit 0', () => {
+test('075: --status text: the findings, the critical banner, the queue and the gone-branch warning, exactly', () => {
   const f = fx();
-  for (const args of [[], ['--status', '--all'], ['--status', '--all', '--json'], ['--status', '--branch', 'feature'], ['--status', '--branch', 'feature', '--json']]) view(f, args);
+  assert.equal(view(f, ['--status']).stdout,
+    STATUS_FINDINGS
+    + `📋 acme/demo — branch main — ${f.folder}\n`
+    + '   objective: phase anchor (no document)\n'
+    + '   phases (4) — work queue order, P0 = next:\n'
+    + '   • [  2] 002-beta                     pending      P  0 ⚠️CRIT  Beta\n'
+    + '        ↳ sum Beta\n'
+    + '   • [  1] 001-alpha                    pending      P  1  Alpha\n'
+    + '        ↳ sum Alpha\n'
+    + '   🔄 [  3] 003-gamma                    in_progress  P  2  Gamma\n'
+    + '        ↳ sum Gamma\n'
+    + '   ✅ [  4] 004-delta                    done         P  3  Delta\n'
+    + '        ↳ sum Delta\n'
+    + '   ⚠️  1 open item(s) belong to branches that no longer exist on the origin; they are in no queue. Decide for each: move to a branch (backlog move <item> --to-branch <name>), archive, or remove:\n'
+    + '      - 005-feat (branch feature) Feat\n');
 });
 
-test('--next --json prints the queue head; --next text prints the item, the banner and the mandate', () => {
+test('075: --status --all and --branch: every branch in the queue, the gone item in its own branch only', () => {
   const f = fx();
-  assert.equal(JSON.parse(view(f, ['--next', '--json']).stdout).slug, '002-beta');
-  const text = view(f, ['--next']).stdout;
-  assert.match(text, /NEXT-STEPS-MANDATE/);
-  assert.match(text, /END-MANDATE/);
+  assert.equal(view(f, ['--status', '--all']).stdout,
+    STATUS_FINDINGS
+    + `📋 acme/demo — branch (all) — ${f.folder}\n`
+    + '   objective: phase anchor (no document)\n'
+    + '   phases (5) — work queue order, P0 = next:\n'
+    + '   • [  2] 002-beta                     pending      P  0 ⚠️CRIT  Beta\n'
+    + '        ↳ sum Beta\n'
+    + '   • [  1] 001-alpha                    pending      P  1  Alpha\n'
+    + '        ↳ sum Alpha\n'
+    + '   🔄 [  3] 003-gamma                    in_progress  P  2  Gamma\n'
+    + '        ↳ sum Gamma\n'
+    + '   • [  5] 005-feat                     pending      P  3  Feat\n'
+    + '        ↳ sum Feat\n'
+    + '   ✅ [  4] 004-delta                    done         P  3  Delta\n'
+    + '        ↳ sum Delta\n');
+  assert.equal(view(f, ['--status', '--branch', 'feature']).stdout,
+    STATUS_FINDINGS
+    + `📋 acme/demo — branch feature — ${f.folder}\n`
+    + '   objective: phase anchor (no document)\n'
+    + '   phases (1) — work queue order, P0 = next:\n'
+    + '   • [  5] 005-feat                     pending      P  3  Feat\n'
+    + '        ↳ sum Feat\n');
+  const v = JSON.parse(view(f, ['--status', '--all', '--json']).stdout);
+  assert.deepEqual(v.phases.map(x => [x.slug, x.branch, x.priority]), [['002-beta', 'main', 0], ['001-alpha', 'main', 1], ['003-gamma', 'main', 2], ['005-feat', 'feature', 3], ['004-delta', 'main', 3]]);
+  assert.deepEqual(v.gone_branch_items, [], 'with --all the gone-branch item is in the queue');
+  assert.deepEqual(JSON.parse(view(f, ['--status', '--branch', 'feature', '--json']).stdout).phases.map(x => x.slug), ['005-feat']);
+});
+
+test('075: --next --json prints the queue head; --next text prints the findings, the item and the mandate', () => {
+  const f = fx();
+  assert.deepEqual(normJson(view(f, ['--next', '--json']).stdout), {
+    id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta',
+    status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA',
+    location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null });
+  const text = norm(view(f, ['--next']).stdout);
+  const at = text.indexOf('================ NEXT-STEPS-MANDATE');
+  assert.equal(text.slice(0, at), STATUS_FINDINGS + NEXT_HEADER, 'the findings, the item and the blank line before the mandate');
+  assert.equal(text.slice(at), MANDATE, 'the mandate, word for word');
   view(f, ['--next', '--all']);
-  view(f, ['--next', '--branch', 'feature', '--json']);
+  assert.equal(JSON.parse(view(f, ['--next', '--branch', 'feature', '--json']).stdout).slug, '005-feat');
 });
 
 test('`backlog next` is --next', () => {
@@ -115,41 +217,92 @@ test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
   assert.equal(view(f, ['--next', '--branch', 'nowhere', '--json']).stdout.trim(), '{}');
 });
 
-test('--phase prints the item by slug and by number; not found is exit 1 on stdout', () => {
+test('075: --phase prints the full item (row, front matter, body, missing) by slug and by number; not found is exit 1 on stdout', () => {
   const f = fx();
-  for (const [id, slug] of [['002-beta', '002-beta'], ['3', '003-gamma'], ['003', '003-gamma']]) assert.equal(JSON.parse(view(f, ['--phase', id]).stdout).slug, slug, id);
+  const beta = { id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
+    front_matter: { phase: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', updated: 'TS', updated_by: 'UPD', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' },
+    body: '\n# Phase 002 — Beta\n\n**Objective:** Caf\u00e9 \u2615 Beta\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n',
+    missing: ['review_refs', 'estimate_min', 'definition_of_done'] };
+  assert.deepEqual(normJson(view(f, ['--phase', '002-beta']).stdout), beta, 'by slug');
+  const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal', priority: 2, path: 'phases/003-gamma.md',
+    front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal', priority: 2 } };
+  gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
+  assert.deepEqual(normJson(view(f, ['--phase', '3']).stdout), gamma, 'by number');
+  assert.deepEqual(normJson(view(f, ['--phase', '003']).stdout), gamma, 'zero-padded numbers resolve to the same item');
   assert.match(view(f, ['--phase', 'nope'], 1).stdout, /no phase 'nope'/);
 });
 
-test('--critical lists the open critical items (JSON and text) and says so when there are none', () => {
+test('075: --critical lists the open critical items (JSON and text) and says so when there are none', () => {
   const f = fx();
-  view(f, ['--critical']);
-  assert.ok(JSON.stringify(JSON.parse(view(f, ['--critical', '--json']).stdout)).includes('002-beta'));
+  assert.equal(view(f, ['--critical']).stdout,
+    '⚠️ ========================================================================\n'
+    + '⚠️  1 CRITICAL ITEM(S) ON THE BACKLOG — SURFACE THESE FIRST, DO NOT BURY:\n'
+    + '⚠️    P0   [  2] 002-beta — Beta\n'
+    + '⚠️ ========================================================================\n');
+  assert.deepEqual(normJson(view(f, ['--critical', '--json']).stdout).map(x => [x.slug, x.severity, x.priority]), [['002-beta', 'critical', 0]]);
   const g = build(false);
   setStatus(g, '002-beta', 'done');
-  view(g, ['--critical']);
-  assert.ok(!JSON.stringify(JSON.parse(view(g, ['--critical', '--json']).stdout)).includes('002-beta'));
+  assert.equal(view(g, ['--critical']).stdout, '✅ no open CRITICAL items on the backlog\n');
+  assert.deepEqual(normJson(view(g, ['--critical', '--json']).stdout), []);
 });
 
-test('--events (all, and for one item) and --by-branch exit 0', () => {
+test('075: --events (all, and for one item) and --by-branch: the exact lines', () => {
   const f = fx();
-  for (const args of [['--events'], ['--events', '002-beta'], ['--events', '2'], ['--by-branch', 'main'], ['--by-branch', 'feature']]) view(f, args);
+  assert.equal(norm(view(f, ['--events']).stdout),
+    '  TS  ingested       branch= commit=SHA new phase 008-untagged\n'
+    + '  TS  ingested       branch=main commit=SHA new phase 007-foreign\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  planning_event branch= commit= added 006-ghost at rank end; backlog re-densified to 5 item(s)\n'
+    + '  TS  ingested       branch=main commit=SHA new phase 006-ghost\n'
+    + '  TS  reingested     branch=feature commit=SHA sha drift SHA->SHA\n'
+    + '  TS  planning_event branch= commit= added 005-feat at rank end; backlog re-densified to 4 item(s)\n'
+    + '  TS  ingested       branch=feature commit=SHA new phase 005-feat\n'
+    + '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  state_change   branch=main commit=SHA set status=done\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  state_change   branch=main commit=SHA set status=in_progress\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  planning_event branch= commit= added 004-delta at rank end; backlog re-densified to 4 item(s)\n'
+    + '  TS  ingested       branch=main commit=SHA new phase 004-delta\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  planning_event branch= commit= added 003-gamma at rank end; backlog re-densified to 3 item(s)\n'
+    + '  TS  ingested       branch=main commit=SHA new phase 003-gamma\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  planning_event branch= commit= added 002-beta at rank 0; backlog re-densified to 2 item(s)\n'
+    + '  TS  ingested       branch=main commit=SHA new phase 002-beta\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  planning_event branch= commit= added 001-alpha at rank end; backlog re-densified to 1 item(s)\n'
+    + '  TS  ingested       branch=main commit=SHA new phase 001-alpha\n');
+  assert.equal(norm(view(f, ['--events', '002-beta']).stdout), '  TS  ingested       branch=main commit=SHA new phase 002-beta\n', 'one item: only its own lines');
+  assert.equal(norm(view(f, ['--by-branch', 'main']).stdout),
+    '  [  1] 001-alpha                    pending      commit=SHA \n'
+    + '  [  2] 002-beta                     pending      commit=SHA \n'
+    + '  [  3] 003-gamma                    in_progress  commit=SHA \n'
+    + '  [  4] 004-delta                    done         commit=SHA \n'
+    + '  [  6] 006-ghost                    pending      commit=SHA \n'
+    + '  [  7] 007-foreign                  pending      commit=SHA \n');
+  assert.equal(norm(view(f, ['--by-branch', 'feature']).stdout), '  [  5] 005-feat                     pending      commit=SHA \n');
 });
 
-test('a repository without a backlog folder prints {} or the info line, exit 0', () => {
+test('075: a repository without a backlog folder prints the info line or {}, exit 0', () => {
   const f = fx();
   const other = consumer(f.t, 'acme', 'fresh', 'main');
-  for (const args of [['--status'], ['--next', '--json'], ['--status', '--json']]) view(f, args, 0, other);
+  const info = `ℹ️  acme/fresh has no backlog yet (no folder ${join(f.home, 'acme', 'fresh')})\n`;
+  assert.equal(cli(['query', '--status'], { cwd: other, tmp: f.t }).stdout, info);
+  assert.equal(cli(['query', '--next'], { cwd: other, tmp: f.t }).stdout, info);
+  assert.equal(view(f, ['--status', '--json'], 0, other).stdout.trim(), '{}');
   assert.equal(view(f, ['--next', '--json'], 0, other).stdout.trim(), '{}');
 });
 
-test('a detached HEAD without --branch or --all is exit 2', () => {
+test('075: a detached HEAD without --branch or --all is exit 2 with the exact refusal', () => {
   const f = fx();
   const head = git(f.cons, 'rev-parse', 'HEAD');
   git(f.cons, 'checkout', '-q', '--detach');
+  const refused = '❌ backlog: HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all\n';
   try {
-    view(f, ['--next'], 2);
-    view(f, ['--status'], 2);
+    assert.equal(view(f, ['--next'], 2).stderr, refused);
+    assert.equal(view(f, ['--status'], 2).stderr, refused);
     view(f, ['--status', '--all', '--json']);
   } finally { git(f.cons, 'checkout', '-q', 'main'); assert.equal(git(f.cons, 'rev-parse', 'HEAD'), head); }
 });

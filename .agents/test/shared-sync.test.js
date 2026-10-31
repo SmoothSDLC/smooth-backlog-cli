@@ -431,10 +431,29 @@ test('overlapping, the other writer first: a commit held at its push while backl
   const g = gate(f);
   putItem(f.folder2, 1, 'nodeitem');
   const node = sync.commit(f.home2, f.folder2, 'new nodeitem');
-  await g.entered(); // the commit is made locally and is inside its first push
-  const r = await cliNew(f, f.home, cons, 'Otheritem');
+  let r;
+  try {
+    await g.entered(); // the commit is made locally and is inside its first push
+    r = await cliNew(f, f.home, cons, 'Otheritem');
+  } finally { g.release(); } // never leave the held push (and its hook) running
   assert.equal(r.status, 0, r.out);
-  g.release();
   assert.deepEqual(await node, [[1, 2]]);
   assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-otheritem.md', seq: 1 }, { file: '002-nodeitem.md', seq: 2 }]);
+});
+
+test('overlapping, this writer first: a commit that scanned backlog.db and is held at its push keeps 1 while another clone publishes 2', async t => {
+  const f = fixture(t);
+  const g = gate(f);
+  putItem(f.folder, 1, 'nodeitem');
+  const mirror = db.connect(f.folder); try { db.scan(mirror, f.folder); } finally { mirror.close(); }
+  const node = sync.commit(f.home, f.folder, 'new nodeitem');
+  let other;
+  try {
+    await g.entered(); // held inside its first push
+    putItem(f.folder2, 2, 'otheritem'); // the second writer, on the other clone, takes the next number
+    other = await sync.commit(f.home2, f.folder2, 'new otheritem');
+  } finally { g.release(); }
+  assert.deepEqual(other, []);
+  assert.deepEqual(await node, []);
+  assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-nodeitem.md', seq: 1 }, { file: '002-otheritem.md', seq: 2 }]);
 });

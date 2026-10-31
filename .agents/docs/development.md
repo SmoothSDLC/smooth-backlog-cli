@@ -17,6 +17,12 @@ public integration templates are under `templates/`. Tests are in `.agents/test/
 the release verifier is `.agents/scripts/verify-published-package.mjs`. Development-only documents
 are kept in `.agents/docs/`; public usage documentation stays at the root.
 
+On exit, the executable reports the run to an optional run recorder: when the
+environment variable `CODY_SCRIPT_RUNS_MODULE` names a module, `bin/backlog.js`
+spawns `python3 <module> record backlog.js <exit code> <start time> <end time>`
+as a detached child process it never waits for; with the variable unset it spawns
+no child process. The variable is a development hook, not a user feature.
+
 GitHub Actions validates the supported operating systems and Node.js versions
 before publishing tagged releases. The first-party release verifier downloads
 published packages and exercises the installed CLI independently of source code.
@@ -51,3 +57,10 @@ verified across all supported OS/Node combinations. A tag identifies the assigne
 release; the publish workflow result records whether publication and verification
 succeeded. Reruns never overwrite npm versions or move existing tags. Registry
 authentication or network failures stop publication instead of indicating absence.
+
+## Commit conventions
+
+The repository is public: a commit message names no private environment detail -
+no host name, local path, port, model name, card number or private repository
+name. Evidence that carries such details belongs in the backlog item, never in a
+commit message.

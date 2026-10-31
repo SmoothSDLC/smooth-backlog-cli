@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The exit-hook run recorder of `bin/backlog.js` spawns its child process only when
+  `CODY_SCRIPT_RUNS_MODULE` names a module; with the variable unset no child process is spawned (item 086).
 - `backlog update` records dependency hand-offs and the team lead's receipts: the producer's claimer records
   `--handoff <dependent>` with `--handoff-commit`, `--handoff-contract` and `--handoff-verification` (and optional
   `--handoff-outputs`, `--handoff-pickup`, `--handoff-risks`); the team lead accepts it with `--accept-handoff

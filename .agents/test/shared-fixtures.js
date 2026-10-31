@@ -81,17 +81,22 @@ export function env(tmp) {
   return { ...GIT_IDENTITY, BACKLOG_HOME: home, XDG_CONFIG_HOME: join(t, 'config') };
 }
 
-// item 76 review: the pids the fixture spawned, by the scenario tmp dir whose BACKLOG_HOME they carry. Where /proc
-// is absent (macOS) the scenario cleanup of shared-sync-db.test.js settles them by process group: the children are
-// spawned detached (their own group), so the group covers the whole chain of the child's git processes.
+// item 76 review: the pids the fixture spawned, by the scenario tmp dir whose BACKLOG_HOME they carry, with the
+// ChildProcess retained where the child may still be alive (the async spawn). Where /proc is absent (macOS) the
+// scenario cleanup of shared-sync-db.test.js settles them by process group: the children are spawned detached
+// (their own group), so the group covers the whole chain of the child's git processes.
 const spawned = new Map();
-export function recordSpawned(tmp, pid) {
+export function recordSpawned(tmp, pid, child = undefined) {
   if (!tmp) return;
-  const set = spawned.get(tmp) ?? new Set();
-  spawned.set(tmp, set);
-  set.add(pid);
+  const groups = spawned.get(tmp) ?? new Map();
+  spawned.set(tmp, groups);
+  groups.set(pid, child);
 }
-export const spawnedPids = tmp => spawned.get(tmp) ?? new Set();
+export const spawnedPids = tmp => new Set((spawned.get(tmp) ?? new Map()).keys());
+// [pid, child] pairs: child is the retained ChildProcess, undefined for the synchronous spawn whose child is reaped
+// when the call returns. The scenario cleanup settles a group only while it can prove ownership of the number
+// (item 76 review: a reused group number is an unrelated same-user group).
+export const spawnedGroups = tmp => [...(spawned.get(tmp) ?? new Map()).entries()];
 
 let calls = 0;
 // Runs node bin/backlog.js (this repository's CLI) from a consumer checkout.

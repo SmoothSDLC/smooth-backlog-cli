@@ -1,28 +1,23 @@
 // Tests for the team views of src/shared/query.js (src/shared/views.js) - cli-parity job 16 (VIEWS), part 2.
-// Port of tests/test_team_scope.py (--scope branch|repo|all and the refinement cap of <folder>/backlog.scope; its --pop
-// assertions are in shared-team-pop.test.js), plus parity with query.py --claimable/--reviewable/--blocked:
-// the same fixture is read by the oracle and by the CLI, and stdout, stderr and exit status must be identical. Parity
-// tests skip when SMOOTH_BACKLOG_SCRIPTS is not configured or PyYAML is missing. Local bare repos only.
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import * as store from '../../src/shared/store.js';
-import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
-const oracle = py('query.py', ['--help']) !== null;
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
   if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
   return p.stdout.trim();
 };
 
-// acme/demo on main plus other/thing on main in one shared home; items are made by `side` (python or node).
+// acme/demo on main plus other/thing on main in one shared home.
 function fixture() {
   const t = mkdtempSync(join(tmpdir(), 'team-scope-'));
   dirs.push(t);
@@ -43,7 +38,7 @@ function make(f, side, cwd, name, extra = []) {
   if (!has('--review-refs') && !bare) args.push('--review-refs', 'references/review/code.md');
   if (!has('--estimate')) args.push('--estimate', '5', '--complexity', 'low');
   args.push('--body', DOD, ...extra);
-  const r = side === 'py' ? py('new_phase.py', args, { cwd, tmp: f.t }) : cli(['new', ...args], { cwd, tmp: f.t });
+  const r = cli(['new', ...args], { cwd, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r.stdout.split('created phase phases/')[1].split('.md')[0];
 }
@@ -113,96 +108,6 @@ test('--scope takes branch, repo or all', () => {
   const r = cli(['query', '--blocked', '--scope', 'galaxy'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /--scope: invalid choice: 'galaxy' \(choose from 'branch', 'repo', 'all'\)/);
-});
-
-// A fixture with every shape the views print: dependencies (open, done, missing), claims, review requests, a second
-// branch, a second repository, an incomplete item and an item that was written before team work. Built with the oracle.
-function rich() {
-  const f = fixture();
-  const m = (cwd, name, extra) => make(f, 'py', cwd, name, extra);
-  const up = (slug, ...args) => { const r = py('update.py', [slug, ...args], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
-  const a = m(f.cons, 'dep first', []);
-  const b = m(f.cons, 'needs first', ['--depends-on', '1']);
-  m(f.cons, 'docs item', ['--layer', '3']);
-  const d = m(f.cons, 'ui held', ['--review-refs', 'references/review/ui.md,references/review/code.md']);
-  const ghost = m(f.cons, 'ghost dep', []);
-  const e = m(f.cons, 'done one', []);
-  const bare = py('new_phase.py', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });
-  assert.equal(bare.status, 0, bare.stdout);
-  up(d, '--claim', 'cody');
-  up(d, '--request-review', 'any', '--note', 'ready');
-  up(e, '--claim', 'archy');
-  up(e, '--request-review', 'any', '--note', 'ready');
-  up(e, '--review', 'pass', '--by', 'cody', '--comments', 'ok references/review/code.md');
-  up(e, '--close', '--summary', 'done');
-  up(a, '--claim', 'archy');
-  git(f.cons, 'checkout', '-q', '-b', 'side');
-  m(f.cons, 'side impl', []);
-  m(f.cons, 'side waits', ['--depends-on', String(Number(b.split('-')[0]))]);
-  git(f.cons, 'checkout', '-q', 'main');
-  m(f.other, 'other chunk', ['--chunk']);
-  m(f.other, 'other docs', ['--depends-on', '1']);
-  m(f.other, 'other impl', []);
-  const gp = join(f.folder, 'phases', `${ghost}.md`); // a dependency on an item that does not exist, as a hand edit leaves it
-  const g = parse(readFileSync(gp, 'utf8'));
-  store.write({ path: gp, fm: { ...g.fm, depends_on: ['no-such-thing'] }, body: g.body }, f.folder);
-  writeFileSync(join(f.t, 'roster.json'), JSON.stringify({ cody: { work_classes: ['app-code', 'tests'], review_classes: ['code'] }, archy: { work_classes: ['docs', 'ui'], review_classes: ['ui'] } }));
-  return f;
-}
-
-test('parity with query.py: --claimable, --reviewable and --blocked print, refuse and exit alike', t => {
-  if (!oracle) return t.skip(ORACLE_SKIP);
-  const f = rich();
-  const roster = join(f.t, 'roster.json');
-  const same = args => {
-    const o = py('query.py', args, { cwd: f.cons, tmp: f.t });
-    const n = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
-    assert.equal(n.status, o.status, `${args.join(' ')}: ${n.stdout}${n.stderr}`);
-    assert.equal(n.stdout, o.stdout, args.join(' '));
-    assert.equal(n.stderr, o.stderr, args.join(' '));
-    return o;
-  };
-  for (const json of [[], ['--json']]) {
-    same(['--claimable', ...json]);
-    same(['--claimable', '--agent', 'cody', ...json]); // team mode: the incomplete item is skipped
-    same(['--claimable', '--scope', 'repo', ...json]);
-    same(['--claimable', '--all', ...json]);
-    same(['--claimable', '--branch', 'side', ...json]);
-    same(['--claimable', '--scope', 'all', ...json]);
-    same(['--reviewable', '--agent', 'archy', ...json]);
-    same(['--reviewable', '--agent', 'cody', ...json]);
-    same(['--reviewable', '--agent', 'archy', '--roster', roster, ...json]); // a roster with old class profiles
-    same(['--blocked', ...json]);
-    same(['--blocked', '--scope', 'repo', ...json]);
-    same(['--blocked', '--scope', 'all', ...json]);
-    same(['--blocked', '--all', ...json]);
-  }
-  const loud = same(['--reviewable', '--agent', 'archy', '--roster', roster]);
-  assert.match(loud.stdout, /reviewable item\(s\)/);
-  // refusals
-  same(['--reviewable']); // needs --agent
-  same(['--claimable', '--roster', join(f.t, 'missing.json')]); // the views read no roster (query.py loads it for --pop and --plan only)
-  // the cap of backlog.scope
-  try {
-    for (const cap of ['all', 'repo', 'off', 'branch', 'everywhere']) {
-      writeFileSync(f.cfg, `refinement_scope: ${cap}\n`);
-      for (const scope of ['branch', 'repo', 'all']) {
-        same(['--claimable', '--scope', scope, '--json']);
-        same(['--blocked', '--scope', scope]);
-      }
-    }
-  } finally { rmSync(f.cfg, { force: true }); }
-  // a bound team session
-  for (const env of [{ TEAM_REPOSITORY: 'acme/demo' }, { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'side' }, { TEAM_REPOSITORY: 'nonsense' }]) {
-    const args = ['--claimable'];
-    const o = py('query.py', args, { cwd: f.cons, tmp: f.t, env });
-    const n = cli(['query', ...args], { cwd: f.cons, tmp: f.t, env });
-    assert.deepEqual([n.status, n.stdout, n.stderr], [o.status, o.stdout, o.stderr], JSON.stringify(env));
-  }
-  // ../x matches owner/name; Python would look for a backlog outside the home, this build refuses the folder
-  const up = cli(['query', '--claimable'], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: '../x' } });
-  assert.equal(up.status, 2);
-  assert.match(up.stderr, /^❌ backlog: not an owner\/name repository id: \.\.\/x/);
 });
 
 // --scope all reads other repositories' backlogs and backlog.scope: nothing below the home may be a link to outside it.

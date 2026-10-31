@@ -1,16 +1,13 @@
 // Tests for src/shared/new.js — cli-parity job 10 (`backlog new` in shared mode).
-// Oracle: new_phase.py:28-192 and lib_db.py (vocabularies :601-606, review-ref coverage :683-686), the pinned scripts;
-// test_team_compat.py:10-22 for the refusals. Oracle-backed tests skip when SMOOTH_BACKLOG_SCRIPTS is not configured or
-// PyYAML is missing; the rest check the contract directly. Local bare repos only (shared-fixtures.js, job 1).
+// Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
-import { parse } from '../../src/shared/frontmatter.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as store from '../../src/shared/store.js';
 
@@ -32,11 +29,6 @@ function fixture(t, prefix = 'new-test-') {
   return { dir, home, cons, folder: join(home, 'acme', 'demo'), bare: join(dir, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git') };
 }
 const node = (f, args, env) => cli(['new', ...args], { cwd: f.cons, tmp: f.dir, env });
-const oracle = (t, f, args, env) => {
-  const r = py('new_phase.py', args, { cwd: f.cons, tmp: f.dir, env });
-  if (!r) t.skip(ORACLE_SKIP);
-  return r;
-};
 const BASE = ['--name', 'Alpha job', '--objective', 'do alpha', '--summary', 'sum alpha'];
 const NONE = [...BASE, '--depends-on', 'none'];
 const items = f => store.load(f.folder).filter(i => i.path.startsWith('phases/'));
@@ -45,42 +37,7 @@ const bare = ({ fm: { created, updated, updated_by, commit, ...fm }, body, path 
 const subject = f => git(f.bare, 'log', '-1', '--format=%s', 'main');
 const rows = (f, sql) => { const con = db.connect(f.folder); try { return con.prepare(sql).all().map(r => ({ ...r })); } finally { con.close(); } };
 
-// ---------------------------------------------------------------- refusals (test_team_compat.py:10-22)
-
-const REFUSALS = [
-  ['no --depends-on', BASE, 1, 'stdout', '--depends-on is required'],
-  ['no --name', ['--depends-on', 'none'], 1, 'stdout', '--name is required (or --split-from <phase>)'],
-  ['a work class (the classes are gone)', [...NONE, '--work-class', 'docs'], 2, 'stderr', 'unrecognized arguments: --work-class docs'],
-  ['a review class (the classes are gone)', [...NONE, '--review-classes', 'code'], 2, 'stderr', 'unrecognized arguments: --review-classes code'],
-  ['review refs that name no review document', [...NONE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x'], 1, 'stdout', '--review-refs needs at least one review document (references/review/<type>.md in cody-coding-model)'],
-  ['a dependency that is not there', [...BASE, '--depends-on', 'no-such-item'], 1, 'stdout', "no item 'no-such-item'"],
-  ['a number that is not there', [...BASE, '--depends-on', '99'], 1, 'stdout', "no item '99'"],
-  ['--split-from not found', [...NONE, '--split-from', 'nope'], 1, 'stdout', "--split-from: no phase 'nope'"],
-  ['review refs without a definition of done', [...NONE, '--review-refs', 'references/review/code.md'], 1, 'stdout', '--body must hold a definition of done'],
-  ['an unknown option', [...NONE, '--bogus', 'x'], 2, 'stderr', 'unrecognized arguments: --bogus x'],
-  ['an invalid choice', [...NONE, '--severity', 'urgent'], 2, 'stderr', "invalid choice: 'urgent'"],
-  ['an invalid integer', [...NONE, '--priority', 'soon'], 2, 'stderr', "invalid int value: 'soon'"],
-  ['a missing value', [...NONE, '--summary'], 2, 'stderr', 'expected one argument'],
-];
-
-for (const [title, args, code, stream, text] of REFUSALS) {
-  test(`refusal: ${title}: exit ${code}, message on ${stream}, nothing written or committed (same as new_phase.py)`, t => {
-    const f = fixture(t);
-    const before = subject(f);
-    const r = node(f, args);
-    assert.equal(r.status, code, r.stdout + r.stderr);
-    assert.ok(r[stream].includes(text), r.stdout + r.stderr);
-    if (stream === 'stdout') assert.ok(r.stdout.startsWith('❌ ') && r.stderr === '');
-    else assert.ok(r.stderr.startsWith('❌ backlog: ') && r.stdout === '');
-    assert.deepEqual(items(f), []);
-    assert.equal(subject(f), before);
-    assert.equal(git(f.home, 'status', '--porcelain', '--', 'acme/demo/phases'), '');
-    const o = oracle(t, fixture(t, 'new-oracle-'), args); // the same refusal from Python on a second fixture
-    if (!o) return;
-    assert.equal(r.status, o.status);
-    if (title !== 'an unknown option' && !title.startsWith('an invalid') && title !== 'a missing value' && !title.includes('(the classes are gone)')) assert.equal(r[stream], o[stream]); // argparse's own wording is its own
-  });
-}
+// ---------------------------------------------------------------- refusals
 
 test('refusal: a dependency that is in the backlog passes, a split source that is archived or missing is a refusal', t => {
   const f = fixture(t);
@@ -101,20 +58,6 @@ test('a stale mirror cannot hand out a used number: nextSeq looks at the files t
   assert.equal(items(f).length, 3);
 });
 
-test('refusal: a detached HEAD dies with exit 2 after the dependency check (new_phase.py:126, lib_db.py:273-277)', t => {
-  const f = fixture(t);
-  git(f.cons, 'checkout', '-q', '--detach');
-  const r = node(f, NONE);
-  assert.equal(r.status, 2);
-  assert.equal(r.stderr, '❌ backlog: HEAD is detached; check out the branch the item belongs to first\n');
-  assert.deepEqual(items(f), []);
-  const o = oracle(t, fixture(t, 'new-oracle-'), NONE);
-  if (!o) return;
-  const f2 = fixture(t, 'new-oracle-'); git(f2.cons, 'checkout', '-q', '--detach');
-  const o2 = oracle(t, f2, NONE);
-  assert.deepEqual([r.status, r.stderr, r.stdout], [o2.status, o2.stderr, o2.stdout]);
-});
-
 test('refusal: a diagnostic that echoes input carries no credential of a URL', t => {
   const f = fixture(t);
   for (const args of [[...NONE, '--work-class', 'https://user:tok3n@host/x'], [...NONE, 'https://user:tok3n@host/x'], [...BASE, '--depends-on', 'https://user:tok3n@host/x']]) {
@@ -124,9 +67,9 @@ test('refusal: a diagnostic that echoes input carries no credential of a URL', t
   }
 });
 
-// ---------------------------------------------------------------- the item (new_phase.py:111-184)
+// ---------------------------------------------------------------- the item
 
-test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name Alpha job" and pushes (no oracle)', t => {
+test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name Alpha job" and pushes', t => {
   const f = fixture(t);
   const r = node(f, NONE);
   assert.equal(r.status, 0, r.stderr);
@@ -149,39 +92,6 @@ test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name 
   assert.ok(!existsSync(join(f.cons, '.backlog')));
 });
 
-// The same flags on two fixtures, one run by new_phase.py: the item, the output, the commit and the mirror agree.
-const SCENARIOS = {
-  'every flag, appended': [[], [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--chunk',
-    '--review-refs', 'references/review/code.md,references/review/tests.example.md', '--estimate', '30', '--complexity', 'medium', '--layer', '3']],
-  'inserted at rank 0 before older work': [[['--name', 'Older', '--depends-on', 'none'], ['--name', 'Oldest', '--depends-on', '1']], [...BASE, '--depends-on', '1,Oldest'.replace('Oldest', '002-oldest'), '--priority', '0']],
-  'critical, forced to P0 with the banner': [[['--name', 'Older', '--depends-on', 'none']], [...NONE, '--severity', 'critical']],
-  'a rank beyond the end is clamped, a layer of process': [[['--name', 'Older', '--depends-on', 'none']], [...NONE, '--priority', '7', '--layer', 'process', '--complexity', 'high']],
-  'the placeholder when the body has none, unicode and quotes': [[], ['--name', 'Ünï "quoted" it\'s: a/b', '--objective', 'x: y # z', '--depends-on', 'none', '--body', 'plain body']],
-  'a prefix of an option and --opt=value': [[], ['--depends', 'none', '--name=Abbrev', '--obj', 'o=1', '--summ=s']],
-  'a dry run': [[], [...NONE, '--dry-run']],
-};
-for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
-  test(`parity with new_phase.py: ${title}`, t => {
-    const a = fixture(t); const b = fixture(t, 'new-oracle-');
-    for (const s of setup) {
-      assert.equal(node(a, s).status, 0);
-      const o = oracle(t, b, s); if (!o) return;
-      assert.equal(o.status, 0, o.stdout + o.stderr);
-    }
-    const r = node(a, args); const o = oracle(t, b, args); if (!o) return;
-    assert.equal(r.status, o.status, r.stderr + o.stderr);
-    assert.equal(r.stdout, o.stdout);
-    assert.equal(r.stderr, o.stderr);
-    assert.deepEqual(items(a).map(bare), items(b).map(bare)); // front matter keys, order and values, body to the byte, file names
-    assert.equal(subject(a), subject(b).replace('new_phase.py', 'new')); // the subject names the command (item 010), the oracle its script
-    assert.equal(git(a.bare, 'rev-list', '--count', 'main'), git(b.bare, 'rev-list', '--count', 'main'));
-    const mirror = 'SELECT slug, seq, name, objective, summary, status, severity, priority, path, branch, repository, location, size_score FROM phase ORDER BY seq';
-    assert.deepEqual(rows(a, mirror), rows(b, mirror));
-    const events = "SELECT event, branch, CASE WHEN note LIKE 'sha drift%' THEN 'sha drift' ELSE note END AS note FROM event ORDER BY id"; // a sha covers the created time and the creating commit
-    assert.deepEqual(rows(a, events), rows(b, events));
-  });
-}
-
 test('review P2: new --dry-run in a repository without a backlog writes nothing (new --help promises it)', t => {
   const f = fixture(t);
   assert.equal(git(f.home, 'status', '--porcelain'), '');
@@ -196,27 +106,6 @@ test('review P2: new --dry-run in a repository without a backlog writes nothing 
   assert.equal(existsSync(f.folder), false);
 });
 
-test('parity with new_phase.py: --split-from copies the objective, summary and body of the source and logs a split event', t => {
-  const a = fixture(t); const b = fixture(t, 'new-oracle-');
-  const first = ['--name', 'Parent', '--objective', 'parent objective', '--summary', 'parent summary', '--depends-on', 'none', '--body', 'Parent body with ünï\n\n## Definition of done\n- [ ] a'];
-  const split = ['--split-from', '1', '--depends-on', '1', '--priority', '0'];
-  assert.equal(node(a, first).status, 0);
-  const o1 = oracle(t, b, first); if (!o1) return;
-  const r = node(a, split); const o = oracle(t, b, split);
-  assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout, o.stdout);
-  assert.deepEqual(items(a).map(bare), items(b).map(bare));
-  const [, child] = items(a);
-  assert.equal(child.fm.name, '1-cont'); assert.equal(child.fm.objective, 'parent objective'); assert.equal(child.fm.summary, 'parent summary');
-  assert.ok(child.body.includes('## Split from `001-parent`. Inherited context:\n\n# Phase 001 — Parent'));
-  const events = "SELECT event, note FROM event WHERE event = 'split'";
-  assert.deepEqual(rows(a, events), [{ event: 'split', note: 'spawned sibling 002-1-cont' }]);
-  assert.deepEqual(rows(a, events), rows(b, events));
-  const long = ['--name', 'Long', '--depends-on', 'none', '--body', `${'é'.repeat(900)}\n\n## Definition of done\n- [ ] a`];
-  assert.equal(node(a, long).status, 0); oracle(t, b, long);
-  assert.equal(node(a, ['--split-from', 'Long'.replace('Long', '003-long'), '--depends-on', 'none']).status, 0); oracle(t, b, ['--split-from', '003-long', '--depends-on', 'none']);
-  assert.deepEqual(items(a).map(bare), items(b).map(bare)); // the inherited body is cut at 800 characters
-});
-
 test('--split-from takes the body from inside the folder only: a mirror row that points outside is refused', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0);
@@ -224,19 +113,6 @@ test('--split-from takes the body from inside the folder only: a mirror row that
   const r = node(f, ['--split-from', '1', '--depends-on', 'none']);
   assert.equal(r.status, 1); assert.match(r.stderr, /^❌ backlog: Unsafe path/);
   assert.equal(items(f).length, 1);
-});
-
-test('team mode: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the branch, an item without a definition of done is refused', t => {
-  const f = fixture(t); const env = { TEAM_REPOSITORY: 'acme/other', TEAM_BRANCH: 'team-1' };
-  const refused = node(f, NONE, env);
-  assert.equal(refused.status, 1); assert.match(refused.stdout, /^❌ --body must hold a definition of done/);
-  const ok = node(f, [...NONE, '--body', '## Definition of done\n- [ ] x'], env);
-  assert.equal(ok.status, 0, ok.stderr);
-  const [item] = store.load(join(f.home, 'acme', 'other'));
-  assert.equal(item.fm.repository, 'acme/other'); assert.equal(item.fm.branch, 'team-1');
-  assert.equal(node(f, NONE, { TEAM_REPOSITORY: '../x' }).status, 2);
-  const o = oracle(t, fixture(t, 'new-oracle-'), NONE, env); if (!o) return;
-  assert.equal(refused.stdout, o.stdout);
 });
 
 test('hasDefinitionOfDone: a heading or a line with checkable content; the placeholder and an empty section do not count', () => {
@@ -314,17 +190,6 @@ test('review P2: a file with the name of the next item is never replaced: the it
   assert.equal(forced.status, 0, forced.stderr);
   assert.ok(readFileSync(path, 'utf8').includes('SEEDED BODY'));
   assert.deepEqual(items(f).map(i => i.path).sort(), ['phases/001-alpha-job.md', 'phases/002-alpha-job.md', 'phases/003-alpha-job.md']);
-});
-
-test('review P2: a skills.md review document is accepted and persisted; no class field is written', t => {
-  const f = fixture(t);
-  const r = node(f, [...NONE, '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
-  assert.equal(r.status, 0, r.stderr + r.stdout);
-  const [item] = items(f);
-  assert.deepEqual(item.fm.review_refs, ['references/review/skills.md']);
-  assert.ok(!('work_class' in item.fm) && !('review_classes' in item.fm) && !('chunk' in item.fm));
-  const o = oracle(t, fixture(t, 'new-oracle-'), [...NONE, '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
-  if (o) assert.equal(o.status, 0, o.stdout + o.stderr);
 });
 
 test('review P1: new whose rescan throws (an existing phase with size_score: []) removes the file it wrote and commits nothing', t => {

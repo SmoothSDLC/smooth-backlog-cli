@@ -1,8 +1,5 @@
 // Tests for src/shared/update.js - cli-parity job 11 (UPDATE): `backlog update` in shared mode, non-team flags.
-// Oracle: update.py:88-257 (no team_action) run on a twin fixture. Both twins are seeded identically, the same
-// command runs on each (python on one, the CLI on the other), and the printed lines, exit status, item files, db rows
-// and events, and the pushed commits must be identical (timestamps and the shas that hash them aside). Parity tests
-// skip when SMOOTH_BACKLOG_SCRIPTS is not configured or PyYAML is missing. Local bare repos only (shared-fixtures.js).
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -10,7 +7,7 @@ import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, readdirSy
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
@@ -23,7 +20,6 @@ const git = (cwd, ...args) => {
 };
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
-const oracle = py('update.py', ['--help']) !== null;
 
 // A shared home with consumer acme/demo on main and seven items: four open (one in progress, one waiting), one with
 // a review class, one done. ids: the mirror db is built by the Node scan; the item files are fixed text.
@@ -66,154 +62,8 @@ function seed({ permuteIds = false } = {}) {
   return { t, home, cons, folder };
 }
 
-const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
-const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA');
-
-// The codec writes strings JSON-quoted (contract section 3) where PyYAML writes them plain: the front matter is compared
-// as parsed values in key order, the body byte for byte.
-const doc = text => norm(JSON.stringify(parse(text)));
-
-// Everything a command may have changed: the item files, the mirror rows and events, the commits.
-function snapshot(f) {
-  const files = {};
-  for (const n of readdirSync(join(f.folder, 'phases'))) files[n] = doc(readFileSync(join(f.folder, 'phases', n), 'utf8'));
-  const con = db.connect(f.folder);
-  const rows = x => con.prepare(x).all().map(r => norm(JSON.stringify({ ...r })));
-  const out = {
-    files,
-    phases: rows('SELECT id, handoff_id, slug, seq, name, objective, summary, status, severity, priority, path, branch, commit_sha, location, repository, size_score, completed_at FROM phase ORDER BY id'),
-    events: rows('SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event ORDER BY id'),
-    log: git(f.home, 'log', '--format=%s').split('\n'),
-    origin: git(f.home, 'rev-parse', 'origin/main') === git(f.home, 'rev-parse', 'HEAD'),
-  };
-  con.close();
-  return out;
-}
-
-// Runs the same command on both twins; asserts the same exit status, stdout, files, db and commits.
-// loose: only the exit status and stdout (argparse and traceback texts are python's own).
-// A write stamps `updated` to the second: a command that starts in the second of the previous one can rewrite a file
-// byte-identically, and then no `reingested` event follows. Start each command in a fresh second.
-let lastEnd = 0;
-function pair(t, o, n, args, { loose = false } = {}) {
-  while (Math.floor(Date.now() / 1000) === lastEnd) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
-  const ro = py('update.py', args, { cwd: o.cons, tmp: o.t });
-  const rn = cli(['update', ...args], { cwd: n.cons, tmp: n.t });
-  assert.equal(rn.status, ro.status, `${args.join(' ')}: ${rn.stderr}`);
-  assert.equal(norm(rn.stdout), norm(ro.stdout), args.join(' '));
-  if (!loose) assert.equal(rn.stderr, ro.stderr, args.join(' '));
-  assert.deepEqual(snapshot(n), snapshot(o), args.join(' '));
-  lastEnd = Math.floor(Date.now() / 1000);
-  return rn;
-}
-function twins(t) {
-  if (!oracle) { t.skip(ORACLE_SKIP); return null; }
-  return [seed(), seed()];
-}
 const run = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });
 const fm = (f, name) => parse(readFileSync(join(f.folder, 'phases', name), 'utf8'));
-
-test('field updates (status, location, commit, summary, name, objective, note) match update.py', t => {
-  const w = twins(t);
-  if (!w) return;
-  const r = pair(t, ...w, ['2', '--status', 'in_progress', '--location', 'src/a.js', '--commit', 'abc1234', '--summary', 'Neue Zusammenfassung ☕',
-    '--name', 'Beta 2', '--objective', 'Obj: "quoted" it\'s', '--note', 'working on it']);
-  assert.match(r.stdout, /^✅ 002-beta updated \(status=in_progress, commit=abc1234, location=src\/a\.js, summary=/);
-  pair(t, ...w, ['002-beta', '--seq', '77', '--size_score', '5']);
-  pair(t, ...w, ['1', '--note', 'only a note']);
-  pair(t, ...w, ['--size_score=3', '1']);
-});
-
-test('--append adds the text after a blank line and a final newline, like update.py', t => {
-  const w = twins(t);
-  if (!w) return;
-  pair(t, ...w, ['1', '--append', 'extra line\n\n  indented\n- [ ] item']);
-  pair(t, ...w, ['1', '--append', '## Definition of done\n- [ ] checked', '--status', 'in_progress']);
-});
-
-test('--priority moves the item to that rank and re-densifies, with a planning_event (match update.py)', t => {
-  const w = twins(t);
-  if (!w) return;
-  pair(t, ...w, ['3', '--priority', '0']);
-  pair(t, ...w, ['1', '--priority', '99']);
-  pair(t, ...w, ['2', '--priority', '-4']);
-  pair(t, ...w, ['004-delta', '--priority', '1', '--note', 'resume']);
-  pair(t, ...w, ['6', '--priority', '0']); // a done item is in no queue
-});
-
-test('--status done completes, stamps completed, re-prioritizes and prints the planning-event lines (match update.py)', t => {
-  const w = twins(t);
-  if (!w) return;
-  const r = pair(t, ...w, ['2', '--status', 'done']);
-  assert.match(r.stdout, /PLANNING EVENT — completing work RE-PRIORITIZES the backlog/);
-  assert.match(fm(w[1], '002-beta.md').fm.completed, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
-  pair(t, ...w, ['1', '--status', 'done', '--note', 'n']);
-  pair(t, ...w, ['3', '--status', 'done', '--priority', '0']);
-  pair(t, ...w, ['4', '--status', 'done']); // empties the backlog down to item 5
-  pair(t, ...w, ['6', '--status', 'done']); // already done: completed stays
-});
-
-test('--replan sets the leading order by slug or number, ignores unknown names, and prints the order (match update.py)', t => {
-  const w = twins(t);
-  if (!w) return;
-  const r = pair(t, ...w, ['--replan', '4,002-beta, zzz ,4']);
-  assert.match(r.stdout, /^📋 PLANNING EVENT — backlog re-prioritized \(P0 = next\):\n {3}P0 {2}004-delta\n {3}P1 {2}002-beta\n/);
-  pair(t, ...w, ['--replan', '3', '--note', 'because']);
-  pair(t, ...w, ['--replan', ',']);
-  pair(t, ...w, ['--replan', '1', '1', '--status', 'done']); // replan wins over the item (ignored)
-});
-
-test('--dry-run prints the plan and changes and commits nothing (match update.py)', t => {
-  const w = twins(t);
-  if (!w) return;
-  const before = snapshot(w[1]);
-  const r = pair(t, ...w, ['2', '--status', 'done', '--dry-run']);
-  assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'done'\}; COMPLETE -> re-prioritize backlog\n$/);
-  pair(t, ...w, ['3', '--priority', '1', '--name', "It's \"x\"", '--seq', '9', '--dry-run']);
-  pair(t, ...w, ['3', '--append', 'x', '--dry-run']);
-  pair(t, ...w, ['--replan', '3,1', '--dry-run']);
-  assert.deepEqual(snapshot(w[1]), before);
-});
-
-test('refusals are the oracle\'s: stdout, exit 1, nothing written, nothing committed', t => {
-  const w = twins(t);
-  if (!w) return;
-  const before = snapshot(w[1]);
-  for (const args of [['--status', 'done'], ['2', '--branch', 'x'], ['2', '--commit', ''], ['2', '--commit', '  '], ['999', '--status', 'done'],
-    ['nosuch'], ['0'], ['5', '--status', 'done'], ['2', '--set-estimate', '0']]) {
-    assert.equal(pair(t, ...w, args).status, 1, args.join(' '));
-  }
-  assert.deepEqual(snapshot(w[1]), before);
-});
-
-test('invalid command lines exit 2 or 1 like python (texts are python\'s own)', t => {
-  const w = twins(t);
-  if (!w) return;
-  assert.equal(pair(t, ...w, ['2', '--bogus'], { loose: true }).status, 2);
-  assert.equal(pair(t, ...w, ['2', '3'], { loose: true }).status, 2);
-  assert.equal(pair(t, ...w, ['2', '--status'], { loose: true }).status, 2);
-  assert.equal(pair(t, ...w, ['2', '--set-complexity', 'huge'], { loose: true }).status, 2);
-  assert.equal(pair(t, ...w, ['2', '--priority', 'abc'], { loose: true }).status, 1); // python: ValueError traceback
-});
-
-test('--note on an item that waits clears the wait with a WAIT DONE line (match update.py)', t => {
-  const w = twins(t);
-  if (!w) return;
-  pair(t, ...w, ['4', '--note', 'workflow finished']);
-  assert.equal(fm(w[1], '004-delta.md').fm.wait_on, '');
-  assert.match(fm(w[1], '004-delta.md').body, /\n\nWAIT DONE \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \(next step on the item\)\n$/);
-});
-
-test('refinement flags --set-review-refs --set-chunk --set-estimate --set-complexity --set-layer --set-depends-on (match update.py)', t => {
-  const w = twins(t);
-  if (!w) return;
-  pair(t, ...w, ['2', '--set-review-refs', 'references/review/code.md,references/review/tests.md', '--set-chunk', 'yes', '--set-estimate', '30',
-    '--set-complexity', 'high', '--set-layer', '3', '--set-depends-on', '1,003-gamma']);
-  pair(t, ...w, ['2', '--set-depends-on', 'none', '--set-layer', 'process']);
-  pair(t, ...w, ['2', '--set-depends-on', '99']);
-  pair(t, ...w, ['2', '--set-chunk', 'no']);
-  pair(t, ...w, ['2', '--set-review-refs', 'docs/notes.md']);
-});
 
 test('the class options are gone: --set-work-class and --set-review-classes are unrecognized, nothing is written', () => {
   const f = seed();

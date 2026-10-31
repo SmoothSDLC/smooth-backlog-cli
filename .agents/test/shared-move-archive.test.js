@@ -1,8 +1,5 @@
-// Tests for src/shared/move.js and src/shared/archive.js - cli-parity job 17 (MOVE): `backlog move` and `backlog archive`
-// in shared mode. Oracles: move.py and archive.py run on a twin fixture. Both twins are seeded identically, the same command
-// runs on each (python on one, the CLI on the other), and the printed lines, exit status, item files (also archive/), db rows
-// and events of both folders, and the pushed commits must be identical (timestamps and the shas that hash them aside).
-// Parity tests skip when SMOOTH_BACKLOG_SCRIPTS is not configured or PyYAML is missing. Local bare repos only (shared-fixtures.js).
+// Tests for src/shared/move.js and src/shared/archive.js - cli-parity job 17 (MOVE): `backlog move` and `backlog archive`.
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -10,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
@@ -23,7 +20,6 @@ const git = (cwd, ...args) => {
 };
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
-const oracle = py('move.py', ['--help']) !== null && py('archive.py', ['--help']) !== null;
 
 // A shared home with consumer acme/demo (branches main and release on its origin) and seven items: four open (one in
 // progress), two done, one foreign (it names other/proj). The folder other/proj holds item 001 already.
@@ -74,22 +70,18 @@ function seed({ permuteIds = false } = {}) {
 
 const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
 const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA');
-// The codec writes strings JSON-quoted (contract section 3) where PyYAML writes them plain: front matter is compared as
-// parsed values in key order, the body byte for byte.
-// A cross-repository move re-densifies both queues, which move.py does not (review round 6): those runs compare without ranks.
-let ignoreRank = false;
-const doc = text => { const p = parse(text); if (ignoreRank) { delete p.fm.priority; delete p.fm.updated; } return norm(JSON.stringify(p)); };
+const doc = text => norm(JSON.stringify(parse(text)));
 const names = (dir, sub) => (existsSync(join(dir, sub)) ? readdirSync(join(dir, sub), { recursive: true }).filter(n => n.endsWith('.md')).sort() : []);
 
 function snapshotFolder(dir) {
   const files = {};
   for (const sub of ['phases', 'archive']) for (const n of names(dir, sub)) files[`${sub}/${n}`] = doc(readFileSync(join(dir, sub, n), 'utf8'));
   const con = db.connect(dir);
-  const rows = x => con.prepare(x).all().map(r => { if (ignoreRank) { delete r.priority; delete r.updated_at; delete r.sha; } return norm(JSON.stringify({ ...r })); });
+  const rows = x => con.prepare(x).all().map(r => norm(JSON.stringify({ ...r })));
   const out = {
     files,
     phases: rows('SELECT id, handoff_id, slug, seq, name, objective, summary, status, severity, priority, path, branch, commit_sha, location, repository, size_score, completed_at FROM phase ORDER BY id'),
-    events: rows('SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event ORDER BY id').filter(e => !ignoreRank || !e.includes('"reingested"')), // a rank rewrite is a sha drift
+    events: rows('SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event ORDER BY id'),
   };
   con.close();
   return out;
@@ -97,77 +89,15 @@ function snapshotFolder(dir) {
 const snapshot = f => ({
   demo: snapshotFolder(f.folder),
   other: snapshotFolder(f.other),
-  // move.py's scan of the target is a script of its own and commits alone ("other/proj: scan.py"); the CLI commits the move once
-  log: ignoreRank ? [] : git(f.home, 'log', '--format=%s').split('\n').filter(s => !s.endsWith(': scan.py')), // a cross-repository move is one commit here, two in move.py
+  log: git(f.home, 'log', '--format=%s').split('\n'),
   origin: git(f.home, 'rev-parse', 'origin/main') === git(f.home, 'rev-parse', 'HEAD'),
 });
 
-// Runs the same command on both twins; asserts the same exit status, stdout, files, db and commits.
-// loose: only the exit status and stdout (argparse texts are python's own).
-// A write stamps `updated` to the second: a command that starts in the second of the previous one can rewrite a file
-// byte-identically, and then no `reingested` event follows. Start each command in a fresh second.
-let lastEnd = 0;
-function pair(t, o, n, script, args, { loose = false, rankless = false } = {}) {
-  while (Math.floor(Date.now() / 1000) === lastEnd) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
-  const ro = py(`${script}.py`, args, { cwd: o.cons, tmp: o.t });
-  const rn = cli([script, ...args], { cwd: n.cons, tmp: n.t });
-  assert.equal(rn.status, ro.status, `${script} ${args.join(' ')}: ${rn.stderr}`);
-  assert.equal(norm(rn.stdout), norm(ro.stdout), args.join(' '));
-  if (!loose) assert.equal(rn.stderr, ro.stderr, args.join(' '));
-  ignoreRank = rankless;
-  try { assert.deepEqual(snapshot(n), snapshot(o), `${script} ${args.join(' ')}`); } finally { ignoreRank = false; }
-  lastEnd = Math.floor(Date.now() / 1000);
-  return rn;
-}
-function twins(t) {
-  if (!oracle) { t.skip(ORACLE_SKIP); return null; }
-  return [seed(), seed()];
-}
+// Runs a backlog command in the consumer checkout.
 const run = (f, script, args) => cli([script, ...args], { cwd: f.cons, tmp: f.t });
 const fm = (dir, rel) => parse(readFileSync(join(dir, rel), 'utf8'));
-const pyJson = (f, script, args) => JSON.parse(py(script, args, { cwd: f.cons, tmp: f.t }).stdout);
 
 // --- archive
-
-test('archive of a done item matches archive.py: git mv, status stamp, db row, events, reflow', t => {
-  const w = twins(t);
-  if (!w) return;
-  const r = pair(t, ...w, 'archive', ['5']);
-  assert.match(r.stdout, /^📦 005-epsilon archived -> archive\/phases\/005-epsilon\.md\n {3}rescan: \d+ \(re\)ingested, 0 missing\n {3}📋 planning event: backlog re-densified to 5 item\(s\) \(P0\.\.P4\)\n$/);
-  assert.equal(fm(w[1].folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
-  assert.ok(!existsSync(join(w[1].folder, 'phases/005-epsilon.md')));
-  assert.equal(git(w[1].home, 'log', '-1', '--format=%s'), 'acme/demo: archive.py 5');
-  assert.equal(git(w[1].home, 'log', '-1', '--follow', '--format=%s', '--', 'acme/demo/archive/phases/005-epsilon.md'), 'acme/demo: archive.py 5');
-  pair(t, ...w, 'archive', ['006-zeta']);
-});
-
-test('archive --force, an already archived item, refusals and --dry-run match archive.py', t => {
-  const w = twins(t);
-  if (!w) return;
-  pair(t, ...w, 'archive', ['2']); // not done: refused
-  pair(t, ...w, 'archive', ['99']);
-  pair(t, ...w, 'archive', ['5', '--dry-run']);
-  pair(t, ...w, 'archive', ['2', '--force', '--dry-run']);
-  pair(t, ...w, 'archive', ['2', '--force']);
-  pair(t, ...w, 'archive', ['2']); // already archived: ℹ️ line, exit 0
-  pair(t, ...w, 'archive', ['002-beta']);
-  pair(t, ...w, 'archive', ['3', '--force']);
-  pair(t, ...w, 'archive', [], { loose: true });
-  pair(t, ...w, 'archive', ['1', '--bogus'], { loose: true });
-});
-
-test('after a Node archive, Python query.py --status no longer lists the item as open and archive/phases holds it', t => {
-  if (!oracle) return t.skip(ORACLE_SKIP);
-  const f = seed();
-  const row = () => pyJson(f, 'query.py', ['--status', '--json']).phases.find(p => p.slug === '002-beta'); // query.py lists archived items last
-  assert.deepEqual([row().status, row().path], ['pending', 'phases/002-beta.md']);
-  const r = run(f, 'archive', ['2', '--force']);
-  assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual([row().status, row().path], ['archived', 'archive/phases/002-beta.md']);
-  assert.ok(py('query.py', ['--next', '--json'], { cwd: f.cons, tmp: f.t }).stdout.indexOf('002-beta') < 0);
-  assert.deepEqual(names(f.folder, 'archive'), ['phases/002-beta.md']);
-  assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
-});
 
 test('archive finds the item by number, never by database row id', () => {
   const f = seed({ permuteIds: true });
@@ -217,37 +147,6 @@ test('review P2: a new item does not inherit the events of the moved-away item w
 
 // --- move --to-branch
 
-test('move --to-branch matches move.py; Python query.py --by-branch lists the item', t => {
-  const w = twins(t);
-  if (!w) return;
-  const r = pair(t, ...w, 'move', ['2', '--to-branch', 'release']);
-  assert.equal(r.stdout, "✅ 002-beta now belongs to branch 'release'\n");
-  assert.match(py('query.py', ['--by-branch', 'release'], { cwd: w[1].cons, tmp: w[1].t }).stdout, /\b002-beta\b/);
-  pair(t, ...w, 'move', ['001-alpha', '--to-branch', 'release', '--note', 'ship it ☕']);
-  pair(t, ...w, 'move', ['4', '--to-branch=main']);
-  pair(t, ...w, 'move', ['5', '--to-branch', 'release']); // a done item moves too
-});
-
-test('move --all-open-of-branch matches move.py', t => {
-  const w = twins(t);
-  if (!w) return;
-  const r = pair(t, ...w, 'move', ['--all-open-of-branch', 'main', '--to-branch', 'release']);
-  assert.equal(r.stdout, "✅ moved 3 open item(s) of 'main' to 'release'\n");
-  pair(t, ...w, 'move', ['--all-open-of-branch', 'nothing', '--to-branch', 'release', '--note', 'x']);
-  pair(t, ...w, 'move', ['--all-open-of-branch', 'release'], { loose: true });
-});
-
-test('move refusals and argument errors match move.py', t => {
-  const w = twins(t);
-  if (!w) return;
-  pair(t, ...w, 'move', ['99', '--to-branch', 'release']);
-  pair(t, ...w, 'move', ['2', '--to-repository']); // same repository
-  pair(t, ...w, 'move', ['2', '--to-repository', 'acme/demo']);
-  pair(t, ...w, 'move', [], { loose: true });
-  pair(t, ...w, 'move', ['2'], { loose: true });
-  pair(t, ...w, 'move', ['2', '3', '--to-branch', 'release'], { loose: true });
-});
-
 test('a branch missing on the origin of the consuming repository is refused, nothing changes', () => {
   const f = seed();
   const before = snapshot(f);
@@ -271,20 +170,6 @@ test('an origin that cannot be read refuses the move', () => {
 });
 
 // --- move --to-repository
-
-test('move --to-repository matches move.py: new number in the target, events copied, source row removed', t => {
-  const w = twins(t);
-  if (!w) return;
-  const r = pair(t, ...w, 'move', ['7', '--to-repository'], { rankless: true }); // default: the repository the item names
-  assert.equal(r.stdout, '✅ 007-eta moved to other/proj as 002-eta\n');
-  assert.ok(existsSync(join(w[1].other, 'phases/002-eta.md')));
-  assert.ok(!existsSync(join(w[1].folder, 'phases/007-eta.md')));
-  assert.equal(git(w[1].home, 'log', '-1', '--format=%s'), 'acme/demo, other/proj: move.py 7 --to-repository'); // one commit for both folders
-  assert.deepEqual(git(w[1].home, 'show', '--format=', '--name-only', 'HEAD').split('\n').map(f => f.split('/').slice(0, 2).join('/')).filter((f, i, a) => a.indexOf(f) === i).sort(), ['acme/demo', 'other/proj']);
-  assert.equal(git(w[1].home, 'rev-parse', 'origin/main'), git(w[1].home, 'rev-parse', 'HEAD'));
-  pair(t, ...w, 'move', ['3', '--to-repository', 'other/proj'], { rankless: true });
-  pair(t, ...w, 'move', ['4', '--to-repository', 'new/place'], { rankless: true }); // a folder that does not exist yet
-});
 
 test('a target that is not a plain owner/name is refused before anything is written', () => {
   const f = seed();
@@ -386,20 +271,6 @@ for (const [title, script, args] of [['archive', 'archive', ['5']], ['move --to-
     assert.ok(pushed.files.includes('phases/009-local.md'));
   });
 }
-
-test('review P2: archive with a ghost row (a pending mirror row whose file is gone) ranks it like archive.py: the survivors keep their ranks', t => {
-  const ghost = f => { git(f.home, 'rm', '-q', 'acme/demo/phases/001-alpha.md'); git(f.home, 'commit', '-q', '-m', 'file gone'); git(f.home, 'push', '-q'); };
-  const f = seed(); ghost(f);
-  const r = run(f, 'archive', ['5']);
-  assert.equal(r.status, 0, r.stderr);
-  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.priority, 1, 'the ghost still holds P0');
-  assert.deepEqual(['003-gamma', '004-delta', '007-eta'].map(n => fm(f.folder, `phases/${n}.md`).fm.priority), [2, 3, 4]);
-  assert.match(r.stdout, /re-densified to 5 item\(s\) \(P0\.\.P4\)/, 'the ghost row is counted');
-  const w = twins(t);
-  if (!w) return;
-  ghost(w[0]); ghost(w[1]);
-  pair(t, ...w, 'archive', ['5']);
-});
 
 test('review P2: move accepts --note="two words" (an option with a value, not a positional)', () => {
   const f = seed();

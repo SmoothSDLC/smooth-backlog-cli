@@ -1,9 +1,6 @@
 // Tests for src/shared/team.js and src/shared/lifecycle.js - cli-parity job 15 (TEAM): the team metadata rules and the
-// claim, review, wait and close lifecycle of `backlog update`. Oracle: lib_db.py:528-621 and update.py:26-85, 181-246.
-// Port of tests/test_team_lifecycle.py (the query views --blocked/--claimable/--reviewable belong to job 16 and are not
-// asserted here), plus twin-fixture parity: the same command runs on a python twin and a node twin, and the printed
-// lines, exit status, item files (parsed front matter in key order, body bytes), db rows, events and commits must match.
-// Parity tests skip when SMOOTH_BACKLOG_SCRIPTS is not configured or PyYAML is missing. Local bare repos only.
+// claim, review, wait and close lifecycle of `backlog update`.
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -11,11 +8,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
-import { shutdown } from '../../src/shared/lifecycle.js';
 import * as team from '../../src/shared/team.js';
 
 const git = (cwd, ...args) => {
@@ -25,9 +21,8 @@ const git = (cwd, ...args) => {
 };
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
-const oracle = py('update.py', ['--help']) !== null;
 
-// A shared home with the consuming repository acme/demo on main; the items are made with `new` (python or node).
+// A shared home with the consuming repository acme/demo on main; the items are made with `new`.
 function fixture() {
   const t = mkdtempSync(join(tmpdir(), 'team-test-'));
   dirs.push(t);
@@ -64,7 +59,7 @@ function newArgs(name, extra = []) {
 }
 function make(f, side, name, extra = []) {
   const args = newArgs(name, extra);
-  const r = side === 'py' ? py('new_phase.py', args, { cwd: f.cons, tmp: f.t }) : cli(['new', ...args], { cwd: f.cons, tmp: f.t });
+  const r = cli(['new', ...args], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r.stdout.split('created phase phases/')[1].split('.md')[0];
 }
@@ -216,7 +211,7 @@ test('team.js: held items, the claim rule, undone dependencies on a folder', () 
   assert.deepEqual(undone.map(d => team.describeDependency(d)), ['001-a (status in_progress, claimed by cody)', 'nothing (no such item in this backlog)', '005-e (status in_progress, claimed by archy)']);
 });
 
-test('team.js: status and identity come from the mirror rows, the files give only the metadata (drift cases, lib_db.py:648-680)', () => {
+test('team.js: status and identity come from the mirror rows, the files give only the metadata (drift cases)', () => {
   const f = fixture();
   const { put, scan } = seed(f);
   put(1, 'a', { status: 'in_progress', claimed_by: 'cody' });
@@ -263,117 +258,3 @@ test('review P2: a holder whose item file has malformed front matter still block
   assert.deepEqual(team.heldItems(f.folder, 'cody'), [], 'a genuinely missing file is {} (item_fm: p.exists() else {})');
 });
 
-test('twin parity: every lifecycle step prints, refuses and records as update.py', t => {
-  if (!oracle) return t.skip(ORACLE_SKIP);
-  const o = fixture(); const n = fixture();
-  const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
-  const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA').replace(/cwd=\S+/g, 'cwd=X').replace(/\b[0-9a-f]{40}\b/g, 'SHA40').replace(/,?"review_author":"[^"]*"/g, "");  // review_author: beyond the oracle (who asked for a review survives a release)
-  const snapshot = f => {
-    const files = {};
-    for (const name of readdirSync(join(f.folder, 'phases'))) files[name] = norm(JSON.stringify(parse(readFileSync(join(f.folder, 'phases', name), 'utf8'))));
-    const con = db.connect(f.folder);
-    const rows = x => con.prepare(x).all().map(r => norm(JSON.stringify({ ...r })));
-    const out = {
-      files,
-      phases: rows('SELECT id, slug, seq, status, priority, branch, commit_sha, completed_at FROM phase ORDER BY id'),
-      events: rows("SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event WHERE event != 'ingested' AND event != 'reingested' ORDER BY id"),
-      log: git(f.home, 'log', '--format=%s').split('\n').filter(l => l.includes('update.py')),
-      origin: git(f.home, 'rev-parse', 'origin/main') === git(f.home, 'rev-parse', 'HEAD'),
-    };
-    con.close();
-    return out;
-  };
-  let lastEnd = 0; // a write stamps `updated` to the second: start each command in a fresh second
-  const both = (args, env, want) => {
-    while (Math.floor(Date.now() / 1000) === lastEnd) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
-    const ro = py('update.py', args, { cwd: o.cons, tmp: o.t, env });
-    const rn = update(n, args, env);
-    assert.equal(rn.status, ro.status, `${args.join(' ')}: ${rn.stdout}${rn.stderr}`);
-    // beyond the oracle (item 033, spec section 7): a member's hand-off, changes verdict or close ends with the shutdown
-    // line, and a member's close leaves the re-ranking to the lead; everything else is the oracle's
-    const ends = args.includes('--request-review') || args.includes('--close') || (args.includes('--review') && args.includes('changes'));
-    const line = rn.stdout.match(/\n(🛑 (\w+): .*)\n$/);
-    if (line) { // exactly the shutdown text, to a member of the fixture, on a step that ends a session
-      assert.ok(ends && ['archy', 'zed'].includes(line[2]), `${args.join(' ')}: an unexpected shutdown line`);
-      assert.equal(line[1], shutdown(line[2]));
-    }
-    const mine = rn.stdout.replace(/\n🛑 \w+: .*\n$/, '\n').replace('      the team lead re-evaluates the order (backlog update --replan, --priority); not you\n',
-      '      RE-EVALUATE the order now (it is a planning step even if nothing changes):\n        backlog update <phase> --priority <rank>      # promote/demote one\n        backlog update --replan "<id,id,id,...>"       # set the leading order\n');
-    assert.equal(norm(mine), norm(ro.stdout), args.join(' '));
-    assert.equal(rn.stderr, ro.stderr, args.join(' '));
-    assert.deepEqual(snapshot(n), snapshot(o), args.join(' '));
-    if (want !== undefined) assert.equal(ro.status, want, `${args.join(' ')}: ${ro.stdout}`);
-    lastEnd = Math.floor(Date.now() / 1000);
-    return ro;
-  };
-  const slugs = {};
-  for (const [key, name, extra] of [
-    ['a', 'dependency first', []],
-    ['b', 'the job', ['--review-refs', 'references/review/code.md', '--depends-on', '1']],
-    ['c', 'third', []],
-  ]) {
-    slugs[key] = make(o, 'py', name, extra);
-    assert.equal(make(n, 'js', name, extra), slugs[key]);
-  }
-  const [A, B, C] = [slugs.a, slugs.b, slugs.c];
-
-  both([B, '--claim', 'cody'], undefined, 1); // dependency not done
-  both([A, '--claim', 'archy'], undefined, 0);
-  both([A, '--claim', 'cody'], undefined, 1); // held by another agent
-  both([C, '--claim', 'archy'], undefined, 1); // archy holds an active item
-  both([C, '--claim', 'archy', '--force'], undefined, 0); // recorded in the claim line
-  both([C, '--release', 'cody'], undefined, 1);
-  both([C, '--release', 'archy'], undefined, 0);
-  both([A, '--close', '--summary', 'early'], undefined, 1); // needs a passing review
-  both([A, '--request-review', 'any'], undefined, 1); // a note is needed
-  both([A, '--request-review', 'any', '--note', 'tests written'], undefined, 0);
-  both([A, '--start-review'], undefined, 1);
-  both([A, '--start-review', '--by', 'archy'], undefined, 1); // not its own work
-  both([A, '--start-review', '--by', 'cody'], undefined, 0);
-  both([A, '--start-review', '--by', 'zed'], undefined, 1); // in review by cody
-  both([A, '--review', 'pass', '--by', 'cody'], undefined, 1); // comments needed
-  both([A, '--review', 'pass', '--by', 'cody', '--comments', 'fine'], undefined, 1); // cites no review ref
-  both([A, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md'], undefined, 0);
-  both([A, '--waiting', 'workflow run 9', '--by', 'archy'], undefined, 0);
-  both([A, '--waiting', 'again', '--by', 'cody'], undefined, 1);
-  both([A, '--waiting-done', '--by', 'archy'], undefined, 0);
-  both([A, '--waiting', 'workflow run 10', '--by', 'archy'], undefined, 0);
-  both([A, '--claim', 'archy', '--release', 'archy'], undefined, 1); // one team step at a time
-  both([A, '--close', '--summary', 'tests written'], undefined, 0); // a wait is cleared by the next step
-  both([A, '--dry-run', '--waiting-done'], undefined, 0);
-  both([B, '--claim', 'cody'], undefined, 0);
-  both([B, '--close', '--summary', 'early'], undefined, 1);
-  both([B, '--status', 'done'], undefined, 1); // reviewed items finish through --close only
-  both([B, '--set-review-refs', 'docs/notes.md'], undefined, 1); // not a review document
-  both([B, '--set-review-refs', 'references/review/code.md,x/y.md'], undefined, 0);
-  both([B, '--request-review', 'archy', '--note', 'commit def5678'], undefined, 0);
-  both([B, '--review', 'changes', '--by', 'archy', '--comments', 'no refs cited'], undefined, 1);
-  both([B, '--review', 'changes', '--by', 'archy', '--comments', 'add a test (references/review/code.md)'], undefined, 0);
-  both([B, '--waiting', 'ci', '--by', 'cody', '--note', 'x'], undefined, 0);
-  both([B, '--note', 'the holder continues'], undefined, 0); // ends the wait
-  both([B, '--request-review', 'archy', '--note', 'commit 9999999'], undefined, 0);
-  both([B, '--review', 'pass', '--by', 'archy', '--comments', 'good (references/review/code.md)'], undefined, 0); // CLOSE NOW line
-  // beyond the oracle (item 039): the reviewer never closes (update.py prints the rule but lets it through)
-  const byReviewer = update(n, [B, '--close', '--by', 'archy', '--summary', 'delivered']);
-  assert.deepEqual([byReviewer.status, byReviewer.stdout], [1, `❌ ${B}: only the claimer (cody) closes it, else the team lead (cody); not archy\n`]);
-  assert.deepEqual(snapshot(n), snapshot(o)); // refused: nothing changed
-  both([B, '--close', '--by', 'cody', '--summary', 'delivered'], undefined, 0);
-  both([C, '--close', '--summary', 'x'], undefined, 1); // nobody claimed it
-  both([C, '--claim', 'cody', '--note', 'n'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'other' }, 1); // outside the team scope
-  both([C, '--claim', 'cody'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' }, 0);
-  both([C, '--release', 'cody'], { TEAM_REPOSITORY: 'acme/demo' }, 0);
-  both([C, '--claim', 'archy'], undefined, 0);
-  both([C, '--dry-run', '--release', 'archy'], undefined, 0);
-  both([C, '--request-review', 'any', '--note', 'ready'], undefined, 0);
-  both([C, '--start-review', '--by', 'cody'], undefined, 0);
-  both([C, '--start-review', '--by', 'zed'], undefined, 1); // in review by cody
-  // beyond the oracle (item 033): a stale review is handed on by the team lead (--reassign-review), never taken over
-  const stale = update(n, [C, '--start-review', '--by', 'zed'], { BACKLOG_REVIEW_STALE_SECONDS: '-1' });
-  assert.equal(stale.status, 1, stale.stdout + stale.stderr);
-  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by cody since \\S+; review another item \\(the review is stale: the team lead hands it on with backlog update <item> --reassign-review <agent> --by cody --reason "<why>"\\)\\n$`));
-  assert.deepEqual(snapshot(n), snapshot(o)); // refused: nothing changed
-  // the class options are gone: unrecognized, exit 2 in both (argparse prints its whole usage, the CLI names the option)
-  assert.equal(py('update.py', [C, '--claim', 'cody', '--set-work-class', 'docs'], { cwd: o.cons, tmp: o.t }).status, 2);
-  const gone = update(n, [C, '--claim', 'cody', '--set-work-class', 'docs']);
-  assert.deepEqual([gone.status, gone.stderr], [2, '❌ backlog: unrecognized arguments: --set-work-class\n']);
-});

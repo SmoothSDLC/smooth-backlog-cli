@@ -41,7 +41,7 @@ test('store and db: load, write and connect work when the folder is reached thro
 
 test('safety: validateHome and assertInside accept a path whose ancestors contain a symlink', async t => {
   const f = linked(t);
-  assert.equal(await validateHome(f.home), realpathSync(f.home)); // the resolved path, as set_home.py records it
+  assert.equal(await validateHome(f.home), realpathSync(f.home)); // the resolved path
   assert.equal(await assertInside(f.home, join(f.folder, 'backlog.db')), join('acme', 'demo', 'backlog.db'));
 });
 

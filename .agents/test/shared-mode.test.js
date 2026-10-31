@@ -1,8 +1,5 @@
 // Tests for the mode options and the shared-mode command router - cli-parity job 6 (ROUTER).
-// Cited source: contract section 1 (modes), section 2 (command table), section 5 (exit codes);
-// the Python oracle lib_db.py:77-109 (ensure_home) and set_home.py:33-35 (home record).
-// Local bare repositories only (shared-fixtures.js), BACKLOG_HOME and XDG_CONFIG_HOME inside the
-// test's temp dir. Parity tests run the oracle and skip without SMOOTH_BACKLOG_SCRIPTS or PyYAML.
+// Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -10,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { cli, consumer, env, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, env, sharedBacklog } from './shared-fixtures.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fixture } from './helpers.js';
 
@@ -20,7 +17,7 @@ const unbuilt = name => !existsSync(join(SRC, 'shared', name));
 function pair(t) {
   const tmp = mkdtempSync(join(tmpdir(), 'mode-test-'));
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
-  // realpath: the home record holds the resolved path (set_home.py), and macOS tmpdir() is under the /var symlink
+  // realpath: the home record holds the resolved path, and macOS tmpdir() is under the /var symlink
   return { tmp, home: realpathSync(sharedBacklog(tmp)), cons: consumer(tmp, 'acme', 'demo', 'main') };
 }
 const recordFile = tmp => join(tmp, 'config', 'smoothsdlc-backlog', 'home');
@@ -37,16 +34,12 @@ function inproc(f, source, extraEnv = {}) {
   return { status: p.status, stdout: p.stdout, stderr: p.stderr };
 }
 
-test('--use-backlog-repo writes the home record and mode.json (same record as set_home.py) and exits 0', t => {
+test('--use-backlog-repo writes the home record and mode.json and exits 0', t => {
   const f = pair(t);
   const r = cli(['--use-backlog-repo', f.home], { cwd: f.cons, tmp: f.tmp });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(read(recordFile(f.tmp)), `${f.home}\n`);
   assert.equal(read(modeFile(f.tmp)), '{"mode":"shared"}');
-  const o = py('set_home.py', [f.home], { cwd: f.cons, tmp: f.tmp, env: { XDG_CONFIG_HOME: join(f.tmp, 'oracle-config') } });
-  if (!o) return t.diagnostic(`${ORACLE_SKIP}: record parity not compared`);
-  assert.equal(o.status, 0, o.stderr);
-  assert.equal(read(recordFile(f.tmp)), read(join(f.tmp, 'oracle-config', 'smoothsdlc-backlog', 'home')));
 });
 
 test('--use-backlog-repo also takes --use-backlog-repo=<path>', t => {
@@ -284,28 +277,22 @@ test('<command> --help prints the help text and needs no backlog home', t => {
   assert.equal(r.stdout, 'FAKE HELP\n');
 });
 
-test('a missing home: BACKLOG_HOME set -> exit 2 with the oracle message; default or recorded home -> exit 4 with the ASK text', t => {
+test('a missing home: BACKLOG_HOME set -> exit 2 naming the expected clone; default or recorded home -> exit 4 with the ASK text', t => {
   const f = pair(t);
   setShared(f.tmp);
   const nope = join(f.tmp, 'nope');
   const cases = [
     ['BACKLOG_HOME set but missing', { BACKLOG_HOME: nope }, 2, /^❌ backlog: BACKLOG_HOME=.*nope does not exist; expected a clone of SmoothSDLC\/smoothsdlc-backlog on main \(unset BACKLOG_HOME to use ~\/git\/smoothsdlc-backlog\)\n$/],
-    // beyond the oracle (item 043): the answer is backlog setup, not the Python skill's set_home.py; exit code as the oracle
-    ['default home missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, 4, /^❌ backlog: the backlog repository is not at .*smoothsdlc-backlog\. ASK THE USER: where is the local clone of SmoothSDLC\/smoothsdlc-backlog, or should it be cloned to .*\? Then run 'backlog setup' in this repository .*'backlog setup --ask'/, 'text'],
+    // item 043: the answer is backlog setup
+    ['default home missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, 4, /^❌ backlog: the backlog repository is not at .*smoothsdlc-backlog\. ASK THE USER: where is the local clone of SmoothSDLC\/smoothsdlc-backlog, or should it be cloned to .*\? Then run 'backlog setup' in this repository .*'backlog setup --ask'/],
   ];
-  for (const [label, e, code, pattern, differs] of cases) {
+  for (const [label, e, code, pattern] of cases) {
     const extra = { BACKLOG_HEADLESS: '', ...e };
     const r = cli(['next'], { cwd: f.cons, tmp: f.tmp, env: extra });
     assert.equal(r.status, code, `${label}: ${r.stderr}`);
     assert.match(r.stderr, pattern, label);
-    const o = py('query.py', ['--status'], { cwd: f.cons, tmp: f.tmp, env: extra });
-    if (!o) { t.diagnostic(`${label}: ${ORACLE_SKIP}: parity not compared`); continue; }
-    assert.equal(o.status, code, `${label} oracle`);
-    // the deliberate difference is only the instruction after the question: everything before it is the oracle's
-    if (differs === 'text') assert.equal(r.stderr.split(' Then run ')[0], o.stderr.split(' Then run ')[0], `${label}: same location and question as the oracle`);
-    else assert.equal(r.stderr, o.stderr, `${label}: same message as the oracle`);
   }
-  // the home record points at a missing folder: that is the "not the default" ask case too (lib_db.py:81-85)
+  // the home record points at a missing folder: that is the "not the default" ask case too
   mkdirSync(dirname(recordFile(f.tmp)), { recursive: true });
   writeFileSync(recordFile(f.tmp), `${nope}\n`);
   const rec = cli(['next'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: '' } });

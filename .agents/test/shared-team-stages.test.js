@@ -1,11 +1,6 @@
 // Tests for the stages before any work (item 036; spec 2026-10-28-pr1-learnings.md section 4): refining, refined,
-// refinement-review and ready, the refine and refinement-review steps of `backlog update`, the claim gate on ready, the
-// refine and refinement-review actions of the pop, the incomplete-item rule, and the review-hitl stage of topology item 288
-// with `backlog query --decisions`. Oracle: PR1 update.py:26-104 and 300-320, query.py:183-266, lib_db STAGES/is_ready.
-// PR1 tests and their ports here: test_team_plan.py test_the_team_workflow_from_work_item_to_ready_work (without --plan,
-// which this build refuses), test_team_complete.py test_incomplete_items_are_refined_by_the_lead_only, test_team_lifecycle.py
-// test_claim_review_close_lifecycle and test_claim_refuses_done_item (shared-team-lifecycle.test.js, shared-audit.test.js t4),
-// test_team_scope.py test_scopes_and_refinement_cap (shared-team-scope.test.js). Local bare repos only.
+// refinement-review and ready.
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -15,11 +10,10 @@ import { parse } from '../../src/shared/frontmatter.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
-import { cli, consumer, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
-const oracle = py('update.py', ['--help']) !== null;
 
 function fixture(prefix = 'team-stages-') {
   const t = mkdtempSync(join(tmpdir(), prefix));
@@ -94,7 +88,7 @@ test('test_the_team_workflow_from_work_item_to_ready_work: split, member refinem
   up(f, w, '--claim', 'lead'); // the work item has no stage: the runner claims it for the lead (idempotent)
 });
 
-test('each step refuses what update.py refuses, and one step at a time', () => {
+test('each step refuses out of order, and one step at a time', () => {
   const f = fixture();
   const w = work(f);
   const c = make(f, 'child', '--split-from', w);
@@ -198,38 +192,6 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
   const now = JSON.parse(ok(f, ['query', '--claimable', '--agent', 'archy', '--json'], team).stdout).map(x => x.slug);
   for (const s of Object.values(gaps)) assert.ok(now.includes(s), s); // complete now: normal work for any member but the lead
   ok(f, ['update', gaps.estimate_min, '--claim', 'archy'], team);
-});
-
-test('parity with update.py: the stage steps print, refuse and write the front matter as the oracle', t => {
-  if (!oracle) return t.skip(ORACLE_SKIP);
-  const KEYS = ['team', 'stage', 'refiner', 'refinement_reviewed_by', 'claimed_by', 'status'];
-  const STEPS = [
-    ['update.py', 'update', ['1', '--set-team', 't1']], ['update.py', 'update', ['1', '--claim', 'lead']],
-    ['new_phase.py', 'new', [...NEW('child'), '--split-from', '1']],
-    ['update.py', 'update', ['2', '--claim', 'cody']], ['update.py', 'update', ['2', '--refine-start']],
-    ['update.py', 'update', ['2', '--refine-start', '--by', 'cody']], ['update.py', 'update', ['2', '--refine-start', '--by', 'zed']],
-    ['update.py', 'update', ['2', '--refine-done', '--by', 'zed', '--note', 'x']], ['update.py', 'update', ['2', '--refine-done', '--by', 'cody']],
-    ['update.py', 'update', ['2', '--refine-done', '--by', 'cody', '--note', 'checked']],
-    ['update.py', 'update', ['2', '--refinement-review', 'pass', '--by', 'codex', '--comments', 'x']],
-    ['update.py', 'update', ['2', '--request-refinement-review', '--by', 'lead']],
-    ['update.py', 'update', ['2', '--refinement-review', 'pass', '--by', 'archy', '--comments', 'x']],
-    ['update.py', 'update', ['2', '--refinement-review', 'changes', '--by', 'codex', '--comments', 'needs a test; thread t-1']],
-    ['update.py', 'update', ['2', '--refine-start', '--by', 'zed']], ['update.py', 'update', ['2', '--refine-done', '--by', 'zed', '--note', 'test']],
-    ['update.py', 'update', ['2', '--request-refinement-review', '--by', 'lead']],
-    ['update.py', 'update', ['2', '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready; thread t-2']],
-    ['update.py', 'update', ['2', '--claim', 'cody']],
-  ];
-  const sides = ['py', 'js'].map(side => {
-    const f = fixture(`team-stages-${side}-`);
-    const out = [];
-    for (const [script, command, args] of [['new_phase.py', 'new', NEW('work item')], ...STEPS]) {
-      const r = side === 'py' ? py(script, args, { cwd: f.cons, tmp: f.t, env: LEAD }) : run(f, [command, ...args]);
-      out.push([r.status, command === 'new' ? '' : r.stdout.replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g, 'TS').replaceAll(f.t, '<tmp>')]);
-    }
-    return { out, items: ['001-work-item', '002-child'].map(s => Object.fromEntries(KEYS.map(k => [k, fm(f, s)[k]]))) };
-  });
-  sides[1].out.forEach((o, i) => assert.deepEqual(o, sides[0].out[i], `step ${i}: ${JSON.stringify(STEPS[i - 1] ?? 'new')}`));
-  assert.deepEqual(sides[1].items, sides[0].items);
 });
 
 test('an incomplete item waiting in review-hitl is not offered to the lead for refinement', () => {

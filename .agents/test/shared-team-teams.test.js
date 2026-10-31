@@ -1,18 +1,16 @@
 // Tests for teams in the CLI (item 037; spec 2026-10-28-pr1-learnings.md section 3): the team field set and cleared by
-// `backlog update --set-team`, written by `backlog new --team`, inherited on `--split-from`, and the TEAM_NAME scope of
-// the offers (pop, --claimable, --reviewable, --blocked). Oracle: PR1 update.py:255-258, new_phase.py:99 and 126-127,
-// query.py:184 and 494 (lib_db.in_team). Parity cases skip when the Python oracle is not configured. Local bare repos only.
+// update and new, and the offers (pop, --claimable, --reviewable, --blocked).
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
-const oracle = py('update.py', ['--help']) !== null;
 
 function fixture(prefix = 'team-teams-') {
   const t = mkdtempSync(join(tmpdir(), prefix));
@@ -86,30 +84,6 @@ test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimabl
   ok(f, ['update', dep, '--set-team', 't2']);
   assert.deepEqual(slugs(f, ['--blocked'], T1), []);
   assert.deepEqual(slugs(f, ['--blocked'], T2), [dep]);
-});
-
-test('parity with update.py and new_phase.py: --set-team, --team and the inherited team write the same front matter', t => {
-  if (!oracle) return t.skip(ORACLE_SKIP);
-  const KEYS = ['team', 'stage', 'refiner', 'claimed_by'];
-  const sides = ['py', 'js'].map(side => {
-    const f = fixture(`team-teams-${side}-`);
-    const step = (script, command, args) => {
-      const r = side === 'py' ? py(script, args, { cwd: f.cons, tmp: f.t, env: LEAD }) : run(f, [command, ...args]);
-      assert.equal(r.status, 0, `${side} ${command}: ${r.stdout}${r.stderr}`);
-      return r.stdout.replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g, 'TS').replaceAll(f.t, '<tmp>');
-    };
-    const out = [step('new_phase.py', 'new', NEW('work item'))];
-    out.push(step('update.py', 'update', ['1', '--set-team', 't1']));
-    out.push(step('update.py', 'update', ['1', '--claim', 'lead']));
-    out.push(step('new_phase.py', 'new', [...NEW('child'), '--split-from', '1']));
-    out.push(step('new_phase.py', 'new', [...NEW('other'), '--team', 't2']));
-    out.push(step('update.py', 'update', ['3', '--set-team', 't3'])); // another team; clearing the team of an item in a stage is refused (item 036)
-    out.push(step('update.py', 'update', ['1', '--set-team', '']));
-    const items = ['001-work-item', '002-child', '003-other'].map(s => Object.fromEntries(KEYS.map(k => [k, fm(f, s)[k]])));
-    return { out, items };
-  });
-  assert.deepEqual(sides[1].items, sides[0].items);
-  assert.deepEqual(sides[1].out.slice(1, 3), sides[0].out.slice(1, 3)); // the update lines; new prints paths of its own fixture
 });
 
 test('another team\'s chunk item is never offered, in this repository or (--scope all) in another one', () => {

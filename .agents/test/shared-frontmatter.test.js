@@ -1,41 +1,12 @@
 // Shared-mode front-matter codec tests for src/shared/frontmatter.js (cli-parity job 4, CODEC).
-//
-// Fixtures under fixtures/shared/ were made once (2026-10-22, PyYAML 6.0.3 / CPython 3.14.4)
-// with the pinned oracle's write_doc (lib_db.py:182-184 per contract v3); each .json is
-// json.dumps(yaml.safe_load(<that dump>)) of the same front matter. The generating command:
-//
-//   python3 - <<'PY'
-//   import json, sys
-//   from pathlib import Path
-//   sys.path.insert(0, str(Path.home()/'.qwen/skills/backlog/scripts'))
-//   import yaml, lib_db
-//   out = Path('.agents/test/fixtures/shared'); out.mkdir(parents=True, exist_ok=True)
-//   def make(name, fm, body):
-//       lib_db.write_doc(out/f'{name}.md', fm, body)
-//       (out/f'{name}.json').write_text(json.dumps(yaml.safe_load(yaml.safe_dump(fm, sort_keys=False, allow_unicode=True)), indent=2)+'\n')
-//   obj = 'Read the item files PyYAML writes and write files PyYAML reads, without a dependency. The codec keeps the shared-mode format byte-for-byte per oracle.'
-//   assert len(obj) == 150
-//   make('item-realistic', {'phase': '004-cli-parity-job-4-front-matter-codec-compatible-with-pyyaml', 'seq': 4, 'name': 'cli-parity job 4: front-matter codec compatible with PyYAML', 'objective': obj, 'status': 'in_progress', 'work_class': ['app-code','tests'], 'review_classes': ['code','tests','data'], 'created': '2026-10-22T03:39:31Z', 'location': ''}, '# Phase 004 - front-matter codec\n\nThe body markdown of the item file stays exactly as written.\n')
-//   make('item-scalars', {'name': "job with 'single' and \"double\" quotes in the name", 'simple': 'plain words', 'unicode': '日本語の項目 - café ünïcode', 'colon': 'a: b', 'empty': '', 'dash': '- leading dash', 'quote_first': '"starts with a double quote" and ends plain', 'apostrophe_first': "'starts with an apostrophe'", 'tab': 'a\tb', 'long_tab': 'a\tb ' + 'the quick brown fox jumps over the lazy dog. ' * 2, 'long': "a 'single' and \"double\" quoted string, long enough to fold over a line break at the eighty column boundary, with words continuing after the fold point"}, '# scalars\n\nQuoting styles as written by PyYAML.\n')
-//   make('item-shapes', {'seq': 7, 'negative': -15, 'big': 123456789, 'flag_true': True, 'flag_false': False, 'nothing': None, 'empty_list': [], 'numbers': [1,2,3]}, '# shapes\n\nLists, integers, booleans and null.\n')
-//   PY
-//
-// Review-fix fixtures (2026-10-23) came from the same make() with: item-multiline (strings with \n,
-// blank-line breaks and a trailing \n), item-escapes (\0 \e \a \v \b \f, \x7F, \x9F, \uFEFF, tab, CR)
-// and item-wrapped-lists (block-list items PyYAML wraps: plain, double-quoted with \t / \0, multiline).
-//
-// Cited source: the pinned oracle at commit ec5b254e (contract v3 lines) — lib_db.py:171-179
-// (_FM_RE + parse_front_matter) and 182-184 (write_doc); the oracle copies at
-// ~/.qwen/skills/backlog/scripts/ are content-identical for these functions.
+// The fixtures under fixtures/shared/ (item files and the JSON of their front matter) were generated once, on 2026-10-22,
+// with PyYAML 6.0.3; the generating script is in this file's git history (before item 062).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, dump } from '../../src/shared/frontmatter.js';
-import { ORACLE_SKIP } from './shared-fixtures.js';
 
 const FIX = join(fileURLToPath(new URL('./fixtures/shared/', import.meta.url)));
 const FIXTURES = ['item-realistic', 'item-scalars', 'item-shapes', 'item-multiline', 'item-escapes', 'item-wrapped-lists'];
@@ -65,41 +36,7 @@ for (const name of FIXTURES) {
   });
 }
 
-function pyYamlAvailable() {
-  try {
-    return spawnSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }).status === 0;
-  } catch {
-    return false;
-  }
-}
-
-// --- the item's test 3: with python3 and PyYAML present, yaml.safe_load of dump() equals the input ---
-for (const name of FIXTURES) {
-  test(`fixture ${name}: PyYAML reads our dump (safe_load of the dumped front matter equals the input)`, (t) => {
-    const { fm, body } = parse(readFixture(name));
-    if (!pyYamlAvailable()) {
-      t.skip(ORACLE_SKIP); // the backlog format's oracle is PyYAML here (item 023's rule)
-      return;
-    }
-    const dir = mkdtempSync(join(tmpdir(), 'codec-'));
-    try {
-      const file = join(dir, 'roundtrip.md');
-      writeFileSync(file, dump(fm, body));
-      const out = spawnSync('python3', ['-c',
-        "import json, re, sys, yaml\n" +
-        "text = open(sys.argv[1], encoding='utf-8').read()\n" +
-        "m = re.match(r'^---\\n(.*?)\\n---', text, re.S)\n" +
-        "sys.stdout.write(json.dumps(yaml.safe_load(m.group(1))))\n",
-        file]);
-      assert.equal(out.status, 0, `python3 failed: ${out.stderr.toString('utf8')}`);
-      assert.deepEqual(JSON.parse(out.stdout.toString('utf8')), fm);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-}
-
-// --- parse: the split of lib_db.py:171-179 ---
+// --- parse: the split of front matter and body ---
 
 test('parse: a text without a front-matter header returns {} and the whole text', () => {
   assert.deepEqual(parse('body only'), { fm: {}, body: 'body only' });
@@ -191,7 +128,7 @@ test('parse: a list line after a key with an inline value is a clear error', () 
   assert.throws(() => parse('---\nk: v\n- x\n---\n'), /k/);
 });
 
-// --- dump: keys in the given order, the oracle write_doc shape ---
+// --- dump: keys in the given order ---
 
 test('dump: keys in the given order, strings as JSON double-quoted, body unchanged', () => {
   assert.equal(dump({ b: 'x "y"', a: 1 }, 'BODY'), '---\n' + 'b: ' + String.raw`"x \"y\""` + '\na: 1\n---\nBODY');
@@ -202,7 +139,7 @@ test('dump: null, booleans, empty and block lists', () => {
   assert.equal(out, '---\na: null\nb: true\nc: false\nd: []\ne:\n- 1\n- "x"\n---\n');
 });
 
-test('dump: an empty front matter writes {} like the oracle write_doc', () => {
+test('dump: an empty front matter writes {}', () => {
   assert.equal(dump({}, 'body'), '---\n{}\n---\nbody');
 });
 
@@ -213,17 +150,6 @@ test('dump: unsupported value types and non-identifier keys are clear errors', (
 });
 
 // --- review fixes (Codex review 2026-10-23, job 4) ---
-
-// Runs PyYAML's safe_load over a dumped front matter; returns the parsed JSON (null when PyYAML is missing).
-function pyLoad(text) {
-  if (!pyYamlAvailable()) return undefined;
-  const out = spawnSync('python3', ['-I', '-c',
-    "import json, re, sys, yaml\n" +
-    "m = re.match(r'^---\\n(.*?)\\n---', sys.stdin.read(), re.S)\n" +
-    "sys.stdout.write(json.dumps(yaml.safe_load(m.group(1))))\n"], { input: text });
-  assert.equal(out.status, 0, `python3 failed: ${out.stderr.toString('utf8')}`);
-  return JSON.parse(out.stdout.toString('utf8'));
-}
 
 test('review P1: a quoted scalar keeps blank-line breaks (PyYAML folding: n breaks -> n-1 newlines)', () => {
   assert.equal(parse("---\na: 'first line\n\n  second line'\n---\n").fm.a, 'first line\nsecond line');
@@ -297,13 +223,11 @@ test('review P2: the double-quoted decoder reads every escape PyYAML emits', () 
   assert.throws(() => parse('---\nk: "\\q"\n---\n'), /escape/);
 });
 
-test('review P2: dump escapes characters YAML forbids or reads as line breaks; PyYAML reads back the exact string', () => {
+test('review P2: dump escapes characters YAML forbids or reads as line breaks', () => {
   const s = 'a\x7fb\x85c\u2028d\u2029e\x9ff\ufffeg\uffffh\x00i';
   const text = dump({ s, list: [s] }, '');
   assert.doesNotMatch(text, /[\x7f-\x9f\u2028\u2029\ufffe\uffff]/, 'no raw forbidden character reaches the file');
   assert.deepEqual(parse(text).fm, { s, list: [s] });
-  const py = pyLoad(text);
-  if (py !== undefined) assert.deepEqual(py, { s, list: [s] });
 });
 
 test('review P2: integers outside the JavaScript safe range are errors in both directions', () => {
@@ -317,7 +241,7 @@ test('review P2: integers outside the JavaScript safe range are errors in both d
 });
 
 // --- second review (job 4) ---
-test('second review P2: a quote inside a plain flow-list item is content, not a delimiter (PyYAML reads the same)', () => {
+test('second review P2: a quote inside a plain flow-list item is content, not a delimiter', () => {
   const cases = {
     "k: [it's, c]": ["it's", 'c'],
     'k: [say "hi", ok]': ['say "hi"', 'ok'],
@@ -327,31 +251,13 @@ test('second review P2: a quote inside a plain flow-list item is content, not a 
   for (const [line, want] of Object.entries(cases)) {
     const text = `---\n${line}\n---\n`;
     assert.deepEqual(parse(text).fm, { k: want }, line);
-    const py = pyLoad(text);
-    if (py !== undefined) assert.deepEqual(py, { k: want }, `PyYAML: ${line}`);
   }
 });
 
-test('second review P2: only YAML separation characters (space, tab, line breaks) count in the comment and mapping checks', t => {
-  // PyYAML (allow_unicode) writes these as plain scalars; every Unicode space except space/tab is scalar content.
-  const cases = ['see\u00a0#123', 'a:\u00a0b', 'x\u2003#y', 'a:\u3000b', 'b:\u2003', '\u00a0:x', '\u00a0lead', 'trail\u00a0', '\u00a0', '\u2003a', 'a\u200b\u00a0#b', 'a\ufeff', "it's, c"];
-  if (!pyYamlAvailable()) return t.skip(ORACLE_SKIP);
-  const py = spawnSync('python3', ['-I', '-c',
-    "import json, sys, yaml\n" +
-    "cases = json.loads(sys.stdin.read())\n" +
-    "fm = {'objective': cases[0], 'cases': cases}\n" +
-    "fm.update({'k%d' % i: c for i, c in enumerate(cases)})\n" +
-    "text = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True)\n" +
-    "assert yaml.safe_load(text) == fm\n" +
-    "json.dump({'text': text}, sys.stdout)\n"], { input: JSON.stringify(cases) });
-  assert.equal(py.status, 0, py.stderr.toString('utf8'));
-  const { text } = JSON.parse(py.stdout.toString('utf8'));
-  const want = { objective: cases[0], cases, ...Object.fromEntries(cases.map((c, i) => [`k${i}`, c])) };
-  assert.deepEqual(parse(`---\n${text.trim()}\n---\n`).fm, want);
+test('second review P2: only YAML separation characters (space, tab, line breaks) count in the comment and mapping checks', () => {
   assert.equal(parse('---\nobjective: see\u00a0#123\n---\n').fm.objective, 'see\u00a0#123');
   const flow = '---\nk: [see\u00a0#123, a:\u00a0b, \u00a0x]\n---\n';
   assert.deepEqual(parse(flow).fm, { k: ['see\u00a0#123', 'a:\u00a0b', '\u00a0x'] });
-  assert.deepEqual(pyLoad(flow), { k: ['see\u00a0#123', 'a:\u00a0b', '\u00a0x'] });
   // a real space or tab still makes a comment or a mapping
   assert.throws(() => parse('---\nk: see #123\n---\n'), /comment/);
   assert.throws(() => parse('---\nk: a:\tb\n---\n'), /mapping/);

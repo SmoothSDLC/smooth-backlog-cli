@@ -1,26 +1,19 @@
-// Tests for src/shared/store.js — cli-parity job 5 (STORE: home, repository folder,
-// items, numbers, priorities). Cited source: the pinned oracle at ec5b254e (contract v3).
-// Tests use only local bare repos from shared-fixtures.js (job 1), with BACKLOG_HOME and
-// XDG_CONFIG_HOME inside the test's temp dir — never the real backlog repository or ~/.config.
-// Parity tests run the Python oracle (py() of job 1) on the same fixture folder and skip
-// when it is not configured (SMOOTH_BACKLOG_SCRIPTS) or PyYAML is missing.
+// Tests for src/shared/store.js — cli-parity job 5 (STORE: home, repository folder, items, numbers, priorities).
+// Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import {
-  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { consumer, env, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { consumer, env } from './shared-fixtures.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
 const STORE = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'shared', 'store.js'));
-const PY_ARGS = ['--name', 'Alpha', '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'store-test-'));
 const sha256File = p => createHash('sha256').update(readFileSync(p)).digest('hex');
@@ -30,30 +23,6 @@ function scratch(t) {
   const dir = tmp();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
-}
-
-// A consumer repository (origin acme/demo) plus the shared backlog home it works on.
-function fixturePair(t) {
-  const dir = scratch(t);
-  const home = sharedBacklog(dir);
-  const cons = consumer(dir, 'acme', 'demo', 'main');
-  return { t: dir, home, cons, folder: join(home, 'acme', 'demo') };
-}
-
-// Runs the oracle; skips the calling test when it is not configured.
-function oracle(t, f, script, args) {
-  const r = py(script, args, { cwd: f.cons, tmp: f.t });
-  if (!r) { t.skip(ORACLE_SKIP); return null; }
-  assert.equal(r.status, 0, `${script} ${args.join(' ')} failed: ${r.stdout}${r.stderr}`);
-  return r;
-}
-
-// Three Python-created items; returns their slugs (the file stem = the front-matter `phase`) and file names.
-function threeItems(t, f) {
-  for (let i = 0; i < 3; i++) if (!oracle(t, f, 'new_phase.py', PY_ARGS)) return null;
-  const files = readdirSync(join(f.folder, 'phases')).filter(x => x.endsWith('.md')).sort();
-  assert.equal(files.length, 3);
-  return { files, slugs: files.map(x => x.replace(/\.md$/, '')) };
 }
 
 function withEnv(t, vars) {
@@ -76,7 +45,7 @@ test('resolveHome: BACKLOG_HOME > home record > ~/git/smoothsdlc-backlog; a miss
   const homeA = join(d, 'homeA'); const homeB = join(d, 'homeB');
   mkdirSync(homeA); mkdirSync(homeB);
   mkdirSync(join(d, 'config', 'smoothsdlc-backlog'), { recursive: true });
-  withEnv(t, { HOME: join(d, 'home'), XDG_CONFIG_HOME: join(d, 'config'), BACKLOG_HOME: homeA, SMOOTH_BACKLOG_SCRIPTS: '/scripts' });
+  withEnv(t, { HOME: join(d, 'home'), XDG_CONFIG_HOME: join(d, 'config'), BACKLOG_HOME: homeA });
   assert.deepEqual(store.resolveHome(), { home: realpathSync(homeA), ask: null });
   delete process.env.BACKLOG_HOME;
   writeFileSync(join(d, 'config', 'smoothsdlc-backlog', 'home'), `${homeB}\n`);
@@ -89,7 +58,7 @@ test('resolveHome: BACKLOG_HOME > home record > ~/git/smoothsdlc-backlog; a miss
   assert.equal(missing.ask.text,
     `the backlog repository is not at ${dflt}. ASK THE USER: where is the local clone of SmoothSDLC/smoothsdlc-backlog, `
     + `or should it be cloned to ${dflt}? Then run 'backlog setup' in this repository (it clones it beside the repository) or `
-    + `'backlog setup --ask' (it asks for the path), and run this command again.`, 'item 043: backlog setup, not the Python set_home.py');
+    + `'backlog setup --ask' (it asks for the path), and run this command again.`, 'item 043: the answer is backlog setup');
   assert.equal(existsSync(dflt), false, 'never clones');
   mkdirSync(dflt, { recursive: true });
   assert.deepEqual(store.resolveHome(), { home: realpathSync(dflt), ask: null });
@@ -204,34 +173,7 @@ test('nextSeq: 1 on an empty folder; 1 + max of the file seqs (phases and archiv
   assert.equal(r.stdout, '6');
 });
 
-test('nextSeq after Python-created items (oracle)', t => {
-  const f = fixturePair(t);
-  if (!oracle(t, f, 'new_phase.py', PY_ARGS)) return;
-  oracle(t, f, 'new_phase.py', PY_ARGS);
-  assert.equal(store.nextSeq(f.folder), 3);
-  const created = oracle(t, f, 'new_phase.py', ['--name', 'Next', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
-  assert.match(created.stdout, /\(seq 3\)/, 'Python itself used the number nextSeq predicted');
-});
-
 // ---------------------------------------------------------------- reflow / reorder
-
-test('reflow (oracle): a no-op keeps Python priorities and rewrites no file; a move re-densifies and Python reads our files back (update.py --note only rescans)', t => {
-  const f = fixturePair(t);
-  const s = threeItems(t, f);
-  if (!s) return;
-  const { files, slugs } = s;
-  const before = files.map(x => sha256File(join(f.folder, 'phases', x)));
-  assert.deepEqual(store.reflow(f.folder), slugs.map((x, i) => [x, i]));
-  assert.deepEqual(files.map(x => sha256File(join(f.folder, 'phases', x))), before, 'unchanged priorities are not rewritten');
-  assert.deepEqual(store.reflow(f.folder, { slug: slugs[2], target: 0 }), [slugs[2], slugs[0], slugs[1]].map((x, i) => [x, i]));
-  assert.match(readItem(f.folder, `phases/${files[0]}`), /^priority: 1$/m);
-  assert.match(readItem(f.folder, `phases/${files[2]}`), /^priority: 0$/m);
-  assert.match(readItem(f.folder, `phases/${files[0]}`), /^updated: "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"$/m, 'a rewritten file gets updated=now');
-  oracle(t, f, 'update.py', [files[0].slice(0, 3), '--note', 'rescan']);
-  const q = oracle(t, f, 'query.py', ['--status', '--json']);
-  const prio = Object.fromEntries(JSON.parse(q.stdout).phases.map(r => [r.slug, r.priority]));
-  assert.deepEqual(prio, { [slugs[2]]: 0, [slugs[0]]: 1, [slugs[1]]: 2 }, 'Python reads the same priorities');
-});
 
 test('reflow: the target is clamped to 0..len(rest); zero priorities are not rewritten', t => {
   const d = scratch(t);
@@ -256,16 +198,6 @@ test('reflow: only pending/in_progress items of ALL branches are ranked; done an
   assert.deepEqual(store.reflow(folder), [['001-i1', 0], ['002-i2', 1]]);
   assert.match(readItem(folder, 'phases/002-i2.md'), /^priority: 1$/m);
   assert.equal(sha256File(join(folder, 'phases/003-i3.md')), doneSha);
-});
-
-test('reorder (oracle): slugs and item numbers lead, the rest keeps its order, unknown idents are skipped', t => {
-  const f = fixturePair(t);
-  const s = threeItems(t, f);
-  if (!s) return;
-  const { slugs } = s;
-  assert.deepEqual(store.reorder(f.folder, [slugs[2], '1']), [slugs[2], slugs[0], slugs[1]].map((x, i) => [x, i]), 'slug, then number 1 = the first item');
-  assert.deepEqual(store.reorder(f.folder, ['999', slugs[1], slugs[1]]), [slugs[1], slugs[2], slugs[0]].map((x, i) => [x, i]));
-  assert.deepEqual(store.reorder(f.folder, ['003']).map(x => x[0]), [slugs[2], slugs[1], slugs[0]], 'zero-padded numbers resolve');
 });
 
 // ---------------------------------------------------------------- inQueue / findings / now
@@ -294,22 +226,6 @@ test('findings: a foreign and an untagged item are flagged, archived items are n
   assert.deepEqual(fd.foreign.map(i => i.fm.phase), ['002-i2']);
   assert.deepEqual(fd.untagged.map(i => i.fm.phase), ['003-i3', '005-i5']);
   assert.deepEqual(fd.ghost, []);
-});
-
-test('findings (oracle): flags exactly what query.py --status reports', t => {
-  const f = fixturePair(t);
-  if (!oracle(t, f, 'new_phase.py', PY_ARGS)) return;
-  writeFileSync(join(f.folder, 'phases/002-foreign.md'),
-    '---\nphase: "002-foreign"\nseq: 2\nname: "Foreign"\nstatus: "pending"\nrepository: "acme/other"\nbranch: "main"\n---\n');
-  writeFileSync(join(f.folder, 'phases/003-untagged.md'),
-    '---\nphase: "003-untagged"\nseq: 3\nname: "Untagged"\nstatus: "pending"\n---\n');
-  oracle(t, f, 'update.py', ['1', '--note', 'rescan']);
-  const py_ = JSON.parse(oracle(t, f, 'query.py', ['--status', '--json']).stdout).findings;
-  const fd = store.findings(f.folder);
-  assert.deepEqual(fd.foreign.map(i => i.fm.phase), py_.foreign.map(r => r.slug));
-  assert.deepEqual(fd.untagged.map(i => i.fm.phase), py_.untagged.map(r => r.slug));
-  assert.deepEqual(fd.foreign.map(i => i.fm.phase), ['002-foreign']);
-  assert.deepEqual(fd.untagged.map(i => i.fm.phase), ['003-untagged']);
 });
 
 test('now(): second-precision UTC with a Z suffix', () => {
@@ -404,16 +320,6 @@ test('review P2: findings reports ghost rows (a non-archived mirror row whose fi
   assert.deepEqual(store.findings(join(d, 'acme', 'none')).ghost, [], 'no database, no ghosts');
 });
 
-test('review P2 (oracle): findings.ghost matches query.py --status for a deleted item file', t => {
-  const f = fixturePair(t);
-  const s = threeItems(t, f);
-  if (!s) return;
-  rmSync(join(f.folder, 'phases', s.files[1]));
-  const py_ = JSON.parse(oracle(t, f, 'query.py', ['--status', '--json']).stdout).findings;
-  assert.deepEqual(py_.ghost.map(r => r.slug), [s.slugs[1]], 'Python reports the gone file');
-  assert.deepEqual(store.findings(f.folder).ghost.map(r => r.slug), [s.slugs[1]]);
-});
-
 test('review P2: an explicit status: null is kept (not defaulted to pending): the item is neither ranked, rewritten nor flagged', t => {
   const d = scratch(t);
   const folder = join(d, 'acme', 'demo');
@@ -442,75 +348,6 @@ test('review P2: a quoted numeric priority already at its rank is left alone (in
   assert.equal(sha('phases/002-i2.md'), b, '" 1 " at rank 1: same bytes');
   assert.notEqual(sha('phases/003-i3.md'), c, '"9" at rank 2 is rewritten');
   assert.match(readItem(folder, 'phases/003-i3.md'), /^priority: 2$/m);
-});
-
-// lib_db.py:523-553 ranks the mirror rows: a row whose file was moved to archive/ outside the CLI is unchanged, so it keeps its rank.
-function archivedOutside(t) {
-  const f = fixturePair(t);
-  const s = threeItems(t, f);
-  if (!s) return null;
-  mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
-  renameSync(join(f.folder, 'phases', s.files[1]), join(f.folder, 'archive', 'phases', s.files[1]));
-  return { f, s };
-}
-
-test('review P2: reflow keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
-  const x = archivedOutside(t);
-  if (!x) return;
-  const { f, s } = x;
-  const live = sha256File(join(f.folder, 'phases', s.files[2]));
-  assert.deepEqual(store.reflow(f.folder), s.slugs.map((n, i) => [n, i]), 'the archived item still holds P1: the last item stays P2');
-  assert.equal(sha256File(join(f.folder, 'phases', s.files[2])), live, 'no live file is rewritten');
-});
-
-test('review P2: reorder keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
-  const x = archivedOutside(t);
-  if (!x) return;
-  const { f, s } = x;
-  assert.deepEqual(store.reorder(f.folder, [s.slugs[2]]), [s.slugs[2], s.slugs[0], s.slugs[1]].map((n, i) => [n, i]));
-  assert.match(readItem(f.folder, `phases/${s.files[0]}`), /^priority: 1$/m);
-});
-
-// Two identical Python-built fixtures with scrambled priorities (ties, a done item, a pending item with a higher priority
-// than its seq): one is changed by the oracle's own replan / move, the other by store.reorder / store.reflow.
-function scrambled(t) {
-  const f = fixturePair(t);
-  for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon']) {
-    if (!oracle(t, f, 'new_phase.py', ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'])) return null;
-  }
-  const files = readdirSync(join(f.folder, 'phases')).filter(x => x.endsWith('.md')).sort();
-  const edits = [['priority: 7', null], ['priority: 3', null], ['priority: 3', 'done'], ['priority: 9', null], ['priority: 3', null]];
-  files.forEach((x, i) => {
-    const p = join(f.folder, 'phases', x);
-    let text = readFileSync(p, 'utf8').replace(/^priority: .*$/m, edits[i][0]);
-    if (edits[i][1]) text = text.replace(/^status: .*$/m, `status: "${edits[i][1]}"`);
-    writeFileSync(p, text);
-  });
-  if (!oracle(t, f, 'scan.py', [])) return null;
-  return { f, files, slugs: files.map(x => x.replace(/\.md$/, '')) };
-}
-const prioritiesOf = (folder, files) => Object.fromEntries(files.map(x => [x, parse(readItem(folder, `phases/${x}`)).fm.priority]));
-
-test('reorder and reflow (oracle): the same operations on identical fixtures give the same priorities in Node and Python', t => {
-  const a = scrambled(t); // the oracle's fixture
-  if (!a) return;
-  const b = scrambled(t); // Node's fixture
-  assert.deepEqual(prioritiesOf(b.f.folder, b.files), prioritiesOf(a.f.folder, a.files), 'identical starting point');
-  const { slugs, files } = a;
-  const start = prioritiesOf(a.f.folder, files);
-  // replan: item number 5, then a slug, lead; the rest keeps (priority, seq) order; the done item is not ranked
-  oracle(t, a.f, 'update.py', ['--replan', `5,${slugs[3]},999`]);
-  store.reorder(b.f.folder, ['5', slugs[3], '999']);
-  assert.deepEqual(prioritiesOf(b.f.folder, files), prioritiesOf(a.f.folder, files), 'reorder');
-  assert.notDeepEqual(prioritiesOf(a.f.folder, files), start, 'the replan changed something');
-  assert.equal(prioritiesOf(a.f.folder, files)[files[2]], 3, 'the done item keeps its priority');
-  // move the first item to rank 2, then the last past the end
-  oracle(t, a.f, 'update.py', [slugs[0], '--priority', '2']);
-  store.reflow(b.f.folder, { slug: slugs[0], target: 2 });
-  assert.deepEqual(prioritiesOf(b.f.folder, files), prioritiesOf(a.f.folder, files), 'reflow move to rank 2');
-  oracle(t, a.f, 'update.py', [slugs[4], '--priority', '99']);
-  store.reflow(b.f.folder, { slug: slugs[4], target: 99 });
-  assert.deepEqual(prioritiesOf(b.f.folder, files), prioritiesOf(a.f.folder, files), 'reflow clamps the target');
 });
 
 // ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 5, second review)

@@ -1,6 +1,5 @@
 // Tests for the team views of src/shared/query.js (src/shared/views.js) - cli-parity job 16 (VIEWS), part 1.
-// Port of tests/test_team_compat.py (2 cases) and of the query --blocked/--claimable/--reviewable assertions of
-// tests/test_team_lifecycle.py that job 15 left out of shared-team-lifecycle.test.js. Local bare repos only.
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -125,7 +124,7 @@ test('--reviewable needs --agent; the text view lists the item with its dependen
   assert.deepEqual(waiting, [{ id: String(Number(a.split('-')[0])), slug: a, status: 'pending', claimed_by: '' }]);
 });
 
-test('a completed dependency whose file is gone does not hold the dependent item back (the row decides, lib_db.py:648-655)', () => {
+test('a completed dependency whose file is gone does not hold the dependent item back (the row decides)', () => {
   const f = fixture();
   const dep = make(f, 'ghost dependency', ['--no-review-refs']); // no review: --status done finishes it
   const job = make(f, 'waits for the ghost', ['--depends-on', dep.split('-')[0]]);

@@ -2,10 +2,7 @@
 // Hostile inputs come from the item: '../x', '/etc/passwd', 'a;rm -rf x',
 // a symlinked home, a home with another origin, and git stderr that contains
 // https://u:ghp_x@github.com/... .
-// Cited source: the pinned oracle at commit ec5b254e — lib_db.py:58-64
-// (url_repo_id), 77-100 (ensure_home checks), 188-193 (_git), 587-595
-// (phase_by_ident); new_phase.py:19-20 (_slugify). src/storage.js:8-17
-// (safePath) is the symlink check the item says to reuse.
+// Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -30,7 +27,7 @@ function tmp(t) {
   return dir;
 }
 
-test('repoIdFromUrl: https, scp-style and local-path URLs (lib_db.py:58-64)', () => {
+test('repoIdFromUrl: https, scp-style and local-path URLs', () => {
   assert.equal(repoIdFromUrl('https://github.com/SmoothSDLC/smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
   assert.equal(repoIdFromUrl('https://github.com/SmoothSDLC/smoothsdlc-backlog'), 'SmoothSDLC/smoothsdlc-backlog');
   assert.equal(repoIdFromUrl('git@github.com:SmoothSDLC/smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
@@ -49,7 +46,7 @@ test('repoIdFromUrl: https, scp-style and local-path URLs (lib_db.py:58-64)', ()
   assert.equal(repoIdFromUrl(undefined), '');
 });
 
-test('slugify: lowercase, runs of non-alphanumerics to one dash, no / or .., fallback phase (new_phase.py:19-20)', () => {
+test('slugify: lowercase, runs of non-alphanumerics to one dash, no / or .., fallback phase', () => {
   assert.equal(slugify('My Item'), 'my-item');
   assert.equal(slugify('CLI parity: job 3 (security)'), 'cli-parity-job-3-security');
   assert.equal(slugify('a;rm -rf x'), 'a-rm-rf-x');
@@ -64,14 +61,14 @@ test('slugify: lowercase, runs of non-alphanumerics to one dash, no / or .., fal
   }
 });
 
-test('itemSelector: digits -> {number}, anything else -> {slug}, empty -> null (lib_db.py:587-595)', () => {
+test('itemSelector: digits -> {number}, anything else -> {slug}, empty -> null', () => {
   assert.deepEqual(itemSelector('5'), { number: 5 });
   assert.deepEqual(itemSelector(' 12 '), { number: 12 });
   assert.deepEqual(itemSelector('007'), { number: 7 });
   assert.deepEqual(itemSelector('003-cli-parity-job-3-path-input-and-credential-safety-for-the-shared-mode'),
     { slug: '003-cli-parity-job-3-path-input-and-credential-safety-for-the-shared-mode' });
   assert.deepEqual(itemSelector('abc'), { slug: 'abc' });
-  // the oracle (587-595) treats any non-digit ident as a slug
+  // any non-digit ident is a slug
   assert.deepEqual(itemSelector('a;rm -rf x'), { slug: 'a;rm -rf x' });
   assert.deepEqual(itemSelector('/etc/passwd'), { slug: '/etc/passwd' });
   assert.deepEqual(itemSelector('../x'), { slug: '../x' });
@@ -82,7 +79,7 @@ test('itemSelector: digits -> {number}, anything else -> {slug}, empty -> null (
   assert.equal(itemSelector(undefined), null);
 });
 
-test('validateHome: a good shared clone passes and returns the path (lib_db.py:77-100)', async () => {
+test('validateHome: a good shared clone passes and returns the path', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);
   assert.equal(await validateHome(home), home);
@@ -92,7 +89,7 @@ test('validateHome: a relative path is refused before any git call', async () =>
   await assert.rejects(validateHome('home'), /not an absolute path/);
 });
 
-test('validateHome: a missing path is refused with the lib_db.py:77-80 message', async () => {
+test('validateHome: a missing path is refused with its message', async () => {
   const d = tmp(test);
   const missing = join(d, 'nohome');
   await assert.rejects(
@@ -101,7 +98,7 @@ test('validateHome: a missing path is refused with the lib_db.py:77-80 message',
   );
 });
 
-test('validateHome: a directory that is not the top folder of a git repository (lib_db.py:92-94)', async () => {
+test('validateHome: a directory that is not the top folder of a git repository', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);
   const sub = join(home, 'subdir');
@@ -119,20 +116,20 @@ test('validateHome: a symlinked home is refused (item: no symlink on the path, v
   await assert.rejects(validateHome(link), /Symlink destination is unsupported/);
 });
 
-test('validateHome: a home with another origin is refused (lib_db.py:95-97)', async () => {
+test('validateHome: a home with another origin is refused', async () => {
   const d = tmp(test);
   const other = consumer(d, 'Acme', 'widgets');
   await assert.rejects(validateHome(other), /has origin 'Acme\/widgets'; expected SmoothSDLC\/smoothsdlc-backlog/);
 });
 
-test('validateHome: a home on another branch is refused (lib_db.py:98-100)', async () => {
+test('validateHome: a home on another branch is refused', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);
   spawnSync('git', ['-C', home, 'checkout', '-q', '-b', 'dev']);
   await assert.rejects(validateHome(home), /is on branch 'dev'; the backlog repository stays on main/);
 });
 
-test('validateHome: a detached home says detached HEAD (lib_db.py:98-100)', async () => {
+test('validateHome: a detached home says detached HEAD', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);
   spawnSync('git', ['-C', home, 'checkout', '-q', '--detach']);
@@ -204,7 +201,7 @@ test('redact: colon-less userinfo and plain text are left intact; non-strings ar
   assert.equal(redact(''), '');
 });
 
-test('git: runs git with an argv array and returns {stdout, stderr, code} (lib_db.py:188-193)', async () => {
+test('git: runs git with an argv array and returns {stdout, stderr, code}', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);
   const ok = await git(['rev-parse', '--show-toplevel'], home);
@@ -229,7 +226,7 @@ test('git: never a shell — a hostile commit message survives as one argv eleme
   assert.equal(log.stdout.trim(), 'a;rm -rf x');
 });
 
-test('git: GIT_TERMINAL_PROMPT=0 reaches the child process (lib_db.py:190-192)', async () => {
+test('git: GIT_TERMINAL_PROMPT=0 reaches the child process', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);
   const hooks = join(home, 'hooks');

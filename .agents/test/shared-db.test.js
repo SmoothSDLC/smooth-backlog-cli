@@ -1,7 +1,5 @@
 // Tests for src/shared/db.js — cli-parity job 9 (the backlog.db mirror with node:sqlite).
-// Oracle: lib_db.py connect/_migrate (SCHEMA), ensure_handoff_anchor, ingest_phase, scan_stack and
-// archive.py:89-93, the pinned scripts. Oracle-backed tests skip when SMOOTH_BACKLOG_SCRIPTS is
-// not configured or PyYAML is missing. Local bare repos only (shared-fixtures.js, job 1).
+// Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -9,7 +7,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -22,7 +20,7 @@ const git = (cwd, ...args) => {
 };
 const pad = n => String(n).padStart(3, '0');
 const rows = (con, sql, ...p) => con.prepare(sql).all(...p).map(r => ({ ...r }));
-const STAMPS = ({ created_at, updated_at, ts, ...rest }) => rest; // eslint-disable-line no-unused-vars
+// eslint-disable-line no-unused-vars
 
 function scratch(t) {
   const dir = mkdtempSync(join(tmpdir(), 'db-test-'));
@@ -32,20 +30,7 @@ function scratch(t) {
 }
 // A folder in the <home>/<owner>/<name> layout, as the containment check of connect expects.
 const inHome = t => { const d = join(scratch(t), 'acme', 'demo'); mkdirSync(d, { recursive: true }); return d; };
-// The shared home, a consumer (origin acme/demo, branch main) and the item folder.
-function fixture(t) {
-  const dir = scratch(t);
-  const home = sharedBacklog(dir);
-  const cons = consumer(dir, 'acme', 'demo', 'main');
-  return { t: dir, home, cons, folder: join(home, 'acme', 'demo') };
-}
-function oracle(t, f, script, args) {
-  const r = py(script, args, { cwd: f.cons, tmp: f.t });
-  if (!r) { t.skip(ORACLE_SKIP); return null; }
-  assert.equal(r.status, 0, `${script} ${args.join(' ')} failed: ${r.stdout}${r.stderr}`);
-  return r;
-}
-// An item file as new_phase.py writes it (front matter order of new_phase.py:122-138).
+// An item file as `backlog new` writes it (its front matter order).
 function putItem(folder, seq, name, extra = {}, rel) {
   const phase = `${pad(seq)}-${name}`;
   store.write({
@@ -60,23 +45,8 @@ function putItem(folder, seq, name, extra = {}, rel) {
   return phase;
 }
 const scanned = (folder, fn) => { const con = db.connect(folder); try { const s = db.scan(con, folder); return fn?.(con, s); } finally { con.close(); } };
-const PY_ARGS = ['--name', 'Alpha', '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
 
 // ---------------------------------------------------------------- connect / migrate / anchor
-
-test('connect: creates <folder>/backlog.db with the schema of lib_db.py SCHEMA (oracle: same table SQL as Python)', t => {
-  const f = fixture(t);
-  if (!oracle(t, f, 'new_phase.py', PY_ARGS)) return;
-  const pyDb = db.connect(f.folder); // Python made this file; connect must not change it
-  const pySql = rows(pyDb, "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
-  pyDb.close();
-  const fresh = join(f.t, 'fresh');
-  const con = db.connect(fresh);
-  assert.ok(existsSync(join(fresh, 'backlog.db')));
-  assert.deepEqual(rows(con, "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"), pySql);
-  assert.deepEqual(pySql.map(r => r.name), ['event', 'handoff', 'phase']);
-  con.close();
-});
 
 test('connect: opening an existing database writes nothing (the tracked file stays byte-identical)', t => {
   const d = inHome(t);
@@ -86,7 +56,7 @@ test('connect: opening an existing database writes nothing (the tracked file sta
   assert.ok(before.equals(readFileSync(join(d, 'backlog.db'))));
 });
 
-test('connect: migrates a committed database that lacks severity and repository (lib_db.py _migrate)', t => {
+test('connect: migrates a committed database that lacks severity and repository', t => {
   const d = scratch(t);
   const raw = db.connect(join(d, 'old'));
   raw.exec('DROP TABLE phase; CREATE TABLE phase (id INTEGER PRIMARY KEY, handoff_id INTEGER, slug TEXT NOT NULL, seq INTEGER, status TEXT DEFAULT \'pending\')');
@@ -136,7 +106,7 @@ test('ingest: new file -> row (integers stay integers) and an "ingested" event; 
   con.close();
 });
 
-test('ingest: missing keys take the lib_db.py defaults (seq 0, status pending, priority 50, slug from the file name)', t => {
+test('ingest: missing keys take the defaults (seq 0, status pending, priority 50, slug from the file name)', t => {
   const d = inHome(t);
   const con = db.connect(d);
   store.write({ path: join(d, 'phases', '009-bare.md'), fm: { name: 'Bare' }, body: 'x\n' });
@@ -196,62 +166,6 @@ test('node:sqlite prints no ExperimentalWarning to stderr', () => {
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
-// ---------------------------------------------------------------- Python parity (oracle)
-
-test('Python rows equal Node rows: Node scan of Python-made files reproduces the phase table; a Node scan over the Python db changes nothing', t => {
-  const f = fixture(t);
-  if (!oracle(t, f, 'new_phase.py', PY_ARGS)) return;
-  oracle(t, f, 'new_phase.py', ['--name', 'Beta', '--objective', 'o2', '--summary', 's2', '--depends-on', 'none', '--priority', '0', '--severity', 'critical']);
-  const phases = con => rows(con, 'SELECT * FROM phase ORDER BY id').map(STAMPS);
-  const mirror = join(f.t, 'mirror');
-  cpSync(join(f.folder, 'phases'), join(mirror, 'phases'), { recursive: true });
-  const nodeRows = scanned(mirror, con => phases(con));
-  const count = () => { const c = db.connect(f.folder); try { return rows(c, 'SELECT * FROM event').length; } finally { c.close(); } };
-  const before = count();
-  const pythonRows = scanned(f.folder, (con, s) => { assert.equal(s.changed, 0, 'the Python rows already match the files'); return phases(con); });
-  assert.equal(pythonRows.length, 2);
-  assert.deepEqual(nodeRows, pythonRows);
-  assert.equal(count(), before, 'sha parity: no drift, no new event');
-});
-
-test('Python reads Node writes: query.py --status lists the items with status, priority and branch', t => {
-  const f = fixture(t);
-  putItem(f.folder, 1, 'one', { priority: 1, status: 'in_progress' });
-  putItem(f.folder, 2, 'two', { priority: 0 });
-  putItem(f.folder, 3, 'three', { priority: 2, branch: 'other' });
-  scanned(f.folder);
-  const r = oracle(t, f, 'query.py', ['--status', '--json']);
-  if (!r) return;
-  const out = JSON.parse(r.stdout);
-  const by = Object.fromEntries(out.phases.map(p => [p.slug, p]));
-  assert.deepEqual(Object.keys(by).sort(), ['001-one', '002-two']);
-  assert.deepEqual([by['001-one'].status, by['001-one'].priority, by['001-one'].branch], ['in_progress', 1, 'main']);
-  assert.deepEqual([by['002-two'].status, by['002-two'].priority, by['002-two'].branch], ['pending', 0, 'main']);
-  assert.deepEqual(out.findings, { foreign: [], untagged: [], ghost: [] });
-  const s = oracle(t, f, 'scan.py', []);
-  assert.match(s.stdout, /scanned: 3 phase\(s\); 0 \(re\)ingested, 0 file\(s\) missing/, 'Python finds no drift in what Node scanned');
-});
-
-test('Python new_phase.py after a Node create takes the next number (the db carries the Node seq)', t => {
-  const f = fixture(t);
-  putItem(f.folder, 1, 'node-made');
-  scanned(f.folder);
-  const r = oracle(t, f, 'new_phase.py', ['--name', 'After', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
-  if (!r) return;
-  assert.match(r.stdout, /\(seq 2\)/);
-});
-
-test('Python archive.py on a Node-archived item is a no-op: the db row says archived', t => {
-  const f = fixture(t);
-  if (!oracle(t, f, 'new_phase.py', PY_ARGS)) return;
-  const slug = readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8').match(/^phase: (\S+)/m)[1];
-  mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
-  renameSync(join(f.folder, 'phases', `${slug}.md`), join(f.folder, 'archive', 'phases', `${slug}.md`));
-  scanned(f.folder, con => db.markArchived(con, slug, `archive/phases/${slug}.md`));
-  const r = oracle(t, f, 'archive.py', ['1']);
-  assert.match(r.stdout, /already archived \(archive\/phases\/001-alpha\.md\)/);
-});
-
 // ---------------------------------------------------------------- stale rows after sync.commit renumbers
 
 test('scan(db, folder, renumbered): rows of renumbered items are replaced by the rescan and the fixed db is pushed', async t => {
@@ -262,10 +176,10 @@ test('scan(db, folder, renumbered): rows of renumbered items are replaced by the
   git(dir, 'clone', '-q', bare, home2);
   const folder = join(home, 'acme', 'demo'); const folder2 = join(home2, 'acme', 'demo');
   putItem(folder2, 1, 'alpha');                       // the other clone takes number 1 first (files only)
-  await sync.commit(home2, folder2, 'new_phase.py --name alpha');
+  await sync.commit(home2, folder2, 'new --name alpha');
   putItem(folder, 1, 'beta');                         // this clone also took number 1 and mirrors it
   scanned(folder);
-  const renumbered = await sync.commit(home, folder, 'new_phase.py --name beta');
+  const renumbered = await sync.commit(home, folder, 'new --name beta');
   assert.deepEqual(renumbered, [[1, 2]]);
   assert.ok(existsSync(join(folder, 'phases', '002-beta.md')));
   let con = db.connect(folder);
@@ -321,13 +235,13 @@ test('scan(db, folder, renumbered): the renumbered row keeps its id and its earl
   git(dir, 'clone', '-q', bare, home2);
   const folder = join(home, 'acme', 'demo'); const folder2 = join(home2, 'acme', 'demo');
   putItem(folder2, 1, 'alpha');
-  await sync.commit(home2, folder2, 'new_phase.py --name alpha');
+  await sync.commit(home2, folder2, 'new --name alpha');
   putItem(folder, 1, 'beta');
   let con = db.connect(folder);
   db.scan(con, folder);
   const betaId = rows(con, "SELECT id FROM phase WHERE slug='001-beta'")[0].id;
   con.close();
-  const renumbered = await sync.commit(home, folder, 'new_phase.py --name beta');
+  const renumbered = await sync.commit(home, folder, 'new --name beta');
   con = db.connect(folder); // the rebase replaced the tracked db file
   db.scan(con, folder, renumbered);
   assert.deepEqual(rows(con, "SELECT id, seq, path FROM phase WHERE slug='002-beta'"), [{ id: betaId, seq: 2, path: 'phases/002-beta.md' }]);

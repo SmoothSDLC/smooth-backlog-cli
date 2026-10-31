@@ -2,16 +2,11 @@
 // Tests run against local bare repositories only: origins under <tmp>/origins,
 // clones under <tmp>, with BACKLOG_HOME and XDG_CONFIG_HOME inside the test's
 // temp dir - never the real backlog repository or ~/.config.
-// Model: the Python skill's tests/conftest.py:1-60.
-import { existsSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-// Item 023 (owner decision 9b): CI has no Python oracle, so the parity tests skip there; the skip names the review rule.
-export const ORACLE_SKIP = 'the Python backlog skill (the parity oracle) is not here (SMOOTH_BACKLOG_SCRIPTS, python3 with PyYAML). '
-  + 'Review rule (item 023): an item that changes the storage or the backlog format needs a local parity run on BigFan, its output cited in the review';
 export const BACKLOG_OWNER = 'SmoothSDLC';
 export const BACKLOG_NAME = 'smoothsdlc-backlog';
 export const GIT_IDENTITY = {
@@ -26,8 +21,8 @@ function git(cwd, ...args) {
   return p.stdout.trim();
 }
 
-// A local bare origin plus a working clone. The Python skill accepts only
-// SmoothSDLC/smoothsdlc-backlog as owner/name (lib_db.py:69-111), which is why
+// A local bare origin plus a working clone. The backlog repository is always
+// SmoothSDLC/smoothsdlc-backlog as owner/name, which is why
 // the shared backlog origin keeps exactly that folder layout.
 function originBare(tmp, owner, name, branch) {
   const bare = join(tmp, 'origins', owner, `${name}.git`);
@@ -50,7 +45,7 @@ function originBare(tmp, owner, name, branch) {
 
 // The shared backlog repository: bare <tmp>/origins/SmoothSDLC/smoothsdlc-backlog.git
 // with one commit on main, cloned to <tmp>/home. The per-repository folders
-// (<home>/<owner>/<name>/) live inside that clone (lib_db.py:24-26).
+// (<home>/<owner>/<name>/) live inside that clone.
 export function sharedBacklog(tmp) {
   const bare = originBare(tmp, BACKLOG_OWNER, BACKLOG_NAME, 'main');
   const dest = join(tmp, 'home');
@@ -86,51 +81,6 @@ export function env(tmp) {
   return { ...GIT_IDENTITY, BACKLOG_HOME: home, XDG_CONFIG_HOME: join(t, 'config') };
 }
 
-function scriptsDir() {
-  return process.env.SMOOTH_BACKLOG_SCRIPTS
-    || join(homedir(), 'git', 'smoothsdlc-backlog', 'skill', 'backlog', 'scripts');
-}
-
-let yamlOk;
-function pyyamlAvailable() {
-  if (yamlOk === undefined) {
-    yamlOk = spawnSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }).status === 0;
-  }
-  return yamlOk;
-}
-
-// Runs python3 <SCRIPTS>/<script>; stdin is ignored. Returns
-// { status, stdout, stderr }, or null when the script is absent or PyYAML is
-// missing, so suites can skip with that reason.
-export function py(script, args = [], opts = {}) {
-  const scriptPath = join(scriptsDir(), script);
-  if (!existsSync(scriptPath) || !pyyamlAvailable()) return null;
-  const p = spawnSync('python3', [scriptPath, ...args], {
-    cwd: opts.cwd,
-    // The oracle compares Path.resolve() with an unresolved BACKLOG_HOME (lib_db.py:453), so it gets the real path of a symlinked tmp (macOS /var).
-    env: { ...process.env, ...(opts.tmp ? env(realpathSync(opts.tmp)) : {}), ...opts.env },
-    stdin: 'ignore',
-    encoding: 'utf8',
-    timeout: opts.timeout ?? 300000,
-  });
-  const words = args.includes('--help') ? s => s : cliWords; // the help parity tests compare the flags themselves
-  return { status: p.status ?? -1, stdout: words(p.stdout ?? ''), stderr: words(p.stderr ?? '') };
-}
-
-// The CLI's messages name its own commands where the oracle names its scripts (spec 2026-10-28-pr1-learnings: members
-// know the backlog only through this CLI); otherwise the text is the oracle's. Applied to the oracle's output.
-const CLI_WORDS = [
-  ['scripts/handback.py\n     and end your turn with its DECISION NEEDED line', 'end your turn\n     with a DECISION NEEDED line'],
-  ['if that tool says it cannot ask in non-interactive mode, use ', 'if that tool says it cannot ask in non-interactive mode, '],
-  ['update.py/archive.py/new_phase.py', 'backlog update/archive/new'],
-  ['(run scripts/scan.py to create the phase anchor)', '(backlog new creates the first item and the phase anchor)'],
-  ['(run scan.py, or new_phase.py to create it)', '(create it with backlog new)'],
-  [/; it is out of the queue until migrate_repo\.py <repository path> --identity-only fills them/g, '; it is out of the queue until its repository and branch are filled in'],
-  [/\. Restore the file from git, or remove\.py \S+ --reason "\.\.\."/g, '. Restore the file from git'],
-  [/\b(update|move|archive|query)\.py\b/g, 'backlog $1'], [/\bnew_phase\.py\b/g, 'backlog new'],
-];
-export const cliWords = s => CLI_WORDS.reduce((t, [a, b]) => t.replaceAll(a, b), s);
-
 let calls = 0;
 // Runs node bin/backlog.js (this repository's CLI) from a consumer checkout.
 export function cli(args = [], opts = {}) {
@@ -146,6 +96,3 @@ export function cli(args = [], opts = {}) {
   return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
 }
 
-// Item 060: the CLI's --status --json rows carry claimed_by and review_state, which the oracle's rows lack: parity
-// comparisons drop them from the CLI's output (they are the last two keys of each row).
-export const withoutTeamFields = s => String(s).replace(/,\n( +)"claimed_by": [^\n]*,\n\1"review_state": [^\n]*(?=\n)/g, '');

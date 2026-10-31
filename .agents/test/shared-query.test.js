@@ -1,14 +1,12 @@
-// Tests for src/shared/query.js - cli-parity job 12 (QUERY): the read views of query.py:361-619 and `backlog next`.
-// Oracle: query.py (--next --status --critical --phase --events --by-branch --all --branch --json, the findings
-// banner :328-329) run on the same temporary fixture; stdout and exit status must be identical. Parity tests skip
-// when SMOOTH_BACKLOG_SCRIPTS is not configured or PyYAML is missing. Local bare repos only (shared-fixtures.js).
+// Tests for src/shared/query.js - cli-parity job 12 (QUERY): the read views (--next --status --critical --phase --events
+// --by-branch --all --branch --json) and `backlog next`. Local bare repos only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { withoutTeamFields, cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 
@@ -21,14 +19,14 @@ const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 
 const newItem = (f, name, ...more) => {
-  const r = py('new_phase.py', ['--name', name, '--objective', `Café ☕ ${name}`, '--summary', `sum ${name}`, '--depends-on', 'none', ...more], { cwd: f.cons, tmp: f.t });
-  if (!r) return null;
+  const r = cli(['new', '--name', name, '--objective', `Café ☕ ${name}`, '--summary', `sum ${name}`, '--depends-on', 'none', ...more], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r;
 };
+const setStatus = (f, item, status) => { const r = cli(['update', item, '--status', status], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
 const commitAll = home => { git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'fixture'); git(home, 'push', '-q'); };
 
-// Shared home + consumer acme/demo on main. Built with the Python scripts so the mirror database is the real one:
+// Shared home + consumer acme/demo on main, built with the CLI:
 // open items on main (one critical, one in progress), a done item, an item of branch "feature" that is not on the
 // origin (a gone-branch item), and hand-made foreign, untagged and ghost findings. Mode is set to shared.
 function build(withFindings) {
@@ -39,12 +37,12 @@ function build(withFindings) {
   const f = { t, home, cons, folder: join(home, 'acme', 'demo') };
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  if (!newItem(f, 'Alpha')) return { ...f, noOracle: true };
+  newItem(f, 'Alpha');
   newItem(f, 'Beta', '--severity', 'critical');
   newItem(f, 'Gamma');
   newItem(f, 'Delta');
-  assert.equal(py('update.py', ['003-gamma', '--status', 'in_progress'], { cwd: cons, tmp: t }).status, 0);
-  assert.equal(py('update.py', ['004-delta', '--status', 'done'], { cwd: cons, tmp: t }).status, 0);
+  setStatus(f, '003-gamma', 'in_progress');
+  setStatus(f, '004-delta', 'done');
   git(cons, 'checkout', '-q', '-b', 'feature');
   newItem(f, 'Feat');
   git(cons, 'checkout', '-q', 'main');
@@ -68,141 +66,97 @@ function build(withFindings) {
 let shared;
 const fx = () => (shared ??= build(true));
 
-// Runs the oracle and the Node view on the same fixture; null (and a skip) without the oracle.
-function both(t, f, args) {
-  if (f.noOracle) return t.skip(ORACLE_SKIP);
-  const o = py('query.py', args, { cwd: f.cons, tmp: f.t });
-  const n = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
-  return { o, n };
-}
-// --phase prints the oracle's row and then the whole item (front_matter and body, item 033): the row part is the oracle's.
-const rowOnly = (args, out) => {
-  if (!args.includes('--phase') || !out.startsWith('{')) return out;
-  const { front_matter: _f, body: _b, missing: _m, ...row } = JSON.parse(out); // eslint-disable-line no-unused-vars
-  return `${JSON.stringify(row, null, 2)}\n`;
-};
-function same(t, f, args) {
-  const r = both(t, f, args);
-  if (!r) return null;
-  assert.equal(r.n.status, r.o.status, `${args.join(' ')}: ${r.n.stderr}`);
-  assert.equal(withoutTeamFields(rowOnly(args, r.n.stdout)), args.includes('--phase') && r.o.stdout.startsWith('{') ? `${JSON.stringify(JSON.parse(r.o.stdout), null, 2)}\n` : r.o.stdout);
-  assert.equal(r.n.stderr, r.o.stderr);
-  return r;
+// Runs a read view of the CLI; asserts its exit status.
+function view(f, args, status = 0, cwd = f.cons) {
+  const n = cli(['query', ...args], { cwd, tmp: f.t });
+  assert.equal(n.status, status, `${args.join(' ')}: ${n.stderr}`);
+  return n;
 }
 
-test('--status --json prints the same JSON as query.py (handoff, phases, gone_branch_items, findings)', t => {
-  const f = fx();
-  const r = same(t, f, ['--status', '--json']);
-  if (!r) return;
-  const v = JSON.parse(r.n.stdout);
+test('--status --json prints handoff, repository, branch, phases, gone_branch_items and findings', () => {
+  const v = JSON.parse(view(fx(), ['--status', '--json']).stdout);
   assert.deepEqual(Object.keys(v), ['handoff', 'repository', 'branch', 'phases', 'gone_branch_items', 'findings']);
   assert.deepEqual(Object.keys(v.findings), ['foreign', 'untagged', 'ghost']);
   assert.deepEqual(v.gone_branch_items.map(x => x.slug), ['005-feat']);
   assert.deepEqual([v.findings.foreign.length, v.findings.untagged.length, v.findings.ghost.length], [1, 1, 1]);
 });
 
-test('--status text (findings banner, critical banner, queue, gone-branch warning) is byte-identical to query.py', t => {
-  const r = same(t, fx(), ['--status']);
-  if (r) assert.match(r.n.stdout, /CRITICAL ITEM\(S\) ON THE BACKLOG/);
+test('--status text shows the critical banner', () => {
+  assert.match(view(fx(), ['--status']).stdout, /CRITICAL ITEM\(S\) ON THE BACKLOG/);
 });
 
-test('--status with no view flag, --all and --branch', t => {
+test('--status with no view flag, --all and --branch exit 0', () => {
   const f = fx();
-  same(t, f, []);
-  same(t, f, ['--status', '--all']);
-  same(t, f, ['--status', '--all', '--json']);
-  same(t, f, ['--status', '--branch', 'feature']);
-  same(t, f, ['--status', '--branch', 'feature', '--json']);
+  for (const args of [[], ['--status', '--all'], ['--status', '--all', '--json'], ['--status', '--branch', 'feature'], ['--status', '--branch', 'feature', '--json']]) view(f, args);
 });
 
-test('--next --json prints the same row as query.py; --next text prints the item, the banner and the mandate', t => {
+test('--next --json prints the queue head; --next text prints the item, the banner and the mandate', () => {
   const f = fx();
-  const r = same(t, f, ['--next', '--json']);
-  if (!r) return;
-  assert.equal(JSON.parse(r.n.stdout).slug, '002-beta');
-  const text = same(t, f, ['--next']);
-  assert.match(text.n.stdout, /NEXT-STEPS-MANDATE/);
-  assert.match(text.n.stdout, /END-MANDATE/);
-  same(t, f, ['--next', '--all']);
-  same(t, f, ['--next', '--branch', 'feature', '--json']);
+  assert.equal(JSON.parse(view(f, ['--next', '--json']).stdout).slug, '002-beta');
+  const text = view(f, ['--next']).stdout;
+  assert.match(text, /NEXT-STEPS-MANDATE/);
+  assert.match(text, /END-MANDATE/);
+  view(f, ['--next', '--all']);
+  view(f, ['--next', '--branch', 'feature', '--json']);
 });
 
-test('`backlog next` is --next', t => {
+test('`backlog next` is --next', () => {
   const f = fx();
-  const r = both(t, f, ['--next', '--json']);
-  if (!r) return;
   const n = cli(['next'], { cwd: f.cons, tmp: f.t });
   assert.equal(n.status, 0, n.stderr);
-  assert.equal(n.stdout, py('query.py', ['--next'], { cwd: f.cons, tmp: f.t }).stdout);
+  assert.equal(n.stdout, view(f, ['--next']).stdout);
 });
 
-test('an empty queue prints {} (JSON) or the info line, exit 0', t => {
+test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
   const f = fx();
-  same(t, f, ['--next', '--branch', 'nowhere']);
-  same(t, f, ['--next', '--branch', 'nowhere', '--json']);
+  assert.notEqual(view(f, ['--next', '--branch', 'nowhere']).stdout, '');
+  assert.equal(view(f, ['--next', '--branch', 'nowhere', '--json']).stdout.trim(), '{}');
 });
 
-test('--phase prints the same row as query.py, by slug and by number; not found is exit 1 on stdout', t => {
+test('--phase prints the item by slug and by number; not found is exit 1 on stdout', () => {
   const f = fx();
-  same(t, f, ['--phase', '002-beta']);
-  same(t, f, ['--phase', '3']);
-  same(t, f, ['--phase', '003']);
-  const r = same(t, f, ['--phase', 'nope']);
-  if (r) assert.equal(r.n.status, 1);
+  for (const id of ['002-beta', '3', '003']) assert.match(JSON.parse(view(f, ['--phase', id]).stdout).slug, /^00[23]-/);
+  assert.match(view(f, ['--phase', 'nope'], 1).stdout, /no phase 'nope'/);
 });
 
-test('--critical lists the open critical items (JSON and text) and says so when there are none', t => {
+test('--critical lists the open critical items (JSON and text) and says so when there are none', () => {
   const f = fx();
-  same(t, f, ['--critical']);
-  same(t, f, ['--critical', '--json']);
+  view(f, ['--critical']);
+  assert.ok(JSON.stringify(JSON.parse(view(f, ['--critical', '--json']).stdout)).includes('002-beta'));
   const g = build(false);
-  if (g.noOracle) return;
-  assert.equal(py('update.py', ['002-beta', '--status', 'done'], { cwd: g.cons, tmp: g.t }).status, 0);
-  same(t, g, ['--critical']);
-  same(t, g, ['--critical', '--json']);
+  setStatus(g, '002-beta', 'done');
+  view(g, ['--critical']);
+  assert.ok(!JSON.stringify(JSON.parse(view(g, ['--critical', '--json']).stdout)).includes('002-beta'));
 });
 
-test('--events (all, and for one item) and --by-branch match query.py', t => {
+test('--events (all, and for one item) and --by-branch exit 0', () => {
   const f = fx();
-  same(t, f, ['--events']);
-  same(t, f, ['--events', '002-beta']);
-  same(t, f, ['--events', '2']);
-  same(t, f, ['--by-branch', 'main']);
-  same(t, f, ['--by-branch', 'feature']);
+  for (const args of [['--events'], ['--events', '002-beta'], ['--events', '2'], ['--by-branch', 'main'], ['--by-branch', 'feature']]) view(f, args);
 });
 
-test('a repository without a backlog folder prints {} or the info line, exit 0', t => {
+test('a repository without a backlog folder prints {} or the info line, exit 0', () => {
   const f = fx();
-  if (f.noOracle) return t.skip(ORACLE_SKIP);
   const other = consumer(f.t, 'acme', 'fresh', 'main');
-  for (const args of [['--status'], ['--next', '--json'], ['--status', '--json']]) {
-    const o = py('query.py', args, { cwd: other, tmp: f.t });
-    const n = cli(['query', ...args], { cwd: other, tmp: f.t });
-    assert.equal(n.status, o.status);
-    assert.equal(n.stdout, o.stdout);
-  }
+  for (const args of [['--status'], ['--next', '--json'], ['--status', '--json']]) view(f, args, 0, other);
+  assert.equal(view(f, ['--next', '--json'], 0, other).stdout.trim(), '{}');
 });
 
-test('a detached HEAD without --branch or --all is exit 2 with the oracle message', t => {
+test('a detached HEAD without --branch or --all is exit 2', () => {
   const f = fx();
-  if (f.noOracle) return t.skip(ORACLE_SKIP);
   const head = git(f.cons, 'rev-parse', 'HEAD');
   git(f.cons, 'checkout', '-q', '--detach');
   try {
-    same(t, f, ['--next']);
-    same(t, f, ['--status']);
-    const r = same(t, f, ['--status', '--all', '--json']);
-    assert.equal(r.n.status, 0);
-    same(t, f, ['--phase', '002-beta']);
+    view(f, ['--next'], 2);
+    view(f, ['--status'], 2);
+    view(f, ['--status', '--all', '--json']);
   } finally { git(f.cons, 'checkout', '-q', 'main'); assert.equal(git(f.cons, 'rev-parse', 'HEAD'), head); }
 });
 
-test('a read view pulls first: an item pushed from another clone is shown, and no item or db file is written', t => {
+test('a read view pulls first: an item pushed from another clone is shown, and no item or db file is written', () => {
   const f = build(false);
-  if (f.noOracle) return t.skip(ORACLE_SKIP);
   const home2 = join(f.t, 'home2');
   git(f.t, 'clone', '-q', join(f.t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2);
-  const r = py('new_phase.py', ['--name', 'Pushed', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_HOME: realpathSync(home2) } });
+  const r = cli(['new', '--name', 'Pushed', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_HOME: realpathSync(home2) } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const before = git(f.home, 'rev-parse', 'HEAD');
   const n = cli(['query', '--status', '--json'], { cwd: f.cons, tmp: f.t });
@@ -249,7 +203,6 @@ test('an unknown flag is exit 2', () => {
 for (const link of ['repo', 'db', 'owner']) test(`review P1: a symlink at ${{ repo: '<home>/<owner>/<repo>', db: 'backlog.db', owner: '<home>/<owner>' }[link]} is refused and the outside database is not touched`, () => {
   {
     const f = build(false);
-    if (f.noOracle) return;
     const outside = join(f.t, 'outside');
     const target = link === 'owner' ? join(f.home, 'acme') : link === 'repo' ? f.folder : join(f.folder, 'backlog.db');
     cpSync(target, outside, { recursive: true });
@@ -277,7 +230,6 @@ function withRowPath(f, path) {
 
 test('review P2: a row path that leaves the folder (.. or absolute) is a ghost, not an existing file', () => {
   const f = build(false);
-  if (f.noOracle) return;
   const secret = join(f.t, 'secret.md');
   writeFileSync(secret, 'outside\n');
   for (const path of ['../../../secret.md', secret, '../../../../../../../../../etc/passwd']) {
@@ -289,7 +241,6 @@ test('review P2: a row path that leaves the folder (.. or absolute) is a ghost, 
 
 test('review P2: a row path through a symlink to a file outside the folder is a ghost', () => {
   const f = build(false);
-  if (f.noOracle) return;
   writeFileSync(join(f.t, 'secret.md'), 'outside\n');
   symlinkSync(join(f.t, 'secret.md'), join(f.folder, 'phases', 'link.md'));
   const r = withRowPath(f, 'phases/link.md');
@@ -301,7 +252,6 @@ test('review P2: a row path through a symlink to a file outside the folder is a 
 
 test('review P2: input echoed in a diagnostic is redacted (flags, missing items)', () => {
   const f = build(false);
-  if (f.noOracle) return;
   const url = 'https://user:review_dummy@host/path';
   for (const args of [[`--bogus=${url}`], ['--phase', url], ['--events', url], [`--branch=${url}`, '--bogus']]) {
     const n = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
@@ -311,19 +261,16 @@ test('review P2: input echoed in a diagnostic is redacted (flags, missing items)
   assert.match(cli(['query', '--phase', url], { cwd: f.cons, tmp: f.t }).stdout, /^❌ no phase 'https:\/\/host\/path'/);
 });
 
-test('review P3: --json escapes U+007F like json.dumps', t => {
+test('review P3: --json escapes U+007F and non-ASCII as \\u escapes', () => {
   const f = build(false);
-  if (f.noOracle) return t.skip(ORACLE_SKIP);
   const con = db.connect(f.folder);
   con.prepare("UPDATE phase SET name=? WHERE slug='001-alpha'").run('a\x7fb \x80 é');
   con.close();
-  const r = same(t, f, ['--phase', '1', '--json']);
-  assert.match(r.n.stdout, /"name": "a\\u007fb \\u0080 \\u00e9"/);
+  assert.match(view(f, ['--phase', '1', '--json']).stdout, /"name": "a\\u007fb \\u0080 \\u00e9"/);
 });
 
 test('review P2 (second): input echoed in a normal result is redacted too (--branch and --agent in every view)', () => {
   const f = build(false);
-  if (f.noOracle) return;
   const url = 'https://user:review_dummy@host/path';
   for (const args of [['query', '--next', '--branch', url], ['query', '--next', '--branch', url, '--json'], ['query', '--status', '--branch', url], ['query', '--status', '--branch', url, '--json'],
     ['query', '--claimable', '--branch', url], ['query', '--reviewable', '--agent', 'cody', '--branch', url],

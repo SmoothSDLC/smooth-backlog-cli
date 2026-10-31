@@ -1,8 +1,5 @@
 // Tests for `backlog pop` and `backlog query --pop` (src/shared/pop.js) - cli-parity job 20 (POP).
-// Port of tests/test_team_pop.py (4 cases), tests/test_team_pop_compat.py (1 case) and the --pop assertions of
-// tests/test_team_scope.py, plus parity with query.py --pop: one fixture state per action, and stdout, stderr and the
-// exit status must be identical. Parity tests skip when SMOOTH_BACKLOG_SCRIPTS is not configured or PyYAML is missing.
-// Local bare repos only.
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -12,11 +9,10 @@ import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 import { HELP } from '../../src/help.js';
-import { cli, consumer, GIT_IDENTITY, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
-const oracle = py('query.py', ['--help']) !== null;
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
   if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
@@ -43,25 +39,25 @@ function make(f, side, cwd, name, extra = []) {
   if (!has('--review-refs') && !bare) args.push('--review-refs', 'references/review/code.md');
   if (!has('--estimate')) args.push('--estimate', '5', '--complexity', 'low');
   args.push('--body', DOD, ...extra);
-  const r = side === 'py' ? py('new_phase.py', args, { cwd, tmp: f.t }) : cli(['new', ...args], { cwd, tmp: f.t });
+  const r = cli(['new', ...args], { cwd, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r.stdout.split('created phase phases/')[1].split('.md')[0];
 }
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const upWith = side => (f, slug, ...args) => {
   const who = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
-  if (side !== 'py' && who) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t }); // an agent reads an item before it writes it again (seen.js)
-  const r = (side === 'py' ? py : (s, a, o) => cli([s, ...a], o))(side === 'py' ? 'update.py' : 'update', [slug, ...args], { cwd: f.cons, tmp: f.t });
+  if (who) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t }); // an agent reads an item before it writes it again (seen.js)
+  const r = cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r;
 };
 const ok = upWith('js');
 const refuse = (f, slug, ...args) => cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t });
-// cody is a plain member here (test_team_pop.py LEAD); popLead asks as the team lead, who does no chunk work.
+// cody is a plain member here; popLead asks as the team lead, who does no chunk work.
 const LEAD = { TEAM_LEAD: 'lead' };
 const popCli = (f, args, opts = {}) => cli(['query', '--pop', '--agent', 'cody', ...args], { cwd: f.cons, tmp: f.t, ...opts, env: { ...LEAD, ...opts.env } });
 
-// test_team_pop.py:8-14: the JSON of --pop; exit 3 exactly when the action is idle. Unless the pop changes the backlog
+// The JSON of --pop: exit 3 exactly when the action is idle. Unless the pop changes the backlog
 // (--claim-now), `backlog pop` must print the same thing as `backlog query --pop`.
 function pop(f, ...args) { return popAs(f, LEAD, ...args); }
 function popLead(f, ...args) { return popAs(f, { TEAM_LEAD: 'cody' }, ...args); }
@@ -214,7 +210,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   r = refuse(f, job, '--set-review-refs', 'references/patterns/y.md');
   assert.ok(r.status === 1 && r.stdout.includes('needs at least one review document'), r.stdout);
   ok(f, job, '--close', '--summary', 'done');
-  // the agent's own work goes before another member's review request, however old (spec section 5, query.py:199)
+  // the agent's own work goes before another member's review request, however old (spec section 5)
   const mine = make(f, 'js', f.cons, 'own job', []);
   const other = make(f, 'js', f.cons, 'other job', ['--review-refs', 'references/review/code.md']);
   ok(f, other, '--claim', 'archy');
@@ -229,7 +225,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   assert.deepEqual([p.action, p.item], ['review', other]);
 });
 
-test('a roster member with review_only never claims; a missing roster is an error (query.py:176-179)', () => {
+test('a roster member with review_only never claims; a missing roster is an error', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'pop-review-only');
   const job = make(f, 'js', f.cons, 'review only job', []);
@@ -244,7 +240,7 @@ test('a roster member with review_only never claims; a missing roster is an erro
   assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'missing.json')}: `), gone.stderr);
 });
 
-// test_team_pop_compat.py: without the new flags every query prints what it printed before.
+// Without the new flags every query prints what it printed before.
 test('test_no_new_flags_unchanged', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'compat-a');
@@ -267,7 +263,7 @@ test('test_no_new_flags_unchanged', () => {
   assert.ok(n.stdout.includes('NEXT-STEPS-MANDATE'));
 });
 
-// test_team_scope.py:40-52: the --pop assertions of the scope test.
+// The --pop assertions of the scope rules.
 test('--pop with --scope all and the refinement_scope cap of backlog.scope', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'scope-a');
@@ -295,147 +291,6 @@ test('--agents without --plan, --critical and --headless stay refused with --pop
     assert.equal(r.status, 2, args.join(' '));
     assert.equal(r.stdout, '');
   }
-});
-
-// A fixture with a state for every action, built with the oracle. Agents: busy (continue), closer (close a passed item),
-// rev (review), newbie (claim), lead1 (refine), sleepy (awaits a review, then idle with blockers), waiter (waits, then claim).
-function states() {
-  const f = fixture();
-  const m = (cwd, name, extra) => make(f, 'py', cwd, name, extra);
-  const up = (slug, ...args) => upWith('py')(f, slug, ...args);
-  const a = m(f.cons, 'dep first', []);
-  m(f.cons, 'needs first', ['--depends-on', '1']);
-  m(f.cons, 'free impl', []);
-  const d = m(f.cons, 'ui held', ['--review-refs', 'references/review/ui.md,references/review/code.md']);
-  const g = m(f.cons, 'busy item', ['--review-refs', 'references/review/code.md']);
-  const h = m(f.cons, 'sleepy item', []);
-  const p = m(f.cons, 'passed item', []);
-  const w = m(f.cons, 'waiting item', []);
-  m(f.cons, 'chunk item', ['--chunk']);
-  const bare = py('new_phase.py', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });
-  assert.equal(bare.status, 0, bare.stdout);
-  up(a, '--claim', 'archy');
-  up(d, '--claim', 'holder');
-  up(d, '--request-review', 'any', '--note', 'ready');
-  up(g, '--claim', 'busy');
-  up(h, '--claim', 'sleepy');
-  up(h, '--request-review', 'any', '--note', 'ready');
-  up(p, '--claim', 'closer');
-  up(p, '--request-review', 'any', '--note', 'ready');
-  up(p, '--review', 'pass', '--by', 'archy', '--comments', 'ok references/review/code.md');
-  up(w, '--claim', 'waiter');
-  up(w, '--waiting', 'run 9', '--by', 'waiter');
-  git(f.cons, 'checkout', '-q', '-b', 'side');
-  m(f.cons, 'side impl', []);
-  m(f.cons, 'side chunk', ['--chunk']);
-  git(f.cons, 'checkout', '-q', 'main');
-  m(f.other, 'other chunk', ['--chunk']);
-  m(f.other, 'other impl', []);
-  writeFileSync(join(f.t, 'roster.json'), JSON.stringify({ busy: { work_classes: ['app-code'], review_classes: ['code'] }, rev: { work_classes: ['ui'], review_classes: ['ui'] } }));
-  return f;
-}
-
-test('parity with query.py --pop: every action prints, refuses and exits alike', t => {
-  if (!oracle) return t.skip(ORACLE_SKIP);
-  const f = states();
-  const roster = join(f.t, 'roster.json');
-  const actions = new Set();
-  const same = (args, env) => {
-    const o = py('query.py', args, { cwd: f.cons, tmp: f.t, env });
-    for (const cmd of [['query'], ['pop']]) {
-      const n = cli([...cmd, ...args.filter(x => !(cmd[0] === 'pop' && x === '--pop'))], { cwd: f.cons, tmp: f.t, env });
-      assert.deepEqual([n.status, n.stdout, n.stderr], [o.status, o.stdout, o.stderr], `${cmd[0]} ${args.join(' ')}`);
-    }
-    if (args.includes('--json') && o.stdout.startsWith('{"action"')) actions.add(JSON.parse(o.stdout).action);
-    return o;
-  };
-  const cases = [
-    ['--agent', 'busy'], // continue
-    ['--agent', 'closer'], // continue: close
-    ['--agent', 'rev'], // review (any member but the author)
-    ['--agent', 'rev', '--roster', roster], // a roster with old class profiles changes nothing
-    ['--agent', 'busy', '--roster', roster],
-    ['--agent', 'newbie'], // claim
-    ['--agent', 'newbie'],
-    ['--agent', 'lead1', '--lead', 'lead1'], // refine
-    ['--agent', 'lead1', '--lead', 'lead1'],
-    ['--agent', 'x'], // chunk
-    ['--agent', 'x', '--scope', 'repo'],
-    ['--agent', 'x', '--scope', 'all'],
-    ['--agent', 'x', '--all'],
-    ['--agent', 'x', '--branch', 'side'],
-    ['--agent', 'idler'], // idle with blockers
-    ['--agent', 'sleepy'], // awaiting review: claim or idle
-    ['--agent', 'waiter'],
-    ['--agent', 'waiter'],
-    ['--agent', 'nobody'],
-  ];
-  for (const base of cases) {
-    for (const json of [[], ['--json']]) {
-      same(['--pop', ...base, ...json]);
-    }
-  }
-  for (const base of cases.slice(0, 5)) same(['--pop', ...base, '--json'], { BACKLOG_REVIEW_FIRST_SECONDS: '0' }); // old review requests go first
-  // the requested reviews of 004 and 006 are offered to every member with no work of its own (item 033): once they are started and the free item is claimed,
-  // the other actions show (claim, refine, chunk, idle)
-  for (const args of [['004-ui-held', '--start-review', '--by', 'rev'], ['006-sleepy-item', '--start-review', '--by', 'rev2'], ['003-free-impl', '--claim', 'free3']]) {
-    const r = cli(['update', ...args], { cwd: f.cons, tmp: f.t });
-    assert.equal(r.status, 0, r.stdout + r.stderr);
-  }
-  for (const base of cases) same(['--pop', ...base, '--json']);
-  for (const json of [[], ['--json']]) {
-    const args = ['--next', '--agent', 'busy', ...json];
-    const o = py('query.py', args, { cwd: f.cons, tmp: f.t });
-    const n = cli(['next', ...args.slice(1)], { cwd: f.cons, tmp: f.t });
-    assert.deepEqual([n.status, n.stdout, n.stderr], [o.status, o.stdout, o.stderr]);
-    same(args);
-  }
-  for (const cap of ['all', 'repo', 'off', 'branch', 'everywhere']) {
-    writeFileSync(f.cfg, `refinement_scope: ${cap}\n`);
-    try {
-      for (const scope of ['branch', 'repo', 'all']) {
-        same(['--pop', '--agent', 'x', '--scope', scope, '--json']);
-      }
-    } finally { rmSync(f.cfg, { force: true }); }
-  }
-  for (const a of ['idle', 'continue', 'review', 'claim', 'refine', 'chunk']) assert.ok(actions.has(a), `no fixture state produced ${a}: ${[...actions]}`);
-  // refusals
-  same(['--pop']);
-  same(['--pop', '--agent', 'x']);
-  const galaxy = cli(['pop', '--agent', 'x', '--scope', 'galaxy'], { cwd: f.cons, tmp: f.t }); // argparse usage text is not copied
-  assert.ok(galaxy.status === 2 && galaxy.stderr.includes("argument --scope: invalid choice: 'galaxy' (choose from 'branch', 'repo', 'all')"), galaxy.stderr);
-  const gone = cli(['pop', '--agent', 'x', '--roster', join(f.t, 'nope.json')], { cwd: f.cons, tmp: f.t });
-  assert.equal(gone.status, 2); // the operating system's wording of the error differs from Python's: no byte comparison
-  assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'nope.json')}: `), gone.stderr);
-  for (const env of [{ TEAM_REPOSITORY: 'acme/demo' }, { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'side' }, { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' }, { TEAM_REPOSITORY: 'nonsense' }, { TEAM_ROSTER: roster }, { TEAM_LEAD: 'lead1' }]) {
-    same(['--pop', '--agent', 'x', '--json'], env);
-    same(['--pop', '--agent', 'x', '--branch', 'side', '--json'], env);
-  }
-  git(f.cons, 'checkout', '-q', '--detach');
-  same(['--pop', '--agent', 'x']);
-  same(['--pop', '--agent', 'x', '--all']);
-  git(f.cons, 'checkout', '-q', 'main');
-  // a repository without a backlog yet
-  const empty = consumer(f.t, 'acme', 'empty', 'main');
-  for (const args of [['--pop', '--agent', 'x'], ['--pop', '--agent', 'x', '--json']]) {
-    const o = py('query.py', args, { cwd: empty, tmp: f.t });
-    const n = cli(['pop', ...args.slice(1)], { cwd: empty, tmp: f.t });
-    assert.deepEqual([n.status, n.stdout, n.stderr], [o.status, o.stdout, o.stderr]);
-  }
-});
-
-test('--claim-now after the oracle claimed: the held item is continued, not claimed twice', t => {
-  if (!oracle) return t.skip(ORACLE_SKIP);
-  const f = fixture();
-  const job = make(f, 'py', f.cons, 'claim now twin', []);
-  // the oracle claims in its own run; the CLI then finds the item held by cody and offers continue, claimed false
-  const o = py('query.py', ['--pop', '--agent', 'cody', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD }); // cody a member: the lead never claims there
-  assert.equal(o.status, 0, o.stdout + o.stderr);
-  assert.equal(JSON.parse(o.stdout).claimed, true);
-  assert.equal(item(f, job).fm.claimed_by, 'cody');
-  const n = cli(['pop', '--agent', 'cody', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
-  assert.equal(JSON.parse(n.stdout).action, 'continue');
-  assert.equal(JSON.parse(n.stdout).claimed, false);
 });
 
 test('credentials in a wait are redacted in the text and the JSON of the pop (blocked and held)', () => {

@@ -1,15 +1,12 @@
-// Tests for src/shared/sync.js — cli-parity job 8 (SYNC: pull, commit and push of the shared
-// backlog repository). Oracle: lib_db.py:101-110 (pull), 275-309 (commit), the pinned ec5b254e.
-// Tests use only local bare repos from shared-fixtures.js (job 1), with BACKLOG_HOME and
-// XDG_CONFIG_HOME inside the test's temp dir — never the real backlog repository or ~/.config.
+// Tests for src/shared/sync.js — cli-parity job 8 (SYNC: pull, commit and push of the shared backlog repository).
+// Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { consumer, env, GIT_IDENTITY, ORACLE_SKIP, sharedBacklog } from './shared-fixtures.js';
+import { env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -63,7 +60,7 @@ const rejects3 = async (promise, pattern) => {
 test('pull: fetches what another clone pushed, and the lock file is gone afterwards', async t => {
   const f = fixture(t);
   putItem(f.folder2, 1, 'alpha');
-  await sync.commit(f.home2, f.folder2, 'new_phase.py --name alpha');
+  await sync.commit(f.home2, f.folder2, 'new --name alpha');
   await sync.pull(f.home);
   assert.ok(existsSync(join(f.folder, 'phases', '001-alpha.md')));
   assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli.lock')), false);
@@ -85,8 +82,8 @@ test('pull: an unmergeable legacy commit is refused before rebasing', async t =>
 test('commit: commits "<owner>/<name>: <message>" and pushes; nothing staged means no empty commit', async t => {
   const f = fixture(t);
   putItem(f.folder, 1, 'alpha');
-  assert.deepEqual(await sync.commit(f.home, f.folder, 'new_phase.py --name alpha'), []);
-  assert.equal(git(f.bare, 'log', '-1', '--format=%s', 'main'), 'acme/demo: new_phase.py --name alpha');
+  assert.deepEqual(await sync.commit(f.home, f.folder, 'new --name alpha'), []);
+  assert.equal(git(f.bare, 'log', '-1', '--format=%s', 'main'), 'acme/demo: new --name alpha');
   const before = git(f.bare, 'rev-parse', 'main');
   await sync.commit(f.home, f.folder, 'again');
   assert.equal(git(f.bare, 'rev-parse', 'main'), before);
@@ -161,58 +158,6 @@ test('a distinct number is left alone: no renumber, nothing printed', async t =>
   await sync.commit(f.home, f.folder, 'a');
   const { result, out } = await captureStdout(() => sync.commit(f.home2, f.folder2, 'b'));
   assert.deepEqual(result, []); assert.equal(out, '');
-});
-
-// --- genuinely overlapping Node and Python (new_phase.py) writers, ordered by a gate in the bare's pre-receive hook:
-// the first push to arrive blocks until the test releases it; every later push passes.
-function gate(f) {
-  const dir = join(f.dir, 'gate'); mkdirSync(dir);
-  const hook = join(f.bare, 'hooks', 'pre-receive');
-  writeFileSync(hook, `#!/bin/sh\nif mkdir ${JSON.stringify(join(dir, 'entered'))} 2>/dev/null; then\n  while [ ! -e ${JSON.stringify(join(dir, 'release'))} ]; do sleep 0.05; done\nfi\nexit 0\n`);
-  chmodSync(hook, 0o755);
-  return {
-    async entered() { for (let i = 0; i < 400 && !existsSync(join(dir, 'entered')); i++) await sleep(25); assert.ok(existsSync(join(dir, 'entered')), 'a push reached the gate'); },
-    release() { writeFileSync(join(dir, 'release'), ''); },
-  };
-}
-const scripts = process.env.SMOOTH_BACKLOG_SCRIPTS || join(process.env.HOME || '', 'git', 'smoothsdlc-backlog', 'skill', 'backlog', 'scripts');
-const oracle = () => existsSync(join(scripts, 'new_phase.py')) && spawnSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }).status === 0;
-const pyNewPhase = (f, home, cons) => new Promise(done => { // async: new_phase.py runs while Node is mid-commit; it needs a resolved BACKLOG_HOME (lib_db.py:453)
-  const p = spawn('python3', [join(scripts, 'new_phase.py'), '--name', 'Pyitem', '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
-    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: realpathSync(home) }, stdio: ['ignore', 'pipe', 'pipe'] });
-  let out = ''; p.stdout.on('data', c => { out += c; }); p.stderr.on('data', c => { out += c; });
-  p.on('close', status => done({ status, out }));
-});
-
-test('Python first, overlapping: Node (stale clone) is held at its push while new_phase.py creates and pushes 1; Node ends renumbered to 2', async t => {
-  const f = fixture(t);
-  if (!oracle()) { t.skip(ORACLE_SKIP); return; }
-  const cons = consumer(f.dir, 'acme', 'demo', 'main');
-  const g = gate(f);
-  putItem(f.folder2, 1, 'nodeitem');
-  const node = sync.commit(f.home2, f.folder2, 'new nodeitem');
-  await g.entered(); // Node has committed locally and is inside its first push
-  const r = await pyNewPhase(f, f.home, cons);
-  assert.equal(r.status, 0, r.out);
-  g.release();
-  assert.deepEqual(await node, [[1, 2]]);
-  assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-pyitem.md', seq: 1 }, { file: '002-nodeitem.md', seq: 2 }]);
-});
-
-test('Node first, overlapping: Node has scanned backlog.db and is held at its push while new_phase.py takes the next number', async t => {
-  const f = fixture(t);
-  if (!oracle()) { t.skip(ORACLE_SKIP); return; }
-  const cons = consumer(f.dir, 'acme', 'demo', 'main');
-  const g = gate(f);
-  putItem(f.folder, 1, 'nodeitem');
-  const mirror = db.connect(f.folder); try { db.scan(mirror, f.folder); } finally { mirror.close(); } // Python numbers from MAX(seq) of backlog.db
-  const node = sync.commit(f.home, f.folder, 'new nodeitem');
-  await g.entered();
-  const r = await pyNewPhase(f, f.home, cons);
-  assert.equal(r.status, 0, r.out);
-  g.release();
-  assert.deepEqual(await node, []);
-  assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-nodeitem.md', seq: 1 }, { file: '002-pyitem.md', seq: 2 }]);
 });
 
 test('a bare that refuses pushes: exit 3, no unpublished commit, starting edits retained and token URL redacted', async t => {

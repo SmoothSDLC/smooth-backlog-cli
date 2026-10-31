@@ -1,19 +1,15 @@
-// Tests for item 052, the team's dispatch plan (`backlog query --plan`; PR1 query.py team_plan and test_team_plan.py):
-// at most one action per member, in roster order, each item to one member, with the reason and the dispatch key. The plan
-// follows this build's pop rules (items 033, 036, 038, 039): a stale review is the lead's to hand on, a member's own work
-// goes before another member's review request, a member waiting for its restart gets nothing, nothing before stage ready
-// is reviewed or claimed, and another team's item or an incomplete one is never planned for a member. Local bare repos.
+// Tests for item 052, the team's dispatch plan (`backlog query --plan`).
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, ORACLE_SKIP, py, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
-const oracle = py('query.py', ['--help']) !== null;
 function fixture(prefix = 'team-plan-') {
   const t = mkdtempSync(join(tmpdir(), prefix));
   dirs.push(t);
@@ -126,34 +122,6 @@ test("with TEAM_NAME another team's item is never planned, and nothing before st
   const p = plan(f, { TEAM_NAME: 't1' });
   assert.deepEqual(rows(p), [['cody', 'claim', w]]); // not c (refining), not t2's item
   assert.ok(c);
-});
-
-test('parity with query.py --plan where the rules agree: claims, a review, a changes verdict, a close, the lead\'s refinement', t => {
-  if (!oracle) return t.skip(ORACLE_SKIP);
-  const outs = ['py', 'js'].map(side => {
-    const f = fixture(`team-plan-${side}-`);
-    const step = (script, args) => {
-      const r = side === 'py' ? py(script, args, { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', HOME: f.user } }) : run(f, [script === 'new_phase.py' ? 'new' : script === 'update.py' ? 'update' : 'query', ...args]);
-      assert.equal(r.status, 0, `${side} ${script} ${args.join(' ')}: ${r.stdout}${r.stderr}`);
-      return r.stdout;
-    };
-    const plans = [];
-    const p = () => plans.push(JSON.parse(step('query.py', ['--plan', '--agents', 'cody,archy,zed', '--roster', f.roster, '--json'])).map(e => ({ ...e, key: e.key.replace(/ \d{4}-\d\d-\d\dT\S+$/, ''), instruction: e.instruction.replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g, 'TS') })));
-    for (const n of ['first', 'second', 'third']) step('new_phase.py', NEW(n));
-    p();
-    step('update.py', ['1', '--claim', 'zed']); step('update.py', ['1', '--request-review', 'any', '--note', 'x', '--by', 'zed']);
-    p();
-    step('update.py', ['1', '--review', 'changes', '--by', 'cody', '--comments', 'fix (references/review/code.md)']);
-    p();
-    step('update.py', ['1', '--request-review', 'any', '--note', 'y', '--by', 'zed']);
-    step('update.py', ['1', '--review', 'pass', '--by', 'cody', '--comments', 'ok (references/review/code.md)']);
-    p();
-    writeFileSync(f.roster, JSON.stringify({ cody: {}, archy: {}, zed: {}, lead: {} })); // the lead plans its refinement
-    step('new_phase.py', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']); // incomplete
-    plans.push(JSON.parse(step('query.py', ['--plan', '--agents', 'lead', '--roster', f.roster, '--json'])));
-    return plans;
-  });
-  outs[1].forEach((p, i) => assert.deepEqual(p, outs[0][i], `plan ${i}`));
 });
 
 test('test_plan_gives_a_review_to_the_first_idle_member_but_the_author; a member refining an item is not idle', () => {

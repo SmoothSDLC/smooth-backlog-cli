@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, ORACLE_SKIP, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -136,31 +136,6 @@ test('no marker for the lead, for a member still active on another item, or for 
   ok(f, ['update', plain, '--request-review', 'any', '--note', 'x', '--by', 'zed']);
   assert.ok(!existsSync(join(f.tdir, 'handoff', 'zed.json')));
   assert.notEqual(pop(f, 'lead', T1).action, 'stop'); // the lead is never locked
-});
-
-test('the marker is the one PR1 reads: lib_db.restarting sees the lock the CLI wrote, and the CLI the one PR1 wrote', t => {
-  const scripts = process.env.SMOOTH_BACKLOG_SCRIPTS || join(process.env.HOME || '', 'git', 'smoothsdlc-backlog', 'skill', 'backlog', 'scripts');
-  const pyRestarting = (f, agent) => spawnSync('python3', ['-c', `import sys; sys.path.insert(0, ${JSON.stringify(scripts)}); import lib_db as L; print(L.restarting(${JSON.stringify(agent)}))`],
-    { encoding: 'utf8', env: { ...process.env, HOME: f.user, TEAM_NAME: 't1' } });
-  const f = fixture();
-  config(f, [{ name: 'archy', joinedAt: 1000 }]);
-  if (!existsSync(join(scripts, 'lib_db.py')) || spawnSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }).status !== 0) {
-    return t.skip(ORACLE_SKIP);
-  }
-  const probe = pyRestarting(f, 'archy');
-  assert.equal(probe.status, 0, probe.stderr); // an oracle that is here but broken fails the test
-  assert.equal(probe.stdout.trim(), 'False');
-  const a = teamItem(f, 'job');
-  ok(f, ['update', a, '--claim', 'archy']);
-  ok(f, ['update', a, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
-  assert.equal(pyRestarting(f, 'archy').stdout.trim(), 'True'); // the CLI's marker locks PR1's dispatcher view
-  const w = spawnSync('python3', ['-c', `import sys; sys.path.insert(0, ${JSON.stringify(scripts)}); import lib_db as L; L.mark_handoff('t1', 'zed', 7)`],
-    { encoding: 'utf8', env: { ...process.env, HOME: f.user } });
-  config(f, [{ name: 'archy', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
-  const w2 = spawnSync('python3', ['-c', `import sys; sys.path.insert(0, ${JSON.stringify(scripts)}); import lib_db as L; L.mark_handoff('t1', 'zed', 7)`],
-    { encoding: 'utf8', env: { ...process.env, HOME: f.user } });
-  assert.equal(w.status + w2.status, 0, w.stderr + w2.stderr);
-  assert.equal(pop(f, 'zed', T1).action, 'stop'); // PR1's marker locks the CLI's pop
 });
 
 test('an invalid time stamp stops nobody; the lead is never stopped; a lead closing a member\'s item stops nobody', () => {

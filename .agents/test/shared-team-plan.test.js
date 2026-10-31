@@ -166,24 +166,24 @@ test('the plan through claims, a review, a changes verdict, a close and the lead
   {
     const f = fixture('team-plan-js-');
     const step = (script, args) => {
-      const r = run(f, [script === 'new_phase.py' ? 'new' : script === 'update.py' ? 'update' : 'query', ...args]);
+      const r = run(f, [script, ...args]);
       assert.equal(r.status, 0, `${script} ${args.join(' ')}: ${r.stdout}${r.stderr}`);
       return r.stdout;
     };
     const plans = [];
-    const p = () => plans.push(JSON.parse(step('query.py', ['--plan', '--agents', 'cody,archy,zed', '--roster', f.roster, '--json'])).map(e => ({ ...e, key: e.key.replace(/ \d{4}-\d\d-\d\dT\S+$/, ''), instruction: e.instruction.replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g, 'TS') })));
-    for (const n of ['first', 'second', 'third']) step('new_phase.py', NEW(n));
+    const p = () => plans.push(JSON.parse(step('query', ['--plan', '--agents', 'cody,archy,zed', '--roster', f.roster, '--json'])).map(e => ({ ...e, key: e.key.replace(/ \d{4}-\d\d-\d\dT\S+$/, ''), instruction: e.instruction.replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g, 'TS') })));
+    for (const n of ['first', 'second', 'third']) step('new', NEW(n));
     p();
-    step('update.py', ['1', '--claim', 'zed']); step('update.py', ['1', '--request-review', 'any', '--note', 'x', '--by', 'zed']);
+    step('update', ['1', '--claim', 'zed']); step('update', ['1', '--request-review', 'any', '--note', 'x', '--by', 'zed']);
     p();
-    step('update.py', ['1', '--review', 'changes', '--by', 'cody', '--comments', 'fix (references/review/code.md)']);
+    step('update', ['1', '--review', 'changes', '--by', 'cody', '--comments', 'fix (references/review/code.md)']);
     p();
-    step('update.py', ['1', '--request-review', 'any', '--note', 'y', '--by', 'zed']);
-    step('update.py', ['1', '--review', 'pass', '--by', 'cody', '--comments', 'ok (references/review/code.md)']);
+    step('update', ['1', '--request-review', 'any', '--note', 'y', '--by', 'zed']);
+    step('update', ['1', '--review', 'pass', '--by', 'cody', '--comments', 'ok (references/review/code.md)']);
     p();
     writeFileSync(f.roster, JSON.stringify({ cody: {}, archy: {}, zed: {}, lead: {} })); // the lead plans its refinement
-    step('new_phase.py', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']); // incomplete
-    plans.push(JSON.parse(step('query.py', ['--plan', '--agents', 'lead', '--roster', f.roster, '--json'])));
+    step('new', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']); // incomplete
+    plans.push(JSON.parse(step('query', ['--plan', '--agents', 'lead', '--roster', f.roster, '--json'])));
     assert.equal(plans.length, 5);
   }
 });

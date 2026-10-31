@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, recordSpawned, sharedBacklog, spawnedPids, spawnedGroups } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
@@ -17,14 +17,13 @@ import * as store from '../../src/shared/store.js';
 // chain) and still write into the temp folder when the test's cleanup removes it. Every process of the chain
 // inherits the CLI child's BACKLOG_HOME env; settleScenarioChildren kills the ones still alive (SIGTERM, then
 // SIGKILL) so the removal cannot race with them, and fails loudly if the chain is still alive after the settle.
-// Where /proc is absent (macOS, CI), the chain is settled the same way through the process groups the fixture
-// spawns the CLI children in (item 76 review) - group liveness is checked with kill(-pid, 0), which needs no /proc.
+// Linux only: the scan needs /proc. macOS is not supported by this suite; its support returns with item 085.
 function scenarioPids(d, procRoot = '/proc') {
   const mark = `BACKLOG_HOME=${join(d, 'home')}`;
   const out = [];
   let entries;
   try { entries = readdirSync(procRoot); } catch (e) {
-    if (e.code === 'ENOENT') return out; // no /proc (macOS, CI): verified empty - nothing to settle, and the cleanup still removes the folders
+    if (e.code === 'ENOENT') return out; // no /proc: nothing to scan (Linux-only suite; macOS returns with item 085)
     throw new Error(`scenarioPids: the process scan of ${procRoot} is unreadable: ${e.message}`); // item 76 review: a failed scan is not verified empty
   }
   for (const pid of entries) {
@@ -41,56 +40,36 @@ function scenarioPids(d, procRoot = '/proc') {
   return out;
 }
 async function settleScenarioChildren(d, procRoot = '/proc', rounds = 25) {
-  for (let round = 0; round < rounds; round++) {
+  let empty = 0; // item 76: settled only after two consecutive empty scans 100 ms apart - one empty look can fall between two processes of the chain
+  for (let round = 0; round < rounds && empty < 2; round++) {
     const pids = scenarioPids(d, procRoot);
-    if (!pids.length) return;
-    for (const p of pids) { try { process.kill(p, round ? 'SIGKILL' : 'SIGTERM'); } catch { /* exited in the meantime */ } }
-    await sleep(100);
-  }
-  const pids = scenarioPids(d, procRoot); // item 76 review: verify the writers stopped; fail loudly instead of removing the folders silently
-  if (pids.length) throw new Error(`the scenario's child processes are still alive after the settle (${rounds} rounds of SIGTERM, then SIGKILL): pids ${pids.join(', ')}`);
-}
-
-// item 76 review: where /proc is absent (macOS) the env scan sees nothing - the scenario's child processes are settled through the
-// process groups the fixture spawns the CLI children in; group liveness is checked with kill(-pid, 0), which needs no /proc.
-// The fixture records [pid, child, groupAliveAtLeaderDeath], and a group is signalled only while the fixture owns a
-// recorded process of it (item 76 review r4/r5: a reused group number is an unrelated same-user group) - the leader
-// alive means the group is ours only if the leader is still the retained child the fixture spawned; the leader dead
-// means the group is ours only if the fixture saw it still alive when the recorded leader died (the child's chain) -
-// a group dead at the leader's death is a number the fixture owns no live process of.
-async function settleScenarioGroups(d, groups, rounds = 25) {
-  const groupAlive = p => { try { process.kill(-p, 0); return true; } catch { return false; } };
-  const leaderAlive = p => { try { process.kill(p, 0); return true; } catch { return false; } };
-  const owned = (pid, child, groupAliveAtLeaderDeath) => {
-    if (!groupAlive(pid)) return false;
-    if (leaderAlive(pid)) return !!child && child.pid === pid && child.exitCode === null && child.signalCode === null;
-    return groupAliveAtLeaderDeath === true;
-  };
-  for (let round = 0; round < rounds; round++) {
-    if (!groups.some(([p, c, f]) => owned(p, c, f))) return;
-    for (const [p, c, f] of groups) {
-      if (!owned(p, c, f)) continue;
-      try { process.kill(-p, round ? 'SIGKILL' : 'SIGTERM'); } catch { /* exited in the meantime */ }
+    if (!pids.length) empty++;
+    else {
+      empty = 0;
+      for (const p of pids) { try { process.kill(p, round ? 'SIGKILL' : 'SIGTERM'); } catch { /* exited in the meantime */ } }
     }
     await sleep(100);
   }
-  const alive = groups.filter(([p, c, f]) => owned(p, c, f)).map(([p]) => p);
-  if (alive.length) throw new Error(`the scenario's child processes are still alive after the settle (${rounds} rounds of SIGTERM, then SIGKILL), scenario ${d}: process groups ${alive.join(', ')}`);
+  if (empty >= 2) return;
+  const pids = scenarioPids(d, procRoot); // item 76 review: verify the writers stopped; fail loudly instead of removing the folders silently
+  if (pids.length) throw new Error(`the scenario's child processes are still alive after the settle (${rounds} rounds of SIGTERM, then SIGKILL): pids ${pids.join(', ')}`);
 }
-// The scenario cleanup's settle: the /proc env scan where /proc exists, the process groups where it does not (item 76 review).
-async function settleScenario(d, procRoot = '/proc') {
-  if (existsSync(procRoot)) return settleScenarioChildren(d, procRoot);
-  return settleScenarioGroups(d, spawnedGroups(d));
+// item 76: remove a scenario folder; if the removal fails, name what is left and which scenario processes are still alive (no retry).
+function removeScenario(d) {
+  try { rmSync(d, { recursive: true, force: true }); }
+  catch (e) {
+    let left = [];
+    try { left = readdirSync(d, { recursive: true }).slice(0, 20); } catch { /* the listing itself failed */ }
+    throw new Error(`cleanup of ${d} failed (${e.code}): left ${left.join(', ') || 'nothing listed'}; scenario processes still alive: ${scenarioPids(d).join(', ') || 'none'}`);
+  }
 }
 
 // Two writers (a, b): separate temp dirs, each with its own clone of ONE backlog bare remote and its own consumer clone of acme/demo.
-// procRoot picks the cleanup's settle branch for this scenario: the default /proc uses the env scan, a root that does
-// not exist forces the process-group settle (item 76 review r4: the tests exercise the branch through the cleanup).
-function writers(t, { procRoot = '/proc' } = {}) {
+function writers(t) {
   const dirs = [mkdtempSync(join(tmpdir(), 'dbconf-a-')), mkdtempSync(join(tmpdir(), 'dbconf-b-'))];
   t.after(async () => {
-    for (const d of dirs) await settleScenario(d, procRoot); // item 76: the child git process of a killed or unsettled CLI child still writes the folder — the ENOTEMPTY writer of the cleanup
-    dirs.forEach(d => rmSync(d, { recursive: true, force: true }));
+    for (const d of dirs) await settleScenarioChildren(d); // item 76: the child git process of a killed or unsettled CLI child still writes the folder — the ENOTEMPTY writer of the cleanup
+    dirs.forEach(removeScenario);
   });
   const home = sharedBacklog(dirs[0]);
   const bare = join(dirs[0], 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
@@ -861,13 +840,6 @@ for (const [name, args, change] of [
 
 test('cleanup: a CLI child killed mid-push leaves its child git process writing the dbconf-* folder; the cleanup settles it, no ENOTEMPTY (item 76)', t => {
   const [a, b, { bare }] = writers(t);
-  const onProc = existsSync('/proc');
-  if (!onProc) {
-    // item 76 review: the chain is visible and settleable only where /proc exists. Skip BEFORE the gate starts,
-    // so a platform without /proc does not start the infinite gate (and its sh + sleep) it cannot settle.
-    t.skip('no /proc on this platform (macOS): the surviving chain cannot be seen or settled (item 76)');
-    return;
-  }
   assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   // A pre-receive gate that keeps a's push in flight and writes a new probe file into the shared bare
   // (inside dbconf-a-*) every millisecond: when the CLI child dies mid-push, its child git process
@@ -889,10 +861,6 @@ test('cleanup: a CLI child killed mid-push leaves its child git process writing 
 test('cleanup settle: a child process that survives the settle is reported loudly, not removed silently (item 76 review)', async t => {
   const d = mkdtempSync(join(tmpdir(), 'dbconf-s-'));
   t.after(() => rmSync(d, { recursive: true, force: true }));
-  if (!existsSync('/proc')) {
-    t.skip('no /proc on this platform (macOS): the settle is a no-op there (item 76)');
-    return; // item 76 review: t.skip does not stop execution - the process-scan assertions below cannot run without /proc
-  }
   // a node child that traps SIGTERM and writes the ready file only after the trap is installed: the parent starts
   // the settle only after the ready file, so the settle's SIGTERM always hits a child that traps it - no start-up
   // race (item 76 review; the CI failure at cbc7324). The child lives until the test's explicit SIGKILL, so it is
@@ -913,211 +881,17 @@ test('cleanup settle: a child process that survives the settle is reported loudl
   assert.equal(scenarioPids(d).length, 0);
 });
 
-test('cleanup settle: a process that exits between the process scan and the environ read is skipped, not fatal (item 76 review)', async t => {
-  const d = mkdtempSync(join(tmpdir(), 'dbconf-e-'));
-  t.after(() => rmSync(d, { recursive: true, force: true }));
-  if (!existsSync('/proc')) {
-    t.skip('no /proc on this platform (macOS): the env scan cannot run (item 76 review)');
-    return; // item 76 review: t.skip does not stop execution - the process-scan assertions below cannot run without /proc
-  }
-  const root = join(d, 'procscan');
-  mkdirSync(root);
-  execFileSync('mkfifo', [join(d, 'die')]); // the child blocks on this fifo's open; the test's write-open triggers the child's exit
-  execFileSync('mkfifo', [join(d, 'free')]); // the reaper blocks on this fifo; the test's byte paces it to the next child
-  const reaper = spawn(process.execPath, ['-e',
-    'const fs = require("node:fs"); const cp = require("node:child_process");' +
-    '(async () => { const N = Number(process.argv[3]);' +
-    ' fs.writeFileSync(process.argv[1], "");' +
-    ' for (let i = 0; i < N; i++) {' +
-    '  const c = cp.spawn(process.execPath, ["-e", \'const fs = require("node:fs"); fs.openSync(process.argv[1], "r"); process.exit(0);\', process.argv[4]], { stdio: "ignore", env: { BACKLOG_HOME: process.argv[5] } });' +
-    '  fs.writeFileSync(process.argv[2], String(c.pid));' +
-    '  const fd = fs.openSync(process.argv[6], "r"); const buf = Buffer.alloc(1); fs.readSync(fd, buf, 0, 1, null); fs.closeSync(fd);' +
-    '  await new Promise(r => setImmediate(r));' +
-    ' } })();',
-    join(d, 'reaper-ready'), join(d, 'current-pid'), '60', join(d, 'die'), join(d, 'home'), join(d, 'free')], { stdio: 'ignore' });
-  reaper.unref();
-  const reaperExited = new Promise(r => reaper.once('exit', r)); // registered at spawn: the reaper exits during the test body, the event fires only once
-  t.after(async () => { // watchdog: a reaper that does not exit must not hang the cleanup
-    const watchdog = setTimeout(() => { try { reaper.kill('SIGKILL'); } catch {} }, 2000);
-    await reaperExited;
-    clearTimeout(watchdog);
-  });
-  // A reaper spawns the children, and each child blocks on the die fifo's open: the test's write-open is the
-  // child's death trigger, and the reaper (blocked on the free fifo) reaps the child right after - the reap
-  // then races the scans the test runs immediately after: Linux returns ESRCH for the environ of a process
-  // that exits between the /proc/<pid> lookup and the environ read of one of those scans (the CI failure at
-  // 95a3db3), and the scan must skip it, not throw
-  for (let i = 0; i < 100 && !existsSync(join(d, 'reaper-ready')); i++) await sleep(20);
-  assert.ok(existsSync(join(d, 'reaper-ready')), 'the reaper is up');
-  let last = '';
-  let prevPid = 0;
-  for (let i = 0; i < 60; i++) {
-    let pid;
-    for (let k = 0; k < 100; k++) {
-      const v = existsSync(join(d, 'current-pid')) ? readFileSync(join(d, 'current-pid'), 'utf8') : '';
-      if (v && v !== last) { pid = Number(v); last = v; break; }
-      await sleep(10);
-    }
-    assert.ok(pid, `the reaper spawned the child of iteration ${i}`);
-    if (prevPid) rmSync(join(root, String(prevPid)), { recursive: true, force: true }); // one child per scan: the previous entry is gone
-    mkdirSync(join(root, String(pid)));
-    symlinkSync(`/proc/${pid}/environ`, join(root, String(pid), 'environ'));
-    assert.ok(scenarioPids(d, root).includes(pid), 'the child is visible to the scan while it is alive');
-    writeFileSync(join(d, 'die'), 'x'); // the write-open triggers the child's exit; the reaper reaps it
-    writeFileSync(join(d, 'free'), 'x'); // the reaper unblocks and moves to the next child
-    for (let k = 0; k < 30; k++) scenarioPids(d, root); // a process that exits in the ESRCH window is skipped, not fatal (item 76 review)
-    for (let k = 0; k < 40 && scenarioPids(d, root).length; k++) await sleep(10);
-    assert.deepEqual(scenarioPids(d, root), [], `the scan reports no process of the child of iteration ${i}`);
-    prevPid = pid;
-  }
-});
-
-test('cleanup: scenarioPids sees the processes carrying the fixture env; without /proc (macOS) it sees none (item 76 review)', async t => {
+test('cleanup: scenarioPids sees the processes carrying the fixture env (item 76 review)', async t => {
   const d = mkdtempSync(join(tmpdir(), 'dbconf-p-'));
   t.after(() => rmSync(d, { recursive: true, force: true }));
-  // platform-independent: without /proc (macOS, CI) scenarioPids returns [] instead of throwing
-  assert.deepStrictEqual(scenarioPids(d, '/no-such-proc'), [], 'no /proc (macOS, CI): nothing to settle, and no throw');
-  // platform-independent: a scan whose root is not a directory failed - it is not verified empty, it is reported loudly (item 76 review)
+  // a scan whose root is not a directory failed - it is not verified empty, it is reported loudly (item 76 review)
   const notADir = join(d, 'not-a-dir');
   writeFileSync(notADir, '');
   assert.throws(() => scenarioPids(d, notADir), /unreadable/, 'a failed process scan is not verified empty');
-  if (!existsSync('/proc')) {
-    t.skip('no /proc on this platform (macOS): the env scan cannot run (item 76)');
-    return; // item 76 review: t.skip does not stop execution - the env-scan assertion below cannot run without /proc
-  }
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
   child.unref();
   t.after(() => { try { child.kill('SIGKILL'); } catch {} });
   for (let i = 0; i < 100 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
   assert.ok(scenarioPids(d).includes(child.pid), 'a process carrying the fixture env is found through /proc');
   child.kill('SIGKILL');
-});
-
-test('cleanup: the child processes of a killed CLI child are settled through its process group, without /proc (item 76 review)', async t => {
-  const d = mkdtempSync(join(tmpdir(), 'dbconf-g-'));
-  // a detached node parent and its sh writer child in the same process group: the CLI child killed mid-push and
-  // the surviving gate chain, with no /proc the settle could scan (item 76 review: the same race remained there)
-  const writerPidFile = join(d, 'writer-pid');
-  let parent;
-  // the fallback kills the WHOLE group, not only the Node parent: the writer outlives the parent, and an assertion
-  // failure before the settle must not leave the infinite shell writer running (item 76 review r4). It is registered
-  // BEFORE the folder removal: hooks run in registration order, and the writer is still touching d when the removal
-  // would run.
-  t.after(() => { if (parent) { try { process.kill(-parent.pid, 'SIGKILL'); } catch {} } });
-  t.after(() => rmSync(d, { recursive: true, force: true }));
-  parent = spawn(process.execPath, ['-e',
-    'const sh = require("node:child_process").spawn("sh", ["-c", "i=0; while :; do touch " + process.argv[1] + "-$i 2>/dev/null; i=$((i+1)); sleep 0.001; done"], { stdio: "ignore" }); require("node:fs").writeFileSync(process.argv[2], String(sh.pid)); setTimeout(() => {}, 1e9)',
-    join(d, 'probe'), writerPidFile], { env: { ...process.env, BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore', detached: true });
-  parent.unref();
-  for (let i = 0; i < 100 && !existsSync(writerPidFile); i++) await sleep(50);
-  assert.ok(existsSync(writerPidFile), 'the writer child is alive in the group');
-  const writer = Number(readFileSync(writerPidFile, 'utf8'));
-  assert.doesNotThrow(() => process.kill(writer, 0), 'the writer is alive before the settle');
-  parent.kill('SIGKILL'); // the CLI child dies mid-push: the writer survives in the group
-  await new Promise(r => parent.once('exit', r));
-  recordSpawned(d, parent.pid); // item 76 review r5: the fixture's record captures the group as alive at the leader's death (the writer is still running) - the settle settles only the groups it owns a recorded process of
-  await settleScenarioGroups(d, spawnedGroups(d)); // item 76 review: the no-/proc settle must kill the group before the folders are removed
-  assert.throws(() => process.kill(-parent.pid, 0), 'every child process of the group is settled, without /proc');
-});
-
-test('cleanup: a group member that survives the no-/proc settle is reported loudly, not removed silently (item 76 review)', async t => {
-  const d = mkdtempSync(join(tmpdir(), 'dbconf-g-'));
-  // the writer traps SIGTERM and marks itself ready only after the trap: one SIGTERM round of the settle cannot
-  // kill it, so the surviving group must be reported loudly (item 76 review: a silent return races the folder removal)
-  const ready = join(d, 'gate-ready');
-  const parent = spawn(process.execPath, ['-e',
-    `require("node:child_process").spawn("sh", ["-c", 'trap "" TERM; touch ${ready}; i=0; while :; do touch ${join(d, 'probe')}-$i 2>/dev/null; i=$((i+1)); sleep 0.001; done'], { stdio: "ignore" }); setTimeout(() => {}, 1e9)`,
-  ], { env: { ...process.env, BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore', detached: true });
-  parent.unref();
-  // item 76 review r5: the group-kill fallback is registered BEFORE the folder removal - on a failure while the
-  // infinite writer is active, the hooks run in registration order, and the writer is still touching d when the
-  // removal would run (the preceding group test has this order; the writers' cleanup settles before the removal)
-  t.after(() => { try { process.kill(-parent.pid, 'SIGKILL'); } catch {} });
-  t.after(() => rmSync(d, { recursive: true, force: true }));
-  for (let i = 0; i < 100 && !existsSync(ready); i++) await sleep(50);
-  assert.ok(existsSync(ready), 'the writer traps SIGTERM before the settle starts');
-  await assert.rejects(settleScenarioGroups(d, [[parent.pid, parent, true]], 1), /still alive/);
-  try { process.kill(-parent.pid, 'SIGKILL'); } catch {}
-  for (let i = 0; i < 40; i++) { try { process.kill(-parent.pid, 0); } catch { break; } await sleep(50); }
-  assert.throws(() => process.kill(-parent.pid, 0), 'the test left no group behind');
-});
-
-test('cleanup: a live process group whose leader is not the recorded child is not signalled by the no-/proc settle (item 76 review)', async t => {
-  const d = mkdtempSync(join(tmpdir(), 'dbconf-g-'));
-  t.after(() => rmSync(d, { recursive: true, force: true }));
-  // a detached child that traps SIGTERM and marks the trap: its group number is recorded, but the leader is alive
-  // and not the retained child of the scenario - the settle must not signal a number it does not own (item 76
-  // review r4: a reused group number is an unrelated same-user group)
-  const marker = join(d, 'signalled');
-  const ready = join(d, 'group-ready');
-  const foreign = spawn(process.execPath, ['-e',
-    `process.on("SIGTERM", () => require("node:fs").writeFileSync(process.argv[1], "")); require("node:fs").writeFileSync(process.argv[2], ""); setTimeout(() => {}, 1e9)`,
-    marker, ready], { env: { ...process.env, BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore', detached: true });
-  foreign.unref();
-  t.after(() => { try { process.kill(-foreign.pid, 'SIGKILL'); } catch {} });
-  for (let i = 0; i < 100 && !existsSync(ready); i++) await sleep(50);
-  assert.ok(existsSync(ready), 'the child traps SIGTERM before the settle starts');
-  await settleScenarioGroups(d, [[foreign.pid]], 2); // the group's number is recorded without the retained child: the settle settles nothing
-  assert.doesNotThrow(() => process.kill(foreign.pid, 0), 'the group was settled only while owned, not by its number alone');
-  assert.ok(!existsSync(marker), 'no SIGTERM reached a group the settle does not own');
-  try { process.kill(foreign.pid, 'SIGKILL'); } catch {}
-  for (let i = 0; i < 40; i++) { try { process.kill(foreign.pid, 0); } catch { break; } await sleep(50); }
-  assert.throws(() => process.kill(foreign.pid, 0), 'the test left no child behind');
-});
-
-test('cleanup: a live group whose number was recorded under an exited leader is not signalled by the no-/proc settle (item 76 review)', async t => {
-  const d = mkdtempSync(join(tmpdir(), 'dbconf-g-'));
-  // a detached child that exits with no members: its group number is recorded, and the group was dead when the
-  // recorded leader died - the fixture owns no live process of that number (item 76 review r5: a group dead at
-  // the leader's death may have been re-issued to an unrelated same-user group)
-  const ready = join(d, 'leader-ready');
-  const leader = spawn(process.execPath, ['-e', 'require("node:fs").writeFileSync(process.argv[1], "")', ready],
-    { env: { ...process.env, BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore', detached: true });
-  leader.unref();
-  for (let i = 0; i < 100 && !existsSync(ready); i++) await sleep(50);
-  assert.ok(existsSync(ready), 'the recorded leader ran');
-  for (let i = 0; i < 100; i++) { try { process.kill(-leader.pid, 0); } catch { break; } await sleep(50); }
-  assert.throws(() => process.kill(-leader.pid, 0), 'the recorded leader exited and its group is dead (no members remained)');
-  // the settle is given the pair as the fixture would hold it after the number is re-issued: a live group whose
-  // leader exited while its members remain, recorded under a leader whose group was dead at its death. The
-  // writer traps SIGTERM and marks it if a signal reaches a group the settle does not own
-  const marker = join(d, 'signalled');
-  const readyW = join(d, 'writer-ready');
-  const foreign = spawn(process.execPath, ['-e',
-    `require("node:child_process").spawn("sh", ["-c", \`trap "touch ${marker}" TERM; touch ${readyW}; i=0; while :; do touch ${join(d, 'probe')}-$i 2>/dev/null; i=$((i+1)); sleep 0.001; done\`], { stdio: "ignore" }); setTimeout(() => {}, 1e9)`,
-  ], { env: { ...process.env, BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore', detached: true });
-  foreign.unref();
-  t.after(() => { try { process.kill(-foreign.pid, 'SIGKILL'); } catch {} });
-  t.after(() => rmSync(d, { recursive: true, force: true }));
-  for (let i = 0; i < 100 && !existsSync(readyW); i++) await sleep(50);
-  assert.ok(existsSync(readyW), 'the foreign writer traps SIGTERM before the settle starts');
-  foreign.kill('SIGKILL'); // the group's leader exits while its members remain: a reused group number
-  await new Promise(r => foreign.once('exit', r));
-  assert.doesNotThrow(() => process.kill(-foreign.pid, 0), 'the group is alive with the leader exited (the writer remains)');
-  await settleScenarioGroups(d, [[foreign.pid, leader, false]], 2);
-  assert.ok(!existsSync(marker), 'no SIGTERM reached a group the fixture owns no recorded process of (item 76 review)');
-  assert.doesNotThrow(() => process.kill(-foreign.pid, 0), 'the settle settled only the groups it owns a recorded process of');
-  try { process.kill(-foreign.pid, 'SIGKILL'); } catch {}
-  for (let i = 0; i < 40; i++) { try { process.kill(-foreign.pid, 0); } catch { break; } await sleep(50); }
-  assert.throws(() => process.kill(-foreign.pid, 0), 'the test left no group behind');
-});
-
-test('cleanup: the writers settle the surviving git chain of a killed CLI child through the process groups, without /proc (item 76 review)', async t => {
-  // the writers' cleanup of this scenario takes the no-/proc branch: it settles the scenario through the recorded
-  // process groups instead of the env scan, and the test does not settle anything itself (item 76 review r4: the
-  // branch must be driven through the cleanup, not beside it)
-  const [a, b, { bare }] = writers(t, { procRoot: '/no-such-proc' });
-  assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  const gate = join(bare, 'hooks', 'pre-receive');
-  writeFileSync(gate, `#!/bin/sh\ni=0\nwhile :; do touch ${join(bare, 'refs', 'probe')}-$i 2>/dev/null; i=$((i+1)); sleep 0.001; done\n`);
-  chmodSync(gate, 0o755);
-  const r = cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp, timeout: 2500 });
-  assert.notEqual(r.status, 0, `the CLI child must be killed mid-push: ${r.stdout}${r.stderr}`);
-  const pids = [...spawnedPids(a.tmp)];
-  assert.ok(pids.length >= 1, 'the fixture recorded the CLI children of this scenario');
-  // the writers' cleanup was registered first and runs first (hooks are FIFO): it settles the groups and removes
-  // the folders, and only then does this hook check that every recorded group is gone - without the no-/proc branch
-  // of the cleanup the surviving git chain is still alive and this assertion fails (item 76 review r4)
-  t.after(() => { for (const pid of pids) assert.throws(() => process.kill(-pid, 0), `the writers' cleanup settled the group of recorded CLI child ${pid}`); });
-  void b;
 });

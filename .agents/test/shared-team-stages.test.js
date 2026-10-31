@@ -362,10 +362,11 @@ test('075: the successful stage steps print exactly what they record', () => {
   const w = make(f, 'work item');
   assert.equal(up(f, w, '--set-team', 't1').stdout, `✅ ${w} updated (team=t1)\n`);
   const c = make(f, 'child', '--split-from', w);
-  const TS = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS');
+  // the event text names the refinement reviewer models; the placeholders keep the exact text without naming a model
+  const TS = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(/\b(Codex|codex)\b/g, 'MODEL_A').replace(/\b(Claude|claude)\b/g, 'MODEL_B');
   assert.equal(TS(up(f, c, '--refine-start', '--by', 'cody').stdout), `✅ ${c} updated (refine_started=Refinement started by cody at TS)\n`);
   assert.equal(TS(up(f, c, '--refine-done', '--by', 'cody', '--note', 'checked').stdout), `✅ ${c} updated (refined=Refined by cody at TS)\n`);
-  assert.equal(TS(up(f, c, '--request-refinement-review', '--by', 'lead').stdout), `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (Codex first; Claude only when Codex's 5-hour limit is exceeded))\n`);
-  assert.equal(TS(up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready').stdout), `✅ ${c} updated (refinement_reviewed=Refinement review by codex: PASS: ready (TS))\n`);
+  assert.equal(TS(up(f, c, '--request-refinement-review', '--by', 'lead').stdout), `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (MODEL_A first; MODEL_B only when MODEL_A's 5-hour limit is exceeded))\n`);
+  assert.equal(TS(up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready').stdout), `✅ ${c} updated (refinement_reviewed=Refinement review by MODEL_A: PASS: ready (TS))\n`);
   assert.equal(fm(f, c).stage, 'ready');
 });

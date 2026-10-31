@@ -2,13 +2,14 @@
 // Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { consumer, env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -442,6 +443,33 @@ test('overlapping, the other writer first: a commit held at its push while backl
   assert.equal(r.status, 0, r.out);
   assert.deepEqual(held.v, [[1, 2]]);
   assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-otheritem.md', seq: 1 }, { file: '002-nodeitem.md', seq: 2 }]);
+});
+
+test('075: CLI steps publish a clean, in-sync state: after new and archive the tree is clean and the local mirror equals the published database', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'sync-cli-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const home = sharedBacklog(dir);
+  const cons = consumer(dir, 'acme', 'demo', 'main');
+  mkdirSync(join(dir, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  const bare = join(dir, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  const folder = join(home, 'acme', 'demo');
+  const sha256 = p => createHash('sha256').update(readFileSync(p)).digest('hex');
+  const verify = (label, files) => {
+    assert.equal(git(home, 'status', '--porcelain', '--untracked-files=all'), '', label + ': the clone tree is clean after the publish');
+    const clone = mkdtempSync(join(dir, 'verify-'));
+    git(dir, 'clone', '-q', bare, clone);
+    assert.ok(sha256(join(folder, 'backlog.db')) === sha256(join(clone, 'acme', 'demo', 'backlog.db')), label + ': the local mirror database equals the published one');
+    assert.deepEqual(git(bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(x => x.includes('phases/')).sort(), files, label);
+    rmSync(clone, { recursive: true, force: true });
+  };
+  const run = args => { const r = cli(args, { cwd: cons, tmp: dir }); assert.equal(r.status, 0, r.stdout + r.stderr); };
+  run(['new', '--name', 'Alpha', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
+  verify('after new 1', ['acme/demo/phases/001-alpha.md']);
+  run(['new', '--name', 'Beta', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
+  verify('after new 2', ['acme/demo/phases/001-alpha.md', 'acme/demo/phases/002-beta.md']);
+  run(['archive', '2', '--force']);
+  verify('after archive', ['acme/demo/archive/phases/002-beta.md', 'acme/demo/phases/001-alpha.md']);
 });
 
 test('overlapping, this writer first: a commit held at its push keeps 1 when a second git writer in the same clone publishes it with item 2 on top', async t => {

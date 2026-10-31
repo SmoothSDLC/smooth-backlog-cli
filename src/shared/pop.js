@@ -102,7 +102,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   let act = reviews.find(x => x.fm.review_state === 'in_review' && x.fm.reviewer === me);
   if (!lead && team.restarting(me, team.teamLead(a.lead))) act = { name: 'stop', r: null, f: repo, say: team.STOP_TEXT }; // query.py:201-202: handed off, no new work until a fresh session
   // query.py:197-221: the item you work on, your refinement in progress, then your passed and your changes-requested items
-  let mine = own.filter(({ fm, undone }) => fm.claimed_by === me && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on && team.isReady(fm) // waiting for a verdict or a run is not work; nor an item before ready
+  // item 082: heldBy matches an earlier session of the same card - a new session continues the item
+  let mine = own.filter(({ fm, undone }) => team.heldBy(fm.claimed_by, me) && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on && team.isReady(fm) // waiting for a verdict or a run is not work; nor an item before ready
     && !undone.some(d => d.foreign && d.item?.status !== 'done')); // item 042: nor one that waits on another repository (named below as the work to do first)
   // query.py:203-211 (item 039, spec section 8): while its team works the split items the lead's work item waits: no busy
   // continue (proof runs 01 and 02 died of qwen-code loop detection while the lead polled), but a passed or
@@ -111,7 +112,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   if (lead) {
     const leads = new Set(mine.map(x => String(x.r.seq)));
     // every open item of the team on this branch, incomplete ones included: an incomplete split child is the team's work too
-    busy = here.filter(x => x.fm.team && team.inTeam(x.fm) && x.fm.claimed_by !== me && x.r.status !== 'done' && !leads.has(String(x.r.seq))
+    // item 082: an earlier session of the same card holds the lead's own work, not the team's
+    busy = here.filter(x => x.fm.team && team.inTeam(x.fm) && !team.heldBy(x.fm.claimed_by, me) && x.r.status !== 'done' && !leads.has(String(x.r.seq))
       && !team.undoneDependencies(folder, x.fm).some(d => (d.item && !d.foreign && leads.has(String(d.item.seq))) || d.foreign)); // an item that waits on another repository is no work of the team here (item 042)
     // item 042: team items that wait only on other repositories: the lead does not go on here, it is told where to go
     const away = here.filter(x => x.fm.team && team.inTeam(x.fm) && x.r.status !== 'done' && !leads.has(String(x.r.seq)) && team.undoneDependencies(folder, x.fm).some(d => d.foreign));

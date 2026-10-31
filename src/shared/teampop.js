@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { caller } from './lifecycle.js';
 import { redact } from './safety.js';
 import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
-import { gitBranch, strip, teamLead, teamName, teamScope } from './team.js';
+import { gitBranch, heldBy, strip, teamLead, teamName, teamScope } from './team.js';
 
 const BIN = process.env.BACKLOG_TEST_SELF || fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)); // the test seam: a wrapper that fails on cue
 const OPEN = ['pending', 'in_progress'];
@@ -57,7 +57,8 @@ export async function run(argv) {
   const ours = f => strip(f.team || '') === a.team && !f.stage && OPEN.includes(f.status) && f.repository === own && f.branch === branch;
   const skipped = [];
   let action = 'idle'; let item = null;
-  const held = work.find(i => strip(i.fm.claimed_by || '') === agent);
+  // item 082: heldBy also matches the lead's earlier session of the same card (the continuation)
+  const held = work.find(i => heldBy(strip(i.fm.claimed_by || ''), agent));
   if (held) { action = 'continue'; item = held.fm.phase; }
   // a refused claim is update's refusal (exit 1, '❌ <item>: <why>' on stdout); any other failure ends the command (Codex review of 056)
   const refused = r => r.status === 1 && /^❌ /m.test(r.stdout) && !/❌ backlog:/.test(r.stderr);
@@ -81,7 +82,7 @@ export async function run(argv) {
     try { shown = JSON.parse(q.stdout); } catch { shown = null; }
     if (q.status !== 0 || !shown) return fail(q); // only the reason: the read's own output names the item's file
     const f = shown.front_matter || {};
-    if (strip(f.claimed_by || '') !== agent || !ours(f)) {
+    if (!heldBy(strip(f.claimed_by || ''), agent) || !ours(f)) {
       return die(`${item} changed before team pop could show it (claimed by ${f.claimed_by || 'nobody'}, status ${f.status}); run backlog team pop again`, 1);
     }
   }

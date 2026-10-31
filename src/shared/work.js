@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { caller } from './lifecycle.js';
 import { redact } from './safety.js';
 import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
-import { strip, teamLead, teamScope } from './team.js';
+import { heldBy, strip, teamLead, teamScope } from './team.js';
 
 const BIN = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
 const VALUE = ['agent', 'lead', 'roster', 'scope', 'branch'];
@@ -80,7 +80,9 @@ export async function run(argv) {
   }
   const fmNow = item?.front_matter ?? {};
   const holds = { claim: fmNow.claimed_by, review: fmNow.reviewer, refine: fmNow.refiner }[p.action];
-  if (marked && item && holds !== a.agent) { // handed on between the mark and the read
+  // item 082: heldBy matches an earlier session of the same card - the item is not handed on when the card
+  // keeps it in a new session
+  if (marked && item && !heldBy(holds ?? '', a.agent)) { // handed on between the mark and the read
     return die(`${p.item} was handed on before backlog work could read it (claimed by ${fmNow.claimed_by || 'nobody'}); run backlog work again`, 1);
   }
   const out = { ...p, marked, front_matter: item ? item.front_matter : null, body: item ? item.body : null };

@@ -10,6 +10,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { load } from './store.js';
+import { heldBy } from './team.js';
 
 const LEVELS = ['overall', 'repository', 'branch', 'team', 'agent'];
 const warned = new Set();
@@ -56,7 +57,8 @@ function scopes(repo, fm, agent) {
     repository: { key: repo, of: x => x.repository === repo },
     branch: { key: `${repo} ${fm.branch || ''}`, of: x => x.repository === repo && (x.fm.branch || '') === (fm.branch || '') },
     team: { key: fm.team || '', of: x => Boolean(fm.team) && x.fm.team === fm.team, skip: !fm.team },
-    agent: { key: agent, of: x => holderOf(x.fm) === agent },
+    // item 082: work held by an earlier session of the same card counts against the agent's limit (the continuation)
+    agent: { key: agent, of: x => heldBy(holderOf(x.fm), agent) },
   };
 }
 // null when the agent may start the item, else why not (the limit, the count and the items holding it).

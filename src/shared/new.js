@@ -161,6 +161,7 @@ async function create(argv, { home, folder, repo, team }) {
       commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(), updated_by: actor(),
     };
     if (a.team) Object.assign(fm, { team: strip(a.team), stage: 'refining', refiner: '' }); // new_phase.py:126-127
+    else if (a.splitFrom) Object.assign(fm, { stage: 'refining', refiner: '' }); // item 088: a split slice needs its refinement review too, with or without a team field
     if (a.chunk) fm.chunk = true;
     if (refs.length) fm.review_refs = refs;
     for (const [k, v] of [['estimate_min', a.estimate], ['complexity', a.complexity], ['layer', a.layer]]) if (v !== undefined) fm[k] = v;

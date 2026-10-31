@@ -8,7 +8,7 @@ import { now } from './store.js';
 import { acceptHandoff, recordHandoff, rejectHandoff } from './handoff-commands.js';
 import {
   offeredTo, teamName,
-  REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
+  REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
   STOP_TEXT, restarting, staleReview, teamLead, teamScope, undoneDependencies,
 } from './team.js';
 
@@ -59,12 +59,15 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages.
   // Item 088: a split slice is in stage refining with or without a team field, so the gate covers it too.
   if (!isReady(fm)) reject(`team ${fm.team || 'none'} item in stage ${fm.stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`);
-  if (who && who !== agent) reject(`claimed by ${who} since ${fm.claimed_at}; message ${who} or pick another item`);
+  // item 082: a new session of the same card continues the item (no takeover, no lead reassignment): the
+  // holder check and the "already holding" checks treat the earlier session's item as the agent's own
+  const cont = heldBy(who, agent);
+  if (who && who !== agent && !cont) reject(`claimed by ${who} since ${fm.claimed_at}; message ${who} or pick another item`);
   const undone = undoneDependencies(folder, fm);
   if (undone.length) reject(`dependencies not done: ${undone.map(describeDependency).join('; ')}`);
-  const refusal = who === agent ? null : claimRefusal(folder, agent);
+  const refusal = cont ? null : claimRefusal(folder, agent);
   if (refusal && !force) reject(refusal);
-  const wip = who === agent && fm.status === 'in_progress' ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // item 034: --force never passes a limit; a reclaim of a pending item is a start
+  const wip = cont && fm.status === 'in_progress' ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // item 034: --force never passes a limit; a reclaim of a pending item is a start
   if (wip) reject(wip);
   // item 082: the claiming session joins the list; item 088: the claim's session becomes the author session - a
   // Cody review by that same session is refused (the same card reviews only in a fresh session).
@@ -281,18 +284,25 @@ export function waitingDone({ fm }, by) {
   return { event: 'wait_done', text: `WAIT DONE ${now()} ${by || fm.claimed_by || ''}` };
 }
 
-export function closeItem({ fm }, by, summary) {
+export function closeItem({ fm }, by, summary, reason) {
   if (!strip(summary || '')) reject('--close needs --summary "<what was delivered>"');
-  if (needsReview(fm) && fm.review_state !== 'passed') {
-    reject(`review_state is ${fm.review_state || 'none'}; an item with review_refs closes only after a passing review (--request-review, then another agent's --review pass)`);
-  }
+  const owner = by === 'owner';
+  // item 088: the owner closes on a written decision, recorded as such; no review required
+  if (owner && !strip(reason || '')) reject(`--close --by owner needs --reason "<the owner's decision>"`);
   const closer = by || fm.claimed_by || '';
   if (!closer) reject('nobody claimed this item: pass --by <agent>');
-  // item 039 (spec section 9, owner 2026-10-25): only the claimer closes its item, else the team lead
-  if (fm.claimed_by && closer !== fm.claimed_by && closer !== teamLead()) reject(`only the claimer (${fm.claimed_by}) closes it, else the team lead (${teamLead()}); not ${closer}`);
-  if (!fm.claimed_by && fm.team && closer !== teamLead()) reject(`nobody holds this item of team ${fm.team}: the team lead (${teamLead()}) closes it; not ${closer}`); // a team's item (beyond the oracle)
+  // item 039 (spec section 9, owner 2026-10-25): only the claimer closes its item, else the team lead; the owner closes on a decision
+  if (fm.claimed_by && closer !== fm.claimed_by && closer !== teamLead() && closer !== 'owner') reject(`only the claimer (${fm.claimed_by}) closes it, else the team lead (${teamLead()}); not ${closer}`);
+  if (!fm.claimed_by && fm.team && closer !== teamLead() && closer !== 'owner') reject(`nobody holds this item of team ${fm.team}: the team lead (${teamLead()}) closes it; not ${closer}`); // a team's item (beyond the oracle)
+  // item 088: both review stages must have passed for the current work commit, with or without review_refs
+  if (!owner) {
+    const refusal = stageRefusal(fm);
+    if (refusal) reject(refusal);
+  }
   fm.status = 'done';
-  return { event: 'closed', text: `## Closed by ${closer} at ${now()}\n\n${summary}` };
+  return { event: 'closed', text: owner
+    ? `## Closed by owner at ${now()} (owner decision: ${strip(reason)})\n\n${summary}`
+    : `## Closed by ${closer} at ${now()}\n\n${summary}` };
 }
 
 // update.py:181-241: the guards and the one team action of a call. ctx = {fm, slug, folder, repo, body, incomplete, given}:
@@ -408,7 +418,8 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
         outputs: a['handoff-outputs'], pickup: a['handoff-pickup'], risks: a['handoff-risks'], by: a.by || fm.claimed_by }));
       case 'accept-handoff': return handoffStep(slug, item, acceptHandoff(item, { dependent: a['accept-handoff'], checks: a.checks, by: a.by, lead: teamLead() }));
       case 'reject-handoff': return handoffStep(slug, item, rejectHandoff(item, { dependent: a['reject-handoff'], reason: a.reason, by: a.by, lead: teamLead() }));
-      default: return closeItem(item, a.by, a.summary);
+      // item 088: --close --by owner --reason "<the decision>" closes on a written decision, recorded as such
+      default: return closeItem(item, a.by, a.summary, a.reason);
     }
   } catch (e) {
     if (e instanceof Rejected) return { refuse: `${slug}: ${e.message}` };
@@ -419,6 +430,9 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
 // item 033 (spec section 7): the last line of the command that hands an item to review, asks for changes or closes it.
 export const shutdown = agent => `🛑 ${agent}: END THE SESSION NOW. Reply with text only and make no further tool call; your next task starts in a fresh session.`;
 
-// update.py:253-255: printed after a passing review.
+// update.py:253-255: printed after a passing review. Item 088: a Cody pass asks for the external review (codex or
+// claude, same commit) - the close now only after both stages passed.
 // update.py:379-382: the claimer closes, else the team lead (owner 2026-10-25), never the reviewer (item 039)
-export const closeNow = (fm, slug) => (!fm.claimed_by ? `   ➡️  CLOSE NOW: nobody holds it: the team lead closes it (backlog update ${slug} --close --by <lead> --summary "<outcome>")` : `   ➡️  CLOSE NOW: ${fm.claimed_by} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead`);
+export const closeNow = (fm, slug) => stageRefusal(fm) !== ''
+  ? `   ➡️  NEXT: the external review - the Cody pass is recorded; request the codex or claude review (backlog update ${slug} --request-review codex --note "<commit>"), it must pass on the same commit before the close`
+  : (!fm.claimed_by ? `   ➡️  CLOSE NOW: nobody holds it: the team lead closes it (backlog update ${slug} --close --by <lead> --summary "<outcome>")` : `   ➡️  CLOSE NOW: ${fm.claimed_by} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead`);

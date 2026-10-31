@@ -14,7 +14,7 @@ import { parse } from './frontmatter.js';
 import { actor, publicationGuard, staleError, staleViews } from './seen.js';
 import { connect, scan } from './db.js';
 import * as store from './store.js';
-import { asList, foreignCycle, foreignItem, isForeign } from './team.js';
+import { asList, foreignCycle, foreignItem, heldBy, isForeign } from './team.js';
 import { wipRefusal } from './wip.js';
 
 const PULL = ['pull', '-q', '--rebase', '--autostash', 'origin', 'main']; // explicit: the clone's tracking branch and push.default are the user's, not ours
@@ -381,8 +381,10 @@ async function validatePublication(home, folders, names, claims, renumbered) {
       const wip = claim.reclaim ? null : wipRefusal(folders[n], names[n], item.fm, claim.agent, slug(item)); // item 034: a concurrent start elsewhere counts
       if (wip) reject(`${names[n]}: ${slug(item)}: ${wip}`);
       if (!claim.skipActiveLimit) {
+        // item 082: items held by an earlier session of the same card count (the continuation keeps the
+        // one-active-item rule across the card's sessions)
         const held = items.filter(i => i !== item && i.path.startsWith('phases/') && ['pending', 'in_progress'].includes(i.fm.status ?? 'pending')
-          && i.fm.claimed_by === claim.agent && !['requested', 'in_review'].includes(i.fm.review_state) && !i.fm.wait_on);
+          && heldBy(i.fm.claimed_by, claim.agent) && !['requested', 'in_review'].includes(i.fm.review_state) && !i.fm.wait_on);
         if (held.length) reject(`${names[n]}: ${claim.agent} holds ${held.length} active item(s): ${held.map(slug).join(', ')}; pull new work only when every item you hold waits; --force overrides`);
       }
     }

@@ -9,13 +9,13 @@ import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { teamRefusal } from './archive.js';
-import { caller, closeNow, headline, missingFields, shutdown, step } from './lifecycle.js';
+import { caller, closeNow, headline, missingFields, shutdown, stageRefusal, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { inProgress, wipRefusal } from './wip.js';
-import { REVIEW_DIR, asList, foreignCycle, foreignItem, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
+import { REVIEW_DIR, asList, foreignCycle, foreignItem, heldBy, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
@@ -185,7 +185,9 @@ async function change(a, con, folder, repo) {
   if (!a.named && (a['request-review'] !== undefined || a.handoff !== undefined)) seen.setActor(fm.claimed_by);
   seen.check(folder, repo, seen.actor(), row.slug, row.path); // refuses (exit 5) when someone else changed the item since this agent read it
   a.guard = [{ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` }];
-  a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: fm.claimed_by === a.claim && fm.status === 'in_progress' }] : [];
+  // item 082: a new session of the same card reclaims the in-progress item (the continuation, no new work to
+  // start); the active-item limit of the other items of the card still applies, checked against heldBy below
+  a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: heldBy(fm.claimed_by, a.claim) && fm.status === 'in_progress' }] : [];
   let body = text;
   const changes = {};
   let moveTarget = null; // --priority is a move-to-rank, applied via reflow (stays dense)
@@ -272,9 +274,11 @@ async function change(a, con, folder, repo) {
     fm.wait_on = '';
     body = `${rstrip(body)}\n\nWAIT DONE ${store.now()} (next step on the item)\n`;
   }
-  if (a.status === 'done' && event !== 'closed' && needsReview(fm)) { // reviewed items finish through --close only (beyond the oracle: after a pass too, so the close rule applies; Codex review of item 039)
-    return refuse(fm.review_state === 'passed' ? `${row.slug}: has review_refs and a passing review; finish it with --close --summary (the claimer, else the team lead)`
-      : `${row.slug}: has review_refs and review_state ${fm.review_state || 'none'}; use --request-review, then --close after a passing review`);
+  if (a.status === 'done' && event !== 'closed') {
+    // item 088: an item finishes only after both review stages passed for the current work commit, with or without
+    // review_refs; the refusal names the missing stage (the owner's decision closes with --close --by owner --reason).
+    const refusal = stageRefusal(fm);
+    if (refusal) return refuse(`${row.slug}: ${refusal}`);
   }
   const completing = a.status === 'done' || event === 'closed';
   if (completing && !fm.completed) fm.completed = store.now();

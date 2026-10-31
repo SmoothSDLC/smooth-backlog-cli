@@ -171,7 +171,8 @@ export function heldItems(folder, agent, { refining = false } = {}) {
     rows = con.prepare(`SELECT * FROM phase WHERE handoff_id=? AND status IN (${ACTIONABLE.map(() => '?')}) ORDER BY seq`).all(hid, ...ACTIONABLE).map(r => ({ ...r }));
   } finally { con.close(); }
   const refines = fm => refining && !fm.claimed_by && fm.refiner === agent && fm.stage === 'refining'; // a refinement in progress is active work too (item 039)
-  return rows.map(r => ({ ...r, fm: itemFm(folder, r) })).filter(r => r.fm.claimed_by === agent || refines(r.fm))
+  // item 082: heldBy also matches an earlier session of the same card - the continuation is the agent's own work
+  return rows.map(r => ({ ...r, fm: itemFm(folder, r) })).filter(r => heldBy(r.fm.claimed_by, agent) || refines(r.fm))
     .map(r => ({ ...r, state: ['requested', 'in_review'].includes(r.fm.review_state) ? 'awaiting-review' : r.fm.wait_on ? `waiting:${r.fm.wait_on}` : 'active' }));
 }
 
@@ -199,6 +200,19 @@ export function loadRoster(path) {
 // session name of the item). The one predicate behind every offer, dispatch and refusal of a review.
 export const isReviewAuthor = (fm, agent) => (fm.claimed_by || '') === (agent || '')
   || (Boolean(agent) && (fm.review_author === agent || asList(fm.session_authors).includes(agent)));
+
+// Item 082: session names of one card are <item 3 digits><card id>:<increment 2 digits>; two such names are
+// sessions of the same card when both match the scheme and share the part before the colon (item and card).
+const SESSION_NAME = /^(\d{3}[A-Za-z0-9]+):\d{2}$/;
+export const sameCard = (a, b) => {
+  const ma = String(a ?? '').match(SESSION_NAME);
+  const mb = String(b ?? '').match(SESSION_NAME);
+  return Boolean(ma && mb && ma[1] === mb[1]);
+};
+// Item 082: work held by the agent's own name, or by an earlier session of the same card: a new session of
+// the card continues the item its earlier session claimed (no takeover, no lead reassignment). Every
+// "is this item mine" check goes through here; older names compare by equality only.
+export const heldBy = (holder, agent) => (holder === agent) || sameCard(holder, agent);
 
 // lib_db.py:710-715: seconds since a front-matter time stamp; -1 when there is none.
 export const age = ts => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(String(ts)) ? (Date.now() - Date.parse(ts)) / 1000 : -1);

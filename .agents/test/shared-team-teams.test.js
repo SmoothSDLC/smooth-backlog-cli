@@ -120,3 +120,15 @@ test('the lead refines only an incomplete item of its own team', () => {
   assert.deepEqual([lead({ TEAM_NAME: 't2' }).action, lead({ TEAM_NAME: 't2' }).item], ['refine', theirs]);
   assert.equal(lead({}).item, theirs); // without TEAM_NAME the first incomplete item
 });
+
+test('--set-team, --team and a split child of a team item: every step succeeds', () => {
+  const f = fixture('team-teams-js-');
+  const step = (command, args) => { const r = run(f, [command, ...args]); assert.equal(r.status, 0, `${command}: ${r.stdout}${r.stderr}`); };
+  step('new', NEW('work item'));
+  step('update', ['1', '--set-team', 't1']);
+  step('update', ['1', '--claim', 'lead']);
+  step('new', [...NEW('child'), '--split-from', '1']);
+  step('new', [...NEW('other'), '--team', 't2']);
+  step('update', ['3', '--set-team', 't3']); // another team; clearing the team of an item in a stage is refused (item 036)
+  step('update', ['1', '--set-team', '']);
+});

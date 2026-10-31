@@ -307,3 +307,30 @@ test('--split-from copies the objective, summary and body of the source and logs
   const events = "SELECT event, note FROM event WHERE event = 'split'";
   assert.deepEqual(rows(a, events), [{ event: 'split', note: 'spawned sibling 002-1-cont' }]);
 });
+
+const SCENARIOS = {
+  'every flag, appended': [[], [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--chunk',
+    '--review-refs', 'references/review/code.md,references/review/tests.example.md', '--estimate', '30', '--complexity', 'medium', '--layer', '3']],
+  'inserted at rank 0 before older work': [[['--name', 'Older', '--depends-on', 'none'], ['--name', 'Oldest', '--depends-on', '1']], [...BASE, '--depends-on', '1,Oldest'.replace('Oldest', '002-oldest'), '--priority', '0']],
+  'critical, forced to P0 with the banner': [[['--name', 'Older', '--depends-on', 'none']], [...NONE, '--severity', 'critical']],
+  'a rank beyond the end is clamped, a layer of process': [[['--name', 'Older', '--depends-on', 'none']], [...NONE, '--priority', '7', '--layer', 'process', '--complexity', 'high']],
+  'the placeholder when the body has none, unicode and quotes': [[], ['--name', 'Ünï "quoted" it\'s: a/b', '--objective', 'x: y # z', '--depends-on', 'none', '--body', 'plain body']],
+  'a prefix of an option and --opt=value': [[], ['--depends', 'none', '--name=Abbrev', '--obj', 'o=1', '--summ=s']],
+  'a dry run': [[], [...NONE, '--dry-run']],
+};
+for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
+  test(`new: ${title}: the setup and the command succeed`, t => {
+    const f = fixture(t);
+    for (const s of setup) { const r = node(f, s); assert.equal(r.status, 0, r.stdout + r.stderr); }
+    const r = node(f, args);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  });
+}
+
+test('--split-from a long parent: the parent and the split child are created', t => {
+  const f = fixture(t);
+  assert.equal(node(f, ['--name', 'Long', '--depends-on', 'none', '--body', `${'é'.repeat(900)}\n\n## Definition of done\n- [ ] a`]).status, 0);
+  const r = node(f, ['--split-from', '001-long', '--depends-on', 'none']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(items(f).length, 2);
+});

@@ -2,7 +2,7 @@
 // writer conflicts on it, and recovery used to refuse before the number collision was repaired. Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -32,7 +32,7 @@ function scenarioPids(d, procRoot = '/proc') {
     let env;
     try { env = readFileSync(join(procRoot, pid, 'environ'), 'utf8'); }
     catch (e) {
-      if (e.code === 'ENOENT') continue; // the process exited between the enumeration and the read: verified gone
+      if (e.code === 'ENOENT' || e.code === 'ESRCH') continue; // the process exited between the enumeration and the read: verified gone (ESRCH: the exit is in flight, the CI failure at 95a3db3)
       if (e.code === 'EACCES') continue; // another user's process: only this scenario's own children carry the fixture env (item 76 review)
       throw new Error(`scenarioPids: the environ of pid ${pid} is unreadable: ${e.message}`); // a scan error is not verified empty
     }
@@ -911,6 +911,65 @@ test('cleanup settle: a child process that survives the settle is reported loudl
   child.kill('SIGKILL');
   await exited;
   assert.equal(scenarioPids(d).length, 0);
+});
+
+test('cleanup settle: a process that exits between the process scan and the environ read is skipped, not fatal (item 76 review)', async t => {
+  const d = mkdtempSync(join(tmpdir(), 'dbconf-e-'));
+  t.after(() => rmSync(d, { recursive: true, force: true }));
+  if (!existsSync('/proc')) {
+    t.skip('no /proc on this platform (macOS): the env scan cannot run (item 76 review)');
+    return; // item 76 review: t.skip does not stop execution - the process-scan assertions below cannot run without /proc
+  }
+  const root = join(d, 'procscan');
+  mkdirSync(root);
+  execFileSync('mkfifo', [join(d, 'die')]); // the child blocks on this fifo's open; the test's write-open triggers the child's exit
+  execFileSync('mkfifo', [join(d, 'free')]); // the reaper blocks on this fifo; the test's byte paces it to the next child
+  const reaper = spawn(process.execPath, ['-e',
+    'const fs = require("node:fs"); const cp = require("node:child_process");' +
+    '(async () => { const N = Number(process.argv[3]);' +
+    ' fs.writeFileSync(process.argv[1], "");' +
+    ' for (let i = 0; i < N; i++) {' +
+    '  const c = cp.spawn(process.execPath, ["-e", \'const fs = require("node:fs"); fs.openSync(process.argv[1], "r"); process.exit(0);\', process.argv[4]], { stdio: "ignore", env: { BACKLOG_HOME: process.argv[5] } });' +
+    '  fs.writeFileSync(process.argv[2], String(c.pid));' +
+    '  const fd = fs.openSync(process.argv[6], "r"); const buf = Buffer.alloc(1); fs.readSync(fd, buf, 0, 1, null); fs.closeSync(fd);' +
+    '  await new Promise(r => setImmediate(r));' +
+    ' } })();',
+    join(d, 'reaper-ready'), join(d, 'current-pid'), '60', join(d, 'die'), join(d, 'home'), join(d, 'free')], { stdio: 'ignore' });
+  reaper.unref();
+  const reaperExited = new Promise(r => reaper.once('exit', r)); // registered at spawn: the reaper exits during the test body, the event fires only once
+  t.after(async () => { // watchdog: a reaper that does not exit must not hang the cleanup
+    const watchdog = setTimeout(() => { try { reaper.kill('SIGKILL'); } catch {} }, 2000);
+    await reaperExited;
+    clearTimeout(watchdog);
+  });
+  // A reaper spawns the children, and each child blocks on the die fifo's open: the test's write-open is the
+  // child's death trigger, and the reaper (blocked on the free fifo) reaps the child right after - the reap
+  // then races the scans the test runs immediately after: Linux returns ESRCH for the environ of a process
+  // that exits between the /proc/<pid> lookup and the environ read of one of those scans (the CI failure at
+  // 95a3db3), and the scan must skip it, not throw
+  for (let i = 0; i < 100 && !existsSync(join(d, 'reaper-ready')); i++) await sleep(20);
+  assert.ok(existsSync(join(d, 'reaper-ready')), 'the reaper is up');
+  let last = '';
+  let prevPid = 0;
+  for (let i = 0; i < 60; i++) {
+    let pid;
+    for (let k = 0; k < 100; k++) {
+      const v = existsSync(join(d, 'current-pid')) ? readFileSync(join(d, 'current-pid'), 'utf8') : '';
+      if (v && v !== last) { pid = Number(v); last = v; break; }
+      await sleep(10);
+    }
+    assert.ok(pid, `the reaper spawned the child of iteration ${i}`);
+    if (prevPid) rmSync(join(root, String(prevPid)), { recursive: true, force: true }); // one child per scan: the previous entry is gone
+    mkdirSync(join(root, String(pid)));
+    symlinkSync(`/proc/${pid}/environ`, join(root, String(pid), 'environ'));
+    assert.ok(scenarioPids(d, root).includes(pid), 'the child is visible to the scan while it is alive');
+    writeFileSync(join(d, 'die'), 'x'); // the write-open triggers the child's exit; the reaper reaps it
+    writeFileSync(join(d, 'free'), 'x'); // the reaper unblocks and moves to the next child
+    for (let k = 0; k < 30; k++) scenarioPids(d, root); // a process that exits in the ESRCH window is skipped, not fatal (item 76 review)
+    for (let k = 0; k < 40 && scenarioPids(d, root).length; k++) await sleep(10);
+    assert.deepEqual(scenarioPids(d, root), [], `the scan reports no process of the child of iteration ${i}`);
+    prevPid = pid;
+  }
 });
 
 test('cleanup: scenarioPids sees the processes carrying the fixture env; without /proc (macOS) it sees none (item 76 review)', async t => {

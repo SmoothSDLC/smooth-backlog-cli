@@ -8,6 +8,13 @@ This is a dependency-free Node.js 24+ CLI, licensed under Apache-2.0.
   .agents/scripts/verify-published-package.mjs. Keep GitHub workflows under
   .github/workflows/ so GitHub can execute them.
 - Product agent integrations live in templates/skills/backlog/ and ship with the CLI.
+- Every change to the CLI's behaviour ships with its documentation in the same change. That covers a command, an option, an output, a refusal, a rule or a stored field. The required documentation is:
+  - the built-in skill, templates/skills/backlog/SKILL.md;
+  - the help text, src/help.js;
+  - COMMANDS.md, regenerated with `node .agents/scripts/sync-commands-md.mjs`;
+  - README.md, wherever it describes the behaviour;
+  - CHANGELOG.md.
+  None of them may describe the old behaviour. A change without them is not done, and a review returns CHANGES for it (owner decision, 2026-10-31).
 - Only the main release workflow assigns release versions. Keep the private
   development placeholder in package.json and package-lock.json; never bump a
   release version in a pull request. Publishing derives its version from the tag.

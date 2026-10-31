@@ -495,23 +495,25 @@ test('075: CLI steps publish a clean, in-sync state: after new, archive and an o
   } finally { g.release(); } // never leave the held push (and its hook) running
 });
 
-test('075: overlapping writers, this writer first: a CLI commit held at its push keeps 1 when a second CLI in the same clone publishes item 2 on top', async t => {
+test('075: overlapping writers, this writer first: the second writer\'s push held at the gate is rejected when the first writer publishes; the second settles renumbered onto the first commit and publishes item 2 on top of it', async t => {
   const f = fixture(t);
-  const cons = consumer(f.dir, 'acme', 'demo', 'main');
+  const cons = consumer(f.dir, 'acme', 'demo', 'main'); // home's consumer
+  const cons2 = join(f.dir, 'cons2');
+  git(f.dir, 'clone', '-q', join(f.dir, 'origins', 'acme', 'demo.git'), cons2); // home2's consumer
   const g = gate(f);
-  const aP = cliNew(f, f.home, cons, 'Nodeitem'); // writer A; its push will be held at the gate (it holds the run lock)
+  const bP = cliNew(f, f.home2, cons2, 'Otheritem'); // writer B in home2; its push arrives first and is held at the gate
   try {
-    await g.entered(); // A's commit is made locally and is inside its first push
-    const bP = cliNew(f, f.home, cons, 'Otheritem', { BACKLOG_LOCK_WAIT_MS: '60000' }); // writer B in the same clone starts and waits on the run lock (not awaited: it would deadlock the release)
-    g.release(); // A's push proceeds and publishes 001-nodeitem, then releases the run lock
-    const a = await aP;
-    const b = await bP; // B acquires the lock and publishes 002-otheritem on top
+    await g.entered(); // B's commit is made locally and is inside its first push
+    const a = await cliNew(f, f.home, cons, 'Nodeitem'); // writer A in home passes the gate and publishes 001-nodeitem while B's push is held
+    g.release(); // B's held push is rejected: B rebases onto A's commit and is renumbered to 002-otheritem
+    const b = await bP; // the held writer settles on top of the first commit, which its renumbered push carries
     assert.equal(a.status, 0, a.out + a.err);
     assert.equal(a.out, '✅ created phase phases/001-nodeitem.md (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
     assert.equal(a.err, '');
     assert.equal(b.status, 0, b.out + b.err);
-    assert.equal(b.out, '✅ created phase phases/002-otheritem.md (seq 2) — appended, now at P1\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 1 (re)ingested\n');
+    assert.equal(b.out, 'renumbered 001 -> 002\n✅ created phase phases/002-otheritem.md (seq 2) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
     assert.equal(b.err, '');
-    assertPublish(f, f.home, f.folder, ['acme/demo/phases/001-nodeitem.md', 'acme/demo/phases/002-otheritem.md']);
+    assertPublish(f, f.home2, f.folder2, ['acme/demo/phases/001-nodeitem.md', 'acme/demo/phases/002-otheritem.md']); // the last publisher's mirror equals the published database
+    assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all'), '', "A's clone tree is clean too");
   } finally { g.release(); } // never leave the held push (and its hook) running
 });

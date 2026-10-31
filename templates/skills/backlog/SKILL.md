@@ -118,3 +118,8 @@ them; `backlog query --wip` shows the counts. Only the team lead lifts a team or
 Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign <agent> --reason
 "<why>" --by <lead>`, `--reassign-review <agent> --reason "<why>" --by <lead>`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the
 owner's `--decision`.
+
+Session names: a card's sessions are named `<item, 3 digits><card id>:<increment, 2 digits>` (a colon inside the
+name) and a team joins its card ids with colons. The colon is part of the name: it works in every command, in the
+front matter, the event log, the commit subject (which carries the agent a `--claim`, `--release` or `--by`
+command names) and the hand-off marker file name `~/.qwen/teams/<team>/handoff/<agent>.json`.

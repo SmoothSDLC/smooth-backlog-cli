@@ -402,7 +402,10 @@ Options:
   --claim AGENT
       Take the item for an agent (team session). The command refuses when another agent holds the item, when an item
       in its depends_on is not done, or when a team's item is not in stage ready (its refinement review has not passed);
-      otherwise the item becomes in progress and claimed by that agent.
+      otherwise the item becomes in progress and claimed by that agent. An agent or team name may contain letters,
+      digits, a period, an underscore, a hyphen and a colon (a card's session names and a team name carry colons);
+      the name works in the front matter, the event log, the commit subject, the hand-off marker file name and
+      every --claim, --release and --by value.
   --force
       Together with --claim: claim although the agent already holds active items (never before stage ready).
   --waiting WHAT

@@ -114,8 +114,13 @@ async function update(argv) {
     try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); unlock(); throw e; } finally { close(); }
     if (code || a['dry-run']) { forget(); unlock(); return code; }
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
+    // Item 082: the agent a command names goes into the commit subject (session names with colons are audit data too);
+    // only when the first flag is the agent-naming one, so the subjects of every other command stay as they are
+    const subjectParts = ['update.py', ...argv.slice(0, 2)];
+    const agentOf = { '--claim': a.claim, '--release': a.release, '--by': a.by };
+    if (agentOf[argv[1]] !== undefined) subjectParts.push(agentOf[argv[1]]);
     let pairs;
-    try { pairs = await db.commitSettled(home, folder, ['update.py', ...argv.slice(0, 2)].join(' '), a.guard, a.claims); } catch (e) {
+    try { pairs = await db.commitSettled(home, folder, subjectParts.join(' '), a.guard, a.claims); } catch (e) {
       unlock();
       throw e;
     }

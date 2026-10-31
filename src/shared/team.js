@@ -234,7 +234,8 @@ export function describeDependency({ id, item, fm, foreign, handoff }) {
 // gets none. The same files and format as PR1, so its dispatcher and wake loop keep working during the cut-over.
 export const STOP_TEXT = 'your session is being replaced by a fresh one for your next task (you handed your item to review or '
   + 'closed it): end your turn now with a text-only reply and no other tool call';
-const SAFE = /^(?!\.{1,2}$)[\w.-]+$/; // a team or agent name is one path segment, never . or ..
+const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // a team or agent name is one path segment, never . or ..; item 082: a card's
+// session names and a team name join their card ids with colons, so a colon is part of the name
 // a time stamp is a finite number or a string of digits; anything else (an array, an object, text) is no time stamp
 const ms = v => { const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : NaN; return Number.isFinite(n) ? n : null; };
 const teamsRoot = () => join(homedir(), '.qwen', 'teams');

@@ -20,7 +20,6 @@ const git = (cwd, ...args) => {
 };
 const pad = n => String(n).padStart(3, '0');
 const rows = (con, sql, ...p) => con.prepare(sql).all(...p).map(r => ({ ...r }));
-// eslint-disable-line no-unused-vars
 
 function scratch(t) {
   const dir = mkdtempSync(join(tmpdir(), 'db-test-'));

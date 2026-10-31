@@ -290,3 +290,17 @@ test('review P2: a skills.md review document is accepted and persisted; no class
   assert.deepEqual(item.fm.review_refs, ['references/review/skills.md']);
   assert.ok(!('work_class' in item.fm) && !('review_classes' in item.fm) && !('chunk' in item.fm));
 });
+
+test('--split-from copies the objective, summary and body of the source and logs a split event', t => {
+  const a = fixture(t);
+  const first = ['--name', 'Parent', '--objective', 'parent objective', '--summary', 'parent summary', '--depends-on', 'none', '--body', 'Parent body with ünï\n\n## Definition of done\n- [ ] a'];
+  const split = ['--split-from', '1', '--depends-on', '1', '--priority', '0'];
+  assert.equal(node(a, first).status, 0);
+  const r = node(a, split);
+  assert.equal(r.status, 0, r.stderr);
+  const [, child] = items(a);
+  assert.equal(child.fm.name, '1-cont'); assert.equal(child.fm.objective, 'parent objective'); assert.equal(child.fm.summary, 'parent summary');
+  assert.ok(child.body.includes('## Split from `001-parent`. Inherited context:\n\n# Phase 001 — Parent'));
+  const events = "SELECT event, note FROM event WHERE event = 'split'";
+  assert.deepEqual(rows(a, events), [{ event: 'split', note: 'spawned sibling 002-1-cont' }]);
+});

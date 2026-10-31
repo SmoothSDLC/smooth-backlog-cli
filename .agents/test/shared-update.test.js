@@ -387,3 +387,120 @@ test('review P1: a bound team session reorders and re-ranks only its own items: 
   try { store.reflow(f.folder, { slug: '003-gamma', target: 0 }); store.reflow(f.folder); } finally { for (const k of Object.keys(team)) delete process.env[k]; }
   assert.equal(others(), before, 'no file of another team was written');
 });
+
+// The item files, the mirror rows and events, and the commits: what a command may change.
+const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
+const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '');
+function snapshot(f) {
+  const files = {};
+  for (const n of readdirSync(join(f.folder, 'phases'))) files[n] = norm(JSON.stringify(parse(readFileSync(join(f.folder, 'phases', n), 'utf8'))));
+  const con = db.connect(f.folder);
+  const rows = x => con.prepare(x).all().map(r => norm(JSON.stringify({ ...r })));
+  const out = {
+    files,
+    phases: rows('SELECT id, handoff_id, slug, seq, name, objective, summary, status, severity, priority, path, branch, commit_sha, location, repository, size_score, completed_at FROM phase ORDER BY id'),
+    events: rows('SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event ORDER BY id'),
+    log: git(f.home, 'log', '--format=%s').split('\n'),
+  };
+  con.close();
+  return out;
+}
+// Runs one update; a step either succeeds or is refused, but never crashes.
+const step = (f, args) => {
+  const r = run(f, args);
+  assert.ok([0, 1, 2].includes(r.status), `${args.join(' ')}: exit ${r.status} ${r.stderr}`);
+  assert.doesNotMatch(r.stderr, /TypeError|ReferenceError|\n\s+at /, args.join(' '));
+  return r;
+};
+
+test('field updates (status, location, commit, summary, name, objective, note)', () => {
+  const f = seed();
+  const r = step(f, ['2', '--status', 'in_progress', '--location', 'src/a.js', '--commit', 'abc1234', '--summary', 'Neue Zusammenfassung ☕',
+    '--name', 'Beta 2', '--objective', 'Obj: "quoted" it\'s', '--note', 'working on it']);
+  assert.match(r.stdout, /^✅ 002-beta updated \(status=in_progress, commit=abc1234, location=src\/a\.js, summary=/);
+  step(f, ['002-beta', '--seq', '77', '--size_score', '5']);
+  step(f, ['1', '--note', 'only a note']);
+  step(f, ['--size_score=3', '1']);
+});
+
+test('--append adds the text after a blank line and a final newline', () => {
+  const f = seed();
+  step(f, ['1', '--append', 'extra line\n\n  indented\n- [ ] item']);
+  step(f, ['1', '--append', '## Definition of done\n- [ ] checked', '--status', 'in_progress']);
+});
+
+test('--priority moves the item to that rank and re-densifies, with a planning_event', () => {
+  const f = seed();
+  step(f, ['3', '--priority', '0']);
+  step(f, ['1', '--priority', '99']);
+  step(f, ['2', '--priority', '-4']);
+  step(f, ['004-delta', '--priority', '1', '--note', 'resume']);
+  step(f, ['6', '--priority', '0']); // a done item is in no queue
+});
+
+test('--status done completes, stamps completed, re-prioritizes and prints the planning-event lines', () => {
+  const f = seed();
+  const r = step(f, ['2', '--status', 'done']);
+  assert.match(r.stdout, /PLANNING EVENT — completing work RE-PRIORITIZES the backlog/);
+  assert.match(fm(f, '002-beta.md').fm.completed, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+  step(f, ['1', '--status', 'done', '--note', 'n']);
+  step(f, ['3', '--status', 'done', '--priority', '0']);
+  step(f, ['4', '--status', 'done']); // empties the backlog down to item 5
+  step(f, ['6', '--status', 'done']); // already done: completed stays
+});
+
+test('--replan sets the leading order by slug or number, ignores unknown names, and prints the order', () => {
+  const f = seed();
+  const r = step(f, ['--replan', '4,002-beta, zzz ,4']);
+  assert.match(r.stdout, /^📋 PLANNING EVENT — backlog re-prioritized \(P0 = next\):\n {3}P0 {2}004-delta\n {3}P1 {2}002-beta\n/);
+  step(f, ['--replan', '3', '--note', 'because']);
+  step(f, ['--replan', ',']);
+  step(f, ['--replan', '1', '1', '--status', 'done']); // replan wins over the item (ignored)
+});
+
+test('--dry-run prints the plan and changes and commits nothing', () => {
+  const f = seed();
+  const before = snapshot(f);
+  const r = step(f, ['2', '--status', 'done', '--dry-run']);
+  assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'done'\}; COMPLETE -> re-prioritize backlog\n$/);
+  step(f, ['3', '--priority', '1', '--name', "It's \"x\"", '--seq', '9', '--dry-run']);
+  step(f, ['3', '--append', 'x', '--dry-run']);
+  step(f, ['--replan', '3,1', '--dry-run']);
+  assert.deepEqual(snapshot(f), before);
+});
+
+test('refusals: exit 1, nothing written, nothing committed', () => {
+  const f = seed();
+  const before = snapshot(f);
+  for (const args of [['--status', 'done'], ['2', '--branch', 'x'], ['2', '--commit', ''], ['2', '--commit', '  '], ['999', '--status', 'done'],
+    ['nosuch'], ['0'], ['5', '--status', 'done'], ['2', '--set-estimate', '0']]) {
+    assert.equal(step(f, args).status, 1, args.join(' '));
+  }
+  assert.deepEqual(snapshot(f), before);
+});
+
+test('invalid command lines exit 2 or 1', () => {
+  const f = seed();
+  assert.equal(step(f, ['2', '--bogus']).status, 2);
+  assert.equal(step(f, ['2', '3']).status, 2);
+  assert.equal(step(f, ['2', '--status']).status, 2);
+  assert.equal(step(f, ['2', '--set-complexity', 'huge']).status, 2);
+  assert.equal(step(f, ['2', '--priority', 'abc']).status, 1); // python: ValueError traceback
+});
+
+test('--note on an item that waits clears the wait with a WAIT DONE line', () => {
+  const f = seed();
+  step(f, ['4', '--note', 'workflow finished']);
+  assert.equal(fm(f, '004-delta.md').fm.wait_on, '');
+  assert.match(fm(f, '004-delta.md').body, /\n\nWAIT DONE \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \(next step on the item\)\n$/);
+});
+
+test('refinement flags --set-review-refs --set-chunk --set-estimate --set-complexity --set-layer --set-depends-on', () => {
+  const f = seed();
+  step(f, ['2', '--set-review-refs', 'references/review/code.md,references/review/tests.md', '--set-chunk', 'yes', '--set-estimate', '30',
+    '--set-complexity', 'high', '--set-layer', '3', '--set-depends-on', '1,003-gamma']);
+  step(f, ['2', '--set-depends-on', 'none', '--set-layer', 'process']);
+  step(f, ['2', '--set-depends-on', '99']);
+  step(f, ['2', '--set-chunk', 'no']);
+  step(f, ['2', '--set-review-refs', 'docs/notes.md']);
+});

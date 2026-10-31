@@ -435,3 +435,15 @@ test('review P2: reorder keeps the rank of a row whose file was moved to archive
   assert.deepEqual(store.reorder(f.folder, [s.slugs[2]]), [s.slugs[2], s.slugs[0], s.slugs[1]].map((n, i) => [n, i]));
   assert.match(readItem(f.folder, `phases/${s.files[0]}`), /^priority: 1$/m);
 });
+
+test('findings: an item of another repository is foreign, an item without repository and branch is untagged', t => {
+  const f = fixturePair(t);
+  threeItems(f);
+  writeFileSync(join(f.folder, 'phases/004-foreign.md'),
+    '---\nphase: "004-foreign"\nseq: 4\nname: "Foreign"\nstatus: "pending"\nrepository: "acme/other"\nbranch: "main"\n---\n');
+  writeFileSync(join(f.folder, 'phases/005-untagged.md'),
+    '---\nphase: "005-untagged"\nseq: 5\nname: "Untagged"\nstatus: "pending"\n---\n');
+  const fd = store.findings(f.folder);
+  assert.deepEqual(fd.foreign.map(i => i.fm.phase), ['004-foreign']);
+  assert.deepEqual(fd.untagged.map(i => i.fm.phase), ['005-untagged']);
+});

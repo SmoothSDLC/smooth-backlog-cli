@@ -497,3 +497,50 @@ test('review P2: archive with a ghost row (a pending mirror row whose file is go
   assert.deepEqual(['003-gamma', '004-delta', '007-eta'].map(n => fm(f.folder, `phases/${n}.md`).fm.priority), [2, 3, 4]);
   assert.match(r.stdout, /re-densified to 5 item\(s\) \(P0\.\.P4\)/, 'the ghost row is counted');
 });
+
+test('archive of a done item: git mv, status stamp, reflow, one commit', () => {
+  const f = seed();
+  const r = run(f, 'archive', ['5']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^📦 005-epsilon archived -> archive\/phases\/005-epsilon\.md\n {3}rescan: \d+ \(re\)ingested, 0 missing\n {3}📋 planning event: backlog re-densified to 5 item\(s\) \(P0\.\.P4\)\n$/);
+  assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
+  assert.ok(!existsSync(join(f.folder, 'phases/005-epsilon.md')));
+  assert.equal(git(f.home, 'log', '-1', '--format=%s'), 'acme/demo: archive.py 5');
+  assert.equal(git(f.home, 'log', '-1', '--follow', '--format=%s', '--', 'acme/demo/archive/phases/005-epsilon.md'), 'acme/demo: archive.py 5');
+});
+
+test('move --to-branch and --all-open-of-branch print what moved', () => {
+  const f = seed();
+  const r = run(f, 'move', ['2', '--to-branch', 'release']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, "✅ 002-beta now belongs to branch 'release'\n");
+  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'release');
+  const g = seed();
+  const all = run(g, 'move', ['--all-open-of-branch', 'main', '--to-branch', 'release']);
+  assert.equal(all.status, 0, all.stderr);
+  assert.equal(all.stdout, "✅ moved 3 open item(s) of 'main' to 'release'\n");
+});
+
+test('move --to-repository: new number in the target, source file gone, one published commit for both folders', () => {
+  const f = seed();
+  const r = run(f, 'move', ['7', '--to-repository']); // default: the repository the item names
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, '✅ 007-eta moved to other/proj as 002-eta\n');
+  assert.ok(existsSync(join(f.other, 'phases/002-eta.md')));
+  assert.ok(!existsSync(join(f.folder, 'phases/007-eta.md')));
+  assert.equal(git(f.home, 'log', '-1', '--format=%s'), 'acme/demo, other/proj: move.py 7 --to-repository');
+  assert.deepEqual(git(f.home, 'show', '--format=', '--name-only', 'HEAD').split('\n').map(p => p.split('/').slice(0, 2).join('/')).filter((p, i, a) => a.indexOf(p) === i).sort(), ['acme/demo', 'other/proj']);
+  assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
+});
+
+test('archive --force of an open item: the mirror row says archived, the queue no longer offers it, the change is published', () => {
+  const f = seed();
+  const row = () => { const con = db.connect(f.folder); try { return { ...con.prepare("SELECT status, path FROM phase WHERE slug='002-beta'").get() }; } finally { con.close(); } };
+  assert.deepEqual(row(), { status: 'pending', path: 'phases/002-beta.md' });
+  const r = run(f, 'archive', ['2', '--force']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(row(), { status: 'archived', path: 'archive/phases/002-beta.md' });
+  assert.ok(cli(['query', '--next', '--json'], { cwd: f.cons, tmp: f.t }).stdout.indexOf('002-beta') < 0);
+  assert.deepEqual(names(f.folder, 'archive'), ['phases/002-beta.md']);
+  assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
+});

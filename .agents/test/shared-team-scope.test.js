@@ -29,7 +29,7 @@ function fixture() {
   return { t, home, cons, other, folder: join(home, 'acme', 'demo'), cfg: join(home, 'acme', 'demo', 'backlog.scope') };
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
-function make(f, side, cwd, name, extra = []) {
+function make(f, cwd, name, extra = []) {
   const has = k => extra.includes(k);
   const args = ['--name', name, '--objective', 'o', '--summary', 's', ...(has('--depends-on') ? [] : ['--depends-on', 'none'])];
   // owner 2026-10-28: no classes. A team item names its review documents; the default is references/review/code.md
@@ -52,13 +52,13 @@ test('test_scopes_and_refinement_cap: --scope and the refinement_scope cap of ba
   const f = fixture();
   const cl = ['--claimable'];
   git(f.cons, 'checkout', '-q', '-b', 'scope-a');
-  const here = make(f, 'js', f.cons, 'scope impl here', []);
+  const here = make(f, f.cons, 'scope impl here', []);
   git(f.cons, 'checkout', '-q', '-b', 'scope-b');
-  const there = make(f, 'js', f.cons, 'scope impl other branch', []);
-  const chunkb = make(f, 'js', f.cons, 'scope chunk other branch', ['--chunk']);
-  const chunk = make(f, 'js', f.other, 'scope chunk other repository', ['--chunk']);
-  const impl = make(f, 'js', f.other, 'scope impl other repository', []);
-  const wait = make(f, 'js', f.cons, 'scope waits', ['--depends-on', there.split('-')[0]]);
+  const there = make(f, f.cons, 'scope impl other branch', []);
+  const chunkb = make(f, f.cons, 'scope chunk other branch', ['--chunk']);
+  const chunk = make(f, f.other, 'scope chunk other repository', ['--chunk']);
+  const impl = make(f, f.other, 'scope impl other repository', []);
+  const wait = make(f, f.cons, 'scope waits', ['--depends-on', there.split('-')[0]]);
   git(f.cons, 'checkout', '-q', 'scope-a');
   assert.ok(!slugs(f, ['--blocked']).includes(wait) && slugs(f, ['--blocked', '--scope', 'repo']).includes(wait));
 
@@ -94,7 +94,7 @@ test('test_scopes_and_refinement_cap: --scope and the refinement_scope cap of ba
 
 test('--agents goes with --plan only (the plan is shared-team-plan.test.js)', () => {
   const f = fixture();
-  make(f, 'js', f.cons, 'x', []);
+  make(f, f.cons, 'x', []);
   for (const args of [['--agents', 'a,b', '--claimable']]) {
     const r = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 2, args.join(' '));
@@ -104,7 +104,7 @@ test('--agents goes with --plan only (the plan is shared-team-plan.test.js)', ()
 
 test('--scope takes branch, repo or all', () => {
   const f = fixture();
-  make(f, 'js', f.cons, 'x', []);
+  make(f, f.cons, 'x', []);
   const r = cli(['query', '--blocked', '--scope', 'galaxy'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /--scope: invalid choice: 'galaxy' \(choose from 'branch', 'repo', 'all'\)/);
@@ -113,8 +113,8 @@ test('--scope takes branch, repo or all', () => {
 // --scope all reads other repositories' backlogs and backlog.scope: nothing below the home may be a link to outside it.
 function otherChunk() {
   const f = fixture();
-  const own = make(f, 'js', f.cons, 'scope own impl', []); // the folder of acme/demo exists
-  const chunk = make(f, 'js', f.other, 'scope chunk other repository', ['--chunk']);
+  const own = make(f, f.cons, 'scope own impl', []); // the folder of acme/demo exists
+  const chunk = make(f, f.other, 'scope chunk other repository', ['--chunk']);
   writeFileSync(f.cfg, 'refinement_scope: all\n');
   const all = () => cli(['query', '--claimable', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t });
   assert.deepEqual(JSON.parse(all().stdout).map(x => x.slug), [own, chunk]); // visible when nothing is linked
@@ -136,8 +136,8 @@ test('--scope all does not open another repository\'s backlog.db through a symli
 
 test('the refinement cap file backlog.scope is not followed through a symlink', () => {
   const f = fixture();
-  make(f, 'js', f.cons, 'scope own impl', []);
-  const chunk = make(f, 'js', f.other, 'scope chunk other repository', ['--chunk']);
+  make(f, f.cons, 'scope own impl', []);
+  const chunk = make(f, f.other, 'scope chunk other repository', ['--chunk']);
   mkdirSync(join(f.t, 'outside'));
   writeFileSync(join(f.t, 'outside', 'scope'), 'refinement_scope: all\n'); // would widen the cap to all
   symlinkSync(join(f.t, 'outside', 'scope'), f.cfg);
@@ -159,7 +159,7 @@ test('the diagnostic of an unreadable backlog of another repository does not pri
 
 test('any member but the author is offered the review at once; old class profiles in the roster change nothing', () => {
   const f = fixture();
-  const job = make(f, 'js', f.cons, 'reviewed by any member', ['--review-refs', 'references/review/code.md']);
+  const job = make(f, f.cons, 'reviewed by any member', ['--review-refs', 'references/review/code.md']);
   const up = (...a) => { const r = cli(['update', job, ...a], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
   up('--claim', 'cody');
   up('--request-review', 'any', '--note', 'ready');
@@ -173,4 +173,12 @@ test('any member but the author is offered the review at once; old class profile
   for (const agent of ['eve', 'dan', 'archy']) assert.deepEqual(view(agent, old), [job], agent); // no holder window
   assert.deepEqual(view('cody', old), []); // never the author
   assert.deepEqual(view('eve', roster({ cody: {}, eve: {} })), [job]);
+});
+
+test('a team session whose repository id leaves the home (../x) is refused with exit 2', () => {
+  const f = fixture();
+  make(f, f.cons, 'scope bound', []);
+  const up = cli(['query', '--claimable'], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: '../x' } });
+  assert.equal(up.status, 2);
+  assert.match(up.stderr, /^❌ backlog: not an owner\/name repository id: \.\.\/x/);
 });

@@ -39,6 +39,47 @@ const rows = (f, sql) => { const con = db.connect(f.folder); try { return con.pr
 
 // ---------------------------------------------------------------- refusals
 
+const REFUSALS = [
+  ['no --depends-on', BASE, 1, 'stdout', '--depends-on is required'],
+  ['no --name', ['--depends-on', 'none'], 1, 'stdout', '--name is required (or --split-from <phase>)'],
+  ['a work class (the classes are gone)', [...NONE, '--work-class', 'docs'], 2, 'stderr', 'unrecognized arguments: --work-class docs'],
+  ['a review class (the classes are gone)', [...NONE, '--review-classes', 'code'], 2, 'stderr', 'unrecognized arguments: --review-classes code'],
+  ['review refs that name no review document', [...NONE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x'], 1, 'stdout', '--review-refs needs at least one review document (references/review/<type>.md in cody-coding-model)'],
+  ['a dependency that is not there', [...BASE, '--depends-on', 'no-such-item'], 1, 'stdout', "no item 'no-such-item'"],
+  ['a number that is not there', [...BASE, '--depends-on', '99'], 1, 'stdout', "no item '99'"],
+  ['--split-from not found', [...NONE, '--split-from', 'nope'], 1, 'stdout', "--split-from: no phase 'nope'"],
+  ['review refs without a definition of done', [...NONE, '--review-refs', 'references/review/code.md'], 1, 'stdout', '--body must hold a definition of done'],
+  ['an unknown option', [...NONE, '--bogus', 'x'], 2, 'stderr', 'unrecognized arguments: --bogus x'],
+  ['an invalid choice', [...NONE, '--severity', 'urgent'], 2, 'stderr', "invalid choice: 'urgent'"],
+  ['an invalid integer', [...NONE, '--priority', 'soon'], 2, 'stderr', "invalid int value: 'soon'"],
+  ['a missing value', [...NONE, '--summary'], 2, 'stderr', 'expected one argument'],
+];
+
+for (const [title, args, code, stream, text] of REFUSALS) {
+  test(`refusal: ${title}: exit ${code}, message on ${stream}, nothing written or committed`, t => {
+    const f = fixture(t);
+    const before = subject(f);
+    const r = node(f, args);
+    assert.equal(r.status, code, r.stdout + r.stderr);
+    assert.ok(r[stream].includes(text), r.stdout + r.stderr);
+    if (stream === 'stdout') assert.ok(r.stdout.startsWith('❌ ') && r.stderr === '');
+    else assert.ok(r.stderr.startsWith('❌ backlog: ') && r.stdout === '');
+    assert.deepEqual(items(f), []);
+    assert.equal(subject(f), before);
+    assert.equal(git(f.home, 'status', '--porcelain', '--', 'acme/demo/phases'), '');
+  });
+}
+
+test('refusal: a detached HEAD dies with exit 2 after the dependency check', t => {
+  const f = fixture(t);
+  git(f.cons, 'checkout', '-q', '--detach');
+  const r = node(f, NONE);
+  assert.equal(r.status, 2);
+  assert.equal(r.stderr, '❌ backlog: HEAD is detached; check out the branch the item belongs to first\n');
+  assert.deepEqual(items(f), []);
+});
+
+
 test('refusal: a dependency that is in the backlog passes, a split source that is archived or missing is a refusal', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0);
@@ -228,4 +269,24 @@ test('review P1: new --split-from an item of another team (TEAM_BRANCH differs) 
   assert.match(r.stdout, /team session is bound to acme\/demo branch release/);
   assert.equal(rows(), before);
   assert.deepEqual(readdirSync(join(f.folder, 'phases')), ['001-alpha-job.md']);
+});
+
+test('team mode: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the branch, an item without a definition of done is refused', t => {
+  const f = fixture(t); const env = { TEAM_REPOSITORY: 'acme/other', TEAM_BRANCH: 'team-1' };
+  const refused = node(f, NONE, env);
+  assert.equal(refused.status, 1); assert.match(refused.stdout, /^❌ --body must hold a definition of done/);
+  const ok = node(f, [...NONE, '--body', '## Definition of done\n- [ ] x'], env);
+  assert.equal(ok.status, 0, ok.stderr);
+  const [item] = store.load(join(f.home, 'acme', 'other'));
+  assert.equal(item.fm.repository, 'acme/other'); assert.equal(item.fm.branch, 'team-1');
+  assert.equal(node(f, NONE, { TEAM_REPOSITORY: '../x' }).status, 2);
+});
+
+test('review P2: a skills.md review document is accepted and persisted; no class field is written', t => {
+  const f = fixture(t);
+  const r = node(f, [...NONE, '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const [item] = items(f);
+  assert.deepEqual(item.fm.review_refs, ['references/review/skills.md']);
+  assert.ok(!('work_class' in item.fm) && !('review_classes' in item.fm) && !('chunk' in item.fm));
 });

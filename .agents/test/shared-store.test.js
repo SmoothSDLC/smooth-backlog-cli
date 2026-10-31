@@ -4,12 +4,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { consumer, env } from './shared-fixtures.js';
+import { cli, consumer, env, sharedBacklog } from './shared-fixtures.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
@@ -371,4 +371,67 @@ test('review P1: a symlinked repository folder or owner folder is refused from t
     assert.equal(sha256File(victim), before, 'the file outside the backlog is unchanged');
     assert.deepEqual(readdirSync(join(outside, owner ? 'demo/phases' : 'phases')), ['001-i1.md'], 'nothing was created outside');
   }
+});
+
+// Three items made with `backlog new` in shared mode; returns their slugs (the file stem = the front-matter `phase`) and file names.
+function fixturePair(t) {
+  const dir = scratch(t);
+  const home = sharedBacklog(dir);
+  const cons = consumer(dir, 'acme', 'demo', 'main');
+  mkdirSync(join(dir, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  return { t: dir, home, cons, folder: join(home, 'acme', 'demo') };
+}
+function threeItems(f) {
+  for (const n of ['one', 'two', 'three']) {
+    const r = cli(['new', '--name', n, '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  }
+  const files = readdirSync(join(f.folder, 'phases')).filter(x => x.endsWith('.md')).sort();
+  assert.equal(files.length, 3);
+  return { files, slugs: files.map(x => x.replace(/\.md$/, '')) };
+}
+function archivedOutside(t) {
+  const f = fixturePair(t);
+  const s = threeItems(f);
+  mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
+  renameSync(join(f.folder, 'phases', s.files[1]), join(f.folder, 'archive', 'phases', s.files[1]));
+  return { f, s };
+}
+
+test('reflow: a no-op keeps the priorities and rewrites no file; a move re-densifies', t => {
+  const f = fixturePair(t);
+  const s = threeItems(f);
+  const { files, slugs } = s;
+  const before = files.map(x => sha256File(join(f.folder, 'phases', x)));
+  assert.deepEqual(store.reflow(f.folder), slugs.map((x, i) => [x, i]));
+  assert.deepEqual(files.map(x => sha256File(join(f.folder, 'phases', x))), before, 'unchanged priorities are not rewritten');
+  assert.deepEqual(store.reflow(f.folder, { slug: slugs[2], target: 0 }), [slugs[2], slugs[0], slugs[1]].map((x, i) => [x, i]));
+  assert.match(readItem(f.folder, `phases/${files[0]}`), /^priority: 1$/m);
+  assert.match(readItem(f.folder, `phases/${files[2]}`), /^priority: 0$/m);
+  assert.match(readItem(f.folder, `phases/${files[0]}`), /^updated: "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"$/m, 'a rewritten file gets updated=now');
+});
+
+test('reorder: slugs and item numbers lead, the rest keeps its order, unknown idents are skipped', t => {
+  const f = fixturePair(t);
+  const s = threeItems(f);
+  const { slugs } = s;
+  assert.deepEqual(store.reorder(f.folder, [slugs[2], '1']), [slugs[2], slugs[0], slugs[1]].map((x, i) => [x, i]), 'slug, then number 1 = the first item');
+  assert.deepEqual(store.reorder(f.folder, ['999', slugs[1], slugs[1]]), [slugs[1], slugs[2], slugs[0]].map((x, i) => [x, i]));
+  assert.deepEqual(store.reorder(f.folder, ['003']).map(x => x[0]), [slugs[2], slugs[1], slugs[0]], 'zero-padded numbers resolve');
+});
+
+test('review P2: reflow keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
+  const x = archivedOutside(t);
+  const { f, s } = x;
+  const live = sha256File(join(f.folder, 'phases', s.files[2]));
+  assert.deepEqual(store.reflow(f.folder), s.slugs.map((n, i) => [n, i]), 'the archived item still holds P1: the last item stays P2');
+  assert.equal(sha256File(join(f.folder, 'phases', s.files[2])), live, 'no live file is rewritten');
+});
+
+test('review P2: reorder keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
+  const x = archivedOutside(t);
+  const { f, s } = x;
+  assert.deepEqual(store.reorder(f.folder, [s.slugs[2]]), [s.slugs[2], s.slugs[0], s.slugs[1]].map((n, i) => [n, i]));
+  assert.match(readItem(f.folder, `phases/${s.files[0]}`), /^priority: 1$/m);
 });

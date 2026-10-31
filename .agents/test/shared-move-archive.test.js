@@ -487,3 +487,13 @@ test('review P2: move and the reflow add the keys they set (branch, repository, 
   assert.equal(moved.repository, 'other/proj');
   assert.equal(typeof moved.priority, 'number');
 });
+
+test('review P2: archive with a ghost row (a pending mirror row whose file is gone) is still ranked: the survivors keep their ranks', t => {
+  const ghost = f => { git(f.home, 'rm', '-q', 'acme/demo/phases/001-alpha.md'); git(f.home, 'commit', '-q', '-m', 'file gone'); git(f.home, 'push', '-q'); };
+  const f = seed(); ghost(f);
+  const r = run(f, 'archive', ['5']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.priority, 1, 'the ghost still holds P0');
+  assert.deepEqual(['003-gamma', '004-delta', '007-eta'].map(n => fm(f.folder, `phases/${n}.md`).fm.priority), [2, 3, 4]);
+  assert.match(r.stdout, /re-densified to 5 item\(s\) \(P0\.\.P4\)/, 'the ghost row is counted');
+});

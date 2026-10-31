@@ -57,7 +57,7 @@ function newArgs(name, extra = []) {
   if (!has('--estimate')) out.push('--estimate', '5', '--complexity', 'low');
   return [...out, '--body', DOD, ...extra];
 }
-function make(f, side, name, extra = []) {
+function make(f, name, extra = []) {
   const args = newArgs(name, extra);
   const r = cli(['new', ...args], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -68,9 +68,9 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
   const f = fixture();
   const ok = (...args) => { const r = update(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
   const refused = (...args) => { const r = update(f, args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };
-  const first = make(f, 'js', 'dependency first', []);
+  const first = make(f, 'dependency first', []);
   const seq = first.split('-')[0];
-  const job = make(f, 'js', 'the job', ['--review-refs', 'references/review/code.md', '--depends-on', seq]);
+  const job = make(f, 'the job', ['--review-refs', 'references/review/code.md', '--depends-on', seq]);
   let { fm } = item(f, job);
   assert.deepEqual(fm.review_refs, ['references/review/code.md']);
   assert.ok(!('work_class' in fm) && !('review_classes' in fm)); // no class field is written
@@ -110,7 +110,7 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
 
 test('team session: TEAM_REPOSITORY binds the repository, a step on another scope is refused', () => {
   const f = fixture();
-  const s = make(f, 'js', 'scoped job', []);
+  const s = make(f, 'scoped job', []);
   const inScope = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const out = update(f, [s, '--claim', 'cody'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'other' });
   assert.equal(out.status, 1);
@@ -124,7 +124,7 @@ test('team session: TEAM_REPOSITORY binds the repository, a step on another scop
 
 test('team scope guards every mutating update path, not only the team steps (review P1)', () => {
   const f = fixture();
-  const s = make(f, 'js', 'scoped edits', []);
+  const s = make(f, 'scoped edits', []);
   const file = join(f.folder, 'phases', `${s}.md`);
   const outside = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'other' };
   const inside = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
@@ -241,8 +241,8 @@ test('team.js: status and identity come from the mirror rows, the files give onl
 
 test('review P2: a holder whose item file has malformed front matter still blocks a second claim: the error propagates and nothing is written', () => {
   const f = fixture();
-  const a = make(f, 'js', 'held job', []);
-  const b = make(f, 'js', 'second job', []);
+  const a = make(f, 'held job', []);
+  const b = make(f, 'second job', []);
   assert.equal(update(f, [a, '--claim', 'cody']).status, 0);
   const held = join(f.folder, 'phases', `${a}.md`);
   writeFileSync(held, readFileSync(held, 'utf8').replace(/^claimed_by:/m, 'not a pair\nclaimed_by:'));

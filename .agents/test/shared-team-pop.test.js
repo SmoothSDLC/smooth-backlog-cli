@@ -30,7 +30,7 @@ function fixture() {
   return { t, home, cons, other, folder: join(home, 'acme', 'demo'), cfg: join(home, 'acme', 'demo', 'backlog.scope') };
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
-function make(f, side, cwd, name, extra = []) {
+function make(f, cwd, name, extra = []) {
   const has = k => extra.includes(k);
   const args = ['--name', name, '--objective', 'o', '--summary', 's', ...(has('--depends-on') ? [] : ['--depends-on', 'none'])];
   // owner 2026-10-28: no classes. A team item names its review documents; the default is references/review/code.md
@@ -44,14 +44,13 @@ function make(f, side, cwd, name, extra = []) {
   return r.stdout.split('created phase phases/')[1].split('.md')[0];
 }
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
-const upWith = side => (f, slug, ...args) => {
+const ok = (f, slug, ...args) => {
   const who = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
   if (who) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t }); // an agent reads an item before it writes it again (seen.js)
   const r = cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r;
 };
-const ok = upWith('js');
 const refuse = (f, slug, ...args) => cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t });
 // cody is a plain member here; popLead asks as the team lead, who does no chunk work.
 const LEAD = { TEAM_LEAD: 'lead' };
@@ -76,8 +75,8 @@ function popAs(f, env, ...args) {
 test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idle, --claim-now claims', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'pop-a'); // a queue of this test only
-  const dep = make(f, 'js', f.cons, 'pop dependency', ['--review-refs', 'references/review/tests.md']);
-  const blocked = make(f, 'js', f.cons, 'pop blocked', ['--depends-on', dep.split('-')[0]]);
+  const dep = make(f, f.cons, 'pop dependency', ['--review-refs', 'references/review/tests.md']);
+  const blocked = make(f, f.cons, 'pop blocked', ['--depends-on', dep.split('-')[0]]);
   ok(f, dep, '--claim', 'archy');
 
   let p = popLead(f); // (e) nothing for the lead: idle, with blockers
@@ -86,11 +85,11 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   const text = popCli(f, [], { env: { TEAM_LEAD: 'cody' } });
   assert.ok(text.status === 3 && text.stdout.startsWith('idle\n') && text.stdout.includes(`blocked ${blocked}: waits on ${dep}`), text.stdout);
   assert.equal(pop(f).action, 'chunk'); // a member with nothing else: small-chunk work, no item
-  const chunk = make(f, 'js', f.cons, 'pop chunk', ['--chunk']);
+  const chunk = make(f, f.cons, 'pop chunk', ['--chunk']);
   p = pop(f); // (d) the chunk item is named
   assert.deepEqual([p.action, p.item], ['chunk', chunk]);
   assert.ok(p.instruction.includes('CHUNK <time>'));
-  const job = make(f, 'js', f.cons, 'pop job', []);
+  const job = make(f, f.cons, 'pop job', []);
   p = pop(f); // (c) claim beats chunk; not claimed yet
   assert.deepEqual([p.action, p.item, p.claimed], ['claim', job, false]);
   assert.ok(!item(f, job).fm.claimed_by);
@@ -100,7 +99,7 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   p = pop(f, '--claim-now'); // --claim-now claims it
   assert.deepEqual([p.action, p.item, p.claimed], ['claim', job, true]);
   assert.equal(item(f, job).fm.claimed_by, 'cody');
-  const spare = make(f, 'js', f.cons, 'pop spare job', []);
+  const spare = make(f, f.cons, 'pop spare job', []);
   ok(f, dep, '--request-review', 'any', '--note', 'tests in commit abc');
   const z = JSON.parse(cli(['query', '--pop', '--agent', 'zed', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD }).stdout);
   assert.deepEqual([z.action, z.item], ['review', dep]); // (b) review beats claim; any member but the author
@@ -119,10 +118,10 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
 test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_closed', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'popwait');
-  const job = make(f, 'js', f.cons, 'wait job', ['--review-refs', 'references/review/tests.md']);
+  const job = make(f, f.cons, 'wait job', ['--review-refs', 'references/review/tests.md']);
   ok(f, job, '--claim', 'cody');
   ok(f, job, '--request-review', 'any', '--note', 'commit abc, run 1');
-  const other = make(f, 'js', f.cons, 'wait other', []);
+  const other = make(f, f.cons, 'wait other', []);
   let p = pop(f); // awaiting a verdict: falls through to claim
   assert.deepEqual([p.action, p.item], ['claim', other]);
   ok(f, other, '--claim', 'archy');
@@ -146,7 +145,7 @@ test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_clo
 test('test_claim_only_when_every_held_item_waits', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'popwait2');
-  const [one, two, three] = ['rule one', 'rule two', 'rule three'].map((n, i) => make(f, 'js', f.cons, n, [...(i < 2 ? ['--review-refs', 'references/review/tests.md'] : [])]));
+  const [one, two, three] = ['rule one', 'rule two', 'rule three'].map((n, i) => make(f, f.cons, n, [...(i < 2 ? ['--review-refs', 'references/review/tests.md'] : [])]));
   ok(f, one, '--claim', 'cody');
   let r = refuse(f, two, '--claim', 'cody'); // one active item: no new claim
   assert.ok(r.status === 1 && r.stdout.includes(`holds 1 active item(s): ${one}`), r.stdout);
@@ -169,7 +168,7 @@ test('test_claim_only_when_every_held_item_waits', () => {
   ok(f, one, '--note', 'run 397 green'); // the next --note ends it: active again
   assert.ok(!item(f, one).fm.wait_on);
   ok(f, two, '--review', 'changes', '--by', 'archy', '--comments', 'fix y per references/review/tests.md');
-  const four = make(f, 'js', f.cons, 'rule four', []);
+  const four = make(f, f.cons, 'rule four', []);
   r = refuse(f, four, '--claim', 'cody'); // 'changes' verdict counts as active
   assert.ok(r.status === 1 && r.stdout.includes(one) && r.stdout.includes(two), r.stdout);
   ok(f, four, '--claim', 'cody', '--force'); // --force overrides, recorded
@@ -187,7 +186,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   const bad = cli(['new', '--name', 'no refs', '--objective', 'o', '--summary', 's', '--depends-on', 'none',
     '--review-refs', 'references/patterns/x.md'], { cwd: f.cons, tmp: f.t });
   assert.ok(bad.status === 1 && bad.stdout.includes('needs at least one review document'), bad.stdout);
-  const job = make(f, 'js', f.cons, 'refs job', ['--review-refs',
+  const job = make(f, f.cons, 'refs job', ['--review-refs',
     'references/review/contract.example.md,references/patterns/x.md']);
   let r = cli(['query', '--pop', '--agent', 'archy', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.ok(JSON.parse(r.stdout).instruction.includes('definition of done: references/review/contract.example.md, references/patterns/x.md'), r.stdout + r.stderr);
@@ -211,8 +210,8 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   assert.ok(r.status === 1 && r.stdout.includes('needs at least one review document'), r.stdout);
   ok(f, job, '--close', '--summary', 'done');
   // the agent's own work goes before another member's review request, however old (spec section 5)
-  const mine = make(f, 'js', f.cons, 'own job', []);
-  const other = make(f, 'js', f.cons, 'other job', ['--review-refs', 'references/review/code.md']);
+  const mine = make(f, f.cons, 'own job', []);
+  const other = make(f, f.cons, 'other job', ['--review-refs', 'references/review/code.md']);
   ok(f, other, '--claim', 'archy');
   ok(f, other, '--request-review', 'any', '--note', 'commit def');
   ok(f, mine, '--claim', 'cody');
@@ -228,7 +227,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
 test('a roster member with review_only never claims; a missing roster is an error', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'pop-review-only');
-  const job = make(f, 'js', f.cons, 'review only job', []);
+  const job = make(f, f.cons, 'review only job', []);
   const roster = join(f.t, 'team.json');
   writeFileSync(roster, JSON.stringify({ rev: { review_only: true }, cody: {} }));
   const as = (agent, ...args) => cli(['query', '--pop', '--agent', agent, '--roster', roster, '--json', ...args], { cwd: f.cons, tmp: f.t, env: LEAD });
@@ -244,9 +243,9 @@ test('a roster member with review_only never claims; a missing roster is an erro
 test('test_no_new_flags_unchanged', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'compat-a');
-  const s = make(f, 'js', f.cons, 'compat job', []);
+  const s = make(f, f.cons, 'compat job', []);
   git(f.cons, 'checkout', '-q', '-b', 'compat-b');
-  const other = make(f, 'js', f.cons, 'compat job of another branch', []);
+  const other = make(f, f.cons, 'compat job of another branch', []);
   git(f.cons, 'checkout', '-q', 'compat-a');
   const q = (...a) => cli(['query', ...a], { cwd: f.cons, tmp: f.t });
   for (const mode of [['--claimable'], ['--reviewable', '--agent', 'cody'], ['--blocked']]) {
@@ -267,8 +266,8 @@ test('test_no_new_flags_unchanged', () => {
 test('--pop with --scope all and the refinement_scope cap of backlog.scope', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'scope-a');
-  make(f, 'js', f.other, 'scope chunk other repository', ['--chunk']);
-  const here = make(f, 'js', f.cons, 'scope docs here', []);
+  make(f, f.other, 'scope chunk other repository', ['--chunk']);
+  const here = make(f, f.cons, 'scope docs here', []);
   ok(f, here, '--claim', 'archy'); // nothing else claimable: the pop has only chunk work
   const t = (...a) => cli(['query', '--pop', '--agent', 't', '--json', ...a], { cwd: f.cons, tmp: f.t, env: LEAD });
   try {
@@ -285,7 +284,7 @@ test('--pop with --scope all and the refinement_scope cap of backlog.scope', () 
 
 test('--agents without --plan, --critical and --headless stay refused with --pop', () => {
   const f = fixture();
-  make(f, 'js', f.cons, 'x', []);
+  make(f, f.cons, 'x', []);
   for (const args of [['query', '--agents', 'a,b'], ['pop', '--agent', 't', '--agents', 'a'], ['pop', '--agent', 't', '--critical'], ['pop', '--agent', 't', '--headless']]) {
     const r = cli(args, { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 2, args.join(' '));
@@ -296,7 +295,7 @@ test('--agents without --plan, --critical and --headless stay refused with --pop
 test('credentials in a wait are redacted in the text and the JSON of the pop (blocked and held)', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'pop-secret');
-  const held = make(f, 'js', f.cons, 'pop waits on a url', []);
+  const held = make(f, f.cons, 'pop waits on a url', []);
   ok(f, held, '--claim', 'cody');
   const { fm, body } = item(f, held);
   store.write({ path: join(f.folder, 'phases', `${held}.md`), fm: { ...fm, wait_on: 'https://user:hunter2secret@host/run' }, body }, f.folder);
@@ -314,7 +313,7 @@ test('credentials in a wait are redacted in the text and the JSON of the pop (bl
 function claimOutcome(kind) {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', `pop-${kind}`);
-  const job = make(f, 'js', f.cons, 'pop claim fails', []);
+  const job = make(f, f.cons, 'pop claim fails', []);
   const hook = join(f.t, 'hook.cjs');
   writeFileSync(hook, kind === 'killed'
     ? "if (process.argv[2] === 'update') process.kill(process.pid, 'SIGTERM');\n"
@@ -361,7 +360,7 @@ test('the exit codes of query --pop and next --agent are described: 3 is idle, 1
 test('the JSON of the pop stays valid when a credential follows a non-ASCII character (redaction before serialization)', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'pop-unicode');
-  make(f, 'js', f.cons, 'pop unicode agent', []);
+  make(f, f.cons, 'pop unicode agent', []);
   const agent = 'https://\u00e9user:review_dummy@host/path';
   for (const cmd of [['query', '--pop'], ['pop']]) {
     const r = cli([...cmd, '--agent', agent, '--json'], { cwd: f.cons, tmp: f.t });

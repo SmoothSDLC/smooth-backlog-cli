@@ -14,7 +14,7 @@ after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 const OLD = ['work_class', 'review_classes', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer']; // test_team_compat.OLD
 
 // One shared home with acme/demo and one item made by `new`.
-function fixture(side, name, extra) {
+function fixture(name, extra) {
   const t = mkdtempSync(join(tmpdir(), 'team-done-'));
   dirs.push(t);
   const home = sharedBacklog(t);
@@ -28,14 +28,14 @@ function fixture(side, name, extra) {
   const slug = r.stdout.split('created phase phases/')[1].split('.md')[0];
   return { t, home, cons, slug, file: join(home, 'acme', 'demo', 'phases', `${slug}.md`) };
 }
-const update = (side, f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });
+const update = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });
 const status = f => parse(readFileSync(f.file, 'utf8')).fm.status;
 
 test('--status done is refused until the review passed (port of test_status_done_refused_until_review_passed)', () => {
-  const f = fixture('js', 'reviewed job', ['--review-refs', 'references/review/code.md']);
-  const ok = update('js', f, [f.slug, '--claim', 'cody']);
+  const f = fixture('reviewed job', ['--review-refs', 'references/review/code.md']);
+  const ok = update(f, [f.slug, '--claim', 'cody']);
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
-  const r = update('js', f, [f.slug, '--status', 'done']);
+  const r = update(f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 1);
   assert.ok(r.stdout.includes('use --request-review, then --close after a passing review'), r.stdout);
   assert.equal(r.stdout, `❌ ${f.slug}: has review_refs and review_state none; use --request-review, then --close after a passing review\n`);
@@ -43,11 +43,11 @@ test('--status done is refused until the review passed (port of test_status_done
 });
 
 test('--status done on an item without review_refs finishes as before (port of test_status_done_on_item_without_review_refs)', () => {
-  const f = fixture('js', 'old item finishes as before', []);
+  const f = fixture('old item finishes as before', []);
   const { fm, body } = parse(readFileSync(f.file, 'utf8')); // as an old item looks: none of the team keys
   for (const k of OLD) delete fm[k];
   writeFileSync(f.file, dump(fm, body));
-  const r = update('js', f, [f.slug, '--status', 'done']);
+  const r = update(f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(status(f), 'done');
 });

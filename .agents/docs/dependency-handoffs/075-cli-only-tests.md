@@ -163,3 +163,29 @@ REVIEW: pending
 PICKUP: same as the 47bf7af block: 57's slices A and B read output in the shared-new, shared-move-archive, shared-query, shared-team-pop and shared-team-work tests; the 075 tests in those files assert the line with the path - 57 edits the expected strings when the path leaves the line; createdSlug stays the one place that tolerates both forms
 OPEN_RISKS: NONE
 END_DEPENDENCY_HANDOFF
+
+DEPENDENCY_HANDOFF v1
+SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#75
+DEPENDENT_ITEM: SmoothSDLC/smooth-backlog-cli#74
+PRODUCER_AGENT: the claimer of item 75
+SOURCE_COMMIT: cb951c9 ; BRANCH: team-cli-parity-1
+CONTRACT: changed by the final-review round (2026-10-31): the SUBJECT constant in .agents/test/shared-move-archive.test.js gains one entry, SUBJECT['archive 2 --force'] = 'acme/demo: archive.py 2 --force', asserted by the new archive --force output test - slice 74 must edit this value along with the existing four when the subjects stop naming the python scripts. Every commit-subject assertion in shared-move-archive.test.js and shared-new.test.js still goes through the one per-file SUBJECT constant. The rest of the final-review changes are exact-output and stderr assertions only: the six move and archive refusals that had no test get 075: tests (exit status, exact stdout and stderr, nothing written or committed), the six regex-only refusal assertions in shared-move-archive.test.js and the one in shared-foreign-deps.test.js become exact, and the archive --force output is pinned word for word.
+OUTPUTS: the final-review commits: 7422e7c (shared-move-archive.test.js), cb951c9 (shared-foreign-deps.test.js)
+VERIFICATION: at cb951c9 on Node 24 (the agent shell's BACKLOG_HEADLESS unset): the two changed files (node --test): shared-move-archive 49 pass 0 fail, shared-foreign-deps 4, all 0 fail 0 skipped; the full suite on the clean tree at cb951c9 (npm test): tests 778, pass 777, fail 0, skipped 1 - the skip is item 86's guard test (no-private-details.test.js), which self-skips while BACKLOG_PRIVATE_DENYLIST is unset; npm run check exits 0; a mutation check broke one source per new or changed 075 test and per converted assertion (the no-phase, not-done and target-exists lines in archive.js, the re-densified line in archive.js, the no-item, own-repository and non-plain-slug lines in move.js, the unreadable-origin line in move.js, the owner/name line in store.js, the depends-on and depended-on lines in move.js, the archived-move line in move.js, the team-bound line in team.js, the foreign-dependents line in move.js: each mutation made its test fail, every source was restored before the commit)
+REVIEW: pending
+PICKUP: slice 74 edits the subject lines in shared-update.test.js, shared-move-archive.test.js and shared-sync-db.test.js; in shared-move-archive.test.js the SUBJECT values change (one line per subject, now five, including 'archive 2 --force'), the assertions route through them and stay; nothing in this round's commits changes how the subjects are read
+OPEN_RISKS: NONE
+END_DEPENDENCY_HANDOFF
+
+DEPENDENCY_HANDOFF v1
+SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#75
+DEPENDENT_ITEM: SmoothSDLC/smooth-backlog-cli#57
+PRODUCER_AGENT: the claimer of item 75
+SOURCE_COMMIT: cb951c9 ; BRANCH: team-cli-parity-1
+CONTRACT: unchanged by the final-review round (2026-10-31): createdSlug in .agents/test/shared-fixtures.js stays the one place that tolerates both "created phase phases/<slug>.md" and "created phase <slug>"; shared-fixtures.js is unchanged in this round. The final-review changes (7422e7c, cb951c9) add exact-output refusal tests and the archive --force output to shared-move-archive.test.js and one exact-output assertion to shared-foreign-deps.test.js; none of the new expected strings contains a created-phase line, so item 057's output change keeps touching the same existing expected strings only.
+OUTPUTS: .agents/test/shared-fixtures.js (createdSlug, unchanged this round); the final-review commits (7422e7c, cb951c9) changed only the two test files
+VERIFICATION: same run as the 74 block above (the two changed files 53/0/0 at cb951c9; the full suite 778/777/0 fail/1 skip - the skip is item 86's guard test, which self-skips while BACKLOG_PRIVATE_DENYLIST is unset)
+REVIEW: pending
+PICKUP: same as the 1444d17 block: 57's slices A and B read output in the shared-new, shared-move-archive, shared-query, shared-team-pop and shared-team-work tests; the 075 tests in those files assert the created-phase line with the path - 57 edits the expected strings when the path leaves the line; createdSlug stays the one place that tolerates both forms
+OPEN_RISKS: NONE
+END_DEPENDENCY_HANDOFF

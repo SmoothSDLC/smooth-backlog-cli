@@ -8,7 +8,7 @@
 2. **Implementation execution plan:** [Updated PR #3 test-first implementation handoff](2026-10-25-pr3-test-first-implementation-handoff.md). This is planning/agent-orientation documentation only; actual item state, claimed executor, review and dependencies belong in the authoritative backlog.
 3. **Authoritative source item:** `SmoothSDLC/smoothsdlc-backlog` `SmoothSDLC/backlog-cli/phases/030-pull-request-3-patch-item-placeholder-content-to-come-from-chatgpt.md`, using **legacy item repository identity `SmoothSDLC/backlog-cli`**, branch `team-cli-parity-1`. That file contains item-level PR3 source requirements; the old placeholder name/metadata must be normalized by a backed, authorized backlog mutation.
 4. **Current coding methods:** `SmoothSDLC/cody-coding-model` PR #29 `references-review-v2` / `references/methods/refine-and-split.md`; PR #23 is already merged and does not substitute for PR #29.
-5. **Qwen runtime:** `SmoothSDLC/cody-topology-bigfan-linux` draft PR #1 `fix/qwen-team-member-lifecycle-reuse` — untested runtime patch, not a completed deployment.
+5. **Qwen runtime:** the topology repository, draft PR #1 `fix/qwen-team-member-lifecycle-reuse` — untested runtime patch, not a completed deployment.
 
 ## Corrections to the 2026-10-25 instructions
 
@@ -16,7 +16,7 @@
 - **Self-organizing team:** the lead creates/publishes the DAG and exposes claimable items. Team members independently make an **atomic remote-published claim**. No lead-assigned claimant, read-only dispatch as reservation or implicit carryover from retired agent sessions.
 - **Dependency handoff is mandatory:** the producer of an item that has a downstream consumer writes a committed dependency-handoff artifact in the implementation repository, links it in the backlog, and obtains lead verification/approval against the exact artifact/commit and downstream interface **before dependent dispatch**. This *artifact* is distinct from an old conversational session handoff (which remains prohibited).
 - **Session reset:** close -> `CLOSED <seq>` -> no more member tool calls -> actual Qwen release/cleanup/persisted roster removal -> fresh identical canonical name, no previous context -> read current item/backlog/artifact. A reset failure is a dispatch blocker, never a reason to reuse an old session.
-- **Owner approval remains mandatory:** no merge/publish/release (PR3 merge can publish), destructive tests against the live central backlog, BigFan deployment, forced refs or writes to other repositories without their separately scoped authorization. Use isolated local clone/repo fixtures for adversarial tests.
+- **Owner approval remains mandatory:** no merge/publish/release (PR3 merge can publish), destructive tests against the live central backlog, a deployment to the owner's workstation, forced refs or writes to other repositories without their separately scoped authorization. Use isolated local clone/repo fixtures for adversarial tests.
 - **Analysis evidence discipline:** existing matrix rows and previous Codex reports are specifications/leads, not passing executions. Explicitly track NOT-RUN, policy-blocked, SHA-pinned reproducible failures, and source-derived observations.
 
 ## Frozen analysis artifacts and acceptance references

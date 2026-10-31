@@ -8,6 +8,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
 import { connect } from './db.js';
+import { edgeState, satisfied } from './handoff.js';
 import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 import { load } from './store.js';
@@ -129,16 +130,35 @@ export function foreignCycle(folder, repoId, seq, deps, cache = new Map()) {
   }
   return null;
 }
+// Item 059: the edge state of a done producer that does not satisfy the edge; null while it is satisfied
+// (accepted or legacy). The row decides the producer is done - the files give only the metadata the rows do not
+// hold - so the row's status stands in for a producer file that is gone (a done producer without a handoffs key
+// is legacy, whatever the files say).
+const edgeRefusal = (producerFm, dependentId) => {
+  const state = edgeState(producerFm, dependentId);
+  return satisfied(state) ? null : state;
+};
+
 // lib_db.py:648-655: [{id as written, item: the row or null, fm}] for each depends_on entry that is not done or archived.
 // rows = the mirror rows of folder (the default), or those of another repository's backlog read by the caller. A foreign
-// entry (item 042) is read from that repository's folder; its item carries the repository.
+// entry (item 042) is read from that repository's folder; its item carries the repository. Item 059: a done producer
+// whose hand-off the lead has not accepted is an unfinished dependency too - the entry carries the edge state in
+// handoff (missing, unaccepted, stale or rejected); a satisfied edge (accepted, legacy) is no entry. The dependent
+// is named as the producer's repository names it: its seq for a same-repository producer,
+// <dependent repository>#<seq> for a producer of another repository.
 export function undoneDependencies(folder, fm, rows = mirrorRows(folder)) {
   return asList(fm.depends_on).map(id => {
     const f = foreignItem(folder, id);
-    if (f !== undefined) return { id, item: f && { slug: f.slug, seq: f.seq, status: f.status, repository: f.repository }, fm: f ? f.fm : {}, foreign: true };
-    return { id, item: byIdent(rows, id) };
-  }).filter(d => !d.item || !DONE_STATES.includes(d.item.status))
-    .map(d => (d.foreign ? d : { ...d, fm: d.item ? itemFm(folder, d.item) : {} }));
+    if (f !== undefined) {
+      const dependentId = f && f.repository === (fm.repository || undefined) ? String(fm.seq) : `${fm.repository}#${fm.seq}`;
+      const handoff = f && f.status === 'done' ? edgeRefusal(f.fm, dependentId) : null;
+      return { id, item: f && { slug: f.slug, seq: f.seq, status: f.status, repository: f.repository }, fm: f ? f.fm : {}, foreign: true, ...(handoff ? { handoff } : {}) };
+    }
+    const item = byIdent(rows, id);
+    const producer = item ? itemFm(folder, item) : {};
+    const handoff = item && item.status === 'done' ? edgeRefusal({ ...producer, status: item.status }, String(fm.seq)) : null;
+    return { id, item, fm: producer, ...(handoff ? { handoff } : {}) };
+  }).filter(d => !d.item || !DONE_STATES.includes(d.item.status) || d.handoff);
 }
 
 // lib_db.py:658-670: the open rows of the active handoff whose file says agent holds them, on every branch, by number.
@@ -188,10 +208,21 @@ export const staleReview = fm => fm.review_state === 'in_review' && age(fm.revie
 // (backlog update <item> --reassign-review <agent> --by <lead> --reason), never taken over by another member.
 export const reviewOpenTo = (fm, agent) => fm.review_state === 'requested' || (fm.review_state === 'in_review' && fm.reviewer === agent);
 
-// lib_db.py:745-749
-export function describeDependency({ id, item, fm, foreign }) {
-  if (foreign && item) return `${item.repository}#${item.seq} ${item.slug} of repository ${item.repository} (status ${item.status}, claimed by ${fm.claimed_by || 'nobody'})`;
-  return item ? `${item.slug} (status ${item.status}, claimed by ${fm.claimed_by || 'nobody'})` : `${id} (no such item in ${isForeign(id) ? 'the backlog repository' : 'this backlog'})`;
+// Item 059: what the team still owes before the dependent may be offered or claimed, per unsatisfied edge state.
+const HANDOFF_NEEDS = {
+  missing: 'the producer has not recorded a hand-off for this item; it records one and the team lead accepts it',
+  unaccepted: 'the team lead has not accepted the producer\'s hand-off',
+  stale: 'the producer re-recorded its hand-off after the last acceptance; the team lead must accept it again',
+  rejected: 'the team lead rejected the producer\'s hand-off; a new hand-off and acceptance are needed',
+};
+
+// lib_db.py:745-749; item 059: a done producer with an unsatisfied edge is described by its edge state and
+// what is needed, not by its claim.
+export function describeDependency({ id, item, fm, foreign, handoff }) {
+  const state = handoff ? `done, hand-off ${handoff}: ${HANDOFF_NEEDS[handoff]}`
+    : item ? `status ${item.status}, claimed by ${fm.claimed_by || 'nobody'}` : null;
+  if (foreign && item) return `${item.repository}#${item.seq} ${item.slug} of repository ${item.repository} (${state})`;
+  return item ? `${item.slug} (${state})` : `${id} (no such item in ${isForeign(id) ? 'the backlog repository' : 'this backlog'})`;
 }
 
 // The hand-off lock (item 038; spec 2026-10-28-pr1-learnings.md section 7; PR1 lib_db.py:770-827). A member that hands its

@@ -51,7 +51,8 @@ async function settleScenarioChildren(d, procRoot = '/proc', rounds = 25) {
     await sleep(100);
   }
   if (empty >= 2) return;
-  const pids = scenarioPids(d, procRoot); // item 76 review: verify the writers stopped; fail loudly instead of removing the folders silently
+  let pids = scenarioPids(d, procRoot); // item 76 review: verify the writers stopped; fail loudly instead of removing the folders silently
+  if (!pids.length && empty === 0) { await sleep(100); pids = scenarioPids(d, procRoot); } // the second consecutive empty scan, 100 ms after the first
   if (pids.length) throw new Error(`the scenario's child processes are still alive after the settle (${rounds} rounds of SIGTERM, then SIGKILL): pids ${pids.join(', ')}`);
 }
 // item 76: remove a scenario folder; if the removal fails, name what is left and which scenario processes are still alive (no retry).
@@ -894,4 +895,40 @@ test('cleanup: scenarioPids sees the processes carrying the fixture env (item 76
   for (let i = 0; i < 100 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
   assert.ok(scenarioPids(d).includes(child.pid), 'a process carrying the fixture env is found through /proc');
   child.kill('SIGKILL');
+});
+
+// item 76: a fake process root for the settle and the scan: <root>/<pid>/environ, NUL-separated like /proc.
+// The pid is above Linux's pid_max (4194304), so the settle's signals can never reach a real process.
+const FAKE_PID = '9999999';
+const fakeProc = (d, withEnv = true) => {
+  const root = join(d, 'proc'); mkdirSync(join(root, FAKE_PID), { recursive: true });
+  if (withEnv) writeFileSync(join(root, FAKE_PID, 'environ'), `PATH=/bin\0BACKLOG_HOME=${join(d, 'home')}\0`);
+  return root;
+};
+
+test('cleanup: a scan entry whose environ is gone (the process exited between the listing and the read: ENOENT, or ESRCH while the exit is in flight) is skipped, not fatal (item 76)', t => {
+  const d = mkdtempSync(join(tmpdir(), 'dbconf-x-')); t.after(() => rmSync(d, { recursive: true, force: true }));
+  const root = fakeProc(d, false);
+  assert.deepStrictEqual(scenarioPids(d, root), []);
+  writeFileSync(join(root, FAKE_PID, 'environ'), `BACKLOG_HOME=${join(d, 'home')}\0`);
+  assert.deepStrictEqual(scenarioPids(d, root), [Number(FAKE_PID)], 'the same entry with its environ is a scenario process');
+});
+
+test('cleanup settle: the settle ends only after two consecutive empty scans 100 ms apart, also when its rounds run out (item 76)', async t => {
+  const d = mkdtempSync(join(tmpdir(), 'dbconf-y-')); t.after(() => rmSync(d, { recursive: true, force: true }));
+  const root = fakeProc(d);
+  setTimeout(() => rmSync(join(root, FAKE_PID), { recursive: true, force: true }), 30); // the process is gone during the first round's wait
+  const start = Date.now();
+  await settleScenarioChildren(d, root, 1); // one round: it sees the process, waits, then needs two empty scans 100 ms apart
+  assert.ok(Date.now() - start >= 195, `the settle returned after ${Date.now() - start} ms: it did not wait for the second empty scan`);
+  const start2 = Date.now();
+  await settleScenarioChildren(d, root); // nothing to settle: two empty scans, 100 ms apart
+  assert.ok(Date.now() - start2 >= 195, 'an empty scenario is settled only after two empty scans 100 ms apart');
+});
+
+test('cleanup: a folder the cleanup cannot remove fails loudly, naming what is left and the live scenario processes (item 76)', t => {
+  const d = mkdtempSync(join(tmpdir(), 'dbconf-z-'));
+  const locked = join(d, 'locked'); mkdirSync(locked); writeFileSync(join(locked, 'probe'), 'x'); chmodSync(locked, 0o500);
+  t.after(() => { chmodSync(locked, 0o700); rmSync(d, { recursive: true, force: true }); });
+  assert.throws(() => removeScenario(d), e => /^cleanup of .+ failed \(EACCES\): left .*probe.*; scenario processes still alive: none$/.test(e.message));
 });

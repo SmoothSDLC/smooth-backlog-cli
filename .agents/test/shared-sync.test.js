@@ -415,80 +415,98 @@ function gate(f) {
     release() { writeFileSync(join(dir, 'release'), ''); },
   };
 }
-// `backlog new` run as a separate process (the other writer), in shared mode on the given clone
-const cliNew = (f, home, cons, name) => new Promise(done => {
+// A publication check after a publish step: the clone tree is clean, the local mirror database equals the published one, and the published phases match.
+const sha256 = p => createHash('sha256').update(readFileSync(p)).digest('hex');
+const assertPublish = (f, home, folder, files) => {
+  assert.equal(git(home, 'status', '--porcelain', '--untracked-files=all'), '', 'the clone tree is clean after the publish');
+  const clone = mkdtempSync(join(f.dir, 'verify-'));
+  git(f.dir, 'clone', '-q', f.bare, clone);
+  assert.ok(sha256(join(folder, 'backlog.db')) === sha256(join(clone, 'acme', 'demo', 'backlog.db')), 'the local mirror database equals the published one');
+  assert.deepEqual(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(x => x.includes('phases/')).sort(), files, 'the published phases');
+  rmSync(clone, { recursive: true, force: true });
+};
+
+// `backlog new` run as a separate process (a writer), in shared mode on the given clone. stdout and stderr are kept separate.
+const cliNew = (f, home, cons, name, extra = {}) => new Promise(done => {
   const bin = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js');
   mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(f.dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const p = spawn(process.execPath, [bin, 'new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
-    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: home, QWEN_CODE_AGENT_ID: 'other-writer' }, stdio: ['ignore', 'pipe', 'pipe'] });
-  let out = ''; p.stdout.on('data', c => { out += c; }); p.stderr.on('data', c => { out += c; });
-  p.on('close', status => done({ status, out }));
+    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: home, QWEN_CODE_AGENT_ID: name.toLowerCase(), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = ''; let err = '';
+  p.stdout.on('data', c => { out += c; });
+  p.stderr.on('data', c => { err += c; });
+  p.on('close', status => done({ status, out, err }));
 });
 
-test('overlapping, the other writer first: a commit held at its push while backlog new creates and pushes 1 is renumbered to 2', async t => {
+test('075: overlapping writers, the other writer first: a CLI commit held at its push while a second CLI creates and pushes 1 is renumbered to 2', async t => {
+  const f = fixture(t);
+  const cons = consumer(f.dir, 'acme', 'demo', 'main'); // home's consumer
+  const cons2 = join(f.dir, 'cons2');
+  git(f.dir, 'clone', '-q', join(f.dir, 'origins', 'acme', 'demo.git'), cons2); // home2's consumer
+  const g = gate(f);
+  const aP = cliNew(f, f.home2, cons2, 'Nodeitem'); // writer A in home2; its push will be held at the gate
+  try {
+    await g.entered(); // A's commit is made locally and is inside its first push
+    const b = await cliNew(f, f.home, cons, 'Otheritem'); // writer B in home lands 001-otheritem, before the release
+    g.release(); // A's push is released and renumbered to 002-nodeitem
+    const a = await aP; // the held writer settles
+    assert.equal(a.status, 0, a.out + a.err);
+    assert.equal(a.out, 'renumbered 001 -> 002\n✅ created phase phases/002-nodeitem.md (seq 2) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+    assert.equal(a.err, '');
+    assert.equal(b.status, 0, b.out + b.err);
+    assert.equal(b.out, '✅ created phase phases/001-otheritem.md (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+    assert.equal(b.err, '');
+    assertPublish(f, f.home2, f.folder2, ['acme/demo/phases/001-otheritem.md', 'acme/demo/phases/002-nodeitem.md']); // the last publisher's mirror equals the published database
+    assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all'), '', "B's clone tree is clean too");
+  } finally { g.release(); } // never leave the held push (and its hook) running
+});
+
+test('075: CLI steps publish a clean, in-sync state: after new, archive and an overlapping pair the tree is clean and the local mirror equals the published database', async t => {
+  const f = fixture(t);
+  const cons = consumer(f.dir, 'acme', 'demo', 'main');
+  mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(f.dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  const run = args => { const r = cli(args, { cwd: cons, tmp: f.dir }); assert.equal(r.status, 0, r.stdout + r.stderr); assert.equal(r.stderr, ''); };
+  run(['new', '--name', 'Alpha', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
+  assertPublish(f, f.home, f.folder, ['acme/demo/phases/001-alpha.md']);
+  run(['new', '--name', 'Beta', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
+  assertPublish(f, f.home, f.folder, ['acme/demo/phases/001-alpha.md', 'acme/demo/phases/002-beta.md']);
+  run(['archive', '2', '--force']);
+  assertPublish(f, f.home, f.folder, ['acme/demo/archive/phases/002-beta.md', 'acme/demo/phases/001-alpha.md']);
+  // overlapping writers: two `new` in the same clone overlap on the run lock; both land and the state stays published
+  const g = gate(f);
+  const aP = cliNew(f, f.home, cons, 'Gamma'); // its push will be held at the gate
+  try {
+    await g.entered(); // its push is inside the gate (it holds the run lock)
+    const bP = cliNew(f, f.home, cons, 'Delta', { BACKLOG_LOCK_WAIT_MS: '60000' }); // the second writer waits on the run lock
+    g.release(); // the first publishes 003-gamma, then the second acquires the lock and publishes 004-delta
+    const [a, b] = await Promise.all([aP, bP]);
+    assert.equal(a.status, 0, a.out + a.err);
+    assert.equal(a.err, '');
+    assert.equal(b.status, 0, b.out + b.err);
+    assert.equal(b.err, '');
+    assertPublish(f, f.home, f.folder, ['acme/demo/archive/phases/002-beta.md', 'acme/demo/phases/001-alpha.md', 'acme/demo/phases/003-gamma.md', 'acme/demo/phases/004-delta.md']);
+  } finally { g.release(); } // never leave the held push (and its hook) running
+});
+
+test('075: overlapping writers, this writer first: a CLI commit held at its push keeps 1 when a second CLI in the same clone publishes item 2 on top', async t => {
   const f = fixture(t);
   const cons = consumer(f.dir, 'acme', 'demo', 'main');
   const g = gate(f);
-  putItem(f.folder2, 1, 'nodeitem');
-  const settled = sync.commit(f.home2, f.folder2, 'new nodeitem').then(v => ({ v }), e => ({ e })); // handled from the start
-  let r, err;
+  const aP = cliNew(f, f.home, cons, 'Nodeitem'); // writer A; its push will be held at the gate (it holds the run lock)
   try {
-    await g.entered(); // the commit is made locally and is inside its first push
-    r = await cliNew(f, f.home, cons, 'Otheritem');
-  } catch (e) { err = e; } finally { g.release(); } // never leave the held push (and its hook) running
-  const held = await settled; // the held commit settles before the test can end
-  if (err) throw err;
-  if (held.e) throw held.e;
-  assert.equal(r.status, 0, r.out);
-  assert.deepEqual(held.v, [[1, 2]]);
-  assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-otheritem.md', seq: 1 }, { file: '002-nodeitem.md', seq: 2 }]);
-});
-
-test('075: CLI steps publish a clean, in-sync state: after new and archive the tree is clean and the local mirror equals the published database', t => {
-  const dir = mkdtempSync(join(tmpdir(), 'sync-cli-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const home = sharedBacklog(dir);
-  const cons = consumer(dir, 'acme', 'demo', 'main');
-  mkdirSync(join(dir, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  const bare = join(dir, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
-  const folder = join(home, 'acme', 'demo');
-  const sha256 = p => createHash('sha256').update(readFileSync(p)).digest('hex');
-  const verify = (label, files) => {
-    assert.equal(git(home, 'status', '--porcelain', '--untracked-files=all'), '', label + ': the clone tree is clean after the publish');
-    const clone = mkdtempSync(join(dir, 'verify-'));
-    git(dir, 'clone', '-q', bare, clone);
-    assert.ok(sha256(join(folder, 'backlog.db')) === sha256(join(clone, 'acme', 'demo', 'backlog.db')), label + ': the local mirror database equals the published one');
-    assert.deepEqual(git(bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(x => x.includes('phases/')).sort(), files, label);
-    rmSync(clone, { recursive: true, force: true });
-  };
-  const run = args => { const r = cli(args, { cwd: cons, tmp: dir }); assert.equal(r.status, 0, r.stdout + r.stderr); };
-  run(['new', '--name', 'Alpha', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
-  verify('after new 1', ['acme/demo/phases/001-alpha.md']);
-  run(['new', '--name', 'Beta', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
-  verify('after new 2', ['acme/demo/phases/001-alpha.md', 'acme/demo/phases/002-beta.md']);
-  run(['archive', '2', '--force']);
-  verify('after archive', ['acme/demo/archive/phases/002-beta.md', 'acme/demo/phases/001-alpha.md']);
-});
-
-test('overlapping, this writer first: a commit held at its push keeps 1 when a second git writer in the same clone publishes it with item 2 on top', async t => {
-  const f = fixture(t);
-  const g = gate(f);
-  putItem(f.folder, 1, 'nodeitem');
-  const mirror = db.connect(f.folder); try { db.scan(mirror, f.folder); } finally { mirror.close(); }
-  const settled = sync.commit(f.home, f.folder, 'new nodeitem').then(v => ({ v }), e => ({ e })); // handled from the start
-  let other, err;
-  try {
-    await g.entered(); // held inside its first push
-    putItem(f.folder, 2, 'otheritem'); // the second writer, in the same clone: its push carries the held commit too
-    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'acme/demo: new otheritem'); git(f.home, 'push', '-q', 'origin', 'HEAD:main');
-    other = [];
-  } catch (e) { err = e; } finally { g.release(); }
-  const held = await settled; // the held commit settles before the test can end
-  if (err) throw err;
-  if (held.e) throw held.e;
-  assert.deepEqual(other, []);
-  assert.deepEqual(held.v, []);
-  assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-nodeitem.md', seq: 1 }, { file: '002-otheritem.md', seq: 2 }]);
+    await g.entered(); // A's commit is made locally and is inside its first push
+    const bP = cliNew(f, f.home, cons, 'Otheritem', { BACKLOG_LOCK_WAIT_MS: '60000' }); // writer B in the same clone starts and waits on the run lock (not awaited: it would deadlock the release)
+    g.release(); // A's push proceeds and publishes 001-nodeitem, then releases the run lock
+    const a = await aP;
+    const b = await bP; // B acquires the lock and publishes 002-otheritem on top
+    assert.equal(a.status, 0, a.out + a.err);
+    assert.equal(a.out, '✅ created phase phases/001-nodeitem.md (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+    assert.equal(a.err, '');
+    assert.equal(b.status, 0, b.out + b.err);
+    assert.equal(b.out, '✅ created phase phases/002-otheritem.md (seq 2) — appended, now at P1\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 1 (re)ingested\n');
+    assert.equal(b.err, '');
+    assertPublish(f, f.home, f.folder, ['acme/demo/phases/001-nodeitem.md', 'acme/demo/phases/002-otheritem.md']);
+  } finally { g.release(); } // never leave the held push (and its hook) running
 });

@@ -379,6 +379,7 @@ test('pop --scope with an unknown scope exits 2 and names the choices', () => {
 
 test('pop --roster with a missing roster file exits 2 and names the file', () => {
   const f = fixture();
+  make(f, f.cons, 'roster job');
   const gone = cli(['pop', '--agent', 'x', '--roster', join(f.t, 'nope.json')], { cwd: f.cons, tmp: f.t });
   assert.equal(gone.status, 2);
   assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'nope.json')}: `), gone.stderr);

@@ -99,6 +99,7 @@ const fm = (dir, rel) => parse(readFileSync(join(dir, rel), 'utf8'));
 // 074 stops naming the python scripts in the subjects: it edits the values here, the assertions go through them.
 const SUBJECT = {
   'archive 5': 'acme/demo: archive.py 5',
+  'archive 2 --force': 'acme/demo: archive.py 2 --force',
   'move 2 --to-branch': 'acme/demo: move.py 2 --to-branch',
   'move --all-open-of-branch main': 'acme/demo: move.py --all-open-of-branch main',
   'move 7 --to-repository': 'acme/demo, other/proj: move.py 7 --to-repository',
@@ -172,7 +173,9 @@ test('an origin that cannot be read refuses the move', () => {
   git(f.cons, 'remote', 'set-url', 'origin', join(f.t, 'missing', 'acme', 'demo.git'));
   const r = run(f, 'move', ['2', '--to-branch', 'release']);
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /^❌ could not read the branches of the origin of acme\/demo/);
+  const missing = join(f.t, 'missing', 'acme', 'demo.git');
+  assert.equal(r.stdout, `❌ could not read the branches of the origin of acme/demo (fatal: '${missing}' does not appear to be a git repository\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.); the target branch 'release' cannot be checked\n`);
+  assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'main');
 });
 
@@ -184,7 +187,8 @@ test('a target that is not a plain owner/name is refused before anything is writ
   for (const target of ['../evil', 'a/b/c', 'solo', '/abs/path', 'a/..', 'a\\b']) {
     const r = run(f, 'move', ['2', '--to-repository', target]);
     assert.equal(r.status, 2, target);
-    assert.match(r.stderr, /owner\/name/);
+    assert.equal(r.stderr, `❌ backlog: not an owner/name repository id: ${target}\n`);
+    assert.equal(r.stdout, '');
   }
   assert.deepEqual(snapshot(f), before);
   assert.ok(!existsSync(join(f.home, 'evil')));
@@ -293,7 +297,8 @@ test('review P2: move --to-repository refuses an item with depends_on, before an
   const target = names(f.other, 'phases');
   const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stdout, /003-gamma depends on other items of acme\/demo.*update 003-gamma --set-depends-on none/);
+  assert.equal(r.stdout, '❌ 003-gamma depends on other items of acme/demo; dependencies are resolved against the target backlog, so clear them first: update 003-gamma --set-depends-on none\n');
+  assert.equal(r.stderr, '');
   assert.deepEqual(names(f.other, 'phases'), target);
   assert.equal(existsSync(join(f.folder, 'phases', '003-gamma.md')), true);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
@@ -327,7 +332,8 @@ test('review P2: move --to-repository refuses an item other items depend on, by 
   const target = names(f.other, 'phases');
   const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stdout, /001-alpha.*002-beta.*depend on 003-gamma.*update <dependent> --set-depends-on/s);
+  assert.equal(r.stdout, '❌ 001-alpha, 002-beta depend on 003-gamma, which would leave their depends_on pointing at nothing; clear them first: update <dependent> --set-depends-on ... (the other dependencies, or none)\n');
+  assert.equal(r.stderr, '');
   assert.deepEqual(names(f.other, 'phases'), target);
   assert.equal(existsSync(join(f.folder, 'phases', '003-gamma.md')), true);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
@@ -433,7 +439,8 @@ test('review P2: move of an archived item (--to-branch, --to-repository) is refu
   for (const args of [['5', '--to-branch', 'release'], ['005-epsilon', '--to-repository', 'other/proj']]) {
     const r = run(f, 'move', args);
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.match(r.stdout, /005-epsilon is archived and cannot be moved/);
+    assert.equal(r.stdout, '❌ 005-epsilon is archived and cannot be moved (the rescan does not visit archive/, so the mirror would keep the old branch or repository)\n');
+    assert.equal(r.stderr, '');
   }
   assert.deepEqual([readFileSync(file, 'utf8'), mirror(f), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD')], before);
 });
@@ -460,8 +467,10 @@ for (const [title, script, args] of [
     const f = seed();
     const before = [mirror(f), names(f.folder, 'phases'), names(f.folder, 'archive'), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'status', '--porcelain')];
     const r = cli([script, ...args], { cwd: f.cons, tmp: f.t, env: bound });
+    const refused = { archive: '005-epsilon', 'move --to-branch': '002-beta', 'move --to-repository': '002-beta', 'move --all-open-of-branch': '001-alpha' }[title];
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.match(r.stdout, /team session is bound to acme\/demo branch release/);
+    assert.equal(r.stdout, `❌ ${refused}: this item belongs to repository acme/demo branch main, but this team session is bound to acme/demo branch release (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them\n`);
+    assert.equal(r.stderr, '');
     assert.deepEqual([mirror(f), names(f.folder, 'phases'), names(f.folder, 'archive'), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'status', '--porcelain')], before);
   });
 }
@@ -611,4 +620,85 @@ test('archive --force of an open item: the mirror row says archived, the queue n
   assert.ok(cli(['query', '--next', '--json'], { cwd: f.cons, tmp: f.t }).stdout.indexOf('002-beta') < 0);
   assert.deepEqual(names(f.folder, 'archive'), ['phases/002-beta.md']);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
+});
+
+// --- 075 final review: the move and archive refusals that had no exact check, and the archive --force output
+
+test('075: archive of an unknown item: exit 1, the exact refusal, nothing written or committed', () => {
+  const f = seed();
+  const before = snapshot(f);
+  const r = run(f, 'archive', ['42']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "❌ no phase '42'\n");
+  assert.equal(r.stderr, '');
+  assert.deepEqual(snapshot(f), before);
+});
+
+test('075: archive of a not-done item without --force: exit 1, the exact refusal, nothing written or committed', () => {
+  const f = seed();
+  const before = snapshot(f);
+  const r = run(f, 'archive', ['2']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "❌ 002-beta is 'pending', not 'done' — finish it or pass --force\n");
+  assert.equal(r.stderr, '');
+  assert.deepEqual(snapshot(f), before);
+});
+
+test('075: archive whose target file already exists: exit 1, the exact refusal, nothing written or committed', () => {
+  const f = seed();
+  mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
+  writeFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), readFileSync(join(f.folder, 'phases/005-epsilon.md'), 'utf8'));
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an archived copy exists already'); git(f.home, 'push', '-q');
+  const before = snapshot(f);
+  const r = run(f, 'archive', ['5']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, '❌ archive/phases/005-epsilon.md already exists; archiving 005-epsilon would replace that archived item\n');
+  assert.equal(r.stderr, '');
+  assert.deepEqual(snapshot(f), before);
+});
+
+test('075: move of an unknown item: exit 1, the exact refusal, nothing written or committed', () => {
+  const f = seed();
+  const before = snapshot(f);
+  const r = run(f, 'move', ['42', '--to-branch', 'release']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "❌ no item '42' in the backlog of acme/demo\n");
+  assert.equal(r.stderr, '');
+  assert.deepEqual(snapshot(f), before);
+});
+
+test('075: move to the item own repository: exit 1, the exact refusal, nothing written or committed', () => {
+  const f = seed();
+  const before = snapshot(f);
+  const r = run(f, 'move', ['2', '--to-repository', 'acme/demo']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, '❌ 002-beta already belongs to acme/demo; name the target repository\n');
+  assert.equal(r.stderr, '');
+  assert.deepEqual(snapshot(f), before);
+});
+
+test('075: move of an item whose slug is not a plain name: exit 1, the exact refusal, nothing written or committed', () => {
+  const f = seed();
+  const con = db.connect(f.folder); con.exec("UPDATE phase SET slug='007-eta two' WHERE seq=7"); con.close();
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'a non-plain slug'); git(f.home, 'push', '-q');
+  const before = snapshot(f);
+  const r = run(f, 'move', ['7', '--to-repository', 'other/proj']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "❌ '007-eta two' is not a plain item name (letters, digits, . _ -); the target file is named from it\n");
+  assert.equal(r.stderr, '');
+  assert.deepEqual(snapshot(f), before);
+});
+
+test('075: archive --force of an open item: the exact output, the stamp, the row, the published commit', () => {
+  const f = seed();
+  const r = run(f, 'archive', ['2', '--force']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, '📦 002-beta archived -> archive/phases/002-beta.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 4 item(s) (P0..P3)\n');
+  assert.equal(r.stderr, '');
+  assert.equal(fm(f.folder, 'archive/phases/002-beta.md').fm.status, 'archived');
+  assert.ok(!existsSync(join(f.folder, 'phases/002-beta.md')));
+  const row = () => { const con = db.connect(f.folder); try { return { ...con.prepare("SELECT status, path FROM phase WHERE slug='002-beta'").get() }; } finally { con.close(); } };
+  assert.deepEqual(row(), { status: 'archived', path: 'archive/phases/002-beta.md' });
+  assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['archive 2 --force']);
+  assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'), 'published');
 });

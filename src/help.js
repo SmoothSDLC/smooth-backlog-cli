@@ -212,7 +212,7 @@ Options:
       example a stale review; a member never takes over another agent's review.
   --reason REASON
       Why the lead reassigns or releases another agent's item or review (--reassign, --reassign-review, or
-      --release AGENT --by <lead>).
+      --release AGENT --by <lead>), or rejects a hand-off (--reject-handoff).
   --release AGENT
       Give the item back, pending and unclaimed (team session). Only AGENT itself, or the team lead with --by <lead> and
       --reason, releases it.
@@ -230,9 +230,35 @@ Options:
       set). Other agents skip it unless the review was started more than 20 minutes ago (team session).
   --review {pass,changes}
       Record a review verdict; it needs --by and --comments (team session).
+  --handoff DEPENDENT
+      The producer records its hand-off for DEPENDENT, one of the item's dependents; only the item's claimer does
+      (--by <you> or the claim). It replaces any earlier hand-off for the same dependent, which makes an earlier
+      receipt of the team lead stale. It needs --handoff-commit, --handoff-contract and --handoff-verification.
+  --handoff-commit COMMIT
+      The 40-hex commit id the hand-off is pinned to. Required with --handoff.
+  --handoff-contract CONTRACT
+      The contract of the hand-off, in text. Required with --handoff.
+  --handoff-verification VERIFICATION
+      How the hand-off is verified, in text. Required with --handoff.
+  --handoff-outputs OUTPUTS
+      The outputs of the work the hand-off carries. Optional with --handoff.
+  --handoff-pickup PICKUP
+      How the dependent picks the work up. Optional with --handoff.
+  --handoff-risks RISKS
+      The open risks of the hand-off. The default is NONE. Optional with --handoff.
+  --accept-handoff DEPENDENT
+      The team lead accepts the producer's hand-off for DEPENDENT (--by <lead>, --checks "<what was checked>"); the
+      producer's review must have passed. It records a receipt that pins the current hand-off record; a re-recorded
+      hand-off makes it stale.
+  --reject-handoff DEPENDENT
+      The team lead rejects the producer's hand-off for DEPENDENT (--by <lead>, --reason "<why>"); it records a
+      receipt that pins the current hand-off record.
+  --checks CHECKS
+      The checks the team lead did before accepting a hand-off (--accept-handoff).
   --by AGENT
       The agent that reviews (--start-review, --review), refines (--refine-start, --refine-done), requests or records the
-      refinement review, or closes (--close) the item (team session).
+      refinement review, records the hand-off (--handoff) or accepts or rejects one (--accept-handoff,
+      --reject-handoff), or closes (--close) the item (team session).
   --comments COMMENTS
       The review findings (--review); they must cite one of the review references of the item (team session).
   --close
@@ -242,7 +268,8 @@ Options:
       Say what would change and change nothing: no file is written and nothing is committed.
 ${HELP_FLAG}
 
-A call takes at most one team step (--claim, --release, --request-review, --start-review, --review, --close, --waiting, --waiting-done).
+A call takes at most one team step (--claim, --release, --request-review, --start-review, --review, --close, --waiting,
+--waiting-done, --handoff, --accept-handoff, --reject-handoff).
 A session with TEAM_REPOSITORY (and TEAM_BRANCH) set works only on items of that repository and branch: every change to another item is refused, field edits and --append as much as team steps.
 On success the command prints a line that starts with a check mark, the slug and the fields it set.
 

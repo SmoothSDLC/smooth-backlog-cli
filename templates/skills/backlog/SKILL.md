@@ -91,6 +91,12 @@ sees and changes the backlog only through them.
   then `--waiting-done --by <you>`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review
   --by <you>`, then `--review pass|changes --by <you> --comments "<findings, citing one of the item's review_refs>"`;
   the claimer closes with `--close --summary "<what was delivered>"`.
+- [ ] Hand-off: the producer records its hand-off for each dependent before the dependent may be offered or claimed,
+  and the team lead accepts or rejects it: the claimer runs `backlog update <item> --handoff <dependent>
+  --handoff-commit <sha> --handoff-contract "<text>" --handoff-verification "<text>" [--handoff-outputs ...
+  --handoff-pickup ... --handoff-risks ...] --by <you>`, and the lead answers `--accept-handoff <dependent>
+  --checks "<what was checked>" --by <lead>` (only after the producer's review passed) or `--reject-handoff
+  <dependent> --reason "<why>" --by <lead>`; a re-recorded hand-off makes an earlier receipt stale.
 - [ ] A member's review request, a changes verdict it gives and its close end its session (never the lead's): the
   output's last line says END THE SESSION NOW: reply with text only and make no further tool call (when the CLI
   recorded a hand-off for a Qwen team member, `backlog work` also answers stop until its fresh session).

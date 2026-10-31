@@ -5,6 +5,7 @@
 import { hasDefinitionOfDone } from './new.js';
 import { wipRefusal } from './wip.js';
 import { now } from './store.js';
+import { acceptHandoff, recordHandoff, rejectHandoff } from './handoff-commands.js';
 import {
   offeredTo, teamName,
   REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
@@ -254,9 +255,18 @@ export function closeItem({ fm }, by, summary) {
 const REFINEMENT_STEPS = ['refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision'];
 // the agent each step acts as (item 033: a member acts only as itself)
 const ACTS_AS = { claim: a => a.claim, release: a => a.by || a.release, reassign: a => a.by, 'reassign-review': a => a.by, 'request-review': (a, fm) => a.by || fm.claimed_by,
-  close: (a, fm) => a.by || fm.claimed_by, 'waiting-done': (a, fm) => a.by || fm.claimed_by };
+  close: (a, fm) => a.by || fm.claimed_by, 'waiting-done': (a, fm) => a.by || fm.claimed_by,
+  'accept-handoff': a => a.by, 'reject-handoff': a => a.by }; // the accept and reject act as --by, the team lead (item 059.V1)
 const ACTIONS = ['reassign', 'reassign-review', 'refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
-  'claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done'];
+  'claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done', 'handoff', 'accept-handoff', 'reject-handoff'];
+// The hand-off steps (item 059.2, src/shared/handoff-commands.js) are pure: they return {refuse} (the refusal
+// text) or {fm: {<keys to set, in the stored form>}, text, event}; this applies the front matter keys and
+// refuses as the other steps do.
+const handoffStep = (slug, item, r) => {
+  if (r.refuse) return { refuse: `${slug}: ${r.refuse}` };
+  Object.assign(item.fm, r.fm);
+  return { event: r.event, text: r.text };
+};
 export function step(a, { fm, body, slug, folder, repo, incomplete, given, before = fm }) {
   const actions = ACTIONS.filter(k => a[k]);
   if (actions.length > 1) return { refuse: `one team-work step at a time (got ${actions.map(k => `--${k}`).join(', ')})` };
@@ -335,6 +345,12 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
       case 'review': return review(item, a.review, { by: a.by, comments: a.comments });
       case 'waiting': return waiting(item, a.by, a.waiting);
       case 'waiting-done': return waitingDone(item, a.by);
+      // Item 059.V1: the hand-off steps. The record is made by the claimer (--by, else the claimer), the accept and
+      // reject by the team lead (teamLead()); the functions are pure (059.2), handoffStep applies their front matter.
+      case 'handoff': return handoffStep(slug, item, recordHandoff(item, { dependent: a.handoff, commit: a['handoff-commit'], contract: a['handoff-contract'], verification: a['handoff-verification'],
+        outputs: a['handoff-outputs'], pickup: a['handoff-pickup'], risks: a['handoff-risks'], by: a.by || fm.claimed_by }));
+      case 'accept-handoff': return handoffStep(slug, item, acceptHandoff(item, { dependent: a['accept-handoff'], checks: a.checks, by: a.by || fm.claimed_by, lead: teamLead() }));
+      case 'reject-handoff': return handoffStep(slug, item, rejectHandoff(item, { dependent: a['reject-handoff'], reason: a.reason, by: a.by || fm.claimed_by, lead: teamLead() }));
       default: return closeItem(item, a.by, a.summary);
     }
   } catch (e) {

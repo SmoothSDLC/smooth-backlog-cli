@@ -112,8 +112,11 @@ test('refusal: a diagnostic that echoes input carries no credential of a URL', t
 
 test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name Alpha job" and pushes', t => {
   const f = fixture(t);
+  const commits = () => Number(git(f.bare, 'rev-list', '--count', 'main'));
+  const before = commits();
   const r = node(f, NONE);
   assert.equal(r.status, 0, r.stderr);
+  assert.equal(commits(), before + 1, 'exactly one commit is published');
   assert.equal(r.stdout, '✅ created phase phases/001-alpha-job.md (seq 1) — appended, now at P0\n'
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
   const [item] = items(f);

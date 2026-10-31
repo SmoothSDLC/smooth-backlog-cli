@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
@@ -62,7 +62,7 @@ function make(f, name, extra = []) {
   const args = newArgs(name, extra);
   const r = cli(['new', ...args], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  return r.stdout.split('created phase phases/')[1].split('.md')[0];
+  return createdSlug(r.stdout);
 }
 
 test('claim, review and close lifecycle (port of test_claim_review_close_lifecycle)', () => {
@@ -150,7 +150,7 @@ test('an incomplete item is only refined: no claim, no note', () => {
   const f = fixture();
   const r = cli(['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const slug = r.stdout.split('created phase phases/')[1].split('.md')[0];
+  const slug = createdSlug(r.stdout);
   const out = update(f, [slug, '--claim', 'cody']);
   assert.equal(out.status, 1);
   assert.match(out.stdout, new RegExp(`^❌ ${slug}: incomplete item, missing review_refs, estimate_min, definition_of_done: in a team nobody claims, reviews or works it \\(--claim refused\\); the team lead refines it only: backlog update <item> --set-review-refs references/review/<type>\\.md`));

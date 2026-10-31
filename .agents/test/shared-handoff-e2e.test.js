@@ -233,3 +233,28 @@ test('059.V1: a hand-off recorded without --by is checked against the claimer\'s
   assert.equal(handoffs(f, p).length, 1);
   assert.equal(handoffs(f, p)[0].by, 'producer'); // the record is by the claimer, checked against its view
 });
+
+// Review round 3 (codex rounds 3 and 4 at 7bd4b10): the hand-off flags are detected by presence, not
+// truthiness - an empty value selects the action and is refused, instead of falling through to a
+// successful state change (parse accepts the empty value).
+
+test('059.V1: an empty hand-off value is refused for the record, the accept and the reject', () => {
+  const f = fixture();
+  const { p, d } = producerWithHandoff(f, C1, 'e2e-77-session');
+  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  const record = run(f, ['update', p, '--handoff', '', '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
+    '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--by', 'producer']);
+  assert.equal(record.status, 1, record.stdout + record.stderr);
+  assert.match(record.stdout, /--handoff needs the dependent/);
+  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  const accept = run(f, ['update', p, '--accept-handoff', '', '--checks', 'checked', '--by', 'lead']);
+  assert.equal(accept.status, 1, accept.stdout + accept.stderr);
+  assert.match(accept.stdout, /--accept-handoff needs the dependent/);
+  const reject = run(f, ['update', p, '--reject-handoff', '', '--reason', 'why not', '--by', 'lead']);
+  assert.equal(reject.status, 1, reject.stdout + reject.stderr);
+  assert.match(reject.stdout, /--reject-handoff needs the dependent/);
+  assert.equal(handoffs(f, p).length, 1); // the original record stays, untouched by the empty calls
+  assert.equal(handoffs(f, p)[0].commit, C1);
+  assert.equal(receipts(f, p).length, 0);
+  assert.equal(edgeState(fm(f, p), String(seq(d))), 'unaccepted');
+});

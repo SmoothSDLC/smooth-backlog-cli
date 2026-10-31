@@ -269,8 +269,12 @@ const handoffStep = (slug, item, r) => {
   return { event: r.event, text: r.text };
 };
 export function step(a, { fm, body, slug, folder, repo, incomplete, given, before = fm }) {
-  const actions = ACTIONS.filter(k => a[k]);
+  // Item 059.V1 review r3 (codex round 4 at 7bd4b10): the hand-off flags are detected by presence, not truthiness -
+  // parse accepts an empty value (update.js), so without this --handoff '' / --accept-handoff '' / --reject-handoff ''
+  // select no action and fall through to a successful state change; now they select the action and are refused below.
+  const actions = ACTIONS.filter(k => (k === 'handoff' || k === 'accept-handoff' || k === 'reject-handoff') ? a[k] !== undefined : a[k]);
   if (actions.length > 1) return { refuse: `one team-work step at a time (got ${actions.map(k => `--${k}`).join(', ')})` };
+  if (actions.length && a[actions[0]] === '') return { refuse: `${slug}: --${actions[0]} needs the dependent (an empty value records nothing)` };
   // item 038: a member waiting for its restart takes no new work (update.py:32-35)
   for (const [flag, agent] of [['--refine-start', a['refine-start'] && a.by], ['--claim', a.claim], ['--start-review', a['start-review'] && a.by]]) {
     if (agent && restarting(agent)) return { refuse: `${slug}: ${flag} refused: ${agent} is waiting for its restart; ${STOP_TEXT}` };

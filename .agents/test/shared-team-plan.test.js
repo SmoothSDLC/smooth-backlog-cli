@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -31,7 +31,7 @@ const run = (f, args, env = {}) => {
   return cli(args, o);
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 const plan = (f, env, agents = 'cody,archy,zed,lead') => JSON.parse(ok(f, ['query', '--plan', '--agents', agents, '--roster', f.roster, '--json'], env).stdout);
 const rows = p => p.map(e => [e.member, e.action, e.item]);
@@ -104,7 +104,7 @@ test('the lead, a review_only member and a member waiting for its restart get no
   writeFileSync(join(tdir, 'config.json'), JSON.stringify({ members: [{ name: 'cody', joinedAt: 1000 }] }));
   writeFileSync(join(tdir, 'handoff', 'cody.json'), JSON.stringify({ at_ms: Date.now(), seq: 1 }));
   assert.deepEqual(plan(f).map(e => [e.member, e.item]), [['zed', a]]); // cody waits for its restart
-  const bare = ok(f, ['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  const bare = createdSlug(ok(f, ['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout);
   const r = plan(f).find(e => e.member === 'lead');
   assert.deepEqual([r.action, r.item], ['refine', bare]);
   assert.ok(r.reason.startsWith('incomplete: review_refs,estimate_min,definition_of_done') && r.instruction.includes('never action it'), JSON.stringify(r));
@@ -162,28 +162,70 @@ test('a member refining an item gets no respond or close in the plan', () => {
   assert.ok(!plan(f).some(e => e.member === 'zed' && ['respond', 'close'].includes(e.action)), JSON.stringify(plan(f)));
 });
 
-test('the plan through claims, a review, a changes verdict, a close and the lead\'s refinement: every step and plan query succeeds', () => {
+test('075: the plan through claims, a review, a changes verdict, a close and the lead\'s refinement: every step and plan query prints exactly what it records', () => {
   {
     const f = fixture('team-plan-js-');
+    // timestamps and the consumer checkout differ between runs; the rest of the output is asserted word for word
+    const TS = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(f.cons, '<cwd>');
+    // the plan JSON uses the CLI's Python-style dumps: ", " and ": " separators, non-ASCII escaped
+    const dumps = v => (v !== null && typeof v === 'object'
+      ? (Array.isArray(v) ? `[${v.map(dumps).join(', ')}]` : `{${Object.entries(v).map(([k, x]) => `${dumps(k)}: ${dumps(x)}`).join(', ')}}`)
+      : JSON.stringify(v ?? null).replace(/[\u007f-￿]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`));
+    const claim = (member, item, seq, hint) => ({ member, action: 'claim', item, seq,
+      instruction: `claim exactly this item (planned for you; do not pop for another): backlog update ${item} --claim ${member}, then start the work and record each step in the item; definition of done: references/review/code.md (${hint}: load them before working)`,
+      reason: 'free member', key: `${member} claim ${seq}` });
     const step = (script, args) => {
       const r = run(f, [script, ...args]);
       assert.equal(r.status, 0, `${script} ${args.join(' ')}: ${r.stdout}${r.stderr}`);
+      assert.equal(r.stderr, '', `${script} ${args.join(' ')}: ${r.stderr}`);
       return r.stdout;
     };
-    const plans = [];
-    const p = () => plans.push(JSON.parse(step('query', ['--plan', '--agents', 'cody,archy,zed', '--roster', f.roster, '--json'])).map(e => ({ ...e, key: e.key.replace(/ \d{4}-\d\d-\d\dT\S+$/, ''), instruction: e.instruction.replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g, 'TS') })));
+    // the claim and review text cite the definition-of-done hint as the CLI prints it; other branch work may
+    // reword that phrase, so capture it from the CLI's own output and reuse it in every expected document
+    let hint = null;
+    const plan = (agents, expectedForHint) => {
+      const out = step('query', ['--plan', '--agents', agents, '--roster', f.roster, '--json']);
+      if (hint === null) {
+        const m = out.match(/\(([^()]*): load them before working\)/);
+        assert.ok(m, out);
+        hint = m[1];
+      }
+      assert.equal(TS(out), `${dumps(expectedForHint(hint))}\n`);
+    };
     for (const n of ['first', 'second', 'third']) step('new', NEW(n));
-    p();
+    plan('cody,archy,zed', h => [claim('cody', '001-first', 1, h), claim('archy', '002-second', 2, h), claim('zed', '003-third', 3, h)]);
     step('update', ['1', '--claim', 'zed']); step('update', ['1', '--request-review', 'any', '--note', 'x', '--by', 'zed']);
-    p();
+    plan('cody,archy,zed', h => [
+      { member: 'cody', action: 'review', item: '001-first', seq: 1,
+        instruction: `start the review: backlog update 001-first --start-review --by cody; then review the work of zed; load its review_refs first: references/review/code.md (${h}) and cite one in --comments, then backlog update 001-first --review pass|changes --by cody --comments "<findings>"`,
+        reason: 'any member but the author', key: 'cody review 1' },
+      { ...claim('archy', '002-second', 2, h), reason: 'free member; least loaded' },
+      claim('zed', '003-third', 3, h),
+    ]);
     step('update', ['1', '--review', 'changes', '--by', 'cody', '--comments', 'fix (references/review/code.md)']);
-    p();
+    plan('cody,archy,zed', h => [
+      { member: 'zed', action: 'respond', item: '001-first', seq: 1,
+        instruction: 'the review by cody asked for changes (TS): read its findings in the item, fix them, record each step (backlog update 001-first --append "..."), then backlog update 001-first --request-review any --note "<what changed>"',
+        reason: 'claimer', key: 'zed respond 1 TS' },
+      claim('cody', '002-second', 2, h),
+      claim('archy', '003-third', 3, h),
+    ]);
     step('update', ['1', '--request-review', 'any', '--note', 'y', '--by', 'zed']);
     step('update', ['1', '--review', 'pass', '--by', 'cody', '--comments', 'ok (references/review/code.md)']);
-    p();
+    plan('cody,archy,zed', h => [
+      { member: 'zed', action: 'close', item: '001-first', seq: 1,
+        instruction: 'close 1 with --close --summary (backlog update 001-first --close --summary "<outcome>")',
+        reason: 'claimer', key: 'zed close 1' },
+      claim('cody', '002-second', 2, h),
+      claim('archy', '003-third', 3, h),
+    ]);
     writeFileSync(f.roster, JSON.stringify({ cody: {}, archy: {}, zed: {}, lead: {} })); // the lead plans its refinement
     step('new', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']); // incomplete
-    plans.push(JSON.parse(step('query', ['--plan', '--agents', 'lead', '--roster', f.roster, '--json'])));
-    assert.equal(plans.length, 5);
+    plan('lead', () => [
+      { member: 'lead', action: 'refine', item: '004-bare', seq: 4,
+        instruction: "refine 4, never action it: set review_refs, estimate_min, definition_of_done (backlog update 004-bare --set-review-refs references/review/<type>.md,.. / --set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / --append '## Definition of done\\n- [ ] <checkable line>'); once complete, record the gap in the item",
+        reason: 'incomplete: review_refs,estimate_min,definition_of_done',
+        key: 'lead refine 4 review_refs,estimate_min,definition_of_done' },
+    ]);
   }
 });

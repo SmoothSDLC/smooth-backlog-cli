@@ -85,3 +85,29 @@ REVIEW: pending
 PICKUP: 57's slices A and B read output in the shared-new, shared-move-archive, shared-query, shared-team-pop and shared-team-work tests; the 075 tests in shared-new.test.js and shared-sync.test.js assert the created-phase line word for word (a successful new prints it to stdout and nothing to stderr) - 57 edits those expected strings when the path leaves the line; createdSlug stays the one place that tolerates both forms
 OPEN_RISKS: NONE
 END_DEPENDENCY_HANDOFF
+
+DEPENDENCY_HANDOFF v1
+SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#75
+DEPENDENT_ITEM: SmoothSDLC/smooth-backlog-cli#74
+PRODUCER_AGENT: the claimer of item 75
+SOURCE_COMMIT: 47bf7af ; BRANCH: team-cli-parity-1
+CONTRACT: unchanged by the codex round 3 review round (2026-10-31): every commit-subject assertion in .agents/test/shared-move-archive.test.js and .agents/test/shared-new.test.js still goes through the one per-file SUBJECT constant; no commit-subject assertion was added or changed in this round. The round 3 changes are CLI-only exact-output and stderr assertions: the shared-store reorder and findings tests now drive the CLI (backlog update --replan, backlog query) and assert the planning-event output and the findings banner word for word; the shared-team-plan journey test asserts every plan query word for word (the JSON in the CLI's own dumps format, timestamps normalized, the definition-of-done hint captured from the CLI's own first output because branch work may reword that phrase); the shared-team-stages test normalizes the reviewer model names of the refinement-review text from the CLI's own output (MODEL_A, MODEL_B) so the file names no model; the created slugs in shared-team-stages and shared-team-lifecycle go through createdSlug; every successful step asserts empty stderr.
+OUTPUTS: the round 3 commits (one per changed test file): 46383e3 (shared-store), 5681f86 (shared-team-plan), aaa14d8 (shared-team-stages), 47bf7af (shared-team-lifecycle); the shared-team-pop exact-output test of this round landed in 357e362 (item 86's commit pinned the same output text)
+VERIFICATION: at 47bf7af on Node 24 (the card shell's BACKLOG_HEADLESS unset): the ten files that carry 075 tests (node --test): tests 226, pass 226, fail 0, skipped 0; the full suite (npm test, the shared checkout with other items' uncommitted work on top - the 059.* hand-off docs, the hand-off close/commands/core tests, shared-sync-db, shared-fixtures): tests 768, pass 767, fail 0, skipped 1 - the skip is item 86's guard test (no-private-details.test.js), which self-skips while BACKLOG_PRIVATE_DENYLIST is unset; npm run check exits 0; a mutation check broke one source per new or changed 075 test (each mutation made its test fail, every source was restored before the commit)
+REVIEW: pending
+PICKUP: slice 74 edits the subject lines in shared-update.test.js, shared-move-archive.test.js and shared-sync-db.test.js; in shared-move-archive.test.js only the SUBJECT values change (one line per subject), the assertions route through them and stay; the SUBJECT constant in shared-new.test.js is left unless a new subject changes; nothing in this round's commits changes how the subjects are read
+OPEN_RISKS: NONE
+END_DEPENDENCY_HANDOFF
+
+DEPENDENCY_HANDOFF v1
+SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#75
+DEPENDENT_ITEM: SmoothSDLC/smooth-backlog-cli#57
+PRODUCER_AGENT: the claimer of item 75
+SOURCE_COMMIT: 47bf7af ; BRANCH: team-cli-parity-1
+CONTRACT: unchanged by the codex round 3 review round (2026-10-31): createdSlug in .agents/test/shared-fixtures.js stays the one place that tolerates both "created phase phases/<slug>.md" and "created phase <slug>"; the round 3 change moved the remaining created-slug reads in shared-team-stages.test.js and shared-team-lifecycle.test.js through createdSlug, so item 057's output change keeps touching one line per read. The exact-output assertions that contain the full "created phase phases/<slug>.md" line are unchanged and remain the current contract - 57 edits those expected strings when the path leaves the line, after 75 has closed and the files are free.
+OUTPUTS: .agents/test/shared-fixtures.js (createdSlug, unchanged this round); the round 3 commits (46383e3, 5681f86, aaa14d8, 47bf7af) changed only assertions in the test files; the shared-team-pop exact-output test landed in 357e362 (item 86's commit)
+VERIFICATION: same run as the 74 block above (the ten 075 files 226/0/0 at 47bf7af; the full suite 768/767/0 fail/1 skip - the skip is item 86's guard test, which self-skips while BACKLOG_PRIVATE_DENYLIST is unset)
+REVIEW: pending
+PICKUP: 57's slices A and B read output in the shared-new, shared-move-archive, shared-query, shared-team-pop and shared-team-work tests; the 075 tests in those files assert the line with the path - 57 edits the expected strings when the path leaves the line; createdSlug stays the one place that tolerates both forms
+OPEN_RISKS: NONE
+END_DEPENDENCY_HANDOFF

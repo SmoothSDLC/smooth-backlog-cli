@@ -174,7 +174,10 @@ async function change(a, con, folder, repo) {
   const path = join(folder, row.path);
   await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way
   const { fm, body: text } = parseDoc(readFileSync(path, 'utf8'));
-  if (!a.named && a['request-review'] !== undefined) seen.setActor(fm.claimed_by); // only the holder asks for a review of its work
+  // The step's effective actor, not the environment actor: only the holder asks for a review of its work, and the
+  // hand-off record acts as the claimer (item 059.V1, review r2: a --handoff without --by records as the claimer,
+  // so the stale-view check must run against the claimer's view).
+  if (!a.named && (a['request-review'] !== undefined || a.handoff !== undefined)) seen.setActor(fm.claimed_by);
   seen.check(folder, repo, seen.actor(), row.slug, row.path); // refuses (exit 5) when someone else changed the item since this agent read it
   a.guard = [{ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` }];
   a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: fm.claimed_by === a.claim && fm.status === 'in_progress' }] : [];

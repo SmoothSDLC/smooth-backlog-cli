@@ -205,3 +205,31 @@ test('059.V1: a member without --by cannot accept or reject as the lead claimer'
   assert.match(reject.stdout, /--reject-handoff needs --by <the team lead>/);
   assert.equal(receipts(f, p).length, 0);
 });
+
+// Review round 2 (codex at 906b41a): the stale-view check must run against the effective actor of the step.
+// A --handoff without --by records as the claimer, so the claimer's view is the one that must be fresh; the
+// environment actor's fresh view must not let the write through (update.js chose the actor before the item
+// loaded and substituted the claimer only for --request-review).
+
+test('059.V1: a hand-off recorded without --by is checked against the claimer\'s view, not the environment actor\'s', () => {
+  const f = fixture();
+  const p = make(f, 'producer item');
+  const d = make(f, 'dependent item', '--depends-on', seq(p));
+  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['update', p, '--claim', 'producer']);
+  ok(f, ['query', '--phase', p, '--agent', 'producer']); // the claimer's view of the item as it stands
+  ok(f, ['update', p, '--append', 'a note from the lead', '--by', 'lead']); // someone else changes it: the claimer's view is now stale
+  const r = run(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
+    '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
+    { QWEN_CODE_AGENT_ID: 'lead@team77' });
+  assert.equal(r.status, 5, r.stdout + r.stderr);
+  assert.match(r.stderr, /was changed by lead at .* after you last read it/);
+  assert.equal(handoffs(f, p).length, 0);
+  ok(f, ['query', '--phase', p, '--agent', 'producer']); // the claimer reads the change, then the same call succeeds
+  const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
+    '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
+    { QWEN_CODE_AGENT_ID: 'lead@team77' });
+  assert.match(record.stdout, /handoff=DEPENDENCY_HANDOFF v1/);
+  assert.equal(handoffs(f, p).length, 1);
+  assert.equal(handoffs(f, p)[0].by, 'producer'); // the record is by the claimer, checked against its view
+});

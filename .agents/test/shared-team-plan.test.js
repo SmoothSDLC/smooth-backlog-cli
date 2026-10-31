@@ -171,8 +171,9 @@ test('075: the plan through claims, a review, a changes verdict, a close and the
     const dumps = v => (v !== null && typeof v === 'object'
       ? (Array.isArray(v) ? `[${v.map(dumps).join(', ')}]` : `{${Object.entries(v).map(([k, x]) => `${dumps(k)}: ${dumps(x)}`).join(', ')}}`)
       : JSON.stringify(v ?? null).replace(/[\u007f-￿]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`));
-    const claim = (member, item, seq, hint) => ({ member, action: 'claim', item, seq,
-      instruction: `claim exactly this item (planned for you; do not pop for another): backlog update ${item} --claim ${member}, then start the work and record each step in the item; definition of done: references/review/code.md (${hint}: load them before working)`,
+    const HINT = 'the review-documents repository'; // the definition-of-done hint the plan cites, pinned word for word
+    const claim = (member, item, seq) => ({ member, action: 'claim', item, seq,
+      instruction: `claim exactly this item (planned for you; do not pop for another): backlog update ${item} --claim ${member}, then start the work and record each step in the item; definition of done: references/review/code.md (${HINT}: load them before working)`,
       reason: 'free member', key: `${member} claim ${seq}` });
     const step = (script, args) => {
       const r = run(f, [script, ...args]);
@@ -180,48 +181,40 @@ test('075: the plan through claims, a review, a changes verdict, a close and the
       assert.equal(r.stderr, '', `${script} ${args.join(' ')}: ${r.stderr}`);
       return r.stdout;
     };
-    // the claim and review text cite the definition-of-done hint as the CLI prints it; other branch work may
-    // reword that phrase, so capture it from the CLI's own output and reuse it in every expected document
-    let hint = null;
-    const plan = (agents, expectedForHint) => {
+    const plan = (agents, expected) => {
       const out = step('query', ['--plan', '--agents', agents, '--roster', f.roster, '--json']);
-      if (hint === null) {
-        const m = out.match(/\(([^()]*): load them before working\)/);
-        assert.ok(m, out);
-        hint = m[1];
-      }
-      assert.equal(TS(out), `${dumps(expectedForHint(hint))}\n`);
+      assert.equal(TS(out), `${dumps(expected)}\n`);
     };
     for (const n of ['first', 'second', 'third']) step('new', NEW(n));
-    plan('cody,archy,zed', h => [claim('cody', '001-first', 1, h), claim('archy', '002-second', 2, h), claim('zed', '003-third', 3, h)]);
+    plan('cody,archy,zed', [claim('cody', '001-first', 1), claim('archy', '002-second', 2), claim('zed', '003-third', 3)]);
     step('update', ['1', '--claim', 'zed']); step('update', ['1', '--request-review', 'any', '--note', 'x', '--by', 'zed']);
-    plan('cody,archy,zed', h => [
+    plan('cody,archy,zed', [
       { member: 'cody', action: 'review', item: '001-first', seq: 1,
-        instruction: `start the review: backlog update 001-first --start-review --by cody; then review the work of zed; load its review_refs first: references/review/code.md (${h}) and cite one in --comments, then backlog update 001-first --review pass|changes --by cody --comments "<findings>"`,
+        instruction: `start the review: backlog update 001-first --start-review --by cody; then review the work of zed; load its review_refs first: references/review/code.md (${HINT}) and cite one in --comments, then backlog update 001-first --review pass|changes --by cody --comments "<findings>"`,
         reason: 'any member but the author', key: 'cody review 1' },
-      { ...claim('archy', '002-second', 2, h), reason: 'free member; least loaded' },
-      claim('zed', '003-third', 3, h),
+      { ...claim('archy', '002-second', 2), reason: 'free member; least loaded' },
+      claim('zed', '003-third', 3),
     ]);
     step('update', ['1', '--review', 'changes', '--by', 'cody', '--comments', 'fix (references/review/code.md)']);
-    plan('cody,archy,zed', h => [
+    plan('cody,archy,zed', [
       { member: 'zed', action: 'respond', item: '001-first', seq: 1,
         instruction: 'the review by cody asked for changes (TS): read its findings in the item, fix them, record each step (backlog update 001-first --append "..."), then backlog update 001-first --request-review any --note "<what changed>"',
         reason: 'claimer', key: 'zed respond 1 TS' },
-      claim('cody', '002-second', 2, h),
-      claim('archy', '003-third', 3, h),
+      claim('cody', '002-second', 2),
+      claim('archy', '003-third', 3),
     ]);
     step('update', ['1', '--request-review', 'any', '--note', 'y', '--by', 'zed']);
     step('update', ['1', '--review', 'pass', '--by', 'cody', '--comments', 'ok (references/review/code.md)']);
-    plan('cody,archy,zed', h => [
+    plan('cody,archy,zed', [
       { member: 'zed', action: 'close', item: '001-first', seq: 1,
         instruction: 'close 1 with --close --summary (backlog update 001-first --close --summary "<outcome>")',
         reason: 'claimer', key: 'zed close 1' },
-      claim('cody', '002-second', 2, h),
-      claim('archy', '003-third', 3, h),
+      claim('cody', '002-second', 2),
+      claim('archy', '003-third', 3),
     ]);
     writeFileSync(f.roster, JSON.stringify({ cody: {}, archy: {}, zed: {}, lead: {} })); // the lead plans its refinement
     step('new', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']); // incomplete
-    plan('lead', () => [
+    plan('lead', [
       { member: 'lead', action: 'refine', item: '004-bare', seq: 4,
         instruction: "refine 4, never action it: set review_refs, estimate_min, definition_of_done (backlog update 004-bare --set-review-refs references/review/<type>.md,.. / --set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / --append '## Definition of done\\n- [ ] <checkable line>'); once complete, record the gap in the item",
         reason: 'incomplete: review_refs,estimate_min,definition_of_done',

@@ -109,13 +109,15 @@ test('`backlog next` is --next', () => {
 
 test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
   const f = fx();
-  assert.notEqual(view(f, ['--next', '--branch', 'nowhere']).stdout, '');
+  const text = view(f, ['--next', '--branch', 'nowhere']).stdout; // the fixture's findings banners come first
+  assert.match(text, /^⚠️  CRITICAL: phases\/007-foreign\.md says repository other\/thing/);
+  assert.ok(text.endsWith('\nℹ️  no actionable item for acme/demo, branch nowhere; --all shows every branch\n'), text);
   assert.equal(view(f, ['--next', '--branch', 'nowhere', '--json']).stdout.trim(), '{}');
 });
 
 test('--phase prints the item by slug and by number; not found is exit 1 on stdout', () => {
   const f = fx();
-  for (const id of ['002-beta', '3', '003']) assert.match(JSON.parse(view(f, ['--phase', id]).stdout).slug, /^00[23]-/);
+  for (const [id, slug] of [['002-beta', '002-beta'], ['3', '003-gamma'], ['003', '003-gamma']]) assert.equal(JSON.parse(view(f, ['--phase', id]).stdout).slug, slug, id);
   assert.match(view(f, ['--phase', 'nope'], 1).stdout, /no phase 'nope'/);
 });
 

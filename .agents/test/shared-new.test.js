@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as store from '../../src/shared/store.js';
@@ -34,7 +34,14 @@ const NONE = [...BASE, '--depends-on', 'none'];
 const items = f => store.load(f.folder).filter(i => i.path.startsWith('phases/'));
 // An item without what differs between two runs: the creation and update times and the creating commit.
 const bare = ({ fm: { created, updated, updated_by, commit, ...fm }, body, path }) => ({ path, keys: Object.keys(fm), fm, body }); // eslint-disable-line no-unused-vars
+const fmNorm = fm => ({ ...fm, commit: 0, created: 0, updated: 0, updated_by: 0 });
 const subject = f => git(f.bare, 'log', '-1', '--format=%s', 'main');
+// 074 removes the python script names from the subjects: edit only the SUBJECT values, the assertions go through them.
+const SUBJECT = {
+  newName: (name) => `acme/demo: new --name ${name}`,
+  newDependsNone: () => 'acme/demo: new --depends none',
+  newSplitFrom: (phase) => `acme/demo: new --split-from ${phase}`,
+};
 const rows = (f, sql) => { const con = db.connect(f.folder); try { return con.prepare(sql).all().map(r => ({ ...r })); } finally { con.close(); } };
 
 // ---------------------------------------------------------------- refusals
@@ -127,7 +134,7 @@ test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name 
     depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
   assert.equal(item.fm.commit, git(f.cons, 'rev-parse', 'HEAD'));
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
-  assert.equal(subject(f), 'acme/demo: new --name Alpha job');
+  assert.equal(subject(f), SUBJECT.newName('Alpha job'));
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   assert.deepEqual(rows(f, 'SELECT slug, seq, priority, status FROM phase'), [{ slug: '001-alpha-job', seq: 1, priority: 0, status: 'pending' }]);
@@ -294,18 +301,21 @@ test('review P2: a skills.md review document is accepted and persisted; no class
   assert.ok(!('work_class' in item.fm) && !('review_classes' in item.fm) && !('chunk' in item.fm));
 });
 
-test('--split-from copies the objective, summary and body of the source and logs a split event', t => {
+test('075: --split-from copies the objective, summary and body of the source and logs a split event', t => {
   const a = fixture(t);
   const first = ['--name', 'Parent', '--objective', 'parent objective', '--summary', 'parent summary', '--depends-on', 'none', '--body', 'Parent body with ünï\n\n## Definition of done\n- [ ] a'];
   const split = ['--split-from', '1', '--depends-on', '1', '--priority', '0'];
   assert.equal(node(a, first).status, 0);
   const r = node(a, split);
   assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, '✅ created phase phases/002-1-cont.md (seq 2) — inserted at P0, now at P0\n'
+    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 1 (re)ingested\n');
   const [, child] = items(a);
   assert.equal(child.fm.name, '1-cont'); assert.equal(child.fm.objective, 'parent objective'); assert.equal(child.fm.summary, 'parent summary');
-  assert.ok(child.body.includes('## Split from `001-parent`. Inherited context:\n\n# Phase 001 — Parent'));
-  const events = "SELECT event, note FROM event WHERE event = 'split'";
-  assert.deepEqual(rows(a, events), [{ event: 'split', note: 'spawned sibling 002-1-cont' }]);
+  assert.deepEqual(child.fm.depends_on, [1]);
+  assert.equal(child.body, '\n# Phase 002 — 1-cont\n\n**Objective:** parent objective\n\n\n## Split from `001-parent`. Inherited context:\n\n# Phase 001 — Parent\n\n**Objective:** parent objective\n\n\nParent body with ünï\n\n## Definition of done\n- [ ] a\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
+  assert.equal(subject(a), SUBJECT.newSplitFrom('1'));
+  assert.deepEqual(rows(a, "SELECT event, note FROM event WHERE event = 'split'"), [{ event: 'split', note: 'spawned sibling 002-1-cont' }]);
 });
 
 const SCENARIOS = {
@@ -319,18 +329,83 @@ const SCENARIOS = {
   'a dry run': [[], [...NONE, '--dry-run']],
 };
 for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
-  test(`new: ${title}: the setup and the command succeed`, t => {
+  test(`075: new: ${title}: the exact output, the published commit and the queue`, t => {
     const f = fixture(t);
     for (const s of setup) { const r = node(f, s); assert.equal(r.status, 0, r.stdout + r.stderr); }
     const r = node(f, args);
     assert.equal(r.status, 0, r.stdout + r.stderr);
+    if (title === 'a dry run') {
+      assert.equal(r.stdout, 'ℹ️  [dry-run] would create phase phases/001-alpha-job.md (seq 1)\n');
+      assert.equal(existsSync(f.folder), false, 'a dry run writes nothing');
+      return;
+    }
+    const all = items(f);
+    const item = all[all.length - 1];
+    const slug = createdSlug(r.stdout);
+    assert.equal(slug, item.fm.phase, 'the slug the output names is the item that was created');
+    assert.equal(item.path, `phases/${slug}.md`);
+    const created = setup.length
+      ? (title === 'a rank beyond the end is clamped, a layer of process' ? 'inserted at P7, now at P1' : 'inserted at P0, now at P0')
+      : 'appended, now at P0';
+    const rescan = title === 'inserted at rank 0 before older work'
+      ? `   rescan: ${all.length} phase(s) tracked, ${setup.length} (re)ingested\n` // the reflowed setup items are re-ingested
+      : `   rescan: ${all.length} phase(s) tracked, 1 (re)ingested\n`;
+    const banner = title === 'critical, forced to P0 with the banner'
+      ? `⚠️ ========================================================================\n⚠️  CRITICAL phase filed at P0 — ${slug}\n⚠️  SURFACE THIS TO THE USER NOW, in your FIRST line, with a ⚠️ marker. Do NOT bury it.\n⚠️ ========================================================================\n`
+      : '';
+    assert.equal(r.stdout, banner + `✅ created phase phases/${slug}.md (seq ${item.fm.seq}) — ${created}\n`
+      + `   📋 planning event: backlog re-densified to ${all.length} item(s) (P0..P${all.length - 1})\n` + rescan);
+    assert.equal(subject(f), title === 'a prefix of an option and --opt=value' ? SUBJECT.newDependsNone() : SUBJECT.newName(item.fm.name));
+    assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'), 'published');
+    if (title === 'critical, forced to P0 with the banner') assert.equal(item.fm.severity, 'critical', 'forced to P0 with the banner');
+    if (title === 'a rank beyond the end is clamped, a layer of process') { assert.equal(item.fm.priority, 1, 'a rank beyond the end is clamped'); assert.equal(item.fm.layer, 'process'); }
   });
 }
 
-test('--split-from a long parent: the parent and the split child are created', t => {
+test('075: new: every flag, appended: the item carries the carried context, the review documents and the job fields', t => {
+  const f = fixture(t);
+  const r = node(f, [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--chunk',
+    '--review-refs', 'references/review/code.md,references/review/tests.example.md', '--estimate', '30', '--complexity', 'medium', '--layer', '3']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const [item] = items(f);
+  assert.deepEqual(fmNorm(item.fm), { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
+    status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: 0, location: '',
+    created: 0, updated: 0, updated_by: 0, chunk: true, review_refs: ['references/review/code.md', 'references/review/tests.example.md'],
+    estimate_min: 30, complexity: 'medium', layer: '3', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
+  assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Carried context (from the original ask)\n\nfrom the ask\n\n\nSome body\n\n## Definition of done\n- [ ] it works\n');
+});
+
+test('075: new: a prefix of an option and --opt=value: the item takes the abbreviated values', t => {
+  const f = fixture(t);
+  const r = node(f, ['--depends', 'none', '--name=Abbrev', '--obj', 'o=1', '--summ=s']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stdout, '✅ created phase phases/001-abbrev.md (seq 1) — appended, now at P0\n'
+    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+  const [item] = items(f);
+  assert.equal(item.fm.name, 'Abbrev'); assert.equal(item.fm.objective, 'o=1'); assert.equal(item.fm.summary, 's');
+});
+
+test('075: new: unicode and quotes in the name: the slug is slugified, the front matter keeps the original', t => {
+  const f = fixture(t);
+  const r = node(f, ['--name', 'Ünï "quoted" it\'s: a/b', '--objective', 'x: y # z', '--depends-on', 'none', '--body', 'plain body']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stdout, '✅ created phase phases/001-n-quoted-it-s-a-b.md (seq 1) — appended, now at P0\n'
+    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+  const [item] = items(f);
+  assert.equal(item.fm.name, 'Ünï "quoted" it\'s: a/b');
+  assert.equal(item.fm.objective, 'x: y # z');
+});
+
+test('075: --split-from a long parent: the inherited context is trimmed to 800 characters of the source body', t => {
   const f = fixture(t);
   assert.equal(node(f, ['--name', 'Long', '--depends-on', 'none', '--body', `${'é'.repeat(900)}\n\n## Definition of done\n- [ ] a`]).status, 0);
   const r = node(f, ['--split-from', '001-long', '--depends-on', 'none']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(items(f).length, 2);
+  assert.equal(r.stdout, '✅ created phase phases/002-001-long-cont.md (seq 2) — appended, now at P1\n'
+    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 1 (re)ingested\n');
+  assert.equal(subject(f), SUBJECT.newSplitFrom('001-long'));
+  const [, child] = items(f);
+  const parent = store.load(f.folder).find(i => i.path === 'phases/001-long.md');
+  const inherited = parent.body.replace(/^\n/, '').slice(0, 800); // 800 characters of the source body, not more
+  assert.equal(child.body, `\n# Phase 002 — 001-long-cont\n\n**Objective:** Long\n\n\n## Split from \`001-long\`. Inherited context:\n\n${inherited}\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n`);
 });

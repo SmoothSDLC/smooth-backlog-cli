@@ -175,9 +175,15 @@ async function query(argv) {
     if (a.next) {
       const items = new Map(store.load(folder).map(i => [i.path, i.fm]));
       // item 059.4: a done producer whose hand-off the lead has not accepted holds the dependent back like an
-      // unfinished dependency: next skips it, the way pop, work, plan and --claimable already do
-      const r = all(OPEN, hid).find(x => !excluded.has(x.id) && (a.all || ((x.repository || '') === repo && (x.branch || '') === branch))
-        && !team.undoneDependencies(folder, items.get(x.path) ?? {}).some(d => d.handoff));
+      // unfinished dependency: next skips it, the way pop, work, plan and --claimable already do, and names the
+      // skipped edge (the design requires the edge state named, not a silent skip)
+      let r = null; const skipped = [];
+      for (const x of all(OPEN, hid)) {
+        if (excluded.has(x.id) || !(a.all || ((x.repository || '') === repo && (x.branch || '') === branch))) continue;
+        const held = team.undoneDependencies(folder, items.get(x.path) ?? {}).filter(d => d.handoff);
+        if (held.length) { skipped.push({ row: x, deps: held }); continue; }
+        r = x; break;
+      }
       if (!r) {
         say(a.json ? '{}' : `ℹ️  no actionable item for ${repo}${a.all ? '' : `, branch ${redact(branch)}; --all shows every branch`}`);
         return 0;
@@ -185,7 +191,8 @@ async function query(argv) {
       // item 042: the next item may wait on another repository's item: that is named as the work to do first
       const away = team.undoneDependencies(folder, items.get(r.path) ?? {}).filter(d => d.foreign && d.item && d.item.status !== 'done')
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
-      if (a.json) { dump(away.length ? { ...r, first: away } : r); return 0; }
+      const skip = skipped.flatMap(s => s.deps.map(d => ({ item: s.row.slug, edge: d.id, handoff: d.handoff })));
+      if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), ...(skip.length ? { skipped: skip } : {}) }); return 0; }
       if (process.env.BACKLOG_HEADLESS === '1') return die('BACKLOG_HEADLESS=1 is not in this build');
       criticalBanner(critical());
       say(`➡️  NEXT: P${r.priority} (rank 0 = next) — [${pad(r.seq, 3)}] ${r.slug}  (${r.status})${(r.severity || 'normal') === 'critical' ? '  ⚠️ CRITICAL' : ''}`);
@@ -195,6 +202,7 @@ async function query(argv) {
       say(`    file:      ${r.path}`);
       if (r.branch || r.commit_sha || r.location) say(`    progress:  branch=${r.branch} commit=${sha7(r)} loc=${r.location}`);
       for (const x of away) say(`    ⛓ waits on ${x.item} (${x.slug}, status ${x.status}): do that first in repository ${x.repository}`);
+      for (const s of skipped) for (const d of s.deps) say(`    ⛓ ${s.row.slug} waits on ${team.describeDependency(d)}: skipped until the edge is satisfied`);
       say(MANDATE);
       return 0;
     }

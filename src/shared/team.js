@@ -209,10 +209,13 @@ export const staleReview = fm => fm.review_state === 'in_review' && age(fm.revie
 export const reviewOpenTo = (fm, agent) => fm.review_state === 'requested' || (fm.review_state === 'in_review' && fm.reviewer === agent);
 
 // Item 059: what the team still owes before the dependent may be offered or claimed, per unsatisfied edge state.
+// stale names both ways an edge goes stale: the receipt pins a record that is no longer the current one (the
+// producer re-recorded after the last receipt, an acceptance or a rejection), or the current record's digest does
+// not match its own fields (a broken record that pins nothing).
 const HANDOFF_NEEDS = {
   missing: 'the producer has not recorded a hand-off for this item; it records one and the team lead accepts it',
   unaccepted: 'the team lead has not accepted the producer\'s hand-off',
-  stale: 'the producer re-recorded its hand-off after the last acceptance; the team lead must accept it again',
+  stale: 'the last receipt does not match the current hand-off record: the producer re-recorded it after the last receipt (an acceptance or a rejection), or the record\'s digest does not match its own fields; the producer records a clean hand-off when the record is broken, and the team lead must accept the current record',
   rejected: 'the team lead rejected the producer\'s hand-off; the team lead must accept the current record (or the producer records a new one and the lead accepts that)',
 };
 

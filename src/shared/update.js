@@ -251,7 +251,7 @@ async function change(a, con, folder, repo) {
   if (a['set-review-refs'] !== undefined) {
     const refs = asList(a['set-review-refs']);
     checkRefs(refs); // before any assignment
-    if (!refs.some(r => r.startsWith(REVIEW_DIR))) return refuse(`${row.slug}: --set-review-refs needs at least one review document (${REVIEW_DIR}<type>.md in cody-coding-model)`);
+    if (!refs.some(r => r.startsWith(REVIEW_DIR))) return refuse(`${row.slug}: --set-review-refs needs at least one review document (${REVIEW_DIR}<type>.md in the review-documents repository)`);
     fm.review_refs = refs;
     changes.review_refs = refs.join(',');
   }

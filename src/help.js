@@ -71,7 +71,7 @@ Options:
       done" heading or line with checkable lines, a placeholder checklist is added. With --review-refs, or in a team
       session, the body must hold a real definition of done.
   --review-refs REVIEW_REFS
-      How the item is reviewed: comma-separated paths of review documents in the cody-coding-model repository, at
+      How the item is reviewed: comma-separated paths of review documents in the review-documents repository, at
       least one of them under references/review/ (references/review/<type>.md). An item with review documents
       closes only after a passing review; without them it closes without one.
   --depends-on DEPENDS_ON
@@ -161,7 +161,7 @@ Options:
   --waiting-done
       Clear the wait of the item (team session).
   --set-review-refs PATHS
-      Set the review_refs of the item (its definition of done), as comma-separated paths in the cody-coding-model repository.
+      Set the review_refs of the item (its definition of done), as comma-separated paths in the review-documents repository.
       At least one of them is a review document under references/review/ (references/review/<type>.md) (team session).
   --set-depends-on IDS
       Replace the depends_on of the item, as item numbers or slugs, owner/name#seq for an item of another repository, or

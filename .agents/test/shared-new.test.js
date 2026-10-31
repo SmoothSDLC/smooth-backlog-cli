@@ -51,7 +51,7 @@ const REFUSALS = [
   ['no --name', ['--depends-on', 'none'], 1, '❌ --name is required (or --split-from <phase>)\n', ''],
   ['a work class (the classes are gone)', [...NONE, '--work-class', 'docs'], 2, '', '❌ backlog: unrecognized arguments: --work-class docs\n'],
   ['a review class (the classes are gone)', [...NONE, '--review-classes', 'code'], 2, '', '❌ backlog: unrecognized arguments: --review-classes code\n'],
-  ['review refs that name no review document', [...NONE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x'], 1, '❌ --review-refs needs at least one review document (references/review/<type>.md in cody-coding-model)\n', ''],
+  ['review refs that name no review document', [...NONE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x'], 1, '❌ --review-refs needs at least one review document (references/review/<type>.md in the review-documents repository)\n', ''],
   ['a dependency that is not there', [...BASE, '--depends-on', 'no-such-item'], 1, "❌ --depends-on: no item 'no-such-item' in this backlog\n", ''],
   ['a number that is not there', [...BASE, '--depends-on', '99'], 1, "❌ --depends-on: no item '99' in this backlog\n", ''],
   ['--split-from not found', [...NONE, '--split-from', 'nope'], 1, "❌ --split-from: no phase 'nope'\n", ''],

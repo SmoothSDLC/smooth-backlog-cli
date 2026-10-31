@@ -101,7 +101,7 @@ async function create(argv, { home, folder, repo, team }) {
   if (!(a.dependsOn || '').trim()) return refuse('--depends-on is required: the item numbers or slugs this work needs done first, or --depends-on none');
   const refs = asList(a.reviewRefs);
   checkRefs(refs); // before any database access
-  if (refs.length && !refs.some(r => r.startsWith(REVIEW_DIR))) return refuse(`--review-refs needs at least one review document (${REVIEW_DIR}<type>.md in cody-coding-model)`); // new_phase.py: the creator names how it is reviewed
+  if (refs.length && !refs.some(r => r.startsWith(REVIEW_DIR))) return refuse(`--review-refs needs at least one review document (${REVIEW_DIR}<type>.md in the review-documents repository)`); // new_phase.py: the creator names how it is reviewed
   // an item of a team (--team, or a split of a team's item) starts in stage refining, where a member writes it
   const intoRefining = a.team || a.splitFrom;
   if (!hasDefinitionOfDone(a.body) && (team.repo || refs.length) && !intoRefining) {

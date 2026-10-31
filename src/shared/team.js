@@ -14,7 +14,7 @@ import { itemSelector } from './safety.js';
 import { load } from './store.js';
 
 // An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true (owner 2026-10-28).
-export const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR: the review documents of cody-coding-model
+export const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR: the review documents in the review-documents repository
 // lib_db.STAGES and the review-hitl stage of topology item 288; REFINEMENT_REVIEWERS record a refinement verdict.
 export const STAGES = ['refining', 'refined', 'refinement-review', 'review-hitl', 'ready'];
 export const REFINEMENT_REVIEWERS = ['codex', 'claude'];

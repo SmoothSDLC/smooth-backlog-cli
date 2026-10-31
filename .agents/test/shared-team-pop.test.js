@@ -63,6 +63,7 @@ function popLead(f, ...args) { return popAs(f, { TEAM_LEAD: 'cody' }, ...args); 
 function popAs(f, env, ...args) {
   const r = popCli(f, ['--json', ...args], { env });
   assert.ok([0, 3].includes(r.status), r.stdout + r.stderr);
+  assert.equal(r.stderr, '', r.stdout + r.stderr); // the JSON of a successful pop has no stderr
   const out = JSON.parse(r.stdout);
   assert.equal(r.status === 3, out.action === 'idle', r.stdout);
   if (!args.includes('--claim-now')) {
@@ -83,7 +84,9 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   assert.ok(p.action === 'idle' && p.item === null);
   assert.deepEqual(p.blocked, [{ item: blocked, waiting_on: [{ id: String(Number(dep.split('-')[0])), slug: dep, status: 'in_progress', claimed_by: 'archy' }] }]);
   const text = popCli(f, [], { env: { TEAM_LEAD: 'cody' } });
-  assert.ok(text.status === 3 && text.stdout.startsWith('idle\n') && text.stdout.includes(`blocked ${blocked}: waits on ${dep}`), text.stdout);
+  assert.equal(text.status, 3, text.stdout + text.stderr);
+  assert.equal(text.stderr, '');
+  assert.equal(text.stdout, `idle\n   nothing for cody: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in_progress, claimed by archy)\n`);
   assert.equal(pop(f).action, 'chunk'); // a member with nothing else: small-chunk work, no item
   const chunk = make(f, f.cons, 'pop chunk', ['--chunk']);
   p = pop(f); // (d) the chunk item is named
@@ -113,6 +116,35 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   ok(f, dep, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/tests.md');
   assert.ok(cli(['query', '--pop'], { cwd: f.cons, tmp: f.t }).stderr.includes('--pop needs --agent'));
   assert.ok(cli(['pop'], { cwd: f.cons, tmp: f.t }).stderr.includes('--pop needs --agent'));
+});
+
+test('075: the pop of an idle lead and of a claimable item prints its text and its JSON exactly, with empty stderr', () => {
+  const f = fixture();
+  const dep = make(f, f.cons, '075 pop dependency', ['--review-refs', 'references/review/tests.md']);
+  const blocked = make(f, f.cons, '075 pop blocked', ['--depends-on', dep.split('-')[0]]);
+  ok(f, dep, '--claim', 'archy');
+  // the lead sees idle with the blocker: the text, word for word
+  const idleText = popCli(f, [], { env: { TEAM_LEAD: 'cody' } });
+  assert.equal(idleText.status, 3, idleText.stdout + idleText.stderr);
+  assert.equal(idleText.stderr, '');
+  assert.equal(idleText.stdout, `idle\n   nothing for cody: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in_progress, claimed by archy)\n`);
+  // the same state as the JSON of --pop: the whole document, word for word (the CLI's Python-style separators)
+  const idleJson = popCli(f, ['--json'], { env: { TEAM_LEAD: 'cody' } });
+  assert.equal(idleJson.status, 3, idleJson.stdout + idleJson.stderr);
+  assert.equal(idleJson.stderr, '');
+  assert.equal(idleJson.stdout,
+    `{"action": "idle", "item": null, "seq": null, "repository": "acme/demo", "branch": "main", "instruction": "nothing for cody: message the agents holding the blockers below, or the coordinator", "claimed": false, "blocked": [{"item": "${blocked}", "waiting_on": [{"id": "1", "slug": "${dep}", "status": "in_progress", "claimed_by": "archy"}]}], "held": []}\n`);
+  // the claim the member gets instead: its text and JSON, exit 0
+  const job = make(f, f.cons, '075 pop job', []);
+  const claimText = popCli(f, [], { env: LEAD });
+  assert.equal(claimText.status, 0, claimText.stdout + claimText.stderr);
+  assert.equal(claimText.stderr, '');
+  assert.equal(claimText.stdout, `claim ${job}\n   claim it: backlog update ${job} --claim cody; definition of done: references/review/code.md (the review-documents repository: load them before working)\n`);
+  const claimJson = popCli(f, ['--json'], { env: LEAD });
+  assert.equal(claimJson.status, 0, claimJson.stdout + claimJson.stderr);
+  assert.equal(claimJson.stderr, '');
+  assert.equal(claimJson.stdout,
+    `{"action": "claim", "item": "${job}", "seq": 3, "repository": "acme/demo", "branch": "main", "instruction": "claim it: backlog update ${job} --claim cody; definition of done: references/review/code.md (the review-documents repository: load them before working)", "claimed": false, "blocked": [], "held": []}\n`);
 });
 
 test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_closed', () => {

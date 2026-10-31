@@ -56,7 +56,7 @@ function excludedIds(rows, folder, repo) {
 }
 
 // query.py:132-134
-const dod = fm => { const refs = team.asList(fm.review_refs); return refs.length ? `; definition of done: ${refs.join(', ')} (cody-coding-model: load them before working)` : ''; };
+const dod = fm => { const refs = team.asList(fm.review_refs); return refs.length ? `; definition of done: ${refs.join(', ')} (the review-documents repository: load them before working)` : ''; };
 // query.py:137-148
 function reviewSay(slug, fm, me) {
   const refs = team.asList(fm.review_refs);
@@ -64,7 +64,7 @@ function reviewSay(slug, fm, me) {
     : `start the review: backlog update ${slug} --start-review --by ${me}; then `;
   text += 'review the work of ';
   text += fm.claimed_by || 'its author';
-  if (refs.length) text += `; load its review_refs first: ${refs.join(', ')} (cody-coding-model) and cite one in --comments`;
+  if (refs.length) text += `; load its review_refs first: ${refs.join(', ')} (the review-documents repository) and cite one in --comments`;
   return `${text}, then backlog update ${slug} --review pass|changes --by ${me} --comments "<findings>"`;
 }
 

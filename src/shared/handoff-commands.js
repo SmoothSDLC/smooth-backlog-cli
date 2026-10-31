@@ -47,9 +47,10 @@ export function recordHandoff(ctx, { dependent, commit, contract, verification, 
 // The team lead accepts a hand-off: only the lead (a missing actor or lead identity is refused on its own,
 // review r1), only while a record exists, and only after the producer's review passed (lead ruling
 // 2026-10-30). The receipt pins the current record's digest and is appended to handoff_receipts
-// (append-only); it records the reviewer, the verdict and the reviewed commit - the record's commit
-// (the item's commit front matter is the creation HEAD, new.js, and can name the wrong commit, review r1),
-// else the item's commit front matter for a record without a commit.
+// (append-only); it records the reviewer and the verdict the review operation stored, and the reviewed
+// commit - the record's commit, the one the review request named and the review reviewed (the producer
+// records the hand-off at that commit, and no work after the review is labeled reviewed, review r2);
+// a record without a commit takes the item's commit front matter, the creation HEAD (new.js).
 export function acceptHandoff(ctx, { dependent, checks, by, lead }) {
   const { fm } = ctx;
   if (!strip(by || '')) return { refuse: 'a hand-off is accepted by the team lead: --by <agent> is missing' };
@@ -67,9 +68,10 @@ export function acceptHandoff(ctx, { dependent, checks, by, lead }) {
     commit: record.commit || fm.commit,
   };
   // The ruling's reviewer, verdict and reviewed commit: 059.1's receiptBlock does not output them
-  // (review r1), so the block appends them.
+  // (review r1), so the block appends them directly after the receipt block, which already ends in a
+  // newline (no blank line, review r2).
   const text = receiptBlock(receipt, source(ctx))
-    + `\nREVIEWER: ${receipt.reviewer} ; VERDICT: ${receipt.verdict} ; REVIEWED_COMMIT: ${receipt.commit}`;
+    + `REVIEWER: ${receipt.reviewer} ; VERDICT: ${receipt.verdict} ; REVIEWED_COMMIT: ${receipt.commit}\n`;
   return { fm: { handoff_receipts: appendReceipts(fm, receipt) }, text, event: 'handoff-accepted' };
 }
 

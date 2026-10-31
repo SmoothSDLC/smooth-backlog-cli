@@ -110,9 +110,9 @@ backlog repository's `skill/backlog`, which Claude and Codex link to.
 ## 12. Run reporting and monitoring
 Every run of the CLI where the run-recording variable is set reports its name, exit code and times to the
 topology's script-run recorder (`$CODY_SCRIPT_RUNS_MODULE`; Prometheus `cody_script_runs_total`); with the variable
-unset it spawns no child process. The recorder never blocks or fails the run, including a recorder that raises or
-exits at import. `bin/backlog.js` does this since d0dc5f1; its tests set `CODY_SCRIPT_RUNS_FILE=/dev/null`, so test
-runs write no records.
+unset the optional run recorder hook spawns no child process (shared mode starts its git calls independently). The
+recorder never blocks or fails the run, including a recorder that raises or exits at import. `bin/backlog.js` does
+this since d0dc5f1; its tests set `CODY_SCRIPT_RUNS_FILE=/dev/null`, so test runs write no records.
 
 ## 13. Repository identity and dependencies across repositories
 The backlog folder is keyed by the origin's owner/name. This repository was renamed from SmoothSDLC/backlog-cli to

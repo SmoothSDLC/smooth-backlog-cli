@@ -22,11 +22,19 @@ function scenarioPids(d, procRoot = '/proc') {
   const mark = `BACKLOG_HOME=${join(d, 'home')}`;
   const out = [];
   let entries;
-  try { entries = readdirSync(procRoot); } catch { return out; } // no /proc (macOS, CI): nothing to settle; the cleanup still removes the folders
+  try { entries = readdirSync(procRoot); } catch (e) {
+    if (e.code === 'ENOENT') return out; // no /proc (macOS, CI): verified empty - nothing to settle, and the cleanup still removes the folders
+    throw new Error(`scenarioPids: the process scan of ${procRoot} is unreadable: ${e.message}`); // item 76 review: a failed scan is not verified empty
+  }
   for (const pid of entries) {
     if (!/^\d+$/.test(pid) || Number(pid) === process.pid) continue;
-    let env = '';
-    try { env = readFileSync(join(procRoot, pid, 'environ'), 'utf8'); } catch { continue; }
+    let env;
+    try { env = readFileSync(join(procRoot, pid, 'environ'), 'utf8'); }
+    catch (e) {
+      if (e.code === 'ENOENT') continue; // the process exited between the enumeration and the read: verified gone
+      if (e.code === 'EACCES') continue; // another user's process: only this scenario's own children carry the fixture env (item 76 review)
+      throw new Error(`scenarioPids: the environ of pid ${pid} is unreadable: ${e.message}`); // a scan error is not verified empty
+    }
     if (env.includes(mark)) out.push(Number(pid));
   }
   return out;
@@ -818,6 +826,13 @@ for (const [name, args, change] of [
 
 test('cleanup: a CLI child killed mid-push leaves its child git process writing the dbconf-* folder; the cleanup settles it, no ENOTEMPTY (item 76)', t => {
   const [a, b, { bare }] = writers(t);
+  const onProc = existsSync('/proc');
+  if (!onProc) {
+    // item 76 review: the chain is visible and settleable only where /proc exists. Skip BEFORE the gate starts,
+    // so a platform without /proc does not start the infinite gate (and its sh + sleep) it cannot settle.
+    t.skip('no /proc on this platform (macOS): the surviving chain cannot be seen or settled (item 76)');
+    return;
+  }
   assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   // A pre-receive gate that keeps a's push in flight and writes a new probe file into the shared bare
   // (inside dbconf-a-*) every millisecond: when the CLI child dies mid-push, its child git process
@@ -828,12 +843,10 @@ test('cleanup: a CLI child killed mid-push leaves its child git process writing 
   chmodSync(gate, 0o755);
   const r = cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp, timeout: 2500 }); // the fixture's spawnSync timeout kills the CLI child mid-push
   assert.notEqual(r.status, 0, `the CLI child must be killed mid-push: ${r.stdout}${r.stderr}`);
-  const onProc = existsSync('/proc'); // the chain is visible only where /proc exists (macOS, CI: the cleanup must still work without it)
   // writers' t.after was registered first and runs first (hooks are FIFO): it settles the chain and removes the
   // folders, and only then does this hook check the ABSENCE of the chain — without the settle the chain is still
   // alive after the rmSync and this assertion fails (item 76 review: the absence was never checked)
-  t.after(() => { if (onProc) assert.equal(scenarioPids(a.tmp).length, 0, 'the cleanup settled every child process of the killed CLI child (item 76)'); });
-  if (!onProc) t.skip('no /proc on this platform: the surviving chain cannot be seen (item 76)');
+  t.after(() => { assert.equal(scenarioPids(a.tmp).length, 0, 'the cleanup settled every child process of the killed CLI child (item 76)'); });
   assert.ok(scenarioPids(a.tmp).length >= 1, 'the child git process of the killed CLI child is still alive');
   void b;
 });
@@ -842,18 +855,23 @@ test('cleanup settle: a child process that survives the settle is reported loudl
   const d = mkdtempSync(join(tmpdir(), 'dbconf-s-'));
   t.after(() => rmSync(d, { recursive: true, force: true }));
   if (!existsSync('/proc')) t.skip('no /proc on this platform (macOS): the settle is a no-op there (item 76)');
-  // a node child that traps SIGTERM and carries the fixture env: the settle's first round (SIGTERM) cannot clear it.
-  // It lives 10s (CI finding at 25d7554): the child must outlive the spawn wait and the settle on a slow stock
-  // Linux runner, so the test does not depend on a 1s lifetime racing the process start-up.
-  const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); setTimeout(() => {}, 10000)'],
-    { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
+  // a node child that traps SIGTERM and writes the ready file only after the trap is installed: the parent starts
+  // the settle only after the ready file, so the settle's SIGTERM always hits a child that traps it - no start-up
+  // race (item 76 review; the CI failure at cbc7324). The child lives until the test's explicit SIGKILL, so it is
+  // alive for every assertion - the test controls its lifetime instead of relying on a race.
+  const ready = join(d, 'ready');
+  const child = spawn(process.execPath, ['-e',
+    'process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(process.argv[1], ""); setTimeout(() => {}, 1e9)',
+    ready], { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
   child.unref();
   t.after(() => { try { child.kill('SIGKILL'); } catch {} });
-  for (let i = 0; i < 100 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
+  const exited = new Promise(res => child.once('exit', res));
+  for (let i = 0; i < 100 && !existsSync(ready); i++) await sleep(50);
+  assert.ok(existsSync(ready), 'the child traps SIGTERM before the settle starts (item 76 review)');
   assert.ok(scenarioPids(d).includes(child.pid), 'the SIGTERM-surviving child is visible to the settle');
   await assert.rejects(settleScenarioChildren(d, 1), /still alive/);
   child.kill('SIGKILL');
-  for (let i = 0; i < 40 && scenarioPids(d).length; i++) await sleep(50);
+  await exited;
   assert.equal(scenarioPids(d).length, 0);
 });
 
@@ -862,6 +880,10 @@ test('cleanup: scenarioPids sees the processes carrying the fixture env; without
   t.after(() => rmSync(d, { recursive: true, force: true }));
   // platform-independent: without /proc (macOS, CI) scenarioPids returns [] instead of throwing
   assert.deepStrictEqual(scenarioPids(d, '/no-such-proc'), [], 'no /proc (macOS, CI): nothing to settle, and no throw');
+  // platform-independent: a scan whose root is not a directory failed - it is not verified empty, it is reported loudly (item 76 review)
+  const notADir = join(d, 'not-a-dir');
+  writeFileSync(notADir, '');
+  assert.throws(() => scenarioPids(d, notADir), /unreadable/, 'a failed process scan is not verified empty');
   if (!existsSync('/proc')) t.skip('no /proc on this platform (macOS): the env scan cannot run (item 76)');
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
   child.unref();

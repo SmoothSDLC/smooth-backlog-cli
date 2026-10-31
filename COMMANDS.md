@@ -406,7 +406,10 @@ Options:
       digits, a period, an underscore, a hyphen and a colon (a card's session names and a team name carry colons);
       the name works in the front matter, the event log, the commit subject, the hand-off marker file name and
       every --claim, --release and --by value. The claiming session joins the item's session_authors list; the
-      sessions in that list, and the one who asked for the review, never review the item.
+      sessions in that list, and the one who asked for the review, never review the item. A new session of the same
+      card - a name sharing the <item><card> part before the colon - continues an item its earlier session claimed
+      (a rework after a review, or the close): the claim records the new session name on the item, with no takeover
+      and no lead reassignment.
   --force
       Together with --claim: claim although the agent already holds active items (never before stage ready).
   --waiting WHAT

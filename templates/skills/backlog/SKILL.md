@@ -126,6 +126,10 @@ command names) and the hand-off marker file name `~/.qwen/teams/<team>/handoff/<
 The self-review rule is per session: `--claim` and `--request-review` record the session name on the item
 (`session_authors`, kept on release like `review_author`); the session that claimed or asked is refused with
 "the same session cannot review its own work; a new session may", and a new session (a new name) reviews it.
+A new session of the same card continues the item its earlier session claimed (a rework after a review, or
+the close): a `--claim` with a name sharing the `<item><card>` part before the colon records the new session
+name on the item, with no takeover and no lead reassignment; the self-review block still applies to every
+earlier session name of the item.
 
 Class options: the CLI has no class options (work or review): no `--classes`, no class profiles. The removed
 class fields stay out of the help texts, COMMANDS.md, README.md, templates and CHANGELOG.md; the negative test

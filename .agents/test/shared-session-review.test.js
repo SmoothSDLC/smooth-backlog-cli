@@ -33,7 +33,9 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args) => {
-  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead' } };
+  // QWEN_CODE_SESSION_ID stays out: these tests pin the agent-name rules, not the author-session rule (item 088),
+  // which a session id inherited from the running shell would apply to the cody-card* names
+  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', QWEN_CODE_SESSION_ID: '' } };
   if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };

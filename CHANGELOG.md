@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A new session of the same card continues the item its earlier session claimed: a `--claim` with a name sharing
+  the `<item><card>` part before the colon (082k0c:02 after 082k0c:01) records the new session name on the item,
+  with no takeover and no lead reassignment; the one-active-item, work-in-progress and hand-off-lock rules apply
+  across the card's sessions, and the self-review block still holds for every earlier session name (item 082).
 - The self-review rule is per session: `--claim` and `--request-review` record the session name in a new
   front-matter list `session_authors` (kept on release, like `review_author`); the session that claimed the item
   or asked for the review is refused with "the same session cannot review its own work; a new session may", and a

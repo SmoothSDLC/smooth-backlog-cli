@@ -2,11 +2,13 @@
 // Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { consumer, env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -399,4 +401,40 @@ test('pull: incoming commits preserve unrelated staged and unstaged versions sep
   assert.equal(readFileSync(note, 'utf8'), 'unstaged note\n');
   assert.ok(existsSync(join(f.folder, 'phases', '001-remote.md')));
   assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+});
+
+// --- overlapping writers, ordered by a gate in the bare's pre-receive hook: the first push to arrive waits until released
+function gate(f) {
+  const dir = join(f.dir, 'gate'); mkdirSync(dir);
+  const hook = join(f.bare, 'hooks', 'pre-receive');
+  writeFileSync(hook, `#!/bin/sh\nif mkdir ${JSON.stringify(join(dir, 'entered'))} 2>/dev/null; then\n  while [ ! -e ${JSON.stringify(join(dir, 'release'))} ]; do sleep 0.05; done\nfi\nexit 0\n`);
+  chmodSync(hook, 0o755);
+  return {
+    async entered() { for (let i = 0; i < 400 && !existsSync(join(dir, 'entered')); i++) await sleep(25); assert.ok(existsSync(join(dir, 'entered')), 'a push reached the gate'); },
+    release() { writeFileSync(join(dir, 'release'), ''); },
+  };
+}
+// `backlog new` run as a separate process (the other writer), in shared mode on the given clone
+const cliNew = (f, home, cons, name) => new Promise(done => {
+  const bin = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js');
+  mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(f.dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  const p = spawn(process.execPath, [bin, 'new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
+    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: home, QWEN_CODE_AGENT_ID: 'other-writer' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = ''; p.stdout.on('data', c => { out += c; }); p.stderr.on('data', c => { out += c; });
+  p.on('close', status => done({ status, out }));
+});
+
+test('overlapping, the other writer first: a commit held at its push while backlog new creates and pushes 1 is renumbered to 2', async t => {
+  const f = fixture(t);
+  const cons = consumer(f.dir, 'acme', 'demo', 'main');
+  const g = gate(f);
+  putItem(f.folder2, 1, 'nodeitem');
+  const node = sync.commit(f.home2, f.folder2, 'new nodeitem');
+  await g.entered(); // the commit is made locally and is inside its first push
+  const r = await cliNew(f, f.home, cons, 'Otheritem');
+  assert.equal(r.status, 0, r.out);
+  g.release();
+  assert.deepEqual(await node, [[1, 2]]);
+  assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-otheritem.md', seq: 1 }, { file: '002-nodeitem.md', seq: 2 }]);
 });

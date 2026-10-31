@@ -1,6 +1,6 @@
 # PR1 learnings: the acceptance contract for the backlog CLI (PR3) (2026-10-28)
 
-PR1 of SmoothSDLC/cody-topology-bigfan-linux (merged 2026-10-28) proved that qwen-code can stop a team member and start
+PR1 of the topology repository (merged 2026-10-28) proved that qwen-code can stop a team member and start
 it again under the same name, and built the team workflow into the Python backlog scripts of that repository's
 `cody/skills/backlog/scripts` (update.py, query.py, lib_db.py, new_phase.py), the team-lead dispatcher
 (`cody/skills/team-lead/scripts/dispatcher.py`) and the team-member wake loop (`cody/skills/team-member/scripts/wake_hook.py`).
@@ -108,10 +108,11 @@ backlog skill. The topology installs it to `~/.qwen/skills/backlog` and to the b
 Claude and Codex link to.
 
 ## 12. Run reporting and monitoring
-Every run of the CLI reports its name, exit code and times to the topology's script-run recorder
-(`$CODY_SCRIPT_RUNS_MODULE`, default `/opt/cody/bin/script_runs.py`; Prometheus `cody_script_runs_total`). The recorder
-never blocks or fails the run, including a recorder that raises or exits at import. `bin/backlog.js` does this since
-d0dc5f1; its tests set `CODY_SCRIPT_RUNS_FILE=/dev/null`, so test runs write no records.
+Every run of the CLI where the run-recording variable is set reports its name, exit code and times to the
+topology's script-run recorder (`$CODY_SCRIPT_RUNS_MODULE`; Prometheus `cody_script_runs_total`); with the variable
+unset it spawns no child process. The recorder never blocks or fails the run, including a recorder that raises or
+exits at import. `bin/backlog.js` does this since d0dc5f1; its tests set `CODY_SCRIPT_RUNS_FILE=/dev/null`, so test
+runs write no records.
 
 ## 13. Repository identity and dependencies across repositories
 The backlog folder is keyed by the origin's owner/name. This repository was renamed from SmoothSDLC/backlog-cli to

@@ -71,6 +71,9 @@ Retain the returned GUID for subsequent commands if priorities may change.
   Updates run at CLI execution under user preferences, not through skill hooks.
 - CLI environment variables reach child processes, not the invoking shell. If Git
   cannot determine a branch, provide --branch or set BACKLOG_CLI_BRANCH in the shell.
+- Run reporting: the executable reports each run to an optional run recorder hook. It spawns a child
+  process only when the environment variable `CODY_SCRIPT_RUNS_MODULE` names a module; with the
+  variable unset it spawns no child process.
 
 ## Shared mode: team work
 

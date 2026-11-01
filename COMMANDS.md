@@ -484,7 +484,8 @@ Options:
       --release AGENT --by <lead>), or rejects a hand-off (--reject-handoff).
   --release AGENT
       Give the item back, pending and unclaimed (team session). Only AGENT itself, or the team lead with --by <lead> and
-      --reason, releases it.
+      --reason, releases it. The release keeps the holder in session_authors (seeded for an item written before the
+      list existed), so the holder's self-review block stands.
   --request-review AGENT|any
       Ask an agent, or any agent, for a review; --note says what to review (team session). The output ends with the
       instruction to end the session now, printed after the change is published: a review request, a changes verdict
@@ -499,7 +500,9 @@ Options:
       set). Other agents skip it unless the review was started more than 20 minutes ago (team session). The self-review rule
       is per session: the session that claimed the item or asked for the review (recorded in session_authors, kept on
       release like review_author) is refused with "the same session cannot review its own work; a new session may"; a new
-      session, with a new name, may start the review (team session).
+      session, with a new name, may start the review (team session). Every claim, reassign, release and review request
+      seeds the list from the item's current holder and review requester, so an item written before the list existed
+      keeps the self-review block of its earlier sessions.
   --review {pass,changes}
       Record a review verdict; it needs --by and --comments (team session). Two review stages are enforced before
       any close: first a Cody review - a Cody agent (a name starting with cody, or a session name) in a fresh
@@ -902,9 +905,10 @@ no stage (backlog update <item> --set-team <name> gives an item to a team; the i
 the members' work). When the lead holds an open work item of the team, the answer is continue with that item. When an
 earlier session of the lead's card holds it, the command records the continuation claim first - the new session name as
 claimed_by and in session_authors - and then answers continue. A refused continuation claim is no success: the earlier
-session keeps holding, and the command stops (exit 1, the reason on standard error). A claim that is handed back to an
-earlier session of the same card between the claim and the final read is no success either: the command stops (exit 1,
-the item changed before it could be shown) and the earlier session keeps holding. Otherwise the command claims for
+session keeps holding, and the command stops (exit 1, the reason on standard error). The final read requires the lead's
+own session still holding the item, on every path: a hand-back or a reassignment to another session of the same card
+between the selection and the final read is no success - the command stops (exit 1, the item changed before it could be
+shown) and the other session keeps holding. Otherwise the command claims for
 the lead the team's
 first open, unclaimed work item in the work order (priority, then seq) whose claim backlog update --claim accepts (its
 dependencies are done, no work-in-progress limit is passed), and the answer is claim. The output is the action, the one instruction (refine and split the item with the team), the items not taken
@@ -926,7 +930,7 @@ Exit codes:
   0  continue or claim: the lead holds the item.
   1  The continuation claim was refused (the earlier session keeps holding), a command it ran failed for another reason
      than a refused claim, a synchronisation failure included (the reason is printed), or the item changed before it
-     could be shown (a hand-back of the claim to an earlier session of the same card included): run it again.
+     could be shown (a hand-back or a reassignment to another session of the same card included): run it again.
   2  Invalid input: a missing --team, an agent other than the lead, another team than TEAM_NAME, or no branch (a
      detached HEAD without TEAM_BRANCH).
   3  idle: no work item of the team to take.

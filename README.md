@@ -103,7 +103,9 @@ The self-review rule is per session, not per card: an agent name is a session na
 item or asked for its review (recorded in `session_authors`) may not review it, and a new session of the same card
 may — it continues the item its earlier session claimed; a continuation of an item without the list (claimed before
 it existed) keeps the earlier holder in it. A `--reassign` keeps the former holder in the list (and adds the new
-holder), so the block survives a hand-off.
+holder), so the block survives a hand-off. Every claim, reassign, release and review request seeds the list from
+the item's current holder and review requester, so an item written before the list existed keeps the block of its
+earlier sessions.
 
 ## Command help
 

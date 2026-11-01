@@ -178,3 +178,63 @@ test('082: a reassignment keeps the former holder blocked: the legacy item keeps
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, new RegExp(`^❌ ${s}: ${A1}: the same session cannot review its own work; a new session may\\n$`));
 });
+
+test('082: a legacy item keeps its original author in session_authors across every holder or review-request write', () => {
+  // Each row starts from a legacy item: one claimed by 082aa:01 before session_authors existed, so the list is
+  // not in the file. The row runs the one write that changes or clears the holder or records a review request;
+  // the write must seed the list from the item's current holder and review requester and add the session it
+  // names, so the self-review block of the earlier session survives the transition (Codex round 5: a release
+  // after a lead's review request erased the original author of such an item).
+  const legacy = (f, s) => {
+    const file = join(f.folder, 'phases', `${s}.md`);
+    writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
+    assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
+  };
+  const refuse = (f, s, by) => no(f, ['update', s, '--start-review', '--by', by], 'the same session cannot review its own work');
+  const rows = [
+    ['a new claim of an unclaimed item', (f, s) => {
+      // the review was requested before the list existed: the requester is on the item, the list is not
+      ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
+      legacy(f, s);
+      ok(f, ['update', s, '--release', A1]);
+      legacy(f, s);
+      ok(f, ['update', s, '--claim', B1]);
+      return [A1, B1];
+    }, (f, s) => refuse(f, s, A1)],
+    ['a continuation claim', (f, s) => {
+      ok(f, ['update', s, '--claim', A2]);
+      return [A1, A2];
+    }, (f, s) => { ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A2]); refuse(f, s, A1); }],
+    ['a reassignment', (f, s) => {
+      ok(f, ['update', s, '--reassign', B1, '--by', 'lead', '--reason', 'the earlier session ended']);
+      return [A1, B1];
+    }, (f, s) => { ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', B1]); refuse(f, s, A1); }],
+    ['a release', (f, s) => {
+      ok(f, ['update', s, '--release', A1]);
+      return [A1];
+    }, (f, s) => { ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'lead']); refuse(f, s, A1); }],
+    ['a review request by the lead', (f, s) => {
+      ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'lead']);
+      return [A1, 'lead'];
+    }, (f, s) => refuse(f, s, A1)],
+    ['a team pop continuation claim', (f, s) => {
+      ok(f, ['update', s, '--set-team', 't1']);
+      const p = run(f, ['team', 'pop', '--team', 't1', '--json'], { TEAM_LEAD: A2 });
+      assert.equal(p.status, 0, p.stdout + p.stderr);
+      return [A1, A2];
+    }, (f, s) => { ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A2]); refuse(f, s, A1); }],
+  ];
+  const failures = [];
+  for (const [name, write, check] of rows) {
+    const f = fixture();
+    const s = make(f);
+    ok(f, ['update', s, '--claim', A1]);
+    legacy(f, s);
+    try {
+      const expected = write(f, s);
+      assert.deepEqual(itemFm(f, s).session_authors, expected, `${name}: the list is ${JSON.stringify(itemFm(f, s).session_authors)}`);
+      check(f, s);
+    } catch (e) { failures.push(`${name}: ${String(e.message).split('\n')[0]}`); }
+  }
+  assert.deepEqual(failures, [], `rows that lost the original author:\n${failures.join('\n')}`);
+});

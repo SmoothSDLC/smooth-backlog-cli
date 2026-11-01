@@ -36,16 +36,19 @@
   claims the item first (a continuation claim) before those steps; the lead's completed-team review-and-close in
   pop starts with the same claim, and `backlog team pop` records the continuation claim itself when an earlier
   session of the lead's card holds the team's work item: a refused claim is no success - the command stops (exit 1,
-  the reason on standard error) and the earlier session keeps holding; a claim that is handed back between the claim
-  and the final read is no success either - the command stops (exit 1, the item changed before it could be shown)
-  and the earlier session keeps holding (item 082).
+  the reason on standard error) and the earlier session keeps holding; the final read requires the lead's own
+  session still holding the item, on every path, so a hand-back or a reassignment to another session of the same
+  card between the selection and the final read is no success either - the command stops (exit 1, the item changed
+  before it could be shown) and the other session keeps holding (item 082).
 - The self-review rule is per session: `--claim` and `--request-review` record the claiming or asking session name
   (a requester other than the claimer, the team lead, is recorded too) in a new front-matter list `session_authors`
   (kept on release, like `review_author`); the session that claimed the item or asked for the review is refused
   with "the same session cannot review its own work; a new session may", and a new session (a new name) may start
   or pass the review; a `--reassign` keeps the former holder in the list (and adds the new holder), so the block
-  survives a hand-off; a reviewer whose name is a session name records the Cody stage of the two-stage review, as
-  the old cody-* names did; items without session names keep the old agent-name rule (item 082).
+  survives a hand-off; every claim, reassign, release and review request seeds the list from the item's current
+  holder and review requester, so an item written before the list existed keeps the block of its earlier sessions;
+  a reviewer whose name is a session name records the Cody stage of the two-stage review, as the old cody-* names
+  did; items without session names keep the old agent-name rule (item 082).
 - Agent and team names may contain a colon in addition to letters, digits, `.`, `_` and `-` (a card's session
   names and a team name carry colons): the name works in the front matter, the event log, the commit subject
   (which now carries the agent a `--claim`, `--release` or `--by` command names, wherever the option is placed),

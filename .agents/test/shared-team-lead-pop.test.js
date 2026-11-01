@@ -78,6 +78,20 @@ test('082: team pop exits 1 when the continuation claim is handed back before th
   assert.equal(fm(f, s).claimed_by, '082bb:01', 'the hand-back stands: the earlier session keeps holding');
 });
 
+test('082: team pop exits 1 when the held item is reassigned to another session of the same card before the final read', () => {
+  const f = fixture();
+  const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
+  const s = make(f, 'exact holder work item'); ok(f, ['update', s, '--set-team', 't1']);
+  ok(f, ['query', '--phase', s, '--agent', '082bb:02']);
+  ok(f, ['update', s, '--claim', '082bb:02'], { TEAM_LEAD: '082bb:02' }); // the lead's own session holds it: the call makes no claim
+  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: '082bb:02', BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'reassigned'),
+    REASSIGN_ON_READ: s, REASSIGN_TO: '082bb:03', REASSIGN_BY: '082bb:02' });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /changed before team pop could show it/);
+  assert.equal(r.stdout, '', 'no success output: the item is not presented as held');
+  assert.equal(fm(f, s).claimed_by, '082bb:03', 'the other session of the same card holds the item');
+});
+
 test('082: team pop exits 1 when the continuation claim is refused; the earlier session keeps holding', () => {
   const f = fixture();
   const dep = make(f, 'open dependency');
@@ -170,6 +184,11 @@ if (e.FAIL_ON && args.join(' ').startsWith(e.FAIL_ON)) { process.stderr.write(e.
 if (e.CLEAR_ON_READ && args[0] === 'query' && args.includes('--phase') && !existsSync(e.MOVE_MARK + '.cleared')) {
   writeFileSync(e.MOVE_MARK + '.cleared', '1'); // another agent takes the item out of the team just before the lead reads it
   spawnSync(process.execPath, [bin, 'update', args[args.indexOf('--phase') + 1], '--set-team', ''], { env: { ...e, QWEN_CODE_AGENT_ID: 'other', TEAM_NAME: '' } });
+}
+if (e.REASSIGN_ON_READ && args[0] === 'query' && args[args.indexOf('--phase') + 1] === e.REASSIGN_ON_READ && !existsSync(e.MOVE_MARK + '.reassigned')) {
+  writeFileSync(e.MOVE_MARK + '.reassigned', '1'); // another writer hands the item to another session of the same card just before the lead reads it
+  spawnSync(process.execPath, [bin, 'query', '--phase', e.REASSIGN_ON_READ, '--agent', e.REASSIGN_BY], { env: e }); // a fresh view for the hand-off
+  spawnSync(process.execPath, [bin, 'update', e.REASSIGN_ON_READ, '--reassign', e.REASSIGN_TO, '--by', e.REASSIGN_BY, '--reason', 'reassigned'], { env: e });
 }
 const r = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: e });
 let out = r.stdout;

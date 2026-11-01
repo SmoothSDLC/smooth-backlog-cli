@@ -634,10 +634,15 @@ Options:
       in a "held" section; every other changed item goes to "others"; a file moved inside the folder (an
       archive, a renumbering) is one "D" entry for its old name. When the comparison fails (your reference
       commit is no longer in the clone, for example after a history rewrite), the command reports the
-      failure (exit 2) and keeps your reference, so the change is not lost. When the write of your
-      reference fails, the result says so and keeps the previous reference (with --json it is null on a
-      first use). The result also lists the agents that use the backlog (those with a reference point in
-      this clone) and their last-use time.
+      failure (exit 2) and keeps your reference, so the change is not lost. The report is printed before
+      the reference is written, so a failed output consumes no change (the same changes repeat in the
+      next report); on a first use the report is empty and the write happens first, so the result states
+      exactly what was stored. When the write of your reference fails, the result says so and keeps the
+      previous reference: a failed first use prints "no earlier use: the reference could not be set"
+      (with --json the reference is null), and a failed write after an earlier use says so in the text
+      and, with --json, prints the line {"reference_write": "failed"} after the report (the exit is 0).
+      The result also lists the agents that use the backlog (those with a reference point in this clone)
+      and their last-use time.
   --json
       Print machine-readable output.
   --all

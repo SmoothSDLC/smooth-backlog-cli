@@ -102,9 +102,13 @@ sees and changes the backlog only through them.
   `refiner`) are listed in a "held" section apart from the other changed items ("others"), so you can ignore
   changes to items you are not working on; a file moved inside the folder (an archive, a renumbering) is one "D"
   entry for its old name. When the comparison fails (your reference commit is no longer in the clone), the command
-  reports the failure (exit 2) and keeps your reference, so the change is not lost; a failed write of your
-  reference is stated in the result (the previous reference is kept; with `--json` it is null on a first use). The
-  result also names the agents that use the backlog with their last-use time.
+  reports the failure (exit 2) and keeps your reference, so the change is not lost. The report is printed before
+  the reference is written, so a failed output consumes no change (the same changes repeat in your next report);
+  on a first use the report is empty and the write happens first, so the result states exactly what was stored.
+  A failed write of your reference is stated in the result and keeps the previous reference: a failed first use
+  prints "no earlier use: the reference could not be set" (with `--json` the reference is null), and a failed
+  write after an earlier use says so in the text and, with `--json`, adds the line `{"reference_write": "failed"}`
+  after the report (the exit is 0). The result also names the agents that use the backlog with their last-use time.
 - [ ] Refine: `backlog update <item> --refine-start --by <you>`, set what is missing (`--set-review-refs` with
   the review-documents repository's review documents, `--set-estimate`, `--set-depends-on`, `--append` a definition of done), then
   `--refine-done --by <you> --note "<what you refined>"`.

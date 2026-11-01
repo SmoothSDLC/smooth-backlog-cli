@@ -117,34 +117,55 @@ Do not pick for the user. Do not proceed past the brief without their answer.
 // item 027: which items of this repository folder changed since the calling agent's last use. The
 // reference is the agent's own ~use record - its last write or its last --changed, never a global
 // timestamp - so a change made while the agent is idle still appears in the agent's next report.
-// The report is computed before the reference is written, and the result states exactly what was
-// stored (the write's value, or the kept reference when the write failed): an output can never
-// name a reference that is not there, and a failed comparison or a failed write never consumes a
-// change. The result names the reference (also when it is empty) and the agents that use the backlog.
+// The report is printed before the reference is written, so a failed output consumes no change
+// (the same changes repeat in the next report); on a first use the report is empty and the write
+// happens first, so the result states exactly what was stored (the write's value, or null on a
+// failed first use). A failed write after an earlier use is stated in the result - the text says
+// so, and with --json the line {"reference_write": "failed"} follows the report, the exit is 0 -
+// and keeps the previous reference. The result names the reference (also when it is empty) and the
+// agents that use the backlog.
 function changedReport(home, folder, repo, a) {
   const agent = a.agent || seen.actor();
   const reference = seen.lastUse(home, agent);
+  if (!reference) {
+    // first use: no comparison point and an empty report; the write happens first, and the result
+    // states exactly what was stored - an output can never name a reference that is not there
+    const rec = seen.setUse(home, agent);
+    if (a.json) { dump({ agent, reference: rec ? { commit: rec.commit, at: rec.at } : null, held: [], others: [], agents: seen.agentsUsing(home) }); return 0; }
+    if (rec) {
+      say('no earlier use: reference set now');
+      say(`reference: ${rec.commit} at ${rec.at}`);
+    } else {
+      say('no earlier use: the reference could not be set (the write failed)');
+    }
+    say('agents using the backlog:');
+    for (const x of seen.agentsUsing(home)) say(`  ${x.name} last used ${x.last_use}`);
+    return 0;
+  }
   let report;
   try {
-    report = reference ? seen.changedSince(home, folder, repo, reference, agent) : { held: [], others: [] };
+    report = seen.changedSince(home, folder, repo, reference, agent);
   } catch (e) {
     return die(`--changed: ${e.message}`); // the comparison failed: the reference is kept, the change is not lost
   }
+  // the whole report first, the reference write after it: a failed output must not consume the changes
+  if (a.json) {
+    dump({ agent, reference: { commit: reference.commit, at: reference.at }, held: report.held, others: report.others, agents: seen.agentsUsing(home) });
+  } else {
+    say(`reference: ${reference.commit} at ${reference.at}`);
+    if (!report.held.length && !report.others.length) say('no changes since the last use');
+    const line = x => `  changed: ${x.slug} (${x.status}) by ${x.updated_by || 'nobody'} at ${x.updated || 'an unknown time'}`;
+    if (report.held.length) { say('held:'); for (const x of report.held) say(line(x)); }
+    if (report.others.length) { say('others:'); for (const x of report.others) say(line(x)); }
+    say('agents using the backlog:');
+    for (const x of seen.agentsUsing(home)) say(`  ${x.name} last used ${x.last_use}`);
+  }
   const rec = seen.setUse(home, agent);
-  // the reference the report compares against (the agent's last use); on a first use, the value just written -
-  // and when the write failed, the previous reference (kept: the same changes repeat in the next report)
-  const ref = reference ?? rec;
-  const referenceOut = ref ? { commit: ref.commit, at: ref.at } : null;
-  const out = { agent, reference: referenceOut, held: report.held, others: report.others, agents: seen.agentsUsing(home) };
-  if (a.json) { dump(out); return 0; }
-  if (!reference) say(rec ? 'no earlier use: reference set now' : 'no earlier use: the reference could not be set (the write failed)');
-  if (ref) say(`reference: ${ref.commit} at ${ref.at}`);
-  if (reference && !report.held.length && !report.others.length) say('no changes since the last use');
-  const line = x => `  changed: ${x.slug} (${x.status}) by ${x.updated_by || 'nobody'} at ${x.updated || 'an unknown time'}`;
-  if (report.held.length) { say('held:'); for (const x of report.held) say(line(x)); }
-  if (report.others.length) { say('others:'); for (const x of report.others) say(line(x)); }
-  say('agents using the backlog:');
-  for (const x of out.agents) say(`  ${x.name} last used ${x.last_use}`);
+  if (!rec) {
+    // the write failed: the previous reference is kept, the same changes repeat in the next report
+    if (a.json) dump({ reference_write: 'failed' });
+    else say('reference write failed: the previous reference is kept (the same changes repeat in the next report)');
+  }
   return 0;
 }
 

@@ -13,12 +13,16 @@
   archive, a renumbering) is one "D" entry for its old name — a move that git reports as a rename is
   that entry, not a vanished item. When the comparison fails (the reference commit is no longer in the
   clone, for example after a history rewrite), the command reports the failure (exit 2) and keeps the
-  agent's reference, so the change is not lost; the report is computed before the reference is written,
-  and a failed write of the reference is stated in the result (the previous reference is kept, and with
-  `--json` it is null on a first use). The help and the command documentation name that `--changed`
-  advances the agent's own last-use reference, and that the command otherwise never changes the
-  backlog. The result also lists the agents that use the backlog (those with a reference point in this
-  clone) and their last-use time (item 027).
+  agent's reference, so the change is not lost. The report is printed before the reference is written,
+  so a failed output consumes no change (the same changes repeat in the next report); on a first use the
+  report is empty and the write happens first, so the result states exactly what was stored. A failed
+  write of the reference is stated in the result and keeps the previous reference: a failed first use
+  prints "no earlier use: the reference could not be set" (with `--json` the reference is null), and a
+  failed write after an earlier use says so in the text and, with `--json`, adds the line
+  `{"reference_write": "failed"}` after the report (the exit is 0). The help and the command documentation
+  name that `--changed` advances the agent's own last-use reference, and that the command otherwise never
+  changes the backlog. The result also lists the agents that use the backlog (those with a reference point
+  in this clone) and their last-use time (item 027).
 - The shared backlog repository is a setting, not a built-in name: its clone URL is read from the environment
   variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url` key of `.smooth-backlog.json`; there is no
   built-in default. A shared-mode command that needs it refuses (exit 2, naming both the variable and the key)

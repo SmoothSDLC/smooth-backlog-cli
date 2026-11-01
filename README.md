@@ -105,8 +105,13 @@ report and the agent's own reads never move it. The items the agent holds (its n
 `refiner`) are listed in a "held" section apart from the other changed items ("others"); a file moved inside the
 folder (an archive, a renumbering) is one "D" entry for its old name. When the comparison fails (the reference commit
 is no longer in the clone), the command reports the failure (exit 2) and keeps the agent's reference, so the change
-is not lost; a failed write of the reference is stated in the result (the previous reference is kept, and with
-`--json` it is null on a first use). The result names the agents that use the backlog with their last-use time.
+is not lost. The report is printed before the reference is written, so a failed output consumes no change (the
+same changes repeat in the next report); on a first use the report is empty and the write happens first, so the
+result states exactly what was stored. A failed write of the reference is stated in the result and keeps the
+previous reference: a failed first use prints "no earlier use: the reference could not be set" (with `--json`
+the reference is null), and a failed write after an earlier use says so in the text and, with `--json`, adds
+the line `{"reference_write": "failed"}` after the report (the exit is 0). The result names the agents that use
+the backlog with their last-use time.
 
 The self-review rule is per session, not per card: an agent name is a session name, so the session that claimed an
 item or asked for its review (recorded in `session_authors`) may not review it, and a new session of the same card

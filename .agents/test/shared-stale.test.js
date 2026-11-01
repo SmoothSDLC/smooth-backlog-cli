@@ -302,9 +302,10 @@ function closeFixture() {
   const f = seed();
   const path = join(f.folder, 'phases', '001-alpha.md');
   const doc = parse(readFileSync(path, 'utf8'));
+  const head = git(f.cons, 'rev-parse', 'HEAD'); // item 088: the work commit is the working repository's HEAD
   store.write({ path, fm: { ...doc.fm,
     review_refs: ['references/review/tests.md'], review_state: 'passed', estimate_min: 5,
-    cody_pass_commit: doc.fm.commit || '', external_pass_commit: doc.fm.commit || '' }, // item 088: both stages passed
+    cody_pass_commit: head, external_pass_commit: head }, // item 088: both stages passed for the work commit
     body: doc.body + '\n## Definition of done\n\n- [x] Tested\n' }, f.folder);
   const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'ready to close'); git(f.home, 'push', '-q');

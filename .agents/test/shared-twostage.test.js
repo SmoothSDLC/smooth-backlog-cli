@@ -13,6 +13,7 @@ import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
+import { stageMissing } from '../../src/shared/lifecycle.js';
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -301,4 +302,12 @@ test('--status done runs unreviewed for an item without review documents; the ga
   const s = make(f, 'review docs item');
   ok(f, ['update', s, '--claim', 'tester']);
   no(f, ['update', s, '--status', 'done', '--by', 'tester'], 'missing the Cody review stage');
+});
+
+test('an empty work commit is no commit: a pass pinned to it (or a cleared pin) counts for no stage', () => {
+  assert.equal(stageMissing({ cody_pass_commit: '', external_pass_commit: '' }, ''), 'cody'); // empty pins on an empty work commit
+  assert.equal(stageMissing({ cody_pass_commit: '', external_pass_commit: '' }, 'h'), 'cody'); // cleared pins, a work commit exists
+  assert.equal(stageMissing({ cody_pass_commit: 'h', external_pass_commit: '' }, 'h'), 'external');
+  assert.equal(stageMissing({ cody_pass_commit: 'o', external_pass_commit: 'o' }, 'h'), 'cody'); // passes for an older commit
+  assert.equal(stageMissing({ cody_pass_commit: 'h', external_pass_commit: 'h' }, 'h'), '');
 });

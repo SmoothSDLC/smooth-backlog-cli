@@ -4,12 +4,19 @@
 // and a new session (a new name) may. Items without session names keep the old agent-name rule. Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import { mkdirSync } from 'node:fs';
 import * as store from '../../src/shared/store.js';
+
+const git = (cwd, ...args) => {
+  const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+  if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
+  return p.stdout.trim();
+};
 
 const A1 = '082aa:01'; // the session that builds and asks
 const A2 = '082aa:02'; // a new session of the same card
@@ -127,14 +134,16 @@ test('082: a pass by a session-named reviewer pins the Cody stage, and the exter
   const f = fixture();
   const s = setup(f); // A1 claims and asks
   const commit = 'a'.repeat(40);
-  ok(f, ['update', s, '--commit', commit]); // the work commit
+  ok(f, ['update', s, '--commit', commit]); // the item's commit record: it no longer drives the gate
   ok(f, ['update', s, '--start-review', '--by', A2]);
   ok(f, ['update', s, '--review', 'pass', '--by', A2, '--comments', 'fine per references/review/code.md']);
-  assert.equal(itemFm(f, s).cody_pass_commit, commit, 'the session-named Cody pass pins the work commit');
+  // item 088: the pass pins the work commit - the working repository's HEAD at review time - not the commit record
+  assert.equal(itemFm(f, s).cody_pass_commit, git(f.cons, 'rev-parse', 'HEAD'), 'the session-named Cody pass pins the work commit');
+  assert.notEqual(itemFm(f, s).cody_pass_commit, commit);
   ok(f, ['update', s, '--request-review', 'codex', '--note', 'the cody pass', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', 'codex']);
   ok(f, ['update', s, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
-  assert.equal(itemFm(f, s).external_pass_commit, commit);
+  assert.equal(itemFm(f, s).external_pass_commit, itemFm(f, s).cody_pass_commit);
 });
 
 test('082: query --plan offers the requested review to the new session of the card, never to the asking session', () => {

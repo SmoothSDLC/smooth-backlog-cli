@@ -45,9 +45,12 @@ function make(f, cwd, name, extra = []) {
 }
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const ok = (f, slug, ...args) => {
+  let extra = {};
+  const last = args[args.length - 1];
+  if (last && typeof last === 'object' && !Array.isArray(last)) extra = args.pop(); // a trailing { env } object
   const who = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
   if (who) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t }); // an agent reads an item before it writes it again (seen.js)
-  const r = cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
+  const r = cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '', ...extra.env } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r;
 };
@@ -168,7 +171,7 @@ test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_clo
   assert.deepEqual([p.action, p.item], ['continue', job]);
   assert.ok(p.instruction.includes('keep working'));
   ok(f, job, '--request-review', 'any', '--note', 'commit def');
-  ok(f, job, '--review', 'pass', '--by', 'archy', '--comments', 'fine per references/review/tests.md');
+  ok(f, job, '--review', 'pass', '--by', 'cody-b', '--comments', 'fine per references/review/tests.md'); // a Cody agent (not the author session) passes
   p = pop(f); // a lone pass: the external review is asked for, not the close (item 088)
   assert.deepEqual([p.action, p.item], ['continue', job]);
   assert.ok(p.instruction.startsWith('the Cody pass is recorded: request the external review'), p.instruction);
@@ -188,14 +191,15 @@ test('a teamless split slice is dispatched to the member for refinement and to t
   assert.equal(item(f, slice).fm.stage, 'refining'); // a split slice, no team field
   let p = pop(f); // the member refines the slice before any claim (first-round refinement)
   assert.deepEqual([p.action, p.item], ['refine', slice]);
-  ok(f, slice, '--refine-start', '--by', 'cody');
-  ok(f, slice, '--refine-done', '--by', 'cody', '--note', 'complete');
+  ok(f, slice, '--refine-start', '--by', 'archy');
+  ok(f, slice, '--refine-done', '--by', 'archy', '--note', 'complete');
   p = popLead(f); // the refined slice goes to the lead for its refinement review
   assert.deepEqual([p.action, p.item], ['refinement-review', slice]);
-  ok(f, slice, '--request-refinement-review', '--by', 'lead');
+  ok(f, slice, '--request-refinement-review', '--by', 'lead', { env: { TEAM_LEAD: 'lead' } });
   p = popLead(f); // the review is in flight: the same offer stands
   assert.deepEqual([p.action, p.item], ['refinement-review', slice]);
   ok(f, slice, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'checkable (codex thread t-3)');
+  ok(f, parent, '--claim', 'lead'); // the lead holds the work item (spec section 8); the slice is the claimable work
   p = pop(f); // the refinement review passed: the slice is claimable
   assert.deepEqual([p.action, p.item], ['claim', slice]);
   assert.ok(parent);

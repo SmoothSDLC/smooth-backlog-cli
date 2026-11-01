@@ -79,6 +79,10 @@ test('test_changes_verdict_is_planned_once_per_verdict_for_the_claimer_and_plain
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit 2', '--by', 'archy']);
   assert.deepEqual(plan(f).filter(x => x.member === 'archy'), []);
   ok(f, ['update', job, '--review', 'pass', '--by', 'cody', '--comments', 'ok (references/review/code.md)']);
+  // item 088: a lone Cody pass asks for the external review, not the close
+  assert.deepEqual(plan(f).filter(x => x.member === 'archy').map(x => [x.action, x.key]), [['review-request', `archy review-request ${e[0].seq}`]]);
+  ok(f, ['update', job, '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', 'archy']);
+  ok(f, ['update', job, '--review', 'pass', '--by', 'codex', '--comments', 'ok (references/review/code.md)']);
   assert.deepEqual(plan(f).filter(x => x.member === 'archy').map(x => [x.action, x.key]), [['close', `archy close ${e[0].seq}`]]);
 });
 

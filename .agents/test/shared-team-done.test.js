@@ -43,33 +43,14 @@ test('--status done is refused until both review stages passed (port of test_sta
   assert.equal(status(f), 'in_progress');
 });
 
-test('--status done on an item without review_refs needs both stages (port of test_status_done_on_item_without_review_refs, item 088)', () => {
+test('--status done on an item without review_refs completes unreviewed (port of test_status_done_on_item_without_review_refs, item 088)', () => {
   const f = fixture('old item without review_refs', []);
   const { fm, body } = parse(readFileSync(f.file, 'utf8')); // as an old item looks: none of the team keys (depends_on is not one)
   for (const k of ['work_class', 'review_classes', 'claimed_by', 'claimed_at', 'review_state', 'reviewer']) delete fm[k];
   writeFileSync(f.file, dump(fm, body));
-  let r = update(f, [f.slug, '--status', 'done']);
-  assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.ok(r.stdout.includes('missing the Cody review stage'), r.stdout);
-  r = update(f, [f.slug, '--set-review-refs', 'references/review/code.md', '--by', 'cody']); // the lead (cody, the default) completes it
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  r = update(f, [f.slug, '--request-review', 'any', '--note', 'the work']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  q(f, 'cody-a');
-  r = update(f, [f.slug, '--start-review', '--by', 'cody-a']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  r = update(f, [f.slug, '--review', 'pass', '--by', 'cody-a', '--comments', 'fine per references/review/code.md']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  q(f, 'cody-a');
-  r = update(f, [f.slug, '--request-review', 'codex', '--note', 'the external stage', '--by', 'cody-a']); // the claimer hands on to the external stage
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  q(f, 'codex');
-  r = update(f, [f.slug, '--start-review', '--by', 'codex']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  r = update(f, [f.slug, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  q(f, 'smooth'); // the environment agent reads the item as it stands before completing it
-  r = update(f, [f.slug, '--status', 'done']);
+  // item 088: the --status done gate runs for an item that names its review documents; without them the item
+  // finishes unreviewed, as before the gate
+  const r = update(f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(status(f), 'done');
 });

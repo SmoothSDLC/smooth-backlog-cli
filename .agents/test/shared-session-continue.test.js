@@ -152,6 +152,10 @@ test('082: query --plan offers the close to the new session of the card while th
   ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', B1]);
   ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
+  // item 088: the close waits for the external review on the same commit
+  ok(f, ['update', s, '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', A1]);
+  ok(f, ['update', s, '--start-review', '--by', 'codex']);
+  ok(f, ['update', s, '--review', 'pass', '--by', 'codex', '--comments', `fine per ${REF}`]);
   const roster = join(f.t, 'roster.json');
   writeFileSync(roster, JSON.stringify({ [A2]: {} })); // only the new session is present
   const out = run(f, ['query', '--plan', '--roster', roster]).stdout;
@@ -178,6 +182,10 @@ test('082: a fresh session of the card is told to claim the item before it close
   ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', B1]);
   ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
+  // item 088: the close waits for the external review on the same commit
+  ok(f, ['update', s, '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', A1]);
+  ok(f, ['update', s, '--start-review', '--by', 'codex']);
+  ok(f, ['update', s, '--review', 'pass', '--by', 'codex', '--comments', `fine per ${REF}`]);
   const w = JSON.parse(run(f, ['pop', '--agent', A2, '--json']).stdout);
   assert.equal(w.action, 'continue', w.instruction);
   assert.ok(w.instruction.includes(`--claim ${A2}`), `the close instruction starts with the continuation claim: ${w.instruction}`);

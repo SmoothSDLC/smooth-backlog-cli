@@ -189,3 +189,76 @@ test('027: --json has the keys agent, reference, held, others, agents', () => {
   assert.ok(Array.isArray(out.held) && Array.isArray(out.others) && Array.isArray(out.agents));
   assert.ok(out.agents.some(x => x.name === 'amy' && typeof x.last_use === 'string'));
 });
+
+test('027: an archived item appears in the report as a D for its old name', () => {
+  const f = seed();
+  assert.equal(run(f, f.home, ['query', '--changed', '--agent', 'amy']).status, 0);
+  // while amy is idle, bob archives item 1 in his own clone (a move under archive/)
+  mkdirSync(join(f.folder2, 'archive', 'phases'), { recursive: true });
+  git(f.home2, 'mv', 'acme/demo/phases/001-alpha.md', 'acme/demo/archive/phases/001-alpha.md');
+  git(f.home2, 'commit', '-q', '-m', 'archive 1');
+  git(f.home2, 'push', '-q');
+  const text = run(f, f.home, ['query', '--changed', '--agent', 'amy']);
+  assert.equal(text.status, 0, text.stderr + text.stdout);
+  assert.match(text.stdout, /changed: 001-alpha \(D\)/, 'the archived item is reported, not vanished');
+  // bob archives item 2 while amy is idle again
+  git(f.home2, 'mv', 'acme/demo/phases/002-beta.md', 'acme/demo/archive/phases/002-beta.md');
+  git(f.home2, 'commit', '-q', '-m', 'archive 2');
+  git(f.home2, 'push', '-q');
+  const r = run(f, f.home, ['query', '--changed', '--agent', 'amy', '--json']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const out = JSON.parse(r.stdout);
+  assert.deepEqual(out.others.map(x => x.slug), ['002-beta'], 'the archived item is reported, not vanished');
+  assert.equal(out.others[0].status, 'D', 'a move inside the folder is one D for its old name');
+});
+
+test('027: a renumbered (moved) item reports one D for its old name, not a vanished item', () => {
+  const f = seed();
+  assert.equal(run(f, f.home, ['query', '--changed', '--agent', 'amy']).status, 0);
+  // while amy is idle, bob renumbers item 1 in his own clone (a move inside the folder)
+  git(f.home2, 'mv', 'acme/demo/phases/001-alpha.md', 'acme/demo/phases/002-alpha.md');
+  git(f.home2, 'commit', '-q', '-m', 'renumber 1 to 2');
+  git(f.home2, 'push', '-q');
+  const r = run(f, f.home, ['query', '--changed', '--agent', 'amy', '--json']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const out = JSON.parse(r.stdout);
+  const all = [...out.held, ...out.others];
+  assert.deepEqual(all.map(x => x.slug), ['001-alpha'], 'the move is reported once, for the old name');
+  assert.equal(all[0].status, 'D');
+});
+
+test('027: a failed comparison reports the failure, keeps the reference, and the change is still in the next report', () => {
+  const f = seed();
+  assert.equal(run(f, f.home, ['query', '--changed', '--agent', 'amy']).status, 0);
+  assert.equal(run(f, f.home2, ['update', '2', '--append', 'from bob', '--by', 'bob']).status, 0);
+  const keep = useOf(f.home, 'amy');
+  const corrupted = { agent: 'amy', at: keep.at, commit: '0'.repeat(40) };
+  writeFileSync(viewCache(f.home, 'amy'), JSON.stringify({ '~use': corrupted }, null, 1));
+  const r = run(f, f.home, ['query', '--changed', '--agent', 'amy', '--json']);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /git diff/, 'the failure names the failed comparison');
+  assert.deepEqual(useOf(f.home, 'amy'), corrupted, 'the reference is kept, not consumed');
+  writeFileSync(viewCache(f.home, 'amy'), JSON.stringify({ '~use': keep }, null, 1));
+  const r2 = run(f, f.home, ['query', '--changed', '--agent', 'amy', '--json']);
+  assert.equal(r2.status, 0, r2.stderr + r2.stdout);
+  const out = JSON.parse(r2.stdout);
+  assert.deepEqual(out.others.map(x => x.slug), ['002-beta'], 'the change was not lost');
+  assert.deepEqual(out.reference, { commit: keep.commit, at: keep.at }, 'the reported reference is the comparison point, the agent own last use');
+  const use = useOf(f.home, 'amy');
+  assert.equal(use.commit, git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), 'the write after the report is stored');
+  assert.match(use.at, /^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+});
+
+test('027: a failed reference write on the first use: the JSON reference is null and the text states it', () => {
+  const f = seed();
+  mkdirSync(viewCache(f.home, 'amy'), { recursive: true }); // the views file path is a directory: the write of the reference fails
+  const r = run(f, f.home, ['query', '--changed', '--agent', 'amy', '--json']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.reference, null, 'no reference could be stored: null, not a crash');
+  assert.deepEqual(out.agents, [], 'the agent without a stored reference is not listed');
+  const text = run(f, f.home, ['query', '--changed', '--agent', 'amy']);
+  assert.equal(text.status, 0, text.stderr + text.stdout);
+  assert.match(text.stdout, /no earlier use: the reference could not be set/);
+  assert.doesNotMatch(text.stdout, /reference: [0-9a-f]{40}/, 'no reference was stored, none is stated');
+});

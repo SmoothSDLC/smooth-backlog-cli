@@ -79,18 +79,24 @@ export function recordWrites(folder, repo, agent, views, pairs = []) {
 // the per-item keys (<owner>/<name>/<slug>) ignores it. A read never moves it.
 const USE = '~use';
 export const lastUse = (home, agent) => read(home, agent)[USE] ?? null;
+// Returns the record written, or null when the write failed (unwritable .git, or no commit yet):
+// the caller keeps the previous reference and says the write failed - a reference the command
+// states was written must be the one stored.
 export const setUse = (home, agent) => {
   try {
     const commit = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: home, encoding: 'utf8' }).stdout.trim();
-    if (!commit) return;
+    if (!commit) return null;
+    const entry = { agent, at: now(), commit };
     const all = read(home, agent);
-    all[USE] = { agent, at: now(), commit };
+    all[USE] = entry;
     const file = viewsFile(home, agent);
     mkdirSync(dirname(file), { recursive: true });
     const tmp = `${file}.${randomUUID()}.tmp`;
     writeFileSync(tmp, JSON.stringify(all, null, 1), { mode: 0o600 });
     renameSync(tmp, file);
-  } catch { /* unwritable .git: the agent simply has no reference point yet */ }
+    return entry;
+  } catch { /* the agent simply has no reference point (yet): the caller says so */ }
+  return null;
 };
 // The agents that have a reference point, read from the views files of this clone (name and
 // last-use time). Other clones' views are not visible here: the list is per clone.
@@ -111,11 +117,13 @@ export function agentsUsing(home) {
 // archived. A file moved inside the folder (an archive, a renumbering) is one D entry for its
 // old name; the item's author and time come from its new location (or its reference-commit
 // version when it is gone). Held: the agent's name in claimed_by, reviewer or refiner.
+// Throws when the comparison itself fails (the reference commit is no longer in the clone, or
+// another git error): an empty report would be read as "no changes", and the caller must decide
+// what to do with the reference before it is advanced.
 export function changedSince(home, folder, repo, reference, agent) {
   const r = spawnSync('git', ['diff', '--name-status', reference.commit, 'HEAD', '--', `${repo}/phases`, `${repo}/archive`], { cwd: home, encoding: 'utf8' });
-  const rows = r.status === 0
-    ? r.stdout.split('\n').filter(Boolean).map(l => { const [status, ...paths] = l.split('\t'); return { status, path: paths[0] }; })
-    : [];
+  if (r.status !== 0) throw new Error(`git diff ${reference.commit} HEAD failed: ${(r.stderr || '').trim() || `exit ${r.status}`}`);
+  const rows = r.stdout.split('\n').filter(Boolean).map(l => { const [status, ...paths] = l.split('\t'); return { status, path: paths[0], to: paths[1] }; });
   const base = p => p.split('/').pop();
   const rel = p => p.slice(repo.length + 1);
   const added = new Map();
@@ -123,12 +131,13 @@ export function changedSince(home, folder, repo, reference, agent) {
   const gone = new Set(rows.filter(x => x.status === 'D').map(x => base(x.path)));
   const entries = [];
   for (const x of rows) {
-    if (!['A', 'M', 'D'].includes(x.status)) continue;
+    const isMove = x.status.startsWith('R'); // git reports a file moved inside the folder (an archive, a renumbering) as a rename: it is the move
+    if (!['A', 'M', 'D'].includes(x.status) && !isMove) continue;
     const b = base(x.path);
     if (x.status === 'A' && gone.has(b)) continue; // its D entry reports the move
     let fm = {};
-    if (x.status === 'D') {
-      const moved = added.get(b);
+    if (x.status === 'D' || isMove) {
+      const moved = isMove ? x.to : added.get(b);
       if (moved) { try { fm = parse(readFileSync(join(folder, rel(moved)), 'utf8')).fm; } catch { /* gone: no author or time */ } }
       else {
         const v = spawnSync('git', ['show', `${reference.commit}:${x.path}`], { cwd: home, encoding: 'utf8' });
@@ -139,7 +148,7 @@ export function changedSince(home, folder, repo, reference, agent) {
     }
     entries.push({
       slug: b.replace(/\.md$/, ''),
-      status: x.status,
+      status: isMove ? 'D' : x.status,
       updated_by: fm.updated_by ?? '',
       updated: fm.updated ?? '',
       held: fm.claimed_by === agent || fm.reviewer === agent || fm.refiner === agent,

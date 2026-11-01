@@ -102,8 +102,11 @@ An agent asks which items changed since its own last use with `backlog query --c
 point is the commit of the agent's own last write or its own `query --changed` (stated in every result, even an
 empty one), never a global timestamp, so a change made while the agent is idle still appears in the agent's next
 report and the agent's own reads never move it. The items the agent holds (its name in `claimed_by`, `reviewer` or
-`refiner`) are listed in a "held" section apart from the other changed items ("others"), and the result names the
-agents that use the backlog with their last-use time.
+`refiner`) are listed in a "held" section apart from the other changed items ("others"); a file moved inside the
+folder (an archive, a renumbering) is one "D" entry for its old name. When the comparison fails (the reference commit
+is no longer in the clone), the command reports the failure (exit 2) and keeps the agent's reference, so the change
+is not lost; a failed write of the reference is stated in the result (the previous reference is kept, and with
+`--json` it is null on a first use). The result names the agents that use the backlog with their last-use time.
 
 The self-review rule is per session, not per card: an agent name is a session name, so the session that claimed an
 item or asked for its review (recorded in `session_authors`) may not review it, and a new session of the same card

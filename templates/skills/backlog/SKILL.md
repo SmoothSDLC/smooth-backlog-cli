@@ -100,8 +100,11 @@ sees and changes the backlog only through them.
   in your next report, and your own reads (`query --phase`, `pop`) do not move it; the first `--changed` prints
   "no earlier use: reference set now" and sets it. The items you hold (your name in `claimed_by`, `reviewer` or
   `refiner`) are listed in a "held" section apart from the other changed items ("others"), so you can ignore
-  changes to items you are not working on; the result also names the agents that use the backlog with their
-  last-use time.
+  changes to items you are not working on; a file moved inside the folder (an archive, a renumbering) is one "D"
+  entry for its old name. When the comparison fails (your reference commit is no longer in the clone), the command
+  reports the failure (exit 2) and keeps your reference, so the change is not lost; a failed write of your
+  reference is stated in the result (the previous reference is kept; with `--json` it is null on a first use). The
+  result also names the agents that use the backlog with their last-use time.
 - [ ] Refine: `backlog update <item> --refine-start --by <you>`, set what is missing (`--set-review-refs` with
   the review-documents repository's review documents, `--set-estimate`, `--set-depends-on`, `--append` a definition of done), then
   `--refine-done --by <you> --note "<what you refined>"`.

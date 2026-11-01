@@ -10,8 +10,15 @@
   `pop`) do not move it. The first use prints "no earlier use: reference set now" and sets the
   reference. The items the agent holds (its name in `claimed_by`, `reviewer` or `refiner`) are listed in
   a "held" section apart from the other changed items ("others"); a file moved inside the folder (an
-  archive, a renumbering) is one "D" entry for its old name; the result also lists the agents that use
-  the backlog (those with a reference point in this clone) and their last-use time (item 027).
+  archive, a renumbering) is one "D" entry for its old name — a move that git reports as a rename is
+  that entry, not a vanished item. When the comparison fails (the reference commit is no longer in the
+  clone, for example after a history rewrite), the command reports the failure (exit 2) and keeps the
+  agent's reference, so the change is not lost; the report is computed before the reference is written,
+  and a failed write of the reference is stated in the result (the previous reference is kept, and with
+  `--json` it is null on a first use). The help and the command documentation name that `--changed`
+  advances the agent's own last-use reference, and that the command otherwise never changes the
+  backlog. The result also lists the agents that use the backlog (those with a reference point in this
+  clone) and their last-use time (item 027).
 - The shared backlog repository is a setting, not a built-in name: its clone URL is read from the environment
   variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url` key of `.smooth-backlog.json`; there is no
   built-in default. A shared-mode command that needs it refuses (exit 2, naming both the variable and the key)

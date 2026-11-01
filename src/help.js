@@ -321,7 +321,8 @@ Usage:
   backlog query --pop --agent <name> [--lead <name>] [--roster <file>] [--scope branch|repo|all] [--claim-now] [--json]
   backlog query --changed [--agent <name>] [--json]
 
-Reads the backlog and never changes it, except that --pop with --claim-now claims an item. Without a view option it prints the full stack of the branch: the open
+Reads the backlog and never changes it, except that --pop with --claim-now claims an item and --changed advances
+the agent's own last-use reference (its record of its own use, not an item). Without a view option it prints the full stack of the branch: the open
 items in queue order (priority 0 is next), then the finished ones. Items that are not on the queue because their file
 is gone, or because they name another repository or no branch, are reported as findings above the queue.
 With --json the command prints the data itself, without any wrapper.
@@ -356,8 +357,12 @@ Options:
       (query --phase, pop) do not move it. The first --changed prints "no earlier use: reference set now"
       and sets the reference. The items you hold (your name in claimed_by, reviewer or refiner) are listed
       in a "held" section; every other changed item goes to "others"; a file moved inside the folder (an
-      archive, a renumbering) is one "D" entry for its old name. The result also lists the agents that
-      use the backlog (those with a reference point in this clone) and their last-use time.
+      archive, a renumbering) is one "D" entry for its old name. When the comparison fails (your reference
+      commit is no longer in the clone, for example after a history rewrite), the command reports the
+      failure (exit 2) and keeps your reference, so the change is not lost. When the write of your
+      reference fails, the result says so and keeps the previous reference (with --json it is null on a
+      first use). The result also lists the agents that use the backlog (those with a reference point in
+      this clone) and their last-use time.
   --json
       Print machine-readable output.
   --all

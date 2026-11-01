@@ -275,9 +275,10 @@ async function change(a, con, folder, repo) {
     body = `${rstrip(body)}\n\nWAIT DONE ${store.now()} (next step on the item)\n`;
   }
   if (a.status === 'done' && event !== 'closed') {
-    // item 088: an item finishes only after both review stages passed for the current work commit, with or without
-    // review_refs; the refusal names the missing stage (the owner's decision closes with --close --by owner --reason).
-    const refusal = stageRefusal(fm);
+    // item 088: an item that names its review documents finishes only after both review stages passed for the current
+    // work commit; the refusal names the missing stage. An item without review documents finishes unreviewed (the
+    // behaviour before the gate); the owner's decision closes with --close --by owner --reason.
+    const refusal = asList(fm.review_refs).length ? stageRefusal(fm) : '';
     if (refusal) return refuse(`${row.slug}: ${refusal}`);
   }
   const completing = a.status === 'done' || event === 'closed';

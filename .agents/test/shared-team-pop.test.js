@@ -169,9 +169,36 @@ test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_clo
   assert.ok(p.instruction.includes('keep working'));
   ok(f, job, '--request-review', 'any', '--note', 'commit def');
   ok(f, job, '--review', 'pass', '--by', 'archy', '--comments', 'fine per references/review/tests.md');
-  p = pop(f); // passed but open: close it
+  p = pop(f); // a lone pass: the external review is asked for, not the close (item 088)
+  assert.deepEqual([p.action, p.item], ['continue', job]);
+  assert.ok(p.instruction.startsWith('the Cody pass is recorded: request the external review'), p.instruction);
+  ok(f, job, '--request-review', 'codex', '--note', 'the cody pass, external stage');
+  ok(f, job, '--start-review', '--by', 'codex');
+  ok(f, job, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/tests.md');
+  p = pop(f); // both stages passed on the same commit: close it
   assert.deepEqual([p.action, p.item], ['continue', job]);
   assert.ok(p.instruction.startsWith(`close ${seq} with --close --summary`));
+});
+
+test('a teamless split slice is dispatched to the member for refinement and to the lead for its refinement review (item 088)', () => {
+  const f = fixture();
+  git(f.cons, 'checkout', '-q', '-b', 'popslice');
+  const parent = make(f, f.cons, 'slice parent', []);
+  const slice = make(f, f.cons, 'teamless slice', ['--split-from', parent]);
+  assert.equal(item(f, slice).fm.stage, 'refining'); // a split slice, no team field
+  let p = pop(f); // the member refines the slice before any claim (first-round refinement)
+  assert.deepEqual([p.action, p.item], ['refine', slice]);
+  ok(f, slice, '--refine-start', '--by', 'cody');
+  ok(f, slice, '--refine-done', '--by', 'cody', '--note', 'complete');
+  p = popLead(f); // the refined slice goes to the lead for its refinement review
+  assert.deepEqual([p.action, p.item], ['refinement-review', slice]);
+  ok(f, slice, '--request-refinement-review', '--by', 'lead');
+  p = popLead(f); // the review is in flight: the same offer stands
+  assert.deepEqual([p.action, p.item], ['refinement-review', slice]);
+  ok(f, slice, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'checkable (codex thread t-3)');
+  p = pop(f); // the refinement review passed: the slice is claimable
+  assert.deepEqual([p.action, p.item], ['claim', slice]);
+  assert.ok(parent);
 });
 
 test('test_claim_only_when_every_held_item_waits', () => {

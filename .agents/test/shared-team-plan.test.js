@@ -206,6 +206,15 @@ test('075: the plan through claims, a review, a changes verdict, a close and the
     step('update', ['1', '--request-review', 'any', '--note', 'y', '--by', 'zed']);
     step('update', ['1', '--review', 'pass', '--by', 'cody', '--comments', 'ok (references/review/code.md)']);
     plan('cody,archy,zed', [
+      { member: 'zed', action: 'review-request', item: '001-first', seq: 1,
+        instruction: 'the Cody pass is recorded: request the external review (backlog update 001-first --request-review codex --note "<the commit>") and close after it passes on the same commit',
+        reason: 'external stage pending', key: 'zed review-request 1' },
+      claim('cody', '002-second', 2),
+      claim('archy', '003-third', 3),
+    ]);
+    step('update', ['1', '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', 'zed']);
+    step('update', ['1', '--review', 'pass', '--by', 'codex', '--comments', 'ok (references/review/code.md)']);
+    plan('cody,archy,zed', [
       { member: 'zed', action: 'close', item: '001-first', seq: 1,
         instruction: 'close 1 with --close --summary (backlog update 001-first --close --summary "<outcome>")',
         reason: 'claimer', key: 'zed close 1' },

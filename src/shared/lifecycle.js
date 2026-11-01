@@ -1,7 +1,8 @@
 // The team lifecycle of `backlog update` in shared mode (cli-parity job 15): claim, release, request-review, start-review,
 // review, waiting, waiting-done and close. Port of update.py:26-96 (team_action) and the guards around it, update.py:181-246.
-// Each action takes item = {fm, folder, repo}, changes item.fm and returns {event, text}, or throws Rejected(message) with
-// the refusal text; step() runs the guards and one action, and update.js writes the front matter and appends the text.
+// Each action takes item = {fm, folder, repo, body}, changes item.fm and returns {event, text}, or throws Rejected(message)
+// with the refusal text; step() runs the guards and one action, and update.js writes the front matter and appends the text.
+import { spawnSync } from 'node:child_process';
 import { hasDefinitionOfDone } from './new.js';
 import { wipRefusal } from './wip.js';
 import { now } from './store.js';
@@ -49,7 +50,11 @@ export function missingFields(fm, body) {
     ['definition_of_done', !hasDefinitionOfDone(body)]].filter(([, bad]) => bad).map(([f]) => f);
 }
 
-export function claim({ fm, folder, repo }, agent, { force } = {}) {
+// item 088: the marker new.js writes into a split slice's body (## Split from `<parent-slug>`. Inherited context:);
+// a slice created before the stage field existed has no stage, and the marker names it.
+export const isSplitSlice = body => /Split from `[^`]+`/.test(String(body ?? ''));
+
+export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
   // spec section 8 (item 039): the lead never claims a split item; the team runner claims the team's work item (no stage) for it
@@ -62,8 +67,10 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   if (agent === teamLead() && fm.team && fm.stage) reject(`the team lead (${agent}) never claims an item of its team's split; a member claims it`);
   if (fm.stage === 'review-hitl') reject('the item waits in stage review-hitl for an owner decision; nobody claims it, --force included (backlog update <item> --decision "<answer>" first)');
   // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages.
-  // Item 088: a split slice is in stage refining with or without a team field, so the gate covers it too.
-  if (!isReady(fm)) reject(`team ${fm.team || 'none'} item in stage ${fm.stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`);
+  // Item 088: a split slice is in stage refining with or without a team field, so the gate covers it too; a slice
+  // created before the stage field existed has no stage, and the body's split marker names it as refining.
+  const stage = fm.stage || (isSplitSlice(body) ? 'refining' : undefined);
+  if (!isReady({ stage })) reject(`team ${fm.team || 'none'} item in stage ${stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`);
   // item 082: a new session of the same card continues the item (no takeover, no lead reassignment): the
   // holder check and the "already holding" checks treat the earlier session's item as the agent's own
   const cont = heldBy(who, agent);
@@ -87,10 +94,12 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
 // for an owner decision (topology item 288). A member refines first, the lead requests the refinement review, and Codex
 // records the verdict; Claude only after Codex's 5-hour limit is recorded for the round.
 const inStage = fm => `team ${fm.team || 'none'}, stage ${fm.stage || 'none'}`;
-export function refineStart({ fm, folder, repo }, by, { force } = {}) {
+export function refineStart({ fm, folder, repo, body = '' }, by, { force } = {}) {
   if (!by) reject('--refine-start needs --by <agent>');
-  // item 088: a split slice is in stage refining with or without a team field - both refine through the same stages.
-  if (fm.stage !== 'refining') reject(`only an item of a team in stage refining is refined (${inStage(fm)})`);
+  // item 088: a split slice is in stage refining with or without a team field - both refine through the same stages;
+  // a slice created before the stage field existed has no stage, and the body's split marker names it as refining.
+  const stage = fm.stage || (isSplitSlice(body) ? 'refining' : 'none');
+  if (stage !== 'refining') reject(`only an item of a team in stage refining is refined (team ${fm.team || 'none'}, stage ${stage})`);
   if (fm.claimed_by) reject(`claimed by ${fm.claimed_by}: the work item itself is refined and split by the team lead, not refined here`);
   if (fm.refiner && fm.refiner !== by) reject(`${fm.refiner} is refining it since ${fm.refine_started}; refine another item`);
   if (by === teamLead() && fm.refiner !== by) reject(`a member, not the team lead, refines in the first round (spec section 4); the lead re-refines only an item an owner decision returned to it`);
@@ -99,7 +108,7 @@ export function refineStart({ fm, folder, repo }, by, { force } = {}) {
   const wip = fm.refiner === by ? null : wipRefusal(folder, repo, fm, by, fm.phase); // item 034
   if (wip) reject(wip);
   const t = now();
-  Object.assign(fm, { refiner: by, refine_started: t });
+  Object.assign(fm, { stage: 'refining', refiner: by, refine_started: t }); // the stage: a slice without one (created before it existed) gets it here
   return { event: 'refine_started', text: `Refinement started by ${by} at ${t}` };
 }
 
@@ -214,15 +223,20 @@ export const callerSession = () => {
   return /^[^@\s]+@\S+$/.test(id) ? strip(id.split('@')[0]) : '';
 };
 
+// item 088: the item's work commit at the time of the check: the working repository's HEAD. A commit of new work after
+// a pass moves HEAD, so pins set for the older commit no longer match and both stages run again; the item's commit
+// field records the repository state at creation (backlog new) and --commit advances that record.
+export const workCommit = cwd => (spawnSync('git', ['rev-parse', '--verify', '--quiet', 'HEAD'], { cwd: cwd ?? process.cwd(), encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }).stdout ?? '').trim() || '';
 // item 088: two review stages before any close - (a) a Cody review, then (b) an external review by codex or claude on
-// the same commit, with or without review_refs. A pass pins the item's work commit; the gate compares the pins to the
-// current commit. An empty work commit is no commit: a pass pinned to it (or a cleared pin) counts for no stage.
-// '' = both stages passed for the current commit; 'cody' or 'external' = the missing stage
-export const stageMissing = fm => {
-  const commit = fm.commit || '';
-  if (!commit) return 'cody';
-  if (fm.cody_pass_commit !== commit) return 'cody';
-  return fm.external_pass_commit === commit ? '' : 'external';
+// the same commit, with or without review_refs. A pass pins the work commit at review time; the gate compares the pins
+// to the work commit at check time. An empty work commit is no commit: a pass pinned to it (or a cleared pin) counts
+// for no stage.
+// '' = both stages passed for the current work commit; 'cody' or 'external' = the missing stage
+export const stageMissing = (fm, commit) => {
+  const c = commit ?? workCommit();
+  if (!c) return 'cody';
+  if (fm.cody_pass_commit !== c) return 'cody';
+  return fm.external_pass_commit === c ? '' : 'external';
 };
 // '' = both stages passed for the current commit, else the refusal naming the missing stage.
 export const stageRefusal = fm => {
@@ -277,9 +291,12 @@ export function review({ fm }, verdict, { by, comments } = {}) {
   // on the current commit. A pass pins the item's work commit; a changes verdict - at either stage, or by a reviewer
   // outside both stages - clears both stages and re-runs them.
   // item 082: a session name (082aa:02) is a cody session name - its pass records the Cody stage too.
+  // item 088: the pass pins the work commit (the working repository's HEAD) at review time; a commit of new work after
+  // a pass moves HEAD, so the pin no longer matches and both stages run again.
   const codyStage = by.toLowerCase().startsWith('cody') || isSessionName(by);
   const externalStage = ['codex', 'claude'].includes(by);
-  if (externalStage && fm.cody_pass_commit !== (fm.commit || '')) {
+  const head = workCommit();
+  if (externalStage && fm.cody_pass_commit !== head) {
     reject('the external review runs only after the Cody review passed on the current commit: a Cody agent (not the author session) reviews it first');
   }
   if (codyStage && fm.author_session) {
@@ -289,8 +306,8 @@ export function review({ fm }, verdict, { by, comments } = {}) {
   const t = now();
   Object.assign(fm, {
     review_state: verdict === 'pass' ? 'passed' : 'changes-requested', reviewer: by, review_started: '', reviewed_at: t,
-    ...(codyStage && verdict === 'pass' ? { cody_pass_commit: fm.commit || '' } : {}),
-    ...(externalStage && verdict === 'pass' ? { external_pass_commit: fm.commit || '' } : {}),
+    ...(codyStage && verdict === 'pass' ? { cody_pass_commit: head } : {}),
+    ...(externalStage && verdict === 'pass' ? { external_pass_commit: head } : {}),
     ...(verdict === 'changes' ? { cody_pass_commit: '', external_pass_commit: '' } : {}),
   });
   return { event: 'reviewed', text: `## Review by ${by}: ${verdict === 'pass' ? 'PASS' : 'CHANGES REQUESTED'} (${t})\n\n${comments}` };
@@ -421,7 +438,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
     if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${REFINE_HOW}` };
   }
   if (!actions.length) return { event: 'state_change' };
-  const item = { fm, folder, repo };
+  const item = { fm, folder, repo, body };
   try {
     switch (actions[0]) {
       case 'refine-start': return refineStart(item, a.by, { force: a.force });

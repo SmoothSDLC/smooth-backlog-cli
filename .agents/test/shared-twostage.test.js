@@ -5,11 +5,20 @@
 // Local bare repositories, items made with the CLI in a fixture backlog.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
+import * as store from '../../src/shared/store.js';
+
+const git = (cwd, ...args) => {
+  const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+  if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
+  return p.stdout.trim();
+};
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -105,17 +114,17 @@ test('an external pass recorded before the Cody pass is refused', () => {
 test('a Cody pass in the author session is refused; a Cody pass in a fresh session passes', () => {
   const f = fixture();
   const s = make(f, 'author session item');
-  ok(f, ['update', s, '--claim', 'cody-a'], { QWEN_CODE_AGENT_ID: 'cody-a@s1' });
+  ok(f, ['update', s, '--claim', 'cody-a'], { QWEN_CODE_AGENT_ID: 'cody-a@s1', QWEN_CODE_SESSION_ID: 's1' });
   assert.equal(fm(f, s).author_session, 's1');
-  ok(f, ['query', '--phase', s, '--agent', 'cody-a'], { QWEN_CODE_AGENT_ID: 'cody-a@s1' });
-  ok(f, ['update', s, '--request-review', 'any', '--note', 'the work in commit abc', '--by', 'cody-a'], { QWEN_CODE_AGENT_ID: 'cody-a@s1' });
+  ok(f, ['query', '--phase', s, '--agent', 'cody-a'], { QWEN_CODE_AGENT_ID: 'cody-a@s1', QWEN_CODE_SESSION_ID: 's1' });
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'the work in commit abc', '--by', 'cody-a'], { QWEN_CODE_AGENT_ID: 'cody-a@s1', QWEN_CODE_SESSION_ID: 's1' });
   // the reviewer is another Cody card (the claimer never reviews its own item): in the author session it is refused
-  ok(f, ['query', '--phase', s, '--agent', 'cody-b'], { QWEN_CODE_AGENT_ID: 'cody-b@s1' });
-  ok(f, ['update', s, '--start-review', '--by', 'cody-b'], { QWEN_CODE_AGENT_ID: 'cody-b@s1' });
+  ok(f, ['query', '--phase', s, '--agent', 'cody-b'], { QWEN_CODE_AGENT_ID: 'cody-b@s1', QWEN_CODE_SESSION_ID: 's1' });
+  ok(f, ['update', s, '--start-review', '--by', 'cody-b'], { QWEN_CODE_AGENT_ID: 'cody-b@s1', QWEN_CODE_SESSION_ID: 's1' });
   no(f, ['update', s, '--review', 'pass', '--by', 'cody-b', '--comments', 'fine per references/review/code.md'],
-    'the author session', { QWEN_CODE_AGENT_ID: 'cody-b@s1' });
+    'the author session', { QWEN_CODE_AGENT_ID: 'cody-b@s1', QWEN_CODE_SESSION_ID: 's1' });
   ok(f, ['update', s, '--review', 'pass', '--by', 'cody-b', '--comments', 'fine per references/review/code.md'],
-    { QWEN_CODE_AGENT_ID: 'cody-b@s2' }); // a fresh session of the author card's session
+    { QWEN_CODE_AGENT_ID: 'cody-b@s2', QWEN_CODE_SESSION_ID: 's2' }); // a fresh session of the author card's session
   assert.equal(fm(f, s).cody_pass_commit, fm(f, s).commit);
   round(f, s, { claimer: 'cody-a', reviewer: 'codex' });
   ok(f, ['query', '--phase', s, '--agent', 'cody-a']);
@@ -139,18 +148,20 @@ test('a changes verdict re-runs both stages: the passes on the older work no lon
   assert.equal(fm(f, s).status, 'done');
 });
 
-test('codex/claude passes on an older commit do not count after new work', () => {
+test('a new work commit invalidates the passes on the older commit: both stages run again', () => {
   const f = fixture();
   const s = make(f, 'new commit item');
   ok(f, ['update', s, '--claim', 'archy']);
-  bothStages(f, s, 'archy'); // both passes on the original commit
-  const older = fm(f, s).commit;
+  bothStages(f, s, 'archy'); // both passes on the original work commit
+  const older = fm(f, s).cody_pass_commit;
+  assert.equal(older, git(f.cons, 'rev-parse', 'HEAD')); // the pins are the work commit at review time
+  git(f.cons, 'commit', '-q', '--allow-empty', '-m', 'new work after the passes'); // new work moves the work commit
   ok(f, ['query', '--phase', s, '--agent', 'archy']);
-  ok(f, ['update', s, '--commit', 'a'.repeat(40), '--by', 'archy']); // new work on the item
   no(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy'], 'missing the Cody review stage');
-  assert.equal(fm(f, s).cody_pass_commit, older); // the passes pin the older commit
-  bothStages(f, s, 'archy'); // both stages again, on the new commit
-  assert.equal(fm(f, s).cody_pass_commit, 'a'.repeat(40));
+  no(f, ['update', s, '--status', 'done', '--by', 'archy'], 'missing the Cody review stage');
+  bothStages(f, s, 'archy'); // both stages again, on the new work commit
+  assert.equal(fm(f, s).cody_pass_commit, git(f.cons, 'rev-parse', 'HEAD'));
+  assert.notEqual(fm(f, s).cody_pass_commit, older);
   ok(f, ['query', '--phase', s, '--agent', 'archy']);
   ok(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy']);
   assert.equal(fm(f, s).status, 'done');
@@ -229,4 +240,65 @@ test('an owner close needs no review at all, but no --reason is refused; other c
   no(f, ['update', u, '--close', '--summary', 'x', '--by', 'zed'], 'only the claimer (archy) closes it, else the team lead (lead); not zed');
   ok(f, ['update', u, '--close', '--summary', 'done', '--by', 'lead']);
   assert.equal(fm(f, u).status, 'done');
+});
+
+test('the owner closes a team item in its refinement stages on the written decision; the stage gate does not run for the owner', () => {
+  const f = fixture();
+  const parent = make(f, 'owner team parent');
+  ok(f, ['update', parent, '--set-team', 't1']);
+  const child = ok(f, ['new', '--name', 'owner team slice', '--split-from', parent, '--depends-on', 'none',
+    '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
+    .split('created phase phases/')[1].split('.md')[0];
+  assert.equal(fm(f, child).stage, 'refining'); // the refinement runs while the owner decides
+  no(f, ['update', child, '--claim', 'archy'], 'it is claimed only when its refinement review passed');
+  ok(f, ['update', child, '--refine-start', '--by', 'archy']);
+  ok(f, ['query', '--phase', child, '--agent', 'owner']);
+  const r = ok(f, ['update', child, '--close', '--by', 'owner', '--reason', 'the owner takes it over', '--summary', 'done']);
+  assert.match(r.stdout, /Closed by owner at .* \(owner decision: the owner takes it over\)/);
+  assert.equal(fm(f, child).status, 'done');
+});
+
+// Written as a file edit, committed and pushed, the way another writer would store it (a slice as it was written
+// before the stage field existed: no stage, the body's split marker intact).
+const legacyWrite = (f, slug, keys) => {
+  const file = join(f.folder, 'phases', `${slug}.md`);
+  const doc = parse(readFileSync(file, 'utf8'));
+  const { stage: _stage, ...rest } = doc.fm; // eslint-disable-line no-unused-vars
+  store.write({ path: file, fm: { ...rest, ...keys }, body: doc.body }, f.folder);
+  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
+  for (const args of [['add', '-A'], ['commit', '-q', '-m', 'legacy slice'], ['push', '-q']]) {
+    const p = spawnSync('git', args, { cwd: f.home, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+    assert.equal(p.status, 0, p.stderr);
+  }
+};
+
+test('a legacy split slice without a stage field is not claimable until its refinement review passed', () => {
+  const f = fixture();
+  const parent = make(f, 'legacy parent');
+  const child = ok(f, ['new', '--name', 'legacy slice', '--split-from', parent, '--depends-on', 'none',
+    '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
+    .split('created phase phases/')[1].split('.md')[0];
+  legacyWrite(f, child, {}); // the stage goes away: a slice as written before the stage existed
+  assert.equal(fm(f, child).stage, undefined);
+  const r = no(f, ['update', child, '--claim', 'archy'], 'it is claimed only when its refinement review passed (stage ready)');
+  assert.ok(r.stdout.includes('stage refining'), r.stdout); // the body's split marker names the stage
+  ok(f, ['update', child, '--refine-start', '--by', 'archy']);
+  assert.equal(fm(f, child).stage, 'refining'); // the start normalizes the stage
+  ok(f, ['update', child, '--refine-done', '--by', 'archy', '--note', 'already complete']);
+  ok(f, ['update', child, '--request-refinement-review', '--by', 'lead']);
+  ok(f, ['update', child, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'checkable (codex thread t-2)']);
+  assert.equal(fm(f, child).stage, 'ready');
+  ok(f, ['query', '--phase', child, '--agent', 'archy']); // the lead's and codex's steps are new to archy
+  ok(f, ['update', child, '--claim', 'archy']);
+});
+
+test('--status done runs unreviewed for an item without review documents; the gate names the stage when it has them', () => {
+  const f = fixture();
+  const bare = ok(f, ['new', '--name', 'no review docs', '--objective', 'o', '--summary', 's', '--depends-on', 'none',
+    '--body', DOD]).stdout.split('created phase phases/')[1].split('.md')[0];
+  ok(f, ['update', bare, '--status', 'done', '--by', 'tester']); // no review documents: it finishes unreviewed
+  assert.equal(fm(f, bare).status, 'done');
+  const s = make(f, 'review docs item');
+  ok(f, ['update', s, '--claim', 'tester']);
+  no(f, ['update', s, '--status', 'done', '--by', 'tester'], 'missing the Cody review stage');
 });

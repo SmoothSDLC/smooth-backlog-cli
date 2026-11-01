@@ -57,6 +57,8 @@ export async function run(argv) {
   const ours = f => strip(f.team || '') === a.team && !f.stage && OPEN.includes(f.status) && f.repository === own && f.branch === branch;
   const skipped = [];
   let action = 'idle'; let item = null;
+  // the session for which this call recorded a claim (item 082): the final read must find that session still holding
+  let claimedFor = null;
   // a refused claim is update's refusal (exit 1, '❌ <item>: <why>' on stdout); any other failure ends the command (Codex review of 056)
   const refused = r => r.status === 1 && /^❌ /m.test(r.stdout) && !/❌ backlog:/.test(r.stderr);
   // item 082: heldBy also matches the lead's earlier session of the same card (the continuation): the command records the
@@ -73,6 +75,7 @@ export async function run(argv) {
         if (!refused(c)) return fail(c);
         return die(`the continuation claim of ${item} was not recorded: ${last(c)}`, 1);
       }
+      claimedFor = agent;
       if (c.stderr) process.stderr.write(c.stderr);
     }
   }
@@ -86,7 +89,7 @@ export async function run(argv) {
     if (!ours(f) || strip(f.claimed_by || '')) { skipped.push({ item: i.fm.phase, reason: 'changed since it was listed (team, stage, status, branch or holder)' }); continue; }
     // the scope is the claim's precondition, checked inside its locked write: the team (TEAM_NAME), repository and branch
     const c = self(['update', i.fm.phase, '--claim', agent], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, TEAM_BRANCH: branch });
-    if (c.status === 0) { action = 'claim'; item = i.fm.phase; if (c.stderr) process.stderr.write(c.stderr); break; }
+    if (c.status === 0) { action = 'claim'; item = i.fm.phase; claimedFor = agent; if (c.stderr) process.stderr.write(c.stderr); break; }
     if (!refused(c)) return fail(c);
     skipped.push({ item: i.fm.phase, reason: last(c) });
   }
@@ -96,7 +99,10 @@ export async function run(argv) {
     try { shown = JSON.parse(q.stdout); } catch { shown = null; }
     if (q.status !== 0 || !shown) return fail(q); // only the reason: the read's own output names the item's file
     const f = shown.front_matter || {};
-    if (!heldBy(strip(f.claimed_by || ''), agent) || !ours(f)) {
+    // item 082: after a claim this call recorded, only the session it claimed for may hold the item: a hand-back to
+    // an earlier session of the same card between the claim and this read is a change, never a reported success
+    const stillHeld = claimedFor ? strip(f.claimed_by || '') === claimedFor : heldBy(strip(f.claimed_by || ''), agent);
+    if (!stillHeld || !ours(f)) {
       return die(`${item} changed before team pop could show it (claimed by ${f.claimed_by || 'nobody'}, status ${f.status}); run backlog team pop again`, 1);
     }
   }

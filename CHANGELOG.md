@@ -16,7 +16,8 @@
   owner/name in the URL - a scheme URL needs two path segments after the authority (host[:port])) is refused the
   same way, and the origin check refuses a clone with no origin (item 091).
 - Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
-  agent in a fresh session, never the author session that claimed the item - a fresh session of the same card may),
+  agent in a fresh session, never the author session that claimed the item - the claim's session name, never the
+  team name - a fresh session of the same card, or of the team, may),
   then an external review by codex or claude on the same commit. A pass pins the item's current work commit: a pass
   on an older commit stops counting when the commit moves, and a changes verdict at either stage clears both stages
   and re-runs them. `--close` and `--status done` are refused until both stages passed for the item's current work
@@ -33,12 +34,15 @@
   claims the item first (a continuation claim) before those steps; the lead's completed-team review-and-close in
   pop starts with the same claim, and `backlog team pop` records the continuation claim itself when an earlier
   session of the lead's card holds the team's work item: a refused claim is no success - the command stops (exit 1,
-  the reason on standard error) and the earlier session keeps holding (item 082).
+  the reason on standard error) and the earlier session keeps holding; a claim that is handed back between the claim
+  and the final read is no success either - the command stops (exit 1, the item changed before it could be shown)
+  and the earlier session keeps holding (item 082).
 - The self-review rule is per session: `--claim` and `--request-review` record the claiming or asking session name
   (a requester other than the claimer, the team lead, is recorded too) in a new front-matter list `session_authors`
   (kept on release, like `review_author`); the session that claimed the item or asked for the review is refused
   with "the same session cannot review its own work; a new session may", and a new session (a new name) may start
-  or pass the review; a reviewer whose name is a session name records the Cody stage of the two-stage review, as
+  or pass the review; a `--reassign` keeps the former holder in the list (and adds the new holder), so the block
+  survives a hand-off; a reviewer whose name is a session name records the Cody stage of the two-stage review, as
   the old cody-* names did; items without session names keep the old agent-name rule (item 082).
 - Agent and team names may contain a colon in addition to letters, digits, `.`, `_` and `-` (a card's session
   names and a team name carry colons): the name works in the front matter, the event log, the commit subject

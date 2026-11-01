@@ -174,7 +174,10 @@ export function reassign({ fm }, agent, { by, reason } = {}) {
   if (!from) reject('nobody holds the item: the agent claims it (backlog update <item> --claim <agent>)');
   if (from === agent) reject(`${agent} holds it already`);
   const t = now();
-  Object.assign(fm, { claimed_by: agent, claimed_at: t, ...(fm.wait_on ? { wait_on: '' } : {}) });
+  // item 082: a reassignment is a hand-off of the work: the former holder stays in session_authors (seeded for an
+  // item claimed before the list existed, like the continuation claim), and the new holder joins, so both keep
+  // their self-review block after later hand-offs.
+  Object.assign(fm, { claimed_by: agent, claimed_at: t, session_authors: withSession(withSession(fm.session_authors, from), agent), ...(fm.wait_on ? { wait_on: '' } : {}) });
   return { event: 'reassigned', text: `## Reassigned by ${by} from ${from} to ${agent} at ${t}\n\n${reason}` };
 }
 
@@ -194,13 +197,14 @@ export function reassignReview({ fm }, agent, { by, reason } = {}) {
 // itself. Outside a team session (no such id) the caller is not known and the named agent is taken as given.
 export const caller = () => { const id = strip(process.env.QWEN_CODE_AGENT_ID || ''); return /^[^@\s]+@\S+$/.test(id) ? id.split('@')[0] : ''; };
 
-// item 082/088: the session of the caller. QWEN_CODE_SESSION_ID names it outright; else the session part of
-// QWEN_CODE_AGENT_ID (<name>@<session>); '' when unknown.
+// item 082/088: the session of the caller. QWEN_CODE_SESSION_ID names it outright; else the session (agent) name,
+// the part before the @ of QWEN_CODE_AGENT_ID (<name>@<team>, item 033) - never the team name, so two sessions of
+// one team are distinct author sessions; '' when the id names no session.
 export const callerSession = () => {
   const env = strip(process.env.QWEN_CODE_SESSION_ID || '');
   if (env) return env;
   const id = strip(process.env.QWEN_CODE_AGENT_ID || '');
-  return id.includes('@') ? strip(id.split('@').pop()) : '';
+  return /^[^@\s]+@\S+$/.test(id) ? strip(id.split('@')[0]) : '';
 };
 
 // item 088: two review stages before any close - (a) a Cody review, then (b) an external review by codex or claude on

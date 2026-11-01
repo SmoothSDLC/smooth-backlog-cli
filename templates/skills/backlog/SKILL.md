@@ -101,7 +101,8 @@ sees and changes the backlog only through them.
   --by <you>`, then `--review pass|changes --by <you> --comments "<findings, citing one of the item's review_refs>"`.
   Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
   agent - a name starting with cody, or a session name - in a fresh session, never the author session that
-  claimed the item), then an external review by codex or claude on the same commit. A pass pins the item's current work commit; a pass on an older commit stops counting
+  claimed the item - the claim's session name, never the team name - so a fresh session of the same card, or of
+  the team, may), then an external review by codex or claude on the same commit. A pass pins the item's current work commit; a pass on an older commit stops counting
   when the commit moves, and a changes verdict at either stage clears both stages. A passing Cody review asks for
   the external review; a passing external review asks for the close. The owner closes without a review on a written
   decision: `--close --by owner --reason "<the decision>"`, recorded as an owner decision.
@@ -117,7 +118,9 @@ sees and changes the backlog only through them.
   recorded a hand-off for a Qwen team member, `backlog work` also answers stop until its fresh session).
 - [ ] Team lead: take your team's work item with `backlog team pop --team <team>` (claimed for you, shown whole; idle
   exits 3; a work item held by an earlier session of your card is continued, and the claim records your new session
-  on the item first; a refused continuation claim stops the command, exit 1, the earlier session keeps holding), then
+  on the item first; a refused continuation claim stops the command, exit 1, the earlier session keeps holding; a
+  claim that is handed back between the claim and the final read stops the command too, exit 1, the earlier session
+  keeps holding), then
   split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of an item starts in stage refining, with or without a team, and takes its refinement review before it is claimed; a child of a team's item inherits the team); send a refined
   item on with `--request-refinement-review --by <you>`, record Codex's verdict with `--refinement-review
   pass|changes --by codex --comments "<findings; thread id>"`; only when Codex answers that its limit is exceeded, record that with
@@ -142,6 +145,7 @@ command names) and the hand-off marker file name `~/.qwen/teams/<team>/handoff/<
 The self-review rule is per session: `--claim` and `--request-review` record the session name on the item
 (`session_authors`, kept on release like `review_author`); the session that claimed or asked is refused with
 "the same session cannot review its own work; a new session may", and a new session (a new name) reviews it.
+A `--reassign` keeps the former holder in the list (and adds the new holder), so the block survives a hand-off.
 A new session of the same card continues the item its earlier session claimed (a rework after a review, or
 the close): a `--claim` with a name sharing the `<item><card>` part before the colon records the new session
 name on the item, with no takeover and no lead reassignment; the self-review block still applies to every
@@ -151,7 +155,9 @@ the rework and the close to the new session, which claims the item first (a cont
 steps; the lead's completed-team review-and-close in pop starts with the same claim, and `backlog team pop`
 records the continuation claim itself when an earlier session of the lead's card holds the team's work item: a
 refused claim is no success - the command stops (exit 1, the reason on standard error) and the earlier session
-keeps holding. A review requested by a session other than the claimer (the team lead) records that session in
+keeps holding; a claim that is handed back between the claim and the final read is no success either - the
+command stops (exit 1, the item changed before it could be shown) and the earlier session keeps holding.
+A review requested by a session other than the claimer (the team lead) records that session in
 `session_authors` too.
 
 Class options: the CLI has no class options (work or review): no `--classes`, no class profiles. The removed

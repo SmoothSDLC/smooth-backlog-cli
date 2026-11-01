@@ -4,7 +4,7 @@
 // and a new session (a new name) may. Items without session names keep the old agent-name rule. Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -32,14 +32,14 @@ const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
-const run = (f, args) => {
+const run = (f, args, env = {}) => {
   // QWEN_CODE_SESSION_ID stays out: these tests pin the agent-name rules, not the author-session rule (item 088),
   // which a session id inherited from the running shell would apply to the cody-* names
-  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', QWEN_CODE_SESSION_ID: '' } };
+  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', QWEN_CODE_SESSION_ID: '', ...env } };
   if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
-const ok = (f, args) => { const r = run(f, args); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
+const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text) => { const r = run(f, args); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const make = f => { const slug = ok(f, ['new', ...NEW('review session')]).stdout.split('created phase phases/')[1].split('.md')[0]; return slug; };
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
@@ -147,4 +147,34 @@ test('082: query --plan offers the requested review to the new session of the ca
   assert.ok(line, `the plan offers the review: ${out}`);
   assert.ok(line.startsWith(`${A2}: review ${s}`), `offered to the first session that is not an authoring one: ${line}`);
   assert.ok(!out.split('\n').some(l => l.startsWith(`${A1}: review ${s}`)), 'never offered to the asking session');
+});
+
+test('082: in a team session the author session is the session name, not the team name', () => {
+  const f = fixture();
+  const s = make(f);
+  ok(f, ['update', s, '--claim', A1], { QWEN_CODE_AGENT_ID: `${A1}@t07:09:1a` }); // a team session, no session id
+  assert.equal(itemFm(f, s).author_session, A1, 'the claim records the session name as the author session, not the team name');
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1], { QWEN_CODE_AGENT_ID: `${A1}@t07:09:1a` });
+  // a fresh session of the same team: a different session name, the same team in QWEN_CODE_AGENT_ID
+  ok(f, ['update', s, '--start-review', '--by', B1], { QWEN_CODE_AGENT_ID: `${B1}@t07:09:1a` });
+  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', 'fine per references/review/code.md'], { QWEN_CODE_AGENT_ID: `${B1}@t07:09:1a` });
+  assert.equal(itemFm(f, s).review_state, 'passed', 'the verdict of a fresh session of the same team is accepted');
+});
+
+test('082: a reassignment keeps the former holder blocked: the legacy item keeps its self-review rule', () => {
+  const f = fixture();
+  const s = make(f);
+  ok(f, ['update', s, '--claim', A1]);
+  // an item claimed before session_authors existed: the list is not in the file
+  const file = join(f.folder, 'phases', `${s}.md`);
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
+  assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
+  ok(f, ['update', s, '--reassign', A2, '--by', 'lead', '--reason', 'the earlier session ended']);
+  const fm = itemFm(f, s);
+  assert.equal(fm.claimed_by, A2);
+  assert.deepEqual(fm.session_authors, [A1, A2], 'the reassignment keeps the former holder and the new holder in the list');
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'lead']);
+  const r = run(f, ['update', s, '--start-review', '--by', A1]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, new RegExp(`^❌ ${s}: ${A1}: the same session cannot review its own work; a new session may\\n$`));
 });

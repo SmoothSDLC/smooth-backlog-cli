@@ -219,8 +219,9 @@ Options:
       to stage refining, where the lead re-refines it with the decision.
   --reassign AGENT
       The team lead only (--by <lead>, --reason "<why>"): take the item from the agent that holds it and give it to AGENT.
-      In a qwen-code team session (QWEN_CODE_AGENT_ID=<name>@<team>) a member acts only as itself: its claim, release,
-      refinement, review and close of an item name itself, never another agent.
+      The former holder stays in the item's session_authors list (the new holder joins), so the self-review block
+      survives the hand-off. In a qwen-code team session (QWEN_CODE_AGENT_ID=<name>@<team>) a member acts only as itself:
+      its claim, release, refinement, review and close of an item name itself, never another agent.
   --reassign-review AGENT
       The team lead only (--by <lead>, --reason "<why>"): hand the review of the item on to AGENT (not its author), for
       example a stale review; a member never takes over another agent's review.
@@ -248,8 +249,9 @@ Options:
   --review {pass,changes}
       Record a review verdict; it needs --by and --comments (team session). Two review stages are enforced before
       any close: first a Cody review - a Cody agent (a name starting with cody, or a session name) in a fresh
-      session, never the author session that claimed the item (a fresh session of the same card may) - then an
-      external review by codex or claude on the same commit. A pass pins the item's current work commit: a pass on an older commit stops counting
+      session, never the author session that claimed the item - the claim's session name (QWEN_CODE_SESSION_ID, else
+      the session part of QWEN_CODE_AGENT_ID, never the team name), so a fresh session of the same card, or of the
+      team, may - then an external review by codex or claude on the same commit. A pass pins the item's current work commit: a pass on an older commit stops counting
       when the commit moves, and a changes verdict at either stage clears both stages and re-runs them. The output of
       a passing Cody review asks for the external review; the output of a passing external review asks for the close.
   --handoff DEPENDENT
@@ -574,7 +576,9 @@ no stage (backlog update <item> --set-team <name> gives an item to a team; the i
 the members' work). When the lead holds an open work item of the team, the answer is continue with that item. When an
 earlier session of the lead's card holds it, the command records the continuation claim first - the new session name as
 claimed_by and in session_authors - and then answers continue. A refused continuation claim is no success: the earlier
-session keeps holding, and the command stops (exit 1, the reason on standard error). Otherwise the command claims for
+session keeps holding, and the command stops (exit 1, the reason on standard error). A claim that is handed back to an
+earlier session of the same card between the claim and the final read is no success either: the command stops (exit 1,
+the item changed before it could be shown) and the earlier session keeps holding. Otherwise the command claims for
 the lead the team's
 first open, unclaimed work item in the work order (priority, then seq) whose claim backlog update --claim accepts (its
 dependencies are done, no work-in-progress limit is passed), and the answer is claim. The output is the action, the one instruction (refine and split the item with the team), the items not taken
@@ -595,7 +599,7 @@ Exit codes:
   0  continue or claim: the lead holds the item.
   1  The continuation claim was refused (the earlier session keeps holding), a command it ran failed for another reason
      than a refused claim, a synchronisation failure included (the reason is printed), or the item changed before it
-     could be shown: run it again.
+     could be shown (a hand-back of the claim to an earlier session of the same card included): run it again.
   2  Invalid input: a missing --team, an agent other than the lead, another team than TEAM_NAME, or no branch (a
      detached HEAD without TEAM_BRANCH).
   3  idle: no work item of the team to take.

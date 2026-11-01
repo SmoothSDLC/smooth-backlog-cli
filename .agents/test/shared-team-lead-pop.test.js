@@ -65,6 +65,19 @@ test('082: team pop records the continuation claim when the lead\'s earlier sess
   assert.deepEqual(fm(f, s).session_authors, ['082bb:01', '082bb:02'], 'the earlier session stays in the list');
 });
 
+test('082: team pop exits 1 when the continuation claim is handed back before the final read', () => {
+  const f = fixture();
+  const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
+  const s = make(f, 'handed back work item'); ok(f, ['update', s, '--set-team', 't1']);
+  ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
+  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:02' }); // the lead's earlier session holds it
+  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: '082bb:02', BACKLOG_TEST_SELF: wrap, HAND_BACK_AFTER_CLAIM: '1', HAND_BACK_TO: '082bb:01' });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /changed before team pop could show it/);
+  assert.equal(r.stdout, '', 'no success output: the item is not presented as held');
+  assert.equal(fm(f, s).claimed_by, '082bb:01', 'the hand-back stands: the earlier session keeps holding');
+});
+
 test('082: team pop exits 1 when the continuation claim is refused; the earlier session keeps holding', () => {
   const f = fixture();
   const dep = make(f, 'open dependency');
@@ -148,7 +161,8 @@ test('item 061: query --phase --json names the team fields an item lacks', () =>
 });
 
 // A wrapper of the CLI for team pop's children (BACKLOG_TEST_SELF): FAIL_ON='<args prefix>' fails that call with FAIL_RC and
-// FAIL_ERR; MOVE_AFTER_CLAIM=<branch> makes the read after a successful claim show the item on another branch.
+// FAIL_ERR; MOVE_AFTER_CLAIM=<branch> makes the read after a successful claim show the item on another branch;
+// HAND_BACK_AFTER_CLAIM makes another writer reassign the item to HAND_BACK_TO right after a successful claim.
 const WRAP = `import { spawnSync } from 'node:child_process'; import { existsSync, writeFileSync } from 'node:fs';
 const bin = ${JSON.stringify(resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'))};
 const args = process.argv.slice(2); const e = process.env;
@@ -159,6 +173,11 @@ if (e.CLEAR_ON_READ && args[0] === 'query' && args.includes('--phase') && !exist
 }
 const r = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: e });
 let out = r.stdout;
+if (e.HAND_BACK_AFTER_CLAIM && args[0] === 'update' && args.includes('--claim') && r.status === 0) {
+  const slug = args[1]; const to = e.HAND_BACK_TO; const from = args[args.indexOf('--claim') + 1];
+  spawnSync(process.execPath, [bin, 'query', '--phase', slug, '--agent', from], { env: e }); // a fresh view for the hand-back
+  spawnSync(process.execPath, [bin, 'update', slug, '--reassign', to, '--by', from, '--reason', 'handed back'], { env: e }); // another writer hands the item back
+}
 if (args[0] === 'update' && args.includes('--claim') && r.status === 0 && e.MOVE_AFTER_CLAIM) writeFileSync(e.MOVE_MARK, '1');
 if (args[0] === 'query' && args.includes('--phase') && e.MOVE_AFTER_CLAIM && existsSync(e.MOVE_MARK)) {
   const j = JSON.parse(out); j.front_matter.branch = e.MOVE_AFTER_CLAIM; out = JSON.stringify(j);

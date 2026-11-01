@@ -14,6 +14,7 @@ const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 const DOD = "## Definition of done\n\n- [ ] the parser test passes";
 const STOP = /🛑 (\S+): END THE SESSION NOW/;
+const COMMIT = 'def45678def45678def45678def45678def45678'; // a 40-hex commit for the hand-off record
 
 test('051: the team workflow through the CLI only, step by step', async ctx => {
   const t = mkdtempSync(join(tmpdir(), 'team-flow-'));
@@ -122,6 +123,11 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
   await step('S21 the claimer closes', () => {
     session(Date.now() + 3000);
     as('archy', ['update', c1, '--close', '--summary', 'x', '--by', 'archy'], 1);
+    // item 059.V2: the close gate - c1 has a dependent (c2): the claimer records the hand-off, the lead accepts it
+    const c2seq = Number(c2.split('-')[0]);
+    as('zed', ['update', c1, '--handoff', c2seq, '--handoff-commit', COMMIT, '--handoff-contract', 'interface parse(text); commit def',
+      '--handoff-verification', 'parser.test (pass)', '--by', 'zed']);
+    as('lead', ['update', c1, '--accept-handoff', c2seq, '--checks', 'the record pins the commit and the contract', '--by', 'lead']);
     // zed wrote c2 in S20, the lead after it: the close re-ranks c2 too, so zed reads c2 again first (stale-view guard; item 053)
     as('zed', ['query', '--phase', c2, '--agent', 'zed']);
     as('zed', ['update', c1, '--close', '--summary', 'parser done', '--by', 'zed']);

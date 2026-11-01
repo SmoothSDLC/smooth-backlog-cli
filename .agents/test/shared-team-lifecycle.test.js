@@ -48,6 +48,7 @@ const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.m
 
 // A complete team item as conftest.Repos.new makes it: review refs, an estimate, a definition of done.
 const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
+const COMMIT = 'def45678def45678def45678def45678def45678'; // a 40-hex commit for the hand-off record (item 059.V2)
 function newArgs(name, extra = []) {
   const has = k => extra.includes(k);
   const out = ['--name', name, '--objective', 'o', '--summary', 's', ...(has('--depends-on') ? [] : ['--depends-on', 'none'])];
@@ -86,6 +87,12 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
   ok(first, '--request-review', 'codex', '--note', 'tests written, external stage', '--by', 'archy');
   ok(first, '--start-review', '--by', 'codex');
   ok(first, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md');
+  // item 059.V2: the close gate - first has a dependent (the job): the claimer records the hand-off, the lead accepts it
+  const jobseq = Number(job.split('-')[0]);
+  ok(first, '--handoff', jobseq, '--handoff-commit', COMMIT, '--handoff-contract', 'the job consumes the parser',
+    '--handoff-verification', 'the parser test passes', '--by', 'archy');
+  const accept = update(f, [first, '--accept-handoff', jobseq, '--checks', 'the record pins the commit', '--by', 'lead'], { TEAM_LEAD: 'lead' });
+  assert.equal(accept.status, 0, accept.stdout + accept.stderr);
   ok(first, '--close', '--summary', 'tests written');
 
   ok(job, '--claim', 'cody');
@@ -322,6 +329,10 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   both([A, '--request-review', 'codex', '--note', 'tests written, external stage'], undefined, 0);
   both([A, '--start-review', '--by', 'codex'], undefined, 0);
   both([A, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md'], undefined, 0);
+  // item 059.V2: the close gate - A has a dependent (B): the claimer records the hand-off, the lead accepts it
+  both([A, '--handoff', Number(B.split('-')[0]), '--handoff-commit', COMMIT, '--handoff-contract', 'B consumes the parser',
+    '--handoff-verification', 'the parser test passes', '--by', 'archy'], undefined, 0);
+  both([A, '--accept-handoff', Number(B.split('-')[0]), '--checks', 'the record pins the commit', '--by', 'lead'], { TEAM_LEAD: 'lead' }, 0);
   both([A, '--close', '--summary', 'tests written'], undefined, 0); // a wait is cleared by the next step
   both([A, '--dry-run', '--waiting-done'], undefined, 0);
   both([B, '--claim', 'cody'], undefined, 0);

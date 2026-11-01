@@ -9,7 +9,7 @@ import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { teamRefusal } from './archive.js';
-import { caller, closeNow, headline, missingFields, shutdown, stageRefusal, step } from './lifecycle.js';
+import { caller, closeNow, headline, missingFields, runCloseGate, shutdown, stageRefusal, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -179,6 +179,7 @@ async function change(a, con, folder, repo) {
   const path = join(folder, row.path);
   await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way
   const { fm, body: text } = parseDoc(readFileSync(path, 'utf8'));
+  const statusBefore = fm.status; // item 059.V2: the close gate (059.3) runs on the pre-transition status
   // The step's effective actor, not the environment actor: only the holder asks for a review of its work, and the
   // hand-off record acts as the claimer (item 059.V1, review r2: a --handoff without --by records as the claimer,
   // so the stale-view check must run against the claimer's view).
@@ -263,7 +264,7 @@ async function change(a, con, folder, repo) {
     changes.review_refs = refs.join(',');
   }
   const holder = fm.claimed_by || '';
-  const todo = step(a, { fm, body, before, slug: row.slug, folder, repo, incomplete, given: [...SETTABLE, 'severity'].filter(k => a[k] !== undefined) }); // --severity is a field edit too (046) // update.py:181-241
+  const todo = step(a, { fm, body, before, slug: row.slug, folder, repo, incomplete, statusBefore, given: [...SETTABLE, 'severity'].filter(k => a[k] !== undefined) }); // --severity is a field edit too (046) // update.py:181-241
   if (todo.refuse) return refuse(todo.refuse);
   const { event } = todo;
   if (todo.text) {
@@ -280,6 +281,16 @@ async function change(a, con, folder, repo) {
     // behaviour before the gate); the owner's decision closes with --close --by owner --reason.
     const refusal = asList(fm.review_refs).length ? stageRefusal(fm) : '';
     if (refusal) return refuse(`${row.slug}: ${refusal}`);
+    // item 059.V2: the close gate (059.3) - this path never calls closeItem, so the gate runs here, on the
+    // pre-transition status; while a dependent's edge is not accepted the completion is refused the same way as
+    // --close. With no dependents the gate records handoffs: none and the NONE line itself.
+    const gate = runCloseGate({ fm, statusBefore, folder, repo, slug: row.slug });
+    if (gate.refuse) return refuse(gate.refuse);
+    if (gate.fm) {
+      Object.assign(fm, gate.fm);
+      changes.handoffs = 'none';
+    }
+    if (gate.text) body = `${rstrip(body)}\n\n${gate.text}\n`;
   }
   const completing = a.status === 'done' || event === 'closed';
   if (completing && !fm.completed) fm.completed = store.now();

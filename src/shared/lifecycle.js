@@ -7,6 +7,8 @@ import { hasDefinitionOfDone } from './new.js';
 import { wipRefusal } from './wip.js';
 import { now } from './store.js';
 import { acceptHandoff, recordHandoff, rejectHandoff } from './handoff-commands.js';
+import { openEdges } from './handoff.js';
+import { closeGate } from './handoff-close.js';
 import {
   offeredTo, teamName,
   REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, isSessionName, needsReview, outsideTeam, reviewOpenTo, strip,
@@ -366,7 +368,22 @@ const handoffStep = (slug, item, r) => {
   Object.assign(item.fm, r.fm);
   return { event: r.event, text: r.text };
 };
-export function step(a, { fm, body, slug, folder, repo, incomplete, given, before = fm }) {
+// item 059.V2: the close gate (059.3) as the CLI teaches its own rules (owner 2026-11-01). The gate runs on the
+// pre-transition front matter: update.js already set status to done before the gate runs, and a done producer
+// without a handoffs key is legacy - a satisfied mark - although the edge was missing before the close attempt.
+// An item that is already done is not re-checked (a producer closed before the rule has no handoffs key). The
+// refusal lists every open dependent edge, its state and the next command; a missing hand-off says the hand-off
+// is required and where the hand-off command's help is.
+export function runCloseGate({ fm, statusBefore, folder, repo, slug }) {
+  if (statusBefore === 'done') return {};
+  const gateFm = { ...fm, status: statusBefore };
+  const gate = closeGate({ fm: gateFm, folder, repo, slug });
+  if (!gate.refuse) return gate;
+  const missing = openEdges(folder, repo, gateFm).some(e => e.state === 'missing');
+  if (missing) gate.refuse += ' A hand-off is required: run `backlog update --help` for details.';
+  return gate;
+}
+export function step(a, { fm, body, slug, folder, repo, incomplete, given, before = fm, statusBefore = fm.status }) {
   // Item 059.V1 review r3 (codex round 4 at 7bd4b10): the hand-off flags are detected by presence, not truthiness -
   // parse accepts an empty value (update.js), so without this --handoff '' / --accept-handoff '' / --reject-handoff ''
   // select no action and fall through to a successful state change; now they select the action and are refused below.
@@ -463,8 +480,17 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
         outputs: a['handoff-outputs'], pickup: a['handoff-pickup'], risks: a['handoff-risks'], by: a.by || fm.claimed_by }));
       case 'accept-handoff': return handoffStep(slug, item, acceptHandoff(item, { dependent: a['accept-handoff'], checks: a.checks, by: a.by, lead: teamLead() }));
       case 'reject-handoff': return handoffStep(slug, item, rejectHandoff(item, { dependent: a['reject-handoff'], reason: a.reason, by: a.by, lead: teamLead() }));
-      // item 088: --close --by owner --reason "<the decision>" closes on a written decision, recorded as such
-      default: return closeItem(item, a.by, a.summary, a.reason);
+      // item 088: --close --by owner --reason "<the decision>" closes on a written decision, recorded as such.
+      // item 059.V2: the close gate (059.3) - a producer with an open dependent edge cannot close; the refusal
+      // lists each open edge, its state and the next command. With no dependents the gate records handoffs: none
+      // and the NONE line as part of the closed event.
+      default: {
+        const gate = runCloseGate({ fm, statusBefore, folder, repo, slug });
+        if (gate.refuse) return { refuse: gate.refuse };
+        const closed = closeItem(item, a.by, a.summary, a.reason);
+        if (gate.fm) Object.assign(item.fm, gate.fm);
+        return { event: closed.event, text: gate.text ? `${closed.text}\n\n${gate.text}` : closed.text };
+      }
     }
   } catch (e) {
     if (e instanceof Rejected) return { refuse: `${slug}: ${e.message}` };

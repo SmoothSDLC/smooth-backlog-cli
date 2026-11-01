@@ -53,9 +53,9 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   // so the item is completed first (refs, estimate; it has the definition of done)
   run(there, ['update', '1', '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--by', 'tester']);
   run(there, ['update', '1', '--request-review', 'any', '--note', 'n', '--by', 'tester']);
-  run(there, ['query', '--phase', '1', '--agent', 'cody-card1']);
-  run(there, ['update', '1', '--start-review', '--by', 'cody-card1']);
-  run(there, ['update', '1', '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md']);
+  run(there, ['query', '--phase', '1', '--agent', 'cody-a']);
+  run(there, ['update', '1', '--start-review', '--by', 'cody-a']);
+  run(there, ['update', '1', '--review', 'pass', '--by', 'cody-a', '--comments', 'fine per references/review/code.md']);
   run(there, ['query', '--phase', '1', '--agent', 'tester']); // the cody stage changed the item after tester's last read
   run(there, ['update', '1', '--request-review', 'codex', '--note', 'n', '--by', 'tester']);
   run(there, ['query', '--phase', '1', '--agent', 'codex']);

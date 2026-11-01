@@ -1043,8 +1043,9 @@ Run inside the git repository to set up; works in local and shared mode. The com
      variable BACKLOG_ORIGIN_URL first, then the backlog_origin_url key of .smooth-backlog.json; there is no
      built-in default); an existing clone is left as it is;
   3. writes .smooth-backlog.json {"backlog_repository": "<path relative to the repository>"} when there is none, or
-     with --ask; otherwise keeps it. Commit it, so every clone of the repository finds the backlog repository, also
-     after the repository and the clone move together;
+     with --ask; otherwise keeps it. A write keeps the file's other keys, so an origin URL that lives only in the
+     backlog_origin_url key survives the write. Commit the file, so every clone of the repository finds the backlog
+     repository, also after the repository and the clone move together;
   4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's;
   5. switches on shared mode.
 
@@ -1053,6 +1054,9 @@ backlog_origin_url key of .smooth-backlog.json; there is no built-in default. A 
 refuses (naming both sources) when it is in neither. Every shared-mode command finds the backlog repository in this
 order: BACKLOG_HOME, .smooth-backlog.json, the per-user record of --use-backlog-repo, ~/git/<name> (the folder
 names above derive from the setting; a neutral name without it). When none is there the command names backlog setup.
+The per-user record of --use-backlog-repo is the file <name>/home under the config folder ($XDG_CONFIG_HOME, else
+~/.config); a record written before the setting existed keeps working when the setting names the same repository -
+the folder name is unchanged, so no migration is needed.
 
 Options:
   --ask

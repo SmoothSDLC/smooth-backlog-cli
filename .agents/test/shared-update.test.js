@@ -73,11 +73,11 @@ const bothStages = (f, item) => {
   assert.equal(r.status, 0, r.stdout + r.stderr);
   r = run(f, [item, '--request-review', 'any', '--note', 'n']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  r = cli(['query', '--phase', item, '--agent', 'cody-card1'], { cwd: f.cons, tmp: f.t });
+  r = cli(['query', '--phase', item, '--agent', 'cody-a'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   for (const args of [
-    [item, '--start-review', '--by', 'cody-card1'],
-    [item, '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md'],
+    [item, '--start-review', '--by', 'cody-a'],
+    [item, '--review', 'pass', '--by', 'cody-a', '--comments', 'fine per references/review/code.md'],
     [item, '--request-review', 'codex', '--note', 'n'],
   ]) { r = run(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); }
   r = cli(['query', '--phase', item, '--agent', 'codex'], { cwd: f.cons, tmp: f.t });

@@ -7,7 +7,12 @@
   built-in default. A shared-mode command that needs it refuses (exit 2, naming both the variable and the key)
   when it is in neither, and touches nothing; the origin check uses the configured value, and the default folder
   names (the clone beside the repository, the per-user record of `--use-backlog-repo`, `~/git/<name>`) derive from
-  the configured repository name, a neutral name without the setting (item 091).
+  the configured repository name, a neutral name without the setting. A `backlog setup` write keeps the config
+  file's other keys, so a URL that lives only in the key survives a setup; the setting refusal comes before the
+  missing-clone question, so a command with no clone at the default path and the setting in neither source is
+  refused by naming the setting, not the neutral path; the per-user record of `--use-backlog-repo` is the file
+  `<name>/home` under the config folder - a record written before the setting existed keeps working when the
+  setting names the same repository, with no migration (item 091).
 - Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
   agent in a fresh session, never the author session that claimed the item - a fresh session of the same card may),
   then an external review by codex or claude on the same commit. A pass pins the item's current work commit: a pass

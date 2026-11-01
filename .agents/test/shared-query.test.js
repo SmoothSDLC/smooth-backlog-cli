@@ -31,9 +31,9 @@ const bothStages = (f, item) => {
   const step = args => { const r = cli(args, { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
   step(['update', item, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', '## Definition of done\n- [ ] it holds']);
   step(['update', item, '--request-review', 'any', '--note', 'n']);
-  step(['query', '--phase', item, '--agent', 'cody-card1']);
-  step(['update', item, '--start-review', '--by', 'cody-card1']);
-  step(['update', item, '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md']);
+  step(['query', '--phase', item, '--agent', 'cody-a']);
+  step(['update', item, '--start-review', '--by', 'cody-a']);
+  step(['update', item, '--review', 'pass', '--by', 'cody-a', '--comments', 'fine per references/review/code.md']);
   step(['update', item, '--request-review', 'codex', '--note', 'n']);
   step(['query', '--phase', item, '--agent', 'codex']);
   step(['update', item, '--start-review', '--by', 'codex']);
@@ -510,9 +510,9 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     + '  TS  review_requested branch=main commit=SHA n\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by cody-card1: PASS (TS)\n'
+    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by cody-a: PASS (TS)\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  review_started branch=main commit=SHA set review_started=Review started by cody-card1 at TS\n'
+    + '  TS  review_started branch=main commit=SHA set review_started=Review started by cody-a at TS\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     + '  TS  review_requested branch=main commit=SHA n\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'

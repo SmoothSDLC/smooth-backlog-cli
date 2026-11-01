@@ -49,9 +49,11 @@ export async function run(command, argv, { table = TABLE, help } = {}) {
   }
   // The oracle's order (lib_db.py:77-85): BACKLOG_HOME missing is an error, any other missing home is a question for the user.
   const { home, ask } = resolveHome();
-  if (ask && !process.env.BACKLOG_HOME) return die(ask.text, ask.code);
   const setting = originSetting();
-  if (!setting.url) return die(ORIGIN_REFUSAL); // item 091: no built-in name; the refusal names both sources, before the command runs
+  // item 091: the setting refusal comes before the missing-clone question - the question would name a default path the
+  // setting has not chosen; the refusal names both sources, before the command runs
+  if (!setting.url) return die(ORIGIN_REFUSAL);
+  if (ask && !process.env.BACKLOG_HOME) return die(ask.text, ask.code);
   try { await validateHome(home, setting.id, `~/git/${originFolderName()}`); } catch (error) { return die(error.message); }
   const [spec, ...lead] = table[command];
   const module = await load(spec);

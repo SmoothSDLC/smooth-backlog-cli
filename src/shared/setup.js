@@ -97,9 +97,12 @@ export async function run(argv) {
     say(`✅ cloned the backlog repository to ${home}`);
   } else say(`ℹ️  the backlog repository is at ${home} (left unchanged)`);
   try { await validateHome(home, setting.id, `~/git/${name}`); } catch (e) { return die(e.message); }
-  if (!kept || ask) { // a second setup keeps the config unless --ask
+  if (!kept || ask) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys (the origin setting, item 091)
     const value = relative(top, realpathSync(home)); // relative to the repository: portable (both real paths: macOS /var is /private/var)
-    await atomicWrite(join(top, CONFIG), `${JSON.stringify({ backlog_repository: value || '.' }, null, 2)}\n`);
+    let previous = null;
+    try { previous = JSON.parse(readFileSync(join(top, CONFIG), 'utf8')); } catch { /* no config */ }
+    const keptKeys = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {};
+    await atomicWrite(join(top, CONFIG), `${JSON.stringify({ ...keptKeys, backlog_repository: value || '.' }, null, 2)}\n`);
     say(`✅ ${CONFIG}: backlog_repository ${value} (commit it, so every clone of this repository finds the backlog repository)`);
   } else say(`ℹ️  ${CONFIG} kept`);
   const deployed = [];

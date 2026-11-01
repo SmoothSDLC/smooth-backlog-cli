@@ -40,7 +40,10 @@ CLI when it is missing or older than the registry's release and then runs `backl
 repository at the shared backlog repository (`.smooth-backlog.json`) and deploys the skill; the shared backlog
 repository's clone URL is a setting (the environment variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url`
 key of `.smooth-backlog.json` — there is no built-in default, and a shared-mode command that needs it refuses,
-naming both sources, when it is in neither); `--ask` asks for the path.
+naming both sources, when it is in neither; a `backlog setup` write keeps the key in the file); `--ask` asks for
+the path. The per-user record of `backlog --use-backlog-repo <path>` is the file `<name>/home` under the config
+folder ($XDG_CONFIG_HOME, else `~/.config`, `<name>` the repository name from the setting); a record written
+before the setting existed keeps working when the setting names the same repository, with no migration.
 
 ## Get started
 

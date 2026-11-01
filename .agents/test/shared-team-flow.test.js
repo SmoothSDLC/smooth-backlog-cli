@@ -105,9 +105,9 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
     session(Date.now() + 2000);
     as('archy', ['update', c1, '--start-review', '--by', 'archy']);
     as('archy', ['update', c1, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md']);
-    as('zed', ['update', c1, '--request-review', 'cody-card1', '--note', 'commit def, cody stage', '--by', 'zed']);
-    as('cody-card1', ['update', c1, '--start-review', '--by', 'cody-card1'], 0, { QWEN_CODE_AGENT_ID: 'cody-card1@s2' });
-    as('cody-card1', ['update', c1, '--review', 'pass', '--by', 'cody-card1', '--comments', 'ok per references/review/code.md'], 0, { QWEN_CODE_AGENT_ID: 'cody-card1@s2' });
+    as('zed', ['update', c1, '--request-review', 'cody-a', '--note', 'commit def, cody stage', '--by', 'zed']);
+    as('cody-a', ['update', c1, '--start-review', '--by', 'cody-a'], 0, { QWEN_CODE_AGENT_ID: 'cody-a@s2' });
+    as('cody-a', ['update', c1, '--review', 'pass', '--by', 'cody-a', '--comments', 'ok per references/review/code.md'], 0, { QWEN_CODE_AGENT_ID: 'cody-a@s2' });
     as('zed', ['update', c1, '--request-review', 'codex', '--note', 'commit def, external stage', '--by', 'zed']);
     as('codex', ['update', c1, '--start-review', '--by', 'codex']);
     const r = as('codex', ['update', c1, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
@@ -142,8 +142,8 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
     as('archy', ['update', c2, '--claim', 'archy']);
     as('archy', ['update', c2, '--request-review', 'any', '--note', 'commit ghi', '--by', 'archy']);
     session(Date.now() + 5000);
-    as('cody-card2', ['update', c2, '--start-review', '--by', 'cody-card2'], 0, { QWEN_CODE_AGENT_ID: 'cody-card2@s2' });
-    as('cody-card2', ['update', c2, '--review', 'pass', '--by', 'cody-card2', '--comments', 'ok per references/review/code.md'], 0, { QWEN_CODE_AGENT_ID: 'cody-card2@s2' });
+    as('cody-b', ['update', c2, '--start-review', '--by', 'cody-b'], 0, { QWEN_CODE_AGENT_ID: 'cody-b@s2' });
+    as('cody-b', ['update', c2, '--review', 'pass', '--by', 'cody-b', '--comments', 'ok per references/review/code.md'], 0, { QWEN_CODE_AGENT_ID: 'cody-b@s2' });
     as('archy', ['update', c2, '--request-review', 'codex', '--note', 'commit ghi, external stage', '--by', 'archy']);
     as('codex', ['update', c2, '--start-review', '--by', 'codex']);
     as('codex', ['update', c2, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
@@ -154,8 +154,8 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
     const p = json('lead', ['pop', '--agent', 'lead', '--json']);
     assert.deepEqual([p.action, p.item], ['continue', w]);
     as('lead', ['update', w, '--request-review', 'any', '--note', 'children and their evidence', '--by', 'lead']);
-    as('cody-card3', ['update', w, '--start-review', '--by', 'cody-card3'], 0, { QWEN_CODE_AGENT_ID: 'cody-card3@s3' });
-    as('cody-card3', ['update', w, '--review', 'pass', '--by', 'cody-card3', '--comments', 'ok per references/review/code.md'], 0, { QWEN_CODE_AGENT_ID: 'cody-card3@s3' });
+    as('cody-c', ['update', w, '--start-review', '--by', 'cody-c'], 0, { QWEN_CODE_AGENT_ID: 'cody-c@s3' });
+    as('cody-c', ['update', w, '--review', 'pass', '--by', 'cody-c', '--comments', 'ok per references/review/code.md'], 0, { QWEN_CODE_AGENT_ID: 'cody-c@s3' });
     as('lead', ['update', w, '--request-review', 'codex', '--note', 'children, external stage', '--by', 'lead']);
     as('codex', ['update', w, '--start-review', '--by', 'codex']);
     as('codex', ['update', w, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);

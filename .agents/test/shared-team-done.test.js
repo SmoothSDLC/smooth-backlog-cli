@@ -55,18 +55,20 @@ test('--status done on an item without review_refs needs both stages (port of te
   assert.equal(r.status, 0, r.stdout + r.stderr);
   r = update(f, [f.slug, '--request-review', 'any', '--note', 'the work']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  q(f, 'cody-card1');
-  r = update(f, [f.slug, '--start-review', '--by', 'cody-card1']);
+  q(f, 'cody-a');
+  r = update(f, [f.slug, '--start-review', '--by', 'cody-a']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  r = update(f, [f.slug, '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md']);
+  r = update(f, [f.slug, '--review', 'pass', '--by', 'cody-a', '--comments', 'fine per references/review/code.md']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  r = update(f, [f.slug, '--request-review', 'codex', '--note', 'the external stage']);
+  q(f, 'cody-a');
+  r = update(f, [f.slug, '--request-review', 'codex', '--note', 'the external stage', '--by', 'cody-a']); // the claimer hands on to the external stage
   assert.equal(r.status, 0, r.stdout + r.stderr);
   q(f, 'codex');
   r = update(f, [f.slug, '--start-review', '--by', 'codex']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   r = update(f, [f.slug, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
+  q(f, 'smooth'); // the environment agent reads the item as it stands before completing it
   r = update(f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(status(f), 'done');

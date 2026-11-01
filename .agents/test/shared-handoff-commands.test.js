@@ -33,7 +33,14 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
   '--estimate', '5', '--complexity', 'low', '--body', `Body of ${name}.\n\n${DOD}`];
 const LEAD = { TEAM_LEAD: 'lead' };
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '', ...LEAD, ...env } });
-const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
+const ok = (f, args, env) => {
+  // the named actor must have read the item after the last change by another actor (the stale-view guard, item 088)
+  const named = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
+  if (named && args[0] === 'update' && args[1] && !args[1].startsWith('-')) run(f, ['query', '--phase', args[1], '--agent', named], env);
+  const r = run(f, args, env);
+  assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
+  return r;
+};
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
 const item = (f, seq) => store.load(f.folder).find(i => i.fm.seq === seq);
 const ctxOf = (f, seq) => { const it = item(f, seq); return { fm: it.fm, body: it.body, slug: it.fm.phase, folder: f.folder, repo: f.repo }; };

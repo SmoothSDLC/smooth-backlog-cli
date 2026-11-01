@@ -105,21 +105,21 @@ test('an external pass recorded before the Cody pass is refused', () => {
 test('a Cody pass in the author session is refused; a Cody pass in a fresh session passes', () => {
   const f = fixture();
   const s = make(f, 'author session item');
-  ok(f, ['update', s, '--claim', 'cody-card1'], { QWEN_CODE_AGENT_ID: 'cody-card1@s1' });
+  ok(f, ['update', s, '--claim', 'cody-a'], { QWEN_CODE_AGENT_ID: 'cody-a@s1' });
   assert.equal(fm(f, s).author_session, 's1');
-  ok(f, ['query', '--phase', s, '--agent', 'cody-card1'], { QWEN_CODE_AGENT_ID: 'cody-card1@s1' });
-  ok(f, ['update', s, '--request-review', 'any', '--note', 'the work in commit abc', '--by', 'cody-card1'], { QWEN_CODE_AGENT_ID: 'cody-card1@s1' });
+  ok(f, ['query', '--phase', s, '--agent', 'cody-a'], { QWEN_CODE_AGENT_ID: 'cody-a@s1' });
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'the work in commit abc', '--by', 'cody-a'], { QWEN_CODE_AGENT_ID: 'cody-a@s1' });
   // the reviewer is another Cody card (the claimer never reviews its own item): in the author session it is refused
-  ok(f, ['query', '--phase', s, '--agent', 'cody-card2'], { QWEN_CODE_AGENT_ID: 'cody-card2@s1' });
-  ok(f, ['update', s, '--start-review', '--by', 'cody-card2'], { QWEN_CODE_AGENT_ID: 'cody-card2@s1' });
-  no(f, ['update', s, '--review', 'pass', '--by', 'cody-card2', '--comments', 'fine per references/review/code.md'],
-    'the author session', { QWEN_CODE_AGENT_ID: 'cody-card2@s1' });
-  ok(f, ['update', s, '--review', 'pass', '--by', 'cody-card2', '--comments', 'fine per references/review/code.md'],
-    { QWEN_CODE_AGENT_ID: 'cody-card2@s2' }); // a fresh session of the author card's session
+  ok(f, ['query', '--phase', s, '--agent', 'cody-b'], { QWEN_CODE_AGENT_ID: 'cody-b@s1' });
+  ok(f, ['update', s, '--start-review', '--by', 'cody-b'], { QWEN_CODE_AGENT_ID: 'cody-b@s1' });
+  no(f, ['update', s, '--review', 'pass', '--by', 'cody-b', '--comments', 'fine per references/review/code.md'],
+    'the author session', { QWEN_CODE_AGENT_ID: 'cody-b@s1' });
+  ok(f, ['update', s, '--review', 'pass', '--by', 'cody-b', '--comments', 'fine per references/review/code.md'],
+    { QWEN_CODE_AGENT_ID: 'cody-b@s2' }); // a fresh session of the author card's session
   assert.equal(fm(f, s).cody_pass_commit, fm(f, s).commit);
-  round(f, s, { claimer: 'cody-card1', reviewer: 'codex' });
-  ok(f, ['query', '--phase', s, '--agent', 'cody-card1']);
-  ok(f, ['update', s, '--close', '--summary', 'done', '--by', 'cody-card1']);
+  round(f, s, { claimer: 'cody-a', reviewer: 'codex' });
+  ok(f, ['query', '--phase', s, '--agent', 'cody-a']);
+  ok(f, ['update', s, '--close', '--summary', 'done', '--by', 'cody-a']);
   assert.equal(fm(f, s).status, 'done');
 });
 

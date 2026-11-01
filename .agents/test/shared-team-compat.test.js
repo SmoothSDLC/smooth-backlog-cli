@@ -86,6 +86,10 @@ test('test_item_without_team_fields_keeps_working: an item written before team w
   assert.ok(q(f, '--claimable').includes(s)); // no dependencies
   const text = readFileSync(path, 'utf8');
   assert.ok(text.includes('a note added the old way') && !OLD.some(k => text.includes(`\n${k}:`)));
+  // item 088: --status done needs both review stages passed - the old item's pins, then the actor re-reads
+  const { fm: current, body: currentBody } = item(f, s);
+  store.write({ path, fm: { ...current, cody_pass_commit: current.commit || '', external_pass_commit: current.commit || '' }, body: currentBody }, f.folder);
+  run(f, 'query', ['--phase', s, '--agent', 'smooth']);
   ok(f, s, '--status', 'done');
 });
 
@@ -99,9 +103,11 @@ test('test_claim_review_close_lifecycle: the query views along the lifecycle (th
   ok(f, first, '--claim', 'archy');
   ok(f, first, '--request-review', 'any', '--note', 'tests written'); // every complete item is reviewed
   ok(f, first, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md');
-  ok(f, first, '--request-review', 'codex', '--note', 'tests written, external stage');
+  run(f, 'query', ['--phase', first, '--agent', 'archy']); // archy's view is stale after cody's pass; the claimer reads it before handing on
+  ok(f, first, '--request-review', 'codex', '--note', 'tests written, external stage', '--by', 'archy');
   ok(f, first, '--start-review', '--by', 'codex');
   ok(f, first, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md');
+  run(f, 'query', ['--phase', first, '--agent', 'smooth']); // the environment agent (the creator here) re-reads after the codex pass
   ok(f, first, '--close', '--summary', 'tests written');
   assert.ok(!q(f, '--blocked').includes(job));
   assert.ok(q(f, '--claimable').includes(job));
@@ -129,7 +135,10 @@ test('--reviewable needs --agent; the text view lists the item with its dependen
 
 test('a completed dependency whose file is gone does not hold the dependent item back (the row decides)', () => {
   const f = fixture();
-  const dep = make(f, 'ghost dependency', ['--no-review-refs']); // no review: --status done finishes it
+  const dep = make(f, 'ghost dependency', ['--no-review-refs']); // no review refs: with both stages' pins, --status done finishes it (item 088)
+  const { fm: depFm, body: depBody } = item(f, dep);
+  store.write({ path: join(f.folder, 'phases', `${dep}.md`), fm: { ...depFm, cody_pass_commit: depFm.commit || '', external_pass_commit: depFm.commit || '' }, body: depBody }, f.folder);
+  run(f, 'query', ['--phase', dep, '--agent', 'smooth']); // the environment agent (the creator here) re-reads after the pins
   const job = make(f, 'waits for the ghost', ['--depends-on', dep.split('-')[0]]);
   assert.ok(q(f, '--blocked').includes(job) && !q(f, '--claimable').includes(job));
   ok(f, dep, '--status', 'done');

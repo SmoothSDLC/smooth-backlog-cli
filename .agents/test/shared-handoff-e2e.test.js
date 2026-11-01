@@ -58,6 +58,7 @@ function reviewPass(f, p, by = 'producer') {
   ok(f, ['query', '--phase', p, '--agent', 'cody']);
   ok(f, ['update', p, '--start-review', '--by', 'cody']);
   ok(f, ['update', p, '--review', 'pass', '--by', 'cody', '--comments', 'PASS (references/review/code.md)']);
+  ok(f, ['query', '--phase', p, '--agent', by]); // the claimer's view is stale after cody's pass; the claimer reads it before handing on
   ok(f, ['update', p, '--request-review', 'codex', '--note', 'the hand-off wiring', '--by', by]);
   ok(f, ['query', '--phase', p, '--agent', 'codex']);
   ok(f, ['update', p, '--start-review', '--by', 'codex']);

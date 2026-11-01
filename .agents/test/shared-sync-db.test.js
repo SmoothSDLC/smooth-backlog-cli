@@ -723,7 +723,14 @@ const COMPLETE = name => [...NEW(name), '--review-refs', 'references/review/code
 
 test('publication graph: a claim is refused when its completed dependency reopens upstream', async t => {
   const { b, bare, result } = await race(t,
-    [NEW('dependency'), ['update', '1', '--status', 'done'], [...COMPLETE('work'), '--depends-on', '1']],
+    // item 088: a completion needs both review stages - the seed completes the dependency through them
+    [COMPLETE('dependency'),
+     ['update', '1', '--request-review', 'any', '--note', 'evidence recorded in the seed'],
+     ['update', '1', '--review', 'pass', '--by', 'cody-a', '--comments', 'ok per references/review/code.md'],
+     ['update', '1', '--request-review', 'codex', '--note', 'the external stage'],
+     ['update', '1', '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md'],
+     ['update', '1', '--status', 'done'],
+     [...COMPLETE('work'), '--depends-on', '1']],
     ['update', '1', '--status', 'pending', '--priority', '99'], ['update', '2', '--claim', 'amy']);
   rejectedPublication(t, b, bare, result, /dependencies not done/);
 });

@@ -51,6 +51,16 @@ const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, t
 const fm = (folder, file) => parse(readFileSync(join(folder, 'phases', file), 'utf8')).fm;
 const onOrigin = (f, path) => git(f.t, '--git-dir', f.bare, 'show', `main:${path}`);
 const sleepSec = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100); // updated has a resolution of one second
+// item 088: a completion needs both review stages passed on the current commit; seed the stage pins so the test's
+// completion (a --status done) is review-complete. Written and pushed before any actor reads the item, so the read
+// that follows is a fresh view of the pinned file.
+function pinnedDone(f, slug) {
+  const path = join(f.folder, 'phases', `${slug}.md`);
+  const doc = parse(readFileSync(path, 'utf8'));
+  store.write({ path, fm: { ...doc.fm, cody_pass_commit: doc.fm.commit || '', external_pass_commit: doc.fm.commit || '' }, body: doc.body }, f.folder);
+  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'both review stages pinned'); git(f.home, 'push', '-q');
+}
 
 test('every write stamps updated_by next to updated; an item without updated_by is read and written', () => {
   const f = seed();
@@ -250,6 +260,7 @@ test('the creator of an item has seen it: another writer\'s change is refused on
 
 test('what the agent itself re-ranked on the side is not news to it: completing item 1 reflows item 2, and her next update of 2 goes through', () => {
   const f = seed();
+  pinnedDone(f, '001-alpha'); // item 088: the completion below needs both review stages already passed
   for (const slug of ['001-alpha', '002-beta']) run(f, f.home, ['query', '--phase', slug, '--agent', 'amy']);
   const done = run(f, f.home, ['update', '1', '--status', 'done', '--by', 'amy']);
   assert.equal(done.status, 0, done.stderr + done.stdout);
@@ -263,6 +274,7 @@ for (const [name, args] of [
   ['completion reflow', ['1', '--status', 'done']],
 ]) test(`the leading pull preserves Amy's expected version of item 2 before a ${name}`, () => {
   const f = seed();
+  pinnedDone(f, '001-alpha'); // item 088: the completion case needs both review stages already passed; the direct write case is unaffected
   const read = run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']);
   assert.equal(read.status, 0, read.stderr + read.stdout);
   const cache = viewCache(f.home, 'amy');
@@ -606,6 +618,7 @@ test('review P2: a renumbered incidental write retains proof of the previously r
 // item's content still refuses its write, and the refusal names one command that reads every item a move re-ranks.
 test('053: after bob closes an item, amy moves another at once; a content change still refuses her write until she reads', () => {
   const f = seed(['alpha', 'beta', 'gamma', 'delta']);
+  pinnedDone(f, '001-alpha'); // item 088: bob's completion below needs both review stages already passed
   for (const item of ['002-beta', '003-gamma', '004-delta']) assert.equal(run(f, f.home, ['query', '--phase', item, '--agent', 'amy']).status, 0);
   assert.equal(run(f, f.home2, ['query', '--phase', '001-alpha', '--agent', 'bob']).status, 0);
   const bob = run(f, f.home2, ['update', '1', '--status', 'done', '--by', 'bob']); // the reflow re-ranks beta, gamma and delta
@@ -625,6 +638,7 @@ test('053: after bob closes an item, amy moves another at once; a content change
 
 test('053: a reflow over several items with new content names them all in one refusal and one command reads them', () => {
   const f = seed(['alpha', 'beta', 'gamma', 'delta']);
+  pinnedDone(f, '001-alpha'); // item 088: the completion below needs both review stages already passed
   for (const item of ['001-alpha', '002-beta', '003-gamma', '004-delta']) assert.equal(run(f, f.home, ['query', '--phase', item, '--agent', 'amy']).status, 0);
   for (const n of ['2', '3']) {
     assert.equal(run(f, f.home2, ['query', '--phase', n, '--agent', 'bob']).status, 0);

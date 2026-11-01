@@ -116,6 +116,12 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
     ok(f, ['update', theirs, '--request-review', 'any', '--note', 'n', '--by', 'zed'], T1);
     assert.match(ok(f, ['update', theirs, '--start-review', '--by', 'archy'], T1).stderr, /stops nobody/); // no start-review refusal
     ok(f, ['update', theirs, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md'], T1); // archy is free again
+    ok(f, ['update', theirs, '--request-review', 'cody', '--note', 'cody stage', '--by', 'zed'], T1);
+    ok(f, ['update', theirs, '--start-review', '--by', 'cody'], T1);
+    ok(f, ['update', theirs, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md'], T1);
+    ok(f, ['update', theirs, '--request-review', 'codex', '--note', 'external stage', '--by', 'zed'], T1);
+    ok(f, ['update', theirs, '--start-review', '--by', 'codex'], T1);
+    ok(f, ['update', theirs, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md'], T1);
     ok(f, ['update', theirs, '--close', '--summary', 'x', '--by', 'zed'], T1); // and zed too
     if (cfg === null) config(f, []); else if (typeof cfg === 'string') writeFileSync(join(f.tdir, 'config.json'), cfg); else config(f, cfg); // zed's hand-off may have rewritten nothing, but keep the case
     put();

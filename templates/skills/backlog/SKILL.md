@@ -111,11 +111,14 @@ sees and changes the backlog only through them.
   Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
   agent - a name starting with cody, or a session name - in a fresh session, never the author session that
   claimed the item - the claim's session name, never the team name - so a fresh session of the same card, or of
-  the team, may), then an external review by codex or claude on the same commit. A pass pins the item's current work commit; a pass on an older commit stops counting
-  when the commit moves, and a changes verdict at either stage clears both stages. A passing Cody review asks for
-  the external review; a passing external review asks for the close. The owner closes without a review on a written
-  decision: `--close --by owner --reason "<the decision>"`, recorded as an owner decision.
-  Otherwise the claimer closes with `--close --summary "<what was delivered>"`.
+  the team, may), then an external review by codex or claude on the same commit. A pass pins the work commit at
+  review time - the working repository's HEAD - and the gate compares the pins to the work commit at check time:
+  a commit of new work after a pass moves the work commit, so both stages run again; a changes verdict at either
+  stage clears both stages. A passing Cody review asks for the external review; a passing external review asks
+  for the close. An item that names its review documents also refuses `--status done` until both stages passed;
+  an item without them completes unreviewed. The owner closes without a review on a written decision:
+  `--close --by owner --reason "<the decision>"`, recorded as an owner decision, even for a team item still in
+  its refinement stages. Otherwise the claimer closes with `--close --summary "<what was delivered>"`.
 - [ ] Hand-off: the producer records its hand-off for each dependent before the dependent may be offered or claimed,
   and the team lead accepts or rejects it: the claimer runs `backlog update <item> --handoff <dependent>
   --handoff-commit <sha> --handoff-contract "<text>" --handoff-verification "<text>" [--handoff-outputs ...

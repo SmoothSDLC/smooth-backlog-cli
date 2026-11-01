@@ -29,13 +29,18 @@
 - Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
   agent in a fresh session, never the author session that claimed the item - the claim's session name, never the
   team name - a fresh session of the same card, or of the team, may),
-  then an external review by codex or claude on the same commit. A pass pins the item's current work commit: a pass
-  on an older commit stops counting when the commit moves, and a changes verdict at either stage clears both stages
-  and re-runs them. `--close` and `--status done` are refused until both stages passed for the item's current work
-  commit, and the refusal names the missing stage; a passing Cody review asks for the external review, and a
-  passing external review asks for the close. A split item starts in stage refining, with or without a team field,
-  and takes its refinement review (codex or claude) before it may be claimed. The owner closes without a review on a
-  written decision: `--close --by owner --reason "<the decision>"`, recorded as an owner decision (item 088).
+  then an external review by codex or claude on the same commit. A pass pins the work commit at review time - the
+  working repository's HEAD - and the gate compares the pins to the work commit at check time: a commit of new work
+  after a pass moves the work commit, so both stages run again; a changes verdict at either stage clears both
+  stages and re-runs them. `--close` is refused until both stages passed for the current work commit, and the
+  refusal names the missing stage; a passing Cody review asks for the external review, and a passing external
+  review asks for the close. An item that names its review documents also refuses `--status done` until both
+  stages passed; an item without review documents completes unreviewed. A split item starts in stage refining,
+  with or without a team field, and takes its refinement review (codex or claude) before it may be claimed; a
+  slice written before the stage field existed is named by its body's split marker and takes the same gate; a
+  teamless slice is dispatched to a member for refinement and to the team lead for its refinement review. The
+  owner closes without a review on a written decision: `--close --by owner --reason "<the decision>"`, recorded
+  as an owner decision, even for a team item still in its refinement stages (item 088).
 - A new session of the same card continues the item its earlier session claimed: a `--claim` with a name sharing
   the `<item><card>` part before the colon (082ab:02 after 082ab:01) records the new session name on the item,
   with no takeover and no lead reassignment; the one-active-item, work-in-progress and hand-off-lock rules apply

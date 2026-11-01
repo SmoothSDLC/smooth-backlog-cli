@@ -113,6 +113,19 @@ holder), so the block survives a hand-off. Every claim, reassign, release and re
 the item's current holder and review requester, so an item written before the list existed keeps the block of its
 earlier sessions.
 
+Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
+agent — a name starting with `cody`, or a session name — in a fresh session, never the author session that claimed
+the item), then an external review by `codex` or `claude` on the same commit. A pass pins the work commit at review
+time — the working repository's `HEAD` — and a commit of new work after a pass moves the work commit, so both
+stages run again; a changes verdict at either stage clears both. `--close` is refused until both stages passed for
+the current work commit, and the refusal names the missing stage; a passing Cody review asks for the external
+review, and a passing external review asks for the close. An item that names its review documents also refuses
+`--status done` until both stages passed; an item without them finishes unreviewed. Every split item starts in
+stage refining, with or without a team field, and needs its refinement review (a `codex` or `claude` verdict)
+before it may be claimed; a slice written before the stage field existed is named by its body's split marker and
+takes the same gate. The owner closes without a review on a written decision — `--close --by owner --reason
+"<the decision>"`, recorded as an owner decision — even for a team item still in its refinement stages.
+
 ## Command help
 
 Run `backlog --help` for the available commands and options:

@@ -123,9 +123,9 @@ ${SHARED}
 Options:
   --status STATUS
       The new status of the item. Open items are pending or in_progress, a finished item is done. Setting done
-      completes the item; the command refuses when both review stages - a Cody pass and a codex or claude pass on
-      the same commit - have not passed for the item's current work commit, with or without review documents; the
-      refusal names the missing stage.
+      completes the item; an item that names its review documents refuses the completion until both review stages
+      - a Cody pass and a codex or claude pass on the same commit - have passed for the item's current work commit,
+      and the refusal names the missing stage. An item without review documents completes unreviewed.
   --branch BRANCH
       Refused by design: the branch of an item is not changed here. Use backlog move --to-branch instead.
   --commit COMMIT
@@ -254,9 +254,11 @@ Options:
       any close: first a Cody review - a Cody agent (a name starting with cody, or a session name) in a fresh
       session, never the author session that claimed the item - the claim's session name (QWEN_CODE_SESSION_ID, else
       the session part of QWEN_CODE_AGENT_ID, never the team name), so a fresh session of the same card, or of the
-      team, may - then an external review by codex or claude on the same commit. A pass pins the item's current work commit: a pass on an older commit stops counting
-      when the commit moves, and a changes verdict at either stage clears both stages and re-runs them. The output of
-      a passing Cody review asks for the external review; the output of a passing external review asks for the close.
+      team, may - then an external review by codex or claude on the same commit. A pass pins the work commit at
+      review time - the working repository's HEAD - and the gate compares the pins to the work commit at check
+      time: a commit of new work after a pass moves the work commit, so both stages run again; a changes verdict at
+      either stage clears both stages and re-runs them. The output of a passing Cody review asks for the external
+      review; the output of a passing external review asks for the close.
   --handoff DEPENDENT
       The producer records its hand-off for DEPENDENT, one of the item's dependents; only the item's claimer does
       (--by <you> or the claim). It replaces any earlier hand-off for the same dependent, which makes an earlier
@@ -292,8 +294,9 @@ Options:
       Complete the item; --summary says what was delivered. Both review stages - a Cody pass and a codex or claude
       pass on the same commit - must have passed for the item's current work commit, with or without review documents;
       the refusal names the missing stage. The owner closes without a review on a written decision
-      (--by owner --reason "<the decision>"), recorded as an owner decision (team session).
-      Only the claimer closes its item, else the team lead (--by <lead>); never the reviewer.
+      (--by owner --reason "<the decision>"), recorded as an owner decision, even for a team item still in its
+      refinement stages (team session). Only the claimer closes its item, else the team lead (--by <lead>);
+      never the reviewer.
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
 ${HELP_FLAG}

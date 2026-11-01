@@ -47,11 +47,11 @@ const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.m
 const ok = (f, slug, ...args) => {
   const who = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
   if (who) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t }); // an agent reads an item before it writes it again (seen.js)
-  const r = cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t });
+  const r = cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r;
 };
-const refuse = (f, slug, ...args) => cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t });
+const refuse = (f, slug, ...args) => cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
 // cody is a plain member here; popLead asks as the team lead, who does no chunk work.
 const LEAD = { TEAM_LEAD: 'lead' };
 const popCli = (f, args, opts = {}) => cli(['query', '--pop', '--agent', 'cody', ...args], { cwd: f.cons, tmp: f.t, ...opts, env: { ...LEAD, ...opts.env } });
@@ -235,7 +235,10 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   assert.deepEqual(JSON.parse(r.stdout).map(x => x.slug), [job]);
   r = refuse(f, job, '--review', 'pass', '--by', 'cody', '--comments', 'looks fine'); // must cite a ref
   assert.ok(r.status === 1 && r.stdout.includes('must cite'), r.stdout);
-  r = ok(f, job, '--review', 'pass', '--by', 'cody', '--comments', 'per references/patterns/x.md: fine');
+  ok(f, job, '--review', 'pass', '--by', 'cody', '--comments', 'per references/patterns/x.md: fine');
+  ok(f, job, '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', 'archy');
+  ok(f, job, '--start-review', '--by', 'codex');
+  r = ok(f, job, '--review', 'pass', '--by', 'codex', '--comments', 'per references/patterns/x.md: fine');
   assert.ok(r.stdout.includes('CLOSE NOW: archy closes it') && r.stdout.includes('if the claimer has not, the team lead closes it') && !r.stdout.includes('cody closes it')); // item 039: never the reviewer
   ok(f, job, '--set-review-refs', 'references/review/contract.md');
   r = refuse(f, job, '--set-review-refs', 'references/patterns/y.md');

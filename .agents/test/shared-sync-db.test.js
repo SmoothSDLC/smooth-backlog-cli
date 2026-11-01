@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
@@ -73,7 +73,7 @@ function writers(t) {
     dirs.forEach(removeScenario);
   });
   const home = sharedBacklog(dirs[0]);
-  const bare = join(dirs[0], 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  const bare = join(dirs[0], 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
   gitIn(dirs[1], 'clone', '-q', bare, join(dirs[1], 'home'));
   void home;
   return dirs.map(tmp => {
@@ -827,7 +827,10 @@ for (const [name, args, change] of [
 ]) test(`publication read set: concurrent ${name} changes cannot pass earlier validation`, async t => {
   const { b, bare, before, result } = await fileRace(t,
     [COMPLETE('alpha'), ['update', '1', '--request-review', 'any', '--note', 'initial evidence'],
-      ['update', '1', '--review', 'pass', '--by', 'bob', '--comments', 'references/review/code.md passed']], args, a => {
+      ['update', '1', '--review', 'pass', '--by', 'cody', '--comments', 'references/review/code.md passed'],
+      ['update', '1', '--request-review', 'codex', '--note', 'external stage'],
+      ['update', '1', '--start-review', '--by', 'codex'],
+      ['update', '1', '--review', 'pass', '--by', 'codex', '--comments', 'references/review/code.md passed']], args, a => {
       const item = store.load(a.folder)[0];
       change(item.fm);
       store.write({ path: join(a.folder, item.path), fm: item.fm, body: item.body }, a.folder);

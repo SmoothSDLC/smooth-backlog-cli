@@ -65,15 +65,17 @@ Options:
       a loud banner so that it is never buried.
   --split-from ITEM
       Create a sibling item that inherits the context of this item (a number or a slug). The command refuses when
-      the item does not exist.
+      the item does not exist. The sibling starts in stage refining and takes its refinement review (codex or
+      claude) before it may be claimed, with or without a team field.
   --body BODY
       The initial body of the item, the hand-over content for whoever does it. When the body has no "Definition of
       done" heading or line with checkable lines, a placeholder checklist is added. With --review-refs, or in a team
       session, the body must hold a real definition of done.
   --review-refs REVIEW_REFS
       How the item is reviewed: comma-separated paths of review documents in the review-documents repository, at
-      least one of them under references/review/ (references/review/<type>.md). An item with review documents
-      closes only after a passing review; without them it closes without one.
+      least one of them under references/review/ (references/review/<type>.md). A verdict cites one of them when
+      the item has any; the item closes only after both review stages - a Cody pass and a codex or claude pass on
+      the same commit - have passed, with or without them.
   --depends-on DEPENDS_ON
       Required: the item numbers or slugs that must be done first, comma-separated, or the word none. owner/name#seq names
       an item of another repository's backlog in the same backlog repository. The command refuses when a named item is
@@ -121,7 +123,9 @@ ${SHARED}
 Options:
   --status STATUS
       The new status of the item. Open items are pending or in_progress, a finished item is done. Setting done
-      completes the item; the command refuses when the item has review documents (review_refs) and no passing review.
+      completes the item; the command refuses when both review stages - a Cody pass and a codex or claude pass on
+      the same commit - have not passed for the item's current work commit, with or without review documents; the
+      refusal names the missing stage.
   --branch BRANCH
       Refused by design: the branch of an item is not changed here. Use backlog move --to-branch instead.
   --commit COMMIT
@@ -150,7 +154,8 @@ Options:
       The note for the event log. Without it the log records which fields were set.
   --claim AGENT
       Take the item for an agent (team session). The command refuses when another agent holds the item, when an item
-      in its depends_on is not done, or when a team's item is not in stage ready (its refinement review has not passed);
+      in its depends_on is not done, or when a split item (with or without a team) is not in stage ready (its
+      refinement review has not passed);
       otherwise the item becomes in progress and claimed by that agent. An agent or team name may contain letters,
       digits, a period, an underscore, a hyphen and a colon (a card's session names and a team name carry colons);
       the name works in the front matter, the event log, the commit subject, the hand-off marker file name and
@@ -241,7 +246,12 @@ Options:
       release like review_author) is refused with "the same session cannot review its own work; a new session may"; a new
       session, with a new name, may start the review (team session).
   --review {pass,changes}
-      Record a review verdict; it needs --by and --comments (team session).
+      Record a review verdict; it needs --by and --comments (team session). Two review stages are enforced before
+      any close: first a Cody review - a Cody agent (a name starting with cody) in a fresh session, never the author
+      session that claimed the item (a fresh session of the same card may) - then an external review by codex or
+      claude on the same commit. A pass pins the item's current work commit: a pass on an older commit stops counting
+      when the commit moves, and a changes verdict at either stage clears both stages and re-runs them. The output of
+      a passing Cody review asks for the external review; the output of a passing external review asks for the close.
   --handoff DEPENDENT
       The producer records its hand-off for DEPENDENT, one of the item's dependents; only the item's claimer does
       (--by <you> or the claim). It replaces any earlier hand-off for the same dependent, which makes an earlier
@@ -274,7 +284,10 @@ Options:
   --comments COMMENTS
       The review findings (--review); they must cite one of the review references of the item (team session).
   --close
-      Complete the item; --summary says what was delivered. It needs a passing review when the item has review documents (review_refs) (team session).
+      Complete the item; --summary says what was delivered. Both review stages - a Cody pass and a codex or claude
+      pass on the same commit - must have passed for the item's current work commit, with or without review documents;
+      the refusal names the missing stage. The owner closes without a review on a written decision
+      (--by owner --reason "<the decision>"), recorded as an owner decision (team session).
       Only the claimer closes its item, else the team lead (--by <lead>); never the reviewer.
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
@@ -444,8 +457,9 @@ Answers with exactly one action for the agent, the first that applies: continue 
 on; when its review passed, close it), review (an item another agent asks to have reviewed, or a review the agent
 started), refine (a member: the refinement it has started, or the first-round refinement of a team item in stage
 refining that nobody refines; the team lead: an incomplete item that lacks required fields), claim (the open item with the
-lowest priority whose dependencies are done, that is no chunk item, is in stage ready when it has a team, and that nobody
-holds), refinement-review (the team lead: refined items to send to the refinement review), reassign-review (the team
+lowest priority whose dependencies are done, that is no chunk item, is in stage ready when it is a split item
+(with or without a team), and that nobody holds), refinement-review (the team lead: refined items to send to the
+refinement review), reassign-review (the team
 lead: a stale review of its team to hand on), stop (a member that handed its item off and waits for a fresh session: end
 the turn), chunk (a small piece
 of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or for a run is not
@@ -655,17 +669,23 @@ Usage:
 
 Run inside the git repository to set up; works in local and shared mode. The command:
   1. finds the backlog repository path: the one in .smooth-backlog.json at the repository's top folder, else
-     ../smoothsdlc-backlog (the clone beside the repository); with --ask it asks for the path, showing that default;
-  2. clones the backlog repository there with git when the path does not exist (from BACKLOG_ORIGIN_URL, default
-     https://github.com/SmoothSDLC/smoothsdlc-backlog.git); an existing clone is left as it is;
+     ../<name> (the clone beside the repository, where <name> is the backlog repository's name part from the
+     setting below, or a neutral name when the setting is absent); with --ask it asks for the path, showing that
+     default;
+  2. clones the backlog repository there with git when the path does not exist (from the setting: the environment
+     variable BACKLOG_ORIGIN_URL first, then the backlog_origin_url key of .smooth-backlog.json; there is no
+     built-in default); an existing clone is left as it is;
   3. writes .smooth-backlog.json {"backlog_repository": "<path relative to the repository>"} when there is none, or
      with --ask; otherwise keeps it. Commit it, so every clone of the repository finds the backlog repository, also
      after the repository and the clone move together;
   4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's;
   5. switches on shared mode.
 
-Every shared-mode command finds the backlog repository in this order: BACKLOG_HOME, .smooth-backlog.json, the
-per-user record of --use-backlog-repo, ~/git/smoothsdlc-backlog. When none is there the command names backlog setup.
+The shared backlog repository's clone URL is a setting: the environment variable BACKLOG_ORIGIN_URL first, then the
+backlog_origin_url key of .smooth-backlog.json; there is no built-in default. A shared-mode command that needs it
+refuses (naming both sources) when it is in neither. Every shared-mode command finds the backlog repository in this
+order: BACKLOG_HOME, .smooth-backlog.json, the per-user record of --use-backlog-repo, ~/git/<name> (the folder
+names above derive from the setting; a neutral name without it). When none is there the command names backlog setup.
 
 Options:
   --ask

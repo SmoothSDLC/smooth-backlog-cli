@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The shared backlog repository is a setting, not a built-in name: its clone URL is read from the environment
+  variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url` key of `.smooth-backlog.json`; there is no
+  built-in default. A shared-mode command that needs it refuses (exit 2, naming both the variable and the key)
+  when it is in neither, and touches nothing; the origin check uses the configured value, and the default folder
+  names (the clone beside the repository, the per-user record of `--use-backlog-repo`, `~/git/<name>`) derive from
+  the configured repository name, a neutral name without the setting (item 091).
+- Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
+  agent in a fresh session, never the author session that claimed the item - a fresh session of the same card may),
+  then an external review by codex or claude on the same commit. A pass pins the item's current work commit: a pass
+  on an older commit stops counting when the commit moves, and a changes verdict at either stage clears both stages
+  and re-runs them. `--close` and `--status done` are refused until both stages passed for the item's current work
+  commit, and the refusal names the missing stage; a passing Cody review asks for the external review, and a
+  passing external review asks for the close. A split item starts in stage refining, with or without a team field,
+  and takes its refinement review (codex or claude) before it may be claimed. The owner closes without a review on a
+  written decision: `--close --by owner --reason "<the decision>"`, recorded as an owner decision (item 088).
 - A new session of the same card continues the item its earlier session claimed: a `--claim` with a name sharing
   the `<item><card>` part before the colon (082k0c:02 after 082k0c:01) records the new session name on the item,
   with no takeover and no lead reassignment; the one-active-item, work-in-progress and hand-off-lock rules apply
@@ -62,8 +77,8 @@
 - Shared mode keeps write views at their published slug and path after collision recovery, including cross-repository moves and incidental reflows, so later stale writes are refused.
 
 - Add the shared backlog repository mode: `backlog --use-backlog-repo <path>` keeps every repository's items in
-  one Git backlog repository (`SmoothSDLC/smoothsdlc-backlog`), with `new`, `update`, `query`, `next`, `pop`,
-  `move` and `archive` matching the Python backlog skill, including the team flags (claim, review, waiting,
+  one Git backlog repository (its clone URL is a setting since item 091), with `new`, `update`, `query`, `next`,
+  `pop`, `move` and `archive` matching the Python backlog skill, including the team flags (claim, review, waiting,
   hand-back) and the team views; `--use-local-repo` switches back. See COMMANDS.md.
 - Read and write item front matter compatibly with the Python skill's PyYAML files, keep the SQLite mirror in step,
   and commit and push each change before exiting, with collision renumbering and a run lock per repository.

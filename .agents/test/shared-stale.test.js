@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
@@ -43,8 +43,8 @@ function seed(items = ['alpha', 'beta', 'gamma'], repo = 'demo') {
   const con = db.connect(folder); db.scan(con, folder); con.close();
   git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'fixture'); git(home, 'push', '-q');
   const home2 = join(t, 'home2');
-  git(t, 'clone', '-q', join(t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2);
-  return { t, home, home2, cons, folder, folder2: join(home2, 'acme', repo), bare: join(t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git') };
+  git(t, 'clone', '-q', join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), home2);
+  return { t, home, home2, cons, folder, folder2: join(home2, 'acme', repo), bare: join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`) };
 }
 // the CLI as the clone `home`; the agent is named by --agent/--by on the command
 const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { BACKLOG_HOME: home, QWEN_CODE_AGENT_ID: '', USER: 'nobody', ...opts.env } });
@@ -291,7 +291,8 @@ function closeFixture() {
   const path = join(f.folder, 'phases', '001-alpha.md');
   const doc = parse(readFileSync(path, 'utf8'));
   store.write({ path, fm: { ...doc.fm,
-    review_refs: ['references/review/tests.md'], review_state: 'passed', estimate_min: 5 },
+    review_refs: ['references/review/tests.md'], review_state: 'passed', estimate_min: 5,
+    cody_pass_commit: doc.fm.commit || '', external_pass_commit: doc.fm.commit || '' }, // item 088: both stages passed
     body: doc.body + '\n## Definition of done\n\n- [x] Tested\n' }, f.folder);
   const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'ready to close'); git(f.home, 'push', '-q');

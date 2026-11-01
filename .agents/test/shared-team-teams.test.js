@@ -58,7 +58,7 @@ test('backlog new --team writes the team and starts the item in stage refining; 
   const plain = make(f, 'no team');
   assert.ok(!('team' in fm(f, plain)) && !('stage' in fm(f, plain)));
   const s = make(f, 'split of an item without team', '--split-from', plain);
-  assert.ok(!('team' in fm(f, s)) && !('stage' in fm(f, s)));
+  assert.ok(!('team' in fm(f, s)) && fm(f, s).stage === 'refining'); // item 088: a split slice needs its refinement review, with or without a team
 });
 
 test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimable, --reviewable and --blocked', () => {

@@ -76,8 +76,10 @@ Retain the returned GUID for subsequent commands if priorities may change.
 ## Shared mode: team work
 
 Set a repository up once with `backlog setup` (it clones the backlog repository beside the repository when it is
-missing, writes `.smooth-backlog.json` to commit, and deploys this skill; `--ask` asks for the path). With the shared
-backlog repository (`backlog --use-backlog-repo <path>`) the commands are `new`, `update`,
+missing — the clone URL is a setting: the environment variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url`
+key of `.smooth-backlog.json`, with no built-in default, and a command that needs it refuses, naming both sources, when
+it is in neither — writes `.smooth-backlog.json` to commit, and deploys this skill; `--ask` asks for the path). With
+the shared backlog repository (`backlog --use-backlog-repo <path>`) the commands are `new`, `update`,
 `query`, `next`, `pop`, `work`, `move` and `archive`; `backlog <command> --help` is the contract. A team member
 sees and changes the backlog only through them.
 
@@ -90,8 +92,14 @@ sees and changes the backlog only through them.
   `--refine-done --by <you> --note "<what you refined>"`.
 - [ ] Work and hand off: record each step with `--append`; blocked on something, `--waiting "<what>" --by <you>`,
   then `--waiting-done --by <you>`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review
-  --by <you>`, then `--review pass|changes --by <you> --comments "<findings, citing one of the item's review_refs>"`;
-  the claimer closes with `--close --summary "<what was delivered>"`.
+  --by <you>`, then `--review pass|changes --by <you> --comments "<findings, citing one of the item's review_refs>"`.
+  Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
+  agent in a fresh session, never the author session that claimed the item), then an external review by codex or
+  claude on the same commit. A pass pins the item's current work commit; a pass on an older commit stops counting
+  when the commit moves, and a changes verdict at either stage clears both stages. A passing Cody review asks for
+  the external review; a passing external review asks for the close. The owner closes without a review on a written
+  decision: `--close --by owner --reason "<the decision>"`, recorded as an owner decision.
+  Otherwise the claimer closes with `--close --summary "<what was delivered>"`.
 - [ ] Hand-off: the producer records its hand-off for each dependent before the dependent may be offered or claimed,
   and the team lead accepts or rejects it: the claimer runs `backlog update <item> --handoff <dependent>
   --handoff-commit <sha> --handoff-contract "<text>" --handoff-verification "<text>" [--handoff-outputs ...
@@ -102,7 +110,7 @@ sees and changes the backlog only through them.
   output's last line says END THE SESSION NOW: reply with text only and make no further tool call (when the CLI
   recorded a hand-off for a Qwen team member, `backlog work` also answers stop until its fresh session).
 - [ ] Team lead: take your team's work item with `backlog team pop --team <team>` (claimed for you, shown whole; idle
-  exits 3), then split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of a team's item starts in stage refining; give a child of an item without a team `--team <team>`); send a refined
+  exits 3), then split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of an item starts in stage refining, with or without a team, and takes its refinement review before it is claimed; a child of a team's item inherits the team); send a refined
   item on with `--request-refinement-review --by <you>`, record Codex's verdict with `--refinement-review
   pass|changes --by codex --comments "<findings; thread id>"`; only when Codex answers that its limit is exceeded, record that with
   `--refinement-review limit --by codex --comments "<Codex's answer>"`, then Claude's verdict with `--by claude
@@ -116,8 +124,8 @@ them; `backlog query --wip` shows the counts. Only the team lead lifts a team or
 (`--wip-override "<reason>" --by <lead>`).
 
 Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign <agent> --reason
-"<why>" --by <lead>`, `--reassign-review <agent> --reason "<why>" --by <lead>`). A team's item is claimed only in stage ready; one waiting in review-hitl waits for the
-owner's `--decision`.
+"<why>" --by <lead>`, `--reassign-review <agent> --reason "<why>" --by <lead>`). A split item (with or without a
+team) is claimed only in stage ready; one waiting in review-hitl waits for the owner's `--decision`.
 
 Session names: a card's sessions are named `<item, 3 digits><card id>:<increment, 2 digits>` (a colon inside the
 name) and a team joins its card ids with colons. The colon is part of the name: it works in every command, in the

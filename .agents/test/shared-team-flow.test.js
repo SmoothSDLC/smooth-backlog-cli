@@ -30,8 +30,8 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
   const roster = join(t, 'team.json');
   writeFileSync(roster, JSON.stringify({ archy: {}, zed: {} }));
   const TEAM = { HOME: user, TEAM_NAME: 't1', TEAM_LEAD: 'lead', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
-  const as = (agent, args, want = 0) => {
-    const env = { ...TEAM, QWEN_CODE_AGENT_ID: `${agent}@t1` };
+  const as = (agent, args, want = 0, envExtra = {}) => {
+    const env = { ...TEAM, QWEN_CODE_AGENT_ID: `${agent}@t1`, QWEN_CODE_SESSION_ID: '', ...envExtra };
     if (args[0] === 'update') cli(['query', '--phase', args[1], '--agent', agent], { cwd: cons, tmp: t, env }); // read before the write
     const r = cli(args, { cwd: cons, tmp: t, env });
     assert.ok([].concat(want).includes(r.status), `${agent}: backlog ${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
@@ -104,7 +104,13 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
     as('zed', ['update', c1, '--request-review', 'any', '--note', 'commit def: empty input; hand-off recorded in the consumer item', '--by', 'zed']);
     session(Date.now() + 2000);
     as('archy', ['update', c1, '--start-review', '--by', 'archy']);
-    const r = as('archy', ['update', c1, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md']);
+    as('archy', ['update', c1, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md']);
+    as('zed', ['update', c1, '--request-review', 'cody-card1', '--note', 'commit def, cody stage', '--by', 'zed']);
+    as('cody-card1', ['update', c1, '--start-review', '--by', 'cody-card1'], 0, { QWEN_CODE_AGENT_ID: 'cody-card1@s2' });
+    as('cody-card1', ['update', c1, '--review', 'pass', '--by', 'cody-card1', '--comments', 'ok per references/review/code.md'], 0, { QWEN_CODE_AGENT_ID: 'cody-card1@s2' });
+    as('zed', ['update', c1, '--request-review', 'codex', '--note', 'commit def, external stage', '--by', 'zed']);
+    as('codex', ['update', c1, '--start-review', '--by', 'codex']);
+    const r = as('codex', ['update', c1, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
     assert.match(r.stdout, /CLOSE NOW: zed closes it/);
   });
   await step('S20a the lead records HANDOFF_ACCEPTED with actor, time, SHA, consumer and hand-off revision in both items', () => {
@@ -136,8 +142,11 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
     as('archy', ['update', c2, '--claim', 'archy']);
     as('archy', ['update', c2, '--request-review', 'any', '--note', 'commit ghi', '--by', 'archy']);
     session(Date.now() + 5000);
-    as('zed', ['update', c2, '--start-review', '--by', 'zed']);
-    as('zed', ['update', c2, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
+    as('cody-card2', ['update', c2, '--start-review', '--by', 'cody-card2'], 0, { QWEN_CODE_AGENT_ID: 'cody-card2@s2' });
+    as('cody-card2', ['update', c2, '--review', 'pass', '--by', 'cody-card2', '--comments', 'ok per references/review/code.md'], 0, { QWEN_CODE_AGENT_ID: 'cody-card2@s2' });
+    as('archy', ['update', c2, '--request-review', 'codex', '--note', 'commit ghi, external stage', '--by', 'archy']);
+    as('codex', ['update', c2, '--start-review', '--by', 'codex']);
+    as('codex', ['update', c2, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
     session(Date.now() + 6000);
     as('archy', ['update', c2, '--close', '--summary', 'printer done', '--by', 'archy']);
   });
@@ -145,8 +154,11 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
     const p = json('lead', ['pop', '--agent', 'lead', '--json']);
     assert.deepEqual([p.action, p.item], ['continue', w]);
     as('lead', ['update', w, '--request-review', 'any', '--note', 'children and their evidence', '--by', 'lead']);
-    as('zed', ['update', w, '--start-review', '--by', 'zed']);
-    as('zed', ['update', w, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
+    as('cody-card3', ['update', w, '--start-review', '--by', 'cody-card3'], 0, { QWEN_CODE_AGENT_ID: 'cody-card3@s3' });
+    as('cody-card3', ['update', w, '--review', 'pass', '--by', 'cody-card3', '--comments', 'ok per references/review/code.md'], 0, { QWEN_CODE_AGENT_ID: 'cody-card3@s3' });
+    as('lead', ['update', w, '--request-review', 'codex', '--note', 'children, external stage', '--by', 'lead']);
+    as('codex', ['update', w, '--start-review', '--by', 'codex']);
+    as('codex', ['update', w, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
     as('lead', ['update', w, '--close', '--summary', 'parser and printer done', '--by', 'lead']);
     assert.equal(fm(w).status, 'done');
   });

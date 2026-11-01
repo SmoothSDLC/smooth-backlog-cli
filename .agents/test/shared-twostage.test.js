@@ -41,7 +41,7 @@ const round = (f, slug, { claimer, reviewer, verdict = 'pass', note = 'the work 
   ok(f, ['update', slug, '--request-review', 'any', '--note', note, '--by', claimer], env);
   ok(f, ['query', '--phase', slug, '--agent', reviewer], env);
   ok(f, ['update', slug, '--start-review', '--by', reviewer], env);
-  ok(f, ['update', slug, '--review', verdict, '--by', reviewer, '--comments', verdict === 'pass'
+  return ok(f, ['update', slug, '--review', verdict, '--by', reviewer, '--comments', verdict === 'pass'
     ? 'fine per references/review/code.md'
     : 'fix x per references/review/code.md'], env);
 };

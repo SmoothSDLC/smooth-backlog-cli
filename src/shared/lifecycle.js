@@ -201,7 +201,8 @@ export const callerSession = () => {
 };
 
 // item 088: two review stages before any close - (a) a Cody review, then (b) an external review by codex or claude on
-// the same commit. A pass pins the item's work commit; the gate compares the pins to the current commit.
+// the same commit, with or without review_refs. A pass pins the item's work commit; the gate compares the pins to the
+// current commit.
 // '' = both stages passed for the current commit, else the refusal naming the missing stage.
 export const stageRefusal = fm => {
   const missing = fm.cody_pass_commit === (fm.commit || '')

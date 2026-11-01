@@ -31,7 +31,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', HOME: f.user, ...env } };
+  const o = { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '', TEAM_LEAD: 'lead', HOME: f.user, ...env } };
   if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
@@ -78,6 +78,12 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
   rmSync(marker(f)); // as if a fresh session had come and the dispatcher had released it
   ok(f, ['update', a, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
   assert.ok(!existsSync(marker(f))); // a verdict writes none
+  ok(f, ['update', a, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'archy']);
+  ok(f, ['update', a, '--start-review', '--by', 'cody']);
+  ok(f, ['update', a, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', a, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'archy']);
+  ok(f, ['update', a, '--start-review', '--by', 'codex']);
+  ok(f, ['update', a, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
   ok(f, ['update', a, '--close', '--summary', 'done', '--by', 'archy']); // a close writes it
   const at = JSON.parse(readFileSync(marker(f), 'utf8')).at_ms;
   config(f, [{ name: 'archy', joinedAt: at }]); // a session not newer than the hand-off: the one valid stop
@@ -155,6 +161,12 @@ test('an invalid time stamp stops nobody; the lead is never stopped; a lead clos
   ok(f, ['update', z, '--request-review', 'any', '--note', 'x', '--by', 'zed']);
   rmSync(join(f.tdir, 'handoff', 'zed.json')); // zed has had its fresh session
   ok(f, ['update', z, '--review', 'pass', '--by', 'archy', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', z, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'lead']);
+  ok(f, ['update', z, '--start-review', '--by', 'cody']);
+  ok(f, ['update', z, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', z, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'lead']);
+  ok(f, ['update', z, '--start-review', '--by', 'codex']);
+  ok(f, ['update', z, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
   ok(f, ['update', z, '--close', '--summary', 'closed for zed', '--by', 'lead']); // the lead closes when the claimer has not
   assert.ok(!existsSync(join(f.tdir, 'handoff', 'zed.json'))); // a lead's close stops nobody
 });

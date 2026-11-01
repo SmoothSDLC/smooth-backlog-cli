@@ -39,9 +39,9 @@ const update = (f, args, env) => {
   const who = named ?? (args.includes('--request-review') ? 'cody' : undefined); // a review is requested by the one working on the item (cody here)
   if (who && args[0] && !args[0].startsWith('-')) {
     const slugs = args.includes('--close') ? readdirSync(join(f.folder, 'phases')).map(n => n.replace(/\.md$/, '')) : [args[0]];
-    for (const slug of slugs) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t, env });
+    for (const slug of slugs) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t, env: env || { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
   }
-  return cli(['update', ...args], { cwd: f.cons, tmp: f.t, env });
+  return cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: env || { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
 };
 const query = (f, args) => cli(['query', ...args], { cwd: f.cons, tmp: f.t });
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
@@ -283,7 +283,7 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
     const ends = args.includes('--request-review') || args.includes('--close') || (args.includes('--review') && args.includes('changes'));
     const line = rn.stdout.match(/\n(🛑 (\w+): .*)\n$/);
     if (line) { // exactly the shutdown text, to a member of the fixture, on a step that ends a session
-      assert.ok(ends && ['archy', 'zed'].includes(line[2]), `${args.join(' ')}: an unexpected shutdown line`);
+      assert.ok(ends && ['archy', 'zed', 'cody'].includes(line[2]), `${args.join(' ')}: an unexpected shutdown line`);
       assert.equal(line[1], shutdown(line[2]));
     }
     if (before) assert.deepEqual(snapshot(n), before, `${args.join(' ')}: a refusal changes nothing`);
@@ -313,6 +313,9 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   both([A, '--waiting-done', '--by', 'archy'], undefined, 0);
   both([A, '--waiting', 'workflow run 10', '--by', 'archy'], undefined, 0);
   both([A, '--claim', 'archy', '--release', 'archy'], undefined, 1); // one team step at a time
+  both([A, '--request-review', 'codex', '--note', 'tests written, external stage'], undefined, 0);
+  both([A, '--start-review', '--by', 'codex'], undefined, 0);
+  both([A, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md'], undefined, 0);
   both([A, '--close', '--summary', 'tests written'], undefined, 0); // a wait is cleared by the next step
   both([A, '--dry-run', '--waiting-done'], undefined, 0);
   both([B, '--claim', 'cody'], undefined, 0);
@@ -326,7 +329,13 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   both([B, '--waiting', 'ci', '--by', 'cody', '--note', 'x'], undefined, 0);
   both([B, '--note', 'the holder continues'], undefined, 0); // ends the wait
   both([B, '--request-review', 'archy', '--note', 'commit 9999999'], undefined, 0);
-  both([B, '--review', 'pass', '--by', 'archy', '--comments', 'good (references/review/code.md)'], undefined, 0); // CLOSE NOW line
+  both([B, '--review', 'pass', '--by', 'archy', '--comments', 'good (references/review/code.md)'], undefined, 0); // item 088: the NEXT line, the cody stage is still open
+  both([B, '--request-review', 'cody-card1', '--note', 'commit 9999999, cody stage'], undefined, 0);
+  both([B, '--start-review', '--by', 'cody-card1'], undefined, 0);
+  both([B, '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md'], undefined, 0);
+  both([B, '--request-review', 'codex', '--note', 'commit 9999999, external stage'], undefined, 0);
+  both([B, '--start-review', '--by', 'codex'], undefined, 0);
+  both([B, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md'], undefined, 0);
   // item 039: the reviewer never closes
   let held = snapshot(n);
   const byReviewer = update(n, [B, '--close', '--by', 'archy', '--summary', 'delivered']);
@@ -360,9 +369,14 @@ test('075: the successful lifecycle steps print exactly what they record', t => 
   const job = make(f, 'lifecycle job', []);
   step([job, '--claim', 'cody'], `✅ ${job} updated (claimed=Claimed by cody at TS repository=acme/demo branch=main cwd=<cwd>)\n`);
   step([job, '--request-review', 'any', '--note', 'ready'], `✅ ${job} updated (review_requested=Review requested by cody at TS (reviewer: any))\n`);
-  step([job, '--start-review', '--by', 'archy'], `✅ ${job} updated (review_started=Review started by archy at TS)\n`);
-  step([job, '--review', 'pass', '--by', 'archy', '--comments', 'ok per references/review/code.md'],
-    `✅ ${job} updated (reviewed=Review by archy: PASS (TS))\n   ➡️  CLOSE NOW: cody closes it (backlog update ${job} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead\n`);
+  step([job, '--start-review', '--by', 'cody-card1'], `✅ ${job} updated (review_started=Review started by cody-card1 at TS)\n`);
+  step([job, '--review', 'pass', '--by', 'cody-card1', '--comments', 'ok per references/review/code.md'],
+    `✅ ${job} updated (reviewed=Review by cody-card1: PASS (TS))\n   ➡️  NEXT: the external review - the Cody pass is recorded; request the codex or claude review (backlog update ${job} --request-review codex --note "<commit>"), it must pass on the same commit before the close\n`);
+  step([job, '--request-review', 'codex', '--note', 'the cody pass, external stage'],
+    `✅ ${job} updated (review_requested=Review requested by cody at TS (reviewer: codex))\n`);
+  step([job, '--start-review', '--by', 'codex'], `✅ ${job} updated (review_started=Review started by codex at TS)\n`);
+  step([job, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md'],
+    `✅ ${job} updated (reviewed=Review by codex: PASS (TS))\n   ➡️  CLOSE NOW: cody closes it (backlog update ${job} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead\n`);
   step([job, '--close', '--summary', 'delivered with tests'],
     `✅ ${job} updated (summary=delivered with tests, closed=Closed by cody at TS)\n   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).\n      backlog now empty — no actionable phase remains.\n      RE-EVALUATE the order now (it is a planning step even if nothing changes):\n        backlog update <phase> --priority <rank>      # promote/demote one\n        backlog update --replan "<id,id,id,...>"       # set the leading order\n`);
   const w = make(f, 'lifecycle waiting job', []);

@@ -28,26 +28,46 @@ function fixture(name, extra) {
   const slug = r.stdout.split('created phase phases/')[1].split('.md')[0];
   return { t, home, cons, slug, file: join(home, 'acme', 'demo', 'phases', `${slug}.md`) };
 }
-const update = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });
+const update = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
+const q = (f, agent) => cli(['query', '--phase', f.slug, '--agent', agent], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
 const status = f => parse(readFileSync(f.file, 'utf8')).fm.status;
 
-test('--status done is refused until the review passed (port of test_status_done_refused_until_review_passed)', () => {
+test('--status done is refused until both review stages passed (port of test_status_done_refused_until_review_passed)', () => {
   const f = fixture('reviewed job', ['--review-refs', 'references/review/code.md']);
   const ok = update(f, [f.slug, '--claim', 'cody']);
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
   const r = update(f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 1);
-  assert.ok(r.stdout.includes('use --request-review, then --close after a passing review'), r.stdout);
-  assert.equal(r.stdout, `❌ ${f.slug}: has review_refs and review_state none; use --request-review, then --close after a passing review\n`);
+  assert.ok(r.stdout.includes('missing the Cody review stage'), r.stdout);
+  assert.equal(r.stdout, `❌ ${f.slug}: missing the Cody review stage: a Cody agent (not the author session) must pass the review first, then codex or claude\n`);
   assert.equal(status(f), 'in_progress');
 });
 
-test('--status done on an item without review_refs finishes as before (port of test_status_done_on_item_without_review_refs)', () => {
-  const f = fixture('old item finishes as before', []);
-  const { fm, body } = parse(readFileSync(f.file, 'utf8')); // as an old item looks: none of the team keys
-  for (const k of OLD) delete fm[k];
+test('--status done on an item without review_refs needs both stages (port of test_status_done_on_item_without_review_refs, item 088)', () => {
+  const f = fixture('old item without review_refs', []);
+  const { fm, body } = parse(readFileSync(f.file, 'utf8')); // as an old item looks: none of the team keys (depends_on is not one)
+  for (const k of ['work_class', 'review_classes', 'claimed_by', 'claimed_at', 'review_state', 'reviewer']) delete fm[k];
   writeFileSync(f.file, dump(fm, body));
-  const r = update(f, [f.slug, '--status', 'done']);
+  let r = update(f, [f.slug, '--status', 'done']);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.ok(r.stdout.includes('missing the Cody review stage'), r.stdout);
+  r = update(f, [f.slug, '--set-review-refs', 'references/review/code.md', '--by', 'cody']); // the lead (cody, the default) completes it
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  r = update(f, [f.slug, '--request-review', 'any', '--note', 'the work']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  q(f, 'cody-card1');
+  r = update(f, [f.slug, '--start-review', '--by', 'cody-card1']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  r = update(f, [f.slug, '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  r = update(f, [f.slug, '--request-review', 'codex', '--note', 'the external stage']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  q(f, 'codex');
+  r = update(f, [f.slug, '--start-review', '--by', 'codex']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  r = update(f, [f.slug, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  r = update(f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(status(f), 'done');
 });

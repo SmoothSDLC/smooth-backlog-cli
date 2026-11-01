@@ -29,7 +29,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
 const LEAD = { TEAM_LEAD: 'lead' };
 const C1 = '0123456789abcdef0123456789abcdef01234567';
 const C2 = 'fedcba9876543210fedcba9876543210fedcba98';
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '', ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
 const seq = slug => Number(slug.split('-')[0]);
@@ -51,8 +51,13 @@ function producerWithHandoff(f, commit, session) {
     { QWEN_CODE_SESSION_ID: session });
   return { p, d, record };
 }
-// The producer's review passing: request, start and a pass verdict, through the CLI (by = the claimer who requests).
+// The producer's review passing, both stages of item 088: a Cody pass first, then the codex pass on the same
+// commit; through the CLI (by = the claimer who requests).
 function reviewPass(f, p, by = 'producer') {
+  ok(f, ['update', p, '--request-review', 'cody', '--note', 'the hand-off wiring', '--by', by]);
+  ok(f, ['query', '--phase', p, '--agent', 'cody']);
+  ok(f, ['update', p, '--start-review', '--by', 'cody']);
+  ok(f, ['update', p, '--review', 'pass', '--by', 'cody', '--comments', 'PASS (references/review/code.md)']);
   ok(f, ['update', p, '--request-review', 'codex', '--note', 'the hand-off wiring', '--by', by]);
   ok(f, ['query', '--phase', p, '--agent', 'codex']);
   ok(f, ['update', p, '--start-review', '--by', 'codex']);

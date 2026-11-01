@@ -32,7 +32,7 @@ const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', `Body of ${name}.\n\n${DOD}`];
 const LEAD = { TEAM_LEAD: 'lead' };
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '', ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
 const item = (f, seq) => store.load(f.folder).find(i => i.fm.seq === seq);
@@ -172,6 +172,9 @@ test('059.2: the acceptance receipt records the reviewer, the verdict and the ha
   const work = workCommit(f);
   // the review operation stores the verdict and the reviewer, but no reviewed commit (lifecycle.js), so
   // the acceptance does not claim that a commit was reviewed (lead ruling 2026-10-31)
+  ok(f, ['update', p.producer, '--request-review', 'cody', '--note', `review work commit ${work} and its contract`, '--by', 'agent-a']);
+  ok(f, ['update', p.producer, '--start-review', '--by', 'cody']);
+  ok(f, ['update', p.producer, '--review', 'pass', '--by', 'cody', '--comments', 'the exported functions hold; references/review/code.md']);
   ok(f, ['update', p.producer, '--request-review', 'codex', '--note', `review work commit ${work} and its contract`, '--by', 'agent-a']);
   ok(f, ['update', p.producer, '--start-review', '--by', 'codex']);
   ok(f, ['update', p.producer, '--review', 'pass', '--by', 'codex', '--comments', 'the exported functions hold; references/review/code.md']);
@@ -211,7 +214,10 @@ test('059.2: acceptHandoff refuses a hand-off record without a commit, naming th
   // no work after the creation: the item's commit front matter is the creation HEAD (new.js)
   const created = rootCommit(f.cons);
   assert.equal(ctxOf(f, 1).fm.commit, created, 'the item\'s commit front matter is the creation HEAD (new.js)');
-  // the review passes on the creation HEAD
+  // the review passes on the creation HEAD, both stages
+  ok(f, ['update', p.producer, '--request-review', 'cody', '--note', `review commit ${created}`, '--by', 'agent-a']);
+  ok(f, ['update', p.producer, '--start-review', '--by', 'cody']);
+  ok(f, ['update', p.producer, '--review', 'pass', '--by', 'cody', '--comments', 'the exported functions hold; references/review/code.md']);
   ok(f, ['update', p.producer, '--request-review', 'codex', '--note', `review commit ${created}`, '--by', 'agent-a']);
   ok(f, ['update', p.producer, '--start-review', '--by', 'codex']);
   ok(f, ['update', p.producer, '--review', 'pass', '--by', 'codex', '--comments', 'holds; references/review/code.md']);

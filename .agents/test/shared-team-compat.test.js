@@ -21,7 +21,7 @@ function fixture() {
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-const run = (f, command, args) => cli([command, ...args], { cwd: f.cons, tmp: f.t });
+const run = (f, command, args) => cli([command, ...args], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
 const ok = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
 const refused = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };
 const q = (f, ...args) => { const r = run(f, 'query', [...args, '--json']); assert.equal(r.status, 0, r.stdout + r.stderr); return JSON.parse(r.stdout).map(x => x.slug); };
@@ -99,6 +99,9 @@ test('test_claim_review_close_lifecycle: the query views along the lifecycle (th
   ok(f, first, '--claim', 'archy');
   ok(f, first, '--request-review', 'any', '--note', 'tests written'); // every complete item is reviewed
   ok(f, first, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md');
+  ok(f, first, '--request-review', 'codex', '--note', 'tests written, external stage');
+  ok(f, first, '--start-review', '--by', 'codex');
+  ok(f, first, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md');
   ok(f, first, '--close', '--summary', 'tests written');
   assert.ok(!q(f, '--blocked').includes(job));
   assert.ok(q(f, '--claimable').includes(job));

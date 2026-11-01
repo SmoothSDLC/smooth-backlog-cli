@@ -32,6 +32,31 @@ export const ORIGIN_REFUSAL = `the shared backlog repository is not set: set the
 // Item 091: the refusal for a setting that is set but does not yield an owner/name (no repository can be named from
 // it); like the missing-setting refusal it names both sources, and the origin check refuses a clone with no origin.
 export const ORIGIN_INVALID = url => `the shared backlog repository setting '${url}' does not name a repository (owner/name): set the environment variable BACKLOG_ORIGIN_URL or the ${ORIGIN_KEY} key of ${CONFIG} to its clone URL (the variable wins)`;
+// Item 091 (7th review): the setting is checked by an ALLOW list at the trust boundary, not by stripping and
+// splitting (each review round found another malformed form the deny approach still accepted). Only these
+// whole-string forms name a repository; anything else returns '' and the existing ORIGIN_INVALID refusal applies:
+//   https://HOST[:DIGITS]/OWNER/NAME         (also http://)
+//   ssh://[USER@]HOST[:DIGITS]/OWNER/NAME
+//   USER@HOST:OWNER/NAME                     (the scp form)
+//   /ABSOLUTE/PATH/.../OWNER/NAME            (a local bare repository)
+// where HOST matches [A-Za-z0-9.-]+, USER and each path segment match [A-Za-z0-9_.-]+, OWNER and NAME are neither
+// '.' nor '..', and NAME may end in '.git'. No query, no fragment, no empty segment, no backslash. The setting only:
+// existing clones' origins are parsed by repoIdFromUrl (safety.js) - for an accepted form the two agree.
+export function settingId(url) {
+  const u = String(url ?? '').trim();
+  const seg = '[A-Za-z0-9_.-]+';
+  const host = '[A-Za-z0-9.-]+';
+  const m =
+    new RegExp(`^https?://${host}(?::\\d+)?/(${seg})/(${seg})$`).exec(u) ||
+    new RegExp(`^ssh://(?:${seg}@)?${host}(?::\\d+)?/(${seg})/(${seg})$`).exec(u) ||
+    new RegExp(`^${seg}@${host}:(${seg})/(${seg})$`).exec(u) ||
+    new RegExp(`^/(?:${seg}/)*(${seg})/(${seg})$`).exec(u);
+  if (!m) return '';
+  const owner = m[m.length - 2];
+  const name = m[m.length - 1];
+  if (owner === '.' || owner === '..' || name === '.' || name === '..') return '';
+  return `${owner}/${name.replace(/\.git$/, '')}`;
+}
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 export const topOf = cwd => { const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
@@ -55,12 +80,13 @@ export function originUrl(cwd = process.cwd()) {
   try { cfg = JSON.parse(readFileSync(join(top, CONFIG), 'utf8')); } catch { return ''; }
   return cfg && typeof cfg[ORIGIN_KEY] === 'string' ? cfg[ORIGIN_KEY].trim() : '';
 }
-// The setting as {url, id, name}: id is the owner/name parsed from the URL; name its last part - the folder name the
-// CLI derives for the clone beside the repository, the per-user record and ~/git/...; '' fields when the setting is
-// empty. originFolderName is that folder name with the neutral fallback.
+// The setting as {url, id, name}: id is the owner/name the setting's allow-list (settingId) accepts - the SETTING
+// is checked by the allow list, while existing clones' origins are parsed by repoIdFromUrl; name is the name part
+// - the folder name the CLI derives for the clone beside the repository, the per-user record and ~/git/...;
+// '' fields when the setting is empty. originFolderName is that folder name with the neutral fallback.
 export function originSetting(cwd = process.cwd()) {
   const url = originUrl(cwd);
-  const id = url ? repoIdFromUrl(url) : '';
+  const id = url ? settingId(url) : '';
   return { url, id, name: id ? id.split('/').pop() : '' };
 }
 export const originFolderName = cwd => originSetting(cwd).name || NEUTRAL_NAME;

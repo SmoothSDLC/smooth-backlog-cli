@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { originSetting, settingId } from '../../src/shared/setup.js';
 import { cli, consumer, env as fixtureEnv, sharedBacklog } from './shared-fixtures.js';
 
 const KEY = 'https://example.com/acme/backlog-repo.git'; // the fixture clone's origin, as a clone URL
@@ -222,5 +223,47 @@ test('a malformed setting with a port: backlog setup refuses before it touches a
     assert.ok(!existsSync(join(app, '.smooth-backlog.json')), `${url}: no config was written`);
     assert.equal(readFileSync(modeFile, 'utf8'), modeBefore, `${url}: shared mode was not switched on`);
     assert.ok(!existsSync(join(app, '.claude', 'skills')), `${url}: no skill copy was deployed`);
+  }
+});
+
+// item 091 round 7 (the lead's ruling): the setting is checked by an ALLOW list at the trust boundary, not by
+// stripping and splitting - every review round's malformed value is refused, and each accepted whole-string
+// form yields its owner/name and folder name.
+test('the setting allow-list: every malformed value from the review rounds is refused, and each accepted form yields its owner/name and folder name', () => {
+  const malformed = [
+    'foo',                              // round 3: no owner/name at all
+    'https://example.com',              // round 4: a bare host
+    'https://example.com/acme',         // round 4: one path segment
+    'https://example.com:443',          // round 5: a bare host with a port
+    'https://example.com:443/acme',     // round 5: a port and one path segment
+    'git@host:acme',                    // round 6: the scp form with no name
+    'acme//repo',                       // round 6: an empty segment
+    'acme/..',                          // round 6: a trailing ..
+    'https://example.com:abcd/acme/repo', // round 6: a non-numeric port
+    'https://example.com/acme/repo?ref=main', // round 6: a query
+    'https://example.com/acme/repo#anchor',   // round 6: a fragment
+  ];
+  for (const url of malformed) {
+    assert.equal(settingId(url), '', url);
+  }
+  const accepted = [
+    ['https://example.com/acme/repo', 'acme/repo', 'repo'],
+    ['http://example.com:8080/acme/site', 'acme/site', 'site'],
+    ['ssh://git@example.com:2222/acme/repo.git', 'acme/repo', 'repo'],
+    ['git@example.com:acme/repo', 'acme/repo', 'repo'],
+    ['/srv/git/acme/repo.git', 'acme/repo', 'repo'],
+  ];
+  for (const [url, id, folder] of accepted) {
+    assert.equal(settingId(url), id, url);
+    // the setting's wiring: originSetting uses the allow-list for the SETTING, and the folder name is the name part
+    process.env.BACKLOG_ORIGIN_URL = url;
+    try {
+      const s = originSetting();
+      assert.equal(s.url, url, url);
+      assert.equal(s.id, id, url);
+      assert.equal(s.name, folder, url);
+    } finally {
+      delete process.env.BACKLOG_ORIGIN_URL;
+    }
   }
 });

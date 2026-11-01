@@ -191,3 +191,36 @@ test('a malformed setting: backlog setup refuses before it touches anything (no 
     assert.ok(!existsSync(join(app, '.claude', 'skills')), `${url}: no skill copy was deployed`);
   }
 });
+
+// item 091 round 5: a scheme URL with a port - the port is part of the authority (host[:port]), not a path segment
+const PORT_MALFORMED = ['https://example.com:443/acme'];
+
+test('a malformed setting with a port: a scheme URL with a port and one path segment is refused, naming both sources, and touches nothing', t => {
+  const f = fixture(t);
+  for (const url of PORT_MALFORMED) {
+    const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: url } });
+    assert.equal(r.status, 2, `${url}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /does not name a repository/, url);
+    assert.match(r.stderr, /BACKLOG_ORIGIN_URL/, url);
+    assert.match(r.stderr, /backlog_origin_url/, url);
+    assert.match(r.stderr, /\.smooth-backlog\.json/, url);
+    assert.equal(r.stdout, '', `${url}: no queue is printed`);
+  }
+});
+
+test('a malformed setting with a port: backlog setup refuses before it touches anything (no clone, no parent folder, no config, no mode change, no skill copy)', t => {
+  const f = fixture(t);
+  const app = consumer(f.d, 'acme', 'app', 'main');
+  mkdirSync(join(app, '.claude'));
+  const modeFile = join(f.d, 'config', 'smooth-backlog-cli', 'mode.json');
+  const modeBefore = readFileSync(modeFile, 'utf8');
+  for (const url of PORT_MALFORMED) {
+    const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: url } });
+    assert.equal(r.status, 2, `${url}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /does not name a repository/, url);
+    assert.ok(!existsSync(join(f.d, 'user')), `${url}: no clone or parent folder was created`);
+    assert.ok(!existsSync(join(app, '.smooth-backlog.json')), `${url}: no config was written`);
+    assert.equal(readFileSync(modeFile, 'utf8'), modeBefore, `${url}: shared mode was not switched on`);
+    assert.ok(!existsSync(join(app, '.claude', 'skills')), `${url}: no skill copy was deployed`);
+  }
+});

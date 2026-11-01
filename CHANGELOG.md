@@ -13,8 +13,8 @@
   refused by naming the setting, not the neutral path; the per-user record of `--use-backlog-repo` is the file
   `<name>/home` under the config folder - a record written before the setting existed keeps working when the
   setting names the same repository, with no migration; a setting value that does not name a repository (no
-  owner/name in the URL - a scheme URL needs two path segments after the host) is refused the same way, and the
-  origin check refuses a clone with no origin (item 091).
+  owner/name in the URL - a scheme URL needs two path segments after the authority (host[:port])) is refused the
+  same way, and the origin check refuses a clone with no origin (item 091).
 - Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
   agent in a fresh session, never the author session that claimed the item - a fresh session of the same card may),
   then an external review by codex or claude on the same commit. A pass pins the item's current work commit: a pass

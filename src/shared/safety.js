@@ -12,17 +12,27 @@ import { safePath } from '../storage.js';
 // owner/name from a git URL or path (lib_db.py:58-64): https://host/Owner/name(.git),
 // git@host:Owner/name(.git), /srv/Owner/name.git. The last two parts win, so a
 // token in the URL changes nothing; fewer than two parts -> "". A scheme:// URL
-// needs two path segments after the host: the scheme and the host are not a
-// repository, so https://host and https://host/one name no owner/name (item 091).
+// needs two path segments after the authority (host[:port]): the scheme, the host
+// and a port are not a repository, so https://host, https://host/one and
+// https://host:443/one name no owner/name (item 091).
 export function repoIdFromUrl(url) {
   // user-info (user:token@) is stripped here, at the one place origins are parsed: no identity, log or error carries it
   let u = String(url ?? '').trim().replace(/\/+$/, '').replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, '$1').replace(/^[^/\\:@]*:[^/\\@]*@/, '');
   if (u.endsWith('.git')) u = u.slice(0, -4);
   const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.exec(u);
+  if (scheme) {
+    // the authority is host[:port] (user-info already stripped): split it from the path at the
+    // first separator - a port in the authority is not a path segment
+    const rest = u.slice(scheme[0].length);
+    const sep = rest.search(/[/\\]/);
+    // a non-empty authority plus two path segments (owner + name)
+    if (sep <= 0) return '';
+    const pathParts = rest.slice(sep + 1).split(/[/\\]/).filter(Boolean);
+    return pathParts.length >= 2 ? pathParts.slice(-2).join('/') : '';
+  }
   // Also splits on \ (beyond the oracle) so a Windows local-path origin (C:\srv\Owner\name.git) works.
-  const parts = (scheme ? u.slice(scheme[0].length) : u).split(/[/\\:]/).filter(Boolean);
-  // with a scheme, the host is the first part: at least host + owner + name
-  return parts.length >= (scheme ? 3 : 2) ? parts.slice(-2).join('/') : '';
+  const parts = u.split(/[/\\:]/).filter(Boolean);
+  return parts.length >= 2 ? parts.slice(-2).join('/') : '';
 }
 
 // Validate a shared-mode home exactly as the oracle's checks (lib_db.py:77-100),

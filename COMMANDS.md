@@ -1056,7 +1056,7 @@ Run inside the git repository to set up; works in local and shared mode. The com
 The shared backlog repository's clone URL is a setting: the environment variable BACKLOG_ORIGIN_URL first, then the
 backlog_origin_url key of .smooth-backlog.json; there is no built-in default. A shared-mode command that needs it
 refuses (naming both sources) when it is in neither, and refuses a value that does not name a repository (no
-owner/name in the URL - a scheme URL needs two path segments after the host); the origin check refuses a clone
+owner/name in the URL - a scheme URL needs two path segments after the authority (host[:port])); the origin check refuses a clone
 with no origin. Every shared-mode command finds the
 backlog repository in this
 order: BACKLOG_HOME, .smooth-backlog.json, the per-user record of --use-backlog-repo, ~/git/<name> (the folder

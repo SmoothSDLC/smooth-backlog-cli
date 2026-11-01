@@ -55,6 +55,17 @@ test('repoIdFromUrl: https, scp-style and local-path URLs', () => {
   assert.equal(repoIdFromUrl('https://github.com/acme'), '');
 });
 
+test('repoIdFromUrl: a port in the authority of a scheme URL is not a path segment (item 091)', () => {
+  // a port plus one path segment names no owner/name - the port is part of the authority, not the path
+  assert.equal(repoIdFromUrl('https://example.com:443/acme'), '');
+  assert.equal(repoIdFromUrl('ssh://git@example.com:2222/acme'), '');
+  assert.equal(repoIdFromUrl('https://example.com:443'), '');
+  // a port with two path segments still names the repository
+  assert.equal(repoIdFromUrl('https://example.com:443/acme/backlog-repo'), 'acme/backlog-repo');
+  assert.equal(repoIdFromUrl('https://example.com:443/acme/backlog-repo.git'), 'acme/backlog-repo');
+  assert.equal(repoIdFromUrl('ssh://git@example.com:2222/acme/backlog-repo.git'), 'acme/backlog-repo');
+});
+
 test('slugify: lowercase, runs of non-alphanumerics to one dash, no / or .., fallback phase', () => {
   assert.equal(slugify('My Item'), 'my-item');
   assert.equal(slugify('CLI parity: job 3 (security)'), 'cli-parity-job-3-security');

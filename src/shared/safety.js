@@ -44,7 +44,8 @@ export async function validateHome(path, expected, defaultHome) {
   const home = join(parent, basename(path));
   await safePath(parent, home);
   const origin = repoIdFromUrl((await git(['remote', 'get-url', 'origin'], path)).stdout);
-  if (origin.toLowerCase() !== String(expected).toLowerCase()) throw new Error(`${path} has origin '${origin || 'none'}'; expected ${expected}`);
+  // A missing origin is a refusal: the empty id of a clone without an origin must not compare equal to an empty expected id (item 091)
+  if (!origin || origin.toLowerCase() !== String(expected).toLowerCase()) throw new Error(`${path} has origin '${origin || 'none'}'; expected ${expected}`);
   const branch = (await git(['branch', '--show-current'], path)).stdout.trim();
   if (branch !== 'main') throw new Error(`${path} is on branch '${branch || 'detached HEAD'}'; the backlog repository stays on main`);
   return home; // the resolved path, as set_home.py records it

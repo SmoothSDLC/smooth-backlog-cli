@@ -127,6 +127,13 @@ test('validateHome: a home with another origin is refused', async () => {
   await assert.rejects(validateHome(other, ID, DFLT), /has origin 'Acme\/widgets'; expected acme\/backlog-repo/);
 });
 
+test('validateHome: a home with no origin is refused when the expected id is empty (two empty ids are not equal)', async () => {
+  const d = tmp(test);
+  const home = sharedBacklog(d);
+  spawnSync('git', ['-C', home, 'remote', 'remove', 'origin']);
+  await assert.rejects(validateHome(home, '', DFLT), /has origin 'none'/);
+});
+
 test('validateHome: a home on another branch is refused', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);

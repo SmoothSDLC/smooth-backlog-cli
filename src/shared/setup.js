@@ -29,6 +29,9 @@ export const NEUTRAL_NAME = 'backlog-repo';
 // Item 091: the refusal for a shared-mode command that needs the shared backlog repository but finds it in neither
 // source; it names both the environment variable and the config key.
 export const ORIGIN_REFUSAL = `the shared backlog repository is not set: set the environment variable BACKLOG_ORIGIN_URL or the ${ORIGIN_KEY} key of ${CONFIG} to its clone URL (the variable wins); there is no built-in default`;
+// Item 091: the refusal for a setting that is set but does not yield an owner/name (no repository can be named from
+// it); like the missing-setting refusal it names both sources, and the origin check refuses a clone with no origin.
+export const ORIGIN_INVALID = url => `the shared backlog repository setting '${url}' does not name a repository (owner/name): set the environment variable BACKLOG_ORIGIN_URL or the ${ORIGIN_KEY} key of ${CONFIG} to its clone URL (the variable wins)`;
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 export const topOf = cwd => { const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
@@ -71,6 +74,7 @@ export async function run(argv) {
   if (!top) return die('backlog setup runs inside the git repository it sets up');
   const setting = originSetting(top);
   if (!setting.url) return die(ORIGIN_REFUSAL); // item 091: no built-in default; the refusal names both sources, before anything is touched
+  if (!setting.id) return die(ORIGIN_INVALID(setting.url)); // item 091: a setting that names no repository is refused, before anything is touched
   const name = originFolderName(top);
   const targets = []; // checked before anything changes: no symbolic link on the way to a skill copy (as backlog init)
   for (const a of adapters) {

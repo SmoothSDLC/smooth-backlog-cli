@@ -121,3 +121,39 @@ test('neither set and no clone at the default path: the setting refusal comes fi
   assert.match(r.stderr, /backlog_origin_url/);
   assert.doesNotMatch(r.stderr, /backlog repository is not at/);
 });
+
+test('an invalid setting: a clone URL without an owner/name is refused, naming both sources, and touches nothing', t => {
+  const f = fixture(t);
+  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: 'foo' } });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /does not name a repository/);
+  assert.match(r.stderr, /BACKLOG_ORIGIN_URL/);
+  assert.match(r.stderr, /backlog_origin_url/);
+  assert.match(r.stderr, /\.smooth-backlog\.json/);
+  assert.equal(r.stdout, '', 'no queue is printed');
+});
+
+test('an invalid setting and a clone with no origin: the shared-mode command is refused, not run against the wrong repository', t => {
+  const f = fixture(t);
+  const removed = spawnSync('git', ['-C', f.home, 'remote', 'remove', 'origin'], { encoding: 'utf8' });
+  assert.equal(removed.status, 0, removed.stderr);
+  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: 'foo' } });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /does not name a repository/);
+  assert.equal(r.stdout, '', 'no queue is printed');
+});
+
+test('an invalid setting: backlog setup refuses before it touches anything (no clone, no parent folder, no config, no mode change, no skill copy)', t => {
+  const f = fixture(t);
+  const app = consumer(f.d, 'acme', 'app', 'main');
+  mkdirSync(join(app, '.claude'));
+  const modeFile = join(f.d, 'config', 'smooth-backlog-cli', 'mode.json');
+  const modeBefore = readFileSync(modeFile, 'utf8');
+  const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: 'foo' } });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /does not name a repository/);
+  assert.ok(!existsSync(join(f.d, 'user')), 'no clone or parent folder was created');
+  assert.ok(!existsSync(join(app, '.smooth-backlog.json')), 'no config was written');
+  assert.equal(readFileSync(modeFile, 'utf8'), modeBefore, 'shared mode was not switched on');
+  assert.ok(!existsSync(join(app, '.claude', 'skills')), 'no skill copy was deployed');
+});

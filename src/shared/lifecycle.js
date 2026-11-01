@@ -8,7 +8,7 @@ import { now } from './store.js';
 import { acceptHandoff, recordHandoff, rejectHandoff } from './handoff-commands.js';
 import {
   offeredTo, teamName,
-  REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, needsReview, outsideTeam, reviewOpenTo, strip,
+  REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, isSessionName, needsReview, outsideTeam, reviewOpenTo, strip,
   STOP_TEXT, restarting, staleReview, teamLead, teamScope, undoneDependencies,
 } from './team.js';
 
@@ -69,9 +69,12 @@ export function claim({ fm, folder, repo }, agent, { force } = {}) {
   if (refusal && !force) reject(refusal);
   const wip = cont && fm.status === 'in_progress' ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // item 034: --force never passes a limit; a reclaim of a pending item is a start
   if (wip) reject(wip);
-  // item 082: the claiming session joins the list; item 088: the claim's session becomes the author session - a
-  // Cody review by that same session is refused (the same card reviews only in a fresh session).
-  Object.assign(fm, { status: 'in_progress', claimed_by: agent, claimed_at: t, session_authors: withSession(fm.session_authors, agent), author_session: callerSession() });
+  // item 082: the claiming session joins the list, and a continuation keeps the earlier holder in it: an item
+  // without session_authors (claimed before the list existed) must not lose the self-review block of its holder
+  // when the new session takes over claimed_by.
+  // item 088: the claim's session becomes the author session - a Cody review by that same session is refused (the
+  // same card reviews only in a fresh session).
+  Object.assign(fm, { status: 'in_progress', claimed_by: agent, claimed_at: t, session_authors: withSession(withSession(fm.session_authors, cont ? who : ''), agent), author_session: callerSession() });
   return { event: 'claimed', text: `Claimed by ${agent} at ${t} repository=${repo} branch=${gitBranch(process.cwd()) || '(detached)'} cwd=${process.cwd()}${refusal ? ` (--force past the claim rule: ${refusal.split(';')[0]})` : ''}` };
 }
 
@@ -254,7 +257,8 @@ export function review({ fm }, verdict, { by, comments } = {}) {
   }
   // item 088: two stages - (a) a Cody agent (not the author session), then (b) codex or claude, only after (a) passed
   // on the current commit. A pass pins the item's work commit; a changes verdict at either stage re-runs both.
-  const codyStage = by.toLowerCase().startsWith('cody');
+  // item 082: a session name (082k0c:02) is a cody session name - its pass records the Cody stage too.
+  const codyStage = by.toLowerCase().startsWith('cody') || isSessionName(by);
   const externalStage = ['codex', 'claude'].includes(by);
   if (externalStage && fm.cody_pass_commit !== (fm.commit || '')) {
     reject('the external review runs only after the Cody review passed on the current commit: a Cody agent (not the author session) reviews it first');

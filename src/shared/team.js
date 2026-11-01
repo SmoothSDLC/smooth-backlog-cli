@@ -209,6 +209,9 @@ export const sameCard = (a, b) => {
   const mb = String(b ?? '').match(SESSION_NAME);
   return Boolean(ma && mb && ma[1] === mb[1]);
 };
+// Item 082: a name in the session-name scheme is a cody session name; its pass records the Cody review stage,
+// as the old cody-* agent names did.
+export const isSessionName = name => SESSION_NAME.test(String(name ?? ''));
 // Item 082: work held by the agent's own name, or by an earlier session of the same card: a new session of
 // the card continues the item its earlier session claimed (no takeover, no lead reassignment). Every
 // "is this item mine" check goes through here; older names compare by equality only.

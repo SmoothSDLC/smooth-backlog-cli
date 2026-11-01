@@ -123,6 +123,20 @@ test('082: the lead requests the review of a claimed item: its session is record
   assert.equal(itemFm(f, s).review_state, 'passed');
 });
 
+test('082: a pass by a session-named reviewer pins the Cody stage, and the external review runs', () => {
+  const f = fixture();
+  const s = setup(f); // A1 claims and asks
+  const commit = 'a'.repeat(40);
+  ok(f, ['update', s, '--commit', commit]); // the work commit
+  ok(f, ['update', s, '--start-review', '--by', A2]);
+  ok(f, ['update', s, '--review', 'pass', '--by', A2, '--comments', 'fine per references/review/code.md']);
+  assert.equal(itemFm(f, s).cody_pass_commit, commit, 'the session-named Cody pass pins the work commit');
+  ok(f, ['update', s, '--request-review', 'codex', '--note', 'the cody pass', '--by', A1]);
+  ok(f, ['update', s, '--start-review', '--by', 'codex']);
+  ok(f, ['update', s, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
+  assert.equal(itemFm(f, s).external_pass_commit, commit);
+});
+
 test('082: query --plan offers the requested review to the new session of the card, never to the asking session', () => {
   const f = fixture();
   const s = setup(f); // A1 claims and asks

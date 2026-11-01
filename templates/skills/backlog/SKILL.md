@@ -98,8 +98,8 @@ sees and changes the backlog only through them.
   then `--waiting-done --by <you>`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review
   --by <you>`, then `--review pass|changes --by <you> --comments "<findings, citing one of the item's review_refs>"`.
   Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
-  agent in a fresh session, never the author session that claimed the item), then an external review by codex or
-  claude on the same commit. A pass pins the item's current work commit; a pass on an older commit stops counting
+  agent - a name starting with cody, or a session name - in a fresh session, never the author session that
+  claimed the item), then an external review by codex or claude on the same commit. A pass pins the item's current work commit; a pass on an older commit stops counting
   when the commit moves, and a changes verdict at either stage clears both stages. A passing Cody review asks for
   the external review; a passing external review asks for the close. The owner closes without a review on a written
   decision: `--close --by owner --reason "<the decision>"`, recorded as an owner decision.
@@ -114,7 +114,8 @@ sees and changes the backlog only through them.
   output's last line says END THE SESSION NOW: reply with text only and make no further tool call (when the CLI
   recorded a hand-off for a Qwen team member, `backlog work` also answers stop until its fresh session).
 - [ ] Team lead: take your team's work item with `backlog team pop --team <team>` (claimed for you, shown whole; idle
-  exits 3), then split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of an item starts in stage refining, with or without a team, and takes its refinement review before it is claimed; a child of a team's item inherits the team); send a refined
+  exits 3; a work item held by an earlier session of your card is continued, and the claim records your new session
+  on the item first), then split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of an item starts in stage refining, with or without a team, and takes its refinement review before it is claimed; a child of a team's item inherits the team); send a refined
   item on with `--request-refinement-review --by <you>`, record Codex's verdict with `--refinement-review
   pass|changes --by codex --comments "<findings; thread id>"`; only when Codex answers that its limit is exceeded, record that with
   `--refinement-review limit --by codex --comments "<Codex's answer>"`, then Claude's verdict with `--by claude
@@ -141,9 +142,13 @@ The self-review rule is per session: `--claim` and `--request-review` record the
 A new session of the same card continues the item its earlier session claimed (a rework after a review, or
 the close): a `--claim` with a name sharing the `<item><card>` part before the colon records the new session
 name on the item, with no takeover and no lead reassignment; the self-review block still applies to every
-earlier session name of the item. pop, work and the dispatch plan (`backlog query --plan`) offer the rework and
-the close to the new session, which claims the item first (a continuation claim) before those steps; a review
-requested by a session other than the claimer (the team lead) records that session in `session_authors` too.
+earlier session name of the item (a continuation of an item without `session_authors`, claimed before the list
+existed, keeps the earlier holder in the list). pop, work and the dispatch plan (`backlog query --plan`) offer
+the rework and the close to the new session, which claims the item first (a continuation claim) before those
+steps; the lead's completed-team review-and-close in pop starts with the same claim, and `backlog team pop`
+records the continuation claim itself when an earlier session of the lead's card holds the team's work item. A
+review requested by a session other than the claimer (the team lead) records that session in `session_authors`
+too.
 
 Class options: the CLI has no class options (work or review): no `--classes`, no class profiles. The removed
 class fields stay out of the help texts, COMMANDS.md, README.md, templates and CHANGELOG.md; the negative test

@@ -501,9 +501,9 @@ Options:
       session, with a new name, may start the review (team session).
   --review {pass,changes}
       Record a review verdict; it needs --by and --comments (team session). Two review stages are enforced before
-      any close: first a Cody review - a Cody agent (a name starting with cody) in a fresh session, never the author
-      session that claimed the item (a fresh session of the same card may) - then an external review by codex or
-      claude on the same commit. A pass pins the item's current work commit: a pass on an older commit stops counting
+      any close: first a Cody review - a Cody agent (a name starting with cody, or a session name) in a fresh
+      session, never the author session that claimed the item (a fresh session of the same card may) - then an
+      external review by codex or claude on the same commit. A pass pins the item's current work commit: a pass on an older commit stops counting
       when the commit moves, and a changes verdict at either stage clears both stages and re-runs them. The output of
       a passing Cody review asks for the external review; the output of a passing external review asks for the close.
   --handoff DEPENDENT
@@ -897,10 +897,11 @@ Usage:
 A work item of a team is an item of this repository and branch (in a team session the ones it is bound to,
 TEAM_REPOSITORY and TEAM_BRANCH, as for every command) whose front matter team is the team's name and that has
 no stage (backlog update <item> --set-team <name> gives an item to a team; the items split from it carry a stage and are
-the members' work). When the lead holds an open work item of the team, the answer is continue with that item. Otherwise
-the command claims for the lead the team's first open, unclaimed work item in the work order (priority, then seq) whose
-claim backlog update --claim accepts (its dependencies are done, no work-in-progress limit is passed), and the answer
-is claim. The output is the action, the one instruction (refine and split the item with the team), the items not taken
+the members' work). When the lead holds an open work item of the team, the answer is continue with that item. When an
+earlier session of the lead's card holds it, the command records the continuation claim first - the new session name as
+claimed_by and in session_authors - and then answers continue. Otherwise the command claims for the lead the team's
+first open, unclaimed work item in the work order (priority, then seq) whose claim backlog update --claim accepts (its
+dependencies are done, no work-in-progress limit is passed), and the answer is claim. The output is the action, the one instruction (refine and split the item with the team), the items not taken
 with the reason, and the whole item: its front matter and its body. When there is no work item to take, the action is
 idle and the command exits with 3. Only the team lead runs it.
 

@@ -57,11 +57,22 @@ export async function run(argv) {
   const ours = f => strip(f.team || '') === a.team && !f.stage && OPEN.includes(f.status) && f.repository === own && f.branch === branch;
   const skipped = [];
   let action = 'idle'; let item = null;
-  // item 082: heldBy also matches the lead's earlier session of the same card (the continuation)
-  const held = work.find(i => heldBy(strip(i.fm.claimed_by || ''), agent));
-  if (held) { action = 'continue'; item = held.fm.phase; }
   // a refused claim is update's refusal (exit 1, '❌ <item>: <why>' on stdout); any other failure ends the command (Codex review of 056)
   const refused = r => r.status === 1 && /^❌ /m.test(r.stdout) && !/❌ backlog:/.test(r.stderr);
+  // item 082: heldBy also matches the lead's earlier session of the same card (the continuation): the command records the
+  // continuation claim (claimed_by, session_authors) before it continues; a refused claim keeps the earlier session as
+  // the holder, the reason goes to standard error
+  const held = work.find(i => heldBy(strip(i.fm.claimed_by || ''), agent));
+  if (held) {
+    action = 'continue'; item = held.fm.phase;
+    if (strip(held.fm.claimed_by || '') !== agent) {
+      const q = read(item);
+      if (q.status !== 0) return fail(q);
+      const c = self(['update', item, '--claim', agent], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, TEAM_BRANCH: branch });
+      if (c.status !== 0) { if (!refused(c)) return fail(c); process.stderr.write(`   the continuation claim was not recorded: ${last(c)}\n`); }
+      else if (c.stderr) process.stderr.write(c.stderr);
+    }
+  }
   for (const i of held ? [] : work.filter(x => !strip(x.fm.claimed_by || ''))) {
     const r = read(i.fm.phase);
     if (r.status !== 0) return fail(r);

@@ -129,8 +129,8 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     const claimFirst = holder && holder !== me ? `first claim it as ${me} (backlog update ${r.slug} --claim ${me}), then ` : '';
     return (teamDone({ r, fm }) && !['passed', 'changes-requested'].includes(fm.review_state) // item 039: the lead closes the work item when every item of its team is done
       ? { name: 'continue', r, f, say: team.needsReview(fm)
-        ? `every item of team ${fm.team} is done: have ${r.seq} reviewed (backlog update ${r.slug} --request-review any --note "<the items and their evidence>"), then close it after the pass`
-        : `every item of team ${fm.team} is done: close ${r.seq} (backlog update ${r.slug} --close --summary "<outcome>")` }
+        ? `${claimFirst}every item of team ${fm.team} is done: have ${r.seq} reviewed (backlog update ${r.slug} --request-review any --note "<the items and their evidence>"), then close it after the pass`
+        : `${claimFirst}every item of team ${fm.team} is done: close ${r.seq} (backlog update ${r.slug} --close --summary "<outcome>")` }
       : fm.review_state === 'passed'
       ? { name: 'continue', r, f, say: `${claimFirst}close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")` }
       : { name: 'continue', r, f, say: `you hold it: ${claimFirst}keep working and record each step in the item (backlog update ${r.slug} --append "..."), then ${team.needsReview(fm) ? 'write the reviewer handoff and --request-review' : 'close it with --close --summary'}${dod(fm)}` }); // query.py:212-213 (an item without review_refs closes without a review)

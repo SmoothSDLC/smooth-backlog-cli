@@ -6,7 +6,7 @@
 // read or written. Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
@@ -38,7 +38,9 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', HOME: f.user, ...env } };
+  // QWEN_CODE_SESSION_ID stays out: these tests pin the continuation rules, not the author-session rule
+  // (item 088), which a session id inherited from the running shell would apply to the session-name reviewers
+  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', HOME: f.user, QWEN_CODE_SESSION_ID: '', ...env } };
   if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
@@ -64,6 +66,24 @@ test('082: 082k0c:02 continues the item 082k0c:01 claimed (rework after review):
   assert.deepEqual(fm.session_authors, [A1, A2], 'every earlier session name stays on the item');
   // the continuing session keeps working on the item
   ok(f, ['update', s, '--append', 'CHUNK rework done', '--by', A2]);
+});
+
+test('082: a continuation of an item without session_authors keeps the earlier holder blocked', () => {
+  const f = fixture();
+  const s = teamItem(f, 'continuation of an older item');
+  ok(f, ['update', s, '--claim', A1]);
+  // an item claimed before session_authors existed: the list is not in the file
+  const file = join(f.folder, 'phases', `${s}.md`);
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
+  assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
+  ok(f, ['update', s, '--claim', A2]); // the continuation
+  const fm = itemFm(f, s);
+  assert.equal(fm.claimed_by, A2, 'the new session is recorded as the holder');
+  assert.deepEqual(fm.session_authors, [A1, A2], 'the earlier holder is kept in the list by the continuation');
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A2]);
+  const r = run(f, ['update', s, '--start-review', '--by', A1]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, new RegExp(`^❌ ${s}: ${A1}: the same session cannot review its own work; a new session may\\n$`));
 });
 
 test('082: 082k03:01 cannot take it over', () => {
@@ -162,4 +182,14 @@ test('082: a fresh session of the card is told to claim the item before it close
   assert.equal(w.action, 'continue', w.instruction);
   assert.ok(w.instruction.includes(`--claim ${A2}`), `the close instruction starts with the continuation claim: ${w.instruction}`);
   assert.ok(w.instruction.includes('--close --summary'), `and ends with the close: ${w.instruction}`);
+});
+
+test('082: the lead\'s completed-team review-and-close starts with the continuation claim', () => {
+  const f = fixture();
+  const s = teamItem(f, 'lead continues a completed team');
+  ok(f, ['update', s, '--claim', A1]); // the lead's earlier session holds the team's work item
+  const w = JSON.parse(run(f, ['pop', '--agent', A2, '--json'], { TEAM_LEAD: A2 }).stdout);
+  assert.equal(w.action, 'continue', w.instruction);
+  assert.ok(w.instruction.includes(`every item of team ${TEAM} is done`), `the completed-team steps: ${w.instruction}`);
+  assert.ok(w.instruction.includes(`--claim ${A2}`), `the completed-team steps start with the continuation claim: ${w.instruction}`);
 });

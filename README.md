@@ -98,7 +98,8 @@ In shared mode, a write to an item that somebody else changed after you last rea
 
 The self-review rule is per session, not per card: an agent name is a session name, so the session that claimed an
 item or asked for its review (recorded in `session_authors`) may not review it, and a new session of the same card
-may — it continues the item its earlier session claimed.
+may — it continues the item its earlier session claimed; a continuation of an item without the list (claimed before
+it existed) keeps the earlier holder in it.
 
 ## Command help
 

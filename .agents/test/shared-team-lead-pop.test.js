@@ -54,6 +54,17 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   assert.ok(text.stdout.startsWith(`continue ${late}\n`) && text.stdout.includes(`--- item ${late}: body ---\n`), text.stdout);
 });
 
+test('082: team pop records the continuation claim when the lead\'s earlier session holds the work item', () => {
+  const f = fixture();
+  const s = make(f, 'continuation work item'); ok(f, ['update', s, '--set-team', 't1']);
+  ok(f, ['query', '--phase', s, '--agent', '082k03:01']);
+  ok(f, ['update', s, '--claim', '082k03:01'], { TEAM_LEAD: '082k03:02' }); // the lead's earlier session holds it
+  const p = pop(f, { TEAM_LEAD: '082k03:02' }, '--team', 't1');
+  assert.deepEqual([p.action, p.item, p.status], ['continue', s, 0]);
+  assert.equal(fm(f, s).claimed_by, '082k03:02', 'the continuation records the new session as the holder');
+  assert.deepEqual(fm(f, s).session_authors, ['082k03:01', '082k03:02'], 'the earlier session stays in the list');
+});
+
 test('team pop: an item whose claim is refused is named and skipped; nothing left is idle with exit 3', () => {
   const f = fixture();
   const dep = make(f, 'open dependency');

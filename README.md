@@ -99,6 +99,13 @@ require an explicit publish or drop decision before another command can change t
 
 In shared mode, a write to an item that somebody else changed after you last read it is refused with exit code 5 (read it again, then retry); every write records `updated_by`. See [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode).
 
+An agent asks which items changed since its own last use with `backlog query --changed --agent <you>`: the reference
+point is the commit of the agent's own last write or its own `query --changed` (stated in every result, even an
+empty one), never a global timestamp, so a change made while the agent is idle still appears in the agent's next
+report and the agent's own reads never move it. The items the agent holds (its name in `claimed_by`, `reviewer` or
+`refiner`) are listed in a "held" section apart from the other changed items ("others"), and the result names the
+agents that use the backlog with their last-use time.
+
 The self-review rule is per session, not per card: an agent name is a session name, so the session that claimed an
 item or asked for its review (recorded in `session_authors`) may not review it, and a new session of the same card
 may — it continues the item its earlier session claimed; a continuation of an item without the list (claimed before

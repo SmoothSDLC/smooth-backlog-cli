@@ -586,6 +586,7 @@ Usage:
   backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
   backlog query --claimable | --reviewable | --blocked | --decisions [--agent <name>] [--roster <file>] [--scope branch|repo|all] [--json]
   backlog query --pop --agent <name> [--lead <name>] [--roster <file>] [--scope branch|repo|all] [--claim-now] [--json]
+  backlog query --changed [--agent <name>] [--json]
 
 Reads the backlog and never changes it, except that --pop with --claim-now claims an item. Without a view option it prints the full stack of the branch: the open
 items in queue order (priority 0 is next), then the finished ones. Items that are not on the queue because their file
@@ -620,6 +621,15 @@ Options:
       prints the latest 50 events of the backlog.
   --by-branch BY_BRANCH
       The items recorded on this branch.
+  --changed
+      Which items of this repository changed since your last use: your own write or your own --changed is
+      the reference (its commit and time, stated in every result, also when it is empty), never a global
+      timestamp, so a change made while you are idle still appears in your next report; your own reads
+      (query --phase, pop) do not move it. The first --changed prints "no earlier use: reference set now"
+      and sets the reference. The items you hold (your name in claimed_by, reviewer or refiner) are listed
+      in a "held" section; every other changed item goes to "others"; a file moved inside the folder (an
+      archive, a renumbering) is one "D" entry for its old name. The result also lists the agents that
+      use the backlog (those with a reference point in this clone) and their last-use time.
   --json
       Print machine-readable output.
   --all

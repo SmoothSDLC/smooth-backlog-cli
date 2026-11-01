@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `backlog query --changed [--agent <name>] [--json]` reports, for the calling agent, which items of the
+  repository folder changed since the agent's own last use. The reference point is the commit of the
+  agent's last write or its last `query --changed` (stored under a reserved key of the agent's views
+  record, stated in every result, even an empty one), never a global timestamp, so a change made while
+  the agent is idle still appears in the agent's next report; the agent's own reads (`query --phase`,
+  `pop`) do not move it. The first use prints "no earlier use: reference set now" and sets the
+  reference. The items the agent holds (its name in `claimed_by`, `reviewer` or `refiner`) are listed in
+  a "held" section apart from the other changed items ("others"); a file moved inside the folder (an
+  archive, a renumbering) is one "D" entry for its old name; the result also lists the agents that use
+  the backlog (those with a reference point in this clone) and their last-use time (item 027).
 - The shared backlog repository is a setting, not a built-in name: its clone URL is read from the environment
   variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url` key of `.smooth-backlog.json`; there is no
   built-in default. A shared-mode command that needs it refuses (exit 2, naming both the variable and the key)

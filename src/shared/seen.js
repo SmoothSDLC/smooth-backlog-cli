@@ -5,11 +5,11 @@
 import { spawnSync } from 'node:child_process';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { parse } from './frontmatter.js';
-import { repoId } from './store.js'; // a cycle (store.js imports this file): used only at run time
+import { now, repoId } from './store.js'; // a cycle (store.js imports this file): used only at run time
 
 export const STALE_EXIT = 5;
 let current; // the --by/--agent of the running command
@@ -70,7 +70,82 @@ export function recordWrites(folder, repo, agent, views, pairs = []) {
   const incidental = [...(operation.getStore()?.incidental.values() ?? [])].filter(v => v.agent === agent);
   const published = remapViews(folder, views, pairs);
   if (incidental.length || views.length) record(folder, repo, agent, [...remapViews(folder, incidental, pairs), ...published]);
+  setUse(homeOf(folder), agent); // item 027: a write is the agent's own use of the backlog: it moves its reference point
   return published;
+}
+
+// item 027: the agent's reference point - the commit of the agent's last write or its last
+// `query --changed`, under a reserved key of the views file. It has no '/', so every reader of
+// the per-item keys (<owner>/<name>/<slug>) ignores it. A read never moves it.
+const USE = '~use';
+export const lastUse = (home, agent) => read(home, agent)[USE] ?? null;
+export const setUse = (home, agent) => {
+  try {
+    const commit = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: home, encoding: 'utf8' }).stdout.trim();
+    if (!commit) return;
+    const all = read(home, agent);
+    all[USE] = { agent, at: now(), commit };
+    const file = viewsFile(home, agent);
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.${randomUUID()}.tmp`;
+    writeFileSync(tmp, JSON.stringify(all, null, 1), { mode: 0o600 });
+    renameSync(tmp, file);
+  } catch { /* unwritable .git: the agent simply has no reference point yet */ }
+};
+// The agents that have a reference point, read from the views files of this clone (name and
+// last-use time). Other clones' views are not visible here: the list is per clone.
+export function agentsUsing(home) {
+  const dir = join(home, '.git', 'smooth-backlog-cli-views');
+  let files;
+  try { files = readdirSync(dir); } catch { return []; }
+  const out = [];
+  for (const n of files.filter(x => x.endsWith('.json')).sort()) {
+    let v = null;
+    try { v = JSON.parse(readFileSync(join(dir, n), 'utf8'))[USE]; } catch { /* unreadable: not listed */ }
+    if (v && v.agent) out.push({ name: v.agent, last_use: v.at });
+  }
+  return out;
+}
+// item 027: the items of the caller's repository folder whose file changed between the agent's
+// reference commit and the current HEAD of the backlog clone: A added, M changed, D removed or
+// archived. A file moved inside the folder (an archive, a renumbering) is one D entry for its
+// old name; the item's author and time come from its new location (or its reference-commit
+// version when it is gone). Held: the agent's name in claimed_by, reviewer or refiner.
+export function changedSince(home, folder, repo, reference, agent) {
+  const r = spawnSync('git', ['diff', '--name-status', reference.commit, 'HEAD', '--', `${repo}/phases`, `${repo}/archive`], { cwd: home, encoding: 'utf8' });
+  const rows = r.status === 0
+    ? r.stdout.split('\n').filter(Boolean).map(l => { const [status, ...paths] = l.split('\t'); return { status, path: paths[0] }; })
+    : [];
+  const base = p => p.split('/').pop();
+  const rel = p => p.slice(repo.length + 1);
+  const added = new Map();
+  for (const x of rows) if (x.status === 'A') added.set(base(x.path), x.path);
+  const gone = new Set(rows.filter(x => x.status === 'D').map(x => base(x.path)));
+  const entries = [];
+  for (const x of rows) {
+    if (!['A', 'M', 'D'].includes(x.status)) continue;
+    const b = base(x.path);
+    if (x.status === 'A' && gone.has(b)) continue; // its D entry reports the move
+    let fm = {};
+    if (x.status === 'D') {
+      const moved = added.get(b);
+      if (moved) { try { fm = parse(readFileSync(join(folder, rel(moved)), 'utf8')).fm; } catch { /* gone: no author or time */ } }
+      else {
+        const v = spawnSync('git', ['show', `${reference.commit}:${x.path}`], { cwd: home, encoding: 'utf8' });
+        if (!v.status) fm = parse(v.stdout).fm;
+      }
+    } else {
+      try { fm = parse(readFileSync(join(folder, rel(x.path)), 'utf8')).fm; } catch { /* unreadable: no author or time */ }
+    }
+    entries.push({
+      slug: b.replace(/\.md$/, ''),
+      status: x.status,
+      updated_by: fm.updated_by ?? '',
+      updated: fm.updated ?? '',
+      held: fm.claimed_by === agent || fm.reviewer === agent || fm.refiner === agent,
+    });
+  }
+  return { held: entries.filter(e => e.held), others: entries.filter(e => !e.held) };
 }
 
 // Creation's slug/path adjustment also applies to moves, updates and incidental

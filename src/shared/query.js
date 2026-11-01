@@ -17,7 +17,7 @@ import { missingFields } from './lifecycle.js';
 import { SCOPES, teamView } from './views.js';
 import { wipView } from './wip.js';
 
-const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'pop', 'plan', 'claim-now', 'headless', 'wip'];
+const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'pop', 'plan', 'claim-now', 'headless', 'wip', 'changed'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
 const ACTIONABLE = ['pending', 'in_progress'];
 const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
@@ -114,6 +114,31 @@ a HARD FAILURE. Before you respond to the user you MUST, in order:
 Do not pick for the user. Do not proceed past the brief without their answer.
 ====================== END-MANDATE — produce the brief now ======================`;
 
+// item 027: which items of this repository folder changed since the calling agent's last use. The
+// reference is the agent's own ~use record - its last write or its last --changed, never a global
+// timestamp - so a change made while the agent is idle still appears in the agent's next report.
+// After the report the reference moves to the current HEAD. The result names the reference (also
+// when it is empty) and the agents that use the backlog.
+function changedReport(home, folder, repo, a) {
+  const agent = a.agent || seen.actor();
+  const reference = seen.lastUse(home, agent);
+  const report = reference ? seen.changedSince(home, folder, repo, reference, agent) : { held: [], others: [] };
+  seen.setUse(home, agent);
+  const ref = reference ?? seen.lastUse(home, agent);
+  const referenceOut = ref ? { commit: ref.commit, at: ref.at } : null;
+  const out = { agent, reference: referenceOut, held: report.held, others: report.others, agents: seen.agentsUsing(home) };
+  if (a.json) { dump(out); return 0; }
+  if (!reference) say('no earlier use: reference set now');
+  say(`reference: ${ref.commit} at ${ref.at}`);
+  if (reference && !report.held.length && !report.others.length) say('no changes since the last use');
+  const line = x => `  changed: ${x.slug} (${x.status}) by ${x.updated_by || 'nobody'} at ${x.updated || 'an unknown time'}`;
+  if (report.held.length) { say('held:'); for (const x of report.held) say(line(x)); }
+  if (report.others.length) { say('others:'); for (const x of report.others) say(line(x)); }
+  say('agents using the backlog:');
+  for (const x of out.agents) say(`  ${x.name} last used ${x.last_use}`);
+  return 0;
+}
+
 // query.py:361-625
 export const run = argv => store.cloneLocked(store.resolveHome().home, () => query(argv)); // a read that pulls waits for a writer of the clone
 async function query(argv) {
@@ -141,6 +166,7 @@ async function query(argv) {
   }
   let folder;
   try { folder = store.folder(home, repo); } catch (e) { return die(e.message); } // TEAM_REPOSITORY=../x passes the owner/name pattern; the folder must stay inside the home
+  if (a.changed) return changedReport(home, folder, repo, a); // item 027: what changed since the calling agent's last use
   if (!existsSync(join(folder, 'backlog.db'))) {
     say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet (no folder ${folder})`);
     return 0;

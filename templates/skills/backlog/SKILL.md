@@ -95,6 +95,14 @@ sees and changes the backlog only through them.
   review, it marks the item as yours (claim, refinement start or review start) and prints the whole item. `backlog query --phase <item> --agent <you>`
   reads one item again before you change it. `backlog update <item> --claim <you>` takes an offered item yourself;
   `--release <you>` gives it back.
+- [ ] What changed since your last use: `backlog query --changed --agent <you>` reports which items of this
+  repository changed since your own last use — your own write or your own `--changed` is the reference (its commit
+  and time are stated in every result), never a global timestamp, so a change made while you are idle still appears
+  in your next report, and your own reads (`query --phase`, `pop`) do not move it; the first `--changed` prints
+  "no earlier use: reference set now" and sets it. The items you hold (your name in `claimed_by`, `reviewer` or
+  `refiner`) are listed in a "held" section apart from the other changed items ("others"), so you can ignore
+  changes to items you are not working on; the result also names the agents that use the backlog with their
+  last-use time.
 - [ ] Refine: `backlog update <item> --refine-start --by <you>`, set what is missing (`--set-review-refs` with
   the review-documents repository's review documents, `--set-estimate`, `--set-depends-on`, `--append` a definition of done), then
   `--refine-done --by <you> --note "<what you refined>"`.

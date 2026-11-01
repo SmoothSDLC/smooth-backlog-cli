@@ -48,12 +48,12 @@ test('--use-backlog-repo also takes --use-backlog-repo=<path>', t => {
   assert.equal(read(modeFile(f.tmp)), '{"mode":"shared"}');
 });
 
-test('--use-backlog-repo refuses a clone with another origin: exit 2, die message on stderr, no record written', t => {
+test('--use-backlog-repo refuses a clone with another origin: exit 2, die message naming the configured value on stderr, no record written', t => {
   const f = pair(t);
   const other = consumer(f.tmp, 'Other', 'else', 'main');
   const r = cli(['--use-backlog-repo', other], { cwd: f.cons, tmp: f.tmp });
   assert.equal(r.status, 2);
-  assert.match(r.stderr, /^❌ backlog: .* has origin 'Other\/else'; expected acme\/backlog-repo\n$/);
+  assert.match(r.stderr, /^❌ backlog: .* has origin 'Other\/else'; expected acme\/backlog-repo \(the setting is 'https:\/\/example\.com\/acme\/backlog-repo\.git'\)\n$/);
   assert.equal(read(recordFile(f.tmp)), null);
   assert.equal(read(modeFile(f.tmp)), null);
 });

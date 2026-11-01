@@ -11,25 +11,13 @@ import { safePath } from '../storage.js';
 
 // owner/name from a git URL or path (lib_db.py:58-64): https://host/Owner/name(.git),
 // git@host:Owner/name(.git), /srv/Owner/name.git. The last two parts win, so a
-// token in the URL changes nothing; fewer than two parts -> "". A scheme:// URL
-// needs two path segments after the authority (host[:port]): the scheme, the host
-// and a port are not a repository, so https://host, https://host/one and
-// https://host:443/one name no owner/name (item 091).
+// token in the URL changes nothing; fewer than two parts -> "". The setting's value
+// and the clone's origin are parsed by this one function (item 091), so the two
+// sides of the origin check compare the same way.
 export function repoIdFromUrl(url) {
   // user-info (user:token@) is stripped here, at the one place origins are parsed: no identity, log or error carries it
   let u = String(url ?? '').trim().replace(/\/+$/, '').replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, '$1').replace(/^[^/\\:@]*:[^/\\@]*@/, '');
   if (u.endsWith('.git')) u = u.slice(0, -4);
-  const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.exec(u);
-  if (scheme) {
-    // the authority is host[:port] (user-info already stripped): split it from the path at the
-    // first separator - a port in the authority is not a path segment
-    const rest = u.slice(scheme[0].length);
-    const sep = rest.search(/[/\\]/);
-    // a non-empty authority plus two path segments (owner + name)
-    if (sep <= 0) return '';
-    const pathParts = rest.slice(sep + 1).split(/[/\\]/).filter(Boolean);
-    return pathParts.length >= 2 ? pathParts.slice(-2).join('/') : '';
-  }
   // Also splits on \ (beyond the oracle) so a Windows local-path origin (C:\srv\Owner\name.git) works.
   const parts = u.split(/[/\\:]/).filter(Boolean);
   return parts.length >= 2 ? parts.slice(-2).join('/') : '';
@@ -48,7 +36,9 @@ export function repoIdFromUrl(url) {
 // Windows paths compare case-insensitively.
 const realPath = p => { const r = realpathSync.native(p); return process.platform === 'win32' ? r.toLowerCase() : r; };
 
-export async function validateHome(path, expected, defaultHome) {
+// setting is the configured clone URL (item 091); when given, the origin-mismatch
+// error names it, so the failure points at the value that was checked.
+export async function validateHome(path, expected, defaultHome, setting) {
   if (!isAbsolute(path)) throw new Error(`${path} is not an absolute path; use the absolute path to a clone of ${expected}`);
   if (!existsSync(path)) throw new Error(`BACKLOG_HOME=${path} does not exist; expected a clone of ${expected} on main (unset BACKLOG_HOME to use ${defaultHome})`);
   const top = (await git(['rev-parse', '--show-toplevel'], path)).stdout.trim();
@@ -59,7 +49,8 @@ export async function validateHome(path, expected, defaultHome) {
   await safePath(parent, home);
   const origin = repoIdFromUrl((await git(['remote', 'get-url', 'origin'], path)).stdout);
   // A missing origin is a refusal: the empty id of a clone without an origin must not compare equal to an empty expected id (item 091)
-  if (!origin || origin.toLowerCase() !== String(expected).toLowerCase()) throw new Error(`${path} has origin '${origin || 'none'}'; expected ${expected}`);
+  if (!origin || origin.toLowerCase() !== String(expected).toLowerCase())
+    throw new Error(`${path} has origin '${origin || 'none'}'; expected ${expected}${setting ? ` (the setting is '${setting}')` : ''}`);
   const branch = (await git(['branch', '--show-current'], path)).stdout.trim();
   if (branch !== 'main') throw new Error(`${path} is on branch '${branch || 'detached HEAD'}'; the backlog repository stays on main`);
   return home; // the resolved path, as set_home.py records it

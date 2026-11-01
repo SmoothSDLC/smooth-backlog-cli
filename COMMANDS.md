@@ -1073,17 +1073,15 @@ Run inside the git repository to set up; works in local and shared mode. The com
 
 The shared backlog repository's clone URL is a setting: the environment variable BACKLOG_ORIGIN_URL first, then the
 backlog_origin_url key of .smooth-backlog.json; there is no built-in default. A shared-mode command that needs it
-refuses (naming both sources) when it is in neither, and refuses a value that is not one of the accepted forms
-(https://host[:port]/owner/name, also http, ssh://[user@]host[:port]/owner/name, user@host:owner/name, or an
-absolute local path ending in /owner/name; owner and name are each one segment of letters, digits, dot, underscore
-or dash, neither '.' nor '..', an optional trailing .git on the name); the origin check refuses a clone
-with no origin. Every shared-mode command finds the
-backlog repository in this
-order: BACKLOG_HOME, .smooth-backlog.json, the per-user record of --use-backlog-repo, ~/git/<name> (the folder
-names above derive from the setting; a neutral name without it). When none is there the command names backlog setup.
-The per-user record of --use-backlog-repo is the file <name>/home under the config folder ($XDG_CONFIG_HOME, else
-~/.config); a record written before the setting existed keeps working when the setting names the same repository -
-the folder name is unchanged, so no migration is needed.
+refuses (naming both sources) when it is in neither. The origin check uses the configured value: a clone whose
+origin is a different repository, or has no origin, is refused, and the error names the configured value; a setup
+clone that cannot be made (the repository cannot be cloned or reached) is refused the same way (exit 3, nothing
+changed). Every shared-mode command finds the backlog repository in this order: BACKLOG_HOME, .smooth-backlog.json,
+the per-user record of --use-backlog-repo, ~/git/<name> (the folder names derive from the setting; a neutral name
+without it). When none is there the command names backlog setup. The per-user record of --use-backlog-repo is the
+file <name>/home under the config folder ($XDG_CONFIG_HOME, else ~/.config); a record written before the setting
+existed keeps working when the setting names the same repository - the folder name is unchanged, so no migration is
+needed.
 
 Options:
   --ask

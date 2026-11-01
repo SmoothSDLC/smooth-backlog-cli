@@ -7,7 +7,7 @@ import { assertInside, redact, validateHome } from './safety.js';
 import { atomicWrite } from '../storage.js';
 import { cloneLocked, resolveHome, setMode } from './store.js';
 import { pull } from './sync.js';
-import { ORIGIN_INVALID, ORIGIN_REFUSAL, originFolderName, originSetting } from './setup.js';
+import { ORIGIN_REFUSAL, originFolderName, originSetting } from './setup.js';
 
 // command -> [module relative to this file, ...arguments put in front of the user's argv]
 export const TABLE = {
@@ -23,9 +23,8 @@ export async function switchMode({ backlogRepo, rest = [] }) {
   if (backlogRepo === undefined) { setMode('local'); out.write('✅ local mode: the repo-local .backlog store is in use\n'); return 0; }
   const setting = originSetting();
   if (!setting.url) return die(ORIGIN_REFUSAL); // item 091: no built-in name; the refusal names both sources, before anything is touched
-  if (!setting.id) return die(ORIGIN_INVALID(setting.url)); // item 091: a setting that names no repository is refused, before the origin check
   let home;
-  try { home = await validateHome(resolve(backlogRepo), setting.id, `~/git/${originFolderName()}`); } catch (error) { return die(error.message); }
+  try { home = await validateHome(resolve(backlogRepo), setting.id, `~/git/${originFolderName()}`, setting.url); } catch (error) { return die(error.message); }
   try { await cloneLocked(home, () => pull(home)); } catch (error) { return die(error.message, error.exitCode ?? 2); } // lock, abort, exit 3 and redaction are sync.js's
   const config = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
   const record = join(config, originFolderName(), 'home');
@@ -54,9 +53,8 @@ export async function run(command, argv, { table = TABLE, help } = {}) {
   // item 091: the setting refusal comes before the missing-clone question - the question would name a default path the
   // setting has not chosen; the refusal names both sources, before the command runs
   if (!setting.url) return die(ORIGIN_REFUSAL);
-  if (!setting.id) return die(ORIGIN_INVALID(setting.url)); // item 091: a setting that names no repository is refused, before the missing-clone question and the origin check
   if (ask && !process.env.BACKLOG_HOME) return die(ask.text, ask.code);
-  try { await validateHome(home, setting.id, `~/git/${originFolderName()}`); } catch (error) { return die(error.message); }
+  try { await validateHome(home, setting.id, `~/git/${originFolderName()}`, setting.url); } catch (error) { return die(error.message); }
   const [spec, ...lead] = table[command];
   const module = await load(spec);
   if (!module) return die(`not built yet: ${command}`);

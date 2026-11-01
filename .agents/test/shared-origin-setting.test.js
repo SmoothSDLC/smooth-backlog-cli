@@ -1,7 +1,8 @@
 // Item 091: the shared backlog repository is a setting (the environment variable BACKLOG_ORIGIN_URL first, then the
-// backlog_origin_url key of .smooth-backlog.json), with no built-in name. The item's four required behaviours:
-// the variable wins over the config key; the config key works alone; neither set refuses, naming both, touching
-// nothing; the origin check uses the configured value.
+// backlog_origin_url key of .smooth-backlog.json), with no built-in name. The item's required behaviours: the
+// variable wins over the config key; the config key works alone; neither set refuses, naming both, touching
+// nothing; the origin check uses the configured value, and a clone failure says so - the errors name the configured
+// value when the repository cannot be cloned or reached, or a copy's origin is a different repository.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -9,7 +10,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { originSetting, settingId } from '../../src/shared/setup.js';
 import { cli, consumer, env as fixtureEnv, sharedBacklog } from './shared-fixtures.js';
 
 const KEY = 'https://example.com/acme/backlog-repo.git'; // the fixture clone's origin, as a clone URL
@@ -78,11 +78,12 @@ test('neither set: backlog setup refuses before it touches anything (no clone, n
   assert.ok(!existsSync(join(app, '.claude', 'skills')), 'no skill copy was deployed');
 });
 
-test('the origin check uses the configured value: a configured value different from the clone is refused, naming both', t => {
+test('the origin check uses the configured value: a configured value different from the clone is refused, naming the clone\u2019s origin, the expected repository and the configured value', t => {
   const f = fixture(t);
   const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: OTHER } });
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.match(r.stderr, /has origin 'acme\/backlog-repo'; expected other\/else/);
+  assert.match(r.stderr, /the setting is 'https:\/\/example\.com\/other\/else\.git'/);
 });
 
 test('setup keeps the config backlog_origin_url: a URL that lives only in the key survives the write, and the later shared command works', t => {
@@ -123,147 +124,19 @@ test('neither set and no clone at the default path: the setting refusal comes fi
   assert.doesNotMatch(r.stderr, /backlog repository is not at/);
 });
 
-test('an invalid setting: a clone URL without an owner/name is refused, naming both sources, and touches nothing', t => {
-  const f = fixture(t);
-  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: 'foo' } });
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /does not name a repository/);
-  assert.match(r.stderr, /BACKLOG_ORIGIN_URL/);
-  assert.match(r.stderr, /backlog_origin_url/);
-  assert.match(r.stderr, /\.smooth-backlog\.json/);
-  assert.equal(r.stdout, '', 'no queue is printed');
-});
-
-test('an invalid setting and a clone with no origin: the shared-mode command is refused, not run against the wrong repository', t => {
-  const f = fixture(t);
-  const removed = spawnSync('git', ['-C', f.home, 'remote', 'remove', 'origin'], { encoding: 'utf8' });
-  assert.equal(removed.status, 0, removed.stderr);
-  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: 'foo' } });
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /does not name a repository/);
-  assert.equal(r.stdout, '', 'no queue is printed');
-});
-
-test('an invalid setting: backlog setup refuses before it touches anything (no clone, no parent folder, no config, no mode change, no skill copy)', t => {
+test('the repository cannot be cloned or reached: setup says so, naming the configured value, and touches nothing (exit 3)', t => {
   const f = fixture(t);
   const app = consumer(f.d, 'acme', 'app', 'main');
   mkdirSync(join(app, '.claude'));
   const modeFile = join(f.d, 'config', 'smooth-backlog-cli', 'mode.json');
   const modeBefore = readFileSync(modeFile, 'utf8');
-  const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: 'foo' } });
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /does not name a repository/);
-  assert.ok(!existsSync(join(f.d, 'user')), 'no clone or parent folder was created');
-  assert.ok(!existsSync(join(app, '.smooth-backlog.json')), 'no config was written');
+  for (const url of [join(f.d, 'origins', 'acme', 'missing.git'), 'https://127.0.0.1:1/acme/backlog-repo']) {
+    const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: url } });
+    assert.equal(r.status, 3, `${url}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /could not clone/);
+    assert.match(r.stderr, new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${url}: the error names the configured value`);
+  }
   assert.equal(readFileSync(modeFile, 'utf8'), modeBefore, 'shared mode was not switched on');
+  assert.ok(!existsSync(join(app, '.smooth-backlog.json')), 'no config was written');
   assert.ok(!existsSync(join(app, '.claude', 'skills')), 'no skill copy was deployed');
-});
-
-// item 091 round 4: a scheme URL needs two path segments after the host - the scheme and the host are not a
-// repository, and a scheme URL with one path segment names the host as the owner
-const MALFORMED = ['https://example.com', 'https://example.com/acme'];
-
-test('a malformed setting: a scheme URL without an owner/name path is refused, naming both sources, and touches nothing', t => {
-  const f = fixture(t);
-  for (const url of MALFORMED) {
-    const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: url } });
-    assert.equal(r.status, 2, `${url}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stderr, /does not name a repository/, url);
-    assert.match(r.stderr, /BACKLOG_ORIGIN_URL/, url);
-    assert.match(r.stderr, /backlog_origin_url/, url);
-    assert.match(r.stderr, /\.smooth-backlog\.json/, url);
-    assert.equal(r.stdout, '', `${url}: no queue is printed`);
-  }
-});
-
-test('a malformed setting: backlog setup refuses before it touches anything (no clone, no parent folder, no config, no mode change, no skill copy)', t => {
-  const f = fixture(t);
-  const app = consumer(f.d, 'acme', 'app', 'main');
-  mkdirSync(join(app, '.claude'));
-  const modeFile = join(f.d, 'config', 'smooth-backlog-cli', 'mode.json');
-  const modeBefore = readFileSync(modeFile, 'utf8');
-  for (const url of MALFORMED) {
-    const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: url } });
-    assert.equal(r.status, 2, `${url}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stderr, /does not name a repository/, url);
-    assert.ok(!existsSync(join(f.d, 'user')), `${url}: no clone or parent folder was created`);
-    assert.ok(!existsSync(join(app, '.smooth-backlog.json')), `${url}: no config was written`);
-    assert.equal(readFileSync(modeFile, 'utf8'), modeBefore, `${url}: shared mode was not switched on`);
-    assert.ok(!existsSync(join(app, '.claude', 'skills')), `${url}: no skill copy was deployed`);
-  }
-});
-
-// item 091 round 5: a scheme URL with a port - the port is part of the authority (host[:port]), not a path segment
-const PORT_MALFORMED = ['https://example.com:443/acme'];
-
-test('a malformed setting with a port: a scheme URL with a port and one path segment is refused, naming both sources, and touches nothing', t => {
-  const f = fixture(t);
-  for (const url of PORT_MALFORMED) {
-    const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: url } });
-    assert.equal(r.status, 2, `${url}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stderr, /does not name a repository/, url);
-    assert.match(r.stderr, /BACKLOG_ORIGIN_URL/, url);
-    assert.match(r.stderr, /backlog_origin_url/, url);
-    assert.match(r.stderr, /\.smooth-backlog\.json/, url);
-    assert.equal(r.stdout, '', `${url}: no queue is printed`);
-  }
-});
-
-test('a malformed setting with a port: backlog setup refuses before it touches anything (no clone, no parent folder, no config, no mode change, no skill copy)', t => {
-  const f = fixture(t);
-  const app = consumer(f.d, 'acme', 'app', 'main');
-  mkdirSync(join(app, '.claude'));
-  const modeFile = join(f.d, 'config', 'smooth-backlog-cli', 'mode.json');
-  const modeBefore = readFileSync(modeFile, 'utf8');
-  for (const url of PORT_MALFORMED) {
-    const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: url } });
-    assert.equal(r.status, 2, `${url}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stderr, /does not name a repository/, url);
-    assert.ok(!existsSync(join(f.d, 'user')), `${url}: no clone or parent folder was created`);
-    assert.ok(!existsSync(join(app, '.smooth-backlog.json')), `${url}: no config was written`);
-    assert.equal(readFileSync(modeFile, 'utf8'), modeBefore, `${url}: shared mode was not switched on`);
-    assert.ok(!existsSync(join(app, '.claude', 'skills')), `${url}: no skill copy was deployed`);
-  }
-});
-
-// item 091 round 7 (the lead's ruling): the setting is checked by an ALLOW list at the trust boundary, not by
-// stripping and splitting - every review round's malformed value is refused, and each accepted whole-string
-// form yields its owner/name and folder name.
-test('the setting allow-list: every malformed value from the review rounds is refused, and each accepted form yields its owner/name and folder name', () => {
-  const malformed = [
-    'foo',                              // round 3: no owner/name at all
-    'https://example.com',              // round 4: a bare host
-    'https://example.com/acme',         // round 4: one path segment
-    'https://example.com:443',          // round 5: a bare host with a port
-    'https://example.com:443/acme',     // round 5: a port and one path segment
-    'git@host:acme',                    // round 6: the scp form with no name
-    'acme//repo',                       // round 6: an empty segment
-    'acme/..',                          // round 6: a trailing ..
-    'https://example.com:abcd/acme/repo', // round 6: a non-numeric port
-    'https://example.com/acme/repo?ref=main', // round 6: a query
-    'https://example.com/acme/repo#anchor',   // round 6: a fragment
-  ];
-  for (const url of malformed) {
-    assert.equal(settingId(url), '', url);
-  }
-  const accepted = [
-    ['https://example.com/acme/repo', 'acme/repo', 'repo'],
-    ['http://example.com:8080/acme/site', 'acme/site', 'site'],
-    ['ssh://git@example.com:2222/acme/repo.git', 'acme/repo', 'repo'],
-    ['git@example.com:acme/repo', 'acme/repo', 'repo'],
-    ['/srv/git/acme/repo.git', 'acme/repo', 'repo'],
-  ];
-  for (const [url, id, folder] of accepted) {
-    assert.equal(settingId(url), id, url);
-    // the setting's wiring: originSetting uses the allow-list for the SETTING, and the folder name is the name part
-    process.env.BACKLOG_ORIGIN_URL = url;
-    try {
-      const s = originSetting();
-      assert.equal(s.url, url, url);
-      assert.equal(s.id, id, url);
-      assert.equal(s.name, folder, url);
-    } finally {
-      delete process.env.BACKLOG_ORIGIN_URL;
-    }
-  }
 });

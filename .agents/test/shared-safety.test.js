@@ -48,22 +48,6 @@ test('repoIdFromUrl: https, scp-style and local-path URLs', () => {
   assert.equal(repoIdFromUrl(''), '');
   assert.equal(repoIdFromUrl(null), '');
   assert.equal(repoIdFromUrl(undefined), '');
-  // a scheme:// URL: the scheme and the host are not a repository - two path segments after the host are required
-  // (item 091: a malformed setting must be refused, not read as owner/name)
-  assert.equal(repoIdFromUrl('https://example.com'), '');
-  assert.equal(repoIdFromUrl('https://example.com/acme'), '');
-  assert.equal(repoIdFromUrl('https://github.com/acme'), '');
-});
-
-test('repoIdFromUrl: a port in the authority of a scheme URL is not a path segment (item 091)', () => {
-  // a port plus one path segment names no owner/name - the port is part of the authority, not the path
-  assert.equal(repoIdFromUrl('https://example.com:443/acme'), '');
-  assert.equal(repoIdFromUrl('ssh://git@example.com:2222/acme'), '');
-  assert.equal(repoIdFromUrl('https://example.com:443'), '');
-  // a port with two path segments still names the repository
-  assert.equal(repoIdFromUrl('https://example.com:443/acme/backlog-repo'), 'acme/backlog-repo');
-  assert.equal(repoIdFromUrl('https://example.com:443/acme/backlog-repo.git'), 'acme/backlog-repo');
-  assert.equal(repoIdFromUrl('ssh://git@example.com:2222/acme/backlog-repo.git'), 'acme/backlog-repo');
 });
 
 test('slugify: lowercase, runs of non-alphanumerics to one dash, no / or .., fallback phase', () => {
@@ -136,10 +120,13 @@ test('validateHome: a symlinked home is refused (item: no symlink on the path, v
   await assert.rejects(validateHome(link, ID, DFLT), /Symlink destination is unsupported/);
 });
 
-test('validateHome: a home with another origin is refused', async () => {
+test('validateHome: a home with another origin is refused, and the error names the configured value when the setting is given', async () => {
   const d = tmp(test);
   const other = consumer(d, 'Acme', 'widgets');
   await assert.rejects(validateHome(other, ID, DFLT), /has origin 'Acme\/widgets'; expected acme\/backlog-repo/);
+  const setting = `https://example.com/${BACKLOG_OWNER}/${BACKLOG_NAME}.git`;
+  await assert.rejects(validateHome(other, ID, DFLT, setting),
+    new RegExp(`has origin 'Acme/widgets'; expected ${ID} \\(the setting is '${setting}'\\)`));
 });
 
 test('validateHome: a home with no origin is refused when the expected id is empty (two empty ids are not equal)', async () => {

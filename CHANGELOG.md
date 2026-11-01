@@ -22,11 +22,10 @@
   missing-clone question, so a command with no clone at the default path and the setting in neither source is
   refused by naming the setting, not the neutral path; the per-user record of `--use-backlog-repo` is the file
   `<name>/home` under the config folder - a record written before the setting existed keeps working when the
-  setting names the same repository, with no migration; a setting value that is not one of the accepted forms
-  (https://host[:port]/owner/name, also http, ssh://[user@]host[:port]/owner/name, user@host:owner/name, or an
-  absolute local path ending in /owner/name; owner and name are each one segment of letters, digits, dot,
-  underscore or dash, neither '.' nor '..', an optional trailing .git on the name) is refused the same way, and
-  the origin check refuses a clone with no origin (item 091).
+  setting names the same repository, with no migration. The origin check uses the configured value: a clone whose
+  origin is a different repository, or has no origin, is refused, and the error names the configured value; a
+  setup clone that cannot be made (the repository cannot be cloned or reached) is refused the same way (exit 3,
+  nothing changed) (item 091).
 - Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
   agent in a fresh session, never the author session that claimed the item - the claim's session name, never the
   team name - a fresh session of the same card, or of the team, may),

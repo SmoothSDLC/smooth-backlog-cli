@@ -106,3 +106,31 @@ test('082: an item without session names keeps the old agent-name rule', () => {
   assert.equal(fm.review_state, 'passed');
   assert.deepEqual(fm.session_authors, ['cody-card1']);
 });
+
+test('082: the lead requests the review of a claimed item: its session is recorded and it cannot review its own request', () => {
+  const f = fixture();
+  const s = make(f);
+  ok(f, ['update', s, '--claim', A1]);
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'lead']); // a session other than the claimer asks
+  const fm = itemFm(f, s);
+  assert.equal(fm.review_author, 'lead', 'the one who asked is recorded, not the claimer');
+  assert.deepEqual(fm.session_authors, [A1, 'lead'], 'the claimer and the requester are both recorded');
+  no(f, ['update', s, '--start-review', '--by', 'lead'], `lead: the same session cannot review its own work; a new session may`);
+  no(f, ['update', s, '--review', 'pass', '--by', 'lead', '--comments', 'fine per references/review/code.md'], `lead: the same session cannot review its own work; a new session may`);
+  // a new session of the card may review the request
+  ok(f, ['update', s, '--start-review', '--by', A2]);
+  ok(f, ['update', s, '--review', 'pass', '--by', A2, '--comments', 'fine per references/review/code.md']);
+  assert.equal(itemFm(f, s).review_state, 'passed');
+});
+
+test('082: query --plan offers the requested review to the new session of the card, never to the asking session', () => {
+  const f = fixture();
+  const s = setup(f); // A1 claims and asks
+  const roster = join(f.t, 'roster.json');
+  writeFileSync(roster, JSON.stringify({ [A2]: {}, [B1]: {}, [A1]: {} }));
+  const out = run(f, ['query', '--plan', '--roster', roster]).stdout;
+  const line = out.split('\n').find(l => l.includes(`review ${s}`));
+  assert.ok(line, `the plan offers the review: ${out}`);
+  assert.ok(line.startsWith(`${A2}: review ${s}`), `offered to the first session that is not an authoring one: ${line}`);
+  assert.ok(!out.split('\n').some(l => l.startsWith(`${A1}: review ${s}`)), 'never offered to the asking session');
+});

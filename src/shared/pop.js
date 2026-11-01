@@ -121,13 +121,20 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   // every open item of the team on this branch, incomplete ones included (a split child before its refinement is open work)
   const teamDone = ({ r, fm }) => lead && fm.team && !busy.length && !here.some(x => x.r.slug !== r.slug && x.fm.team === fm.team);
-  const cont = ({ r, fm, f }) => (teamDone({ r, fm }) && !['passed', 'changes-requested'].includes(fm.review_state) // item 039: the lead closes the work item when every item of its team is done
-    ? { name: 'continue', r, f, say: team.needsReview(fm)
-      ? `every item of team ${fm.team} is done: have ${r.seq} reviewed (backlog update ${r.slug} --request-review any --note "<the items and their evidence>"), then close it after the pass`
-      : `every item of team ${fm.team} is done: close ${r.seq} (backlog update ${r.slug} --close --summary "<outcome>")` }
-    : fm.review_state === 'passed'
-    ? { name: 'continue', r, f, say: `close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")` }
-    : { name: 'continue', r, f, say: `you hold it: keep working and record each step in the item (backlog update ${r.slug} --append "..."), then ${team.needsReview(fm) ? 'write the reviewer handoff and --request-review' : 'close it with --close --summary'}${dod(fm)}` }); // query.py:212-213 (an item without review_refs closes without a review)
+  // item 082: the item is mine through an earlier session of the same card when it is held but not named by
+  // me - the new session claims the item first (the continuation); the close and the request-review run as
+  // the claimer, so the claim comes first
+  const cont = ({ r, fm, f }) => {
+    const holder = fm.claimed_by || '';
+    const claimFirst = holder && holder !== me ? `first claim it as ${me} (backlog update ${r.slug} --claim ${me}), then ` : '';
+    return (teamDone({ r, fm }) && !['passed', 'changes-requested'].includes(fm.review_state) // item 039: the lead closes the work item when every item of its team is done
+      ? { name: 'continue', r, f, say: team.needsReview(fm)
+        ? `every item of team ${fm.team} is done: have ${r.seq} reviewed (backlog update ${r.slug} --request-review any --note "<the items and their evidence>"), then close it after the pass`
+        : `every item of team ${fm.team} is done: close ${r.seq} (backlog update ${r.slug} --close --summary "<outcome>")` }
+      : fm.review_state === 'passed'
+      ? { name: 'continue', r, f, say: `${claimFirst}close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")` }
+      : { name: 'continue', r, f, say: `you hold it: ${claimFirst}keep working and record each step in the item (backlog update ${r.slug} --append "..."), then ${team.needsReview(fm) ? 'write the reviewer handoff and --request-review' : 'close it with --close --summary'}${dod(fm)}` }); // query.py:212-213 (an item without review_refs closes without a review)
+  };
   const pick = (...states) => mine.find(({ fm }) => states.includes(fm.review_state ?? null));
   if (!act) { const x = pick(null, '', 'none'); if (x) act = cont(x); }
   if (!act) {
@@ -258,13 +265,17 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
     out.push({ member: m, action, item: r.slug, seq: r.seq, instruction: say, reason, key: `${m} ${action} ${r.seq}${key}` });
   };
   for (const { r, fm } of rows) {
-    const m = fm.claimed_by;
-    if (!members.includes(m) || busy.has(m) || fm.wait_on || !team.isReady(fm)) continue; // nothing before stage ready (036)
+    const holder = fm.claimed_by || '';
+    // item 082: the holder's card may be in the roster as a new session - the exact holder first, then a
+    // continuation; the new session claims the item before the close or the request-review can run as it
+    const m = members.includes(holder) ? holder : (holder ? members.find(x => team.sameCard(x, holder)) : '');
+    if (!m || busy.has(m) || fm.wait_on || !team.isReady(fm)) continue; // nothing before stage ready (036)
     if (held[m].some(h => !h.fm.claimed_by && h.fm.refiner === m)) continue; // a refinement in progress comes first (spec section 5)
+    const claimFirst = m !== holder ? `first claim it as ${m} (backlog update ${r.slug} --claim ${m}), then ` : '';
     if (fm.review_state === 'changes-requested') {
-      give(m, 'respond', r, `the review by ${fm.reviewer || 'the reviewer'} asked for changes (${fm.reviewed_at || 'time not recorded'}): read its findings in the item, fix them, record each step (backlog update ${r.slug} --append "..."), then backlog update ${r.slug} --request-review any --note "<what changed>"`,
+      give(m, 'respond', r, `the review by ${fm.reviewer || 'the reviewer'} asked for changes (${fm.reviewed_at || 'time not recorded'}): ${claimFirst}read its findings in the item, fix them, record each step (backlog update ${r.slug} --append "..."), then backlog update ${r.slug} --request-review any --note "<what changed>"`,
         'claimer', fm.reviewed_at ? ` ${fm.reviewed_at}` : '');
-    } else if (fm.review_state === 'passed') give(m, 'close', r, `close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")`, 'claimer');
+    } else if (fm.review_state === 'passed') give(m, 'close', r, `${claimFirst}close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")`, 'claimer');
   }
   for (const { r, fm } of rows) {
     if (!team.isReady(fm)) continue;

@@ -626,7 +626,8 @@ Options:
       Open, unclaimed items whose dependencies are all done, in priority order; another repository's items only as chunk
       work (chunk: true, with --scope all); with TEAM_NAME set, only that team's items of this repository (team session).
   --reviewable
-      Items with a requested review that --agent may start or continue: any member but the author reviews (team session).
+      Items with a requested review that --agent may start or continue: a session that did not claim the item and did
+      not ask for the review (the sessions in session_authors) reviews; a new session of the same card may (team session).
   --blocked
       Open items that wait for dependencies that are not done, with the status and holder of each dependency (team session).
   --decisions
@@ -665,7 +666,9 @@ Options:
   --roster ROSTER
       With --pop and --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
       file named by TEAM_ROSTER.
-      Any member but the author may review an item; a member with "review_only": true never claims (team session).
+      Any session may review an item except the sessions recorded on it (session_authors: the claimer and the one who
+      asked for the review, kept on release); a new session of the same card may review it. A member with "review_only":
+      true never claims (team session).
   --scope {branch,repo,all}
       With --pop, --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk items
       of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
@@ -804,7 +807,9 @@ Options:
   --roster ROSTER
       With --pop and --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
       file named by TEAM_ROSTER.
-      Any member but the author may review an item; a member with "review_only": true never claims.
+      Any session may review an item except the sessions recorded on it (session_authors: the claimer and the one who
+      asked for the review, kept on release); a new session of the same card may review it. A member with "review_only":
+      true never claims.
   --scope {branch,repo,all}
       How far the agent looks: this branch (the default), every branch of this repository, or also the chunk items
       of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all

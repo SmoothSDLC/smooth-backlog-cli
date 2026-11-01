@@ -111,3 +111,55 @@ test('082: the hand-off lock of 082k0c:01 does not lock 082k0c:02', () => {
   ok(f, ['update', s, '--claim', A2], { TEAM_NAME: TEAM });
   assert.equal(itemFm(f, s).claimed_by, A2);
 });
+
+test('082: query --plan offers the rework to the new session of the card while the earlier session still holds the item', () => {
+  const f = fixture();
+  const s = teamItem(f, 'plan rework for the new session');
+  reworked(f, s); // A1 claims and asks; A2 gives the changes verdict
+  const roster = join(f.t, 'roster.json');
+  writeFileSync(roster, JSON.stringify({ [A2]: {} })); // only the new session is present
+  const out = run(f, ['query', '--plan', '--roster', roster]).stdout;
+  const respond = out.split('\n').find(l => l.includes(`respond ${s}`));
+  assert.ok(respond, `the plan offers the rework to the new session: ${out}`);
+  assert.ok(respond.startsWith(`${A2}: respond ${s}`), respond);
+  assert.ok(respond.includes(`--claim ${A2}`), `the rework starts with the continuation claim: ${respond}`);
+});
+
+test('082: query --plan offers the close to the new session of the card while the earlier session still holds the item', () => {
+  const f = fixture();
+  const s = teamItem(f, 'plan close for the new session');
+  ok(f, ['update', s, '--claim', A1]);
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
+  ok(f, ['update', s, '--start-review', '--by', B1]);
+  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
+  const roster = join(f.t, 'roster.json');
+  writeFileSync(roster, JSON.stringify({ [A2]: {} })); // only the new session is present
+  const out = run(f, ['query', '--plan', '--roster', roster]).stdout;
+  const close = out.split('\n').find(l => l.includes(`close ${s}`));
+  assert.ok(close, `the plan offers the close to the new session: ${out}`);
+  assert.ok(close.startsWith(`${A2}: close ${s}`), close);
+  assert.ok(close.includes(`--claim ${A2}`), `the close is preceded by the continuation claim: ${close}`);
+});
+
+test('082: a fresh session of the card is told to claim the item before it reworks it', () => {
+  const f = fixture();
+  const s = teamItem(f, 'claim before the rework');
+  reworked(f, s); // A1 claims and asks; A2 gives the changes verdict
+  const w = JSON.parse(run(f, ['pop', '--agent', A2, '--json']).stdout);
+  assert.equal(w.action, 'continue', w.instruction);
+  assert.ok(w.instruction.includes(`--claim ${A2}`), `the rework instruction starts with the continuation claim: ${w.instruction}`);
+  assert.ok(w.instruction.includes('--append'), `the rework steps stay after it: ${w.instruction}`);
+});
+
+test('082: a fresh session of the card is told to claim the item before it closes the passed item', () => {
+  const f = fixture();
+  const s = teamItem(f, 'claim before the close');
+  ok(f, ['update', s, '--claim', A1]);
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
+  ok(f, ['update', s, '--start-review', '--by', B1]);
+  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
+  const w = JSON.parse(run(f, ['pop', '--agent', A2, '--json']).stdout);
+  assert.equal(w.action, 'continue', w.instruction);
+  assert.ok(w.instruction.includes(`--claim ${A2}`), `the close instruction starts with the continuation claim: ${w.instruction}`);
+  assert.ok(w.instruction.includes('--close --summary'), `and ends with the close: ${w.instruction}`);
+});

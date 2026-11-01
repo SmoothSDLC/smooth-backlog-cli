@@ -115,10 +115,10 @@ async function update(argv) {
     if (code || a['dry-run']) { forget(); unlock(); return code; }
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
     // Item 082: the agent a command names goes into the commit subject (session names with colons are audit data too);
-    // only when the first flag is the agent-naming one, so the subjects of every other command stay as they are
+    // the actor the step acts as (a.by ?? a.claim ?? a.release), whatever the order of the options
     const subjectParts = ['update.py', ...argv.slice(0, 2)];
-    const agentOf = { '--claim': a.claim, '--release': a.release, '--by': a.by };
-    if (agentOf[argv[1]] !== undefined) subjectParts.push(agentOf[argv[1]]);
+    const agent = a.by ?? a.claim ?? a.release;
+    if (agent !== undefined) subjectParts.push(agent);
     let pairs;
     try { pairs = await db.commitSettled(home, folder, subjectParts.join(' '), a.guard, a.claims); } catch (e) {
       unlock();

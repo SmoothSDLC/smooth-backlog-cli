@@ -40,7 +40,7 @@ test('backlog update --claim keeps its refusal conditions, query --roster the sh
     const roster = block(backlog(command, '--help').stdout, 'roster');
     assert.match(roster, /\{agent: \{\.\.\.\}\}, the team's members in order/, command);
     assert.match(roster, /TEAM_ROSTER/, command);
-    assert.match(roster, /Any member but the author may review/, command);
+    assert.match(roster, /Any session may review an item except the sessions recorded on it/, command);
     assert.doesNotMatch(roster, /class|HOLDER/, command); // no class profiles, no holder window
   }
 });

@@ -90,6 +90,10 @@ require an explicit publish or drop decision before another command can change t
 
 In shared mode, a write to an item that somebody else changed after you last read it is refused with exit code 5 (read it again, then retry); every write records `updated_by`. See [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode).
 
+The self-review rule is per session, not per card: an agent name is a session name, so the session that claimed an
+item or asked for its review (recorded in `session_authors`) may not review it, and a new session of the same card
+may — it continues the item its earlier session claimed.
+
 ## Command help
 
 Run `backlog --help` for the available commands and options:

@@ -72,6 +72,14 @@ test('082: an agent name with colons (082k0c:01) is stored in claimed_by, the ev
   assert.equal(itemFm(f, s).claimed_by, A1);
 });
 
+test('082: the commit subject carries the agent named by --by wherever the option is placed', () => {
+  const f = fixture();
+  const s = make(f, 'subject carries a later --by');
+  ok(f, ['update', s, '--claim', A1]);
+  ok(f, ['update', s, '--append', 'CHUNK a step with a later --by', '--by', A2]);
+  assert.equal(git(f.home, 'log', '-1', '--format=%s'), `acme/demo: update.py ${s} --append ${A2}`);
+});
+
 test('082: the hand-off marker for 082k0c:01 is written under the team hand-off folder and locks only that session name, not 082k0c:02', () => {
   const f = fixture();
   writeFileSync(join(f.tdir, 'config.json'), JSON.stringify({

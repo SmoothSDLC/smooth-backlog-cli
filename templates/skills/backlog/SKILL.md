@@ -137,7 +137,9 @@ The self-review rule is per session: `--claim` and `--request-review` record the
 A new session of the same card continues the item its earlier session claimed (a rework after a review, or
 the close): a `--claim` with a name sharing the `<item><card>` part before the colon records the new session
 name on the item, with no takeover and no lead reassignment; the self-review block still applies to every
-earlier session name of the item.
+earlier session name of the item. pop, work and the dispatch plan (`backlog query --plan`) offer the rework and
+the close to the new session, which claims the item first (a continuation claim) before those steps; a review
+requested by a session other than the claimer (the team lead) records that session in `session_authors` too.
 
 Class options: the CLI has no class options (work or review): no `--classes`, no class profiles. The removed
 class fields stay out of the help texts, COMMANDS.md, README.md, templates and CHANGELOG.md; the negative test

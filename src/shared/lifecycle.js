@@ -221,10 +221,11 @@ export function requestReview({ fm }, reviewer, note, by = '') {
   if (fm.claimed_by && by && by !== fm.claimed_by && by !== teamLead()) reject(`${fm.claimed_by} holds it: only the holder, or the team lead, asks for its review (not ${by})`);
   const t = now();
   // review_author outlives a release: the one who asked for the review never reviews it, whatever claimed_by says later;
-  // item 082: the asking session joins session_authors, the list that keeps the block for every earlier session
-  const asked = fm.claimed_by || by || fm.review_author || '';
+  // item 082: the asking session joins session_authors, the list that keeps the block for every earlier session -
+  // the requester is recorded, even when it is not the claimer (a team lead asking for a claimed item)
+  const asked = by || fm.claimed_by || fm.review_author || '';
   Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: asked, session_authors: withSession(fm.session_authors, asked) });
-  return { event: 'review_requested', text: `## Review requested by ${fm.claimed_by || 'unknown'} at ${t} (reviewer: ${reviewer})\n\n${note}` };
+  return { event: 'review_requested', text: `## Review requested by ${by || fm.claimed_by || 'unknown'} at ${t} (reviewer: ${reviewer})\n\n${note}` };
 }
 
 export function startReview({ fm }, by) {

@@ -20,16 +20,18 @@
 - A new session of the same card continues the item its earlier session claimed: a `--claim` with a name sharing
   the `<item><card>` part before the colon (082k0c:02 after 082k0c:01) records the new session name on the item,
   with no takeover and no lead reassignment; the one-active-item, work-in-progress and hand-off-lock rules apply
-  across the card's sessions, and the self-review block still holds for every earlier session name (item 082).
-- The self-review rule is per session: `--claim` and `--request-review` record the session name in a new
-  front-matter list `session_authors` (kept on release, like `review_author`); the session that claimed the item
-  or asked for the review is refused with "the same session cannot review its own work; a new session may", and a
-  new session (a new name) may start or pass the review; items without session names keep the old agent-name rule
-  (item 082).
+  across the card's sessions, and the self-review block still holds for every earlier session name; pop, work and
+  the dispatch plan (`backlog query --plan`) offer the rework and the close to the new session, which claims the
+  item first (a continuation claim) before those steps (item 082).
+- The self-review rule is per session: `--claim` and `--request-review` record the claiming or asking session name
+  (a requester other than the claimer, the team lead, is recorded too) in a new front-matter list `session_authors`
+  (kept on release, like `review_author`); the session that claimed the item or asked for the review is refused
+  with "the same session cannot review its own work; a new session may", and a new session (a new name) may start
+  or pass the review; items without session names keep the old agent-name rule (item 082).
 - Agent and team names may contain a colon in addition to letters, digits, `.`, `_` and `-` (a card's session
   names and a team name carry colons): the name works in the front matter, the event log, the commit subject
-  (which now carries the agent a `--claim`, `--release` or `--by` command names), the hand-off marker file name
-  and every `--claim`/`--release`/`--by` value (item 082).
+  (which now carries the agent a `--claim`, `--release` or `--by` command names, wherever the option is placed),
+  the hand-off marker file name and every `--claim`/`--release`/`--by` value (item 082).
 - The optional run recorder hook of `bin/backlog.js` spawns a child process only when
   `CODY_SCRIPT_RUNS_MODULE` names a module, and no child process when the variable is unset;
   the help, the built-in skill and the README confine the claim to the hook (item 086). A

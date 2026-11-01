@@ -899,7 +899,9 @@ TEAM_REPOSITORY and TEAM_BRANCH, as for every command) whose front matter team i
 no stage (backlog update <item> --set-team <name> gives an item to a team; the items split from it carry a stage and are
 the members' work). When the lead holds an open work item of the team, the answer is continue with that item. When an
 earlier session of the lead's card holds it, the command records the continuation claim first - the new session name as
-claimed_by and in session_authors - and then answers continue. Otherwise the command claims for the lead the team's
+claimed_by and in session_authors - and then answers continue. A refused continuation claim is no success: the earlier
+session keeps holding, and the command stops (exit 1, the reason on standard error). Otherwise the command claims for
+the lead the team's
 first open, unclaimed work item in the work order (priority, then seq) whose claim backlog update --claim accepts (its
 dependencies are done, no work-in-progress limit is passed), and the answer is claim. The output is the action, the one instruction (refine and split the item with the team), the items not taken
 with the reason, and the whole item: its front matter and its body. When there is no work item to take, the action is
@@ -918,8 +920,9 @@ Options:
 
 Exit codes:
   0  continue or claim: the lead holds the item.
-  1  A command it ran failed for another reason than a refused claim, a synchronisation failure included (the reason
-     is printed), or the item changed before it could be shown: run it again.
+  1  The continuation claim was refused (the earlier session keeps holding), a command it ran failed for another reason
+     than a refused claim, a synchronisation failure included (the reason is printed), or the item changed before it
+     could be shown: run it again.
   2  Invalid input: a missing --team, an agent other than the lead, another team than TEAM_NAME, or no branch (a
      detached HEAD without TEAM_BRANCH).
   3  idle: no work item of the team to take.

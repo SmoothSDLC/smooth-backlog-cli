@@ -1,8 +1,8 @@
 // Tests for item 082, slice C: a new session of the same card continues the item its earlier session
 // claimed (a rework after review, or the close): the claim records the new session name on the item, with
 // no takeover and no lead reassignment, and the self-review block still applies to every earlier session.
-// Owner design 2026-10-31: session names <item 3 digits><card id>:<increment 2 digits> (082k0c:01), teams
-// join their card ids with colons (t03:08:0c). HOME is a temporary folder: the real ~/.qwen/teams is never
+// Owner design 2026-10-31: session names <item 3 digits><card id>:<increment 2 digits> (082aa:01), teams
+// join their card ids with colons (t07:09:1a). HOME is a temporary folder: the real ~/.qwen/teams is never
 // read or written. Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,10 +12,10 @@ import { join } from 'node:path';
 import { cli, consumer, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 
-const TEAM = 't03:08:0c';
-const A1 = '082k0c:01'; // the session that builds
-const A2 = '082k0c:02'; // a new session of the same card (the continuation)
-const B1 = '082k03:01'; // a session of another card (no continuation)
+const TEAM = 't07:09:1a';
+const A1 = '082aa:01'; // the session that builds
+const A2 = '082aa:02'; // a new session of the same card (the continuation)
+const B1 = '082bb:01'; // a session of another card (no continuation)
 const REF = 'references/review/code.md';
 
 const dirs = [];
@@ -56,7 +56,7 @@ const reworked = (f, s) => {
   ok(f, ['update', s, '--review', 'changes', '--by', A2, '--comments', `fix per ${REF}`]);
 };
 
-test('082: 082k0c:02 continues the item 082k0c:01 claimed (rework after review): claimed_by is 082k0c:02, session_authors holds both', () => {
+test('082: 082aa:02 continues the item 082aa:01 claimed (rework after review): claimed_by is 082aa:02, session_authors holds both', () => {
   const f = fixture();
   const s = teamItem(f, 'continuation after rework');
   reworked(f, s);
@@ -86,7 +86,7 @@ test('082: a continuation of an item without session_authors keeps the earlier h
   assert.match(r.stdout, new RegExp(`^❌ ${s}: ${A1}: the same session cannot review its own work; a new session may\\n$`));
 });
 
-test('082: 082k03:01 cannot take it over', () => {
+test('082: 082bb:01 cannot take it over', () => {
   const f = fixture();
   const s = teamItem(f, 'take over from another card');
   ok(f, ['update', s, '--claim', A1]);
@@ -96,7 +96,7 @@ test('082: 082k03:01 cannot take it over', () => {
   assert.equal(itemFm(f, s).claimed_by, A1, 'the refusal changes nothing');
 });
 
-test('082: after the continuation 082k0c:01 still cannot review', () => {
+test('082: after the continuation 082aa:01 still cannot review', () => {
   const f = fixture();
   const s = teamItem(f, 'block after continuation');
   reworked(f, s);
@@ -111,7 +111,7 @@ test('082: after the continuation 082k0c:01 still cannot review', () => {
   assert.match(r2.stdout, new RegExp(`^❌ ${s}: ${A2}: the same session cannot review its own work; a new session may\\n$`));
 });
 
-test('082: the hand-off lock of 082k0c:01 does not lock 082k0c:02', () => {
+test('082: the hand-off lock of 082aa:01 does not lock 082aa:02', () => {
   const f = fixture();
   writeFileSync(join(f.tdir, 'config.json'), JSON.stringify({
     name: TEAM, leadAgentId: `lead@${TEAM}`,

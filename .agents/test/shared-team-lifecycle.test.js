@@ -36,7 +36,7 @@ function fixture() {
 // update() reads the write set as the named agent first; stale-view refusals have their own regression suite.
 const update = (f, args, env) => {
   const named = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
-  const who = named ?? (args.includes('--request-review') ? 'cody' : undefined); // a review is requested by the one working on the item (cody here)
+  const who = named ?? (args.includes('--request-review') ? 'cody' : 'smooth'); // a review is requested by the one working on the item (cody here); an un-named write acts as the environment agent (smooth here)
   if (who && args[0] && !args[0].startsWith('-')) {
     const slugs = args.includes('--close') ? readdirSync(join(f.folder, 'phases')).map(n => n.replace(/\.md$/, '')) : [args[0]];
     for (const slug of slugs) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t, env: env || { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
@@ -83,17 +83,23 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
   ok(first, '--claim', 'archy');
   ok(first, '--request-review', 'any', '--note', 'tests written'); // every complete item is reviewed
   ok(first, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md');
+  ok(first, '--request-review', 'codex', '--note', 'tests written, external stage', '--by', 'archy');
+  ok(first, '--start-review', '--by', 'codex');
+  ok(first, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md');
   ok(first, '--close', '--summary', 'tests written');
 
   ok(job, '--claim', 'cody');
   assert.ok(refused(job, '--claim', 'archy').includes('claimed by cody')); // held by another agent
-  assert.ok(refused(job, '--close', '--summary', 'early').includes('after a passing review'));
+  assert.ok(refused(job, '--close', '--summary', 'early').includes('missing the Cody review stage'));
   ok(job, '--request-review', 'any', '--note', 'commit abc1234, deployed evidence in run 13');
   assert.ok(refused(job, '--review', 'pass', '--by', 'cody', '--comments', 'fine').includes('cannot review its own work'));
   ok(job, '--review', 'changes', '--by', 'archy', '--comments', 'missing a test for the empty input (references/review/code.md)');
   assert.equal(item(f, job).fm.review_state, 'changes-requested');
-  ok(job, '--request-review', 'archy', '--note', 'commit def5678 adds the test');
-  ok(job, '--review', 'pass', '--by', 'archy', '--comments', 'test present, all green (references/review/code.md)');
+  ok(job, '--request-review', 'cody-a', '--note', 'commit def5678 adds the test', '--by', 'cody');
+  ok(job, '--review', 'pass', '--by', 'cody-a', '--comments', 'test present, all green (references/review/code.md)');
+  ok(job, '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', 'cody');
+  ok(job, '--start-review', '--by', 'codex');
+  ok(job, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md');
   ok(job, '--close', '--summary', 'feature delivered with tests');
 
   const text = readFileSync(join(f.folder, 'phases', `${job}.md`), 'utf8');
@@ -103,7 +109,7 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
   assert.equal(fm.review_state, 'passed');
   for (const line of ['Claimed by cody at', '## Review requested by cody at', '(reviewer: any)', 'commit abc1234',
     '## Review by archy: CHANGES REQUESTED', 'missing a test for the empty input (references/review/code.md)',
-    '## Review by archy: PASS', '## Closed by cody at']) assert.ok(text.includes(line), line);
+    '## Review by cody-a: PASS', '## Review by codex: PASS', '## Closed by cody at']) assert.ok(text.includes(line), line);
   const ev = query(f, ['--events', job]).stdout;
   for (const e of ['claimed', 'review_requested', 'reviewed', 'closed']) assert.ok(ev.includes(` ${e} `), `${e}: ${ev}`);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
@@ -330,9 +336,9 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   both([B, '--note', 'the holder continues'], undefined, 0); // ends the wait
   both([B, '--request-review', 'archy', '--note', 'commit 9999999'], undefined, 0);
   both([B, '--review', 'pass', '--by', 'archy', '--comments', 'good (references/review/code.md)'], undefined, 0); // item 088: the NEXT line, the cody stage is still open
-  both([B, '--request-review', 'cody-card1', '--note', 'commit 9999999, cody stage'], undefined, 0);
-  both([B, '--start-review', '--by', 'cody-card1'], undefined, 0);
-  both([B, '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md'], undefined, 0);
+  both([B, '--request-review', 'cody-a', '--note', 'commit 9999999, cody stage'], undefined, 0);
+  both([B, '--start-review', '--by', 'cody-a'], undefined, 0);
+  both([B, '--review', 'pass', '--by', 'cody-a', '--comments', 'fine per references/review/code.md'], undefined, 0);
   both([B, '--request-review', 'codex', '--note', 'commit 9999999, external stage'], undefined, 0);
   both([B, '--start-review', '--by', 'codex'], undefined, 0);
   both([B, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md'], undefined, 0);
@@ -369,9 +375,9 @@ test('075: the successful lifecycle steps print exactly what they record', t => 
   const job = make(f, 'lifecycle job', []);
   step([job, '--claim', 'cody'], `✅ ${job} updated (claimed=Claimed by cody at TS repository=acme/demo branch=main cwd=<cwd>)\n`);
   step([job, '--request-review', 'any', '--note', 'ready'], `✅ ${job} updated (review_requested=Review requested by cody at TS (reviewer: any))\n`);
-  step([job, '--start-review', '--by', 'cody-card1'], `✅ ${job} updated (review_started=Review started by cody-card1 at TS)\n`);
-  step([job, '--review', 'pass', '--by', 'cody-card1', '--comments', 'ok per references/review/code.md'],
-    `✅ ${job} updated (reviewed=Review by cody-card1: PASS (TS))\n   ➡️  NEXT: the external review - the Cody pass is recorded; request the codex or claude review (backlog update ${job} --request-review codex --note "<commit>"), it must pass on the same commit before the close\n`);
+  step([job, '--start-review', '--by', 'cody-a'], `✅ ${job} updated (review_started=Review started by cody-a at TS)\n`);
+  step([job, '--review', 'pass', '--by', 'cody-a', '--comments', 'ok per references/review/code.md'],
+    `✅ ${job} updated (reviewed=Review by cody-a: PASS (TS))\n   ➡️  NEXT: the external review - the Cody pass is recorded; request the codex or claude review (backlog update ${job} --request-review codex --note "<commit>"), it must pass on the same commit before the close\n`);
   step([job, '--request-review', 'codex', '--note', 'the cody pass, external stage'],
     `✅ ${job} updated (review_requested=Review requested by cody at TS (reviewer: codex))\n`);
   step([job, '--start-review', '--by', 'codex'], `✅ ${job} updated (review_started=Review started by codex at TS)\n`);

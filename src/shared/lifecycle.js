@@ -257,7 +257,7 @@ export function review({ fm }, verdict, { by, comments } = {}) {
   }
   // item 088: two stages - (a) a Cody agent (not the author session), then (b) codex or claude, only after (a) passed
   // on the current commit. A pass pins the item's work commit; a changes verdict at either stage re-runs both.
-  // item 082: a session name (082k0c:02) is a cody session name - its pass records the Cody stage too.
+  // item 082: a session name (082aa:02) is a cody session name - its pass records the Cody stage too.
   const codyStage = by.toLowerCase().startsWith('cody') || isSessionName(by);
   const externalStage = ['codex', 'claude'].includes(by);
   if (externalStage && fm.cody_pass_commit !== (fm.commit || '')) {

@@ -1,7 +1,7 @@
 // Tests for item 082, slice A: session names with colons work everywhere the CLI uses an agent or team name
 // (front matter, event log, commit subject, the hand-off marker file name and --by/--claim validation).
-// Owner design 2026-10-31: a card's sessions are named <item 3 digits><card id>:<increment 2 digits> (082k0c:01),
-// teams join their card ids with colons (t03:08:0c). HOME is a temporary folder: the real ~/.qwen/teams is never
+// Owner design 2026-10-31: a card's sessions are named <item 3 digits><card id>:<increment 2 digits> (082aa:01),
+// teams join their card ids with colons (t07:09:1a). HOME is a temporary folder: the real ~/.qwen/teams is never
 // read or written. Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,9 +14,9 @@ import * as db from '../../src/shared/db.js';
 import { pendingHandoff } from '../../src/shared/team.js';
 import * as store from '../../src/shared/store.js';
 
-const TEAM = 't03:08:0c';
-const A1 = '082k0c:01'; // the session that builds
-const A2 = '082k0c:02'; // a new session of the same card
+const TEAM = 't07:09:1a';
+const A1 = '082aa:01'; // the session that builds
+const A2 = '082aa:02'; // a new session of the same card
 
 const dirs = [];
 test.after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -54,7 +54,7 @@ const teamItem = (f, name) => { const s = make(f, name); ok(f, ['update', s, '--
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
 const events = f => { const con = db.connect(f.folder); try { return con.prepare('SELECT event, note FROM event ORDER BY id DESC LIMIT 100').all(); } finally { con.close(); } };
 
-test('082: an agent name with colons (082k0c:01) is stored in claimed_by, the event log, the commit subject and accepted by --by and --claim', () => {
+test('082: an agent name with colons (082aa:01) is stored in claimed_by, the event log, the commit subject and accepted by --by and --claim', () => {
   const f = fixture();
   const s = make(f, 'colon session claim');
   ok(f, ['update', s, '--claim', A1]);
@@ -80,7 +80,7 @@ test('082: the commit subject carries the agent named by --by wherever the optio
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), `acme/demo: update.py ${s} --append ${A2}`);
 });
 
-test('082: the hand-off marker for 082k0c:01 is written under the team hand-off folder and locks only that session name, not 082k0c:02', () => {
+test('082: the hand-off marker for 082aa:01 is written under the team hand-off folder and locks only that session name, not 082aa:02', () => {
   const f = fixture();
   writeFileSync(join(f.tdir, 'config.json'), JSON.stringify({
     name: TEAM, leadAgentId: `lead@${TEAM}`,
@@ -98,7 +98,7 @@ test('082: the hand-off marker for 082k0c:01 is written under the team hand-off 
   const mk = JSON.parse(readFileSync(file, 'utf8'));
   assert.deepEqual(Object.keys(mk).sort(), ['at_ms', 'seq']);
   assert.equal(mk.seq, Number(s.split('-')[0]));
-  // the lock is keyed by the session name: it stops 082k0c:01, not 082k0c:02
+  // the lock is keyed by the session name: it stops 082aa:01, not 082aa:02
   const oldHome = process.env.HOME;
   process.env.HOME = f.user;
   try {

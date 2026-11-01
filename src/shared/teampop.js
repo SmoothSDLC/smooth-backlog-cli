@@ -61,7 +61,7 @@ export async function run(argv) {
   const refused = r => r.status === 1 && /^❌ /m.test(r.stdout) && !/❌ backlog:/.test(r.stderr);
   // item 082: heldBy also matches the lead's earlier session of the same card (the continuation): the command records the
   // continuation claim (claimed_by, session_authors) before it continues; a refused claim keeps the earlier session as
-  // the holder, the reason goes to standard error
+  // the holder: the reason goes to standard error and the command stops (exit 1, never a reported success)
   const held = work.find(i => heldBy(strip(i.fm.claimed_by || ''), agent));
   if (held) {
     action = 'continue'; item = held.fm.phase;
@@ -69,8 +69,11 @@ export async function run(argv) {
       const q = read(item);
       if (q.status !== 0) return fail(q);
       const c = self(['update', item, '--claim', agent], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, TEAM_BRANCH: branch });
-      if (c.status !== 0) { if (!refused(c)) return fail(c); process.stderr.write(`   the continuation claim was not recorded: ${last(c)}\n`); }
-      else if (c.stderr) process.stderr.write(c.stderr);
+      if (c.status !== 0) {
+        if (!refused(c)) return fail(c);
+        return die(`the continuation claim of ${item} was not recorded: ${last(c)}`, 1);
+      }
+      if (c.stderr) process.stderr.write(c.stderr);
     }
   }
   for (const i of held ? [] : work.filter(x => !strip(x.fm.claimed_by || ''))) {

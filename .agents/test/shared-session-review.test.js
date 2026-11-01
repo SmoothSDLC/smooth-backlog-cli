@@ -11,9 +11,9 @@ import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import { mkdirSync } from 'node:fs';
 import * as store from '../../src/shared/store.js';
 
-const A1 = '082k0c:01'; // the session that builds and asks
-const A2 = '082k0c:02'; // a new session of the same card
-const B1 = '082k03:01'; // a new session of another card
+const A1 = '082aa:01'; // the session that builds and asks
+const A2 = '082aa:02'; // a new session of the same card
+const B1 = '082bb:01'; // a new session of another card
 
 const dirs = [];
 test.after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -34,7 +34,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args) => {
   // QWEN_CODE_SESSION_ID stays out: these tests pin the agent-name rules, not the author-session rule (item 088),
-  // which a session id inherited from the running shell would apply to the cody-card* names
+  // which a session id inherited from the running shell would apply to the cody-* names
   const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', QWEN_CODE_SESSION_ID: '' } };
   if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
   return cli(args, o);
@@ -46,7 +46,7 @@ const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${
 // the setup of every test: the building session claims and asks for the review
 const setup = f => { const s = make(f); ok(f, ['update', s, '--claim', A1]); ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]); return s; };
 
-test('082: 082k0c:01 claims and asks for a review; 082k0c:02 starts and passes it', () => {
+test('082: 082aa:01 claims and asks for a review; 082aa:02 starts and passes it', () => {
   const f = fixture();
   const s = setup(f);
   ok(f, ['update', s, '--start-review', '--by', A2]);
@@ -57,7 +57,7 @@ test('082: 082k0c:01 claims and asks for a review; 082k0c:02 starts and passes i
   assert.deepEqual(fm.session_authors, [A1]); // the claiming and asking session, recorded once
 });
 
-test('082: 082k0c:01 is refused --start-review and --review with the same-session message', () => {
+test('082: 082aa:01 is refused --start-review and --review with the same-session message', () => {
   const f = fixture();
   const s = setup(f);
   no(f, ['update', s, '--start-review', '--by', A1], `${A1}: the same session cannot review its own work; a new session may`);
@@ -66,14 +66,14 @@ test('082: 082k0c:01 is refused --start-review and --review with the same-sessio
   assert.equal(fm.review_state, 'requested'); // neither refusal changed the item
 });
 
-test('082: pop, work and query --reviewable offer the review to 082k0c:02 and 082k03:01, never to 082k0c:01', () => {
+test('082: pop, work and query --reviewable offer the review to 082aa:02 and 082bb:01, never to 082aa:01', () => {
   const f = fixture();
   const s = setup(f);
   const reviewable = (agent) => run(f, ['query', '--reviewable', '--agent', agent]).stdout;
   assert.ok(reviewable(A2).includes(s), 'offered to the new session of the card');
   assert.ok(reviewable(B1).includes(s), 'offered to the other card');
   assert.ok(!reviewable(A1).includes(s), 'never offered to the asking session');
-  // pop offers it to both new sessions; 082k0c:01 gets no review action
+  // pop offers it to both new sessions; 082aa:01 gets no review action
   assert.equal(JSON.parse(run(f, ['pop', '--agent', A2, '--json']).stdout).action, 'review');
   assert.equal(JSON.parse(run(f, ['pop', '--agent', B1, '--json']).stdout).action, 'review');
   assert.notEqual(JSON.parse(run(f, ['pop', '--agent', A1, '--json']).stdout).action, 'review');
@@ -97,14 +97,14 @@ test('082: a release keeps session_authors', () => {
 test('082: an item without session names keeps the old agent-name rule', () => {
   const f = fixture();
   const s = make(f);
-  ok(f, ['update', s, '--claim', 'cody-card1']);
-  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'cody-card1']);
-  no(f, ['update', s, '--start-review', '--by', 'cody-card1'], 'the same session cannot review its own work');
-  ok(f, ['update', s, '--start-review', '--by', 'cody-card2']);
-  ok(f, ['update', s, '--review', 'pass', '--by', 'cody-card2', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', s, '--claim', 'cody-a']);
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'cody-a']);
+  no(f, ['update', s, '--start-review', '--by', 'cody-a'], 'the same session cannot review its own work');
+  ok(f, ['update', s, '--start-review', '--by', 'cody-b']);
+  ok(f, ['update', s, '--review', 'pass', '--by', 'cody-b', '--comments', 'fine per references/review/code.md']);
   const fm = itemFm(f, s);
   assert.equal(fm.review_state, 'passed');
-  assert.deepEqual(fm.session_authors, ['cody-card1']);
+  assert.deepEqual(fm.session_authors, ['cody-a']);
 });
 
 test('082: the lead requests the review of a claimed item: its session is recorded and it cannot review its own request', () => {

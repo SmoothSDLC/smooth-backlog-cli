@@ -57,12 +57,27 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
 test('082: team pop records the continuation claim when the lead\'s earlier session holds the work item', () => {
   const f = fixture();
   const s = make(f, 'continuation work item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', '082k03:01']);
-  ok(f, ['update', s, '--claim', '082k03:01'], { TEAM_LEAD: '082k03:02' }); // the lead's earlier session holds it
-  const p = pop(f, { TEAM_LEAD: '082k03:02' }, '--team', 't1');
+  ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
+  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:02' }); // the lead's earlier session holds it
+  const p = pop(f, { TEAM_LEAD: '082bb:02' }, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.status], ['continue', s, 0]);
-  assert.equal(fm(f, s).claimed_by, '082k03:02', 'the continuation records the new session as the holder');
-  assert.deepEqual(fm(f, s).session_authors, ['082k03:01', '082k03:02'], 'the earlier session stays in the list');
+  assert.equal(fm(f, s).claimed_by, '082bb:02', 'the continuation records the new session as the holder');
+  assert.deepEqual(fm(f, s).session_authors, ['082bb:01', '082bb:02'], 'the earlier session stays in the list');
+});
+
+test('082: team pop exits 1 when the continuation claim is refused; the earlier session keeps holding', () => {
+  const f = fixture();
+  const dep = make(f, 'open dependency');
+  const s = make(f, 'refused continuation item'); ok(f, ['update', s, '--set-team', 't1']);
+  ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
+  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:02' }); // the lead's earlier session holds it
+  ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
+  ok(f, ['update', s, '--set-depends-on', dep.split('-')[0], '--by', '082bb:01']); // an undone dependency: the continuation claim is refused
+  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: '082bb:02' });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /the continuation claim of .* was not recorded.*dependencies not done/);
+  assert.equal(r.stdout, '', 'no success output: the item is not presented as held');
+  assert.equal(fm(f, s).claimed_by, '082bb:01', 'the earlier session keeps holding');
 });
 
 test('team pop: an item whose claim is refused is named and skipped; nothing left is idle with exit 3', () => {

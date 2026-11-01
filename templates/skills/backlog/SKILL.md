@@ -116,7 +116,8 @@ sees and changes the backlog only through them.
   recorded a hand-off for a Qwen team member, `backlog work` also answers stop until its fresh session).
 - [ ] Team lead: take your team's work item with `backlog team pop --team <team>` (claimed for you, shown whole; idle
   exits 3; a work item held by an earlier session of your card is continued, and the claim records your new session
-  on the item first), then split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of an item starts in stage refining, with or without a team, and takes its refinement review before it is claimed; a child of a team's item inherits the team); send a refined
+  on the item first; a refused continuation claim stops the command, exit 1, the earlier session keeps holding), then
+  split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of an item starts in stage refining, with or without a team, and takes its refinement review before it is claimed; a child of a team's item inherits the team); send a refined
   item on with `--request-refinement-review --by <you>`, record Codex's verdict with `--refinement-review
   pass|changes --by codex --comments "<findings; thread id>"`; only when Codex answers that its limit is exceeded, record that with
   `--refinement-review limit --by codex --comments "<Codex's answer>"`, then Claude's verdict with `--by claude
@@ -147,9 +148,10 @@ earlier session name of the item (a continuation of an item without `session_aut
 existed, keeps the earlier holder in the list). pop, work and the dispatch plan (`backlog query --plan`) offer
 the rework and the close to the new session, which claims the item first (a continuation claim) before those
 steps; the lead's completed-team review-and-close in pop starts with the same claim, and `backlog team pop`
-records the continuation claim itself when an earlier session of the lead's card holds the team's work item. A
-review requested by a session other than the claimer (the team lead) records that session in `session_authors`
-too.
+records the continuation claim itself when an earlier session of the lead's card holds the team's work item: a
+refused claim is no success - the command stops (exit 1, the reason on standard error) and the earlier session
+keeps holding. A review requested by a session other than the claimer (the team lead) records that session in
+`session_authors` too.
 
 Class options: the CLI has no class options (work or review): no `--classes`, no class profiles. The removed
 class fields stay out of the help texts, COMMANDS.md, README.md, templates and CHANGELOG.md; the negative test

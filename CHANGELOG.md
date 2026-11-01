@@ -31,7 +31,8 @@
   pop, work and the dispatch plan (`backlog query --plan`) offer the rework and the close to the new session, which
   claims the item first (a continuation claim) before those steps; the lead's completed-team review-and-close in
   pop starts with the same claim, and `backlog team pop` records the continuation claim itself when an earlier
-  session of the lead's card holds the team's work item (item 082).
+  session of the lead's card holds the team's work item: a refused claim is no success - the command stops (exit 1,
+  the reason on standard error) and the earlier session keeps holding (item 082).
 - The self-review rule is per session: `--claim` and `--request-review` record the claiming or asking session name
   (a requester other than the claimer, the team lead, is recorded too) in a new front-matter list `session_authors`
   (kept on release, like `review_author`); the session that claimed the item or asked for the review is refused

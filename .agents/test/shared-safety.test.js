@@ -45,10 +45,14 @@ test('repoIdFromUrl: https, scp-style and local-path URLs', () => {
   assert.equal(repoIdFromUrl('https://github.com/o/r.git/'), 'o/r');
   // fewer than two parts -> ""
   assert.equal(repoIdFromUrl('a;rm -rf x'), '');
-  assert.equal(repoIdFromUrl('https://github.com/acme'), 'github.com/acme');
   assert.equal(repoIdFromUrl(''), '');
   assert.equal(repoIdFromUrl(null), '');
   assert.equal(repoIdFromUrl(undefined), '');
+  // a scheme:// URL: the scheme and the host are not a repository - two path segments after the host are required
+  // (item 091: a malformed setting must be refused, not read as owner/name)
+  assert.equal(repoIdFromUrl('https://example.com'), '');
+  assert.equal(repoIdFromUrl('https://example.com/acme'), '');
+  assert.equal(repoIdFromUrl('https://github.com/acme'), '');
 });
 
 test('slugify: lowercase, runs of non-alphanumerics to one dash, no / or .., fallback phase', () => {

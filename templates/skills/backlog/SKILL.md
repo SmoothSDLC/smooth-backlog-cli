@@ -78,8 +78,9 @@ Retain the returned GUID for subsequent commands if priorities may change.
 Set a repository up once with `backlog setup` (it clones the backlog repository beside the repository when it is
 missing — the clone URL is a setting: the environment variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url`
 key of `.smooth-backlog.json`, with no built-in default, and a command that needs it refuses, naming both sources, when
-it is in neither; it refuses a value that does not name a repository (no owner/name in the URL) the same way, and the
-origin check refuses a clone with no origin — writes `.smooth-backlog.json` to commit, keeping the file's other keys so
+it is in neither; it refuses a value that does not name a repository (no owner/name in the URL - a scheme URL
+needs two path segments after the host) the same way, and the origin check refuses a clone with no origin — writes
+`.smooth-backlog.json` to commit, keeping the file's other keys so
 an origin URL that lives only in that key survives the write, and deploys this skill; `--ask` asks for the path). The per-user record of
 `backlog --use-backlog-repo <path>` is the file `<name>/home` under the config folder ($XDG_CONFIG_HOME, else
 `~/.config`; `<name>` the repository name from the setting, a neutral name without it): a record written before the

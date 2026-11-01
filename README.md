@@ -37,7 +37,10 @@ npm install --global @smoothsdlc/smooth-backlog-cli@<previous version> --registr
 
 In a repository, `bash <skill folder>/scripts/install-backlog-cli.sh` (shipped with the backlog skill) installs the
 CLI when it is missing or older than the registry's release and then runs `backlog setup`, which points the
-repository at the shared backlog repository (`.smooth-backlog.json`) and deploys the skill; `--ask` asks for the path.
+repository at the shared backlog repository (`.smooth-backlog.json`) and deploys the skill; the shared backlog
+repository's clone URL is a setting (the environment variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url`
+key of `.smooth-backlog.json` — there is no built-in default, and a shared-mode command that needs it refuses,
+naming both sources, when it is in neither); `--ask` asks for the path.
 
 ## Get started
 

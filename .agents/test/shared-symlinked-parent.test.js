@@ -8,12 +8,17 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import { assertInside, validateHome } from '../../src/shared/safety.js';
 
 Object.assign(process.env, GIT_IDENTITY);
+
+// item 091: validateHome takes the expected owner/name and default home from the caller's setting; the tests
+// give it the fixture's neutral names.
+const ID = `${BACKLOG_OWNER}/${BACKLOG_NAME}`;
+const DFLT = `~/git/${BACKLOG_NAME}`;
 
 // <real>/data is reached as <real>/../<name> through a symlink: tmp = <link>/data.
 function linked(t) {
@@ -41,14 +46,14 @@ test('store and db: load, write and connect work when the folder is reached thro
 
 test('safety: validateHome and assertInside accept a path whose ancestors contain a symlink', async t => {
   const f = linked(t);
-  assert.equal(await validateHome(f.home), realpathSync(f.home)); // the resolved path
+  assert.equal(await validateHome(f.home, ID, DFLT), realpathSync(f.home)); // the resolved path
   assert.equal(await assertInside(f.home, join(f.folder, 'backlog.db')), join('acme', 'demo', 'backlog.db'));
 });
 
 test('mode switch, new, update, query, archive and move (each commits through sync.js) run under a symlinked parent', t => {
   const f = linked(t);
   ok(f, ['--use-backlog-repo', f.home]);
-  assert.equal(readFileSync(join(f.tmp, 'config', 'smoothsdlc-backlog', 'home'), 'utf8'), `${realpathSync(f.home)}\n`);
+  assert.equal(readFileSync(join(f.tmp, 'config', BACKLOG_NAME, 'home'), 'utf8'), `${realpathSync(f.home)}\n`);
   for (const name of ['Alpha', 'Beta']) ok(f, ['new', '--name', name, '--objective', `do ${name}`, '--summary', 's', '--depends-on', 'none']);
   ok(f, ['update', '1', '--status', 'in_progress']);
   assert.match(ok(f, ['query', '--status']).stdout, /001-alpha/);

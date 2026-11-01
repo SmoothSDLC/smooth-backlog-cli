@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, readdirSy
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
@@ -64,6 +64,29 @@ function seed({ permuteIds = false } = {}) {
 
 const run = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });
 const fm = (f, name) => parse(readFileSync(join(f.folder, 'phases', name), 'utf8'));
+// item 088: --status done runs only after both review stages passed for the item's commit, with or without
+// review_refs; these tests complete seeded items, so the stages run here (a fresh cody card, then the external
+// reviewer, each with a fresh view of the item). An incomplete item takes only the lead's refinement, so the
+// item is completed first (refs, estimate, definition of done).
+const bothStages = (f, item) => {
+  let r = run(f, [item, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', '## Definition of done\n- [ ] it holds']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  r = run(f, [item, '--request-review', 'any', '--note', 'n']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  r = cli(['query', '--phase', item, '--agent', 'cody-card1'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  for (const args of [
+    [item, '--start-review', '--by', 'cody-card1'],
+    [item, '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md'],
+    [item, '--request-review', 'codex', '--note', 'n'],
+  ]) { r = run(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); }
+  r = cli(['query', '--phase', item, '--agent', 'codex'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  for (const args of [
+    [item, '--start-review', '--by', 'codex'],
+    [item, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md'],
+  ]) { r = run(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); }
+};
 
 test('the class options are gone: --set-work-class and --set-review-classes are unrecognized, nothing is written', () => {
   const f = seed();
@@ -93,7 +116,7 @@ test('a bare number is the item number, never the database row id', t => {
 test('order of work: pull first, then change, write, scan the db, log the event, commit and push', () => {
   const f = seed();
   const other = join(f.t, 'other');
-  git(f.t, 'clone', '-q', join(f.t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), other);
+  git(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), other);
   const text = readFileSync(join(other, 'acme', 'demo', 'phases', '004-delta.md'), 'utf8').replace('sum delta', 'remote summary');
   writeFileSync(join(other, 'acme', 'demo', 'phases', '004-delta.md'), text);
   git(other, 'commit', '-q', '-am', 'remote edit');
@@ -119,6 +142,7 @@ test('order of work: pull first, then change, write, scan the db, log the event,
 
 test('a refusal and a dry run make no commit', () => {
   const f = seed();
+  bothStages(f, '2');
   const head = git(f.home, 'rev-parse', 'HEAD');
   assert.equal(run(f, ['2', '--branch', 'x']).status, 1);
   assert.equal(run(f, ['2', '--status', 'done', '--dry-run']).status, 0);
@@ -440,6 +464,7 @@ test('--priority moves the item to that rank and re-densifies, with a planning_e
 
 test('--status done completes, stamps completed, re-prioritizes and prints the planning-event lines', () => {
   const f = seed();
+  for (const item of ['2', '1', '3', '4', '6']) bothStages(f, item); // item 088: the done transitions below need both stages
   const r = step(f, ['2', '--status', 'done']);
   assert.match(r.stdout, /PLANNING EVENT — completing work RE-PRIORITIZES the backlog/);
   assert.match(fm(f, '002-beta.md').fm.completed, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
@@ -460,6 +485,7 @@ test('--replan sets the leading order by slug or number, ignores unknown names, 
 
 test('--dry-run prints the plan and changes and commits nothing', () => {
   const f = seed();
+  bothStages(f, '2');
   const before = snapshot(f);
   const r = step(f, ['2', '--status', 'done', '--dry-run']);
   assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'done'\}; COMPLETE -> re-prioritize backlog\n$/);

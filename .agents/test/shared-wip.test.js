@@ -9,7 +9,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -100,7 +100,7 @@ test('034: a start that another clone made while this one published counts: the 
   const f = fixture();
   const [a, b] = ['one', 'two'].map(n => f.make('demo', n));
   const home2 = join(f.t, 'home2');
-  spawnSync('git', ['clone', '-q', join(f.t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2]);
+  spawnSync('git', ['clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), home2]);
   f.run('demo', ['query', '--phase', b, '--agent', 'bob'], 0, { BACKLOG_HOME: home2 });
   f.limits({ repository: 1 });
   // while amy's push is on its way, bob (the other clone, which has no limits file) claims the other item

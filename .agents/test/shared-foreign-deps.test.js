@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -48,7 +48,20 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.match(lead, /do that first in repository acme\/lib: end the session here; the team is started in that repository/);
   const w = JSON.parse(run(here, ['work', '--agent', 'archy', '--json'], 3).stdout);
   assert.equal(w.first[0].item, 'acme/lib#1'); // the next-work command names it too
-  run(there, ['query', '--phase', '1', '--agent', 'tester']);
+  // item 088: --status done runs only after both review stages passed; the stages run here (a fresh cody card,
+  // then the external reviewer, each with a fresh view). An incomplete item takes only the lead's refinement,
+  // so the item is completed first (refs, estimate; it has the definition of done)
+  run(there, ['update', '1', '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--by', 'tester']);
+  run(there, ['update', '1', '--request-review', 'any', '--note', 'n', '--by', 'tester']);
+  run(there, ['query', '--phase', '1', '--agent', 'cody-card1']);
+  run(there, ['update', '1', '--start-review', '--by', 'cody-card1']);
+  run(there, ['update', '1', '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md']);
+  run(there, ['query', '--phase', '1', '--agent', 'tester']); // the cody stage changed the item after tester's last read
+  run(there, ['update', '1', '--request-review', 'codex', '--note', 'n', '--by', 'tester']);
+  run(there, ['query', '--phase', '1', '--agent', 'codex']);
+  run(there, ['update', '1', '--start-review', '--by', 'codex']);
+  run(there, ['update', '1', '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
+  run(there, ['query', '--phase', '1', '--agent', 'tester']); // the stages changed the item after tester's last read
   run(there, ['update', '1', '--status', 'done', '--by', 'tester']);
   assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status done\)/);
   const offered = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json']).stdout); // done: next-work offers the item
@@ -157,7 +170,7 @@ test('042: two clones that each add one half of a cycle through another reposito
   run(here, NEW('app item'));
   run(there, NEW('lib item'));
   const home2 = join(t, 'home2');
-  spawnSync('git', ['clone', '-q', join(t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2]);
+  spawnSync('git', ['clone', '-q', join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), home2]);
   run(there, ['query', '--phase', '1', '--agent', 'bob'], 0, { BACKLOG_HOME: home2 });
   // while tester's push is on its way, bob (the other clone) adds lib#1 -> app#1
   const hook = join(home, '.git', 'hooks', 'pre-push');

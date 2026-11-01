@@ -7,8 +7,10 @@ import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export const BACKLOG_OWNER = 'SmoothSDLC';
-export const BACKLOG_NAME = 'smoothsdlc-backlog';
+export const BACKLOG_OWNER = 'acme';
+export const BACKLOG_NAME = 'backlog-repo';
+// Item 091: the CLI carries no built-in backlog repository name; the tests give it this neutral clone URL.
+export const ORIGIN_URL = `https://example.com/${BACKLOG_OWNER}/${BACKLOG_NAME}.git`;
 export const GIT_IDENTITY = {
   GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t',
   GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t',
@@ -22,7 +24,7 @@ function git(cwd, ...args) {
 }
 
 // A local bare origin plus a working clone. The backlog repository is always
-// SmoothSDLC/smoothsdlc-backlog as owner/name, which is why
+// acme/backlog-repo as owner/name (the tests' neutral name), which is why
 // the shared backlog origin keeps exactly that folder layout.
 function originBare(tmp, owner, name, branch) {
   const bare = join(tmp, 'origins', owner, `${name}.git`);
@@ -43,7 +45,7 @@ function originBare(tmp, owner, name, branch) {
   return bare;
 }
 
-// The shared backlog repository: bare <tmp>/origins/SmoothSDLC/smoothsdlc-backlog.git
+// The shared backlog repository: bare <tmp>/origins/acme/backlog-repo.git
 // with one commit on main, cloned to <tmp>/home. The per-repository folders
 // (<home>/<owner>/<name>/) live inside that clone.
 export function sharedBacklog(tmp) {
@@ -78,7 +80,8 @@ export function env(tmp) {
   if (!raw || !isAbsolute(raw) || !home.startsWith(t + sep)) {
     throw new Error(`BACKLOG_HOME ${home} is outside tmp ${raw || '<empty>'}`);
   }
-  return { ...GIT_IDENTITY, BACKLOG_HOME: home, XDG_CONFIG_HOME: join(t, 'config') };
+  // item 091: the shared backlog repository's setting - the variable the CLI must use in the tests
+  return { ...GIT_IDENTITY, BACKLOG_HOME: home, XDG_CONFIG_HOME: join(t, 'config'), BACKLOG_ORIGIN_URL: ORIGIN_URL };
 }
 
 let calls = 0;

@@ -7,7 +7,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -170,7 +170,7 @@ test('node:sqlite prints no ExperimentalWarning to stderr', () => {
 test('scan(db, folder, renumbered): rows of renumbered items are replaced by the rescan and the fixed db is pushed', async t => {
   const dir = scratch(t);
   const home = sharedBacklog(dir);
-  const bare = join(dir, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  const bare = join(dir, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
   const home2 = join(dir, 'home2');
   git(dir, 'clone', '-q', bare, home2);
   const folder = join(home, 'acme', 'demo'); const folder2 = join(home2, 'acme', 'demo');
@@ -229,7 +229,7 @@ test('markArchived: refuses an absolute or ..-crossing location and leaves the r
 test('scan(db, folder, renumbered): the renumbered row keeps its id and its earlier events; no other item inherits them', async t => {
   const dir = scratch(t);
   const home = sharedBacklog(dir);
-  const bare = join(dir, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  const bare = join(dir, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
   const home2 = join(dir, 'home2');
   git(dir, 'clone', '-q', bare, home2);
   const folder = join(home, 'acme', 'demo'); const folder2 = join(home2, 'acme', 'demo');

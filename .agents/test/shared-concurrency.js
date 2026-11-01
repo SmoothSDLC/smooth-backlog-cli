@@ -3,7 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { env, GIT_IDENTITY } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, env, GIT_IDENTITY } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 
@@ -43,7 +43,7 @@ export async function waitsForRunLock(f, args, watch, ms = 2500) {
 // number: the next commit of the folder renumbers the local one (008 -> 009) and the mirror database must follow and be committed.
 export function numberClash(f) {
   const other = join(f.t, 'other-clone');
-  gitIn(f.t, 'clone', '-q', join(f.t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), other);
+  gitIn(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), other);
   const put = (dir, slug) => store.write({
     path: join(dir, 'phases', `${slug}.md`),
     fm: { phase: slug, seq: 8, name: slug, status: 'pending', repository: 'acme/demo', branch: 'main', priority: 40, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' },
@@ -57,7 +57,7 @@ export function numberClash(f) {
 // What a fresh clone of the shared backlog holds after the command: the pushed files and the pushed mirror rows.
 export function pushedState(f) {
   const fresh = join(f.t, `fresh-${Date.now()}`);
-  gitIn(f.t, 'clone', '-q', join(f.t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), fresh);
+  gitIn(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), fresh);
   const dir = join(fresh, 'acme', 'demo');
   const con = db.connect(dir);
   try { return { slugs: con.prepare('SELECT slug FROM phase ORDER BY seq, slug').all().map(r => r.slug), files: store.load(dir).map(i => i.path) }; } finally { con.close(); }

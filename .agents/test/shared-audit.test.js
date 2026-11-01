@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { gitIn } from './shared-concurrency.js';
 
@@ -185,7 +185,7 @@ test('review: releasing a claim after --request-review does not let the author r
 
 test('review: a clone whose upstream is origin/side and push.default=upstream still publishes to origin/main', t => {
   const s = solo(t);
-  const bare = join(s.tmp, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  const bare = join(s.tmp, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
   gitIn(s.home, 'push', '-q', 'origin', 'HEAD:refs/heads/side');
   gitIn(s.home, 'fetch', '-q', 'origin');
   gitIn(s.home, 'branch', '--set-upstream-to=origin/side');
@@ -201,7 +201,7 @@ test('review: a clone whose upstream is origin/side and push.default=upstream st
 test('review P1: a command killed (kill -9) mid-mutation is rolled back by the next command before it publishes anything', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0); assert.equal(s.run(NEW('beta job')).status, 0);
-  const bare = join(s.tmp, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  const bare = join(s.tmp, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
   const item = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(item, 'utf8');
   const link = `${s.tmp}-link`; symlinkSync(s.tmp, link); t.after(() => rmSync(link, { force: true })); // the child spells the clone as macOS's /var does, the next command as /private/var
   const child = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), 'shared-audit-child.js'), join(link, 'home'), join(link, 'home', 'acme', 'demo')], { encoding: 'utf8' });

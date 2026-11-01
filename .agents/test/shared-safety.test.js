@@ -9,7 +9,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cli, sharedBacklog, consumer, GIT_IDENTITY } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, sharedBacklog, consumer, GIT_IDENTITY } from './shared-fixtures.js';
 import {
   repoIdFromUrl, validateHome, slugify, itemSelector,
   assertInside, checkRefs, redact, git,
@@ -18,6 +18,11 @@ import {
 // The fixture helpers' internal git calls inherit process.env; give them an
 // identity so the seed commits always work (same identity the fixtures use).
 Object.assign(process.env, GIT_IDENTITY);
+
+// item 091: validateHome takes the expected owner/name and default home from the caller's setting; the tests give
+// it the fixture's neutral names.
+const ID = `${BACKLOG_OWNER}/${BACKLOG_NAME}`;
+const DFLT = `~/git/${BACKLOG_NAME}`;
 
 function tmp(t) {
   // realpath: macOS tmpdir() is under the /var symlink, which validateHome refuses by design;
@@ -28,19 +33,19 @@ function tmp(t) {
 }
 
 test('repoIdFromUrl: https, scp-style and local-path URLs', () => {
-  assert.equal(repoIdFromUrl('https://github.com/SmoothSDLC/smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
-  assert.equal(repoIdFromUrl('https://github.com/SmoothSDLC/smoothsdlc-backlog'), 'SmoothSDLC/smoothsdlc-backlog');
-  assert.equal(repoIdFromUrl('git@github.com:SmoothSDLC/smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
-  assert.equal(repoIdFromUrl('/srv/SmoothSDLC/smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
-  assert.equal(repoIdFromUrl('C:\\srv\\SmoothSDLC\\smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
-  assert.equal(repoIdFromUrl('  https://github.com/SmoothSDLC/smoothsdlc-backlog.git  '), 'SmoothSDLC/smoothsdlc-backlog');
+  assert.equal(repoIdFromUrl(`https://github.com/acme/${BACKLOG_NAME}.git`), `acme/${BACKLOG_NAME}`);
+  assert.equal(repoIdFromUrl(`https://github.com/acme/${BACKLOG_NAME}`), `acme/${BACKLOG_NAME}`);
+  assert.equal(repoIdFromUrl(`git@github.com:acme/${BACKLOG_NAME}.git`), `acme/${BACKLOG_NAME}`);
+  assert.equal(repoIdFromUrl(`/srv/acme/${BACKLOG_NAME}.git`), `acme/${BACKLOG_NAME}`);
+  assert.equal(repoIdFromUrl(`C:\\srv\\acme\\${BACKLOG_NAME}.git`), `acme/${BACKLOG_NAME}`);
+  assert.equal(repoIdFromUrl(`  https://github.com/acme/${BACKLOG_NAME}.git  `), `acme/${BACKLOG_NAME}`);
   // a token in the URL changes nothing (last two parts win)
-  assert.equal(repoIdFromUrl('https://u:ghp_x@github.com/SmoothSDLC/smoothsdlc-backlog.git'), 'SmoothSDLC/smoothsdlc-backlog');
+  assert.equal(repoIdFromUrl(`https://u:ghp_x@github.com/acme/${BACKLOG_NAME}.git`), `acme/${BACKLOG_NAME}`);
   // trailing slashes are ignored, .git is stripped
   assert.equal(repoIdFromUrl('https://github.com/o/r.git/'), 'o/r');
   // fewer than two parts -> ""
   assert.equal(repoIdFromUrl('a;rm -rf x'), '');
-  assert.equal(repoIdFromUrl('https://github.com/SmoothSDLC'), 'github.com/SmoothSDLC');
+  assert.equal(repoIdFromUrl('https://github.com/acme'), 'github.com/acme');
   assert.equal(repoIdFromUrl(''), '');
   assert.equal(repoIdFromUrl(null), '');
   assert.equal(repoIdFromUrl(undefined), '');
@@ -82,19 +87,19 @@ test('itemSelector: digits -> {number}, anything else -> {slug}, empty -> null',
 test('validateHome: a good shared clone passes and returns the path', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);
-  assert.equal(await validateHome(home), home);
+  assert.equal(await validateHome(home, ID, DFLT), home);
 });
 
 test('validateHome: a relative path is refused before any git call', async () => {
-  await assert.rejects(validateHome('home'), /not an absolute path/);
+  await assert.rejects(validateHome('home', ID, DFLT), /not an absolute path/);
 });
 
 test('validateHome: a missing path is refused with its message', async () => {
   const d = tmp(test);
   const missing = join(d, 'nohome');
   await assert.rejects(
-    validateHome(missing),
-    (e) => e.message === `BACKLOG_HOME=${missing} does not exist; expected a clone of SmoothSDLC/smoothsdlc-backlog on main (unset BACKLOG_HOME to use ~/git/smoothsdlc-backlog)`,
+    validateHome(missing, ID, DFLT),
+    (e) => e.message === `BACKLOG_HOME=${missing} does not exist; expected a clone of ${ID} on main (unset BACKLOG_HOME to use ${DFLT})`,
   );
 });
 
@@ -103,8 +108,8 @@ test('validateHome: a directory that is not the top folder of a git repository',
   const home = sharedBacklog(d);
   const sub = join(home, 'subdir');
   mkdirSync(sub);
-  await assert.rejects(validateHome(sub),
-    new RegExp(`${sub.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} is not the top folder of a git repository; expected a clone of SmoothSDLC/smoothsdlc-backlog on main`));
+  await assert.rejects(validateHome(sub, ID, DFLT),
+    new RegExp(`${sub.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} is not the top folder of a git repository; expected a clone of ${ID} on main`));
 });
 
 test('validateHome: a symlinked home is refused (item: no symlink on the path, via src/storage.js:8-17)', async () => {
@@ -113,27 +118,27 @@ test('validateHome: a symlinked home is refused (item: no symlink on the path, v
   const link = join(d, 'links', 'home');
   mkdirSync(join(d, 'links'));
   symlinkSync(real, link);
-  await assert.rejects(validateHome(link), /Symlink destination is unsupported/);
+  await assert.rejects(validateHome(link, ID, DFLT), /Symlink destination is unsupported/);
 });
 
 test('validateHome: a home with another origin is refused', async () => {
   const d = tmp(test);
   const other = consumer(d, 'Acme', 'widgets');
-  await assert.rejects(validateHome(other), /has origin 'Acme\/widgets'; expected SmoothSDLC\/smoothsdlc-backlog/);
+  await assert.rejects(validateHome(other, ID, DFLT), /has origin 'Acme\/widgets'; expected acme\/backlog-repo/);
 });
 
 test('validateHome: a home on another branch is refused', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);
   spawnSync('git', ['-C', home, 'checkout', '-q', '-b', 'dev']);
-  await assert.rejects(validateHome(home), /is on branch 'dev'; the backlog repository stays on main/);
+  await assert.rejects(validateHome(home, ID, DFLT), /is on branch 'dev'; the backlog repository stays on main/);
 });
 
 test('validateHome: a detached home says detached HEAD', async () => {
   const d = tmp(test);
   const home = sharedBacklog(d);
   spawnSync('git', ['-C', home, 'checkout', '-q', '--detach']);
-  await assert.rejects(validateHome(home), /is on branch 'detached HEAD'; the backlog repository stays on main/);
+  await assert.rejects(validateHome(home, ID, DFLT), /is on branch 'detached HEAD'; the backlog repository stays on main/);
 });
 
 test('assertInside: a path inside the root returns the relative path; the root itself is ""', async () => {
@@ -177,8 +182,8 @@ test('checkRefs: absolute refs, .. refs and empty refs are refused (item hostile
 });
 
 test('redact: user:token@ is stripped from URLs in git stderr (item hostile input)', () => {
-  assert.equal(redact('remote: https://u:ghp_x@github.com/SmoothSDLC/smoothsdlc-backlog.git (fetch)'),
-    'remote: https://github.com/SmoothSDLC/smoothsdlc-backlog.git (fetch)');
+  assert.equal(redact(`remote: https://u:ghp_x@github.com/acme/${BACKLOG_NAME}.git (fetch)`),
+    `remote: https://github.com/acme/${BACKLOG_NAME}.git (fetch)`);
   assert.equal(redact('hint: git:tok@host:22/org/repo.git'), 'hint: host:22/org/repo.git');
   assert.equal(redact('error: https://u:ghp_x@github.com/a/b.git then https://y:z@h.com/c/d.git'),
     'error: https://github.com/a/b.git then https://h.com/c/d.git');
@@ -193,8 +198,8 @@ test('redact: the whole user-info of a URL goes, whatever characters the passwor
 });
 
 test('redact: colon-less userinfo and plain text are left intact; non-strings are stringified', () => {
-  assert.equal(redact('remote: git@github.com:SmoothSDLC/smoothsdlc-backlog.git'),
-    'remote: git@github.com:SmoothSDLC/smoothsdlc-backlog.git');
+  assert.equal(redact(`remote: git@github.com:acme/${BACKLOG_NAME}.git`),
+    `remote: git@github.com:acme/${BACKLOG_NAME}.git`);
   assert.equal(redact('hint: see a b c'), 'hint: see a b c');
   assert.equal(redact('u@h'), 'u@h');
   assert.equal(redact(123), '123');
@@ -256,7 +261,7 @@ test('validateHome: a home that is a clone of the right origin but a subdirector
   const home = sharedBacklog(d);
   const sub = join(home, 'phases');
   mkdirSync(sub);
-  await assert.rejects(validateHome(sub), /is not the top folder of a git repository/);
+  await assert.rejects(validateHome(sub, ID, DFLT), /is not the top folder of a git repository/);
 });
 
 const CRED = 'https://alice:SUPERSECRET@example.com';

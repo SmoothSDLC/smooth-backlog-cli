@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameS
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const BIN = resolve(fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)));
 const dirs = [];
@@ -19,7 +19,7 @@ function fixture() {
   sharedBacklog(t); // creates the bare origin (and a clone at <t>/home, unused here)
   const app = consumer(t, 'acme', 'app', 'main');
   for (const d of ['.claude', '.qwen']) mkdirSync(join(app, d));
-  const env = { HOME: join(t, 'user'), XDG_CONFIG_HOME: join(t, 'config'), BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: join(t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'),
+  const env = { HOME: join(t, 'user'), XDG_CONFIG_HOME: join(t, 'config'), BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`),
     GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid', QWEN_CODE_AGENT_ID: 'tester' };
   const run = (cwd, args, input) => { const r = spawnSync(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, ...env }, input: input ?? '', encoding: 'utf8' }); return { status: r.status, stdout: r.stdout, stderr: r.stderr }; };
   return { t, app, run };
@@ -32,9 +32,9 @@ test('043: setup clones beside the repository, writes a relative config, deploys
   const r = run(app, ['setup']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.doesNotMatch(r.stdout + r.stderr, /Backlog repository path/); // no prompt without --ask
-  const clone = join(t, 'consumer', 'smoothsdlc-backlog');
+  const clone = join(t, 'consumer', BACKLOG_NAME);
   assert.ok(existsSync(join(clone, '.git')));
-  assert.deepEqual(cfg(app), { backlog_repository: '../smoothsdlc-backlog' });
+  assert.deepEqual(cfg(app), { backlog_repository: `../${BACKLOG_NAME}` });
   for (const d of ['.claude', '.qwen']) assert.ok(existsSync(join(app, d, 'skills', 'backlog', 'SKILL.md')), d);
   const made = run(app, ['new', '--name', 'first', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x']);
   assert.equal(made.status, 0, made.stdout + made.stderr);
@@ -47,17 +47,17 @@ test('043: setup clones beside the repository, writes a relative config, deploys
   run(moved, ['query', '--phase', '1', '--agent', 'tester']);
   const u = run(moved, ['update', '1', '--append', 'after the move', '--by', 'tester']);
   assert.equal(u.status, 0, u.stdout + u.stderr);
-  assert.match(readFileSync(join(t, 'moved', 'smoothsdlc-backlog', 'acme', 'app', 'phases', '001-first.md'), 'utf8'), /after the move/);
+  assert.match(readFileSync(join(t, 'moved', BACKLOG_NAME, 'acme', 'app', 'phases', '001-first.md'), 'utf8'), /after the move/);
 });
 
 test('043: a second setup leaves the clone, replaces the skill copies and keeps the config; a missing clone names backlog setup', () => {
   const { t, app, run } = fixture();
   assert.equal(run(app, ['setup']).status, 0);
-  const clone = join(t, 'consumer', 'smoothsdlc-backlog');
+  const clone = join(t, 'consumer', BACKLOG_NAME);
   writeFileSync(join(clone, 'untracked.txt'), 'mine');
   const before = head(clone);
   writeFileSync(join(app, '.claude', 'skills', 'backlog', 'SKILL.md'), 'edited');
-  writeFileSync(join(app, '.smooth-backlog.json'), JSON.stringify({ backlog_repository: '../smoothsdlc-backlog', note: 'kept' }));
+  writeFileSync(join(app, '.smooth-backlog.json'), JSON.stringify({ backlog_repository: `../${BACKLOG_NAME}`, note: 'kept' }));
   const again = run(app, ['setup']);
   assert.equal(again.status, 0, again.stdout + again.stderr);
   assert.equal(head(clone), before);
@@ -77,7 +77,7 @@ test('043: setup --ask shows the default, uses the answer and records it relativ
   const r = run(app, ['setup', '--ask'], `${elsewhere}\n`);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   // the CLI prints the real path (macOS: /var is /private/var)
-  assert.match(r.stderr, new RegExp(`Backlog repository path \\[${join(realpathSync(t), 'consumer', 'smoothsdlc-backlog').replace(/[/.]/g, '\\$&')}\\]: `));
+  assert.match(r.stderr, new RegExp(`Backlog repository path \\[${join(realpathSync(t), 'consumer', BACKLOG_NAME).replace(/[/.]/g, '\\$&')}\\]: `));
   assert.ok(existsSync(join(elsewhere, '.git')));
   assert.deepEqual(cfg(app), { backlog_repository: '../../clones/backlog' });
   const keep = run(app, ['setup', '--ask'], '\n'); // an empty answer takes the default: the configured clone
@@ -95,5 +95,5 @@ test('043: setup removes nothing through a symbolic link in an agent folder', ()
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stderr, /symbolic link on the way: nothing changed/);
   assert.equal(readFileSync(join(outside, 'backlog', 'keep.txt'), 'utf8'), 'keep');
-  assert.ok(!existsSync(join(t, 'consumer', 'smoothsdlc-backlog')) && !existsSync(join(app, '.smooth-backlog.json'))); // checked first: nothing changed
+  assert.ok(!existsSync(join(t, 'consumer', BACKLOG_NAME)) && !existsSync(join(app, '.smooth-backlog.json'))); // checked first: nothing changed
 });

@@ -12,10 +12,9 @@ import { asChild, locked } from '../storage.js';
 import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
 import { actor, created, guarded, guardReflow } from './seen.js';
-import { configuredHome } from './setup.js';
+import { configuredHome, NEUTRAL_NAME, originSetting } from './setup.js';
 import { outsideTeam } from './team.js';
 
-const BACKLOG_ORIGIN = 'SmoothSDLC/smoothsdlc-backlog'; // lib_db.py:34
 const ACTIONABLE = ['pending', 'in_progress'];          // lib_db.py:515
 
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
@@ -24,19 +23,21 @@ const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'
 // lib_db.py:49-55 and 81-85. A missing home is returned tagged (ask.code 4), never cloned;
 // the caller prints ask.text and exits with ask.code.
 export function resolveHome() {
+  const setting = originSetting(); // item 091: no built-in name; the folder names derive from the setting
+  const name = setting.name || NEUTRAL_NAME;
   let home = process.env.BACKLOG_HOME;
   if (!home) home = configuredHome() ?? undefined; // item 043: the repository's .smooth-backlog.json comes before the per-user record
   if (!home) {
-    try { home = readFileSync(join(configDir(), 'smoothsdlc-backlog', 'home'), 'utf8').trim(); } catch { /* no record */ }
+    try { home = readFileSync(join(configDir(), name, 'home'), 'utf8').trim(); } catch { /* no record */ }
   }
-  home = resolve(expand(home || '~/git/smoothsdlc-backlog'));
+  home = resolve(expand(home || join('~/git', name)));
   // Symlinks above the home (macOS /var, a linked ~) are resolved once here; a link AT the home is kept for validateHome to refuse.
   if (existsSync(home)) return { home: join(realpathSync(dirname(home)), basename(home)), ask: null };
   return {
     home,
     ask: {
       code: 4,
-      text: `the backlog repository is not at ${home}. ASK THE USER: where is the local clone of ${BACKLOG_ORIGIN}, `
+      text: `the backlog repository is not at ${home}. ASK THE USER: where is the local clone of ${setting.id || 'the shared backlog repository'}, `
         + `or should it be cloned to ${home}? Then run 'backlog setup' in this repository (it clones it beside the repository) or `
         + `'backlog setup --ask' (it asks for the path), and run this command again.`,
     },

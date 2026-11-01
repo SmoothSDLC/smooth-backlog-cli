@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 
@@ -24,6 +24,21 @@ const newItem = (f, name, ...more) => {
   return r;
 };
 const setStatus = (f, item, status) => { const r = cli(['update', item, '--status', status], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
+// item 088: --status done runs only after both review stages passed for the item's commit; the fixture completes
+// Delta, so the stages run here (a fresh cody card, then the external reviewer, each with a fresh view). An
+// incomplete item takes only the lead's refinement, so the item is completed first (refs, estimate, DoD).
+const bothStages = (f, item) => {
+  const step = args => { const r = cli(args, { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
+  step(['update', item, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', '## Definition of done\n- [ ] it holds']);
+  step(['update', item, '--request-review', 'any', '--note', 'n']);
+  step(['query', '--phase', item, '--agent', 'cody-card1']);
+  step(['update', item, '--start-review', '--by', 'cody-card1']);
+  step(['update', item, '--review', 'pass', '--by', 'cody-card1', '--comments', 'fine per references/review/code.md']);
+  step(['update', item, '--request-review', 'codex', '--note', 'n']);
+  step(['query', '--phase', item, '--agent', 'codex']);
+  step(['update', item, '--start-review', '--by', 'codex']);
+  step(['update', item, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
+};
 const commitAll = home => { git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'fixture'); git(home, 'push', '-q'); };
 
 // Shared home + consumer acme/demo on main, built with the CLI:
@@ -42,6 +57,7 @@ function build(withFindings) {
   newItem(f, 'Gamma');
   newItem(f, 'Delta');
   setStatus(f, '003-gamma', 'in_progress');
+  bothStages(f, '004-delta');
   setStatus(f, '004-delta', 'done');
   git(cons, 'checkout', '-q', '-b', 'feature');
   newItem(f, 'Feat');
@@ -234,7 +250,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "updated_at": "TS",
       "completed_at": "TS",
       "claimed_by": "",
-      "review_state": "none"
+      "review_state": "passed"
     }
   ],
   "gone_branch_items": [
@@ -466,6 +482,7 @@ test('075: --critical lists the open critical items (JSON and text) and says so 
     + '⚠️ ========================================================================\n');
   assert.deepEqual(normJson(view(f, ['--critical', '--json']).stdout).map(x => [x.slug, x.severity, x.priority]), [['002-beta', 'critical', 0]]);
   const g = build(false);
+  bothStages(g, '002-beta');
   setStatus(g, '002-beta', 'done');
   assert.equal(view(g, ['--critical']).stdout, '✅ no open CRITICAL items on the backlog\n');
   assert.deepEqual(normJson(view(g, ['--critical', '--json']).stdout), []);
@@ -485,6 +502,21 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     + '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     + '  TS  state_change   branch=main commit=SHA set status=done\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    // item 088: the fixture completes Delta through both review stages before the done transition; their events are here
+    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by codex: PASS (TS)\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  review_started branch=main commit=SHA set review_started=Review started by codex at TS\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  review_requested branch=main commit=SHA n\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by cody-card1: PASS (TS)\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  review_started branch=main commit=SHA set review_started=Review started by cody-card1 at TS\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  review_requested branch=main commit=SHA n\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
+    + '  TS  state_change   branch=main commit=SHA set estimate_min=5, review_refs=references/review/code.md\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     + '  TS  state_change   branch=main commit=SHA set status=in_progress\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
@@ -541,7 +573,7 @@ test('075: a detached HEAD without --branch or --all is exit 2 with the exact re
 test('a read view pulls first: an item pushed from another clone is shown, and no item or db file is written', () => {
   const f = build(false);
   const home2 = join(f.t, 'home2');
-  git(f.t, 'clone', '-q', join(f.t, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), home2);
+  git(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), home2);
   const r = cli(['new', '--name', 'Pushed', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_HOME: realpathSync(home2) } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const before = git(f.home, 'rev-parse', 'HEAD');
@@ -558,7 +590,7 @@ test('a read view pulls first: an item pushed from another clone is shown, and n
 
 test('a failed pull stops the read: exit 3 and nothing printed on stdout', t => {
   const f = build(false);
-  git(f.home, 'remote', 'set-url', 'origin', join(f.t, 'gone', 'SmoothSDLC', 'smoothsdlc-backlog.git'));
+  git(f.home, 'remote', 'set-url', 'origin', join(f.t, 'gone', BACKLOG_OWNER, `${BACKLOG_NAME}.git`));
   const n = cli(['query', '--status'], { cwd: f.cons, tmp: f.t });
   assert.equal(n.status, 3);
   assert.equal(n.stdout, '');

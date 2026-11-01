@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import { HELP } from '../../src/help.js';
 
 const dirs = [];
@@ -116,7 +116,7 @@ test('exit code 3 is described for both cases: the update before the command fai
   const demo = consumer(broken, 'acme', 'demo', 'main');
   mkdirSync(join(broken, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(broken, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  renameSync(join(broken, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git'), join(broken, 'origin-gone.git'));
+  renameSync(join(broken, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), join(broken, 'origin-gone.git'));
   for (const args of [['query', '--status'], ['pop', '--agent', 'x']]) {
     const r = cli(args, { cwd: demo, tmp: broken });
     assert.equal(r.status, 3, `${args.join(' ')}: ${r.stdout}${r.stderr}`);

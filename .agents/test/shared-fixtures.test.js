@@ -1,6 +1,6 @@
 // Job 1 acceptance test: one consumer plus the shared backlog. backlog new must
 // succeed against the local bare origin only, and the real backlog repository
-// (~/git/smoothsdlc-backlog) must be untouched.
+// (~/git/backlog-repo) must be untouched.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';

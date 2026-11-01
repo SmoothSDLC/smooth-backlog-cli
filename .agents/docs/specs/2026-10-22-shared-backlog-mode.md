@@ -5,8 +5,9 @@ builds against this document. It is a convenience, never a source of truth: ever
 line the reviewer can open, and a row that contradicts its cited source is a defect.
 
 **Citation convention.** `<script>.py:<line>` = the read-only Python reference
-`~/git/smoothsdlc-backlog/skill/backlog/scripts/<script>.py` (the oracle for all shared-mode
-behavior; the scripts at commit `ec5b254e`). `src/<path>:<line>` = this repository at the start
+`~/git/<backlog-repo>/skill/backlog/scripts/<script>.py` (the oracle for all shared-mode
+behavior; the scripts at commit `ec5b254e`; item 091: the folder name derives from the shared
+backlog repository's setting, a neutral name without it). `src/<path>:<line>` = this repository at the start
 commit. `item <NNN>:<line>` = line `<line>` of `phases/<NNN>-*.md` in the SmoothSDLC/backlog-cli
 backlog (item 002 = this job). The push line each job pastes into its item is tagged `<TAG> <sha>`
 (item 002:41); a job that needs another module pulls that tag's line first.
@@ -14,18 +15,22 @@ backlog (item 002 = this job). The push line each job pastes into its item is ta
 ## 1. Modes
 
 Two modes, per user, exactly like the Python home record (item 002:46). Resolution order for the
-home path: `BACKLOG_HOME` env var, else the home record, else `~/git/smoothsdlc-backlog`
-(lib_db.py:49-55).
+home path: `BACKLOG_HOME` env var, else the home record, else the default home (lib_db.py:49-55;
+item 091: the folder name derives from the shared backlog repository's setting — the environment
+variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url` key of `.smooth-backlog.json`;
+a neutral name without it, and a command that needs the setting refuses, naming both sources,
+when it is in neither).
 
 | Record | Location and content | Source |
 |---|---|---|
-| Python home record | `$XDG_CONFIG_HOME/smoothsdlc-backlog/home` (`~/.config` when `XDG_CONFIG_HOME` is unset); content = the clone path + one newline | lib_db.py:45; set_home.py:33-35 |
+| Python home record | `$XDG_CONFIG_HOME/<folder name>/home` (`~/.config` when `XDG_CONFIG_HOME` is unset); content = the clone path + one newline; item 091: the CLI's folder name derives from the shared backlog repository's setting (a neutral name without it) | lib_db.py:45; set_home.py:33-35 |
 | CLI mode record | `$XDG_CONFIG_HOME/smooth-backlog-cli/mode.json` (same XDG convention, lib_db.py:45); content is exactly one JSON object: `{"mode":"shared"}` or `{"mode":"local"}` (shape fixed by this contract) | item 002:46 |
 
 - `backlog --use-backlog-repo <path>` (global option, placed before the command name).
   1. Validate `<path>` exactly as `ensure_home`: exists (lib_db.py:77-80); top folder of a git
-     repository (lib_db.py:92-94); origin `owner/name` equals `SmoothSDLC/smoothsdlc-backlog`,
-     case-insensitive (lib_db.py:34, 95-97); branch `main` (lib_db.py:98-100); then
+     repository (lib_db.py:92-94); origin `owner/name` equals the shared backlog repository's
+     setting (item 091; the oracle's constant, lib_db.py:34), case-insensitive (lib_db.py:95-97);
+     branch `main` (lib_db.py:98-100); then
      `git -C <path> pull -q --rebase --autostash` (lib_db.py:101-109).
   2. Write the home record atomically (tmp file + rename) as set_home.py:33-35 does.
   3. Write `mode.json` = `{"mode":"shared"}`.

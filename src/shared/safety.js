@@ -9,9 +9,6 @@ import { existsSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { safePath } from '../storage.js';
 
-const BACKLOG_ORIGIN = 'SmoothSDLC/smoothsdlc-backlog'; // lib_db.py:34
-const DEFAULT_HOME = '~/git/smoothsdlc-backlog'; // lib_db.py:36
-
 // owner/name from a git URL or path (lib_db.py:58-64): https://host/Owner/name(.git),
 // git@host:Owner/name(.git), /srv/Owner/name.git. The last two parts win, so a
 // token in the URL changes nothing; fewer than two parts -> "".
@@ -28,23 +25,26 @@ export function repoIdFromUrl(url) {
 // in the order the item fixes: absolute (item), exists (77-80, the path-naming
 // message), top folder of a git repository (92-94, compared after resolving
 // symlinks like Python's Path.resolve()), no symlink on the path (item, via
-// safePath), origin SmoothSDLC/smoothsdlc-backlog case-insensitive (95-97),
-// branch main (98-100). Returns the home path with its parent resolved or throws the message.
+// safePath), the expected owner/name case-insensitive (95-97), branch main
+// (98-100). expected is the shared backlog repository's owner/name and
+// defaultHome its default home - the CLI carries no built-in name (item 091):
+// both come from the caller's setting. Returns the home path with its parent
+// resolved or throws the message.
 // native: expands Windows 8.3 short names (RUNNER~1) the way git reports them;
 // Windows paths compare case-insensitively.
 const realPath = p => { const r = realpathSync.native(p); return process.platform === 'win32' ? r.toLowerCase() : r; };
 
-export async function validateHome(path) {
-  if (!isAbsolute(path)) throw new Error(`${path} is not an absolute path; use the absolute path to a clone of ${BACKLOG_ORIGIN}`);
-  if (!existsSync(path)) throw new Error(`BACKLOG_HOME=${path} does not exist; expected a clone of ${BACKLOG_ORIGIN} on main (unset BACKLOG_HOME to use ${DEFAULT_HOME})`);
+export async function validateHome(path, expected, defaultHome) {
+  if (!isAbsolute(path)) throw new Error(`${path} is not an absolute path; use the absolute path to a clone of ${expected}`);
+  if (!existsSync(path)) throw new Error(`BACKLOG_HOME=${path} does not exist; expected a clone of ${expected} on main (unset BACKLOG_HOME to use ${defaultHome})`);
   const top = (await git(['rev-parse', '--show-toplevel'], path)).stdout.trim();
-  if (!top || realPath(top) !== realPath(path)) throw new Error(`${path} is not the top folder of a git repository; expected a clone of ${BACKLOG_ORIGIN} on main`);
+  if (!top || realPath(top) !== realPath(path)) throw new Error(`${path} is not the top folder of a git repository; expected a clone of ${expected} on main`);
   // Symlinks above the home (macOS /var, a linked ~) are not attacker-controlled: resolve the parent, refuse a link at the home itself.
   const parent = realpathSync(dirname(resolve(path)));
   const home = join(parent, basename(path));
   await safePath(parent, home);
   const origin = repoIdFromUrl((await git(['remote', 'get-url', 'origin'], path)).stdout);
-  if (origin.toLowerCase() !== BACKLOG_ORIGIN.toLowerCase()) throw new Error(`${path} has origin '${origin || 'none'}'; expected ${BACKLOG_ORIGIN}`);
+  if (origin.toLowerCase() !== String(expected).toLowerCase()) throw new Error(`${path} has origin '${origin || 'none'}'; expected ${expected}`);
   const branch = (await git(['branch', '--show-current'], path)).stdout.trim();
   if (branch !== 'main') throw new Error(`${path} is on branch '${branch || 'detached HEAD'}'; the backlog repository stays on main`);
   return home; // the resolved path, as set_home.py records it

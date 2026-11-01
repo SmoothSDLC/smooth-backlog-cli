@@ -35,7 +35,7 @@ JSON emits {ok,data} or {ok,error}. Exit codes: 0 success, 2 invalid input, 1 fa
 Shared backlog repository mode
 The items of every repository can live in one Git repository, the backlog repository, instead of in each
 repository's own .backlog folder. Two options, put before the command, choose the mode; the choice is kept per user.
-  backlog --use-backlog-repo <path>   Use the clone of SmoothSDLC/smoothsdlc-backlog at <path> (shared mode)
+  backlog --use-backlog-repo <path>   Use the clone of the shared backlog repository at <path> (shared mode)
   backlog --use-local-repo            Go back to the repository's own .backlog folder (local mode)
   backlog setup [--ask]               Point this repository at the backlog repository (clone it beside it), deploy the skill
 Either option may be followed by a command, which then runs in that mode. In shared mode only the commands below

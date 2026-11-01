@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as store from '../../src/shared/store.js';
@@ -26,7 +26,7 @@ function fixture(t, prefix = 'new-test-') {
   const cons = consumer(dir, 'acme', 'demo', 'main');
   mkdirSync(join(dir, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  return { dir, home, cons, folder: join(home, 'acme', 'demo'), bare: join(dir, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git') };
+  return { dir, home, cons, folder: join(home, 'acme', 'demo'), bare: join(dir, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`) };
 }
 const node = (f, args, env) => cli(['new', ...args], { cwd: f.cons, tmp: f.dir, env });
 const BASE = ['--name', 'Alpha job', '--objective', 'do alpha', '--summary', 'sum alpha'];

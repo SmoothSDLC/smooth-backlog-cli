@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { cli, consumer, env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -26,7 +26,7 @@ function fixture(t) {
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   for (const [k, v] of Object.entries(GIT_IDENTITY)) { const old = process.env[k]; process.env[k] = v; t.after(() => { if (old === undefined) delete process.env[k]; else process.env[k] = old; }); }
   const home = sharedBacklog(dir);
-  const bare = join(dir, 'origins', 'SmoothSDLC', 'smoothsdlc-backlog.git');
+  const bare = join(dir, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
   const home2 = join(dir, 'home2');
   git(dir, 'clone', '-q', bare, home2);
   return { dir, bare, home, home2, folder: join(home, 'acme', 'demo'), folder2: join(home2, 'acme', 'demo') };

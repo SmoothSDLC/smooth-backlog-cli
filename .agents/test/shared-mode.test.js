@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { cli, consumer, env, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, ORIGIN_URL, cli, consumer, env, sharedBacklog } from './shared-fixtures.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fixture } from './helpers.js';
 
@@ -20,7 +20,7 @@ function pair(t) {
   // realpath: the home record holds the resolved path, and macOS tmpdir() is under the /var symlink
   return { tmp, home: realpathSync(sharedBacklog(tmp)), cons: consumer(tmp, 'acme', 'demo', 'main') };
 }
-const recordFile = tmp => join(tmp, 'config', 'smoothsdlc-backlog', 'home');
+const recordFile = tmp => join(tmp, 'config', BACKLOG_NAME, 'home');
 const modeFile = tmp => join(tmp, 'config', 'smooth-backlog-cli', 'mode.json');
 const read = p => (existsSync(p) ? readFileSync(p, 'utf8') : null);
 const setShared = tmp => { mkdirSync(dirname(modeFile(tmp)), { recursive: true }); writeFileSync(modeFile(tmp), '{"mode":"shared"}'); };
@@ -53,7 +53,7 @@ test('--use-backlog-repo refuses a clone with another origin: exit 2, die messag
   const other = consumer(f.tmp, 'Other', 'else', 'main');
   const r = cli(['--use-backlog-repo', other], { cwd: f.cons, tmp: f.tmp });
   assert.equal(r.status, 2);
-  assert.match(r.stderr, /^❌ backlog: .* has origin 'Other\/else'; expected SmoothSDLC\/smoothsdlc-backlog\n$/);
+  assert.match(r.stderr, /^❌ backlog: .* has origin 'Other\/else'; expected acme\/backlog-repo\n$/);
   assert.equal(read(recordFile(f.tmp)), null);
   assert.equal(read(modeFile(f.tmp)), null);
 });
@@ -63,7 +63,7 @@ test('--use-backlog-repo refuses a missing path (exit 2) and a clone that cannot
   const missing = cli(['--use-backlog-repo', join(f.tmp, 'nope')], { cwd: f.cons, tmp: f.tmp });
   assert.equal(missing.status, 2);
   assert.match(missing.stderr, /does not exist/);
-  spawnSync('git', ['remote', 'set-url', 'origin', join(f.tmp, 'gone', 'SmoothSDLC', 'smoothsdlc-backlog.git')], { cwd: f.home });
+  spawnSync('git', ['remote', 'set-url', 'origin', join(f.tmp, 'gone', 'acme', `${BACKLOG_NAME}.git`)], { cwd: f.home });
   const pull = cli(['--use-backlog-repo', f.home], { cwd: f.cons, tmp: f.tmp });
   assert.equal(pull.status, 3);
   assert.match(pull.stderr, /could not update .* from origin\/main/);
@@ -95,7 +95,8 @@ test('global mode options before a command switch first, then run the command (c
 
 test('--use-local-repo before a local command switches back, then runs it', t => {
   const f = fixture(t);
-  const e = { ...f.env, BACKLOG_HOME: sharedBacklog(f.dir) };
+  // item 091: the mode switch validates the clone's origin against the setting; this fixture's env carries it
+  const e = { ...f.env, BACKLOG_HOME: sharedBacklog(f.dir), BACKLOG_ORIGIN_URL: ORIGIN_URL };
   assert.equal(f.raw(['--use-backlog-repo', e.BACKLOG_HOME], { env: e }).status, 0);
   const r = f.raw(['--use-local-repo', '--json', 'init'], { env: e });
   assert.equal(r.status, 0, r.stderr);
@@ -178,10 +179,11 @@ test('the mode switch waits for the shared lock held by another operation, then 
 test('--use-local-repo switches back, leaves the home record untouched, and the local commands work', t => {
   const f = fixture(t);
   const home = sharedBacklog(f.dir);
-  const e = { ...f.env, BACKLOG_HOME: home };
+  // item 091: the mode switch validates the clone's origin against the setting; this fixture's env carries it
+  const e = { ...f.env, BACKLOG_HOME: home, BACKLOG_ORIGIN_URL: ORIGIN_URL };
   const shared = f.raw(['--use-backlog-repo', home], { env: e });
   assert.equal(shared.status, 0, shared.stderr);
-  const record = join(f.dir, 'config', 'smoothsdlc-backlog', 'home');
+  const record = join(f.dir, 'config', BACKLOG_NAME, 'home');
   const before = readFileSync(record, 'utf8');
   const refused = f.raw(['list'], { env: e }); // local grammar is skipped in shared mode
   assert.equal(refused.status, 2);
@@ -221,7 +223,7 @@ test('a shared command leaves the consuming repository clean and writes nothing 
 });
 
 test('the real ~/.config home record and mode record are unchanged', t => {
-  const real = ['smoothsdlc-backlog/home', 'smooth-backlog-cli/mode.json'].map(p => join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), p));
+  const real = [`${BACKLOG_NAME}/home`, 'smooth-backlog-cli/mode.json'].map(p => join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), p));
   const snap = () => real.map(p => (existsSync(p) ? [readFileSync(p, 'utf8'), statSync(p).mtimeMs] : null));
   const before = snap();
   const f = pair(t);
@@ -282,9 +284,9 @@ test('a missing home: BACKLOG_HOME set -> exit 2 naming the expected clone; defa
   setShared(f.tmp);
   const nope = join(f.tmp, 'nope');
   const cases = [
-    ['BACKLOG_HOME set but missing', { BACKLOG_HOME: nope }, 2, /^❌ backlog: BACKLOG_HOME=.*nope does not exist; expected a clone of SmoothSDLC\/smoothsdlc-backlog on main \(unset BACKLOG_HOME to use ~\/git\/smoothsdlc-backlog\)\n$/],
+    ['BACKLOG_HOME set but missing', { BACKLOG_HOME: nope }, 2, /^❌ backlog: BACKLOG_HOME=.*nope does not exist; expected a clone of acme\/backlog-repo on main \(unset BACKLOG_HOME to use ~\/git\/backlog-repo\)\n$/],
     // item 043: the answer is backlog setup
-    ['default home missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, 4, /^❌ backlog: the backlog repository is not at .*smoothsdlc-backlog\. ASK THE USER: where is the local clone of SmoothSDLC\/smoothsdlc-backlog, or should it be cloned to .*\? Then run 'backlog setup' in this repository .*'backlog setup --ask'/],
+    ['default home missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, 4, /^❌ backlog: the backlog repository is not at .*backlog-repo\. ASK THE USER: where is the local clone of acme\/backlog-repo, or should it be cloned to .*\? Then run 'backlog setup' in this repository .*'backlog setup --ask'/],
   ];
   for (const [label, e, code, pattern] of cases) {
     const extra = { BACKLOG_HEADLESS: '', ...e };
@@ -306,5 +308,5 @@ test('a home that is not a correct clone (another origin) is refused with exit 2
   const other = consumer(f.tmp, 'Other', 'else', 'main');
   const r = cli(['next'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: other } });
   assert.equal(r.status, 2);
-  assert.match(r.stderr, /has origin 'Other\/else'; expected SmoothSDLC\/smoothsdlc-backlog/);
+  assert.match(r.stderr, /has origin 'Other\/else'; expected acme\/backlog-repo/);
 });

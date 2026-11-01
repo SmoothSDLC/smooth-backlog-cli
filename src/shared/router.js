@@ -7,6 +7,7 @@ import { assertInside, redact, validateHome } from './safety.js';
 import { atomicWrite } from '../storage.js';
 import { cloneLocked, resolveHome, setMode } from './store.js';
 import { pull } from './sync.js';
+import { ORIGIN_REFUSAL, originFolderName, originSetting } from './setup.js';
 
 // command -> [module relative to this file, ...arguments put in front of the user's argv]
 export const TABLE = {
@@ -20,11 +21,13 @@ const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact
 export async function switchMode({ backlogRepo, rest = [] }) {
   const out = rest.length ? process.stderr : process.stdout; // a command follows: keep its stdout clean
   if (backlogRepo === undefined) { setMode('local'); out.write('✅ local mode: the repo-local .backlog store is in use\n'); return 0; }
+  const setting = originSetting();
+  if (!setting.url) return die(ORIGIN_REFUSAL); // item 091: no built-in name; the refusal names both sources, before anything is touched
   let home;
-  try { home = await validateHome(resolve(backlogRepo)); } catch (error) { return die(error.message); }
+  try { home = await validateHome(resolve(backlogRepo), setting.id, `~/git/${originFolderName()}`); } catch (error) { return die(error.message); }
   try { await cloneLocked(home, () => pull(home)); } catch (error) { return die(error.message, error.exitCode ?? 2); } // lock, abort, exit 3 and redaction are sync.js's
   const config = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
-  const record = join(config, 'smoothsdlc-backlog', 'home');
+  const record = join(config, originFolderName(), 'home');
   try {
     await assertInside(config, record); // no symlink on the way to the record
     mkdirSync(dirname(record), { recursive: true });
@@ -47,7 +50,9 @@ export async function run(command, argv, { table = TABLE, help } = {}) {
   // The oracle's order (lib_db.py:77-85): BACKLOG_HOME missing is an error, any other missing home is a question for the user.
   const { home, ask } = resolveHome();
   if (ask && !process.env.BACKLOG_HOME) return die(ask.text, ask.code);
-  try { await validateHome(home); } catch (error) { return die(error.message); }
+  const setting = originSetting();
+  if (!setting.url) return die(ORIGIN_REFUSAL); // item 091: no built-in name; the refusal names both sources, before the command runs
+  try { await validateHome(home, setting.id, `~/git/${originFolderName()}`); } catch (error) { return die(error.message); }
   const [spec, ...lead] = table[command];
   const module = await load(spec);
   if (!module) return die(`not built yet: ${command}`);

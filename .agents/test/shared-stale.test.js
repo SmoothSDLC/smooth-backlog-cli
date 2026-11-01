@@ -57,7 +57,8 @@ const sleepSec = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0,
 function pinnedDone(f, slug) {
   const path = join(f.folder, 'phases', `${slug}.md`);
   const doc = parse(readFileSync(path, 'utf8'));
-  store.write({ path, fm: { ...doc.fm, cody_pass_commit: doc.fm.commit || '', external_pass_commit: doc.fm.commit || '' }, body: doc.body }, f.folder);
+  const head = git(f.cons, 'rev-parse', 'HEAD').trim(); // the work commit the gate compares the pins to
+  store.write({ path, fm: { ...doc.fm, cody_pass_commit: head, external_pass_commit: head }, body: doc.body }, f.folder);
   const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'both review stages pinned'); git(f.home, 'push', '-q');
 }

@@ -123,9 +123,9 @@ ${SHARED}
 Options:
   --status STATUS
       The new status of the item. Open items are pending or in_progress, a finished item is done. Setting done
-      completes the item; an item that names its review documents refuses the completion until both review stages
-      - a Cody pass and a codex or claude pass on the same commit - have passed for the item's current work commit,
-      and the refusal names the missing stage. An item without review documents completes unreviewed.
+      completes the item and is a close: it is refused until both review stages - a Cody pass and a codex or claude
+      pass on the same commit - have passed for the item's current work commit, with or without review documents,
+      and the refusal names the missing stage. The owner closes without a review only with --close --by owner.
   --branch BRANCH
       Refused by design: the branch of an item is not changed here. Use backlog move --to-branch instead.
   --commit COMMIT

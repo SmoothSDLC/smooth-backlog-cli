@@ -212,8 +212,9 @@ test("the lead never claims, waits without polling while its team works, keeps i
   ok(f, ['update', kid, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
   ok(f, ['update', kid, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
   ok(f, ['update', kid, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'archy']);
-  ok(f, ['update', kid, '--start-review', '--by', 'cody']);
-  ok(f, ['update', kid, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md']);
+  // item 088: the cody-stage pass must run in a session of the item's team, or it sets no pin
+  ok(f, ['update', kid, '--start-review', '--by', 'cody'], T);
+  ok(f, ['update', kid, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md'], T);
   ok(f, ['update', kid, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'archy']);
   ok(f, ['update', kid, '--start-review', '--by', 'codex']);
   ok(f, ['update', kid, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
@@ -264,8 +265,9 @@ test('039: the claimer never reviews its own item; a reviewed item finishes only
   ok(f, ['update', t, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
   ok(f, ['update', t, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
   ok(f, ['update', t, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'archy']);
-  ok(f, ['update', t, '--start-review', '--by', 'cody']);
-  ok(f, ['update', t, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md']);
+  // item 088: the cody-stage pass must run in a session of the item's team, or it sets no pin
+  ok(f, ['update', t, '--start-review', '--by', 'cody'], { TEAM_NAME: 't1' });
+  ok(f, ['update', t, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md'], { TEAM_NAME: 't1' });
   ok(f, ['update', t, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'archy']);
   ok(f, ['update', t, '--start-review', '--by', 'codex']);
   ok(f, ['update', t, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
@@ -283,8 +285,9 @@ test("039: the lead's close and rework are never hidden by its team's refinement
   ok(f, ['update', w, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
   ok(f, ['update', w, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
   ok(f, ['update', w, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'lead']);
-  ok(f, ['update', w, '--start-review', '--by', 'cody']);
-  ok(f, ['update', w, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md']);
+  // item 088: the cody-stage pass must run in a session of the item's team, or it sets no pin
+  ok(f, ['update', w, '--start-review', '--by', 'cody'], T);
+  ok(f, ['update', w, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md'], T);
   ok(f, ['update', w, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'lead']);
   ok(f, ['update', w, '--start-review', '--by', 'codex']);
   ok(f, ['update', w, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);

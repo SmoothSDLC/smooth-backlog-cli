@@ -43,15 +43,15 @@ test('--status done is refused until both review stages passed (port of test_sta
   assert.equal(status(f), 'in_progress');
 });
 
-test('--status done on an item without review_refs completes unreviewed (port of test_status_done_on_item_without_review_refs, item 088)', () => {
+test('--status done on an old item without review_refs is refused until both review stages pass (item 088: --status done is a close)', () => {
   const f = fixture('old item without review_refs', []);
   const { fm, body } = parse(readFileSync(f.file, 'utf8')); // as an old item looks: none of the team keys (depends_on is not one)
   for (const k of ['work_class', 'review_classes', 'claimed_by', 'claimed_at', 'review_state', 'reviewer']) delete fm[k];
   writeFileSync(f.file, dump(fm, body));
-  // item 088: the --status done gate runs for an item that names its review documents; without them the item
-  // finishes unreviewed, as before the gate
+  // item 088: --status done is a close: both review stages, with or without review documents, claimed or not
   const r = update(f, [f.slug, '--status', 'done']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(status(f), 'done');
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.ok(r.stdout.includes('missing the Cody review stage'), r.stdout);
+  assert.notEqual(status(f), 'done');
 });
 

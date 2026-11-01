@@ -9,7 +9,7 @@ import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
-import { REFINE_HOW, missingFields, stageMissing, stageRefusal } from './lifecycle.js';
+import { REFINE_HOW, isSplitSlice, missingFields, stageMissing, stageRefusal } from './lifecycle.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -92,8 +92,12 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   // query.py:186-188: this branch's items of the caller's team in stage refining that nobody holds (first-round refinement)
   // item 088: a split slice is in stage refining with or without a team field - a teamless slice's refinement is the caller's
   // team's work too (its refinement review runs through the same stages)
-  const here = open.filter(r => (r.repository || '') === repo && r.branch === branch).map(r => ({ r, fm: files.get(r.path)?.fm ?? {} }));
-  const teamRefining = here.filter(x => ((x.fm.team && team.inTeam(x.fm)) || !x.fm.team) && x.fm.stage === 'refining' && !x.fm.claimed_by && !waitsAway(folder, x)); // nor one waiting on another repository (042)
+  const here = open.filter(r => (r.repository || '') === repo && r.branch === branch).map(r => { const file = files.get(r.path); return { r, fm: file?.fm ?? {}, body: file?.body ?? '' }; });
+  // item 088: a split slice is in stage refining with or without a team field - a teamless slice's refinement is the
+  // caller's team's work too; a slice written before the stage field existed has no stage, and the body's split
+  // marker names it as refining, so the dispatch offers its refinement, not a claim the gate would refuse.
+  const stageOf = x => x.fm.stage || (isSplitSlice(x.body) ? 'refining' : undefined);
+  const teamRefining = here.filter(x => ((x.fm.team && team.inTeam(x.fm)) || !x.fm.team) && stageOf(x) === 'refining' && !x.fm.claimed_by && !waitsAway(folder, x)); // nor one waiting on another repository (042)
   const refineHow = slug => REFINE_HOW.replaceAll('<item>', slug);
   const reviews = [];
   for (const x of own) {
@@ -303,7 +307,10 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   const canClaim = Object.fromEntries(members.map(m => [m, m !== lead && !roster[m]?.review_only && team.claimRefusal(folder, m) === null]));
   const planned = []; // item 034: the claims this plan gives out count against the limits of the next ones
   for (const { r, fm, undone } of rows) {
-    if (r.status !== 'pending' || fm.claimed_by || undone.length || team.isChunk(fm) || !team.isReady(fm)) continue;
+    // item 088: a slice written before the stage field existed has no stage; the body's split marker names it as
+    // refining, so the plan offers no claim the gate would refuse (the member's pop offers its refinement)
+    if (r.status !== 'pending' || fm.claimed_by || undone.length || team.isChunk(fm)
+      || !team.isReady({ stage: fm.stage || (isSplitSlice(files.get(r.path)?.body ?? '') ? 'refining' : undefined) })) continue;
     const free = members.filter(m => !busy.has(m) && canClaim[m] && !wipRefusal(folder, repo, fm, m, r.slug, planned)).sort((x, y) => held[x].length - held[y].length || members.indexOf(x) - members.indexOf(y));
     if (free.length) {
       planned.push({ repository: repo, slug: r.slug, fm: { ...fm, status: 'in_progress', claimed_by: free[0] } });

@@ -50,6 +50,10 @@ const hex = n => n.toString(16).padStart(40, '0');
 // <owner/name>#<number> for one of another repository); folder/cwd: the producer's folder and checkout of the
 // backlog clone (another repository's when the producer is foreign).
 function producerDone(f, p, state, who, { folder = f.folder, cwd = f.cons } = {}) {
+  // item 088: a completion needs both review stages passed on the working repository's current commit
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).stdout.trim();
+  setFront(f, p, { cody_pass_commit: head, external_pass_commit: head }, folder);
+  ok(f, ['query', '--phase', p, '--agent', 'tester'], cwd); // the pins are a change: the closer reads the item again
   ok(f, ['update', p, '--status', 'done', '--by', 'tester'], cwd);
   if (state === 'legacy') return; // closed before the rule: done, no handoffs key
   const rec = handoff.makeRecord({ dependent: who, commit: hex(1), contract: 'the contract', verification: 'the check', by: 'prod', at: '2026-10-30T00:00:00Z' });

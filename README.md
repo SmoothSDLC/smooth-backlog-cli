@@ -127,8 +127,10 @@ the item), then an external review by `codex` or `claude` on the same commit. A 
 time — the working repository's `HEAD` — and a commit of new work after a pass moves the work commit, so both
 stages run again; a changes verdict at either stage clears both. `--close` is refused until both stages passed for
 the current work commit, and the refusal names the missing stage; a passing Cody review asks for the external
-review, and a passing external review asks for the close. An item that names its review documents also refuses
-`--status done` until both stages passed; an item without them finishes unreviewed. Every split item starts in
+review, and a passing external review asks for the close. `--status done` is a close too: refused until both
+stages passed, with or without review documents. A Cody pass counts for the Cody stage only from a session of the
+item's team (`TEAM_NAME`); a pass that counts for no stage asks for the Cody review first. A teamless split slice
+claimed by a team's member joins that team. Every split item starts in
 stage refining, with or without a team field, and needs its refinement review (a `codex` or `claude` verdict)
 before it may be claimed; a slice written before the stage field existed is named by its body's split marker and
 takes the same gate. The owner closes without a review on a written decision — `--close --by owner --reason

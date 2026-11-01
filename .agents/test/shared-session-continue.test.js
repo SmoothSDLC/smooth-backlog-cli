@@ -151,7 +151,8 @@ test('082: query --plan offers the close to the new session of the card while th
   ok(f, ['update', s, '--claim', A1]);
   ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', B1]);
-  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
+  // item 088: the cody-stage pass must run in a session of the item's team, or it sets no pin
+  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`], { TEAM_NAME: TEAM });
   // item 088: the close waits for the external review on the same commit
   ok(f, ['update', s, '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', 'codex']);
@@ -181,7 +182,8 @@ test('082: a fresh session of the card is told to claim the item before it close
   ok(f, ['update', s, '--claim', A1]);
   ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', B1]);
-  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
+  // item 088: the cody-stage pass must run in a session of the item's team, or it sets no pin
+  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`], { TEAM_NAME: TEAM });
   // item 088: the close waits for the external review on the same commit
   ok(f, ['update', s, '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', 'codex']);

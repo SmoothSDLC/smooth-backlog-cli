@@ -122,8 +122,10 @@ sees and changes the backlog only through them.
   review time - the working repository's HEAD - and the gate compares the pins to the work commit at check time:
   a commit of new work after a pass moves the work commit, so both stages run again; a changes verdict at either
   stage clears both stages. A passing Cody review asks for the external review; a passing external review asks
-  for the close. An item that names its review documents also refuses `--status done` until both stages passed;
-  an item without them completes unreviewed. The owner closes without a review on a written decision:
+  for the close. `--status done` is a close too: refused until both stages passed, with or without review
+  documents. A Cody pass counts for the Cody stage only from a session of the item's team (TEAM_NAME); a pass that
+  counts for no stage (a reviewer outside both stages, or outside the item's team) asks for the Cody review first.
+  A teamless split slice claimed by a team's member joins that team. The owner closes without a review on a written decision:
   `--close --by owner --reason "<the decision>"`, recorded as an owner decision, even for a team item still in
   its refinement stages. Otherwise the claimer closes with `--close --summary "<what was delivered>"`.
 - [ ] Hand-off: the producer records its hand-off for each dependent before the dependent may be offered or claimed,

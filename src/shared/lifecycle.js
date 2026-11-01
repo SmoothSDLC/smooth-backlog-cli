@@ -59,6 +59,10 @@ export const isSplitSlice = body => /Split from `[^`]+`/.test(String(body ?? '')
 export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
+  // item 088: a split slice with no team is claimed by the team that refined it - the dispatch offers the slice's
+  // refinement to the team's members, and the claim joins the slice to the claiming session's team, so the slice
+  // belongs to that team from on. A plain teamless item (no split marker) stays outside the session's team.
+  if (teamName() && !fm.team && fm.repository === repo && isSplitSlice(body)) fm.team = teamName();
   // spec section 8 (item 039): the lead never claims a split item; the team runner claims the team's work item (no stage) for it
   // item 056: a team session (TEAM_NAME) claims only what pop offers it: an item of its own team in its repository (any
   // item without another team elsewhere). Checked inside the locked write, so team pop's scope is the claim's precondition.
@@ -305,10 +309,13 @@ export function review({ fm }, verdict, { by, comments } = {}) {
     const session = callerSession();
     if (session && session === fm.author_session) reject(`${by} reviews in the author session: a Cody review runs in a fresh session (same card, new session)`);
   }
+  // item 088: a Cody pass counts for the stage only from a session of the item's team - a pass by a reviewer
+  // outside the item's team is recorded but sets no pin, and the gate still asks for the Cody stage.
+  const codyInTeam = !fm.team || fm.team === teamName();
   const t = now();
   Object.assign(fm, {
     review_state: verdict === 'pass' ? 'passed' : 'changes-requested', reviewer: by, review_started: '', reviewed_at: t,
-    ...(codyStage && verdict === 'pass' ? { cody_pass_commit: head } : {}),
+    ...(codyStage && verdict === 'pass' && codyInTeam ? { cody_pass_commit: head } : {}),
     ...(externalStage && verdict === 'pass' ? { external_pass_commit: head } : {}),
     ...(verdict === 'changes' ? { cody_pass_commit: '', external_pass_commit: '' } : {}),
   });
@@ -450,7 +457,8 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   }
   if (incomplete.length && (teamScope().repo || steps.length || refining)) { // team mode: an incomplete item is only refined
     const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k)) && !(k === 'close' && ownerClose)).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),
-      ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k))).map(k => `--${k}`),
+      // item 088: the owner's close of an incomplete item carries its --summary (the decision needs no refinement)
+      ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k)) && !(ownerClose && k === 'summary')).map(k => `--${k}`),
       ...(a.append && !/^(?:[ \t]*ESTIMATE:[^\n]*(?:\n|$))+$/.test(a.append.trim()) && !hasDefinitionOfDone(a.append) ? ['--append'] : [])]; // only ESTIMATE lines pass as such
     if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${REFINE_HOW}` };
   }
@@ -502,8 +510,14 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
 export const shutdown = agent => `🛑 ${agent}: END THE SESSION NOW. Reply with text only and make no further tool call; your next task starts in a fresh session.`;
 
 // update.py:253-255: printed after a passing review. Item 088: a Cody pass asks for the external review (codex or
-// claude, same commit) - the close now only after both stages passed.
+// claude, same commit); a pass that counts for no stage (a reviewer outside both stages, or outside the item's
+// team) asks for the Cody review first; the close only after both stages passed.
 // update.py:379-382: the claimer closes, else the team lead (owner 2026-10-25), never the reviewer (item 039)
-export const closeNow = (fm, slug) => stageRefusal(fm) !== ''
-  ? `   ➡️  NEXT: the external review - the Cody pass is recorded; request the codex or claude review (backlog update ${slug} --request-review codex --note "<commit>"), it must pass on the same commit before the close`
-  : (!fm.claimed_by ? `   ➡️  CLOSE NOW: nobody holds it: the team lead closes it (backlog update ${slug} --close --by <lead> --summary "<outcome>")` : `   ➡️  CLOSE NOW: ${fm.claimed_by} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead`);
+export const closeNow = (fm, slug) => {
+  const missing = stageMissing(fm);
+  if (missing === 'external') return `   ➡️  NEXT: the external review - the Cody pass is recorded; request the codex or claude review (backlog update ${slug} --request-review codex --note "<commit>"), it must pass on the same commit before the close`;
+  if (missing === 'cody') return `   ➡️  NEXT: the Cody review first - the pass counts for no stage (the reviewer is outside both stages, or outside the item's team); a Cody agent (not the author session) passes the review, then codex or claude on the same commit (backlog update ${slug} --request-review any --note "<commit>")`;
+  return !fm.claimed_by
+    ? `   ➡️  CLOSE NOW: nobody holds it: the team lead closes it (backlog update ${slug} --close --by <lead> --summary "<outcome>")`
+    : `   ➡️  CLOSE NOW: ${fm.claimed_by} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead`;
+};

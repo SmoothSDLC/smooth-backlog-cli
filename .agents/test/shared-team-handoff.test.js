@@ -79,8 +79,9 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
   ok(f, ['update', a, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
   assert.ok(!existsSync(marker(f))); // a verdict writes none
   ok(f, ['update', a, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'archy']);
-  ok(f, ['update', a, '--start-review', '--by', 'cody']);
-  ok(f, ['update', a, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
+  // item 088: the cody-stage pass must run in a session of the item's team, or it sets no pin
+  ok(f, ['update', a, '--start-review', '--by', 'cody'], T1);
+  ok(f, ['update', a, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md'], T1);
   ok(f, ['update', a, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'archy']);
   ok(f, ['update', a, '--start-review', '--by', 'codex']);
   ok(f, ['update', a, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
@@ -168,8 +169,9 @@ test('an invalid time stamp stops nobody; the lead is never stopped; a lead clos
   rmSync(join(f.tdir, 'handoff', 'zed.json')); // zed has had its fresh session
   ok(f, ['update', z, '--review', 'pass', '--by', 'archy', '--comments', 'fine per references/review/code.md']);
   ok(f, ['update', z, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'lead']);
-  ok(f, ['update', z, '--start-review', '--by', 'cody']);
-  ok(f, ['update', z, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
+  // item 088: the cody-stage pass must run in a session of the item's team, or it sets no pin
+  ok(f, ['update', z, '--start-review', '--by', 'cody'], T1);
+  ok(f, ['update', z, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md'], T1);
   ok(f, ['update', z, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'lead']);
   ok(f, ['update', z, '--start-review', '--by', 'codex']);
   ok(f, ['update', z, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);

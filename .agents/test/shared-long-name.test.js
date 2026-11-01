@@ -2,10 +2,12 @@
 // write once added 41 characters to the item's file name and passed the 255-byte limit: ENAMETOOLONG). Local bare repos.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { dump, parse } from '../../src/shared/frontmatter.js';
+import { GIT_IDENTITY, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -29,6 +31,12 @@ test('047: update, replan, close and new work beside an item with a 250-byte fil
   run(['query', '--phase', slug, '--agent', 'tester']);
   run(['update', slug, '--note', 'a note', '--by', 'tester']);
   run(['update', '--replan', '2,1']);
+  run(['query', '--phase', slug, '--agent', 'tester']);
+  // item 088: a completion needs both review stages passed on the work commit: pin them (a write of the long-named file)
+  const path = join(phases, file); const d = parse(readFileSync(path, 'utf8'));
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: cons, encoding: 'utf8' }).stdout.trim();
+  writeFileSync(path, dump({ ...d.fm, cody_pass_commit: head, external_pass_commit: head }, d.body));
+  for (const a of [['commit', '-qam', 'pins'], ['push', '-q', 'origin', 'HEAD']]) assert.equal(spawnSync('git', a, { cwd: home, env: { ...process.env, ...GIT_IDENTITY } }).status, 0);
   run(['query', '--phase', slug, '--agent', 'tester']);
   run(['update', slug, '--status', 'done', '--by', 'tester']); // the close of an item without review_refs, with the reflow
   run(NEW('third item'));

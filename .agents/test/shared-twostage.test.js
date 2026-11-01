@@ -223,6 +223,15 @@ test('an owner close with --by owner --reason is accepted and recorded as an own
   assert.equal(fm(f, s).status, 'done');
 });
 
+test('an owner close of an incomplete item (no review documents, no estimate) is accepted with its --summary', () => {
+  const f = fixture();
+  const s = ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', DOD]).stdout
+    .split('created phase phases/')[1].split('.md')[0];
+  ok(f, ['query', '--phase', s, '--agent', 'owner']);
+  ok(f, ['update', s, '--close', '--by', 'owner', '--reason', 'the decision is recorded', '--summary', 'done']);
+  assert.equal(fm(f, s).status, 'done');
+});
+
 test('an owner close needs no review at all, but no --reason is refused; other closes keep their rules', () => {
   const f = fixture();
   const s = make(f, 'owner unreviewed item'); // no review at all: the owner decides
@@ -293,15 +302,37 @@ test('a legacy split slice without a stage field is not claimable until its refi
   ok(f, ['update', child, '--claim', 'archy']);
 });
 
-test('--status done runs unreviewed for an item without review documents; the gate names the stage when it has them', () => {
+// The review documents go away: an item as it looks without them (an old item predates them). Written and
+// committed and pushed in the fixture's backlog clone, the way another writer would store it.
+const withoutRefs = (f, slug) => {
+  const file = join(f.folder, 'phases', `${slug}.md`);
+  const doc = parse(readFileSync(file, 'utf8'));
+  const { review_refs: _refs, ...rest } = doc.fm; // eslint-disable-line no-unused-vars
+  store.write({ path: file, fm: rest, body: doc.body }, f.folder);
+  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
+  for (const args of [['add', '-A'], ['commit', '-q', '-m', 'no review documents'], ['push', '-q']]) {
+    const p = spawnSync('git', args, { cwd: f.home, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+    assert.equal(p.status, 0, p.stderr);
+  }
+};
+
+test('--status done is refused for an item without review documents until both stages pass', () => {
   const f = fixture();
-  const bare = ok(f, ['new', '--name', 'no review docs', '--objective', 'o', '--summary', 's', '--depends-on', 'none',
-    '--body', DOD]).stdout.split('created phase phases/')[1].split('.md')[0];
-  ok(f, ['update', bare, '--status', 'done', '--by', 'tester']); // no review documents: it finishes unreviewed
+  // the item is claimed and reviewed with the review documents present, then the documents go away (an old
+  // item predates them): the gate runs with or without the documents, and passes on the work commit's pins
+  const bare = make(f, 'no review docs item');
+  ok(f, ['update', bare, '--claim', 'tester']);
+  bothStages(f, bare, 'tester');
+  withoutRefs(f, bare);
+  ok(f, ['query', '--phase', bare, '--agent', 'tester']);
+  ok(f, ['update', bare, '--status', 'done', '--by', 'tester']);
   assert.equal(fm(f, bare).status, 'done');
-  const s = make(f, 'review docs item');
-  ok(f, ['update', s, '--claim', 'tester']);
-  no(f, ['update', s, '--status', 'done', '--by', 'tester'], 'missing the Cody review stage');
+  // a claimed item without the documents and without the passes is refused: the gate does not skip the reviews
+  const refused = make(f, 'no review docs refused item');
+  ok(f, ['update', refused, '--claim', 'tester']);
+  withoutRefs(f, refused);
+  ok(f, ['query', '--phase', refused, '--agent', 'tester']);
+  no(f, ['update', refused, '--status', 'done', '--by', 'tester'], 'missing the Cody review stage');
 });
 
 test('an empty work commit is no commit: a pass pinned to it (or a cleared pin) counts for no stage', () => {
@@ -310,4 +341,62 @@ test('an empty work commit is no commit: a pass pinned to it (or a cleared pin) 
   assert.equal(stageMissing({ cody_pass_commit: 'h', external_pass_commit: '' }, 'h'), 'external');
   assert.equal(stageMissing({ cody_pass_commit: 'o', external_pass_commit: 'o' }, 'h'), 'cody'); // passes for an older commit
   assert.equal(stageMissing({ cody_pass_commit: 'h', external_pass_commit: 'h' }, 'h'), '');
+});
+
+test('a Cody pass by an agent outside the item\'s team counts for no stage; the team\'s own pass pins it', () => {
+  const f = fixture();
+  const s = make(f, 'team cody item');
+  ok(f, ['update', s, '--set-team', 't1']);
+  ok(f, ['update', s, '--claim', 'archy']);
+  round(f, s, { claimer: 'archy', reviewer: 'cody' }); // recorded from a session with no team
+  assert.equal(fm(f, s).cody_pass_commit, undefined); // a pass outside the item's team sets no pin
+  round(f, s, { claimer: 'archy', reviewer: 'cody', env: { TEAM_NAME: 't1' } });
+  assert.equal(fm(f, s).cody_pass_commit, fm(f, s).commit);
+  round(f, s, { claimer: 'archy', reviewer: 'codex', env: { TEAM_NAME: 't1' } });
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  ok(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy']);
+  assert.equal(fm(f, s).status, 'done');
+});
+
+test('a teamless split slice claimed by a member of a named team joins that team', () => {
+  const f = fixture();
+  const parent = make(f, 'teamless parent');
+  const child = ok(f, ['new', '--name', 'teamless slice claim', '--split-from', parent, '--depends-on', 'none',
+    '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
+    .split('created phase phases/')[1].split('.md')[0];
+  ok(f, ['update', child, '--refine-start', '--by', 'm1'], { TEAM_NAME: 't1' });
+  ok(f, ['update', child, '--refine-done', '--by', 'm1', '--note', 'already complete'], { TEAM_NAME: 't1' });
+  ok(f, ['update', child, '--request-refinement-review', '--by', 'lead']);
+  ok(f, ['update', child, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'checkable (codex thread t-3)']);
+  assert.equal(fm(f, child).stage, 'ready');
+  ok(f, ['query', '--phase', child, '--agent', 'm1'], { TEAM_NAME: 't1' });
+  ok(f, ['update', child, '--claim', 'm1'], { TEAM_NAME: 't1' }); // the team that refined it claims it
+  assert.equal(fm(f, child).team, 't1');
+  assert.equal(fm(f, child).claimed_by, 'm1');
+});
+
+test('a legacy split slice without a stage is offered for its refinement, not for a claim', () => {
+  const f = fixture();
+  const parent = make(f, 'legacy dispatch parent');
+  const child = ok(f, ['new', '--name', 'legacy dispatch slice', '--split-from', parent, '--depends-on', 'none',
+    '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
+    .split('created phase phases/')[1].split('.md')[0];
+  legacyWrite(f, child, {}); // the stage goes away: a slice as written before the stage existed
+  const pop = JSON.parse(run(f, ['pop', '--agent', 'm1', '--json'], { TEAM_NAME: 't1' }).stdout);
+  assert.deepEqual([pop.action, pop.item], ['refine', child]); // its refinement, not a claim the gate refuses
+});
+
+test('a pass from an unrecognized reviewer asks for the Cody review first', () => {
+  const f = fixture();
+  const s = make(f, 'unrecognized reviewer item');
+  ok(f, ['update', s, '--claim', 'archy']);
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'the work in commit abc', '--by', 'archy']);
+  ok(f, ['query', '--phase', s, '--agent', 'agent-x']);
+  ok(f, ['update', s, '--start-review', '--by', 'agent-x']);
+  const r = ok(f, ['update', s, '--review', 'pass', '--by', 'agent-x', '--comments', 'fine per references/review/code.md']);
+  assert.equal(fm(f, s).cody_pass_commit, undefined); // the pass is outside both stages: no pin
+  assert.equal(fm(f, s).external_pass_commit, undefined);
+  assert.match(r.stdout, /the Cody review first/);
+  assert.doesNotMatch(r.stdout, /the Cody pass is recorded/);
 });

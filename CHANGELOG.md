@@ -23,7 +23,7 @@
   and takes its refinement review (codex or claude) before it may be claimed. The owner closes without a review on a
   written decision: `--close --by owner --reason "<the decision>"`, recorded as an owner decision (item 088).
 - A new session of the same card continues the item its earlier session claimed: a `--claim` with a name sharing
-  the `<item><card>` part before the colon (082k0c:02 after 082k0c:01) records the new session name on the item,
+  the `<item><card>` part before the colon (082ab:02 after 082ab:01) records the new session name on the item,
   with no takeover and no lead reassignment; the one-active-item, work-in-progress and hand-off-lock rules apply
   across the card's sessions, and the self-review block still holds for every earlier session name (a continuation
   of an item without `session_authors`, claimed before the list existed, keeps the earlier holder in the list);

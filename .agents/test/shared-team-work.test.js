@@ -27,8 +27,10 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
 const LEAD = { TEAM_LEAD: 'lead' };
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  const o = { cwd: f.cons, tmp: f.t, env: { ...LEAD, ...env } };
-  if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o); // read before the write (seen.js)
+  const o = { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '', ...LEAD, ...env } };
+  const actor = reader(args);
+  if (args[0] === 'update') cli(['query', '--phase', args[1], ...(actor ? ['--agent', actor] : [])], o); // read before the write, as the acting agent or the env actor (seen.js)
+  if (args[0] === 'new') { const i = args.indexOf('--split-from'); if (i > -1) cli(['query', '--phase', args[i + 1]], o); } // item 088: the split reads the parent's refinement state; the env actor's view of it must be fresh (seen.js)
   return cli(args, o);
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
@@ -92,6 +94,12 @@ test('the hand-off to review, a changes verdict and a close end the agent\'s ses
   ok(f, ['update', a, '--request-review', 'any', '--note', 'commit def', '--by', 'archy']);
   r = ok(f, ['update', a, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
   assert.doesNotMatch(r.stdout, STOP); // a pass leads to the close, which ends the session
+  ok(f, ['update', a, '--request-review', 'cody', '--note', 'commit def, cody stage', '--by', 'archy']);
+  ok(f, ['update', a, '--start-review', '--by', 'cody']);
+  ok(f, ['update', a, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', a, '--request-review', 'codex', '--note', 'commit def, external stage', '--by', 'archy']);
+  ok(f, ['update', a, '--start-review', '--by', 'codex']);
+  r = ok(f, ['update', a, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
   r = ok(f, ['update', a, '--close', '--summary', 'done', '--by', 'archy']);
   assert.equal(STOP.exec(r.stdout)?.[1], 'archy');
   assert.match(r.stdout.trimEnd().split('\n').pop(), STOP); // the last line: nothing after it asks for more work
@@ -173,7 +181,13 @@ test('only the claimer closes its item, else the team lead; the close-now line n
   const job = make(f, 'close job');
   ok(f, ['update', job, '--claim', 'archy']);
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy']);
-  const r = ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', job, '--request-review', 'cody', '--note', 'commit abc, cody stage', '--by', 'archy']);
+  ok(f, ['update', job, '--start-review', '--by', 'cody']);
+  ok(f, ['update', job, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', job, '--request-review', 'codex', '--note', 'commit abc, external stage', '--by', 'archy']);
+  ok(f, ['update', job, '--start-review', '--by', 'codex']);
+  const r = ok(f, ['update', job, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
   assert.ok(r.stdout.includes('CLOSE NOW: archy closes it') && r.stdout.includes('if the claimer has not, the team lead closes it when available (--close --by <lead>')
     && !r.stdout.includes('zed closes it'), r.stdout);
   no(f, ['update', job, '--close', '--summary', 'x', '--by', 'zed'], 'only the claimer (archy) closes it, else the team lead (lead); not zed');
@@ -197,6 +211,12 @@ test("the lead never claims, waits without polling while its team works, keeps i
   assert.equal(pl().action, 'idle');
   ok(f, ['update', kid, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
   ok(f, ['update', kid, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
+  ok(f, ['update', kid, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'archy']);
+  ok(f, ['update', kid, '--start-review', '--by', 'cody']);
+  ok(f, ['update', kid, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md']);
+  ok(f, ['update', kid, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'archy']);
+  ok(f, ['update', kid, '--start-review', '--by', 'codex']);
+  ok(f, ['update', kid, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
   ok(f, ['update', kid, '--close', '--summary', 'kid done', '--by', 'archy']);
   p = pl();
   assert.deepEqual([p.action, p.item], ['continue', w]); // every item of the team is done
@@ -230,13 +250,25 @@ test('039: the claimer never reviews its own item; a reviewed item finishes only
   no(f, ['update', job, '--review', 'pass', '--by', 'archy', '--comments', 'fine per references/review/code.md'], 'cannot review its own work');
   no(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine'], 'must cite at least one of the item');
   ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
-  no(f, ['update', job, '--status', 'done'], 'has review_refs and a passing review; finish it with --close');
+  no(f, ['update', job, '--status', 'done'], 'missing the Cody review stage');
+  ok(f, ['update', job, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'archy']);
+  ok(f, ['update', job, '--start-review', '--by', 'cody']);
+  ok(f, ['update', job, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md']);
+  ok(f, ['update', job, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'archy']);
+  ok(f, ['update', job, '--start-review', '--by', 'codex']);
+  ok(f, ['update', job, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
   ok(f, ['update', job, '--close', '--summary', 'done', '--by', 'archy']);
   const t = make(f, 'team job');
   ok(f, ['update', t, '--set-team', 't1']);
   ok(f, ['update', t, '--claim', 'archy']);
   ok(f, ['update', t, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
   ok(f, ['update', t, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
+  ok(f, ['update', t, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'archy']);
+  ok(f, ['update', t, '--start-review', '--by', 'cody']);
+  ok(f, ['update', t, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md']);
+  ok(f, ['update', t, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'archy']);
+  ok(f, ['update', t, '--start-review', '--by', 'codex']);
+  ok(f, ['update', t, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
   ok(f, ['update', t, '--release', 'archy']);
   no(f, ['update', t, '--close', '--summary', 'x', '--by', 'zed'], 'nobody holds this item of team t1: the team lead (lead) closes it; not zed');
   ok(f, ['update', t, '--close', '--summary', 'done', '--by', 'lead']);
@@ -250,6 +282,12 @@ test("039: the lead's close and rework are never hidden by its team's refinement
   ok(f, ['update', w, '--claim', 'lead']);
   ok(f, ['update', w, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
   ok(f, ['update', w, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
+  ok(f, ['update', w, '--request-review', 'cody', '--note', 'x, cody stage', '--by', 'lead']);
+  ok(f, ['update', w, '--start-review', '--by', 'cody']);
+  ok(f, ['update', w, '--review', 'pass', '--by', 'cody', '--comments', 'ok per references/review/code.md']);
+  ok(f, ['update', w, '--request-review', 'codex', '--note', 'x, external stage', '--by', 'lead']);
+  ok(f, ['update', w, '--start-review', '--by', 'codex']);
+  ok(f, ['update', w, '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md']);
   const c = make(f, 'child', '--split-from', w);
   for (const step of [['--refine-start', '--by', 'archy'], ['--refine-done', '--by', 'archy', '--note', 'x']]) ok(f, ['update', c, ...step]);
   const p = JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], T).stdout);

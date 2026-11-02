@@ -251,14 +251,17 @@ Options:
       keeps the self-review block of its earlier sessions.
   --review {pass,changes}
       Record a review verdict; it needs --by and --comments (team session). Two review stages are enforced before
-      any close: first a Cody review - a Cody agent (a name starting with cody, or a session name) in a fresh
+      any close: first a Cody review - for an item of a team, a registered member of that team (Qwen's team
+      config.json; when the CLI cannot read it, a Cody name in a session of the item's team); for an item without a
+      team, a Cody agent (a name starting with cody, or a session name) - in a fresh
       session, never the author session that claimed the item - the claim's session name (QWEN_CODE_SESSION_ID, else
       the session part of QWEN_CODE_AGENT_ID, never the team name), so a fresh session of the same card, or of the
       team, may - then an external review by codex or claude on the same commit. A pass pins the work commit at
       review time - the working repository's HEAD - and the gate compares the pins to the work commit at check
       time: a commit of new work after a pass moves the work commit, so both stages run again; a changes verdict at
-      either stage clears both stages and re-runs them. The output of a passing Cody review asks for the external
-      review; the output of a passing external review asks for the close.
+      either stage clears both stages and re-runs them; a changes verdict is recorded at either stage even after
+      the work commit moved (only an external pass needs the Cody pass on the current commit). The output of a
+      passing Cody review asks for the external review; the output of a passing external review asks for the close.
   --handoff DEPENDENT
       The producer records its hand-off for DEPENDENT, one of the item's dependents; only the item's claimer does
       (--by <you> or the claim). It replaces any earlier hand-off for the same dependent, which makes an earlier

@@ -259,9 +259,12 @@ const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // a team or agent name is one path segme
 // a time stamp is a finite number or a string of digits; anything else (an array, an object, text) is no time stamp
 const ms = v => { const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : NaN; return Number.isFinite(n) ? n : null; };
 const teamsRoot = () => join(homedir(), '.qwen', 'teams');
+// Qwen's team_create stores a team under its sanitized name (lower case; every character but a-z, 0-9 and - becomes -;
+// runs of - collapse; no - at either end): a team named Blue:Team is the folder blue-team.
+export const qwenTeamName = t => String(t).toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 export function teamDirs(name) {
   const t = strip(name || process.env.TEAM_NAME || '');
-  if (t) return SAFE.test(t) ? [join(teamsRoot(), t)] : [];
+  if (t) return SAFE.test(t) ? [join(teamsRoot(), qwenTeamName(t) || t)] : [];
   try { return readdirSync(teamsRoot(), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => join(teamsRoot(), e.name)).sort(); } catch { return []; }
 }
 // What config.json says of the agent: 'none' (no config.json, or one that cannot be read or has no members list),
@@ -273,6 +276,18 @@ function member(tdir, agent) {
   const m = cfg.members.filter(x => x && typeof x === 'object' && x.name === agent);
   return m.length ? { joined: ms(m[0].joinedAt) } : 'absent';
 }
+// Whether AGENT is a registered member of team NAME: 'member', 'absent' (the team's config.json lists members, not
+// AGENT), or 'unknown' (no team folder, a config.json that cannot be read, or one that lists no members).
+export function teamMembership(name, agent) {
+  if (!strip(name || '')) return 'unknown';
+  const m = teamDirs(name).map(d => member(d, agent));
+  if (m.some(x => typeof x === 'object')) return 'member';
+  // a config.json with an empty members list names nobody: unknown, as one that cannot be read
+  return m.includes('absent') && teamDirs(name).some(d => memberCount(d) > 0) ? 'absent' : 'unknown';
+}
+function memberCount(tdir) {
+  try { const cfg = JSON.parse(readFileSync(join(tdir, 'config.json'), 'utf8')); return Array.isArray(cfg?.members) ? cfg.members.length : 0; } catch { return 0; }
+}
 export function memberJoinedMs(tdir, agent) { const m = member(tdir, agent); return typeof m === 'object' ? m.joined : null; }
 const warned = new Set();
 const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
@@ -283,7 +298,7 @@ const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr
 export function markHandoff(teamName, agent, seq) {
   if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return { text: null }; // no team folder: nothing to mark
   if (agent === teamLead()) return { text: null }; // the lead is not a member
-  const tdir = join(teamsRoot(), teamName);
+  const tdir = join(teamsRoot(), qwenTeamName(teamName) || teamName); // the folder Qwen writes
   const m = member(tdir, agent);
   if (m === 'none' && existsSync(tdir)) warn(`${join(tdir, 'config.json')} cannot be read or names no members; no hand-off marker for ${agent}`);
   if (typeof m === 'object' && m.joined === null) warn(`the session time stamp (joinedAt) of ${agent} in ${join(tdir, 'config.json')} is no number; no hand-off marker`);
@@ -322,7 +337,7 @@ export function pendingHandoff(agent, teamName) {
 // A marker whose hand-off was not published is set aside as <agent>.released (the dispatcher's name for a released one).
 export function releaseHandoff(teamName, agent, text) {
   if (!SAFE.test(teamName || '') || !SAFE.test(agent || '')) return;
-  const dir = join(teamsRoot(), teamName, 'handoff');
+  const dir = join(teamsRoot(), qwenTeamName(teamName) || teamName, 'handoff');
   const file = join(dir, `${agent}.json`);
   const grab = join(dir, `.${agent}.${process.pid}.release`);
   try { renameSync(file, grab); } catch (e) { // none there, or one this change cannot set aside: say so, it would stop the member

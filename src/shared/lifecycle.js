@@ -10,7 +10,7 @@ import { acceptHandoff, recordHandoff, rejectHandoff } from './handoff-commands.
 import { openEdges } from './handoff.js';
 import { closeGate } from './handoff-close.js';
 import {
-  offeredTo, teamName,
+  offeredTo, teamMembership, teamName,
   REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, isSessionName, needsReview, outsideTeam, reviewOpenTo, strip,
   STOP_TEXT, restarting, staleReview, teamLead, teamScope, undoneDependencies,
 } from './team.js';
@@ -106,6 +106,9 @@ export function refineStart({ fm, folder, repo, body = '' }, by, { force } = {})
   // a slice created before the stage field existed has no stage, and the body's split marker names it as refining.
   const stage = fm.stage || (isSplitSlice(body) ? 'refining' : 'none');
   if (stage !== 'refining') reject(`only an item of a team in stage refining is refined (team ${fm.team || 'none'}, stage ${stage})`);
+  // item 088: a teamless split slice joins the refining session's team here, so the team's pop and plan offer it after
+  // its refinement review (the claim-time join below covers a slice refined before this rule)
+  if (teamName() && !fm.team && fm.repository === repo) fm.team = teamName();
   if (fm.claimed_by) reject(`claimed by ${fm.claimed_by}: the work item itself is refined and split by the team lead, not refined here`);
   if (fm.refiner && fm.refiner !== by) reject(`${fm.refiner} is refining it since ${fm.refine_started}; refine another item`);
   if (by === teamLead() && fm.refiner !== by) reject(`a member, not the team lead, refines in the first round (spec section 4); the lead re-refines only an item an owner decision returned to it`);
@@ -282,6 +285,16 @@ export function startReview({ fm }, by) {
   return { event: 'review_started', text: `Review started by ${by} at ${t}` };
 }
 
+// item 088: who records the Cody stage. For an item of a team, a registered member of that team (the team's Qwen
+// config.json); when the CLI cannot read the team's members, a Cody name (cody..., or a card session name) in a session
+// of the item's team. For an item without a team, a Cody name. A pass by anyone else is recorded but sets no pin.
+function codyReviewer(fm, by) {
+  const named = by.toLowerCase().startsWith('cody') || isSessionName(by);
+  if (!fm.team) return named;
+  const m = teamMembership(fm.team, by);
+  return m === 'member' || (m === 'unknown' && named && fm.team === teamName());
+}
+
 export function review({ fm }, verdict, { by, comments } = {}) {
   if (!by || !strip(comments || '')) reject('--review needs --by <agent> and --comments "<findings>"');
   if (isReviewAuthor(fm, by)) reject(NO_SELF_REVIEW(by));
@@ -299,23 +312,21 @@ export function review({ fm }, verdict, { by, comments } = {}) {
   // item 082: a session name (082aa:02) is a cody session name - its pass records the Cody stage too.
   // item 088: the pass pins the work commit (the working repository's HEAD) at review time; a commit of new work after
   // a pass moves HEAD, so the pin no longer matches and both stages run again.
-  const codyStage = by.toLowerCase().startsWith('cody') || isSessionName(by);
   const externalStage = ['codex', 'claude'].includes(by);
+  const codyStage = !externalStage && by !== 'owner' && codyReviewer(fm, by);
   const head = workCommit();
-  if (externalStage && fm.cody_pass_commit !== head) {
+  // a changes verdict is always recorded: it sends the item back to work whatever the pins say
+  if (externalStage && verdict === 'pass' && fm.cody_pass_commit !== head) {
     reject('the external review runs only after the Cody review passed on the current commit: a Cody agent (not the author session) reviews it first');
   }
   if (codyStage && fm.author_session) {
     const session = callerSession();
     if (session && session === fm.author_session) reject(`${by} reviews in the author session: a Cody review runs in a fresh session (same card, new session)`);
   }
-  // item 088: a Cody pass counts for the stage only from a session of the item's team - a pass by a reviewer
-  // outside the item's team is recorded but sets no pin, and the gate still asks for the Cody stage.
-  const codyInTeam = !fm.team || fm.team === teamName();
   const t = now();
   Object.assign(fm, {
     review_state: verdict === 'pass' ? 'passed' : 'changes-requested', reviewer: by, review_started: '', reviewed_at: t,
-    ...(codyStage && verdict === 'pass' && codyInTeam ? { cody_pass_commit: head } : {}),
+    ...(codyStage && verdict === 'pass' ? { cody_pass_commit: head } : {}),
     ...(externalStage && verdict === 'pass' ? { external_pass_commit: head } : {}),
     ...(verdict === 'changes' ? { cody_pass_commit: '', external_pass_commit: '' } : {}),
   });

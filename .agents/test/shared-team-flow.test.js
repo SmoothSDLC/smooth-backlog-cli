@@ -26,7 +26,7 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
   const user = join(t, 'user');
   const tdir = join(user, '.qwen', 'teams', 't1');
   mkdirSync(tdir, { recursive: true });
-  const session = joined => writeFileSync(join(tdir, 'config.json'), JSON.stringify({ name: 't1', members: ['archy', 'zed'].map(name => ({ name, agentId: `${name}@t1`, joinedAt: joined })) }));
+  const session = joined => writeFileSync(join(tdir, 'config.json'), JSON.stringify({ name: 't1', members: ['archy', 'zed', 'cody-a', 'cody-b', 'cody-c'].map(name => ({ name, agentId: `${name}@t1`, joinedAt: joined })) }));
   session(1000);
   const roster = join(t, 'team.json');
   writeFileSync(roster, JSON.stringify({ archy: {}, zed: {} }));

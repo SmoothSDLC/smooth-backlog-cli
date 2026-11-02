@@ -29,7 +29,7 @@ function fixture() {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const user = join(t, 'user'); // HOME: the team folders live under it
-  const tdir = join(user, '.qwen', 'teams', TEAM);
+  const tdir = join(user, '.qwen', 'teams', 't07-09-1a'); // the folder Qwen writes for TEAM (its sanitized name)
   mkdirSync(tdir, { recursive: true });
   return { t, home, cons, user, tdir, folder: join(home, 'acme', 'demo') };
 }

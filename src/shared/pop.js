@@ -161,7 +161,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   if (!act && !refusal && !noClaim) {
     for (const { r, fm, undone, f } of own) {
       // chunk items are offered as chunk work below
-      if (r.status === 'pending' && !fm.claimed_by && !undone.length && !team.isChunk(fm) && team.isReady(fm) && !wipRefusal(folder, repo, fm, me, r.slug)) { // a team's item only in stage ready; never past a limit (034)
+      if (r.status === 'pending' && !fm.claimed_by && !undone.length && !team.isChunk(fm) && team.isReady({ stage: stageOf({ fm, body: files.get(r.path)?.body }) }) && !wipRefusal(folder, repo, fm, me, r.slug)) { // a team's item only in stage ready; never past a limit (034)
         act = { name: 'claim', r, f, say: `claim it: backlog update ${r.slug} --claim ${me}${dod(fm)}` };
         break;
       }

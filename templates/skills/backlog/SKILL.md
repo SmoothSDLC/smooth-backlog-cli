@@ -115,17 +115,18 @@ sees and changes the backlog only through them.
 - [ ] Work and hand off: record each step with `--append`; blocked on something, `--waiting "<what>" --by <you>`,
   then `--waiting-done --by <you>`. Hand off with `--request-review any --note "<commits, evidence>"`. A review is `--start-review
   --by <you>`, then `--review pass|changes --by <you> --comments "<findings, citing one of the item's review_refs>"`.
-  Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
-  agent - a name starting with cody, or a session name - in a fresh session, never the author session that
+  Two review stages are enforced before any close, with or without review documents: first a Cody review (for an
+  item of a team, a registered member of that team - Qwen's team config.json, else a Cody name in a session of the
+  item's team; for an item without a team, a name starting with cody or a session name - in a fresh session, never the author session that
   claimed the item - the claim's session name, never the team name - so a fresh session of the same card, or of
   the team, may), then an external review by codex or claude on the same commit. A pass pins the work commit at
   review time - the working repository's HEAD - and the gate compares the pins to the work commit at check time:
   a commit of new work after a pass moves the work commit, so both stages run again; a changes verdict at either
   stage clears both stages. A passing Cody review asks for the external review; a passing external review asks
   for the close. `--status done` is a close too: refused until both stages passed, with or without review
-  documents. A Cody pass counts for the Cody stage only from a session of the item's team (TEAM_NAME); a pass that
-  counts for no stage (a reviewer outside both stages, or outside the item's team) asks for the Cody review first.
-  A teamless split slice claimed by a team's member joins that team. The owner closes without a review on a written decision:
+  documents. A changes verdict is recorded at either stage even after the work commit moved. A pass that counts for
+  no stage (a reviewer outside both stages, or not a member of the item's team) asks for the Cody review first.
+  A teamless split slice joins the team of the member who starts its refinement (or, refined earlier, who claims it). The owner closes without a review on a written decision:
   `--close --by owner --reason "<the decision>"`, recorded as an owner decision, even for a team item still in
   its refinement stages. Otherwise the claimer closes with `--close --summary "<what was delivered>"`.
 - [ ] Hand-off: the producer records its hand-off for each dependent before the dependent may be offered or claimed,

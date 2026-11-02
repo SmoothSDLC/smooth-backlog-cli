@@ -121,16 +121,17 @@ holder), so the block survives a hand-off. Every claim, reassign, release and re
 the item's current holder and review requester, so an item written before the list existed keeps the block of its
 earlier sessions.
 
-Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
-agent — a name starting with `cody`, or a session name — in a fresh session, never the author session that claimed
+Two review stages are enforced before any close, with or without review documents: first a Cody review (for an item of
+a team, a registered member of that team — Qwen's team `config.json`, else a Cody name in a session of the item's
+team; for an item without a team, a name starting with `cody` or a session name — in a fresh session, never the author session that claimed
 the item), then an external review by `codex` or `claude` on the same commit. A pass pins the work commit at review
 time — the working repository's `HEAD` — and a commit of new work after a pass moves the work commit, so both
 stages run again; a changes verdict at either stage clears both. `--close` is refused until both stages passed for
 the current work commit, and the refusal names the missing stage; a passing Cody review asks for the external
 review, and a passing external review asks for the close. `--status done` is a close too: refused until both
-stages passed, with or without review documents. A Cody pass counts for the Cody stage only from a session of the
-item's team (`TEAM_NAME`); a pass that counts for no stage asks for the Cody review first. A teamless split slice
-claimed by a team's member joins that team. Every split item starts in
+stages passed, with or without review documents. A changes verdict is recorded at either stage even after the
+work commit moved. A pass that counts for no stage asks for the Cody review first. A teamless split slice joins the
+team of the member who starts its refinement (or, refined earlier, who claims it). Every split item starts in
 stage refining, with or without a team field, and needs its refinement review (a `codex` or `claude` verdict)
 before it may be claimed; a slice written before the stage field existed is named by its body's split marker and
 takes the same gate. The owner closes without a review on a written decision — `--close --by owner --reason

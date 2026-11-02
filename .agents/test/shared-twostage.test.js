@@ -400,3 +400,67 @@ test('a pass from an unrecognized reviewer asks for the Cody review first', () =
   assert.match(r.stdout, /the Cody review first/);
   assert.doesNotMatch(r.stdout, /the Cody pass is recorded/);
 });
+
+// A team's Qwen folder under HOME: Qwen stores the team under its sanitized name (Blue:Team -> blue-team).
+const qwenTeam = (f, folderName, members) => {
+  const d = join(f.t, 'qhome', '.qwen', 'teams', folderName);
+  mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, 'config.json'), JSON.stringify({ name: folderName, members: members.map(name => ({ name, joinedAt: Date.now() })) }));
+  return { HOME: join(f.t, 'qhome') };
+};
+
+test('a registered member of the item\'s team records the Cody stage; a Cody name the team does not list does not', () => {
+  const f = fixture();
+  const env = { ...qwenTeam(f, 'blue-team', ['rev1']), TEAM_NAME: 'Blue:Team' };
+  const s = make(f, 'member cody item');
+  ok(f, ['update', s, '--set-team', 'Blue:Team']);
+  ok(f, ['update', s, '--claim', 'archy'], env);
+  round(f, s, { claimer: 'archy', reviewer: 'cody', env }); // a Cody name, not a registered member
+  assert.equal(fm(f, s).cody_pass_commit, undefined);
+  round(f, s, { claimer: 'archy', reviewer: 'rev1', env }); // the team's member, found in the sanitized folder
+  assert.equal(fm(f, s).cody_pass_commit, fm(f, s).commit);
+  round(f, s, { claimer: 'archy', reviewer: 'codex', env });
+  ok(f, ['query', '--phase', s, '--agent', 'archy'], env);
+  ok(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy'], env);
+  assert.equal(fm(f, s).status, 'done');
+});
+
+test('an external changes verdict is recorded after the work commit moved, and clears both stages', () => {
+  const f = fixture();
+  const s = make(f, 'moved commit item');
+  ok(f, ['update', s, '--claim', 'archy']);
+  round(f, s, { claimer: 'archy', reviewer: 'cody' });
+  git(f.cons, 'commit', '-q', '--allow-empty', '-m', 'more work after the Cody pass');
+  round(f, s, { claimer: 'archy', reviewer: 'codex', verdict: 'changes' }); // refused before: the pin no longer matched
+  assert.equal(fm(f, s).review_state, 'changes-requested');
+  assert.equal(fm(f, s).cody_pass_commit, '');
+  assert.equal(fm(f, s).external_pass_commit, '');
+});
+
+test('a teamless split slice joins the refining team at --refine-start, and the team\'s pop offers its claim', () => {
+  const f = fixture();
+  const parent = make(f, 'join parent');
+  const child = ok(f, ['new', '--name', 'join slice', '--split-from', parent, '--depends-on', 'none',
+    '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
+    .split('created phase phases/')[1].split('.md')[0];
+  ok(f, ['update', child, '--refine-start', '--by', 'm1'], { TEAM_NAME: 't1' });
+  assert.equal(fm(f, child).team, 't1');
+  ok(f, ['update', child, '--refine-done', '--by', 'm1', '--note', 'complete'], { TEAM_NAME: 't1' });
+  ok(f, ['update', child, '--request-refinement-review', '--by', 'lead']);
+  ok(f, ['update', child, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'checkable (codex thread t-4)']);
+  const pop = JSON.parse(run(f, ['pop', '--agent', 'm2', '--json'], { TEAM_NAME: 't1' }).stdout);
+  assert.deepEqual([pop.action, pop.item], ['claim', child]);
+});
+
+test('a legacy split slice another member is refining is not offered for a claim', () => {
+  const f = fixture();
+  const parent = make(f, 'legacy refining parent');
+  const child = ok(f, ['new', '--name', 'legacy refining slice', '--split-from', parent, '--depends-on', 'none',
+    '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
+    .split('created phase phases/')[1].split('.md')[0];
+  legacyWrite(f, child, { refiner: 'm2', team: 't1' }); // no stage, refined by another member
+  const pop = JSON.parse(run(f, ['pop', '--agent', 'm1', '--json'], { TEAM_NAME: 't1' }).stdout);
+  assert.notEqual(pop.action, 'claim');
+  const q = JSON.parse(run(f, ['query', '--claimable', '--json'], { TEAM_NAME: 't1' }).stdout || '{}');
+  assert.ok(!JSON.stringify(q).includes(child), 'query --claimable lists no legacy slice before its refinement review');
+});

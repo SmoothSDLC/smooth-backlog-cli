@@ -37,8 +37,9 @@
   origin is a different repository, or has no origin, is refused, and the error names the configured value; a
   setup clone that cannot be made (the repository cannot be cloned or reached) is refused the same way (exit 3,
   nothing changed) (item 091).
-- Two review stages are enforced before any close, with or without review documents: first a Cody review (a Cody
-  agent in a fresh session, never the author session that claimed the item - the claim's session name, never the
+- Two review stages are enforced before any close, with or without review documents: first a Cody review (for an
+  item of a team, a registered member of that team - Qwen's team config.json, found under the name Qwen stores the
+  team by, else a Cody name in a session of the item's team; for an item without a team, a Cody name - in a fresh session, never the author session that claimed the item - the claim's session name, never the
   team name - a fresh session of the same card, or of the team, may),
   then an external review by codex or claude on the same commit. A pass pins the work commit at review time - the
   working repository's HEAD - and the gate compares the pins to the work commit at check time: a commit of new work
@@ -46,9 +47,12 @@
   stages and re-runs them. `--close` is refused until both stages passed for the current work commit, and the
   refusal names the missing stage; a passing Cody review asks for the external review, and a passing external
   review asks for the close. `--status done` is a close too: refused until both stages passed, with or without
-  review documents. A Cody pass counts for the Cody stage only from a session of the item's team (TEAM_NAME); a
-  pass that counts for no stage (a reviewer outside both stages, or outside the item's team) asks for the Cody
-  review first. A teamless split slice claimed by a team's member joins that team. A split item starts in stage refining,
+  review documents. A changes verdict is recorded at either stage even after the work commit
+  moved. A pass that counts for no stage (a reviewer outside both stages, or not a member of the item's team) asks
+  for the Cody review first. A teamless split slice joins the team of the member who starts its refinement (or,
+  refined earlier, who claims it); a legacy slice without a stage is offered for no claim before its refinement
+  review (pop and query --claimable). The team folder of the hand-off markers is the one Qwen writes (its
+  sanitized team name: Blue:Team is blue-team). A split item starts in stage refining,
   with or without a team field, and takes its refinement review (codex or claude) before it may be claimed; a
   slice written before the stage field existed is named by its body's split marker and takes the same gate; a
   teamless slice is dispatched to a member for refinement and to the team lead for its refinement review. The

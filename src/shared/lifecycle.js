@@ -55,6 +55,10 @@ export function missingFields(fm, body) {
 // item 088: the marker new.js writes into a split slice's body (## Split from `<parent-slug>`. Inherited context:);
 // a slice created before the stage field existed has no stage, and the marker names it.
 export const isSplitSlice = body => /Split from `[^`]+`/.test(String(body ?? ''));
+// Owner 2026-11-02 (decision 083-A): nothing is implemented before it is refined. A team item without a stage (a team's work
+// item, or one written before the stage field existed) and a split slice without one are unrefined: refining. Only an item
+// without a team and without the split marker has no stage (solo work), which counts as ready.
+export const stageOf = (fm, body) => fm.stage || (fm.team || isSplitSlice(body) ? 'refining' : undefined);
 
 export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
@@ -75,8 +79,10 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages.
   // Item 088: a split slice is in stage refining with or without a team field, so the gate covers it too; a slice
   // created before the stage field existed has no stage, and the body's split marker names it as refining.
-  const stage = fm.stage || (isSplitSlice(body) ? 'refining' : undefined);
-  if (!isReady({ stage })) reject(`team ${fm.team || 'none'} item in stage ${stage || 'none'}: it is claimed only when its refinement review passed (stage ready)`);
+  // the team lead's own claim of its team's work item (backlog team pop, to split it) is the one claim of an unrefined item
+  const stage = agent === teamLead() && fm.team && !fm.stage ? undefined : stageOf(fm, body);
+  if (!isReady({ stage })) reject(`team ${fm.team || 'none'} item in stage ${stage || 'none'}${fm.stage ? '' : ' (not refined yet)'}: it is claimed only when its refinement review passed (stage ready)`
+    + (stage === 'refining' && !fm.refiner ? `; refine it first: backlog update ${fm.phase || '<item>'} --refine-start --by <you>` : ''));
   // item 082: a new session of the same card continues the item (no takeover, no lead reassignment): the
   // holder check and the "already holding" checks treat the earlier session's item as the agent's own
   const cont = heldBy(who, agent);
@@ -104,7 +110,7 @@ export function refineStart({ fm, folder, repo, body = '' }, by, { force } = {})
   if (!by) reject('--refine-start needs --by <agent>');
   // item 088: a split slice is in stage refining with or without a team field - both refine through the same stages;
   // a slice created before the stage field existed has no stage, and the body's split marker names it as refining.
-  const stage = fm.stage || (isSplitSlice(body) ? 'refining' : 'none');
+  const stage = stageOf(fm, body) || 'none';
   if (stage !== 'refining') reject(`only an item of a team in stage refining is refined (team ${fm.team || 'none'}, stage ${stage})`);
   // item 088: a teamless split slice joins the refining session's team here, so the team's pop and plan offer it after
   // its refinement review (the claim-time join below covers a slice refined before this rule)

@@ -44,6 +44,9 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
+// item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it
+const refined = (f, slug, lead = 'lead') => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', lead], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']]
+  .forEach(a => { ok(f, ['query', '--phase', slug, '--agent', a[a.indexOf('--by') + 1]], { TEAM_LEAD: lead }); ok(f, ['update', slug, ...a], { TEAM_LEAD: lead }); });
 // One review round: the claimer requests, the reviewer starts and records the verdict. The stale-view guard
 // needs each actor's fresh read of the item first.
 const round = (f, slug, { claimer, reviewer, verdict = 'pass', note = 'the work in commit abc', env }) => {
@@ -347,6 +350,7 @@ test('a Cody pass by an agent outside the item\'s team counts for no stage; the 
   const f = fixture();
   const s = make(f, 'team cody item');
   ok(f, ['update', s, '--set-team', 't1']);
+  refined(f, s);
   ok(f, ['update', s, '--claim', 'archy']);
   round(f, s, { claimer: 'archy', reviewer: 'cody' }); // recorded from a session with no team
   assert.equal(fm(f, s).cody_pass_commit, undefined); // a pass outside the item's team sets no pin
@@ -414,6 +418,7 @@ test('a registered member of the item\'s team records the Cody stage; a Cody nam
   const env = { ...qwenTeam(f, 'blue-team', ['rev1']), TEAM_NAME: 'Blue:Team' };
   const s = make(f, 'member cody item');
   ok(f, ['update', s, '--set-team', 'Blue:Team']);
+  refined(f, s);
   ok(f, ['update', s, '--claim', 'archy'], env);
   round(f, s, { claimer: 'archy', reviewer: 'cody', env }); // a Cody name, not a registered member
   assert.equal(fm(f, s).cody_pass_commit, undefined);
@@ -470,6 +475,7 @@ test('the team lead, not a listed member, records the Cody stage in a session of
   const env = { ...qwenTeam(f, 'blue-team', ['rev1']), TEAM_NAME: 'Blue:Team', TEAM_LEAD: 'boss' };
   const s = make(f, 'lead cody item');
   ok(f, ['update', s, '--set-team', 'Blue:Team']);
+  refined(f, s, 'boss');
   ok(f, ['update', s, '--claim', 'archy'], env);
   round(f, s, { claimer: 'archy', reviewer: 'boss', env });
   assert.equal(fm(f, s).cody_pass_commit, fm(f, s).commit);

@@ -408,8 +408,11 @@ Options:
       The note for the event log. Without it the log records which fields were set.
   --claim AGENT
       Take the item for an agent (team session). The command refuses when another agent holds the item, when an item
-      in its depends_on is not done, or when a split item (with or without a team) is not in stage ready (its
-      refinement review has not passed);
+      in its depends_on is not done, or when a split item (with or without a team) or a team's item is not in stage
+      ready (its refinement review has not passed). A team item without a stage (a team's work item, or one written
+      before the stage field existed) is unrefined, stage refining: only the team lead's own claim of its team's work
+      item (backlog team pop, to split it) is accepted; for every other agent the refusal names --refine-start. An
+      item without a team and without the split marker has no stage (solo work) and is claimable;
       otherwise the item becomes in progress and claimed by that agent. An agent or team name may contain letters,
       digits, a period, an underscore, a hyphen and a colon (a card's session names and a team name carry colons);
       the name works in the front matter, the event log, the commit subject, the hand-off marker file name and
@@ -453,8 +456,8 @@ Options:
       Set the team that owns the item; an empty NAME clears it. The team runner sets it on the work item it hands the team
       lead, and claims that item for the lead; items split from it inherit the team.
   --refine-start
-      A team member starts refining the item (--by <agent>): only a team's item in stage refining that nobody claims or
-      already refines. A split slice without a team joins the refining session's team (TEAM_NAME) here. The stages
+      A team member starts refining the item (--by <agent>): only a team's item in stage refining, or without a stage (unrefined),
+      that nobody claims or already refines. A split slice without a team joins the refining session's team (TEAM_NAME) here. The stages
       before any work are refining, refined, refinement-review and ready.
   --refine-done
       The refiner finished (--by <the refiner>, --note "<what you refined>"): stage refined. Refused while a team field or
@@ -655,7 +658,7 @@ Options:
       The branch whose queue to show. The default is the branch that is checked out here; a detached HEAD needs
       this option or --all.
   --claimable
-      Open, unclaimed items whose dependencies are all done, in priority order; another repository's items only as chunk
+      Open, unclaimed items whose dependencies are all done, in priority order (a team item before stage ready, or without a stage, is not claimable: it is refined first); another repository's items only as chunk
       work (chunk: true, with --scope all); with TEAM_NAME set, only that team's items of this repository (team session).
   --reviewable
       Items with a requested review that --agent may start or continue: a session that did not claim the item and did
@@ -805,7 +808,7 @@ on; when its review passed, close it), review (an item another agent asks to hav
 started), refine (a member: the refinement it has started, or the first-round refinement of a team item in stage
 refining that nobody refines; the team lead: an incomplete item that lacks required fields), claim (the open item with the
 lowest priority whose dependencies are done, that is no chunk item, is in stage ready when it is a split item
-(with or without a team), and that nobody holds), refinement-review (the team lead: refined items to send to the
+(with or without a team) or a team's item (a team item without a stage is unrefined: its refinement is offered, never a claim), and that nobody holds), refinement-review (the team lead: refined items to send to the
 refinement review), reassign-review (the team
 lead: a stale review of its team to hand on), stop (a member that handed its item off and waits for a fresh session: end
 the turn), chunk (a small piece

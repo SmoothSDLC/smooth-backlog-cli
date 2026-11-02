@@ -58,7 +58,7 @@ test('082: team pop records the continuation claim when the lead\'s earlier sess
   const f = fixture();
   const s = make(f, 'continuation work item'); ok(f, ['update', s, '--set-team', 't1']);
   ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
-  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:02' }); // the lead's earlier session holds it
+  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:01' }); // the lead's earlier session holds it (item 098: only the lead's own claim takes an unrefined work item)
   const p = pop(f, { TEAM_LEAD: '082bb:02' }, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.status], ['continue', s, 0]);
   assert.equal(fm(f, s).claimed_by, '082bb:02', 'the continuation records the new session as the holder');
@@ -70,7 +70,7 @@ test('082: team pop exits 1 when the continuation claim is handed back before th
   const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
   const s = make(f, 'handed back work item'); ok(f, ['update', s, '--set-team', 't1']);
   ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
-  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:02' }); // the lead's earlier session holds it
+  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:01' }); // the lead's earlier session holds it (item 098: only the lead's own claim takes an unrefined work item)
   const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: '082bb:02', BACKLOG_TEST_SELF: wrap, HAND_BACK_AFTER_CLAIM: '1', HAND_BACK_TO: '082bb:01' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /changed before team pop could show it/);
@@ -97,7 +97,7 @@ test('082: team pop exits 1 when the continuation claim is refused; the earlier 
   const dep = make(f, 'open dependency');
   const s = make(f, 'refused continuation item'); ok(f, ['update', s, '--set-team', 't1']);
   ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
-  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:02' }); // the lead's earlier session holds it
+  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:01' }); // the lead's earlier session holds it (item 098: only the lead's own claim takes an unrefined work item)
   ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
   ok(f, ['update', s, '--set-depends-on', dep.split('-')[0], '--by', '082bb:01']); // an undone dependency: the continuation claim is refused
   const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: '082bb:02' });

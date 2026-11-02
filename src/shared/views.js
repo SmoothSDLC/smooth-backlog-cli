@@ -5,7 +5,7 @@
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
-import { isSplitSlice, missingFields } from './lifecycle.js';
+import { missingFields, stageOf } from './lifecycle.js';
 import { assertInside, redact } from './safety.js';
 import * as store from './store.js';
 import * as team from './team.js';
@@ -113,7 +113,7 @@ export async function teamView(a, { all, hid, excluded, repo, branch, folder, ho
           if (!file || missingFields(file.fm, file.body).length) return false;
         }
         if (!team.offeredTo(fm, f, repo)) return false; // another team's item (TEAM_NAME)
-        if (a.claimable) return r.status === 'pending' && !fm.claimed_by && !undone.length && team.isReady({ stage: fm.stage || (f === repo && isSplitSlice(own.get(r.path)?.body) ? 'refining' : undefined) }) && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
+        if (a.claimable) return r.status === 'pending' && !fm.claimed_by && !undone.length && team.isReady({ stage: stageOf(fm, f === repo ? own.get(r.path)?.body : '') }) && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
         return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) && !undone.some(d => d.foreign && d.item?.status !== 'done') : undone.length > 0; // never a review of an item before ready (036), nor of one waiting on another repository (042)
       });
     if (a.decisions) return decisionsView(found, { a, scope, repo, branch, own, say, dump });

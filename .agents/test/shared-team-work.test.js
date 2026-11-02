@@ -38,6 +38,8 @@ const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 const work = (f, agent, env, ...args) => { const r = run(f, ['work', '--agent', agent, '--json', ...args], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
+// item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it
+const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']].forEach(a => ok(f, ['update', slug, ...a]));
 const STOP = /🛑 (\S+): END THE SESSION NOW\. Reply with text only and make no further tool call/;
 
 test('query --phase shows the whole item: the row, every front matter field and the body', () => {
@@ -65,6 +67,7 @@ test('backlog work: the next action marked as the agent\'s (claim, refinement st
   assert.ok(w.instruction.startsWith('you started the review: review the work of archy') && !w.instruction.includes('--start-review'), w.instruction);
   const parent = make(f, 'team work item');
   ok(f, ['update', parent, '--set-team', 't1']);
+  ok(f, ['update', parent, '--claim', 'lead']); // item 098: the lead holds its work item; unclaimed, a member would be offered its refinement first
   const child = make(f, 'child', '--split-from', parent);
   w = work(f, 'cody', { TEAM_NAME: 't1' });
   assert.deepEqual([w.action, w.item, w.marked, fm(f, child).refiner], ['refine', child, '--refine-start --by cody', 'cody']);
@@ -73,7 +76,6 @@ test('backlog work: the next action marked as the agent\'s (claim, refinement st
   assert.equal(text.status, 0, text.stderr);
   assert.ok(text.stdout.startsWith(`refine ${child}\n`) && text.stdout.includes(`--- item ${child}: front matter ---\n`) && text.stdout.includes('refiner: cody')
     && text.stdout.includes(`--- item ${child}: body ---\n`), text.stdout); // the refinement in progress: no new mark
-  ok(f, ['update', parent, '--claim', 'lead']);
   const idle = work(f, 'nobody', { TEAM_NAME: 't2' });
   assert.deepEqual([idle.action, idle.status, idle.front_matter], ['chunk', 0, null]); // nothing of its team: chunk work, no item
   const r = run(f, ['work']);
@@ -202,8 +204,9 @@ test("the lead never claims, waits without polling while its team works, keeps i
   ok(f, ['update', w, '--set-team', 't1']);
   ok(f, ['update', w, '--claim', 'lead']);
   const pl = () => JSON.parse(run(f, ['pop', '--agent', 'lead', '--json'], T).stdout);
-  const kid = make(f, 'ready child'); // a team item without a stage: ready
+  const kid = make(f, 'ready child'); // item 098: a team item without a stage is unrefined; refined first, it is ready
   ok(f, ['update', kid, '--set-team', 't1']);
+  refined(f, kid);
   let p = pl();
   assert.deepEqual([p.action, p.item], ['idle', null]); // no claim of kid, no busy continue of the work item
   assert.match(p.instruction, /^your team works on 1 item\(s\) \(\d+\): end your turn now with a text-only reply and no tool call; do not poll/);
@@ -261,6 +264,7 @@ test('039: the claimer never reviews its own item; a reviewed item finishes only
   ok(f, ['update', job, '--close', '--summary', 'done', '--by', 'archy']);
   const t = make(f, 'team job');
   ok(f, ['update', t, '--set-team', 't1']);
+  refined(f, t);
   ok(f, ['update', t, '--claim', 'archy']);
   ok(f, ['update', t, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
   ok(f, ['update', t, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
@@ -327,6 +331,7 @@ test('a refinement in progress is active work; an unclaimed hand-off ends the ca
   ok(f, ['update', c, '--refine-start', '--by', 'archy']);
   const x = make(f, 'ready team item');
   ok(f, ['update', x, '--set-team', 't1']);
+  refined(f, x);
   no(f, ['update', x, '--claim', 'archy'], `archy holds 1 active item(s): ${c}`);
   ok(f, ['update', x, '--claim', 'zed']);
   ok(f, ['update', x, '--request-review', 'any', '--note', 'x', '--by', 'zed']);
@@ -359,6 +364,7 @@ test('an unclaimed team item names who asks for its review, who then never revie
   const f = fixture();
   const x = make(f, 'unclaimed team item');
   ok(f, ['update', x, '--set-team', 't1']);
+  refined(f, x);
   no(f, ['update', x, '--request-review', 'any', '--note', 'y'], 'needs --by <agent>, the one who asks');
   ok(f, ['update', x, '--request-review', 'any', '--note', 'y', '--by', 'cody']);
   assert.equal(fm(f, x).review_author, 'cody');
@@ -368,6 +374,7 @@ test('an unclaimed team item names who asks for its review, who then never revie
   const c = make(f, 'child', '--split-from', w);
   const job = make(f, 'archy job');
   ok(f, ['update', job, '--set-team', 't1']);
+  refined(f, job);
   ok(f, ['update', job, '--claim', 'archy']);
   ok(f, ['update', job, '--waiting', 'a run', '--by', 'archy']);
   ok(f, ['update', make(f, 'other branch work'), '--claim', 'archy', '--force']); // active work
@@ -398,6 +405,7 @@ test("the lead asking for the review of a member's item ends no session and lock
   const f = fixture();
   const x = make(f, 'member job');
   ok(f, ['update', x, '--set-team', 't1']);
+  refined(f, x);
   ok(f, ['update', x, '--claim', 'archy']);
   const r = ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'lead']);
   assert.doesNotMatch(r.stdout, STOP);
@@ -407,6 +415,7 @@ test('a member names nobody else as the one asking for a review', () => {
   const f = fixture();
   const x = make(f, 'member job');
   ok(f, ['update', x, '--set-team', 't1']);
+  refined(f, x);
   ok(f, ['update', x, '--claim', 'archy']);
   no(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'lead'], 'not as lead', { QWEN_CODE_AGENT_ID: 'archy@t1' });
   const r = ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'archy'], { QWEN_CODE_AGENT_ID: 'archy@t1' });

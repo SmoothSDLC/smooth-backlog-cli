@@ -9,7 +9,7 @@ import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
-import { REFINE_HOW, isSplitSlice, missingFields, stageMissing, stageRefusal } from './lifecycle.js';
+import { REFINE_HOW, missingFields, stageMissing, stageOf as stageOfItem, stageRefusal } from './lifecycle.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -96,7 +96,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   // item 088: a split slice is in stage refining with or without a team field - a teamless slice's refinement is the
   // caller's team's work too; a slice written before the stage field existed has no stage, and the body's split
   // marker names it as refining, so the dispatch offers its refinement, not a claim the gate would refuse.
-  const stageOf = x => x.fm.stage || (isSplitSlice(x.body) ? 'refining' : undefined);
+  const stageOf = x => stageOfItem(x.fm, x.body);
   const teamRefining = here.filter(x => ((x.fm.team && team.inTeam(x.fm)) || !x.fm.team) && stageOf(x) === 'refining' && !x.fm.claimed_by && !waitsAway(folder, x)); // nor one waiting on another repository (042)
   const refineHow = slug => REFINE_HOW.replaceAll('<item>', slug);
   const reviews = [];
@@ -216,7 +216,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   }
   if (!act && cap !== 'off' && !(lead && busy.length)) { // a busy team's lead waits (spec section 8)
     const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone, f }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length
-      && team.offeredTo(fm, f, repo) && team.isReady(fm)); // never another team's chunk item (item 037), nor one before ready (036)
+      && team.offeredTo(fm, f, repo) && team.isReady({ stage: stageOfItem(fm, '') })); // never another team's chunk item (item 037), nor one before ready (036), nor an unrefined team item (098)
     if (chunks.length || !noClaim) { // query.py:271: a member with nothing else does small-chunk work; the lead does not
       const { r, f } = chunks[0] ?? { r: null, f: repo };
       const where = f === repo ? '' : ` (repository ${f}: work from its clone)`;
@@ -310,7 +310,7 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
     // item 088: a slice written before the stage field existed has no stage; the body's split marker names it as
     // refining, so the plan offers no claim the gate would refuse (the member's pop offers its refinement)
     if (r.status !== 'pending' || fm.claimed_by || undone.length || team.isChunk(fm)
-      || !team.isReady({ stage: fm.stage || (isSplitSlice(files.get(r.path)?.body ?? '') ? 'refining' : undefined) })) continue;
+      || !team.isReady({ stage: stageOfItem(fm, files.get(r.path)?.body ?? '') })) continue;
     const free = members.filter(m => !busy.has(m) && canClaim[m] && !wipRefusal(folder, repo, fm, m, r.slug, planned)).sort((x, y) => held[x].length - held[y].length || members.indexOf(x) - members.indexOf(y));
     if (free.length) {
       planned.push({ repository: repo, slug: r.slug, fm: { ...fm, status: 'in_progress', claimed_by: free[0] } });

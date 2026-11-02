@@ -134,7 +134,10 @@ work commit moved. A pass that counts for no stage asks for the Cody review firs
 team of the member who starts its refinement (or, refined earlier, who claims it). Every split item starts in
 stage refining, with or without a team field, and needs its refinement review (a `codex` or `claude` verdict)
 before it may be claimed; a slice written before the stage field existed is named by its body's split marker and
-takes the same gate. The owner closes without a review on a written decision — `--close --by owner --reason
+takes the same gate. A team item without a stage (a team's work item, or one written before the stage field existed) is
+unrefined too: `--claim` refuses it for every agent but the team lead's own claim of its team's work item (`backlog team
+pop`, to split it) and names `--refine-start`; `--refine-start` accepts it, and `pop`, `query --claimable` and `query --plan`
+offer its refinement, never a claim. An item without a team and without the split marker has no stage and is claimable. The owner closes without a review on a written decision — `--close --by owner --reason
 "<the decision>"`, recorded as an owner decision — even for a team item still in its refinement stages.
 
 ## Command help

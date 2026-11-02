@@ -121,6 +121,8 @@ test("with TEAM_NAME another team's item is never planned, and nothing before st
   const w = make(f, 'work item');
   ok(f, ['update', w, '--set-team', 't1']);
   const c = make(f, 'child', '--split-from', w); // refining
+  // item 098: an unrefined team item is never planned for a claim; refined (member, lead, Codex), the work item is
+  for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']]) ok(f, ['update', w, ...a]);
   const theirs = make(f, "t2's item");
   ok(f, ['update', theirs, '--set-team', 't2']);
   const p = plan(f, { TEAM_NAME: 't1' });

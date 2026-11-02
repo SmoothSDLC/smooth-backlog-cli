@@ -29,6 +29,10 @@ const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
+// item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it or is offered it as work
+const refined = (f, slug, cwd = f.cons) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']].forEach(a => {
+  const r = cli(['update', slug, ...a], { cwd, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr);
+});
 const pop = (f, agent, env) => JSON.parse(run(f, ['query', '--pop', '--agent', agent, '--json'], env).stdout);
 const slugs = (f, args, env) => JSON.parse(ok(f, ['query', ...args, '--json'], env).stdout).map(x => x.slug);
 
@@ -66,6 +70,7 @@ test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimabl
   const [mine, theirs, none] = ['t1 job', 't2 job', 'job without team'].map(n => make(f, n));
   ok(f, ['update', mine, '--set-team', 't1']);
   ok(f, ['update', theirs, '--set-team', 't2']);
+  refined(f, mine); refined(f, theirs);
   const T1 = { TEAM_NAME: 't1' }; const T2 = { TEAM_NAME: 't2' };
   assert.deepEqual(slugs(f, ['--claimable'], T1), [mine]);
   assert.deepEqual(slugs(f, ['--claimable'], T2), [theirs]);
@@ -91,6 +96,7 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
   const other = consumer(f.t, 'other', 'thing', 'main');
   const theirs = make(f, 't2 chunk here', '--chunk');
   ok(f, ['update', theirs, '--set-team', 't2']);
+  refined(f, theirs);
   writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
   const T1 = { TEAM_NAME: 't1' };
   const popAll = env => JSON.parse(run(f, ['query', '--pop', '--agent', 'cody', '--scope', 'all', '--json'], env).stdout);
@@ -100,6 +106,7 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
   const far = newIn('t2 chunk there');
   const r = cli(['update', far, '--set-team', 't2'], { cwd: other, tmp: f.t, env: LEAD });
   assert.equal(r.status, 0, r.stdout + r.stderr);
+  refined(f, far, other);
   assert.equal(popAll(T1).item, null);
   assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all'], T1), []);
   const free = newIn('chunk of no team there'); // another repository's chunk work without a team stays open to every team

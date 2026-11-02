@@ -38,7 +38,14 @@ const run = (f, args, env = {}) => {
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
-const teamItem = (f, name) => { const s = make(f, name); ok(f, ['update', s, '--set-team', 't1']); return s; }; // a team work item (no stage): claimable
+// item 098: a team item is refined (a member, the lead's review request, Codex's pass) before a member claims it; a team's work
+// item (workItem: team set, no stage) is the lead's own claim and the parent of a split, and stays unrefined
+const workItem = (f, name) => { const s = make(f, name); ok(f, ['update', s, '--set-team', 't1']); return s; };
+const teamItem = (f, name) => {
+  const s = workItem(f, name);
+  for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']]) ok(f, ['update', s, ...a]);
+  return s;
+};
 const pop = (f, agent, env) => JSON.parse(run(f, ['pop', '--agent', agent, '--json'], env).stdout);
 const marker = f => join(f.tdir, 'handoff', 'archy.json');
 const T1 = { TEAM_NAME: 't1' };
@@ -126,7 +133,9 @@ test('owner 2026-10-30: only a valid marker of a registered member stops it; a m
     ok(f, ['update', theirs, '--close', '--summary', 'x', '--by', 'zed'], T1); // and zed too
     if (cfg === null) config(f, []); else if (typeof cfg === 'string') writeFileSync(join(f.tdir, 'config.json'), cfg); else config(f, cfg); // zed's hand-off may have rewritten nothing, but keep the case
     put();
-    const w2 = teamItem(f, 'work item');
+    const w2 = workItem(f, 'work item');
+    ok(f, ['update', w2, '--claim', 'lead', '--force']); // item 098: unclaimed, a member's work call would start refining the work item itself
+    ok(f, ['query', '--phase', w2]); // the split reads the parent: a fresh view after the lead's claim
     const child = make(f, 'child', '--split-from', w2);
     assert.match(ok(f, ['update', child, '--refine-start', '--by', 'archy'], T1).stderr, /stops nobody/); // no refine-start refusal
     ok(f, ['update', child, '--refine-done', '--by', 'archy', '--note', 'x'], T1);
@@ -140,7 +149,7 @@ test('no marker for the lead, for a member still active on another item, or for 
   ok(f, ['update', b, '--claim', 'archy', '--force']); // archy holds two active items
   ok(f, ['update', a, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
   assert.ok(!existsSync(marker(f))); // b is still active: archy keeps its session
-  const l = teamItem(f, "lead's item");
+  const l = workItem(f, "lead's item");
   ok(f, ['update', l, '--claim', 'lead']);
   ok(f, ['update', l, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
   assert.ok(!existsSync(join(f.tdir, 'handoff', 'lead.json'))); // the lead is no member
@@ -154,7 +163,8 @@ test('no marker for the lead, for a member still active on another item, or for 
 test('an invalid time stamp stops nobody; the lead is never stopped; a lead closing a member\'s item stops nobody', () => {
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
-  const [a, l, z] = ['job', "lead's job", "zed's job"].map(n => teamItem(f, n));
+  const [a, z] = ['job', "zed's job"].map(n => teamItem(f, n));
+  const l = workItem(f, "lead's job");
   ok(f, ['update', a, '--claim', 'archy']);
   ok(f, ['update', a, '--request-review', 'any', '--note', 'x', '--by', 'archy']);
   config(f, [{ name: 'archy', joinedAt: 'bad' }, { name: 'lead', joinedAt: 1000 }, { name: 'zed', joinedAt: 1000 }]);
@@ -181,7 +191,7 @@ test('an invalid time stamp stops nobody; the lead is never stopped; a lead clos
 test('--refine-start is refused while the member waits for its restart, and . or .. is no team folder', () => {
   const f = fixture();
   config(f, [{ name: 'archy', joinedAt: 1000 }]);
-  const w = teamItem(f, 'work item');
+  const w = workItem(f, 'work item');
   const c = make(f, 'child', '--split-from', w);
   mkdirSync(join(f.tdir, 'handoff'), { recursive: true });
   writeFileSync(join(f.tdir, 'handoff', 'archy.json'), JSON.stringify({ at_ms: Date.now(), seq: 9 }));
@@ -289,6 +299,6 @@ test('a hand-off that also changes the team writes the marker of the team the it
   config(f, [{ name: 'archy', agentId: 'archy@t1', joinedAt: 1000 }]);
   const a = teamItem(f, 'job');
   ok(f, ['update', a, '--claim', 'archy']);
-  ok(f, ['update', a, '--set-team', '', '--request-review', 'any', '--note', 'x', '--by', 'archy']);
+  ok(f, ['update', a, '--set-team', 't2', '--request-review', 'any', '--note', 'x', '--by', 'archy']); // item 098: a refined item keeps a team (clearing it is refused), so the hand-off moves it to another team
   assert.ok(existsSync(marker(f)));
 });

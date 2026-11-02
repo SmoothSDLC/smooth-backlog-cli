@@ -43,6 +43,8 @@ const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...e
 const doc = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const fm = (f, slug) => doc(f, slug).fm;
 const pop = (f, agent, env) => { const r = run(f, ['query', '--pop', '--agent', agent, '--json'], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
+// item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it
+const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']].forEach(a => up(f, slug, ...a));
 const work = (f, title = 'team work item') => { const w = make(f, title); up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); return w; }; // the runner, for the lead
 
 test('test_the_team_workflow_from_work_item_to_ready_work: split, member refinement, refinement review, ready, claim by its team only', () => {
@@ -95,7 +97,8 @@ test('each step refuses out of order, and one step at a time', () => {
   const plain = make(f, 'no team');
   no(f, ['update', c, '--refine-start'], '--refine-start needs --by <agent>');
   no(f, ['update', plain, '--refine-start', '--by', 'cody'], 'only an item of a team in stage refining is refined (team none, stage none)');
-  no(f, ['update', w, '--refine-start', '--by', 'cody'], 'only an item of a team in stage refining is refined (team t1, stage none)');
+  // item 098: the stage-less work item of a team is unrefined (stage refining); a member does not refine the lead's claimed work item
+  no(f, ['update', w, '--refine-start', '--by', 'cody'], 'claimed by lead: the work item itself is refined and split by the team lead, not refined here');
   no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], '--refine-done --by <the refiner>: refiner is nobody, stage refining');
   no(f, ['update', c, '--request-refinement-review', '--by', 'lead'], 'only a refined item goes to the refinement review (stage refining)');
   no(f, ['update', c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'x'], 'no refinement review is requested (stage refining)');
@@ -125,7 +128,7 @@ test('the review-hitl stage: an owner decision holds the item and its dependents
   const w = work(f);
   const c = make(f, 'needs a decision', '--split-from', w);
   const dep = make(f, 'waits for it', '--depends-on', c.split('-')[0]);
-  up(f, dep, '--set-team', 't1'); // a work item of t1 without a stage: claimable but for its dependency
+  up(f, dep, '--set-team', 't1'); refined(f, dep); // a refined item of t1: claimable but for its dependency
   const Q = 'What: keep the old format?\nWhy: the parser needs it.\n## Options\nA keep, B drop.\n## Review by users at 2026-10-01T10:00:00Z\nDECISION 2026-10-01: an earlier answer, quoted\nRecommendation: A.'; // the whole question, its own headings included
   no(f, ['update', c, '--request-decision', Q], '--request-decision needs --by <agent>');
   no(f, ['update', c, '--request-decision', ' ', '--by', 'cody'], '--request-decision needs the question');
@@ -268,7 +271,7 @@ test('a complete team item before stage ready takes only its refinement steps: n
 test("the lead never starts a first-round refinement nor is offered a member's child; the parent's definition of done is no child's", () => {
   const f = fixture();
   const w = make(f, 'team work item'); // its body has a definition of done
-  up(f, w, '--set-team', 't1');
+  up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // item 098: an unclaimed work item is offered to a member for refinement; the lead holds it
   const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout);
   assert.ok(doc(f, c).body.includes("- [ ] the test's check holds")); // the parent's definition of done, inherited as context
   assert.ok(!hasDefinitionOfDone(doc(f, c).body)); // only the placeholder is the child's own
@@ -305,7 +308,7 @@ test('a team split with review documents and no body starts in refining; --by na
 test('backlog work --lead names only the lead the updates know; pop --lead keeps a member\'s lock', () => {
   const f = fixture();
   const w = make(f, 'team work item');
-  up(f, w, '--set-team', 't1');
+  up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // item 098: an unclaimed work item is offered to a member for refinement; the lead holds it
   const c = make(f, 'child', '--split-from', w);
   const r = run(f, ['work', '--agent', 'cody', '--lead', 'lead', '--json'], { TEAM_LEAD: '', TEAM_NAME: 't1' });
   assert.equal(r.status, 2, r.stdout + r.stderr);

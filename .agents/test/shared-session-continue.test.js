@@ -46,7 +46,12 @@ const run = (f, args, env = {}) => {
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => { const slug = ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0]; return slug; };
-const teamItem = (f, name) => { const s = make(f, name); ok(f, ['update', s, '--set-team', TEAM]); return s; };
+// item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it
+const teamItem = (f, name) => {
+  const s = make(f, name); ok(f, ['update', s, '--set-team', TEAM]);
+  for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']]) ok(f, ['update', s, ...a]);
+  return s;
+};
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
 // the item after a review changes verdict and the earlier session's hand-off request: ready for a rework
 const reworked = (f, s) => {
@@ -196,8 +201,9 @@ test('082: a fresh session of the card is told to claim the item before it close
 
 test('082: the lead\'s completed-team review-and-close starts with the continuation claim', () => {
   const f = fixture();
-  const s = teamItem(f, 'lead continues a completed team');
-  ok(f, ['update', s, '--claim', A1]); // the lead's earlier session holds the team's work item
+  // item 098: the team's work item is unrefined; only the lead's own claim takes it (as the lead's earlier session A1)
+  const s = make(f, 'lead continues a completed team'); ok(f, ['update', s, '--set-team', TEAM]);
+  ok(f, ['update', s, '--claim', A1], { TEAM_LEAD: A1 }); // the lead's earlier session holds the team's work item
   const w = JSON.parse(run(f, ['pop', '--agent', A2, '--json'], { TEAM_LEAD: A2 }).stdout);
   assert.equal(w.action, 'continue', w.instruction);
   assert.ok(w.instruction.includes(`every item of team ${TEAM} is done`), `the completed-team steps: ${w.instruction}`);

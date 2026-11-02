@@ -123,7 +123,7 @@ earlier sessions.
 
 Two review stages are enforced before any close, with or without review documents: first a Cody review (for an item of
 a team, a registered member of that team — Qwen's team `config.json`, else a Cody name in a session of the item's
-team; for an item without a team, a name starting with `cody` or a session name — in a fresh session, never the author session that claimed
+team — or the team lead (`TEAM_LEAD`) in a session of the item's team; for an item without a team, a name starting with `cody` or a session name — in a fresh session, never the author session that claimed
 the item), then an external review by `codex` or `claude` on the same commit. A pass pins the work commit at review
 time — the working repository's `HEAD` — and a commit of new work after a pass moves the work commit, so both
 stages run again; a changes verdict at either stage clears both. `--close` is refused until both stages passed for

@@ -287,10 +287,12 @@ export function startReview({ fm }, by) {
 
 // item 088: who records the Cody stage. For an item of a team, a registered member of that team (the team's Qwen
 // config.json); when the CLI cannot read the team's members, a Cody name (cody..., or a card session name) in a session
-// of the item's team. For an item without a team, a Cody name. A pass by anyone else is recorded but sets no pin.
+// of the item's team. The team lead (TEAM_LEAD; Qwen does not list the lead as a member) in a session of the item's team
+// records it too. For an item without a team, a Cody name. A pass by anyone else is recorded but sets no pin.
 function codyReviewer(fm, by) {
   const named = by.toLowerCase().startsWith('cody') || isSessionName(by);
   if (!fm.team) return named;
+  if (by === teamLead() && fm.team === teamName()) return true;
   const m = teamMembership(fm.team, by);
   return m === 'member' || (m === 'unknown' && named && fm.team === teamName());
 }

@@ -39,7 +39,7 @@
   nothing changed) (item 091).
 - Two review stages are enforced before any close, with or without review documents: first a Cody review (for an
   item of a team, a registered member of that team - Qwen's team config.json, found under the name Qwen stores the
-  team by, else a Cody name in a session of the item's team; for an item without a team, a Cody name - in a fresh session, never the author session that claimed the item - the claim's session name, never the
+  team by, else a Cody name in a session of the item's team, or the team lead in a session of the item's team; for an item without a team, a Cody name - in a fresh session, never the author session that claimed the item - the claim's session name, never the
   team name - a fresh session of the same card, or of the team, may),
   then an external review by codex or claude on the same commit. A pass pins the work commit at review time - the
   working repository's HEAD - and the gate compares the pins to the work commit at check time: a commit of new work

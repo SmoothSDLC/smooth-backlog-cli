@@ -200,7 +200,8 @@ Options:
       lead, and claims that item for the lead; items split from it inherit the team.
   --refine-start
       A team member starts refining the item (--by <agent>): only a team's item in stage refining that nobody claims or
-      already refines. The stages before any work are refining, refined, refinement-review and ready.
+      already refines. A split slice without a team joins the refining session's team (TEAM_NAME) here. The stages
+      before any work are refining, refined, refinement-review and ready.
   --refine-done
       The refiner finished (--by <the refiner>, --note "<what you refined>"): stage refined. Refused while a team field or
       the definition of done is missing.
@@ -252,8 +253,8 @@ Options:
   --review {pass,changes}
       Record a review verdict; it needs --by and --comments (team session). Two review stages are enforced before
       any close: first a Cody review - for an item of a team, a registered member of that team (Qwen's team
-      config.json; when the CLI cannot read it, a Cody name in a session of the item's team); for an item without a
-      team, a Cody agent (a name starting with cody, or a session name) - in a fresh
+      config.json; when the CLI cannot read it, a Cody name in a session of the item's team) or the team lead
+      (TEAM_LEAD) in a session of the item's team; for an item without a team, a Cody agent (a name starting with cody, or a session name) - in a fresh
       session, never the author session that claimed the item - the claim's session name (QWEN_CODE_SESSION_ID, else
       the session part of QWEN_CODE_AGENT_ID, never the team name), so a fresh session of the same card, or of the
       team, may - then an external review by codex or claude on the same commit. A pass pins the work commit at

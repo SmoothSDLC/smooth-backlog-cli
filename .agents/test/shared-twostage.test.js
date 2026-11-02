@@ -464,3 +464,13 @@ test('a legacy split slice another member is refining is not offered for a claim
   const q = JSON.parse(run(f, ['query', '--claimable', '--json'], { TEAM_NAME: 't1' }).stdout || '{}');
   assert.ok(!JSON.stringify(q).includes(child), 'query --claimable lists no legacy slice before its refinement review');
 });
+
+test('the team lead, not a listed member, records the Cody stage in a session of the item\'s team', () => {
+  const f = fixture();
+  const env = { ...qwenTeam(f, 'blue-team', ['rev1']), TEAM_NAME: 'Blue:Team', TEAM_LEAD: 'boss' };
+  const s = make(f, 'lead cody item');
+  ok(f, ['update', s, '--set-team', 'Blue:Team']);
+  ok(f, ['update', s, '--claim', 'archy'], env);
+  round(f, s, { claimer: 'archy', reviewer: 'boss', env });
+  assert.equal(fm(f, s).cody_pass_commit, fm(f, s).commit);
+});

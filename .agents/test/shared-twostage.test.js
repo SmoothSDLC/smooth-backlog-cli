@@ -159,7 +159,10 @@ test('a new work commit invalidates the passes on the older commit: both stages 
   bothStages(f, s, 'archy'); // both passes on the original work commit
   const older = fm(f, s).cody_pass_commit;
   assert.equal(older, git(f.cons, 'rev-parse', 'HEAD')); // the pins are the work commit at review time
-  git(f.cons, 'commit', '-q', '--allow-empty', '-m', 'new work after the passes'); // new work moves the work commit
+  git(f.cons, 'commit', '-q', '--allow-empty', '-m', 'unrelated: another item'); // another item's commit moves nothing
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  assert.equal(stageMissing({ ...fm(f, s) }, fm(f, s).work_commit), '');
+  git(f.cons, 'commit', '-q', '--allow-empty', '-m', `${Number(s.split('-')[0])}: new work after the passes`); // the item's own new work
   ok(f, ['query', '--phase', s, '--agent', 'archy']);
   no(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy'], 'missing the Cody review stage');
   no(f, ['update', s, '--status', 'done', '--by', 'archy'], 'missing the Cody review stage');
@@ -479,4 +482,19 @@ test('the team lead, not a listed member, records the Cody stage in a session of
   ok(f, ['update', s, '--claim', 'archy'], env);
   round(f, s, { claimer: 'archy', reviewer: 'boss', env });
   assert.equal(fm(f, s).cody_pass_commit, fm(f, s).commit);
+});
+
+test('another item\'s commit on the branch between the two stages moves nothing: the passes pin the item\'s work commit', () => {
+  const f = fixture();
+  const s = make(f, 'shared branch item');
+  ok(f, ['update', s, '--claim', 'archy']);
+  round(f, s, { claimer: 'archy', reviewer: 'cody' });
+  const work = fm(f, s).work_commit;
+  git(f.cons, 'commit', '-q', '--allow-empty', '-m', '999: another item pushed meanwhile');
+  round(f, s, { claimer: 'archy', reviewer: 'codex' }); // the external request keeps the work commit
+  assert.equal(fm(f, s).work_commit, work);
+  assert.equal(fm(f, s).external_pass_commit, work); // pinned to the item's work commit, not the HEAD of the checkout
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  ok(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy']);
+  assert.equal(fm(f, s).status, 'done');
 });

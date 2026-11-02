@@ -243,13 +243,23 @@ export const callerSession = () => {
 // field records the repository state at creation (backlog new) and --commit advances that record.
 export const workCommit = cwd => (spawnSync('git', ['rev-parse', '--verify', '--quiet', 'HEAD'], { cwd: cwd ?? process.cwd(), encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }).stdout ?? '').trim() || '';
 // item 088: two review stages before any close - (a) a Cody review, then (b) an external review by codex or claude on
-// the same commit, with or without review_refs. A pass pins the work commit at review time; the gate compares the pins
-// to the work commit at check time. An empty work commit is no commit: a pass pinned to it (or a cleared pin) counts
+// the same commit, with or without review_refs. A pass pins the item's work commit (work_commit: the requester's HEAD at
+// its review request); the gate compares the pins to it at check time. An empty work commit is no commit: a pass pinned to it (or a cleared pin) counts
 // for no stage.
 // '' = both stages passed for the current work commit; 'cody' or 'external' = the missing stage
+// The item's own commits after its work commit in this checkout (subject starting with the item number, the
+// repository's commit convention): new work of the item made after its review request, which the passes do not cover.
+const laterOwnWork = (fm, cwd) => {
+  const seq = Number(String(fm.seq ?? fm.phase ?? '').match(/^0*(\d+)/)?.[1]);
+  const head = workCommit(cwd);
+  if (!fm.work_commit || !seq || !head || head === fm.work_commit) return false;
+  const p = spawnSync('git', ['log', '--format=%s', `${fm.work_commit}..${head}`], { cwd: cwd ?? process.cwd(), encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+  return p.status === 0 && p.stdout.split('\n').some(line => new RegExp(`^0*${seq}(?![0-9])`).test(line.trim()));
+};
 export const stageMissing = (fm, commit) => {
-  const c = commit ?? workCommit();
+  const c = commit ?? (fm.work_commit || workCommit());
   if (!c) return 'cody';
+  if (commit === undefined && laterOwnWork(fm)) return 'cody';
   if (fm.cody_pass_commit !== c) return 'cody';
   return fm.external_pass_commit === c ? '' : 'external';
 };
@@ -274,6 +284,13 @@ export function requestReview({ fm }, reviewer, note, by = '') {
   // also seeds the list from the current holder and the earlier review requester, so an item written before the
   // list existed keeps the holder's block when a later release clears claimed_by
   const asked = by || fm.claimed_by || fm.review_author || '';
+  // the commit under review is the requester's HEAD (the work just pushed): it becomes the item's work commit, which
+  // both review stages pin and the close gate compares; another item's commit on the branch never moves it
+  // An external-stage request after the Cody pass keeps the work commit (another item's commit pulled in moves nothing);
+  // the item's own new work after its review request moves it, and both stages run again.
+  const head = workCommit();
+  const codyPassed = fm.work_commit && fm.cody_pass_commit === fm.work_commit;
+  if (head && (!codyPassed || laterOwnWork(fm))) fm.work_commit = head;
   Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: asked, session_authors: seededAuthors(fm, asked) });
   return { event: 'review_requested', text: `## Review requested by ${by || fm.claimed_by || 'unknown'} at ${t} (reviewer: ${reviewer})\n\n${note}` };
 }
@@ -318,11 +335,12 @@ export function review({ fm }, verdict, { by, comments } = {}) {
   // on the current commit. A pass pins the item's work commit; a changes verdict - at either stage, or by a reviewer
   // outside both stages - clears both stages and re-runs them.
   // item 082: a session name (082aa:02) is a cody session name - its pass records the Cody stage too.
-  // item 088: the pass pins the work commit (the working repository's HEAD) at review time; a commit of new work after
-  // a pass moves HEAD, so the pin no longer matches and both stages run again.
+  // item 088: the pass pins the item's work commit (work_commit, set by the review request to the requester's HEAD; the
+  // reviewer's own checkout and other items' commits do not matter); new work goes through a new review request, which
+  // moves the work commit, so the pins no longer match and both stages run again.
   const externalStage = ['codex', 'claude'].includes(by);
   const codyStage = !externalStage && by !== 'owner' && codyReviewer(fm, by);
-  const head = workCommit();
+  const head = fm.work_commit || workCommit();
   // a changes verdict is always recorded: it sends the item back to work whatever the pins say
   if (externalStage && verdict === 'pass' && fm.cody_pass_commit !== head) {
     reject('the external review runs only after the Cody review passed on the current commit: a Cody agent (not the author session) reviews it first');

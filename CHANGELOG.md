@@ -48,9 +48,10 @@
   item of a team, a registered member of that team - Qwen's team config.json, found under the name Qwen stores the
   team by, else a Cody name in a session of the item's team, or the team lead in a session of the item's team; for an item without a team, a Cody name - in a fresh session, never the author session that claimed the item - the claim's session name, never the
   team name - a fresh session of the same card, or of the team, may),
-  then an external review by codex or claude on the same commit. A pass pins the work commit at review time - the
-  working repository's HEAD - and the gate compares the pins to the work commit at check time: a commit of new work
-  after a pass moves the work commit, so both stages run again; a changes verdict at either stage clears both
+  then an external review by codex or claude on the same commit. A pass pins the item's work commit (work_commit) - the
+  requester's HEAD at its review request (an external-stage request after the Cody pass keeps it) - so the reviewer's
+  checkout and other items' commits on a shared branch move nothing; the item's own new work (a later commit whose
+  subject starts with the item number) moves the work commit, so both stages run again; a changes verdict at either stage clears both
   stages and re-runs them. `--close` is refused until both stages passed for the current work commit, and the
   refusal names the missing stage; a passing Cody review asks for the external review, and a passing external
   review asks for the close. `--status done` is a close too: refused until both stages passed, with or without

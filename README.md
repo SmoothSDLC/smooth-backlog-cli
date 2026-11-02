@@ -124,9 +124,10 @@ earlier sessions.
 Two review stages are enforced before any close, with or without review documents: first a Cody review (for an item of
 a team, a registered member of that team — Qwen's team `config.json`, else a Cody name in a session of the item's
 team — or the team lead (`TEAM_LEAD`) in a session of the item's team; for an item without a team, a name starting with `cody` or a session name — in a fresh session, never the author session that claimed
-the item), then an external review by `codex` or `claude` on the same commit. A pass pins the work commit at review
-time — the working repository's `HEAD` — and a commit of new work after a pass moves the work commit, so both
-stages run again; a changes verdict at either stage clears both. `--close` is refused until both stages passed for
+the item), then an external review by `codex` or `claude` on the same commit. A pass pins the item's work commit (`work_commit`) — the
+requester's `HEAD` at its review request (an external-stage request after the Cody pass keeps it) — so the reviewer's
+checkout and other items' commits on the branch move nothing; the item's own new work (a later commit whose subject
+starts with the item number) moves the work commit, so both stages run again; a changes verdict at either stage clears both. `--close` is refused until both stages passed for
 the current work commit, and the refusal names the missing stage; a passing Cody review asks for the external
 review, and a passing external review asks for the close. `--status done` is a close too: refused until both
 stages passed, with or without review documents. A changes verdict is recorded at either stage even after the

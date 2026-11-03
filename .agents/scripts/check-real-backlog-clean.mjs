@@ -25,8 +25,9 @@ const USAGE = 'Usage: node .agents/scripts/check-real-backlog-clean.mjs [-- <com
   + 'JSON object; the exit code is 0 only when the store is unchanged and the command exited 0.';
 
 const args = process.argv.slice(2);
-if (args.includes('--help')) { process.stdout.write(`${USAGE}\n`); process.exit(0); }
 const dash = args.indexOf('--');
+// --help only counts before --; after -- it is part of the wrapped command
+if ((dash === -1 ? args : args.slice(0, dash)).includes('--help')) { process.stdout.write(`${USAGE}\n`); process.exit(0); }
 const command = dash === -1 ? 'npm test' : args.slice(dash + 1).join(' ');
 if (!command) { process.stdout.write(`${USAGE}\n`); process.exit(1); }
 

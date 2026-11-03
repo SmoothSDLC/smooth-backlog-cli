@@ -146,8 +146,14 @@ function classWordMatches(dir) {
   assert.ok(r.status === 0 || r.status === 1, `git grep exit ${r.status}: ${r.stderr}`);
   const out = {};
   for (const line of String(r.stdout).split('\n')) {
+    if (line === '') continue;
     const m = /^([^:]+):(\d+):(.*)$/.exec(line);
-    if (!m) continue;
+    if (!m) {
+      // a git grep line the file:line:text shape does not cover (a binary match, a colon in
+      // the file name) is a violation, never noise to discard
+      out[line] = { [line]: 1 };
+      continue;
+    }
     out[m[1]] ??= {};
     out[m[1]][m[3]] = (out[m[1]][m[3]] ?? 0) + 1;
   }
@@ -178,8 +184,8 @@ test("097: the excluded file is exactly the guard's own path", () => {
   assert.equal(SELF_PATH, '.agents/test/shared-no-classes-repo.test.js');
 });
 
-function tempStore() {
-  const dir = mkdtempSync(join(tmpdir(), 'bl97-'));
+function tempStore(base = tmpdir()) {
+  const dir = mkdtempSync(join(base, 'bl97-'));
   const git = (...gargs) => {
     const r = spawnSync('git', gargs, { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' } });
     assert.equal(r.status, 0, `git ${gargs.join(' ')}: ${r.stderr}`);
@@ -247,12 +253,41 @@ test('097: a class word in a new untracked file fails the guard', () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('097: a class word in a file whose name contains a colon fails the guard', () => {
+  // the temp store lives on the repository filesystem (not tmpdir, which is tmpfs and
+  // rejects colon file names here): git grep prints the line as <name>:<n>:<text>, the
+  // file part holds a colon, and the parser must treat it as a violation, not drop it
+  const { dir, git } = tempStore(repoRoot);
+  try {
+    writeFileSync(join(dir, 'we:ird.txt'), 'one work_class line\n');
+    git('add', '.'); git('commit', '-qm', 'x');
+    // the table names the right file and line: the failure must come from the parser
+    const bad = violations(classWordMatches(dir), { 'we:ird.txt': { 'one work_class line': 1 } });
+    assert.equal(bad.length, 1, JSON.stringify(bad));
+    assert.ok(bad[0].includes('we:ird.txt'), bad[0]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('097: a class word in a binary file fails the guard', () => {
+  // git grep prints a binary match as one line, "Binary file <path> matches", with no
+  // file:line: prefix; the parser must treat it as a violation, not drop it
+  const { dir, git } = tempStore();
+  try {
+    writeFileSync(join(dir, 'bin.dat'), Buffer.from('one work_class line\x00tail\n'));
+    git('add', '.'); git('commit', '-qm', 'x');
+    const bad = violations(classWordMatches(dir), { 'bin.dat': { 'one work_class line': 1 } });
+    assert.equal(bad.length, 1, JSON.stringify(bad));
+    assert.ok(bad[0].includes('bin.dat'), bad[0]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 // ---------- store guard (the script, temporary git repositories as the store) ----------
 
 const SCRIPT = join(repoRoot, '.agents', 'scripts', 'check-real-backlog-clean.mjs');
 
 function runGuard(store, command, env) {
-  const r = spawnSync(process.execPath, [SCRIPT, '--', command], { cwd: store, encoding: 'utf8', env });
+  const argv = typeof command === 'string' ? [command] : command; // a list keeps each word a separate argument
+  const r = spawnSync(process.execPath, [SCRIPT, '--', ...argv], { cwd: store, encoding: 'utf8', env });
   const lines = String(r.stdout).split('\n').filter(Boolean);
   let json = null;
   try { json = JSON.parse(lines.at(-1) ?? 'null'); } catch { /* no JSON final line */ }
@@ -344,4 +379,26 @@ test('097: the per-user record under a temporary XDG_CONFIG_HOME selects the sto
     rmSync(xdg, { recursive: true, force: true });
     rmSync(home2, { recursive: true, force: true });
   }
+});
+
+test('097: a --help after -- is part of the wrapped command, not the guard help', () => {
+  // --help is a separate argument after --: the guard must not intercept it
+  const { dir } = tempStore();
+  try {
+    const marker = join(dir, 'help-ran.txt');
+    const r = runGuard(dir, ['echo', '1', '>', marker, '--help'], plainEnv(dir));
+    assert.ok(r.json, `expected the JSON final line, got: ${r.stdout}`);
+    assert.equal(r.json.command_exit, 0, r.stdout);
+    assert.equal(existsSync(marker), true, 'the wrapped command must run');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('097: a --help before -- prints the guard help and runs no command', () => {
+  const { dir } = tempStore();
+  try {
+    const r = spawnSync(process.execPath, [SCRIPT, '--help'], { cwd: dir, encoding: 'utf8', env: plainEnv(dir) });
+    assert.equal(r.status, 0, r.stdout + '\n' + r.stderr);
+    assert.ok(String(r.stdout).includes('Usage: node .agents/scripts/check-real-backlog-clean.mjs'), r.stdout);
+    assert.throws(() => JSON.parse(String(r.stdout).trim().split('\n').at(-1)), 'the final line is usage text, not the JSON result');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

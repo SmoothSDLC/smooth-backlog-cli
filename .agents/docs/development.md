@@ -12,6 +12,14 @@ npm run check
 npm pack --dry-run
 ```
 
+The suite ships a development guard for the shared backlog store:
+`node .agents/scripts/check-real-backlog-clean.mjs -- npm test` records the store's
+`git status` and HEAD before and after the wrapped command and prints one final JSON
+line; it exits 0 only when the store is unchanged and the command succeeded. It refuses
+to start on a store that is not clean and reports any change of status or HEAD during
+the run as a changed store - run it in a quiet period, with no other session writing
+to the store.
+
 The CLI sources are under `src/`, its executable is `bin/backlog.js`, and its
 public integration templates are under `templates/`. Tests are in `.agents/test/`;
 the release verifier is `.agents/scripts/verify-published-package.mjs`. Development-only documents

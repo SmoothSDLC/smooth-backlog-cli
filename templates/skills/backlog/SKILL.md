@@ -123,8 +123,10 @@ sees and changes the backlog only through them.
   the team, may), then an external review by codex or claude on the same commit. A pass pins the item's work commit
   (work_commit: the requester's HEAD at its review request; an external-stage request after the Cody pass keeps it), so the
   reviewer's checkout and other items' commits on the branch move nothing; the item's own new work (a later commit
-  whose subject starts with the item number) moves it, so both stages run again; a changes verdict at either
-  stage clears both stages. A passing Cody review asks for the external review; a passing external review asks
+  whose subject names the item as a producer at the start - the item number alone, or joined with another item's
+  number by "and") moves it, so both stages run again; a close or `--status done` whose commit lookup fails is
+  refused fail closed, and the refusal records the reason; a changes verdict at either stage clears both stages.
+  A passing Cody review asks for the external review; a passing external review asks
   for the close. `--status done` is a close too: refused until both stages passed, with or without review
   documents. A changes verdict is recorded at either stage even after the work commit moved. A pass that counts for
   no stage (a reviewer outside both stages, or not a member of the item's team) asks for the Cody review first.

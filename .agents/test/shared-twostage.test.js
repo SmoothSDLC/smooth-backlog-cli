@@ -13,7 +13,7 @@ import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js
 import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
-import { stageMissing } from '../../src/shared/lifecycle.js';
+import { stageMissing, leadingItemIds } from '../../src/shared/lifecycle.js';
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -497,4 +497,60 @@ test('another item\'s commit on the branch between the two stages moves nothing:
   ok(f, ['query', '--phase', s, '--agent', 'archy']);
   ok(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy']);
   assert.equal(fm(f, s).status, 'done');
+});
+
+// Item 088 rework F1: the commit convention names the producers at the start - the item number alone, or numbers
+// joined with "and". A commit of another item that shares the item's number prefix, or only mentions it, is not
+// the item's later work; a commit the item is a producer of (in an "and" chain included) is.
+test('the leading item identifiers: a number, or an "and" chain, not mentions or a shared prefix', () => {
+  assert.deepEqual(leadingItemIds('88: new work'), [88]);
+  assert.deepEqual(leadingItemIds('88 external review (claude): a note'), [88]);
+  assert.deepEqual(leadingItemIds('130 (of 94): a slice commit'), [130]); // the parent in the parens is not a producer
+  assert.deepEqual(leadingItemIds('107 and 131 dependency hand-off documents for items 108, 111'), [107, 131]);
+  assert.deepEqual(leadingItemIds('unrelated: another item'), []);
+  assert.deepEqual(leadingItemIds('999: another item pushed meanwhile'), [999]);
+  assert.deepEqual(leadingItemIds('Dependency hand-off document for item 94 from slice 94.B'), []);
+});
+
+test('a later commit that names the item as a producer in an "and" chain, not only at the start, is later work: both stages run again', () => {
+  const f = fixture();
+  const s = make(f, 'and-chain item');
+  ok(f, ['update', s, '--claim', 'archy']);
+  bothStages(f, s, 'archy');
+  const n = Number(s.split('-')[0]);
+  git(f.cons, 'commit', '-q', '--allow-empty', '-m', `${n + 100} and ${n}: new work of two items`); // the item is not first
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  no(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy'], 'missing the Cody review stage');
+  git(f.cons, 'commit', '-q', '--allow-empty', '-m', `${n} and ${n + 100}: more work of the same two`); // the item first
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  no(f, ['update', s, '--status', 'done', '--by', 'archy'], 'missing the Cody review stage');
+  bothStages(f, s, 'archy'); // both stages again, on the new work commit
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  ok(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy']);
+  assert.equal(fm(f, s).status, 'done');
+});
+
+// Item 088 rework F2: the git history lookup of the commits after the work commit fails open today - on a failed
+// lookup the item proceeds as if there were no later work. It must fail closed (the Cody stage is missing) and the
+// refusal records the reason.
+test('a failed commit lookup fails closed: the close is refused the Cody stage and the refusal records the reason', () => {
+  const f = fixture();
+  const s = make(f, 'lookup item');
+  ok(f, ['update', s, '--claim', 'archy']);
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'the work in commit abc', '--by', 'archy']);
+  // a work commit the checkout cannot resolve: the lookup of the commits after it fails
+  const file = join(f.folder, 'phases', `${s}.md`);
+  const doc = parse(readFileSync(file, 'utf8'));
+  store.write({ path: file, fm: { ...doc.fm, work_commit: 'a'.repeat(40) }, body: doc.body }, f.folder);
+  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
+  for (const args of [['add', '-A'], ['commit', '-q', '-m', 'lookup fixture'], ['push', '-q']]) {
+    const p = spawnSync('git', args, { cwd: f.home, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+    assert.equal(p.status, 0, p.stderr);
+  }
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  const r = no(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy'], 'missing the Cody review stage');
+  assert.ok(r.stdout.includes('the commit lookup failed'), r.stdout);
+  assert.ok(r.stdout.includes('fail closed'), r.stdout);
+  assert.equal(fm(f, s).status, 'in_progress'); // the failed lookup refused the close; the item is still open
 });

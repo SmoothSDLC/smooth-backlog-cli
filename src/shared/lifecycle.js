@@ -247,26 +247,57 @@ export const workCommit = cwd => (spawnSync('git', ['rev-parse', '--verify', '--
 // its review request); the gate compares the pins to it at check time. An empty work commit is no commit: a pass pinned to it (or a cleared pin) counts
 // for no stage.
 // '' = both stages passed for the current work commit; 'cody' or 'external' = the missing stage
-// The item's own commits after its work commit in this checkout (subject starting with the item number, the
-// repository's commit convention): new work of the item made after its review request, which the passes do not cover.
+// item 088: the item identifiers a commit subject names at the start - the repository's commit convention: the
+// producing item number, or numbers joined with "and" (a commit of two items names both), then the description; the
+// "(of <parent>)" after the last number names the parent, not a producer. A commit of another item that shares the
+// item's number prefix, or only mentions the number later in the subject, is not the item's work.
+export const leadingItemIds = subject => {
+  const s = String(subject ?? '').trim();
+  const first = /^(\d+)/.exec(s);
+  if (!first) return [];
+  const ids = [Number(first[1])];
+  let rest = s.slice(first[1].length);
+  for (;;) {
+    const joined = /^\s+and\s+(\d+)/.exec(rest);
+    if (!joined) break;
+    ids.push(Number(joined[1]));
+    rest = rest.slice(joined[1].length);
+  }
+  return ids;
+};
+// The item's own commits after its work commit in this checkout: new work of the item made after its review request,
+// which the passes do not cover. A commit counts when the item is one of the producers the subject names at the start
+// (leadingItemIds). { reason } names the failed lookup: on a failed lookup the gate fails closed (the Cody stage is
+// missing) and the refusal records the reason.
 const laterOwnWork = (fm, cwd) => {
   const seq = Number(String(fm.seq ?? fm.phase ?? '').match(/^0*(\d+)/)?.[1]);
   const head = workCommit(cwd);
-  if (!fm.work_commit || !seq || !head || head === fm.work_commit) return false;
+  if (!fm.work_commit || !seq || !head || head === fm.work_commit) return { later: false, reason: '' };
   const p = spawnSync('git', ['log', '--format=%s', `${fm.work_commit}..${head}`], { cwd: cwd ?? process.cwd(), encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
-  return p.status === 0 && p.stdout.split('\n').some(line => new RegExp(`^0*${seq}(?![0-9])`).test(line.trim()));
+  if (p.status !== 0) return { later: false, reason: String(p.stderr ?? '').trim().split('\n')[0] || `git log exited ${p.status}` };
+  return { later: (p.stdout ?? '').split('\n').some(line => leadingItemIds(line).includes(seq)), reason: '' };
 };
-export const stageMissing = (fm, commit) => {
+// { missing }: '' = both stages passed for the current work commit; 'cody' or 'external' = the missing stage.
+// { reason }: the failed commit lookup (the gate fails closed), else ''.
+const stageStatus = (fm, commit) => {
   const c = commit ?? (fm.work_commit || workCommit());
-  if (!c) return 'cody';
-  if (commit === undefined && laterOwnWork(fm)) return 'cody';
-  if (fm.cody_pass_commit !== c) return 'cody';
-  return fm.external_pass_commit === c ? '' : 'external';
+  if (!c) return { missing: 'cody', reason: '' };
+  let lookReason = '';
+  if (commit === undefined) {
+    const look = laterOwnWork(fm);
+    if (look.later) return { missing: 'cody', reason: '' };
+    lookReason = look.reason;
+  }
+  const missing = fm.cody_pass_commit !== c ? 'cody' : fm.external_pass_commit === c ? '' : 'external';
+  return { missing, reason: missing === 'cody' ? lookReason : '' };
 };
-// '' = both stages passed for the current commit, else the refusal naming the missing stage.
+export const stageMissing = (fm, commit) => stageStatus(fm, commit).missing;
+// '' = both stages passed for the current commit, else the refusal naming the missing stage - and the failed
+// lookup's reason when the gate failed closed.
 export const stageRefusal = fm => {
-  const missing = stageMissing(fm);
-  if (missing === 'cody') return 'missing the Cody review stage: a Cody agent (not the author session) must pass the review first, then codex or claude';
+  const { missing, reason } = stageStatus(fm);
+  if (missing === 'cody') return 'missing the Cody review stage: a Cody agent (not the author session) must pass the review first, then codex or claude'
+    + (reason ? ` (the commit lookup failed: ${reason}; fail closed)` : '');
   if (missing === 'external') return 'missing the external review stage: after the Cody pass, codex or claude must pass on the same commit';
   return '';
 };
@@ -290,7 +321,7 @@ export function requestReview({ fm }, reviewer, note, by = '') {
   // the item's own new work after its review request moves it, and both stages run again.
   const head = workCommit();
   const codyPassed = fm.work_commit && fm.cody_pass_commit === fm.work_commit;
-  if (head && (!codyPassed || laterOwnWork(fm))) fm.work_commit = head;
+  if (head && (!codyPassed || laterOwnWork(fm).later)) fm.work_commit = head;
   Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: asked, session_authors: seededAuthors(fm, asked) });
   return { event: 'review_requested', text: `## Review requested by ${by || fm.claimed_by || 'unknown'} at ${t} (reviewer: ${reviewer})\n\n${note}` };
 }

@@ -52,6 +52,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   // then the external reviewer, each with a fresh view). An incomplete item takes only the lead's refinement,
   // so the item is completed first (refs, estimate; it has the definition of done)
   run(there, ['update', '1', '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--by', 'tester']);
+  run(there, ['update', '1', '--claim', 'tester']); // item 059: the producer's claimer records its hand-off
   run(there, ['update', '1', '--request-review', 'any', '--note', 'n', '--by', 'tester']);
   run(there, ['query', '--phase', '1', '--agent', 'cody-a']);
   run(there, ['update', '1', '--start-review', '--by', 'cody-a']);
@@ -62,6 +63,11 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   run(there, ['update', '1', '--start-review', '--by', 'codex']);
   run(there, ['update', '1', '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
   run(there, ['query', '--phase', '1', '--agent', 'tester']); // the stages changed the item after tester's last read
+  // item 059: the close needs the hand-off for the dependent of the other repository, accepted by the lead acting as itself
+  run(there, ['update', '1', '--handoff', 'acme/app#1', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'tester']);
+  const accepted = cli(['update', '1', '--accept-handoff', 'acme/app#1', '--checks', 'verified', '--by', 'lead'], { cwd: there, tmp: t, env: { QWEN_CODE_AGENT_ID: 'lead', TEAM_LEAD: 'lead' } });
+  assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+  run(there, ['query', '--phase', '1', '--agent', 'tester']);
   run(there, ['update', '1', '--status', 'done', '--by', 'tester']);
   assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status done\)/);
   const offered = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json']).stdout); // done: next-work offers the item

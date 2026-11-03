@@ -23,6 +23,7 @@ function fixture() {
 }
 const run = (f, command, args) => cli([command, ...args], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
 const ok = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
+const COMMIT = 'def45678def45678def45678def45678def45678'; // a 40-hex commit for the hand-off records (item 059)
 const refused = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };
 const q = (f, ...args) => { const r = run(f, 'query', [...args, '--json']); assert.equal(r.status, 0, r.stdout + r.stderr); return JSON.parse(r.stdout).map(x => x.slug); };
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
@@ -108,6 +109,12 @@ test('test_claim_review_close_lifecycle: the query views along the lifecycle (th
   ok(f, first, '--start-review', '--by', 'codex');
   ok(f, first, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md');
   run(f, 'query', ['--phase', first, '--agent', 'smooth']); // the environment agent (the creator here) re-reads after the codex pass
+  // item 059: the close needs the hand-off for the job, recorded by the claimer and accepted by the lead (cody, the default)
+  run(f, 'query', ['--phase', first, '--agent', 'archy']);
+  ok(f, first, '--handoff', String(Number(job.split('-')[0])), '--handoff-commit', COMMIT, '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'archy');
+  run(f, 'query', ['--phase', first, '--agent', 'cody']);
+  ok(f, first, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'cody');
+  run(f, 'query', ['--phase', first, '--agent', 'smooth']);
   ok(f, first, '--close', '--summary', 'tests written');
   assert.ok(!q(f, '--blocked').includes(job));
   assert.ok(q(f, '--claimable').includes(job));
@@ -135,12 +142,17 @@ test('--reviewable needs --agent; the text view lists the item with its dependen
 
 test('a completed dependency whose file is gone does not hold the dependent item back (the row decides)', () => {
   const f = fixture();
-  const dep = make(f, 'ghost dependency', ['--no-review-refs']); // no review refs: with both stages' pins, --status done finishes it (item 088)
+  const dep = make(f, 'ghost dependency'); // a complete item: the hand-off of item 059 is refused on an incomplete one
   const { fm: depFm, body: depBody } = item(f, dep);
-  store.write({ path: join(f.folder, 'phases', `${dep}.md`), fm: { ...depFm, cody_pass_commit: depFm.commit || '', external_pass_commit: depFm.commit || '' }, body: depBody }, f.folder);
+  store.write({ path: join(f.folder, 'phases', `${dep}.md`), fm: { ...depFm, cody_pass_commit: depFm.commit || '', external_pass_commit: depFm.commit || '', review_state: 'passed', claimed_by: 'archy' }, body: depBody }, f.folder);
   run(f, 'query', ['--phase', dep, '--agent', 'smooth']); // the environment agent (the creator here) re-reads after the pins
   const job = make(f, 'waits for the ghost', ['--depends-on', dep.split('-')[0]]);
   assert.ok(q(f, '--blocked').includes(job) && !q(f, '--claimable').includes(job));
+  // item 059: both stages pinned, the review passed and archy holds it, so archy records the hand-off and the lead accepts it
+  ok(f, dep, '--handoff', String(Number(job.split('-')[0])), '--handoff-commit', COMMIT, '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'archy');
+  run(f, 'query', ['--phase', dep, '--agent', 'cody']);
+  ok(f, dep, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'cody');
+  run(f, 'query', ['--phase', dep, '--agent', 'smooth']);
   ok(f, dep, '--status', 'done');
   rmSync(join(f.folder, 'phases', `${dep}.md`)); // the row stays done; only the file is missing
   assert.ok(!q(f, '--blocked').includes(job), 'blocked by a done dependency');

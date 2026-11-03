@@ -141,8 +141,8 @@ stage refining, with or without a team field, and needs its refinement review (a
 before it may be claimed; a slice written before the stage field existed is named by its body's split marker and
 takes the same gate. A team item without a stage (a team's work item, or one written before the stage field existed) is
 unrefined too: `--claim` refuses it for every agent but the team lead's own claim of its team's work item (`backlog team
-pop`, to split it; never a split slice) and names `--refine-start`; `--refine-start` accepts it, and `pop`, `query --claimable` and `query --plan`
-offer its refinement, never a claim. An item without a team and without the split marker has no stage and is claimable. The owner closes without a review on a written decision — `--close --by owner --reason
+pop`, to split it; never a split slice) and names `--refine-start`; `--refine-start` accepts it, `pop` offers its refinement, never a claim,
+and `query --claimable` and `query --plan` leave it out until it is refined. An item without a team and without the split marker has no stage and is claimable. The owner closes without a review on a written decision — `--close --by owner --reason
 "<the decision>"`, recorded as an owner decision — even for a team item still in its refinement stages.
 
 ## Command help

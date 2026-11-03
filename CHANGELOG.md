@@ -14,8 +14,9 @@
   written before the stage field existed) and a split slice without one are unrefined (stage refining); an item
   without a team and without the split marker keeps no stage and is claimable. `--claim` refuses an unrefined item for
   every agent but the team lead's own claim of its team's work item (`backlog team pop`, to split it; never a split slice, which the lead is refused too), and the refusal
-  names `--refine-start`; `--refine-start` accepts an unrefined team item that nobody holds; `backlog pop`, the dispatch
-  plan (`query --plan`) and `query --claimable` offer an unrefined team item for its refinement, never for a claim. The
+  names `--refine-start`; `--refine-start` accepts an unrefined team item that nobody holds; `backlog pop` offers an unrefined
+  team item for its refinement, never for a claim, and the dispatch plan (`query --plan`) and `query --claimable` leave it
+  out until it is refined. The
   help, the built-in skill and the README state the rule.
 - `backlog query --changed [--agent <name>] [--json]` reports, for the calling agent, which items of the
   repository folder changed since the agent's own last use. The reference point is the commit of the

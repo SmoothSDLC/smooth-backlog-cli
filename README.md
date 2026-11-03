@@ -131,7 +131,10 @@ checkout and other items' commits on the branch move nothing; the item's own new
 starts with the item number) moves the work commit, so both stages run again; a changes verdict at either stage clears both. `--close` is refused until both stages passed for
 the current work commit, and the refusal names the missing stage; a passing Cody review asks for the external
 review, and a passing external review asks for the close. `--status done` is a close too: refused until both
-stages passed, with or without review documents. A changes verdict is recorded at either stage even after the
+stages passed, with or without review documents. An item that other items depend on closes (`--close` or `--status done`) only when each
+dependent's hand-off is recorded (`--handoff`) and accepted by the team lead (`--accept-handoff`); the refusal lists
+every open dependent, the state of its hand-off and the next command. An item without dependents closes and records
+`handoffs: none`; an item already done is not checked again. A changes verdict is recorded at either stage even after the
 work commit moved. A pass that counts for no stage asks for the Cody review first. A teamless split slice joins the
 team of the member who starts its refinement (or, refined earlier, who claims it). Every split item starts in
 stage refining, with or without a team field, and needs its refinement review (a `codex` or `claude` verdict)

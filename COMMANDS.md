@@ -381,6 +381,8 @@ Options:
       completes the item and is a close: it is refused until both review stages - a Cody pass and a codex or claude
       pass on the same commit - have passed for the item's current work commit, with or without review documents,
       and the refusal names the missing stage. The owner closes without a review only with --close --by owner.
+      The hand-off rule of --close applies too: done is refused until each dependent's hand-off is recorded and
+      accepted; an item without dependents records handoffs: none; an item already done is not checked again.
   --branch BRANCH
       Refused by design: the branch of an item is not changed here. Use backlog move --to-branch instead.
   --commit COMMIT
@@ -560,7 +562,10 @@ Options:
       the refusal names the missing stage. The owner closes without a review on a written decision
       (--by owner --reason "<the decision>"), recorded as an owner decision, even for a team item still in its
       refinement stages (team session). Only the claimer closes its item, else the team lead (--by <lead>);
-      never the reviewer.
+      never the reviewer. An item that other items depend on closes only when each dependent's hand-off is recorded
+      and accepted (--handoff, then the lead's --accept-handoff); the refusal lists every open dependent, the state
+      of its hand-off and the next command. An item without dependents closes and records handoffs: none. An item
+      already done is not checked again.
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
   --help

@@ -137,6 +137,9 @@ sees and changes the backlog only through them.
   --handoff-pickup ... --handoff-risks ...] --by <you>`, and the lead answers `--accept-handoff <dependent>
   --checks "<what was checked>" --by <lead>` (only after the producer's review passed) or `--reject-handoff
   <dependent> --reason "<why>" --by <lead>`; a re-recorded hand-off makes an earlier receipt stale.
+  A producer closes (`--close` or `--status done`) only when each dependent's hand-off is recorded and accepted;
+  the refusal lists every open dependent, the state of its hand-off and the next command. An item without
+  dependents closes and records handoffs: none; an item already done is not checked again.
 - [ ] A member's review request, a changes verdict it gives and its close end its session (never the lead's): the
   output's last line says END THE SESSION NOW: reply with text only and make no further tool call (when the CLI
   recorded a hand-off for a Qwen team member, `backlog work` also answers stop until its fresh session).

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Item 078: the hand-off close rule is documented in the help of `--close` and `--status`, the built-in skill and the
+  README. An item that other items depend on closes (`--close` or `--status done`) only when each dependent's
+  hand-off is recorded and accepted; the refusal lists every open dependent, the state of its hand-off and the next
+  command. An item without dependents closes and records `handoffs: none`; an item already done is not checked again.
+  The gate itself shipped with the hand-off wiring (059.V2).
 - Item 096: the two retired classification keys of older items have no effect, and the CLI drops them whenever it next
   writes an item (every write, the front-matter-only write and the rewrite of a neighbour by a priority change). An item
   that still carries them shows them until its next write; nothing is swept in one commit.

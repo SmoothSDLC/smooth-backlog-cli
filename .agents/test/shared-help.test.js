@@ -179,3 +179,14 @@ test('096: the update help and the built-in skill say the retired classification
     assert.match(text, /next writes/, name);
   }
 });
+
+test('059.V2: the --close and --status help blocks name the hand-off close rule, NONE and the legacy exemption', () => {
+  const help = backlog('update', '--help').stdout;
+  const skill = readFileSync(new URL('../../templates/skills/backlog/SKILL.md', import.meta.url), 'utf8');
+  for (const [name, text] of [['--close', block(help, 'close')], ['--status', block(help, 'status')], ['skill', skill]]) {
+    const flat = text.replace(/\s+/g, ' ');
+    assert.match(flat, /each dependent's hand-off is recorded and accepted/, name);
+    assert.match(flat, /records handoffs: none/, name);
+    assert.match(flat, /already done is not checked again/, name);
+  }
+});

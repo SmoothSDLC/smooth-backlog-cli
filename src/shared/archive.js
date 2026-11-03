@@ -110,7 +110,7 @@ async function archive(a, con, { repo, folder, close, guard }) {
   if (!row) return refuse(`no phase ${pyStr(a.phase)}`);
   const outside = teamRefusal(row);
   if (outside) return refuse(outside);
-  if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived (${row.path})`); return 0; }
+  if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived`); return 0; }
   if (row.status !== 'done' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'done' — finish it or pass --force`);
 
   const src = join(folder, row.path);
@@ -121,13 +121,13 @@ async function archive(a, con, { repo, folder, close, guard }) {
   const from = relative(folder, resolve(src)).split('\\').join('/');
   const to = `archive/${from}`; // the same path under archive/ (archive.py:76-77)
   store.assertNoSymlinks(folder, join(folder, to)); // a link at archive/ or archive/phases/ would take the move outside
-  if (a['dry-run']) { say(`ℹ️  [dry-run] would git mv ${from} -> ${to} and mark ${row.slug} archived`); return 0; }
+  if (a['dry-run']) { say(`ℹ️  [dry-run] would archive ${row.slug} and mark it archived`); return 0; }
 
-  if (existsSync(join(folder, to))) return refuse(`${to} already exists; archiving ${row.slug} would replace that archived item`);
+  if (existsSync(join(folder, to))) return refuse(`an archived item named ${row.slug} already exists; archiving it again would replace that item`);
   mkdirSync(join(folder, to, '..'), { recursive: true });
   store.note(src); store.note(join(folder, to)); // the move and the stamp below are undone from these
   if ((await git(['mv', '--', from, to], folder)).code) { // archive.py:39-49: a file git does not track yet moves plainly
-    try { renameSync(src, join(folder, to)); } catch { return refuse(`could not move ${src}`); }
+    try { renameSync(src, join(folder, to)); } catch { return refuse(`could not archive ${row.slug}: the file move failed`); }
   }
   store.write({ path: join(folder, to), fm: { ...fm, status: 'archived' } }, folder, { frontMatterOnly: true });
   // archiving removes an item from the backlog -> planning event: re-densify the remainder to 0..M-1
@@ -145,7 +145,7 @@ async function archive(a, con, { repo, folder, close, guard }) {
     db.scan(con, folder);
   }
   close();
-  say(`📦 ${row.slug} archived -> ${to}`);
+  say(`📦 ${row.slug} archived`);
   say(`   rescan: ${s.changed} (re)ingested, ${s.missing} missing`);
   if (order.length) say(`   📋 planning event: backlog re-densified to ${order.length} item(s) (P0..P${order.length - 1})`);
   return 0;

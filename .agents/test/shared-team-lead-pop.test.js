@@ -28,7 +28,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
 const LEAD = { TEAM_LEAD: 'lead' };
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 const pop = (f, env, ...args) => { const r = run(f, ['team', 'pop', '--json', ...args], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
 
@@ -167,7 +167,7 @@ test('team pop: an unclaimed in-progress work item is taken; no output names a f
 test('item 061: query --phase --json names the team fields an item lacks', () => {
   const f = fixture();
   const full = make(f, 'complete item');
-  const bare = ok(f, ['new', '--name', 'bare item', '--depends-on', 'none']).stdout.split('created phase phases/')[1].split('.md')[0];
+  const bare = ok(f, ['new', '--name', 'bare item', '--depends-on', 'none']).stdout.split('created phase ')[1].split(' ')[0];
   const [a, b] = JSON.parse(ok(f, ['query', '--phase', `${full},${bare}`, '--json']).stdout);
   assert.deepEqual(a.missing, []);
   assert.deepEqual(b.missing, ['review_refs', 'estimate_min', 'definition_of_done']);

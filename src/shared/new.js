@@ -128,7 +128,7 @@ async function create(argv, { home, folder, repo, team }) {
       // INTENTIONAL (new_phase.py:103-107): the parent's body goes in verbatim, duplicate headings included.
       const file = join(folder, String(src.path));
       await assertInside(folder, file); // the path comes from the mirror database: untrusted
-      if (!existsSync(file)) return refuse(`--split-from: the file of '${src.slug}' (${src.path}) is missing`);
+      if (!existsSync(file)) return refuse(`--split-from: the contents of '${src.slug}' are missing from the backlog repository`);
       check(folder, repo, actor(), src.slug, src.path); // the split logs a parent event based on this version and scope
       const doc = parse(readFileSync(file, 'utf8'));
       a.team = a.team || doc.fm.team || undefined; // new_phase.py:99: a split item inherits the source's team
@@ -151,7 +151,7 @@ async function create(argv, { home, folder, repo, team }) {
     slug = `${pad(seq)}-${slugify(name)}`;
     rel = `phases/${slug}.md`;
     const path = join(folder, rel);
-    if (existsSync(path) && !a.force) return refuse(`${rel} exists (pass --force)`);
+    if (existsSync(path) && !a.force) return refuse(`${slug} exists (pass --force)`);
 
     const objective = a.objective || inherited.objective || name;
     const fm = {
@@ -172,7 +172,7 @@ async function create(argv, { home, folder, repo, team }) {
     if (a.body) parts.push(`\n${a.body}\n`);
     if (!hasDefinitionOfDone(a.body)) parts.push(`\n## Definition of done\n\n${DOD_PLACEHOLDER}\n`);
 
-    if (a.dryRun) { process.stdout.write(`ℹ️  [dry-run] would create phase ${rel} (seq ${seq})\n`); return 0; }
+    if (a.dryRun) { process.stdout.write(`ℹ️  [dry-run] would create phase ${slug} (seq ${seq})\n`); return 0; }
     // nothing is committed yet: a failed run must not leave its file, a renumbered neighbour or a mirror row for the next command to push (beyond python parity)
     await undoOnThrow(db, folder, async () => {
       write({ path, fm, body: parts.join('\n') }, folder);
@@ -202,7 +202,7 @@ async function create(argv, { home, folder, repo, team }) {
     const bar = `⚠️ ${'='.repeat(72)}`;
     process.stdout.write(`${bar}\n⚠️  CRITICAL phase filed at P${rank} — ${slug}\n⚠️  SURFACE THIS TO THE USER NOW, in your FIRST line, with a ⚠️ marker. Do NOT bury it.\n${bar}\n`);
   }
-  process.stdout.write(`✅ created phase ${rel} (seq ${seq}) — ${where}, now at P${rank}\n`
+  process.stdout.write(`✅ created phase ${slug} (seq ${seq}) — ${where}, now at P${rank}\n`
     + `   📋 planning event: backlog re-densified to ${order.length} item(s) (P0..P${order.length - 1})\n`
     + `   rescan: ${summary.phases} phase(s) tracked, ${summary.changed} (re)ingested\n`);
   return 0;

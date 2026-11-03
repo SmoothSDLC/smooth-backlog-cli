@@ -27,7 +27,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
 const LEAD = { TEAM_LEAD: 'lead' }; // cody, archy and zed are plain members
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 // item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it or is offered it as work
 const refined = (f, slug, cwd = f.cons) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']].forEach(a => {
@@ -102,7 +102,7 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
   const popAll = env => JSON.parse(run(f, ['query', '--pop', '--agent', 'cody', '--scope', 'all', '--json'], env).stdout);
   const p = pop(f, 'cody', T1);
   assert.deepEqual([p.action, p.item], ['chunk', null]); // small-chunk work, but not t2's item
-  const newIn = name => { const r = cli(['new', ...NEW(name), '--chunk'], { cwd: other, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr); return r.stdout.split('created phase phases/')[1].split('.md')[0]; };
+  const newIn = name => { const r = cli(['new', ...NEW(name), '--chunk'], { cwd: other, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr); return r.stdout.split('created phase ')[1].split(' ')[0]; };
   const far = newIn('t2 chunk there');
   const r = cli(['update', far, '--set-team', 't2'], { cwd: other, tmp: f.t, env: LEAD });
   assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -117,7 +117,7 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
 
 test('the lead refines only an incomplete item of its own team', () => {
   const f = fixture();
-  const bare = name => { const r = ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none']); return r.stdout.split('created phase phases/')[1].split('.md')[0]; };
+  const bare = name => { const r = ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none']); return r.stdout.split('created phase ')[1].split(' ')[0]; };
   const theirs = bare('t2 incomplete'); // first on the branch
   ok(f, ['update', theirs, '--set-team', 't2']);
   const mine = bare('t1 incomplete');

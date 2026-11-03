@@ -31,7 +31,7 @@ const run = (f, args, env = {}, cwd = f.cons) => cli(args, { cwd, tmp: f.t, env:
 const ok = (f, args, cwd = f.cons) => { const r = run(f, args, {}, cwd); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const NEW = (name, deps, extra = []) => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', deps,
   '--body', '## Definition of done\n\n- [ ] it holds', ...extra];
-const make = (f, name, deps, extra = []) => ok(f, NEW(name, deps, extra)).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, deps, extra = []) => ok(f, NEW(name, deps, extra)).stdout.split('created phase ')[1].split(' ')[0];
 // A member item the offers accept: review documents and an estimate, or the views and the claim leave it out.
 const COMPLETE = ['--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low'];
 // The hand-off front matter as another writer would store it: lists of encode(...) strings, committed and pushed
@@ -151,7 +151,7 @@ function foreignFixture(prefix) {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const f = { t, home, cons, folder: join(home, 'acme', 'demo'), there, producerFolder: join(home, 'acme', 'lib') };
-  const p = ok(f, NEW('library change', 'none'), there).stdout.split('created phase phases/')[1].split('.md')[0];
+  const p = ok(f, NEW('library change', 'none'), there).stdout.split('created phase ')[1].split(' ')[0];
   ok(f, ['query', '--phase', '1', '--agent', 'tester'], there); // the producer's claimer reads its item before it closes
   return { ...f, producer: p };
 }

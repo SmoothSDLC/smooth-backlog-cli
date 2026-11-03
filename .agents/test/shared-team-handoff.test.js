@@ -37,7 +37,7 @@ const run = (f, args, env = {}) => {
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 // item 098: a team item is refined (a member, the lead's review request, Codex's pass) before a member claims it; a team's work
 // item (workItem: team set, no stage) is the lead's own claim and the parent of a split, and stays unrefined
 const workItem = (f, name) => { const s = make(f, name); ok(f, ['update', s, '--set-team', 't1']); return s; };

@@ -408,7 +408,7 @@ test('075: archive reflows the queue: archiving the last item is a no-op; archiv
   const before = ['phases/001-one.md', 'phases/002-two.md'].map(sha);
   const ra = cli(['archive', '3', '--force'], { cwd: a.cons, tmp: a.t });
   assert.equal(ra.status, 0, ra.stdout + ra.stderr);
-  assert.equal(ra.stdout, '📦 003-three archived -> archive/phases/003-three.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
+  assert.equal(ra.stdout, '📦 003-three archived\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
   assert.equal(ra.stderr, '');
   assert.deepEqual(['phases/001-one.md', 'phases/002-two.md'].map(sha), before, 'a no-op reflow rewrites no file');
 
@@ -417,7 +417,7 @@ test('075: archive reflows the queue: archiving the last item is a no-op; archiv
   threeItems(b);
   const rb = cli(['archive', '2', '--force'], { cwd: b.cons, tmp: b.t });
   assert.equal(rb.status, 0, rb.stdout + rb.stderr);
-  assert.equal(rb.stdout, '📦 002-two archived -> archive/phases/002-two.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
+  assert.equal(rb.stdout, '📦 002-two archived\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
   assert.equal(rb.stderr, '');
   assert.match(readItem(b.folder, 'phases/003-three.md'), /^priority: 1$/m, '003 is re-densified from P2 to P1');
   assert.ok(!existsSync(join(b.folder, 'phases', '002-two.md')), '002 left phases/');
@@ -467,7 +467,7 @@ test('075: reflow: a row whose file was moved to archive/ outside the CLI keeps 
   const r = cli(['archive', '4', '--force'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
-  assert.equal(r.stdout, '📦 004-four archived -> archive/phases/004-four.md\n   rescan: 0 (re)ingested, 1 missing\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n');
+  assert.equal(r.stdout, '📦 004-four archived\n   rescan: 0 (re)ingested, 1 missing\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n');
   assert.match(readItem(f.folder, 'phases/001-one.md'), /^priority: 0$/m, 'the survivor keeps its rank');
   assert.match(readItem(f.folder, 'phases/003-three.md'), /^priority: 2$/m, 'the item after the missing row stays P2: the missing row held P1');
   assert.equal(sha256File(join(f.folder, 'phases', s.files[0])), one, 'no live file is rewritten');
@@ -492,11 +492,11 @@ test('075: nextSeq: an archived item keeps its number: after archiving 2, the ne
   threeItems(f);
   const a = cli(['archive', '2', '--force'], { cwd: f.cons, tmp: f.t });
   assert.equal(a.status, 0, a.stdout + a.stderr);
-  assert.equal(a.stdout, '📦 002-two archived -> archive/phases/002-two.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
+  assert.equal(a.stdout, '📦 002-two archived\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
   assert.equal(a.stderr, '');
   const n = cli(['new', '--name', 'Four', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });
   assert.equal(n.status, 0, n.stdout + n.stderr);
-  assert.equal(n.stdout, '✅ created phase phases/004-four.md (seq 4) — appended, now at P2\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n   rescan: 3 phase(s) tracked, 1 (re)ingested\n');
+  assert.equal(n.stdout, '✅ created phase 004-four (seq 4) — appended, now at P2\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n   rescan: 3 phase(s) tracked, 1 (re)ingested\n');
   assert.equal(n.stderr, '');
   const git = (...args) => execFileSync('git', args, { cwd: f.home, encoding: 'utf8' }).trim();
   assert.ok(existsSync(join(f.folder, 'phases/004-four.md')), 'the created file exists');

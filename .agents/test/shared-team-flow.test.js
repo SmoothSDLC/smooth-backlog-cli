@@ -40,7 +40,7 @@ test('051: the team workflow through the CLI only, step by step', async ctx => {
   };
   const json = (agent, args) => JSON.parse(as(agent, args, [0, 3]).stdout); // 3: pop and work with nothing to do now
   const fm = slug => parse(readFileSync(join(home, 'acme', 'demo', 'phases', `${slug}.md`), 'utf8')).fm;
-  const slugOf = r => r.stdout.split('created phase phases/')[1].split('.md')[0];
+  const slugOf = r => r.stdout.split('created phase ')[1].split(' ')[0];
   const steps = [];
   const step = async (id, fn) => { await ctx.test(id, fn); steps.push(id); }; // one TAP line per step
 

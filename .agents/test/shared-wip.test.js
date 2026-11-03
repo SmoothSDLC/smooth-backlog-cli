@@ -27,7 +27,7 @@ function fixture(repos = ['demo']) {
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
-  const make = (repo, name, ...extra) => run(repo, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', '## Definition of done\n\n- [ ] x', ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+  const make = (repo, name, ...extra) => run(repo, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', '## Definition of done\n\n- [ ] x', ...extra]).stdout.split('created phase ')[1].split(' ')[0];
   const limits = l => writeFileSync(join(home, 'wip-limits.json'), JSON.stringify(l));
   // item 098: a team item is refined (member, lead's review request, Codex pass) before anyone claims it; one refinement at a time, so no limit is crossed
   const refine = (repo, slug) => {

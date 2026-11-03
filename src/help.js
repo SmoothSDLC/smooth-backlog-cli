@@ -36,9 +36,9 @@ Usage:
   backlog new --name <text> --depends-on <items|none> [options]
   backlog new --split-from <item> --depends-on <items|none> [options]
 
-Adds or splits an item. The item gets the next free item number, is written as a file in the folder of this
-repository in the backlog repository, and the whole backlog is renumbered so that the priorities run from 0 without
-gaps. An item is named by its number or by its slug (the file name without .md, for example 018-help-text).
+Adds or splits an item. The item gets the next free item number, is added to the backlog of this repository in the
+backlog repository, and the whole backlog is renumbered so that the priorities run from 0 without gaps. An item is
+named by its number or by its slug, for example 018-help-text, and the output names it the same way.
 The item belongs to the branch that is checked out in the repository you run the command in. When
 TEAM_REPOSITORY (owner/name) and TEAM_BRANCH are set, a team session files the item under that repository and
 branch instead, and then --body must hold a definition of done.
@@ -92,13 +92,13 @@ Options:
   --chunk
       Chunk work: small pieces any member does between items (the front matter key chunk: true).
   --force
-      Write the item file even when a file of that name already exists. Without it the command refuses.
+      Write the item even when an item of that name already exists. Without it the command refuses.
   --dry-run
-      Say which file would be created and change nothing: no file is written and nothing is committed.
+      Say which item would be created and change nothing: nothing is written and nothing is committed.
 ${HELP_FLAG}
 
-On success the command prints a line that starts "created phase" with the file, the item number and the rank the
-item now has, and a line about the renumbered backlog. A critical item is announced in a banner first.
+On success the command prints a line that starts "created phase" with the item's slug, the item number and the rank
+the item now has, and a line about the renumbered backlog. A critical item is announced in a banner first.
 
 ${EXIT}
 
@@ -688,13 +688,13 @@ Example:
   backlog move 18 --to-branch team-cli-parity-1
 `,
 
-  archive: `backlog archive — archive a finished item by moving its file under archive/
+  archive: `backlog archive — archive a finished item: it leaves the work queue and is kept as archived
 
 Usage:
   backlog archive <item> [--force] [--dry-run]
 
-Archives an item given by number or slug. The item file moves to the same path under the archive folder of this
-repository's folder in the backlog repository and its status becomes archived. The command records an event and
+Archives an item given by number or slug: the item leaves the work queue, is kept as archived in the backlog
+repository and its status becomes archived; the output names it by its slug. The command records an event and
 renumbers the remaining backlog to 0..M-1, because archiving takes the item off the backlog. Archiving an item
 that is already archived does nothing and says so. The command refuses when the item does not exist, or when its
 status is not done and --force was not given.
@@ -709,7 +709,7 @@ Options:
   --force
       Archive the item even if its status is not done.
   --dry-run
-      Say which move would happen and change nothing: no file is moved and nothing is committed.
+      Say which item would be archived and change nothing: nothing is moved and nothing is committed.
 ${HELP_FLAG}
 
 ${EXIT}

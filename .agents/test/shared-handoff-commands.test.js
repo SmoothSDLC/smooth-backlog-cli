@@ -41,7 +41,7 @@ const ok = (f, args, env) => {
   assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
   return r;
 };
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const item = (f, seq) => store.load(f.folder).find(i => i.fm.seq === seq);
 const ctxOf = (f, seq) => { const it = item(f, seq); return { fm: it.fm, body: it.body, slug: it.fm.phase, folder: f.folder, repo: f.repo }; };
 

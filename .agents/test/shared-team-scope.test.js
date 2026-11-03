@@ -40,7 +40,7 @@ function make(f, cwd, name, extra = []) {
   args.push('--body', DOD, ...extra);
   const r = cli(['new', ...args], { cwd, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  return r.stdout.split('created phase phases/')[1].split('.md')[0];
+  return r.stdout.split('created phase ')[1].split(' ')[0];
 }
 const slugs = (f, args, code = 0) => {
   const r = cli(['query', ...args, '--json'], { cwd: f.cons, tmp: f.t });

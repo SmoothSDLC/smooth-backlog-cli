@@ -25,7 +25,7 @@ function fixture(name, extra) {
     '--body', '## Definition of done\n\n- [ ] the test\'s check holds', ...extra];
   const r = cli(['new', ...args], { cwd: cons, tmp: t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const slug = r.stdout.split('created phase phases/')[1].split('.md')[0];
+  const slug = r.stdout.split('created phase ')[1].split(' ')[0];
   return { t, home, cons, slug, file: join(home, 'acme', 'demo', 'phases', `${slug}.md`) };
 }
 const update = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });

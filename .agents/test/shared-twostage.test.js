@@ -42,7 +42,7 @@ const LEAD = { TEAM_LEAD: 'lead' };
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, QWEN_CODE_SESSION_ID: '', ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 // item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it
 const refined = (f, slug, lead = 'lead') => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', lead], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']]
@@ -191,7 +191,7 @@ test('a split slice without a codex/claude refinement review cannot be claimed',
   const parent = make(f, 'split parent');
   const child = ok(f, ['new', '--name', 'split slice', '--split-from', parent, '--depends-on', 'none',
     '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
-    .split('created phase phases/')[1].split('.md')[0];
+    .split('created phase ')[1].split(' ')[0];
   assert.equal(fm(f, child).stage, 'refining'); // a split slice starts in stage refining, with or without a team
   no(f, ['update', child, '--claim', 'archy'], 'it is claimed only when its refinement review passed (stage ready)');
   ok(f, ['update', child, '--refine-start', '--by', 'archy']);
@@ -211,7 +211,7 @@ test('a team split slice still needs its refinement review, with or without a te
   ok(f, ['update', parent, '--set-team', 't1']);
   const child = ok(f, ['new', '--name', 'team split slice', '--split-from', parent, '--depends-on', 'none',
     '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
-    .split('created phase phases/')[1].split('.md')[0];
+    .split('created phase ')[1].split(' ')[0];
   assert.deepEqual([fm(f, child).team, fm(f, child).stage], ['t1', 'refining']);
   no(f, ['update', child, '--claim', 'archy'], 'it is claimed only when its refinement review passed (stage ready)');
 });
@@ -232,7 +232,7 @@ test('an owner close with --by owner --reason is accepted and recorded as an own
 test('an owner close of an incomplete item (no review documents, no estimate) is accepted with its --summary', () => {
   const f = fixture();
   const s = ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', DOD]).stdout
-    .split('created phase phases/')[1].split('.md')[0];
+    .split('created phase ')[1].split(' ')[0];
   ok(f, ['query', '--phase', s, '--agent', 'owner']);
   ok(f, ['update', s, '--close', '--by', 'owner', '--reason', 'the decision is recorded', '--summary', 'done']);
   assert.equal(fm(f, s).status, 'done');
@@ -264,7 +264,7 @@ test('the owner closes a team item in its refinement stages on the written decis
   ok(f, ['update', parent, '--set-team', 't1']);
   const child = ok(f, ['new', '--name', 'owner team slice', '--split-from', parent, '--depends-on', 'none',
     '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
-    .split('created phase phases/')[1].split('.md')[0];
+    .split('created phase ')[1].split(' ')[0];
   assert.equal(fm(f, child).stage, 'refining'); // the refinement runs while the owner decides
   no(f, ['update', child, '--claim', 'archy'], 'it is claimed only when its refinement review passed');
   ok(f, ['update', child, '--refine-start', '--by', 'archy']);
@@ -293,7 +293,7 @@ test('a legacy split slice without a stage field is not claimable until its refi
   const parent = make(f, 'legacy parent');
   const child = ok(f, ['new', '--name', 'legacy slice', '--split-from', parent, '--depends-on', 'none',
     '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
-    .split('created phase phases/')[1].split('.md')[0];
+    .split('created phase ')[1].split(' ')[0];
   legacyWrite(f, child, {}); // the stage goes away: a slice as written before the stage existed
   assert.equal(fm(f, child).stage, undefined);
   const r = no(f, ['update', child, '--claim', 'archy'], 'it is claimed only when its refinement review passed (stage ready)');
@@ -370,7 +370,7 @@ test('a teamless split slice claimed by a member of a named team joins that team
   const parent = make(f, 'teamless parent');
   const child = ok(f, ['new', '--name', 'teamless slice claim', '--split-from', parent, '--depends-on', 'none',
     '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
-    .split('created phase phases/')[1].split('.md')[0];
+    .split('created phase ')[1].split(' ')[0];
   ok(f, ['update', child, '--refine-start', '--by', 'm1'], { TEAM_NAME: 't1' });
   ok(f, ['update', child, '--refine-done', '--by', 'm1', '--note', 'already complete'], { TEAM_NAME: 't1' });
   ok(f, ['update', child, '--request-refinement-review', '--by', 'lead']);
@@ -387,7 +387,7 @@ test('a legacy split slice without a stage is offered for its refinement, not fo
   const parent = make(f, 'legacy dispatch parent');
   const child = ok(f, ['new', '--name', 'legacy dispatch slice', '--split-from', parent, '--depends-on', 'none',
     '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
-    .split('created phase phases/')[1].split('.md')[0];
+    .split('created phase ')[1].split(' ')[0];
   legacyWrite(f, child, {}); // the stage goes away: a slice as written before the stage existed
   const pop = JSON.parse(run(f, ['pop', '--agent', 'm1', '--json'], { TEAM_NAME: 't1' }).stdout);
   assert.deepEqual([pop.action, pop.item], ['refine', child]); // its refinement, not a claim the gate refuses
@@ -450,7 +450,7 @@ test('a teamless split slice joins the refining team at --refine-start, and the 
   const parent = make(f, 'join parent');
   const child = ok(f, ['new', '--name', 'join slice', '--split-from', parent, '--depends-on', 'none',
     '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
-    .split('created phase phases/')[1].split('.md')[0];
+    .split('created phase ')[1].split(' ')[0];
   ok(f, ['update', child, '--refine-start', '--by', 'm1'], { TEAM_NAME: 't1' });
   assert.equal(fm(f, child).team, 't1');
   ok(f, ['update', child, '--refine-done', '--by', 'm1', '--note', 'complete'], { TEAM_NAME: 't1' });
@@ -465,7 +465,7 @@ test('a legacy split slice another member is refining is not offered for a claim
   const parent = make(f, 'legacy refining parent');
   const child = ok(f, ['new', '--name', 'legacy refining slice', '--split-from', parent, '--depends-on', 'none',
     '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout
-    .split('created phase phases/')[1].split('.md')[0];
+    .split('created phase ')[1].split(' ')[0];
   legacyWrite(f, child, { refiner: 'm2', team: 't1' }); // no stage, refined by another member
   const pop = JSON.parse(run(f, ['pop', '--agent', 'm1', '--json'], { TEAM_NAME: 't1' }).stdout);
   assert.notEqual(pop.action, 'claim');

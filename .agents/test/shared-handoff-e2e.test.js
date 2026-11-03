@@ -31,7 +31,7 @@ const C1 = '0123456789abcdef0123456789abcdef01234567';
 const C2 = 'fedcba9876543210fedcba9876543210fedcba98';
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '', ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const seq = slug => Number(slug.split('-')[0]);
 const itemFile = (f, slug) => join(f.folder, 'phases', `${slug}.md`);
 const fm = (f, slug) => parse(readFileSync(itemFile(f, slug), 'utf8')).fm;

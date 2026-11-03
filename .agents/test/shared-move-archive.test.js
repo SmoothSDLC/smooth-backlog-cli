@@ -120,7 +120,7 @@ test('review P2: a name with --- in it does not hide the closing front-matter de
   const f = seed();
   const made = run(f, 'new', ['--name', 'three---dashes', '--objective', 'o --- o', '--summary', 'a---b', '--depends-on', 'none']);
   assert.equal(made.status, 0, made.stderr);
-  const slug = made.stdout.split('created phase phases/')[1].split('.md')[0];
+  const slug = made.stdout.split('created phase ')[1].split(' ')[0];
   const r = run(f, 'archive', [slug, '--force']);
   assert.equal(r.status, 0, r.stderr);
   const moved = fm(f.folder, `archive/phases/${slug}.md`);
@@ -140,7 +140,7 @@ test('review P2: a new item does not inherit the events of the moved-away item w
   const mk = name => {
     const r = run(f, 'new', ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
     assert.equal(r.status, 0, r.stderr);
-    return r.stdout.split('created phase phases/')[1].split('.md')[0];
+    return r.stdout.split('created phase ')[1].split(' ')[0];
   };
   const old = mk('first one');
   assert.equal(run(f, 'move', [old, '--to-repository', 'other/proj']).status, 0);
@@ -439,7 +439,7 @@ test('review P2: move of an archived item (--to-branch, --to-repository) is refu
   for (const args of [['5', '--to-branch', 'release'], ['005-epsilon', '--to-repository', 'other/proj']]) {
     const r = run(f, 'move', args);
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.equal(r.stdout, '❌ 005-epsilon is archived and cannot be moved (the rescan does not visit archive/, so the mirror would keep the old branch or repository)\n');
+    assert.equal(r.stdout, '❌ 005-epsilon is archived and cannot be moved (an archived item is not scanned, so its branch or repository would not follow)\n');
     assert.equal(r.stderr, '');
   }
   assert.deepEqual([readFileSync(file, 'utf8'), mirror(f), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD')], before);
@@ -509,7 +509,7 @@ test('075: archive with a ghost row (a pending mirror row whose file is gone) is
   const f = seed(); ghost(f);
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, '📦 005-epsilon archived -> archive/phases/005-epsilon.md\n   rescan: 0 (re)ingested, 1 missing\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
+  assert.equal(r.stdout, '📦 005-epsilon archived\n   rescan: 0 (re)ingested, 1 missing\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
   assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'phases/002-beta.md').fm.priority, 1, 'the ghost still holds P0');
   assert.deepEqual(['003-gamma', '004-delta', '007-eta'].map(n => fm(f.folder, `phases/${n}.md`).fm.priority), [2, 3, 4]);
@@ -521,7 +521,7 @@ test('075: archive of a done item: git mv, status stamp, reflow, one commit', ()
   const f = seed();
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, '📦 005-epsilon archived -> archive/phases/005-epsilon.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
+  assert.equal(r.stdout, '📦 005-epsilon archived\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
   assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
   assert.ok(!existsSync(join(f.folder, 'phases/005-epsilon.md')));
@@ -538,7 +538,7 @@ test('075: archive --dry-run names the move and changes nothing', () => {
   const file = readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8');
   const r = run(f, 'archive', ['5', '--dry-run']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, 'ℹ️  [dry-run] would git mv phases/005-epsilon.md -> archive/phases/005-epsilon.md and mark 005-epsilon archived\n');
+  assert.equal(r.stdout, 'ℹ️  [dry-run] would archive 005-epsilon and mark it archived\n');
   assert.equal(r.stderr, '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head, 'no commit');
   assert.equal(readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8'), file, 'the file is untouched');
@@ -552,7 +552,7 @@ test('075: archive of an already archived item: an info line, exit 0, nothing ch
   const head = git(f.home, 'rev-parse', 'HEAD');
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, 'ℹ️  005-epsilon already archived (archive/phases/005-epsilon.md)\n');
+  assert.equal(r.stdout, 'ℹ️  005-epsilon already archived\n');
   assert.equal(r.stderr, '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
@@ -652,7 +652,7 @@ test('075: archive whose target file already exists: exit 1, the exact refusal, 
   const before = snapshot(f);
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 1);
-  assert.equal(r.stdout, '❌ archive/phases/005-epsilon.md already exists; archiving 005-epsilon would replace that archived item\n');
+  assert.equal(r.stdout, '❌ an archived item named 005-epsilon already exists; archiving it again would replace that item\n');
   assert.equal(r.stderr, '');
   assert.deepEqual(snapshot(f), before);
 });
@@ -684,7 +684,7 @@ test('075: move of an item whose slug is not a plain name: exit 1, the exact ref
   const before = snapshot(f);
   const r = run(f, 'move', ['7', '--to-repository', 'other/proj']);
   assert.equal(r.status, 1);
-  assert.equal(r.stdout, "❌ '007-eta two' is not a plain item name (letters, digits, . _ -); the target file is named from it\n");
+  assert.equal(r.stdout, "❌ '007-eta two' is not a plain item name (letters, digits, . _ -); the target item is named from it\n");
   assert.equal(r.stderr, '');
   assert.deepEqual(snapshot(f), before);
 });
@@ -693,7 +693,7 @@ test('075: archive --force of an open item: the exact output, the stamp, the row
   const f = seed();
   const r = run(f, 'archive', ['2', '--force']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, '📦 002-beta archived -> archive/phases/002-beta.md\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 4 item(s) (P0..P3)\n');
+  assert.equal(r.stdout, '📦 002-beta archived\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 4 item(s) (P0..P3)\n');
   assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'archive/phases/002-beta.md').fm.status, 'archived');
   assert.ok(!existsSync(join(f.folder, 'phases/002-beta.md')));
@@ -701,4 +701,37 @@ test('075: archive --force of an open item: the exact output, the stamp, the row
   assert.deepEqual(row(), { status: 'archived', path: 'archive/phases/002-beta.md' });
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['archive 2 --force']);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'), 'published');
+});
+
+// --- 057: archive and move name an item by its slug and number and never print a file or folder of the backlog
+const BACKLOG_PATH = /phases\/|archive\/|\.md\b/;
+test('057: archive and move print the slug and no path', () => {
+  const f = seed();
+  const outputs = [];
+  const runs = (script, args) => { const r = run(f, script, args); outputs.push(r.stdout + r.stderr); return r; };
+  assert.equal(runs('archive', ['5', '--dry-run']).stdout, 'ℹ️  [dry-run] would archive 005-epsilon and mark it archived\n');
+  assert.match(runs('archive', ['5']).stdout, /^📦 005-epsilon archived\n {3}rescan: /);
+  assert.equal(runs('archive', ['5']).stdout, 'ℹ️  005-epsilon already archived\n');
+  assert.equal(runs('move', ['5', '--to-branch', 'release']).stdout,
+    '❌ 005-epsilon is archived and cannot be moved (an archived item is not scanned, so its branch or repository would not follow)\n');
+  mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
+  writeFileSync(join(f.folder, 'archive', 'phases', '006-zeta.md'), readFileSync(join(f.folder, 'phases', '006-zeta.md'), 'utf8'));
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an archived copy exists already'); git(f.home, 'push', '-q');
+  assert.equal(runs('archive', ['6']).stdout, '❌ an archived item named 006-zeta already exists; archiving it again would replace that item\n');
+  assert.match(runs('move', ['2', '--to-branch', 'release']).stdout, /^✅ 002-beta now belongs to branch 'release'\n/);
+  assert.match(runs('move', ['7', '--to-repository', 'other/proj']).stdout, /^✅ 007-eta moved to other\/proj as 002-eta\n/);
+  for (const out of outputs) assert.doesNotMatch(out, BACKLOG_PATH, out);
+});
+
+test('057: archive whose file move fails names the slug and no path', { skip: process.getuid?.() === 0 && 'root ignores the read-only folder' }, () => {
+  const f = seed();
+  const target = join(f.folder, 'archive', 'phases');
+  mkdirSync(target, { recursive: true });
+  spawnSync('chmod', ['555', target]);
+  try {
+    const r = run(f, 'archive', ['5']);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.equal(r.stdout, '❌ could not archive 005-epsilon: the file move failed\n');
+    assert.doesNotMatch(r.stdout + r.stderr, BACKLOG_PATH);
+  } finally { spawnSync('chmod', ['755', target]); }
 });

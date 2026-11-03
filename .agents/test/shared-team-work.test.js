@@ -35,7 +35,7 @@ const run = (f, args, env = {}) => {
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase phases/')[1].split('.md')[0];
+const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 const work = (f, agent, env, ...args) => { const r = run(f, ['work', '--agent', agent, '--json', ...args], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
 // item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it
@@ -171,7 +171,7 @@ test('backlog work on chunk work of another repository prints that item too', ()
   writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
   const r = cli(['new', ...NEW('chunk there'), '--chunk'], { cwd: other, tmp: f.t, env: LEAD });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const far = r.stdout.split('created phase phases/')[1].split('.md')[0];
+  const far = r.stdout.split('created phase ')[1].split(' ')[0];
   const w = work(f, 'cody', {}, '--scope', 'all');
   assert.deepEqual([w.action, w.item, w.repository, w.front_matter.phase], ['chunk', far, 'other/thing', far]);
   assert.ok(w.body.includes('Body of chunk there.'), w.body); // the whole item, read from that repository's folder
@@ -348,7 +348,7 @@ test('a member acts only as itself on an unclaimed item; a request outside a Qwe
   const r = ok(f, ['update', u, '--request-review', 'any', '--note', 'y', '--by', 'zed']);
   assert.equal(STOP.exec(r.stdout)?.[1], 'zed');
   const half = NEW('incomplete team item').filter((x, i, all) => x !== '--estimate' && all[i - 1] !== '--estimate');
-  const inc = ok(f, ['new', ...half]).stdout.split('created phase phases/')[1].split('.md')[0];
+  const inc = ok(f, ['new', ...half]).stdout.split('created phase ')[1].split(' ')[0];
   ok(f, ['update', inc, '--set-team', 't1']); // stage-less and incomplete
   no(f, ['update', inc, '--set-estimate', '5'], 'only the team lead (lead) refines it, not archy', { QWEN_CODE_AGENT_ID: 'archy@t1' });
   ok(f, ['update', inc, '--set-estimate', '5'], { QWEN_CODE_AGENT_ID: 'lead@t1' });

@@ -99,10 +99,9 @@ export function cli(args = [], opts = {}) {
   return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
 }
 
-// The slug a `new` output names: accepts both "created phase phases/<slug>.md" and "created phase <slug>"
-// (057 removes the path from the line; when that lands, this regex is the one place that changes).
+// The slug a `new` output names: `created phase <slug> (seq N)`.
 export const createdSlug = stdout => {
-  const m = String(stdout).match(/created phase (?:phases\/)?([0-9A-Za-z][0-9A-Za-z._-]*?)(?:\.md)?\s+\(/);
+  const m = String(stdout).match(/created phase ([0-9A-Za-z][0-9A-Za-z._-]*) \(/);
   return m ? m[1] : undefined;
 };
 

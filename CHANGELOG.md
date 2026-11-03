@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Item 107 (of 057): `backlog new`, `backlog archive` and `backlog move` name an item by its slug and number and never
+  print a file or folder of the backlog repository (for example `created phase 004-example (seq 4)`, `📦 004-example
+  archived`, `ℹ️  [dry-run] would archive 004-example and mark it archived`); their refusals do the same. The help of
+  `new` and `archive` describes the item, not its file.
 - Item 078: the hand-off close rule is documented in the help of `--close` and `--status`, the built-in skill and the
   README. An item that other items depend on closes (`--close` or `--status done`) only when each dependent's
   hand-off is recorded and accepted; the refusal lists every open dependent, the state of its hand-off and the next

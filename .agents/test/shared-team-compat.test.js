@@ -39,7 +39,7 @@ function make(f, name, extra = []) {
   if (!has('--estimate')) args.push('--estimate', '5', '--complexity', 'low');
   const r = run(f, 'new', [...args, '--body', DOD, ...extra]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  return r.stdout.split('created phase phases/')[1].split('.md')[0];
+  return r.stdout.split('created phase ')[1].split(' ')[0];
 }
 
 test('test_new_item_refusals: refusals at creation, the class options are gone, release only by the holder', () => {

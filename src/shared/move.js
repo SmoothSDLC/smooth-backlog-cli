@@ -109,7 +109,7 @@ async function move(a, con, ctx) {
   if (!r) return refuse(`no item ${pyStr(a.phase)} in the backlog of ${repo}`);
   const outside = teamRefusal(r);
   if (outside) return refuse(outside);
-  if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (the rescan does not visit archive/, so the mirror would keep the old branch or repository)`);
+  if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (an archived item is not scanned, so its branch or repository would not follow)`);
   if (a['to-branch']) { // move.py:93-98
     const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
@@ -127,7 +127,7 @@ async function move(a, con, ctx) {
   let tdir;
   try { tdir = store.folder(home, target); } catch (e) { throw usage(e.message); } // owner/name only: the target is the user's text or a file's data
   a.folders = [[folder, repo], [tdir, target]]; // item 053: a stale-view refusal names what the agent read in both
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target file is named from it`); // mirror data: no path in it
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target item is named from it`); // mirror data: no path in it
 
   // move.py:32-64
   await assertInside(home, join(tdir, 'backlog.db')); // no symlink between the home and the target db: db.connect checks only below the owner, after the item is written

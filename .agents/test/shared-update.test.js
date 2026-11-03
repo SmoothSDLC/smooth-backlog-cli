@@ -488,7 +488,7 @@ test('--dry-run prints the plan and changes and commits nothing', () => {
   bothStages(f, '2');
   const before = snapshot(f);
   const r = step(f, ['2', '--status', 'done', '--dry-run']);
-  assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'done'\}; COMPLETE -> re-prioritize backlog\n$/);
+  assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'done', 'handoffs': 'none'\}; COMPLETE -> re-prioritize backlog\n$/);
   step(f, ['3', '--priority', '1', '--name', "It's \"x\"", '--seq', '9', '--dry-run']);
   step(f, ['3', '--append', 'x', '--dry-run']);
   step(f, ['--replan', '3,1', '--dry-run']);

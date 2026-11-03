@@ -501,7 +501,7 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     + '  TS  ingested       branch=feature commit=SHA new phase 005-feat\n'
     + '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  state_change   branch=main commit=SHA set status=done\n'
+    + '  TS  state_change   branch=main commit=SHA set status=done, handoffs=none\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     // item 088: the fixture completes Delta through both review stages before the done transition; their events are here
     + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by codex: PASS (TS)\n'

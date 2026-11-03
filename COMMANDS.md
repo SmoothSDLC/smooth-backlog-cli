@@ -411,7 +411,7 @@ Options:
       in its depends_on is not done, or when a split item (with or without a team) or a team's item is not in stage
       ready (its refinement review has not passed). A team item without a stage (a team's work item, or one written
       before the stage field existed) is unrefined, stage refining: only the team lead's own claim of its team's work
-      item (backlog team pop, to split it) is accepted; for every other agent the refusal names --refine-start. An
+      item (backlog team pop, to split it; never a split slice) is accepted; for every other agent the refusal names --refine-start. An
       item without a team and without the split marker has no stage (solo work) and is claimable;
       otherwise the item becomes in progress and claimed by that agent. An agent or team name may contain letters,
       digits, a period, an underscore, a hyphen and a colon (a card's session names and a team name carry colons);

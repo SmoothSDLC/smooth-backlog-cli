@@ -160,7 +160,7 @@ them; `backlog query --wip` shows the counts. Only the team lead lifts a team or
 
 Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign <agent> --reason
 "<why>" --by <lead>`, `--reassign-review <agent> --reason "<why>" --by <lead>`). A split item (with or without a
-team) or of a team is claimed only in stage ready; a team item without a stage is unrefined (stage refining): `--claim` refuses it, naming `--refine-start`, and `pop`, `query --claimable` and `query --plan` offer its refinement, never a claim. Only the team lead's own claim of its team's work item (`backlog team pop`, to split it) is accepted. An item without a team and without the split marker has no stage and is claimed directly; one waiting in review-hitl waits for the owner's `--decision`.
+team) or of a team is claimed only in stage ready; a team item without a stage is unrefined (stage refining): `--claim` refuses it, naming `--refine-start`, and `pop`, `query --claimable` and `query --plan` offer its refinement, never a claim. Only the team lead's own claim of its team's work item (`backlog team pop`, to split it; never a split slice) is accepted. An item without a team and without the split marker has no stage and is claimed directly; one waiting in review-hitl waits for the owner's `--decision`.
 
 Session names: a card's sessions are named `<item, 3 digits><card id>:<increment, 2 digits>` (a colon inside the
 name) and a team joins its card ids with colons. The colon is part of the name: it works in every command, in the

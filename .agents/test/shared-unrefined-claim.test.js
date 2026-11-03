@@ -1,7 +1,11 @@
 // Item 098 (owner decision 083-A): nothing is implemented before it is refined. A team item without a stage (a team's work
-// item, or one written before the stage field existed) is unrefined: --claim refuses it for everyone but the team lead's own
-// claim of its team's work item, --refine-start accepts it, and pop, --claimable and --plan offer its refinement, never a
-// claim. An item without a team and without the split marker keeps no stage (solo work) and stays claimable.
+// item, or one written before the stage field existed) is unrefined. The per-command contract:
+//   --claim          refuses it for everyone, naming --refine-start; the one exception is the team lead's own claim of the
+//                    team's work item (backlog team pop, to split it), never of a split slice
+//   --refine-start   accepts it
+//   pop              offers its refinement (action refine), never a claim
+//   --claimable, --plan   omit it (they list only what can be claimed now)
+// An item without a team and without the split marker keeps no stage (solo work) and stays claimable.
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -58,6 +62,14 @@ test("the team lead's own claim of its team's work item is allowed (backlog team
   const s = teamItem(f);
   ok(f, ['update', s, '--claim', 'lead']);
   assert.equal(fm(f, s).claimed_by, 'lead');
+});
+
+test("the team lead's claim of a team split slice without a stage is refused, naming --refine-start", () => {
+  const f = fixture();
+  const s = make(f, 'legacy split slice');
+  ok(f, ['update', s, '--set-team', 't1', '--append', 'Split from `parent-item`. Inherited context: none']);
+  no(f, ['update', s, '--claim', 'lead'], '--refine-start');
+  assert.equal(fm(f, s).claimed_by, '');
 });
 
 test('--refine-start accepts a team item without a stage', () => {

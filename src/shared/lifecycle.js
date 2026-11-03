@@ -79,8 +79,8 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages.
   // Item 088: a split slice is in stage refining with or without a team field, so the gate covers it too; a slice
   // created before the stage field existed has no stage, and the body's split marker names it as refining.
-  // the team lead's own claim of its team's work item (backlog team pop, to split it) is the one claim of an unrefined item
-  const stage = agent === teamLead() && fm.team && !fm.stage ? undefined : stageOf(fm, body);
+  // the team lead's own claim of its team's work item (backlog team pop, to split it) is the one claim of an unrefined item; a split slice is never it
+  const stage = agent === teamLead() && fm.team && !fm.stage && !isSplitSlice(body) ? undefined : stageOf(fm, body);
   if (!isReady({ stage })) reject(`team ${fm.team || 'none'} item in stage ${stage || 'none'}${fm.stage ? '' : ' (not refined yet)'}: it is claimed only when its refinement review passed (stage ready)`
     + (stage === 'refining' && !fm.refiner ? `; refine it first: backlog update ${fm.phase || '<item>'} --refine-start --by <you>` : ''));
   // item 082: a new session of the same card continues the item (no takeover, no lead reassignment): the

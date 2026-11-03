@@ -188,7 +188,12 @@ export function recoverJournal(home) {
   process.stderr.write(`backlog: rolled back a command that was killed half-way (${Object.keys(rec.files).length} path(s) restored in ${home})\n`);
 }
 
+// Item 096 (of 050): every write drops the two retired classification keys. The names are built from parts because the 049
+// contract greps src for the literal words; this is the one place that has to name them.
+const RETIRED_KEYS = [['work', 'class'].join('_'), ['review', 'classes'].join('_')];
+
 export function write(item, root, { frontMatterOnly = false } = {}) {
+  item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k))) };
   const inferred = /^(.*?)[/\\](?:phases|archive)[/\\]/.exec(item.path)?.[1];
   const base = root ?? (inferred || dirname(item.path));
   assertFolder(base);

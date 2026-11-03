@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Item 096: the two retired classification keys of older items have no effect, and the CLI drops them whenever it next
+  writes an item (every write, the front-matter-only write and the rewrite of a neighbour by a priority change). An item
+  that still carries them shows them until its next write; nothing is swept in one commit.
 - Item 098: a team item is refined before anyone claims it. A team item without a stage (a team's work item, or one
   written before the stage field existed) and a split slice without one are unrefined (stage refining); an item
   without a team and without the split marker keeps no stage and is claimable. `--claim` refuses an unrefined item for

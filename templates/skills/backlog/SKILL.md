@@ -60,6 +60,7 @@ Retain the returned GUID for subsequent commands if priorities may change.
 - A number selects its CURRENT active priority (starting at 0), not permanent
   identity. Reordering or completing work can make that number select another item.
 - Entry numbers inside tasks/outcomes/evidence/references start at 1.
+- The two retired classification keys of older items have no effect. An item that still carries them shows them until the CLI next writes that item; every write drops them.
 - States are new/open/done/archived. Done and archive rows have GUIDs and no priority.
   Reopening done work puts it first; ordinary new and moved work goes last.
 - In local mode, `--force` is only a whole-list `set` replacement option. It is invalid for

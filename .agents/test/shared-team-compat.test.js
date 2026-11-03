@@ -153,8 +153,10 @@ test('an item with old work_class and review_classes fields behaves exactly like
   const plain = make(f, 'plain job');
   const old = make(f, 'old job');
   const path = join(f.folder, 'phases', `${old}.md`);
-  const { fm, body } = item(f, old);
-  store.write({ path, fm: { ...fm, work_class: ['chunk', 'docs'], review_classes: ['security'] }, body }, f.folder); // as a class-era item looks
+  // as a class-era item looks: the keys are written straight into the file (store.write drops them since item 096)
+  writeFileSync(path, readFileSync(path, 'utf8').replace(/^---\n/, '---\nwork_class:\n- chunk\n- docs\nreview_classes:\n- security\n'));
+  assert.ok(/^work_class:/m.test(readFileSync(path, 'utf8')) && /^review_classes:/m.test(readFileSync(path, 'utf8')), 'the seeded file carries both keys');
+  run(f, 'query', ['--phase', old, '--agent', 'me']); // the file changed behind the CLI: read it again before the writes below
   const pop = agent => JSON.parse(run(f, 'query', ['--pop', '--agent', agent, '--json']).stdout);
   // the team view of both items is the same but for identity, rank and time stamps
   const IDENTITY = ['id', 'slug', 'seq', 'name', 'objective', 'summary', 'priority', 'path', 'sha', 'created_at', 'updated_at'];

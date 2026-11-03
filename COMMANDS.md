@@ -366,6 +366,7 @@ records an event in the history of the item and refreshes the backlog database f
 done completes the item (its completion time is set) and renumbers the rest of the backlog; so does --priority.
 Both are planning events, so look at the order again afterwards. The item may be left out only together with
 --replan. Do not confuse this command with the local mode command that updates the CLI itself.
+The two retired classification keys of older items have no effect. An item that still carries them shows them until the CLI next writes that item; every write drops them.
 
 In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.

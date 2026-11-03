@@ -171,3 +171,11 @@ test('COMMANDS.md has the section "Shared backlog repository mode" with the help
   assert.match(section, /--use-local-repo/);
   for (const command of COMMANDS) assert.ok(section.includes(`\`\`\`text\n${HELP[command].trimEnd()}\n\`\`\``), `${command}: the help text is not in COMMANDS.md verbatim`);
 });
+
+test('096: the update help and the built-in skill say the retired classification keys have no effect and are dropped at the next write', () => {
+  const skill = readFileSync(new URL('../../templates/skills/backlog/SKILL.md', import.meta.url), 'utf8');
+  for (const [name, text] of [['update help', backlog('update', '--help').stdout], ['skill', skill]]) {
+    assert.match(text, /retired classification keys[^.]*have no effect/, name);
+    assert.match(text, /next writes/, name);
+  }
+});

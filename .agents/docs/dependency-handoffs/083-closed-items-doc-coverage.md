@@ -14,7 +14,7 @@ round-2 closing definition of done plus the round-3/4 additions).
 DEPENDENCY_HANDOFF v1
 SOURCE_ITEM: SmoothSDLC/smooth-backlog-cli#83
 DEPENDENT_ITEM: SmoothSDLC/smooth-backlog-cli#84
-PRODUCER_AGENT: k08 (records the hand-off in item 083)
+PRODUCER_AGENT: the refiner of item 83 (records the hand-off in item 083)
 SOURCE_COMMIT: the commit that carries this block; the 40-hex id is pinned in item 083's round-6 record ; BRANCH: team-cli-parity-1
 CONTRACT: at the closing commit the five texts (templates/skills/backlog/SKILL.md, the src/help.js help table, COMMANDS.md produced only through .agents/scripts/sync-commands-md.mjs, README.md, CHANGELOG.md) agree with the CLI on every user-visible behaviour of the 30 closed items: the coverage matrix has no MISSING or WRONG cell; .agents/test/doc-examples.test.js discovers and runs every example of SKILL.md, README.md and the help text as shown, in a temp fixture, including examples the slices 100-102 add; npm test on Node 24 at the closing commit is 0 failures and 0 skipped (only named owner exceptions, resolved before the close); a completed GitHub CI run with conclusion success whose head SHA is the closing commit (manual dispatch, run id and SHA cited); the topology deploy of the CLI and its skill succeeded and its smoke test passed (or the close summary records "no deploy needed" with the reason); the topology team-lead and team-member skill gaps found are handed to topology item 297 and named in the close summary.
 OUTPUTS: the five documentation files, the coverage matrix, .agents/test/doc-examples.test.js (created by slice 99), this document.

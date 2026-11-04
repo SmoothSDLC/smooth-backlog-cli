@@ -240,7 +240,7 @@ Not changed by this pull request unless approved:
 
 1. The 1.x command set (`init`, `list`, `set`, `add`, `replace`, `remove`, `priority`, `<item> done`, `import`,
    `branch`, `update <version>`, the JSON manifest) — decision A; `list` would stay as an alias of `query`.
-2. `query --pop`, `query --next --agent`, `--headless`, `BACKLOG_HEADLESS` — exact duplicates or dead.
+2. `query --pop`, `query --next --agent`, `--headless`, `BACKLOG_HEADLESS` — exact duplicates or dead. Done (Phase 1); the empty-backlog message no longer names the folder.
 3. The team-process gates on items that have no team (`--depends-on` required at creation, refinement fields
    required before any step, two review stages before any close, chunk work for plain agents) — decision B.
 4. The agent-product-specific names in flag values, environment variables, output and default values — decision C.

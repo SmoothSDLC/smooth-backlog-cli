@@ -161,3 +161,4 @@ Recommended as a later change; the backlog repository's content (an untracked `b
 ## Order
 
 1 → 3 → 4 → 5 → 7 → 2 (prepared and green; committed on the owner's go) · 8. Task 6 is a later change.
+Phase 1 (duplicates, output, allow-list test): done.

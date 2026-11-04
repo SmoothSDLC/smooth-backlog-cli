@@ -1,4 +1,4 @@
-// Stale-view guard (backlog-cli item 025). Every item write stamps `updated_by` next to `updated`. A command that shows an item to an agent, and
+// Stale-view guard. Every item write stamps `updated_by` next to `updated`. A command that shows an item to an agent, and
 // every explicit write after it succeeds, records what that agent saw (updated, updated_by, the backlog commit) in <clone>/.git/smooth-backlog-cli-views/<agent>.json;
 // a write to an item the agent has seen first compares the file with that record and refuses (exit 5) when someone else changed it since.
 // An item the agent never saw is written without a check (its first write). Items without updated_by (older files) read as written by nobody.
@@ -35,7 +35,7 @@ function read(home, agent) { try { return JSON.parse(readFileSync(viewsFile(home
 
 // views: [{slug, path}] (path from the repository folder) of repo, as the agent now sees them. Never fails the command: the cache is a safety net.
 // The file's hash is part of the view: `updated` has a resolution of one second, so two changes in one second differ only in content.
-// item 053: content is the hash without the fields a reflow rewrites (priority, updated, updated_by): a rank-only change
+// content is the hash without the fields a reflow rewrites (priority, updated, updated_by): a rank-only change
 // by another agent's planning move is no change of the item for this agent's next write
 const RANK_ONLY = ['priority', 'updated', 'updated_by'];
 const contentOf = doc => { const fm = { ...doc.fm }; for (const k of RANK_ONLY) delete fm[k]; return createHash('sha256').update(JSON.stringify([Object.keys(fm).sort().map(k => [k, fm[k]]), doc.body])).digest('hex'); };
@@ -69,16 +69,16 @@ export function recordWrites(folder, repo, agent, views, pairs = []) {
   const incidental = [...(operation.getStore()?.incidental.values() ?? [])].filter(v => v.agent === agent);
   const published = remapViews(folder, views, pairs);
   if (incidental.length || views.length) record(folder, repo, agent, [...remapViews(folder, incidental, pairs), ...published]);
-  setUse(homeOf(folder), agent); // item 027: a write is the agent's own use of the backlog: it moves its reference point
+  setUse(homeOf(folder), agent); // a write is the agent's own use of the backlog: it moves its reference point
   return published;
 }
 
-// item 027: the agent's reference point - the commit of the agent's last write or its last
+// the agent's reference point - the commit of the agent's last write or its last
 // `query --changed`, under a reserved key of the views file. It has no '/', so every reader of
 // the per-item keys (<owner>/<name>/<slug>) ignores it. A read never moves it.
 const USE = '~use';
 export const lastUse = (home, agent) => read(home, agent)[USE] ?? null;
-// Returns the record written, or null when the write failed (unwritable .git, or no commit yet):
+// Returns the record written, or null when the write failed (unwritable.git, or no commit yet):
 // the caller keeps the previous reference and says the write failed - a reference the command
 // states was written must be the one stored.
 export const setUse = (home, agent) => {
@@ -111,7 +111,7 @@ export function agentsUsing(home) {
   }
   return out;
 }
-// item 027: the items of the caller's repository folder whose file changed between the agent's
+// the items of the caller's repository folder whose file changed between the agent's
 // reference commit and the current HEAD of the backlog clone: A added, M changed, D removed or
 // archived. A file moved inside the folder (an archive, a renumbering) is one D entry for its
 // old name; the item's author and time come from its new location (or its reference-commit
@@ -174,7 +174,7 @@ function remapViews(folder, views, pairs) {
 // A command showed the item (a mirror row) to `agent`.
 export const view = (agent, folder, repo, row) => record(folder, repo, agent || actor(), [{ slug: row.slug, path: row.path }]);
 
-// item 053: the refusal names every item of this folder the agent has read whose content changed since, in one command
+// the refusal names every item of this folder the agent has read whose content changed since, in one command
 // others: slugs of repo, or {repo, slug} of another repository folder. The command to read them again is the one to run
 // from inside each repository (a cross-repository move or publication may hit items of the other one).
 export function staleError(slug, by, at, was, others = [], repo) {
@@ -193,7 +193,7 @@ export function staleError(slug, by, at, was, others = [], repo) {
   return e;
 }
 // A refusal of a command over several repository folders (a cross-repository move) names the changed items the agent
-// read in each of them, not only in the folder checked first: [[folder, repo], ...]
+// read in each of them, not only in the folder checked first: [[folder, repo],...]
 export function widen(e, folders = []) {
   if (e?.code !== 'STALE_ITEM' || !e.stale || !folders.length) return e;
   const { slug, by, at, was, groups, repo } = e.stale;
@@ -234,7 +234,7 @@ export function check(folder, repo, agent, slug, path) {
 export function guardReflow(folder, items) {
   const repo = `${basename(dirname(folder))}/${basename(folder)}`;
   const agent = actor(); const ctx = operation.getStore();
-  const stale = []; // item 053: every item of the write set the agent must read again, in one refusal
+  const stale = []; // every item of the write set the agent must read again, in one refusal
   for (const i of items) {
     const path = `${repo}/${i.path}`;
     if (ctx?.created.has(join(folder, i.path)) || ctx?.guard.some(g => g.path === path)) continue;

@@ -69,7 +69,7 @@ function producerDone(f, p, state, who, { folder = f.folder, cwd = f.cons } = {}
   const rcpt = (r, result = 'accepted') => handoff.makeReceipt({ dependent: who, digest: r.digest, result, by: 'lead', at: '2026-10-30T00:00:00Z', checks: 'verified' });
   // item 059.V2: the close gate runs on --status done, so the edge is satisfied (record + acceptance) while the
   // producer closes; the state under test is written afterwards, as the stored form.
-  setFront(f, p, { cody_pass_commit: head, external_pass_commit: head, handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(rcpt(rec))] }, folder);
+  setFront(f, p, { handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(rcpt(rec))] }, folder);
   ok(f, ['query', '--phase', p, '--agent', 'tester'], cwd); // the pins are a change: the closer reads the item again
   ok(f, ['update', p, '--status', 'done', '--by', 'tester'], cwd);
   if (state === 'accepted') return; // the satisfied edge is the accepted state itself
@@ -86,18 +86,18 @@ function producerDone(f, p, state, who, { folder = f.folder, cwd = f.cons } = {}
 // depId: the dependency as the dependent writes it (the producer's slug same-repository, <owner/name>#<seq>
 // foreign); blockedOn: the describeDependency prefix of the producer line in the blocked view and in next.
 function gate(f, state, p, d, h, { depId = p, blockedOn = p } = {}) {
-  ok(f, ['query', '--phase', d, '--agent', 'archy']); // the claimer reads its item first
+  ok(f, ['query', '--phase', d, '--agent', 'ada']); // the claimer reads its item first
   const satisfied = state === 'accepted' || state === 'legacy';
   const nextItem = satisfied ? d : h;
-  const pop = JSON.parse(run(f, ['pop', '--agent', 'archy', '--json'], 3).stdout);
+  const pop = JSON.parse(run(f, ['pop', '--agent', 'ada', '--json'], 3).stdout);
   assert.deepEqual([pop.action, pop.item], ['claim', nextItem], `pop's offer for a ${state} edge: ${JSON.stringify(pop)}`);
   if (!satisfied) {
-    const claim = run(f, ['update', d, '--claim', 'archy']);
+    const claim = run(f, ['update', d, '--claim', 'ada']);
     assert.equal(claim.status, 1, claim.stdout + claim.stderr);
     assert.match(claim.stdout, /dependencies not done/);
     assert.match(claim.stdout, new RegExp(`hand-off ${state}`));
     if (state === 'rejected') assert.match(claim.stdout, /must accept the current record/); // the lead may accept the existing record, not only a new one
-    if (state === 'stale') { // the message names both stale cases (codex round 2, finding 3)
+    if (state === 'stale') { // the message names both stale cases (rex round 2, finding 3)
       assert.match(claim.stdout, /re-recorded it after the last receipt \(an acceptance or a rejection\)/);
       assert.match(claim.stdout, /does not match its own fields/);
     }
@@ -107,24 +107,24 @@ function gate(f, state, p, d, h, { depId = p, blockedOn = p } = {}) {
   } else {
     assert.ok(!run(f, ['query', '--blocked']).stdout.includes(d), 'the satisfied dependent is in no blocked view');
   }
-  const roster = join(f.t, 'roster.json'); writeFileSync(roster, JSON.stringify({ archy: {} }));
+  const roster = join(f.t, 'roster.json'); writeFileSync(roster, JSON.stringify({ ada: {} }));
   const plan = JSON.parse(run(f, ['query', '--plan', '--roster', roster, '--json']).stdout);
   assert.deepEqual(plan.map(e => e.item), [nextItem], `query --plan's offer for a ${state} edge: ${JSON.stringify(plan)}`);
-  const claimable = JSON.parse(run(f, ['query', '--claimable', '--agent', 'archy', '--json']).stdout);
+  const claimable = JSON.parse(run(f, ['query', '--claimable', '--agent', 'ada', '--json']).stdout);
   assert.equal(claimable.some(r => r.slug === d), satisfied, `query --claimable for a ${state} edge: ${JSON.stringify(claimable.map(r => r.slug))}`);
   const next = JSON.parse(run(f, ['next', '--json']).stdout);
   assert.equal(next.slug, nextItem, `next for a ${state} edge: ${JSON.stringify(next)}`);
   if (satisfied) {
     assert.ok(!('first' in next), 'next names no work to do first: the edge is satisfied');
     assert.ok(!('skipped' in next), 'next names no skipped edge: the edge is satisfied');
-  } else { // next names the skipped edge: a silent skip is not "the edge state named" (codex round 2, finding 2)
+  } else { // next names the skipped edge: a silent skip is not "the edge state named" (rex round 2, finding 2)
     assert.deepEqual(next.skipped, [{ item: d, edge: depId, handoff: state }], `next names the skipped edge: ${JSON.stringify(next)}`);
     assert.match(run(f, ['next']).stdout, new RegExp(`${d} waits on ${blockedOn} \\(done, hand-off ${state}:`), 'the text next names the skipped edge');
   }
-  const work = JSON.parse(run(f, ['work', '--agent', 'archy', '--json'], 3).stdout);
+  const work = JSON.parse(run(f, ['work', '--agent', 'ada', '--json'], 3).stdout);
   assert.deepEqual([work.action, work.item], ['claim', nextItem], `work's offer for a ${state} edge: ${JSON.stringify(work)}`);
   assert.equal(work.claimed, true, 'work claims the item it offers');
-  assert.equal(work.front_matter?.claimed_by, 'archy');
+  assert.equal(work.front_matter?.claimed_by, 'ada');
 }
 
 for (const state of ['missing', 'unaccepted', 'stale', 'rejected']) {
@@ -154,7 +154,7 @@ test('059.4: a done producer without a handoffs key (legacy) lets the dependent 
   gate(f, 'legacy', p, d, null);
 });
 
-// The cross-repository gate (codex round 2, finding 4): a done producer of another repository of the backlog clone,
+// The cross-repository gate (rex round 2, finding 4): a done producer of another repository of the backlog clone,
 // with an accepted and with an unsatisfied record.
 function foreignFixture(prefix) {
   const t = mkdtempSync(join(tmpdir(), prefix));

@@ -1,6 +1,6 @@
-// Git sync of the shared backlog repository (cli-parity job 8). Oracle: lib_db.py:101-110
+// Git sync of the shared backlog repository. Oracle:
 // (pull before reading or writing) and 275-309 (commit and push after every change), the
-// pinned ec5b254e. Node has no flock, so the lock is a pid file (locked() of src/storage.js)
+// pinned ec5b254e. Node has no flock, so the lock is a pid file (locked of src/storage.js)
 // and a number two clones picked at once is repaired after the rebase (renumber below).
 // A failure to sync throws BacklogError with exitCode 3; the caller prints it and exits.
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -24,7 +24,7 @@ const pairOf = (old, next, folder) => Object.defineProperty([old, next], 'folder
 const lockFile = home => join(home, '.git', 'smooth-backlog-cli.lock');
 
 // git in the backlog clone; an index.lock held by a git run outside the CLI is retried 5 times
-// (lib_db.py:287-294). Everything git says goes through redact: a URL may carry a token.
+//. Everything git says goes through redact: a URL may carry a token.
 async function g(home, args) {
   let r;
   for (let i = 0; i < 5; i++) {
@@ -195,7 +195,7 @@ async function renumberFiles(home, stream, added, mirror) {
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
     out.push(pairOf(old, next, folder));
-    const was = String(mine.fm.phase || posix.basename(path, '.md')); // item 045: an item without a phase field is named by its file
+    const was = String(mine.fm.phase || posix.basename(path, '.md')); // an item without a phase field is named by its file
     moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
   }
   if (moves.length) { // the local dependents of the renumbered items follow them
@@ -282,7 +282,7 @@ async function repairConflicts(home, folders, names, renumbered) {
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
         process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
         renumbered.push(pairOf(old, next, folder));
-        const was = String(mine.fm.phase || posix.basename(rel, '.md')); // item 045
+        const was = String(mine.fm.phase || posix.basename(rel, '.md'));
         moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
         written.add(`${name}/${target}`);
       }
@@ -312,7 +312,7 @@ async function validatePublication(home, folders, names, claims, renumbered) {
     try { // --seq checks mirror rows too: a ghost still reserves its number until explicitly repaired.
       reserved = con.prepare('SELECT slug, seq FROM phase').all().filter(r => !items.some(i => slug(i) === r.slug));
     } finally { con.close(); }
-    const resolves = d => (isForeign(d) ? Boolean(foreignItem(folders[n], d)) : Boolean(find(d))); // item 042: owner/name#seq
+    const resolves = d => (isForeign(d) ? Boolean(foreignItem(folders[n], d)) : Boolean(find(d))); // owner/name#seq
     const leaves = items.some(i => asList(i.fm.depends_on).some(isForeign)); const others = new Map();
     const key = d => /^\d+$/.test(String(d)) ? String(Number(d)) : String(d);
     const lost = new Set();
@@ -342,13 +342,13 @@ async function validatePublication(home, folders, names, claims, renumbered) {
         if (sameSlug) reject(`${names[n]}: duplicate slug ${slug(item)} in ${item.path} and ${sameSlug.path}; the slug must stay unique`);
         for (const d of asList(item.fm.depends_on)) if (!resolves(d)) reject(`${names[n]}: ${item.fm.phase} depends on missing item ${d}`);
         acyclic(item);
-        // item 042: a cycle through another repository leaves this one by an item with a foreign dependency
+        // a cycle through another repository leaves this one by an item with a foreign dependency
         if (leaves && foreignCycle(folders[n], names[n], seq(item), item.fm.depends_on, others)) reject(`${names[n]}: dependency cycle through another repository's items back to ${slug(item)}`);
       }
       if (status === 'A') continue; // a new item has no incoming identity to preserve
       const before = await must(home, ['show', `origin/main:${file}`], `read the prior identity of ${file}`);
       const { fm } = parse(before.stdout);
-      const priorSlug = fm.phase || basename(file, '.md'); // item 045: an item without a phase field is named by its file
+      const priorSlug = fm.phase || basename(file, '.md'); // an item without a phase field is named by its file
       for (const d of [priorSlug, fm.seq]) if (d !== undefined && !resolves(d)) lost.add(key(d));
       // update --seq refuses incoming slug references as well as numeric ones, even though
       // a slug still resolves after a sequence-only change. Keep that pre-write rule after rebase.
@@ -380,10 +380,10 @@ async function validatePublication(home, folders, names, claims, renumbered) {
         const target = isForeign(d) ? foreignItem(folders[n], d) : find(d);
         if (!target || !['done', 'archived'].includes(isForeign(d) ? target.status : target.fm.status)) reject(`${names[n]}: ${slug(item)} dependencies not done: ${d}`);
       }
-      const wip = claim.reclaim ? null : wipRefusal(folders[n], names[n], item.fm, claim.agent, slug(item)); // item 034: a concurrent start elsewhere counts
+      const wip = claim.reclaim ? null : wipRefusal(folders[n], names[n], item.fm, claim.agent, slug(item)); // a concurrent start elsewhere counts
       if (wip) reject(`${names[n]}: ${slug(item)}: ${wip}`);
       if (!claim.skipActiveLimit) {
-        // item 082: items held by an earlier session of the same card count (the continuation keeps the
+        // items held by an earlier session of the same card count (the continuation keeps the
         // one-active-item rule across the card's sessions)
         const held = items.filter(i => i !== item && i.path.startsWith('phases/') && ['pending', 'in_progress'].includes(i.fm.status ?? 'pending')
           && heldBy(i.fm.claimed_by, claim.agent) && !['requested', 'in_review'].includes(i.fm.review_state) && !i.fm.wait_on);
@@ -394,7 +394,7 @@ async function validatePublication(home, folders, names, claims, renumbered) {
 }
 
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
-// [old, new] pairs renumbered on the way (with .mirror = true when backlog.db was taken from upstream: rescan it and commit again). Recorded only when on origin/main (lib_db.py:275-309).
+// [old, new] pairs renumbered on the way (with.mirror = true when backlog.db was taken from upstream: rescan it and commit again). Recorded only when on origin/main.
 // `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
 // `guard`: [{path (from the clone root), slug, was}] of the items this change rewrites on the strength of what the command read. When origin/main
 // gains a change to one of them from someone else before the push, the commit is taken back (clone and index as before the command) and the command
@@ -438,14 +438,14 @@ export async function commit(home, folders, message, reconcile = null, guard = [
     try {
       await refuseConflicts(home); // a rejected mutation must restore its starting files and mirror too
       await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
-      // scoped to the folders (beyond lib_db.py parity): work staged elsewhere in the backlog clone is neither committed nor pushed
+      // scoped to the folders: work staged elsewhere in the backlog clone is neither committed nor pushed
       if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
         const c = await commitOnly(home, lits, ['-m', `${names.join(', ')}: ${message}`]);
         if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
       }
       const renumbered = []; let err = ''; let settled = 0;
       const staleHit = async () => { for (const x of guard) if ((await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) return x; return null; };
-      const staleCheck = async () => { // item 053: one refusal names every guarded item that changed upstream
+      const staleCheck = async () => { // one refusal names every guarded item that changed upstream
         const hit = [];
         for (const x of guard) if ((await g(home, ['diff', '--quiet', x.base || base, 'origin/main', '--', lit(x.path)])).code) hit.push(x);
         if (!hit.length) return;

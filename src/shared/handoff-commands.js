@@ -1,4 +1,4 @@
-// Item 059.2: the logic of the hand-off commands of item 059: recordHandoff is the producer's --handoff,
+// the logic of the hand-off commands of recordHandoff is the producer's --handoff,
 // acceptHandoff and rejectHandoff the team lead's --accept-handoff / --reject-handoff. Each takes
 // ctx = {fm, body, slug, folder, repo} and the options, changes nothing on disk, and returns
 // {refuse} (the text after "❌ ") or {fm: {<keys to set, in the stored form>}, text: <the block to append
@@ -50,7 +50,7 @@ export function recordHandoff(ctx, { dependent, commit, contract, verification, 
 // (append-only); it records the reviewer and the verdict the review operation stored, and the hand-off
 // commit - the record's commit; the CLI records no reviewed commit (the review operation stores no commit,
 // lifecycle.js), so a hand-off record without a commit is refused, naming the field, with no fallback to
-// the item's creation commit (lead ruling 2026-10-31 after the codex round 3).
+// the item's creation commit.
 export function acceptHandoff(ctx, { dependent, checks, by, lead }) {
   const { fm } = ctx;
   if (!strip(by || '')) return { refuse: 'a hand-off is accepted by the team lead: --by <agent> is missing' };
@@ -71,7 +71,7 @@ export function acceptHandoff(ctx, { dependent, checks, by, lead }) {
   // The ruling's reviewer, verdict and hand-off commit: 059.1's receiptBlock does not output them
   // (review r1), so the block appends them directly after the receipt block, which already ends in a
   // newline (no blank line, review r2). The label is HANDOFF_COMMIT - the CLI does not claim the commit
-  // was reviewed (lead ruling 2026-10-31 after the codex round 3).
+  // was reviewed.
   const text = receiptBlock(receipt, source(ctx))
     + `REVIEWER: ${receipt.reviewer} ; VERDICT: ${receipt.verdict} ; HANDOFF_COMMIT: ${receipt.commit}\n`;
   return { fm: { handoff_receipts: appendReceipts(fm, receipt) }, text, event: 'handoff-accepted' };

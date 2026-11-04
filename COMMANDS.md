@@ -224,7 +224,7 @@ repository's own `.backlog/` folder. Two global options, put before the command,
 is kept per user.
 
 **Two writers never overwrite each other.** Every item write sets `updated_by` (the `--by`/`--claim` agent of the command, else
-`QWEN_CODE_AGENT_ID`, else `USER`) next to `updated`; older items without it read as written by nobody. A command that shows an
+`BACKLOG_AGENT`, else `USER`) next to `updated`; older items without it read as written by nobody. A command that shows an
 item to an agent (`backlog query --phase <item> --agent <you>`, `backlog pop --agent <you>`) records what that agent saw (`updated`,
 `updated_by`, the backlog commit) in `.git/smooth-backlog-cli-views/<agent>.json` of the backlog clone, and so does every write after
 it succeeds. The next write of that agent to the item first compares the item, after the update from origin, with that record: when
@@ -275,7 +275,7 @@ In shared backlog repository mode the command first updates the local clone of t
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
 from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
 child process when the variable is unset.
 
 Options:
@@ -298,19 +298,17 @@ Options:
       a loud banner so that it is never buried.
   --split-from ITEM
       Create a sibling item that inherits the context of this item (a number or a slug). The command refuses when
-      the item does not exist. The sibling starts in stage refining and takes its refinement review (codex or
-      claude) before it may be claimed, with or without a team field.
+      the item does not exist. In a team session the sibling starts in stage refining and takes its refinement review
+      before it may be claimed; outside a team it is a plain item.
   --body BODY
       The initial body of the item, the hand-over content for whoever does it. When the body has no "Definition of
       done" heading or line with checkable lines, a placeholder checklist is added. With --review-refs, or in a team
       session, the body must hold a real definition of done.
   --review-refs REVIEW_REFS
-      How the item is reviewed: comma-separated paths of review documents in the review-documents repository, at
-      least one of them under references/review/ (references/review/<type>.md). A verdict cites one of them when
-      the item has any; the item closes only after both review stages - a Cody pass and a codex or claude pass on
-      the same commit - have passed, with or without them.
+      How the item is reviewed: comma-separated paths of review documents. A verdict cites one of them when the item
+      has any. A team's item closes when the review rules of its team (teams.json in the backlog folder) are met.
   --depends-on DEPENDS_ON
-      Required: the item numbers or slugs that must be done first, comma-separated, or the word none. owner/name#seq names
+      The item numbers or slugs that must be done first, comma-separated, or the word none (the default). owner/name#seq names
       an item of another repository's backlog in the same backlog repository. The command refuses when a named item is
       not in this backlog, or not in the backlog repository.
   --estimate MINUTES
@@ -320,7 +318,7 @@ Options:
   --layer {1,2,3,4,5,process}
       The layer of the item: 1 to 5, or the word process.
   --team NAME
-      The team that owns the item (front matter team; owner 2026-10-28): the item starts in stage refining and is claimed
+      The team that owns the item (front matter team): the item starts in stage refining and is claimed
       only when its refinement review passed. --split-from inherits the source's team.
   --chunk
       Chunk work: small pieces any member does between items (the front matter key chunk: true).
@@ -372,15 +370,15 @@ In shared backlog repository mode the command first updates the local clone of t
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
 from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
 child process when the variable is unset.
 
 Options:
   --status STATUS
       The new status of the item. Open items are pending or in_progress, a finished item is done. Setting done
-      completes the item and is a close: it is refused until both review stages - a Cody pass and a codex or claude
-      pass on the same commit - have passed for the item's current work commit, with or without review documents,
-      and the refusal names the missing stage. The owner closes without a review only with --close --by owner.
+      completes the item and is a close: for a team's item it is refused until the review rules of the team
+      (teams.json) are met for the item's current work commit, and the refusal names the unmet rule. The owner closes
+      without a review with --close --by owner.
       The hand-off rule of --close applies too: done is refused until each dependent's hand-off is recorded and
       accepted; an item without dependents records handoffs: none; an item already done is not checked again.
   --branch BRANCH
@@ -417,8 +415,8 @@ Options:
       item (backlog team pop, to split it; never a split slice) is accepted; for every other agent the refusal names --refine-start. An
       item without a team and without the split marker has no stage (solo work) and is claimable;
       otherwise the item becomes in progress and claimed by that agent. An agent or team name may contain letters,
-      digits, a period, an underscore, a hyphen and a colon (a card's session names and a team name carry colons);
-      the name works in the front matter, the event log, the commit subject, the hand-off marker file name and
+      digits, a period, an underscore, a hyphen and a colon (a session counter after a colon, as in worker:3, names a session of that worker);
+      the name works in the front matter, the event log, the commit subject and
       every --claim, --release and --by value. The claiming session joins the item's session_authors list; the
       sessions in that list, and the one who asked for the review, never review the item. A new session of the same
       card - a name sharing the <item><card> part before the colon - continues an item its earlier session claimed
@@ -434,7 +432,6 @@ Options:
       Clear the wait of the item (team session).
   --set-review-refs PATHS
       Set the review_refs of the item (its definition of done), as comma-separated paths in the review-documents repository.
-      At least one of them is a review document under references/review/ (references/review/<type>.md) (team session).
   --set-depends-on IDS
       Replace the depends_on of the item, as item numbers or slugs, owner/name#seq for an item of another repository, or
       the word none. The command refuses when a named item is not in this backlog, or not in the backlog repository. A
@@ -466,13 +463,11 @@ Options:
       The refiner finished (--by <the refiner>, --note "<what you refined>"): stage refined. Refused while a team field or
       the definition of done is missing.
   --request-refinement-review
-      The team lead sends a refined item to the refinement review (--by <lead>; Codex first, Claude when Codex's
-      5-hour limit is exceeded or after three CHANGES rounds): stage refinement-review.
-  --refinement-review {pass,changes,limit}
-      Record the refinement verdict, --by codex|claude with --comments "<findings; thread or session id>": pass makes the
-      item ready, changes sends it back to refining. limit (--by codex) records Codex's answer that its 5-hour limit is
-      exceeded; Claude may record a verdict for that round only then, or at any time after three CHANGES rounds (also in stage
-      refined, no limit record needed).
+      The team lead sends a refined item to the refinement review (--by <lead>): stage refinement-review.
+  --refinement-review {pass,changes}
+      Record the refinement verdict, --by <reviewer> with --comments "<findings; thread or session id>": pass makes the
+      item ready, changes sends it back to refining. The reviewer is a member of a team the refinement_review rule of
+      the item's team names (teams.json); without such a rule, anyone.
   --request-decision QUESTION
       The item needs an owner decision (--by <agent>): stage review-hitl, the question is written in the item (what, why,
       how it came up, the options and a recommendation). Nobody claims it, or an item that depends on it, until the answer.
@@ -482,8 +477,8 @@ Options:
   --reassign AGENT
       The team lead only (--by <lead>, --reason "<why>"): take the item from the agent that holds it and give it to AGENT.
       The former holder stays in the item's session_authors list (the new holder joins), so the self-review block
-      survives the hand-off. In a qwen-code team session (QWEN_CODE_AGENT_ID=<name>@<team>) a member acts only as itself:
-      its claim, release, refinement, review and close of an item name itself, never another agent.
+      survives the hand-off. In a team session (TEAM_NAME set, BACKLOG_AGENT=<name>) a member acts only as itself: its
+      claim, release, refinement, review and close of an item name itself, never another agent.
   --reassign-review AGENT
       The team lead only (--by <lead>, --reason "<why>"): hand the review of the item on to AGENT (not its author), for
       example a stale review; a member never takes over another agent's review.
@@ -498,11 +493,7 @@ Options:
       Ask an agent, or any agent, for a review; --note says what to review (team session). The output ends with the
       instruction to end the session now, printed after the change is published: a review request, a changes verdict
       (--review changes) and a close each end the agent's session, so its next task starts in a fresh one (not for the
-      team lead). A review request or a close by a member of the item's team that holds no other active item also writes
-      the hand-off marker ~/.qwen/teams/<team>/handoff/<agent>.json before the change: a marker that cannot be written
-      refuses the change, and a change that is not published leaves no marker. Until Qwen registers a newer session of
-      that agent, its backlog pop and backlog work answer stop, and its --claim, --refine-start and --start-review are
-      refused.
+      team lead).
   --start-review
       Record that the agent named by --by starts the requested review (review_state in_review, reviewer and review_started are
       set). Other agents skip it unless the review was started more than 20 minutes ago (team session). The self-review rule
@@ -512,22 +503,15 @@ Options:
       seeds the list from the item's current holder and review requester, so an item written before the list existed
       keeps the self-review block of its earlier sessions.
   --review {pass,changes}
-      Record a review verdict; it needs --by and --comments (team session). Two review stages are enforced before
-      any close: first a Cody review - for an item of a team, a registered member of that team (Qwen's team
-      config.json; when the CLI cannot read it, a Cody name in a session of the item's team) or the team lead
-      (TEAM_LEAD) in a session of the item's team; for an item without a team, a Cody agent (a name starting with cody, or a session name) - in a fresh
-      session, never the author session that claimed the item - the claim's session name (QWEN_CODE_SESSION_ID, else
-      the session part of QWEN_CODE_AGENT_ID, never the team name), so a fresh session of the same card, or of the
-      team, may - then an external review by codex or claude on the same commit. A pass pins the item's work
-      commit (work_commit) - the requester's HEAD at its review request (--request-review records it; an external-stage request
-      after the Cody pass keeps it) - so the reviewer's checkout and other items' commits on the branch move nothing;
-      the item's own new work (a later commit whose subject names the item as a producer at the start - the item
-      number alone, or joined with another item's number by "and") moves the work commit, so both stages run again;
-      a close or --status done whose commit lookup fails is refused fail closed, and the refusal records the reason;
-      a changes verdict at
-      either stage clears both stages and re-runs them; a changes verdict is recorded at either stage even after
-      the work commit moved (only an external pass needs the Cody pass on the current commit). The output of a
-      passing Cody review asks for the external review; the output of a passing external review asks for the close.
+      Record a review verdict; it needs --by and --comments. A pass is recorded against the item's work commit
+      (work_commit) - the requester's HEAD at its review request (--request-review records it; a later request after a
+      pass keeps it) - so the reviewer's checkout and other items' commits on the branch move nothing; the item's own
+      new work (a later commit whose subject names the item as a producer at the start - the item number alone, or
+      joined with another item's number by "and") moves the work commit, so the review runs again; a close or
+      --status done whose commit lookup fails is refused fail closed, and the refusal records the reason. A changes
+      verdict clears every recorded pass and sends the item back to work. A team's item closes when the review rules
+      of its team (teams.json: each rule names a team and how many of its members must pass) are met for the current
+      work commit; a reviewer never reviews in the author's session; an item without a team needs no rule.
   --handoff DEPENDENT
       The producer records its hand-off for DEPENDENT, one of the item's dependents; only the item's claimer does
       (--by <you> or the claim). It replaces any earlier hand-off for the same dependent, which makes an earlier
@@ -560,9 +544,9 @@ Options:
   --comments COMMENTS
       The review findings (--review); they must cite one of the review references of the item (team session).
   --close
-      Complete the item; --summary says what was delivered. Both review stages - a Cody pass and a codex or claude
-      pass on the same commit - must have passed for the item's current work commit, with or without review documents;
-      the refusal names the missing stage. The owner closes without a review on a written decision
+      Complete the item; --summary says what was delivered. A team's item closes when the review rules of its team
+      (teams.json) are met for the item's current work commit; the refusal names the unmet rule. Outside a team the
+      person or agent running the command closes it. The owner closes without a review on a written decision
       (--by owner --reason "<the decision>"), recorded as an owner decision, even for a team item still in its
       refinement stages (team session). Only the claimer closes its item, else the team lead (--by <lead>);
       never the reviewer. An item that other items depend on closes only when each dependent's hand-off is recorded
@@ -619,7 +603,7 @@ In shared backlog repository mode the command first updates the local clone of t
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
 from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
 child process when the variable is unset.
 
 Options:
@@ -704,7 +688,7 @@ Options:
       claim to the member holding the fewest items, then in roster order (team session). Read-only.
   --lead LEAD
       With --pop or --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default
-      is the environment variable TEAM_LEAD, else cody (team session).
+      is the environment variable TEAM_LEAD, else the lead of the session's team in teams.json (team session).
   --agents AGENTS
       With --plan: the team members present, comma-separated; the default is the whole roster (team session).
   --claim-now
@@ -768,7 +752,7 @@ In shared backlog repository mode the command first updates the local clone of t
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
 from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
 child process when the variable is unset.
 
 Options:
@@ -841,7 +825,7 @@ In shared backlog repository mode the command first updates the local clone of t
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
 from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
 child process when the variable is unset.
 
 Options:
@@ -849,7 +833,7 @@ Options:
       The agent that asks. Required.
   --lead LEAD
       The team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the environment
-      variable TEAM_LEAD, else cody.
+      variable TEAM_LEAD, else the lead of the session's team in teams.json.
   --roster ROSTER
       With --pop and --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
       file named by TEAM_ROSTER.
@@ -884,7 +868,7 @@ Exit codes:
   4  The backlog repository is not set up; the printed question must be answered by the user.
 
 Example:
-  backlog pop --agent archy --json
+  backlog pop --agent ada --json
 ```
 
 ### backlog work
@@ -906,7 +890,7 @@ Options:
   --agent AGENT
       Required: you, the agent asking.
   --lead LEAD
-      The team lead. The default is the environment variable TEAM_LEAD, else cody.
+      The team lead. The default is the environment variable TEAM_LEAD, else the lead of the session's team in teams.json.
   --roster ROSTER
       The team roster as a JSON file {agent: {...}}; the default is the file named by TEAM_ROSTER.
   --scope {branch,repo,all}
@@ -929,7 +913,7 @@ Exit codes:
   4  The backlog repository is not set up; the printed question must be answered by the user.
 
 Example:
-  backlog work --agent archy --json
+  backlog work --agent ada --json
 ```
 
 ### backlog team pop
@@ -962,7 +946,7 @@ Options:
   --team NAME
       Required: the team whose work item to take. In a team session (TEAM_NAME set) it must be that team.
   --agent AGENT
-      The team lead. The default is the environment variable TEAM_LEAD, else cody; any other agent is refused.
+      The team lead. The default is the environment variable TEAM_LEAD, else the lead of the session's team in teams.json; any other agent is refused.
   --json
       Print one object: action, item, team, repository, branch, instruction, skipped ({item, reason} of each item not
       taken), front_matter and body.
@@ -1002,7 +986,7 @@ In shared backlog repository mode the command first updates the local clone of t
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
 from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
 child process when the variable is unset.
 
 Argument:
@@ -1048,7 +1032,7 @@ In shared backlog repository mode the command first updates the local clone of t
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
 Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
 from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable CODY_SCRIPT_RUNS_MODULE names a module, and no
+spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
 child process when the variable is unset.
 
 Argument:

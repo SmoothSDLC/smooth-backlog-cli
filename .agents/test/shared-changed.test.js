@@ -50,7 +50,7 @@ function seed(items = ['alpha', 'beta', 'gamma']) {
   return { t, home, home2, cons, folder, folder2: join(home2, 'acme', 'demo'), bare: join(t, 'origins', 'acme', 'backlog-repo.git') };
 }
 // The CLI as the clone `home`; the agent is named by --agent/--by on the command.
-const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { BACKLOG_HOME: home, QWEN_CODE_AGENT_ID: '', USER: 'nobody', ...opts.env } });
+const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { BACKLOG_HOME: home, BACKLOG_AGENT: '', USER: 'nobody', ...opts.env } });
 
 test('027: a change another agent makes while this agent is idle appears in its next --changed report, with the reference commit and time', () => {
   const f = seed();

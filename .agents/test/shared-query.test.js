@@ -25,19 +25,19 @@ const newItem = (f, name, ...more) => {
 };
 const setStatus = (f, item, status) => { const r = cli(['update', item, '--status', status], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
 // item 088: --status done runs only after both review stages passed for the item's commit; the fixture completes
-// Delta, so the stages run here (a fresh cody card, then the external reviewer, each with a fresh view). An
+// Delta, so the stages run here (a fresh amy card, then the external reviewer, each with a fresh view). An
 // incomplete item takes only the lead's refinement, so the item is completed first (refs, estimate, DoD).
 const bothStages = (f, item) => {
   const step = args => { const r = cli(args, { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
   step(['update', item, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', '## Definition of done\n- [ ] it holds']);
   step(['update', item, '--request-review', 'any', '--note', 'n']);
-  step(['query', '--phase', item, '--agent', 'cody-a']);
-  step(['update', item, '--start-review', '--by', 'cody-a']);
-  step(['update', item, '--review', 'pass', '--by', 'cody-a', '--comments', 'fine per references/review/code.md']);
-  step(['update', item, '--request-review', 'codex', '--note', 'n']);
-  step(['query', '--phase', item, '--agent', 'codex']);
-  step(['update', item, '--start-review', '--by', 'codex']);
-  step(['update', item, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
+  step(['query', '--phase', item, '--agent', 'amy-a']);
+  step(['update', item, '--start-review', '--by', 'amy-a']);
+  step(['update', item, '--review', 'pass', '--by', 'amy-a', '--comments', 'fine per references/review/code.md']);
+  step(['update', item, '--request-review', 'rex', '--note', 'n']);
+  step(['query', '--phase', item, '--agent', 'rex']);
+  step(['update', item, '--start-review', '--by', 'rex']);
+  step(['update', item, '--review', 'pass', '--by', 'rex', '--comments', 'fine per references/review/code.md']);
 };
 const commitAll = home => { git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'fixture'); git(home, 'push', '-q'); };
 
@@ -475,15 +475,15 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     + '  TS  state_change   branch=main commit=SHA set status=done, handoffs=none\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     // item 088: the fixture completes Delta through both review stages before the done transition; their events are here
-    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by codex: PASS (TS)\n'
+    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by rex: PASS (TS)\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  review_started branch=main commit=SHA set review_started=Review started by codex at TS\n'
+    + '  TS  review_started branch=main commit=SHA set review_started=Review started by rex at TS\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     + '  TS  review_requested branch=main commit=SHA n\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by cody-a: PASS (TS)\n'
+    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by amy-a: PASS (TS)\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  review_started branch=main commit=SHA set review_started=Review started by cody-a at TS\n'
+    + '  TS  review_started branch=main commit=SHA set review_started=Review started by amy-a at TS\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     + '  TS  review_requested branch=main commit=SHA n\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
@@ -662,7 +662,7 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
   const f = build(false);
   const url = 'https://user:review_dummy@host/path';
   for (const args of [['query', '--next', '--branch', url], ['query', '--next', '--branch', url, '--json'], ['query', '--status', '--branch', url], ['query', '--status', '--branch', url, '--json'],
-    ['query', '--claimable', '--branch', url], ['query', '--reviewable', '--agent', 'cody', '--branch', url],
+    ['query', '--claimable', '--branch', url], ['query', '--reviewable', '--agent', 'amy', '--branch', url],
     ['pop', '--agent', 'x', '--branch', url], ['pop', '--agent', 'x', '--branch', url, '--json'], ['pop', '--agent', url], ['pop', '--agent', url, '--json']]) {
     const n = cli(args, { cwd: f.cons, tmp: f.t });
     assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));

@@ -1,4 +1,4 @@
-// `backlog work --agent <you>`: the one next-work command of a team member (item 033; spec 2026-10-28-pr1-learnings.md
+// `backlog work --agent <you>`: the one next-work command of a team member (an earlier change; spec 2026-10-28-pr1-learnings.md
 // section 5). It asks `backlog pop` for the one next action in the team workflow order, marks the item as the agent's
 // for that step (claim, refinement start or review start), and prints the whole item with the one instruction. Each step
 // is a run of this CLI, so every rule of pop and update applies unchanged; the mark is one locked write of update.
@@ -80,7 +80,7 @@ export async function run(argv) {
   }
   const fmNow = item?.front_matter ?? {};
   const holds = { claim: fmNow.claimed_by, review: fmNow.reviewer, refine: fmNow.refiner }[p.action];
-  // item 082: heldBy matches an earlier session of the same card - the item is not handed on when the card
+  // heldBy matches an earlier session of the same card - the item is not handed on when the card
   // keeps it in a new session
   if (marked && item && !heldBy(holds ?? '', a.agent)) { // handed on between the mark and the read
     return die(`${p.item} was handed on before backlog work could read it (claimed by ${fmNow.claimed_by || 'nobody'}); run backlog work again`, 1);

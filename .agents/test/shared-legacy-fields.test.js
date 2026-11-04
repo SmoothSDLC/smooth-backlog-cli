@@ -25,7 +25,7 @@ function fixture() {
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-const run = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
+const run = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
 const ok = (f, args) => { const r = run(f, args); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const make = (f, name) => createdSlug(ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none',

@@ -284,7 +284,7 @@ test('059.1: recordBlock writes the branch, the session and the review the integ
   // the branch is always written: the given one, or the text 'unspecified' - never a default (lead decision 2026-10-30)
   assert.equal(handoff.recordBlock(r, src), block('PRODUCER_AGENT: agent-c').replace('BRANCH: team-cli-parity-1', 'BRANCH: unspecified'));
   // the session, when given, is the method's inline SESSION sub-field on the PRODUCER_AGENT line
-  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', session: 'cody59/wt-63' }), block('PRODUCER_AGENT: agent-c ; SESSION: cody59/wt-63'));
+  assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', session: 'session-59/wt-63' }), block('PRODUCER_AGENT: agent-c ; SESSION: session-59/wt-63'));
   // the review, when given, replaces the pending default
   assert.equal(handoff.recordBlock(r, src, { branch: 'team-cli-parity-1', review: 'lead acceptance 2026-10-31' }), block('PRODUCER_AGENT: agent-c', 'lead acceptance 2026-10-31'));
 });

@@ -1,8 +1,8 @@
-// Shared-mode `backlog move` (cli-parity job 17). Port of move.py:12-110 and its commit tails (move.py:107, 113-118) in the
+// Shared-mode `backlog move`. Port of move.py:12-110 and its commit tails (move.py:107, 113-118) in the
 // oracle's order: pull, resolve the item, change, write, log the event, scan into backlog.db, commit and push. The item is found by
 // number (seq) or slug, never by database row id.
-// Beyond the oracle (item 017): a target branch must exist on the origin of the consuming repository, and a target repository
-// must be a plain owner/name (the oracle joins any text onto the home).
+// Beyond the earlier scripts: a target branch must exist on the origin of the consuming repository, and a target repository
+// must be a plain owner/name (the earlier scripts joins any text onto the home).
 // shortcut: argparse's unique-prefix abbreviations are not accepted; the target number
 // comes from store.nextSeq (phases/, archive/ and the db) where move.py:35-37 ignores archive/.
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -45,10 +45,10 @@ export async function run(argv) {
   try {
     a = parse(argv);
     return await withBacklog((con, ctx) => move(a, con, ctx), ['move.py', ...argv.slice(0, 2)].join(' '));
-  } catch (err) { const e = seen.widen(err, a?.folders); return die(e.message, e instanceof BacklogError ? e.exitCode : 1); } // item 053: both folders of a move
+  } catch (err) { const e = seen.widen(err, a?.folders); return die(e.message, e instanceof BacklogError ? e.exitCode : 1); } // both folders of a move
 }
 
-// Branch names on the origin of the consuming repository (lib_db.py:287-293): a Set, or the git error text.
+// Branch names on the origin of the consuming repository: a Set, or the git error text.
 async function originBranches() {
   const r = await git(['ls-remote', '--heads', 'origin'], process.cwd());
   if (r.code) return redact(r.stderr).trim().slice(0, 300);
@@ -78,7 +78,7 @@ async function toBranch(con, folder, r, branch, note, { repo, guard, wrote }) {
   seen.check(folder, repo, seen.actor(), r.slug, r.path);
   guard.push({ path: `${repo}/${r.path}`, slug: r.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   const old = Object.hasOwn(fm, 'branch') ? fm.branch ?? 'None' : '';
-  if (inProgress(fm)) { const full = wipRefusal(folder, repo, { ...fm, branch }, fm.claimed_by || fm.refiner || '', r.slug); if (full) throw new BacklogError('INVALID_INPUT', `${r.slug}: in progress, and on branch ${branch}: ${full}`, 1); } // item 034
+  if (inProgress(fm)) { const full = wipRefusal(folder, repo, { ...fm, branch }, fm.claimed_by || fm.refiner || '', r.slug); if (full) throw new BacklogError('INVALID_INPUT', `${r.slug}: in progress, and on branch ${branch}: ${full}`, 1); }
   fm.branch = branch;
   store.stamp(fm);
   store.write({ path, fm, body }, folder);
@@ -126,7 +126,7 @@ async function move(a, con, ctx) {
   if (bound) return refuse(bound);
   let tdir;
   try { tdir = store.folder(home, target); } catch (e) { throw usage(e.message); } // owner/name only: the target is the user's text or a file's data
-  a.folders = [[folder, repo], [tdir, target]]; // item 053: a stale-view refusal names what the agent read in both
+  a.folders = [[folder, repo], [tdir, target]]; // a stale-view refusal names what the agent read in both
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target item is named from it`); // mirror data: no path in it
 
   // move.py:32-64
@@ -141,10 +141,10 @@ async function move(a, con, ctx) {
   // beyond move.py parity: items of this backlog that list the item (by number or slug, as update --set-depends-on stores it) would be left pointing at nothing
   const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && asList(i.fm.depends_on).some(d => find(con, d)?.id === r.id)).map(i => i.fm.phase ?? i.path);
   if (dependents.length) return refuse(`${dependents.join(', ')} depend${dependents.length > 1 ? '' : 's'} on ${r.slug}, which would leave their depends_on pointing at nothing; clear them first: update <dependent> --set-depends-on ... (the other dependencies, or none)`);
-  // item 042: items of other repositories that name it as owner/name#seq would point at nothing too
+  // items of other repositories that name it as owner/name#seq would point at nothing too
   const elsewhere = foreignDependents(home, repo, r.seq);
   if (elsewhere.length) return refuse(`${elsewhere.join(', ')} of other repositories depend${elsewhere.length > 1 ? '' : 's'} on ${repo}#${r.seq} (${r.slug}), which would leave them pointing at nothing; clear them first in their repositories: update <dependent> --set-depends-on ...`);
-  if (inProgress(fm)) { const full = wipRefusal(tdir, target, { ...fm, repository: target }, fm.claimed_by || fm.refiner || '', r.slug, [], { repository: repo, slug: r.slug }); if (full) return refuse(`${r.slug}: in progress, and in ${target}: ${full}`); } // item 034
+  if (inProgress(fm)) { const full = wipRefusal(tdir, target, { ...fm, repository: target }, fm.claimed_by || fm.refiner || '', r.slug, [], { repository: repo, slug: r.slug }); if (full) return refuse(`${r.slug}: in progress, and in ${target}: ${full}`); }
   const tail = `-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;
   const seq = store.nextSeqFor(tdir, `${tail}.md`); // never a number whose file name the target already holds
   const slug = `${String(seq).padStart(3, '0')}${tail}`;
@@ -184,7 +184,7 @@ async function move(a, con, ctx) {
   return 0;
 }
 
-// item 042: owner/name#seq of the items in the backlog home outside `repo` whose depends_on names repo#seq
+// owner/name#seq of the items in the backlog home outside `repo` whose depends_on names repo#seq
 function foreignDependents(home, repo, seq) {
   const out = [];
   let owners = []; try { owners = readdirSync(home, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')); } catch { return out; }

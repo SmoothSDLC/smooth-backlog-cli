@@ -32,7 +32,7 @@ export function parse(argv) {
   for (const key of Object.keys(flags)) input(allowed.has(key), `--${key} is not supported by ${command}.`);
   return { command, args, flags };
 }
-// Global mode options (shared mode, job 6). Only the leading options count (before the command name);
+// Global mode options. Only the leading options count (before the command name);
 // the rest of argv (the command, if any, and other global flags) is returned as `rest`.
 // Returns null when absent, else { backlogRepo?: path, local: boolean, rest }.
 export function modeOptions(argv) {

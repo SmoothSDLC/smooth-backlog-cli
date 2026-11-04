@@ -21,8 +21,8 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  const run = (cwd, args, want = 0) => {
-    const r = cli(args, { cwd, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester', TEAM_LEAD: 'lead' } });
+  const run = (cwd, args, want = 0, env = {}) => {
+    const r = cli(args, { cwd, tmp: t, env: { ...env, BACKLOG_AGENT: env.BACKLOG_AGENT ?? 'tester', TEAM_LEAD: 'lead', BACKLOG_SESSION: '' } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
@@ -37,53 +37,45 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.equal(moved.stderr, '');
   assert.equal(JSON.parse(run(here, ['next', '--json']).stdout).first[0].item, 'acme/lib#1'); // next names it too
   assert.match(run(here, ['next']).stdout, /⛓ waits on acme\/lib#1 \(001-library-change, status pending\): do that first in repository acme\/lib/);
-  run(here, ['query', '--phase', '1', '--agent', 'archy']);
-  assert.match(run(here, ['update', '1', '--claim', 'archy'], 1).stdout, /dependencies not done/);
-  const p = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json'], 3).stdout);
+  run(here, ['query', '--phase', '1', '--agent', 'ada']);
+  assert.match(run(here, ['update', '1', '--claim', 'ada'], 1).stdout, /dependencies not done/);
+  const p = JSON.parse(run(here, ['pop', '--agent', 'ada', '--json'], 3).stdout);
   assert.equal(p.action, 'idle');
   assert.deepEqual(p.first, [{ item: 'acme/lib#1', repository: 'acme/lib', seq: 1, slug: '001-library-change', status: 'pending' }]);
   assert.match(p.instruction, /the work here waits on acme\/lib#1 \(001-library-change, status pending\): do that first in repository acme\/lib/);
   assert.equal(p.blocked[0].waiting_on[0].repository, 'acme/lib');
   const lead = run(here, ['pop', '--agent', 'lead'], 3).stdout;
   assert.match(lead, /do that first in repository acme\/lib: end the session here; the team is started in that repository/);
-  const w = JSON.parse(run(here, ['work', '--agent', 'archy', '--json'], 3).stdout);
+  const w = JSON.parse(run(here, ['work', '--agent', 'ada', '--json'], 3).stdout);
   assert.equal(w.first[0].item, 'acme/lib#1'); // the next-work command names it too
-  // item 088: --status done runs only after both review stages passed; the stages run here (a fresh cody card,
-  // then the external reviewer, each with a fresh view). An incomplete item takes only the lead's refinement,
-  // so the item is completed first (refs, estimate; it has the definition of done)
-  run(there, ['update', '1', '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--by', 'tester']);
-  run(there, ['update', '1', '--claim', 'tester']); // item 059: the producer's claimer records its hand-off
+  // an item outside a team closes with --status done; the hand-off of the producer is accepted after its review passed
+  run(there, ['update', '1', '--claim', 'tester']);
   run(there, ['update', '1', '--request-review', 'any', '--note', 'n', '--by', 'tester']);
-  run(there, ['query', '--phase', '1', '--agent', 'cody-a']);
-  run(there, ['update', '1', '--start-review', '--by', 'cody-a']);
-  run(there, ['update', '1', '--review', 'pass', '--by', 'cody-a', '--comments', 'fine per references/review/code.md']);
-  run(there, ['query', '--phase', '1', '--agent', 'tester']); // the cody stage changed the item after tester's last read
-  run(there, ['update', '1', '--request-review', 'codex', '--note', 'n', '--by', 'tester']);
-  run(there, ['query', '--phase', '1', '--agent', 'codex']);
-  run(there, ['update', '1', '--start-review', '--by', 'codex']);
-  run(there, ['update', '1', '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
-  run(there, ['query', '--phase', '1', '--agent', 'tester']); // the stages changed the item after tester's last read
+  run(there, ['query', '--phase', '1', '--agent', 'rex']);
+  run(there, ['update', '1', '--start-review', '--by', 'rex'], 0, { BACKLOG_AGENT: 'rex' });
+  run(there, ['update', '1', '--review', 'pass', '--by', 'rex', '--comments', 'fine per references/review/code.md'], 0, { BACKLOG_AGENT: 'rex' }); // a fresh session reviews
+  run(there, ['query', '--phase', '1', '--agent', 'tester']); // the review changed the item after tester's last read
   // item 059: the close needs the hand-off for the dependent of the other repository, accepted by the lead acting as itself
   run(there, ['update', '1', '--handoff', 'acme/app#1', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'tester']);
-  const accepted = cli(['update', '1', '--accept-handoff', 'acme/app#1', '--checks', 'verified', '--by', 'lead'], { cwd: there, tmp: t, env: { QWEN_CODE_AGENT_ID: 'lead', TEAM_LEAD: 'lead' } });
+  const accepted = cli(['update', '1', '--accept-handoff', 'acme/app#1', '--checks', 'verified', '--by', 'lead'], { cwd: there, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead' } });
   assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
   run(there, ['query', '--phase', '1', '--agent', 'tester']);
   run(there, ['update', '1', '--status', 'done', '--by', 'tester']);
   assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status done\)/);
-  const offered = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json']).stdout); // done: next-work offers the item
+  const offered = JSON.parse(run(here, ['pop', '--agent', 'ada', '--json']).stdout); // done: next-work offers the item
   assert.deepEqual([offered.action, offered.item, offered.first], ['claim', '001-app-change', undefined]);
-  run(here, ['query', '--phase', '1', '--agent', 'archy']);
-  run(here, ['update', '1', '--claim', 'archy']); // and the claim goes through
+  run(here, ['query', '--phase', '1', '--agent', 'ada']);
+  run(here, ['update', '1', '--claim', 'ada']); // and the claim goes through
   run(here, ['query', '--phase', '1', '--agent', 'tester']);
   assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/lib#7', '--by', 'tester'], 1).stdout, /no item 'acme\/lib#7' in the backlog repository/);
   run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester']);
   // a dependency added after the claim: the holder is not told to go on, the other repository's item is named first
   run(there, ['new', '--name', 'library follow up', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds']);
   run(here, ['update', '1', '--set-depends-on', 'acme/lib#2', '--by', 'tester']);
-  const held = JSON.parse(run(here, ['pop', '--agent', 'archy', '--json'], 3).stdout);
+  const held = JSON.parse(run(here, ['pop', '--agent', 'ada', '--json'], 3).stdout);
   assert.equal(held.action, 'idle', JSON.stringify(held));
   assert.equal(held.first[0].item, 'acme/lib#2');
-  const roster = join(t, 'roster.json'); writeFileSync(roster, JSON.stringify({ archy: {} }));
+  const roster = join(t, 'roster.json'); writeFileSync(roster, JSON.stringify({ ada: {} }));
   const planned = JSON.parse(run(here, ['query', '--plan', '--roster', roster, '--json']).stdout);
   assert.ok(!planned.some(e => e.item === '001-app-change'), JSON.stringify(planned)); // the plan offers it no more than pop does
   // a requested review of an item that waits on another repository is not offered either: that item is named first
@@ -106,8 +98,8 @@ test('042: a lead whose team items wait only on another repository is told to st
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  const run = (cwd, args, want = 0) => {
-    const r = cli(args, { cwd, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester', TEAM_LEAD: 'lead', TEAM_NAME: 't1' } });
+  const run = (cwd, args, want = 0, env = {}) => {
+    const r = cli(args, { cwd, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead', TEAM_NAME: 't1', BACKLOG_SESSION: '', ...env } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
@@ -123,8 +115,8 @@ test('042: a lead whose team items wait only on another repository is told to st
   assert.match(p.instruction, /end the session here; the team is started in that repository/);
   // a refined team item that waits on another repository is not sent to the refinement review first either
   run(here, ['new', '--name', 'refined child', '--objective', 'o', '--summary', 's', '--depends-on', 'acme/lib#1', '--team', 't1', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]);
-  run(here, ['update', '3', '--refine-start', '--by', 'zed']);
-  run(here, ['update', '3', '--refine-done', '--by', 'zed', '--note', 'refined']);
+  run(here, ['update', '3', '--refine-start', '--by', 'zed'], 0, { BACKLOG_AGENT: 'zed' });
+  run(here, ['update', '3', '--refine-done', '--by', 'zed', '--note', 'refined'], 0, { BACKLOG_AGENT: 'zed' });
   const q = JSON.parse(run(here, ['pop', '--agent', 'lead', '--json'], 3).stdout);
   assert.deepEqual([q.action, q.first?.map(x => x.item)], ['idle', ['acme/lib#1']], JSON.stringify(q));
 });
@@ -138,7 +130,7 @@ test('042: a dependency cycle through another repository, or on the item itself,
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = (cwd, args, want = 0) => {
-    const r = cli(args, { cwd, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester' } });
+    const r = cli(args, { cwd, tmp: t, env: { BACKLOG_AGENT: 'tester' } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
@@ -168,7 +160,7 @@ test('042: two clones that each add one half of a cycle through another reposito
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = (cwd, args, want = 0, env = {}) => {
-    const r = cli(args, { cwd, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester', ...env } });
+    const r = cli(args, { cwd, tmp: t, env: { BACKLOG_AGENT: 'tester', ...env } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };

@@ -1,9 +1,9 @@
-// Item 034 (spec section 10): work-in-progress limits overall (every repository of the backlog home), per repository,
+// work-in-progress limits overall (every repository of the backlog home), per repository,
 // per branch, per team and per agent, checked by every step that starts work (a claim, a refinement start). The limits
 // are <backlog home>/wip-limits.json; a level without a number has no limit (the default for every level):
-//   {"overall": 40, "repository": 15 | {"default": 15, "owner/name": 20}, "branch": 8 | {"default": 8, "owner/name:branch": 2},
-//    "team": 3 | {"default": 3, "t1": 4},
-//    "agent": 2 | {"default": 2, "cody": 1}, "stale_hours": 48}
+// {"overall": 40, "repository": 15 | {"default": 15, "owner/name": 20}, "branch": 8 | {"default": 8, "owner/name:branch": 2},
+// "team": 3 | {"default": 3, "t1": 4},
+// "agent": 2 | {"default": 2, "an agent": 1}, "stale_hours": 48}
 // Only the owner edits the file. The team lead lifts the team and agent limits for one item with a recorded reason
 // (backlog update <item> --wip-override "<reason>" --by <lead>). Work in progress: an item with status in_progress, or
 // one a member is refining (stage refining, a refiner, no claimer).
@@ -18,7 +18,7 @@ const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr
 export const limitsFile = home => join(home, 'wip-limits.json');
 export function limits(home) {
   let raw = {};
-  try { raw = JSON.parse(readFileSync(limitsFile(home), 'utf8')) ?? {}; } catch (e) { // owner 2026-10-30: never hold work over it, but say so
+  try { raw = JSON.parse(readFileSync(limitsFile(home), 'utf8')) ?? {}; } catch (e) { // never hold work over it, but say so
     if (e.code !== 'ENOENT') warn(`${limitsFile(home)} cannot be read or is no JSON (${e.message}); no work-in-progress limit applies until it is fixed`);
     raw = {};
   }
@@ -57,7 +57,7 @@ function scopes(repo, fm, agent) {
     repository: { key: repo, of: x => x.repository === repo },
     branch: { key: `${repo} ${fm.branch || ''}`, of: x => x.repository === repo && (x.fm.branch || '') === (fm.branch || '') },
     team: { key: fm.team || '', of: x => Boolean(fm.team) && x.fm.team === fm.team, skip: !fm.team },
-    // item 082: work held by an earlier session of the same card counts against the agent's limit (the continuation)
+    // work held by an earlier session of the same card counts against the agent's limit (the continuation)
     agent: { key: agent, of: x => heldBy(holderOf(x.fm), agent) },
   };
 }

@@ -1,6 +1,6 @@
-// Front-matter codec for the shared backlog repository mode (cli-parity job 4).
+// Front-matter codec for the shared backlog repository mode.
 // Cited source: the pinned oracle at commit ec5b254e (contract v3 lines) —
-// lib_db.py:171-179 (_FM_RE + parse_front_matter), 182-184 (write_doc).
+// (_FM_RE + parse_front_matter), 182-184 (write_doc).
 // parse reads exactly the YAML subset PyYAML's safe_dump writes to item files:
 // a top-level block mapping of plain / single-quoted / double-quoted scalars
 // (including folded continuation lines), block lists, flow [] and [a, b],
@@ -12,9 +12,9 @@ import { redact } from './safety.js';
 // Diagnostics echo parts of the source: strip user:token@ credentials from every message.
 const err = (msg) => new Error(redact(msg));
 
-const FM_SPLIT = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/; // port of _FM_RE (lib_db.py:171-179)
+const FM_SPLIT = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/; // port of _FM_RE
 const KEY_LINE = /^([^\s:#][^:]*):(?:[ \t]+(.*))?$/; // top-level 'key:' or 'key: value'
-// YAML separation is space and tab only; JS trim()/\s also take NBSP and other Unicode spaces, which are scalar content.
+// YAML separation is space and tab only; JS trim/\s also take NBSP and other Unicode spaces, which are scalar content.
 const trim = (s) => s.replace(/^[ \t]+|[ \t]+$/g, '');
 const IDENT = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
@@ -207,7 +207,7 @@ function decodeScalar(s, label) {
   return decodePlain(s);
 }
 
-// write_doc (lib_db.py:182-184): '---\n' + safe_dump(fm).strip() + '\n---\n' + body.
+// write_doc: '---\n' + safe_dump(fm).strip + '\n---\n' + body.
 export function dump(fm, body) {
   const lines = [];
   for (const [key, value] of Object.entries(fm)) {

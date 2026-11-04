@@ -1,4 +1,4 @@
-// `backlog team pop --team <name>`: the team lead takes its team's next work item (item 056; owner 2026-10-30). A work
+// `backlog team pop --team <name>`: the team lead takes its team's next work item. A work
 // item of a team has front matter team = the team and no stage (its split items carry a stage and are the members'
 // work). The lead's open work item of the team is continued; else the first open, unclaimed work item in the work
 // order (priority, then seq) whose claim the CLI accepts is claimed for the lead. Every step is a run of this CLI
@@ -43,7 +43,7 @@ export async function run(argv) {
   let own; let branch;
   try { own = teamScope().repo || repoId(process.cwd()); branch = gitBranch(process.cwd()); } catch (e) { return die(e.message); }
   if (!branch) return die('team pop needs a branch: check one out here or set TEAM_BRANCH (a detached HEAD names none)');
-  // every failure of a command it runs is exit 1 with its reason: exit 3 is idle only (Codex review 2 of 056)
+  // every failure of a command it runs is exit 1 with its reason: exit 3 is idle only
   const fail = r => { process.stderr.write(r.stderr); return die(`team pop stopped: ${last(r)}`, 1); };
   const fresh = self(['query', '--status', '--json']); // pulls the backlog clone
   if (fresh.status !== 0) return fail(fresh);
@@ -57,9 +57,9 @@ export async function run(argv) {
   const ours = f => strip(f.team || '') === a.team && !f.stage && OPEN.includes(f.status) && f.repository === own && f.branch === branch;
   const skipped = [];
   let action = 'idle'; let item = null;
-  // a refused claim is update's refusal (exit 1, '❌ <item>: <why>' on stdout); any other failure ends the command (Codex review of 056)
+  // a refused claim is update's refusal (exit 1, '❌ <item>: <why>' on stdout); any other failure ends the command
   const refused = r => r.status === 1 && /^❌ /m.test(r.stdout) && !/❌ backlog:/.test(r.stderr);
-  // item 082: heldBy also matches the lead's earlier session of the same card (the continuation): the command records the
+  // heldBy also matches the lead's earlier session of the same card (the continuation): the command records the
   // continuation claim (claimed_by, session_authors) before it continues; a refused claim keeps the earlier session as
   // the holder: the reason goes to standard error and the command stops (exit 1, never a reported success)
   const held = work.find(i => heldBy(strip(i.fm.claimed_by || ''), agent));
@@ -82,7 +82,7 @@ export async function run(argv) {
     let f = {};
     try { f = JSON.parse(r.stdout).front_matter || {}; } catch { return fail(r); }
     // changed since the selection: not the team's any more, or taken. The claim is checked against this read (a write after
-    // it refuses the claim with exit 5), so what is claimed is what was checked here (Codex review 4 of 056)
+    // it refuses the claim with exit 5), so what is claimed is what was checked here
     if (!ours(f) || strip(f.claimed_by || '')) { skipped.push({ item: i.fm.phase, reason: 'changed since it was listed (team, stage, status, branch or holder)' }); continue; }
     // the scope is the claim's precondition, checked inside its locked write: the team (TEAM_NAME), repository and branch
     const c = self(['update', i.fm.phase, '--claim', agent], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, TEAM_BRANCH: branch });
@@ -96,7 +96,7 @@ export async function run(argv) {
     try { shown = JSON.parse(q.stdout); } catch { shown = null; }
     if (q.status !== 0 || !shown) return fail(q); // only the reason: the read's own output names the item's file
     const f = shown.front_matter || {};
-    // item 082: the final read must find the session this command answers for still holding the item, on every
+    // the final read must find the session this command answers for still holding the item, on every
     // path: a hand-back or a reassignment to another session of the same card between the selection and this
     // read is a change, never a reported success
     const stillHeld = strip(f.claimed_by || '') === agent;

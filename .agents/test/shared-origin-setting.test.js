@@ -16,7 +16,7 @@ const OTHER = 'https://example.com/other/else.git';
 const bin = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js');
 // backlog setup --ask reads its answer from standard input (spawnSync's input)
 const askSetup = (cwd, tmp, input, env = {}) => spawnSync(process.execPath, [bin, 'setup', '--ask'], {
-  cwd, env: { ...process.env, QWEN_CODE_AGENT_ID: 'driver-ask', ...fixtureEnv(tmp), ...env }, input, encoding: 'utf8', timeout: 60000,
+  cwd, env: { ...process.env, BACKLOG_AGENT: 'driver-ask', ...fixtureEnv(tmp), ...env }, input, encoding: 'utf8', timeout: 60000,
 });
 
 function fixture(t) {

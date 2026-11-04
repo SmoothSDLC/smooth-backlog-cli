@@ -1,8 +1,8 @@
-// Help text of the shared-backlog-repository mode (cli-parity job 18): HELP[command] is what `backlog <command> --help`
-// prints (src/shared/router.js) and what COMMANDS.md repeats. The flag lists follow the argparse help of new_phase.py,
-// update.py, query.py, move.py and archive.py. The text is written in plain, complete sentences so that the skill
+// Help text of the shared-backlog-repository mode: HELP[command] is what `backlog <command> --help`
+// prints (src/shared/router.js) and what COMMANDS.md repeats. The flag lists follow the argparse help of
+// move.py and archive.py. The text is written in plain, complete sentences so that the skill
 // instructions can be rewritten around it. A flag the build refuses carries the sentence "Not in this build."
-// Layout the tests rely on: a flag is a line "  --flag ARG" followed by description lines indented by six spaces.
+// Layout the tests rely on: a flag is a line " --flag ARG" followed by description lines indented by six spaces.
 
 const SHARED = `In shared backlog repository mode the command first updates the local clone of the backlog repository
 (git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
@@ -85,7 +85,7 @@ Options:
   --layer {1,2,3,4,5,process}
       The layer of the item: 1 to 5, or the word process.
   --team NAME
-      The team that owns the item (front matter team; owner 2026-10-28): the item starts in stage refining and is claimed
+      The team that owns the item (front matter team): the item starts in stage refining and is claimed
       only when its refinement review passed. --split-from inherits the source's team.
   --chunk
       Chunk work: small pieces any member does between items (the front matter key chunk: true).
@@ -550,7 +550,7 @@ Exit codes:
   4  The backlog repository is not set up; the printed question must be answered by the user.
 
 Example:
-  backlog pop --agent archy --json
+  backlog pop --agent ada --json
 `,
   work: `backlog work — the one next-work command of a team member: the next action, marked as yours, with the whole item
 
@@ -590,7 +590,7 @@ Exit codes:
   4  The backlog repository is not set up; the printed question must be answered by the user.
 
 Example:
-  backlog work --agent archy --json
+  backlog work --agent ada --json
 `,
 
   team: `backlog team pop — the team lead takes its team's next work item, with the whole item

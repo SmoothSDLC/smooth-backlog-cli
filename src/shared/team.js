@@ -21,12 +21,12 @@ export const teamLead = name => strip(name || process.env.TEAM_LEAD || teamsConf
 const DONE_STATES = ['done', 'archived'];
 const ACTIONABLE = ['pending', 'in_progress'];
 
-// Python str.strip()/rstrip() whitespace (not JS's: \x1c-\x1f and \x85 count, a BOM does not).
+// Python str.strip/rstrip whitespace (not JS's: \x1c-\x1f and \x85 count, a BOM does not).
 const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
 export const rstrip = s => s.replace(new RegExp(`[${WS}]+$`), '');
 export const strip = s => rstrip(s).replace(new RegExp(`^[${WS}]+`), '');
 
-// lib_db.py:627-631: a front-matter list as strings; missing, empty or 'none' is [].
+// a front-matter list as strings; missing, empty or 'none' is [].
 export const asList = v => (v == null || (typeof v === 'string' && ['', 'none'].includes(strip(v).toLowerCase())) ? []
   : (Array.isArray(v) ? v : String(v).split(',')).map(x => strip(String(x))).filter(Boolean));
 
@@ -36,32 +36,32 @@ export const isChunk = fm => ['true', 'yes', '1'].includes(String(fm.chunk).toLo
 export const needsReview = fm => asList(fm.review_refs).length > 0;
 
 // lib_db.team_name / in_team: the caller's team (env TEAM_NAME, set by the team runner); with it set, a member works only
-// that team's items (owner 2026-10-28: the team that refined and split items owns them).
+// that team's items.
 export const teamName = () => strip(process.env.TEAM_NAME || '');
 export const inTeam = fm => !teamName() || fm.team === teamName();
-// Beyond the oracle (item 037: another team's item is never offered): an item of another repository, offered only as chunk
+// Beyond the earlier scripts: an item of another repository, offered only as chunk
 // work, is held back when it names a team other than the caller's.
 export const offeredTo = (fm, f, repo) => (f === repo ? inTeam(fm) : !fm.team || !teamName() || fm.team === teamName());
 
-// lib_db.py:205-211: the (repository, branch) a team session is bound to by the environment; ('', '') outside a team.
+// the (repository, branch) a team session is bound to by the environment; ('', '') outside a team.
 export function teamScope() {
   const repo = strip(process.env.TEAM_REPOSITORY || '');
   input(!repo || /^[\w.-]+\/[\w.-]+$/.test(repo), `TEAM_REPOSITORY='${repo}': expected owner/name`);
   return { repo, branch: strip(process.env.TEAM_BRANCH || '') };
 }
 
-// lib_db.py:200-202: TEAM_BRANCH, else the caller's branch ('' when detached).
+// TEAM_BRANCH, else the caller's branch ('' when detached).
 export const gitBranch = cwd => teamScope().branch
   || spawnSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }).stdout?.trim() || '';
 
-// lib_db.py:263-270: why a team session may not act on this item; null if it may.
+// why a team session may not act on this item; null if it may.
 export function outsideTeam(fm) {
   const { repo, branch } = teamScope();
   if (!repo || ((fm.repository || '') === repo && (!branch || (fm.branch || '') === branch))) return null;
   return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them`;
 }
 
-// lib_db.py:587-595 phase_by_ident over the mirror rows: by number (a live row before an archived one) or by slug.
+// phase_by_ident over the mirror rows: by number (a live row before an archived one) or by slug.
 function byIdent(rows, ident) {
   const sel = itemSelector(ident);
   if (!sel) return null;
@@ -69,7 +69,7 @@ function byIdent(rows, ident) {
   return hits.find(r => r.status !== 'archived') ?? hits[0] ?? null;
 }
 
-// lib_db.py:643 item_fm: the front matter of the row's file, {} when it is gone (or outside the folder); a parse or I/O error propagates. The rows give
+// item_fm: the front matter of the row's file, {} when it is gone (or outside the folder); a parse or I/O error propagates. The rows give
 // identity and status; the files only the metadata the rows do not hold.
 function itemFm(folder, row) {
   let file;
@@ -83,8 +83,8 @@ export function mirrorRows(folder) {
   try { return con.prepare('SELECT * FROM phase ORDER BY id').all().map(r => ({ ...r })); } finally { con.close(); }
 }
 
-// Item 042: owner/name#seq names an item of another repository's backlog in the same backlog repository clone.
-const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // an owner or repository name is one path segment, never . or ..
+// owner/name#seq names an item of another repository's backlog in the same backlog repository clone.
+const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // an owner or repository name is one path segment, never. or..
 const FOREIGN = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
 export const isForeign = id => FOREIGN.test(String(id ?? '').trim());
 // {repository, seq, slug, status, fm} of a foreign reference; null when that repository has no backlog folder or no such
@@ -99,7 +99,7 @@ export function foreignItem(folder, id) {
   const it = hits.find(i => i.fm.status !== 'archived') ?? hits[0];
   return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || basename(it.path, '.md'), status: it.fm.status ?? 'pending', fm: it.fm } : null;
 }
-// Item 042: does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
+// does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
 // to it? Returns the reference that closes the cycle, or null. Local entries are read in the folder they are written in.
 // cache: repository -> its items, shared by the calls of one check (a publication checks every changed item)
 export function foreignCycle(folder, repoId, seq, deps, cache = new Map()) {
@@ -126,7 +126,7 @@ export function foreignCycle(folder, repoId, seq, deps, cache = new Map()) {
   }
   return null;
 }
-// Item 059: the edge state of a done producer that does not satisfy the edge; null while it is satisfied
+// the edge state of a done producer that does not satisfy the edge; null while it is satisfied
 // (accepted or legacy). The row decides the producer is done - the files give only the metadata the rows do not
 // hold - so the row's status stands in for a producer file that is gone (a done producer without a handoffs key
 // is legacy, whatever the files say).
@@ -135,9 +135,9 @@ const edgeRefusal = (producerFm, dependentId) => {
   return satisfied(state) ? null : state;
 };
 
-// lib_db.py:648-655: [{id as written, item: the row or null, fm}] for each depends_on entry that is not done or archived.
+// [{id as written, item: the row or null, fm}] for each depends_on entry that is not done or archived.
 // rows = the mirror rows of folder (the default), or those of another repository's backlog read by the caller. A foreign
-// entry (item 042) is read from that repository's folder; its item carries the repository. Item 059: a done producer
+// entry is read from that repository's folder; its item carries the repository. a done producer
 // whose hand-off the lead has not accepted is an unfinished dependency too - the entry carries the edge state in
 // handoff (missing, unaccepted, stale or rejected); a satisfied edge (accepted, legacy) is no entry. The dependent
 // is named as the producer's repository names it: its seq for a same-repository producer,
@@ -157,7 +157,7 @@ export function undoneDependencies(folder, fm, rows = mirrorRows(folder)) {
   }).filter(d => !d.item || !DONE_STATES.includes(d.item.status) || d.handoff);
 }
 
-// lib_db.py:658-670: the open rows of the active handoff whose file says agent holds them, on every branch, by number.
+// the open rows of the active handoff whose file says agent holds them, on every branch, by number.
 // state: awaiting-review, waiting:<what>, active.
 export function heldItems(folder, agent, { refining = false } = {}) {
   const con = connect(folder);
@@ -166,13 +166,13 @@ export function heldItems(folder, agent, { refining = false } = {}) {
     const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
     rows = con.prepare(`SELECT * FROM phase WHERE handoff_id=? AND status IN (${ACTIONABLE.map(() => '?')}) ORDER BY seq`).all(hid, ...ACTIONABLE).map(r => ({ ...r }));
   } finally { con.close(); }
-  const refines = fm => refining && !fm.claimed_by && fm.refiner === agent && fm.stage === 'refining'; // a refinement in progress is active work too (item 039)
-  // item 082: heldBy also matches an earlier session of the same card - the continuation is the agent's own work
+  const refines = fm => refining && !fm.claimed_by && fm.refiner === agent && fm.stage === 'refining'; // a refinement in progress is active work too
+  // heldBy also matches an earlier session of the same card - the continuation is the agent's own work
   return rows.map(r => ({ ...r, fm: itemFm(folder, r) })).filter(r => heldBy(r.fm.claimed_by, agent) || refines(r.fm))
     .map(r => ({ ...r, state: ['requested', 'in_review'].includes(r.fm.review_state) ? 'awaiting-review' : r.fm.wait_on ? `waiting:${r.fm.wait_on}` : 'active' }));
 }
 
-// lib_db.py:673-680: null when agent may claim, else why not.
+// null when agent may claim, else why not.
 export function claimRefusal(folder, agent) {
   const active = heldItems(folder, agent, { refining: true }).filter(h => h.state === 'active').map(h => h.slug);
   if (!active.length) return null;
@@ -180,8 +180,8 @@ export function claimRefusal(folder, agent) {
 }
 
 // lib_db.load_roster: {agent: profile} from a team roster {agent: {...}} (the team's members, in order); {} without one.
-// The backlog configuration <home>/teams.json: { "<team>": { "lead": "<agent>", "members": ["<agent>", ...],
-// "review": [{ "team": "<team>", "count": <n> }, ...], "refinement_review": [{ "team": "<team>", "count": <n> }] } }.
+// The backlog configuration <home>/teams.json: { "<team>": { "lead": "<agent>", "members": ["<agent>",...],
+// "review": [{ "team": "<team>", "count": <n> },...], "refinement_review": [{ "team": "<team>", "count": <n> }] } }.
 // A team's work closes when each review rule is met: <count> distinct reviewers who are members (or the lead) of <team> passed
 // the current work commit. Without a configured rule, no review is required. An unreadable file is reported once and read as empty.
 let teamsCache;
@@ -225,7 +225,7 @@ export function loadRoster(path) {
 
 // Whether agent wrote the work under review: the current claimer, whoever asked for the review (review_author
 // survives a release), or a session that claimed or asked before a continuation took over claimed_by
-// (session_authors, item 082: the self-review rule is per session, and the block still applies to every earlier
+// (session_authors, the self-review rule is per session, and the block still applies to every earlier
 // session name of the item). The one predicate behind every offer, dispatch and refusal of a review.
 export const isReviewAuthor = (fm, agent) => (fm.claimed_by || '') === (agent || '')
   || (Boolean(agent) && (fm.review_author === agent || asList(fm.session_authors).includes(agent)));
@@ -241,18 +241,18 @@ export const sameWorker = (a, b) => {
 // Work held by the agent's own name, or by an earlier session of the same worker. Every "is this item mine" check goes through here.
 export const heldBy = (holder, agent) => (holder === agent) || sameWorker(holder, agent);
 
-// lib_db.py:710-715: seconds since a front-matter time stamp; -1 when there is none.
+// seconds since a front-matter time stamp; -1 when there is none.
 export const age = ts => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(String(ts)) ? (Date.now() - Date.parse(ts)) / 1000 : -1);
 
-// lib_db.py:718-723: an in-progress review older than BACKLOG_REVIEW_STALE_SECONDS (1200) is offered again.
+// an in-progress review older than BACKLOG_REVIEW_STALE_SECONDS (1200) is offered again.
 export const staleReview = fm => fm.review_state === 'in_review' && age(fm.review_started) > Number(process.env.BACKLOG_REVIEW_STALE_SECONDS ?? 1200);
 
-// lib_db.py:726-729: agent may start or continue the review: requested, in review by agent itself, or stale.
-// Beyond the oracle (item 033: only the team lead takes another agent's work): a stale review is handed on by the lead
+// agent may start or continue the review: requested, in review by agent itself, or stale.
+// Beyond the earlier scripts: a stale review is handed on by the lead
 // (backlog update <item> --reassign-review <agent> --by <lead> --reason), never taken over by another member.
 export const reviewOpenTo = (fm, agent) => fm.review_state === 'requested' || (fm.review_state === 'in_review' && fm.reviewer === agent);
 
-// Item 059: what the team still owes before the dependent may be offered or claimed, per unsatisfied edge state.
+// what the team still owes before the dependent may be offered or claimed, per unsatisfied edge state.
 // stale names both ways an edge goes stale: the receipt pins a record that is no longer the current one (the
 // producer re-recorded after the last receipt, an acceptance or a rejection), or the current record's digest does
 // not match its own fields (a broken record that pins nothing).
@@ -263,7 +263,7 @@ const HANDOFF_NEEDS = {
   rejected: 'the team lead rejected the producer\'s hand-off; the team lead must accept the current record (or the producer records a new one and the lead accepts that)',
 };
 
-// lib_db.py:745-749; item 059: a done producer with an unsatisfied edge is described by its edge state and
+// a done producer with an unsatisfied edge is described by its edge state and
 // what is needed, not by its claim.
 export function describeDependency({ id, item, fm, foreign, handoff }) {
   const state = handoff ? `done, hand-off ${handoff}: ${HANDOFF_NEEDS[handoff]}`

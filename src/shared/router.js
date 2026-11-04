@@ -1,5 +1,5 @@
-// Shared-mode mode switch and command router (cli-parity job 6). Contract sections 1, 2 and 5.
-// Both return the exit code; failures print the die() line of lib_db.py:39-42 on stderr.
+// Shared-mode mode switch and command router. Contract sections 1, 2 and 5.
+// Both return the exit code; failures print the die line of on stderr.
 import { existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -9,7 +9,7 @@ import { cloneLocked, resolveHome, setMode } from './store.js';
 import { pull } from './sync.js';
 import { ORIGIN_REFUSAL, originFolderName, originSetting } from './setup.js';
 
-// command -> [module relative to this file, ...arguments put in front of the user's argv]
+// command -> [module relative to this file,...arguments put in front of the user's argv]
 export const TABLE = {
   new: ['./new.js'], update: ['./update.js'], query: ['./query.js'], pop: ['./pop.js'], work: ['./work.js'], team: ['./teampop.js'],
   next: ['./query.js', '--next'], move: ['./move.js'], archive: ['./archive.js'],
@@ -17,12 +17,12 @@ export const TABLE = {
 
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 
-// `backlog --use-backlog-repo <path>` (lib_db.py:77-109, set_home.py:33-35) and `backlog --use-local-repo`.
+// `backlog --use-backlog-repo <path>` and `backlog --use-local-repo`.
 export async function switchMode({ backlogRepo, rest = [] }) {
   const out = rest.length ? process.stderr : process.stdout; // a command follows: keep its stdout clean
   if (backlogRepo === undefined) { setMode('local'); out.write('✅ local mode: the repo-local .backlog store is in use\n'); return 0; }
   const setting = originSetting();
-  if (!setting.url) return die(ORIGIN_REFUSAL); // item 091: no built-in name; the refusal names both sources, before anything is touched
+  if (!setting.url) return die(ORIGIN_REFUSAL); // no built-in name; the refusal names both sources, before anything is touched
   let home;
   try { home = await validateHome(resolve(backlogRepo), setting.id, `~/git/${originFolderName()}`, setting.url); } catch (error) { return die(error.message); }
   try { await cloneLocked(home, () => pull(home)); } catch (error) { return die(error.message, error.exitCode ?? 2); } // lock, abort, exit 3 and redaction are sync.js's

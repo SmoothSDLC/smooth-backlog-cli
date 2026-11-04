@@ -8,7 +8,7 @@ import { validateStore } from './schema.js';
 export const exists = async path => { try { await fs.lstat(path); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; } };
 export async function safePath(root, target) {
   const rel = relative(resolve(root), resolve(target));
-  // isAbsolute: on Windows relative() across drives returns the target itself.
+  // isAbsolute: on Windows relative across drives returns the target itself.
   operation(!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`) && !resolve(target).startsWith(`${resolve(root)}${sep}..${sep}`), `Unsafe path: ${target}.`);
   let current = resolve(root);
   for (const part of rel.split(sep).filter(Boolean)) {
@@ -119,7 +119,7 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
       try {
         const record = JSON.parse(await fs.readFile(path, 'utf8'));
         operation(Number.isSafeInteger(record.pid) && record.pid > 0, `Invalid lock ${path}; inspect it before removing it.`);
-        holder = ` (${record.agent ? `agent ${record.agent}, ` : ''}pid ${record.pid}${record.host && record.host !== hostname() ? ` on ${record.host}` : ''}${record.command ? `, command ${record.command}` : ''}${record.since ? `, since ${record.since}` : ''})`; // item 025: who holds it and since when
+        holder = ` (${record.agent ? `agent ${record.agent}, ` : ''}pid ${record.pid}${record.host && record.host !== hostname() ? ` on ${record.host}` : ''}${record.command ? `, command ${record.command}` : ''}${record.since ? `, since ${record.since}` : ''})`; // who holds it and since when
         try { if (!record.host || record.host === hostname()) process.kill(record.pid, 0); } catch (error) { // a pid of another host cannot be probed: it counts as alive
           // a child working under its parent's checkout (pop --claim-now's update) keeps it alive after its parent died
           if (error.code === 'ESRCH' && !(Number(record.child) > 0 && alive(Number(record.child)))) {

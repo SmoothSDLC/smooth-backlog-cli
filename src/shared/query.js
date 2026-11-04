@@ -1,6 +1,6 @@
-// Shared-mode read views (cli-parity job 12): `backlog query` and `backlog next`. Port of query.py:361-619
+// Shared-mode read views: `backlog query` and `backlog next`. a port of the earlier scripts
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the backlog.db mirror,
-// the oracle's order: pull, no-backlog check, branch, connect, findings. Output strings and --json match query.py.
+// the earlier scripts order: pull, no-backlog check, branch, connect, findings. Output strings and --json match.
 // Never writes an item (the db is opened as lib_db.connect does). The team views are views.js, --pop and --plan are pop.js; --headless is refused.
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
@@ -22,7 +22,7 @@ const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roste
 const ACTIONABLE = ['pending', 'in_progress'];
 const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
 
-// query.py:367-403 argparse. --events takes an optional value (const "*"); shortcut: no unique-prefix abbreviations.
+// argparse. --events takes an optional value (const "*"); shortcut: no unique-prefix abbreviations.
 function parse(argv) {
   const a = {};
   for (let i = 0; i < argv.length; i++) {
@@ -47,13 +47,13 @@ const sha7 = r => String(r.commit_sha ?? '').slice(0, 7);
 const pad = (v, n) => String(v).padStart(n);
 const repr = s => redact(s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}'`);
 
-// A row's file exists only when it resolves inside the repository folder (no .., absolute path or symlink out).
+// A row's file exists only when it resolves inside the repository folder (no.., absolute path or symlink out).
 // The oracle follows such a path; here it counts as gone, since the row is mirror data and not to be trusted.
 function present(folder, path) {
   try { return realpathSync(resolve(folder, String(path))).startsWith(realpathSync(folder) + sep); } catch { return false; }
 }
 
-// lib_db.py:302-313 over the mirror rows: the file of a row is looked up in the repository folder.
+// over the mirror rows: the file of a row is looked up in the repository folder.
 function findings(rows, folder, repo) {
   const out = { foreign: [], untagged: [], ghost: [] };
   for (const r of rows) {
@@ -65,7 +65,7 @@ function findings(rows, folder, repo) {
   return out;
 }
 
-// scan.py:26-38
+//
 function findingLines(f, repo) {
   return [
     ...f.foreign.map(r => `⚠️  CRITICAL: ${r.path} says repository ${r.repository} but is in the folder of ${repo}; it is out of the queue. Move it: backlog move ${r.slug} --to-repository`),
@@ -75,7 +75,7 @@ function findingLines(f, repo) {
   ];
 }
 
-// query.py:351-364
+//
 function criticalBanner(crit) {
   if (!crit.length) return 0;
   const bar = `⚠️ ${'='.repeat(72)}`;
@@ -86,7 +86,7 @@ function criticalBanner(crit) {
   return crit.length;
 }
 
-// item 027: which items of this repository folder changed since the calling agent's last use. The
+// which items of this repository folder changed since the calling agent's last use. The
 // reference is the agent's own ~use record - its last write or its last --changed, never a global
 // timestamp - so a change made while the agent is idle still appears in the agent's next report.
 // The report is printed before the reference is written, so a failed output consumes no change
@@ -141,7 +141,7 @@ function changedReport(home, folder, repo, a) {
   return 0;
 }
 
-// query.py:361-625
+//
 export const run = argv => store.cloneLocked(store.resolveHome().home, () => query(argv)); // a read that pulls waits for a writer of the clone
 async function query(argv) {
   let a;
@@ -150,14 +150,14 @@ async function query(argv) {
   if (a.pop && !a.agent) return die('--pop needs --agent <your name>');
   if (a.headless) return die('--headless is not in this build');
   if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
-  if (a.pop || a.plan) return (await import('./pop.js')).run(argv); // pop.js repeats the preamble below for its own flags (--plan: item 052)
+  if (a.pop || a.plan) return (await import('./pop.js')).run(argv); // pop.js repeats the preamble below for its own flags
 
   const cwd = process.cwd();
   let repo;
   try { repo = teamScope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }
   const { home } = store.resolveHome();
   try { await sync.pull(home); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
-  if (a.wip) { // item 034: the counts against every work-in-progress limit and the stale in-progress items, whole backlog home
+  if (a.wip) { // the counts against every work-in-progress limit and the stale in-progress items, whole backlog home
     const v = wipView(home);
     if (a.json) { dump(v); return 0; }
     say(`📊 work in progress — ${v.limits_file}${existsSync(v.limits_file) ? '' : ' (none: no limits)'}`);
@@ -168,7 +168,7 @@ async function query(argv) {
   }
   let folder;
   try { folder = store.folder(home, repo); } catch (e) { return die(e.message); } // TEAM_REPOSITORY=../x passes the owner/name pattern; the folder must stay inside the home
-  if (a.changed) return changedReport(home, folder, repo, a); // item 027: what changed since the calling agent's last use
+  if (a.changed) return changedReport(home, folder, repo, a); // what changed since the calling agent's last use
   if (!existsSync(join(folder, 'backlog.db'))) {
     say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet (no folder ${folder})`);
     return 0;
@@ -186,7 +186,7 @@ async function query(argv) {
     const critical = () => (hid === null ? [] : all("SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') AND severity='critical' ORDER BY priority ASC, seq ASC", hid));
     const bad = findings(all("SELECT * FROM phase WHERE status NOT IN ('archived')"), folder, repo);
     const bare = store.bareFiles(folder);
-    if (bare.length) bad.bare = bare; // only when there is one: the --json findings keep the oracle's three keys
+    if (bare.length) bad.bare = bare; // only when there is one: the --json findings keep the earlier scripts three keys
     const excluded = new Set(Object.values(bad).flat().map(r => r.id));
     const lines = findingLines(bad, repo);
     if (!a.json && lines.length && (a.next || !plain)) lines.forEach(say); // findings lead the queue views only
@@ -202,7 +202,7 @@ async function query(argv) {
 
     if (a.next) {
       const items = new Map(store.load(folder).map(i => [i.path, i.fm]));
-      // item 059.4: a done producer whose hand-off the lead has not accepted holds the dependent back like an
+      // a done producer whose hand-off the lead has not accepted holds the dependent back like an
       // unfinished dependency: next skips it, the way pop, work, plan and --claimable already do, and names the
       // skipped edge (the design requires the edge state named, not a silent skip)
       let r = null; const skipped = [];
@@ -216,7 +216,7 @@ async function query(argv) {
         say(a.json ? '{}' : `ℹ️  no actionable item for ${repo}${a.all ? '' : `, branch ${redact(branch)}; --all shows every branch`}`);
         return 0;
       }
-      // item 042: the next item may wait on another repository's item: that is named as the work to do first
+      // the next item may wait on another repository's item: that is named as the work to do first
       const away = team.undoneDependencies(folder, items.get(r.path) ?? {}).filter(d => d.foreign && d.item && d.item.status !== 'done')
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
       const skip = skipped.flatMap(s => s.deps.map(d => ({ item: s.row.slug, edge: d.id, handoff: d.handoff })));
@@ -233,7 +233,7 @@ async function query(argv) {
       return 0;
     }
 
-    if (a.phase && String(a.phase).includes(',')) { // item 053: several items at once, one JSON object each, in an array
+    if (a.phase && String(a.phase).includes(',')) { // several items at once, one JSON object each, in an array
       const out = [];
       for (const id of String(a.phase).split(',').map(x => x.trim()).filter(Boolean)) {
         const sel = itemSelector(id);
@@ -254,9 +254,9 @@ async function query(argv) {
         ? one("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id", sel.number)
         : one('SELECT * FROM phase WHERE slug=?', sel.slug));
       if (!r) { say(`❌ no phase ${repr(a.phase)}`); return 1; }
-      // the oracle's row, then the whole item (item 033: a member that may use only the CLI reads its item here)
+      // the earlier scripts row, then the whole item
       const file = store.load(folder).find(i => i.path === r.path);
-      dump({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null }); // item 061
+      dump({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
       seen.view(a.agent, folder, repo, r); // the agent now holds this version: its next write to the item is checked against it
       return 0;
     }
@@ -301,7 +301,7 @@ async function query(argv) {
       }
     }
     if (a.json) {
-      // item 060: who holds each item and whether it is in review, so no caller reads the item files for them
+      // who holds each item and whether it is in review, so no caller reads the item files for them
       // each row's own file, inside the folder only (a row that leaves it is a ghost: no file is read for it)
       const fmOf = r => (present(folder, r.path) ? parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8')).fm : {});
       const teamFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
@@ -319,7 +319,7 @@ async function query(argv) {
       const crit = (r.severity || 'normal') === 'critical' && ACTIONABLE.includes(r.status) ? ' ⚠️CRIT' : '';
       say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority, 3)}${crit}  ${r.name}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
-      // item 042: a dependency on another repository's item is shown with its state (the items of this backlog keep PR1's line)
+      // a dependency on another repository's item is shown with its state
       { // every status: a done item still shows what it depended on
         const deps = (byPath ??= new Map(store.load(folder).map(i => [i.path, i.fm]))).get(r.path)?.depends_on;
         for (const d of team.asList(deps).filter(team.isForeign)) {

@@ -29,7 +29,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
 const LEAD = { TEAM_LEAD: 'lead' };
 const C1 = '0123456789abcdef0123456789abcdef01234567';
 const C2 = 'fedcba9876543210fedcba9876543210fedcba98';
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '', ...LEAD, ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const seq = slug => Number(slug.split('-')[0]);
@@ -48,21 +48,16 @@ function producerWithHandoff(f, commit, session) {
   const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', commit, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--handoff-outputs', 'src/shared/update.js',
     '--handoff-pickup', 'the next vertical slice wires the close gate', '--handoff-risks', 'NONE', '--by', 'producer'],
-    { QWEN_CODE_SESSION_ID: session });
+    { BACKLOG_SESSION: session });
   return { p, d, record };
 }
-// The producer's review passing, both stages of item 088: a Cody pass first, then the codex pass on the same
-// commit; through the CLI (by = the claimer who requests).
+// The producer's review passing, through the CLI (by = the claimer who requests).
 function reviewPass(f, p, by = 'producer') {
-  ok(f, ['update', p, '--request-review', 'cody', '--note', 'the hand-off wiring', '--by', by]);
-  ok(f, ['query', '--phase', p, '--agent', 'cody']);
-  ok(f, ['update', p, '--start-review', '--by', 'cody']);
-  ok(f, ['update', p, '--review', 'pass', '--by', 'cody', '--comments', 'PASS (references/review/code.md)']);
-  ok(f, ['query', '--phase', p, '--agent', by]); // the claimer's view is stale after cody's pass; the claimer reads it before handing on
-  ok(f, ['update', p, '--request-review', 'codex', '--note', 'the hand-off wiring', '--by', by]);
-  ok(f, ['query', '--phase', p, '--agent', 'codex']);
-  ok(f, ['update', p, '--start-review', '--by', 'codex']);
-  ok(f, ['update', p, '--review', 'pass', '--by', 'codex', '--comments', 'PASS (references/review/code.md)']);
+  ok(f, ['update', p, '--request-review', 'rex', '--note', 'the hand-off wiring', '--by', by]);
+  ok(f, ['query', '--phase', p, '--agent', 'rex']);
+  ok(f, ['update', p, '--start-review', '--by', 'rex']);
+  ok(f, ['update', p, '--review', 'pass', '--by', 'rex', '--comments', 'PASS (references/review/code.md)']);
+  ok(f, ['query', '--phase', p, '--agent', by]); // the claimer's view is stale after the pass; the claimer reads it before handing on
 }
 
 test('059.V1: the producer records its hand-off for its dependent; the block names the item branch and the session', () => {
@@ -108,7 +103,7 @@ test('059.V1: after the review passes the lead accepts the hand-off and the rece
   assert.ok(text.includes('HANDOFF_ACCEPTED v1'));
   assert.ok(text.includes(`HANDOFF_REVISION: ${record.digest}`));
   assert.ok(text.includes('REVIEWER_LEAD: lead'));
-  assert.ok(text.includes(`REVIEWER: codex ; VERDICT: passed ; HANDOFF_COMMIT: ${C1}`));
+  assert.ok(text.includes(`REVIEWER: rex ; VERDICT: passed ; HANDOFF_COMMIT: ${C1}`));
 });
 
 test('059.V1: a re-recorded hand-off makes the old receipt stale', () => {
@@ -160,8 +155,8 @@ test('059.V1: a member cannot accept or reject a hand-off', () => {
   assert.equal(receipts(f, p).length, 0);
 });
 
-// Review round 1 (codex at e3c0fc1): the hand-off steps resolve the actor before the identity check, so a
-// member in a team session (QWEN_CODE_AGENT_ID) without --by acts as itself, never as another claimer - and
+// Review round 1 (round 1): the hand-off steps resolve the actor before the identity check, so a
+// member in a team session (BACKLOG_AGENT) without --by acts as itself, never as another claimer - and
 // the accept and reject need the lead's --by.
 
 test('059.V1: the claimer records its hand-off without --by; the record is by the claimer', () => {
@@ -172,7 +167,7 @@ test('059.V1: the claimer records its hand-off without --by; the record is by th
   ok(f, ['update', p, '--claim', 'producer']);
   const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
-    { QWEN_CODE_AGENT_ID: 'producer@team77' });
+    { BACKLOG_AGENT: 'producer' });
   assert.match(record.stdout, /handoff=DEPENDENCY_HANDOFF v1/);
   const records = handoffs(f, p);
   assert.equal(records.length, 1);
@@ -188,9 +183,9 @@ test('059.V1: a member without --by cannot record another claimer\'s hand-off', 
   ok(f, ['update', p, '--claim', 'producer']);
   const r = run(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
-    { QWEN_CODE_AGENT_ID: 'other@team77' });
+    { BACKLOG_AGENT: 'other', TEAM_NAME: 't1' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stdout, /you are other \(QWEN_CODE_AGENT_ID\): a member acts only as itself, not as producer/);
+  assert.match(r.stdout, /you are other \(BACKLOG_AGENT\): a member acts only as itself, not as producer/);
   assert.equal(handoffs(f, p).length, 0);
 });
 
@@ -203,16 +198,16 @@ test('059.V1: a member without --by cannot accept or reject as the lead claimer'
   ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--by', 'lead']);
   reviewPass(f, p, 'lead');
-  const accept = run(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked'], { QWEN_CODE_AGENT_ID: 'other@team77' });
+  const accept = run(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked'], { BACKLOG_AGENT: 'other' });
   assert.equal(accept.status, 1, accept.stdout + accept.stderr);
   assert.match(accept.stdout, /--accept-handoff needs --by <the team lead>/);
-  const reject = run(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'why not'], { QWEN_CODE_AGENT_ID: 'other@team77' });
+  const reject = run(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'why not'], { BACKLOG_AGENT: 'other' });
   assert.equal(reject.status, 1, reject.stdout + reject.stderr);
   assert.match(reject.stdout, /--reject-handoff needs --by <the team lead>/);
   assert.equal(receipts(f, p).length, 0);
 });
 
-// Review round 2 (codex at 906b41a): the stale-view check must run against the effective actor of the step.
+// Review round 2 (round 2): the stale-view check must run against the effective actor of the step.
 // A --handoff without --by records as the claimer, so the claimer's view is the one that must be fresh; the
 // environment actor's fresh view must not let the write through (update.js chose the actor before the item
 // loaded and substituted the claimer only for --request-review).
@@ -227,20 +222,20 @@ test('059.V1: a hand-off recorded without --by is checked against the claimer\'s
   ok(f, ['update', p, '--append', 'a note from the lead', '--by', 'lead']); // someone else changes it: the claimer's view is now stale
   const r = run(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
-    { QWEN_CODE_AGENT_ID: 'lead@team77' });
+    { BACKLOG_AGENT: 'lead' });
   assert.equal(r.status, 5, r.stdout + r.stderr);
   assert.match(r.stderr, /was changed by lead at .* after you last read it/);
   assert.equal(handoffs(f, p).length, 0);
   ok(f, ['query', '--phase', p, '--agent', 'producer']); // the claimer reads the change, then the same call succeeds
   const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
-    { QWEN_CODE_AGENT_ID: 'lead@team77' });
+    { BACKLOG_AGENT: 'lead' });
   assert.match(record.stdout, /handoff=DEPENDENCY_HANDOFF v1/);
   assert.equal(handoffs(f, p).length, 1);
   assert.equal(handoffs(f, p)[0].by, 'producer'); // the record is by the claimer, checked against its view
 });
 
-// Review round 3 (codex rounds 3 and 4 at 7bd4b10): the hand-off flags are detected by presence, not
+// Review round 3 (rounds 3 and 4): the hand-off flags are detected by presence, not
 // truthiness - an empty value selects the action and is refused, instead of falling through to a
 // successful state change (parse accepts the empty value).
 

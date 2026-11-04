@@ -1,8 +1,8 @@
-// The hand-off data rules of item 059 (the item-dependency-handoff method; spec
+// The hand-off data rules of an earlier change (the item-dependency-handoff method; spec
 // 2026-10-26-atomic-item-execution-dependency-handoffs.md): for every depends_on edge "dependent D depends on
 // producer P", P's front matter holds a hand-off record for D (key handoffs, or 'none' when P has no dependents)
 // and the team lead's append-only receipts (key handoff_receipts) pin the record's digest; D's edge is satisfied
-// only while the last receipt for D accepts the current record. Item 059.1: pure functions, no command yet —
+// only while the last receipt for D accepts the current record. pure functions, no command yet —
 // nothing calls these.
 import { createHash } from 'node:crypto';
 import { readdirSync } from 'node:fs';
@@ -127,7 +127,7 @@ export function openEdges(folder, repoId, producerFm) {
 
 // The producer record as the method's DEPENDENCY_HANDOFF v1 body block (source: <owner>/<name>#<seq> of the
 // producer), appended to the producer's item body. The record has no branch, session or review field, so the CLI
-// passes them in opts (lead decision 2026-10-30): the PRODUCER_AGENT line carries the session inline when given,
+// passes them in opts: the PRODUCER_AGENT line carries the session inline when given,
 // BRANCH is always written (the given branch or the text 'unspecified', never a default), and REVIEW is the given
 // value or 'pending'.
 export function recordBlock(record, source, opts = {}) {

@@ -1,5 +1,4 @@
-// Tests for the stages before any work (item 036; spec 2026-10-28-pr1-learnings.md section 4): refining, refined,
-// refinement-review and ready.
+// Tests for the stages before any work: refining, refined, refinement-review and ready.
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,12 +21,16 @@ function fixture(prefix = 'team-stages-') {
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({
+    t1: { lead: 'lead', members: ['ann', 'bob', 'zed'], refinement_review: [{ team: 'reviewers', count: 1 }] },
+    reviewers: { lead: 'rex', members: ['rex', 'ria'] },
+  }));
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
-const LEAD = { TEAM_LEAD: 'lead' }; // cody, archy and zed are plain members
+const LEAD = { TEAM_LEAD: 'lead' }; // ann, bob and zed are plain members
 const T1 = { TEAM_NAME: 't1' };
 // an agent reads an item before it writes it again (the stale-view guard of seen.js): the agent named by --by, --claim or --release
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
@@ -43,8 +46,8 @@ const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...e
 const doc = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const fm = (f, slug) => doc(f, slug).fm;
 const pop = (f, agent, env) => { const r = run(f, ['query', '--pop', '--agent', agent, '--json'], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
-// item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it
-const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']].forEach(a => up(f, slug, ...a));
+// a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
+const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => up(f, slug, ...a));
 const work = (f, title = 'team work item') => { const w = make(f, title); up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); return w; }; // the runner, for the lead
 
 test('test_the_team_workflow_from_work_item_to_ready_work: split, member refinement, refinement review, ready, claim by its team only', () => {
@@ -53,37 +56,33 @@ test('test_the_team_workflow_from_work_item_to_ready_work: split, member refinem
   const a = make(f, 'child a', '--split-from', w); const b = make(f, 'child b', '--split-from', w);
   assert.deepEqual([fm(f, a).team, fm(f, a).stage], ['t1', 'refining']); // inherited, gated
   const other = make(f, "other team's item", '--team', 't2');
-  let p = pop(f, 'cody', T1);
+  let p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['refine', a]);
-  assert.ok(p.instruction.includes(`--refine-start --by cody`), p.instruction);
-  no(f, ['update', a, '--claim', 'cody'], 'claimed only when its refinement review passed');
-  up(f, a, '--refine-start', '--by', 'cody');
-  assert.equal(pop(f, 'archy', T1).item, b); // a is cody's to refine
-  p = pop(f, 'cody', T1);
-  assert.deepEqual([p.action, p.item], ['refine', a]); // cody continues its refinement
-  assert.ok(p.instruction.startsWith(`you are refining ${fm(f, a).seq}`) && p.instruction.includes('--refine-done --by cody'), p.instruction);
-  no(f, ['update', a, '--refine-done', '--by', 'archy', '--note', 'x'], 'refiner is cody'); // not the refiner
-  up(f, a, '--refine-done', '--by', 'cody', '--note', 'estimate and definition of done checked');
+  assert.ok(p.instruction.includes(`--refine-start --by ann`), p.instruction);
+  no(f, ['update', a, '--claim', 'ann'], 'claimed only when its refinement review passed');
+  up(f, a, '--refine-start', '--by', 'ann');
+  assert.equal(pop(f, 'bob', T1).item, b); // a is ann's to refine
+  p = pop(f, 'ann', T1);
+  assert.deepEqual([p.action, p.item], ['refine', a]); // ann continues its refinement
+  assert.ok(p.instruction.startsWith(`you are refining ${fm(f, a).seq}`) && p.instruction.includes('--refine-done --by ann'), p.instruction);
+  no(f, ['update', a, '--refine-done', '--by', 'bob', '--note', 'x'], 'refiner is ann'); // not the refiner
+  up(f, a, '--refine-done', '--by', 'ann', '--note', 'estimate and definition of done checked');
   assert.equal(fm(f, a).stage, 'refined');
   const lp = pop(f, 'lead', T1);
-  assert.ok(lp.action === 'refinement-review' && lp.instruction.includes('codex-agent') && lp.instruction.includes('5-hour'), JSON.stringify(lp));
+  assert.ok(lp.action === 'refinement-review' && lp.instruction.includes('teams.json'), JSON.stringify(lp));
   up(f, a, '--request-refinement-review', '--by', 'lead');
-  no(f, ['update', a, '--refinement-review', 'pass', '--by', 'archy', '--comments', 'fine'], 'codex|claude'); // only Codex or Claude reviews it
-  no(f, ['update', a, '--refinement-review', 'pass', '--by', 'claude', '--comments', 'fine'], "Codex reports its 5-hour limit"); // Claude only after Codex's limit
-  up(f, a, '--refinement-review', 'changes', '--by', 'codex', '--comments', 'estimate missing a test step; thread t-1');
+  no(f, ['update', a, '--refinement-review', 'pass', '--by', 'bob', '--comments', 'fine'], 'reviewed by a member of reviewers'); // only a configured reviewer
+  up(f, a, '--refinement-review', 'changes', '--by', 'rex', '--comments', 'estimate missing a test step; thread t-1');
   assert.deepEqual([fm(f, a).stage, fm(f, a).refiner], ['refining', '']); // back to refining
   up(f, a, '--refine-start', '--by', 'zed'); up(f, a, '--refine-done', '--by', 'zed', '--note', 'test step added');
   up(f, a, '--request-refinement-review', '--by', 'lead');
-  no(f, ['update', a, '--refinement-review', 'limit', '--by', 'claude', '--comments', 'x'], 'only Codex reports its own 5-hour limit');
-  up(f, a, '--refinement-review', 'limit', '--by', 'codex', '--comments', "usage limit: 5-hour limit exceeded; thread t-2");
-  assert.equal(fm(f, a).stage, 'refinement-review'); // the limit is no verdict
-  up(f, a, '--refinement-review', 'pass', '--by', 'claude', '--comments', 'codex limit exceeded; session s-2: ready');
+  up(f, a, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'ready; session s-2');
   assert.equal(fm(f, a).stage, 'ready');
-  assert.ok(doc(f, a).body.includes('Refinement review by claude: PASS: ready'));
-  p = pop(f, 'cody', T1);
+  assert.ok(doc(f, a).body.includes('Refinement review by rex: PASS'));
+  p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['refine', b]); // first-round refinement before new work
   up(f, b, '--refine-start', '--by', 'zed');
-  p = pop(f, 'cody', T1);
+  p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['claim', a]); // then the ready item
   assert.notEqual(pop(f, 'zed', { TEAM_NAME: 't2' }).item, a); // nor offered to another team
   assert.ok(!JSON.parse(ok(f, ['query', '--claimable', '--json'], T1).stdout).some(x => [b, other].includes(x.slug))); // refining: not claimable
@@ -96,30 +95,30 @@ test('each step refuses out of order, and one step at a time', () => {
   const c = make(f, 'child', '--split-from', w);
   const plain = make(f, 'no team');
   no(f, ['update', c, '--refine-start'], '--refine-start needs --by <agent>');
-  no(f, ['update', plain, '--refine-start', '--by', 'cody'], 'only an item of a team in stage refining is refined (team none, stage none)');
-  // item 098: the stage-less work item of a team is unrefined (stage refining); a member does not refine the lead's claimed work item
-  no(f, ['update', w, '--refine-start', '--by', 'cody'], 'claimed by lead: the work item itself is refined and split by the team lead, not refined here');
-  no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], '--refine-done --by <the refiner>: refiner is nobody, stage refining');
+  no(f, ['update', plain, '--refine-start', '--by', 'ann'], 'only an item of a team in stage refining is refined (team none, stage none)');
+  // the stage-less work item of a team is unrefined (stage refining); a member does not refine the lead's claimed work item
+  no(f, ['update', w, '--refine-start', '--by', 'ann'], 'claimed by lead: the work item itself is refined and split by the team lead, not refined here');
+  no(f, ['update', c, '--refine-done', '--by', 'ann', '--note', 'x'], '--refine-done --by <the refiner>: refiner is nobody, stage refining');
   no(f, ['update', c, '--request-refinement-review', '--by', 'lead'], 'only a refined item goes to the refinement review (stage refining)');
-  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'x'], 'no refinement review is requested (stage refining)');
-  up(f, c, '--refine-start', '--by', 'cody');
-  no(f, ['update', c, '--refine-start', '--by', 'archy'], 'cody is refining it since');
-  no(f, ['update', c, '--refine-done', '--by', 'cody'], '--refine-done needs --note "<what you refined>"');
-  up(f, c, '--refine-start', '--by', 'cody'); // the refiner again: allowed
-  up(f, c, '--refine-done', '--by', 'cody', '--note', 'checked');
+  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'x'], 'no refinement review is requested (stage refining)');
+  up(f, c, '--refine-start', '--by', 'ann');
+  no(f, ['update', c, '--refine-start', '--by', 'bob'], 'ann is refining it since');
+  no(f, ['update', c, '--refine-done', '--by', 'ann'], '--refine-done needs --note "<what you refined>"');
+  up(f, c, '--refine-start', '--by', 'ann'); // the refiner again: allowed
+  up(f, c, '--refine-done', '--by', 'ann', '--note', 'checked');
   no(f, ['update', c, '--request-refinement-review'], '--request-refinement-review --by <the team lead>');
-  no(f, ['update', c, '--request-refinement-review', '--by', 'archy'], 'the lead (lead; TEAM_LEAD) sends a refined item to the refinement review (got archy)');
+  no(f, ['update', c, '--request-refinement-review', '--by', 'bob'], 'the lead (lead; TEAM_LEAD) sends a refined item to the refinement review (got bob)');
   up(f, c, '--request-refinement-review', '--by', 'lead');
-  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'codex'], '--refinement-review needs --comments');
-  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'x', '--claim', 'cody'], 'one team-work step at a time');
-  const r = run(f, ['update', c, '--refinement-review', 'maybe', '--by', 'codex', '--comments', 'x']);
+  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'rex'], '--refinement-review needs --comments');
+  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'x', '--claim', 'ann'], 'one team-work step at a time');
+  const r = run(f, ['update', c, '--refinement-review', 'maybe', '--by', 'rex', '--comments', 'x']);
   assert.equal(r.status, 2, r.stdout + r.stderr);
   const d = make(f, 'claimed child', '--split-from', w);
-  no(f, ['update', d, '--claim', 'cody', '--force'], 'claimed only when its refinement review passed'); // --force does not pass the stages
+  no(f, ['update', d, '--claim', 'ann', '--force'], 'claimed only when its refinement review passed'); // --force does not pass the stages
   const { fm: dfm, body: dbody } = doc(f, d);
-  store.write({ path: join(f.folder, 'phases', `${d}.md`), fm: { ...dfm, claimed_by: 'cody' }, body: dbody }, f.folder); // as a hand edit leaves it
+  store.write({ path: join(f.folder, 'phases', `${d}.md`), fm: { ...dfm, claimed_by: 'ann' }, body: dbody }, f.folder); // as a hand edit leaves it
   const con = db.connect(f.folder); try { db.scan(con, f.folder); } finally { con.close(); }
-  no(f, ['update', d, '--refine-start', '--by', 'archy'], 'claimed by cody: the work item itself is refined and split by the team lead');
+  no(f, ['update', d, '--refine-start', '--by', 'bob'], 'claimed by ann: the work item itself is refined and split by the team lead');
   assert.equal(fm(f, plain).stage, undefined);
 });
 
@@ -131,30 +130,30 @@ test('the review-hitl stage: an owner decision holds the item and its dependents
   up(f, dep, '--set-team', 't1'); refined(f, dep); // a refined item of t1: claimable but for its dependency
   const Q = 'What: keep the old format?\nWhy: the parser needs it.\n## Options\nA keep, B drop.\n## Review by users at 2026-10-01T10:00:00Z\nDECISION 2026-10-01: an earlier answer, quoted\nRecommendation: A.'; // the whole question, its own headings included
   no(f, ['update', c, '--request-decision', Q], '--request-decision needs --by <agent>');
-  no(f, ['update', c, '--request-decision', ' ', '--by', 'cody'], '--request-decision needs the question');
-  no(f, ['update', make(f, 'plain'), '--request-decision', Q, '--by', 'cody'], 'only a team item before ready waits for an owner decision (team none, stage none)');
+  no(f, ['update', c, '--request-decision', ' ', '--by', 'ann'], '--request-decision needs the question');
+  no(f, ['update', make(f, 'plain'), '--request-decision', Q, '--by', 'ann'], 'only a team item before ready waits for an owner decision (team none, stage none)');
   no(f, ['update', c, '--decision', 'A'], 'no owner decision is pending (stage refining)');
-  up(f, c, '--refine-start', '--by', 'cody');
-  up(f, c, '--request-decision', Q, '--by', 'cody');
-  assert.deepEqual([fm(f, c).stage, fm(f, c).refiner, fm(f, c).decision_requested_by], ['review-hitl', '', 'cody']);
-  no(f, ['update', c, '--claim', 'archy'], 'stage review-hitl');
-  no(f, ['update', c, '--claim', 'archy', '--force'], 'nobody claims it, --force included');
-  no(f, ['update', dep, '--claim', 'archy'], 'dependencies not done');
-  for (const agent of ['cody', 'archy', 'lead']) {
+  up(f, c, '--refine-start', '--by', 'ann');
+  up(f, c, '--request-decision', Q, '--by', 'ann');
+  assert.deepEqual([fm(f, c).stage, fm(f, c).refiner, fm(f, c).decision_requested_by], ['review-hitl', '', 'ann']);
+  no(f, ['update', c, '--claim', 'bob'], 'stage review-hitl');
+  no(f, ['update', c, '--claim', 'bob', '--force'], 'nobody claims it, --force included');
+  no(f, ['update', dep, '--claim', 'bob'], 'dependencies not done');
+  for (const agent of ['ann', 'bob', 'lead']) {
     const p = pop(f, agent, T1);
     assert.ok(p.item !== c && p.item !== dep, `${agent}: ${JSON.stringify(p)}`); // never offered, nor what depends on it
   }
   const list = JSON.parse(ok(f, ['query', '--decisions', '--json']).stdout);
-  assert.deepEqual(list.map(x => [x.slug, x.team, x.decision_requested_by, x.question]), [[c, 't1', 'cody', Q]]);
+  assert.deepEqual(list.map(x => [x.slug, x.team, x.decision_requested_by, x.question]), [[c, 't1', 'ann', Q]]);
   const text = ok(f, ['query', '--decisions']).stdout;
   assert.ok(text.startsWith('📋 1 owner decision(s) waiting — acme/demo, branch main;') && text.includes(`${c} (team t1)`), text);
   for (const line of Q.split('\n')) assert.ok(text.includes(`        ${line}\n`), line);
   assert.deepEqual(JSON.parse(ok(f, ['query', '--decisions', '--json'], { TEAM_NAME: 't2' }).stdout), []); // another team's decisions are not listed for t2
   up(f, c, '--decision', 'A: keep the old format');
-  assert.deepEqual([fm(f, c).stage, fm(f, c).refiner], ['refining', 'lead']); // spec section 4: the lead re-refines it with the decision
+  assert.deepEqual([fm(f, c).stage, fm(f, c).refiner], ['refining', 'lead']); // the lead re-refines it with the decision
   assert.match(doc(f, c).body, /\nDECISION \d{4}-\d\d-\d\d: A: keep the old format\n/);
   assert.deepEqual(JSON.parse(ok(f, ['query', '--decisions', '--json']).stdout), []);
-  assert.notEqual(pop(f, 'archy', T1).item, c); // not a member's first-round refinement
+  assert.notEqual(pop(f, 'bob', T1).item, c); // not a member's first-round refinement
   assert.deepEqual([pop(f, 'lead', T1).action, pop(f, 'lead', T1).item], ['refine', c]); // the lead re-refines it with the decision
 });
 
@@ -168,7 +167,6 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
     estimate_min: newBare(...base('complete no estimate'), '--review-refs', 'references/review/code.md', '--complexity', 'low', '--body', `no estimate here\n\n${DOD}`),
     definition_of_done: newBare(...base('complete placeholder only')), // the placeholder definition of done only (no refs, no estimate)
   };
-  no(f, ['update', gaps.review_refs, '--set-review-refs', 'docs/notes.md'], 'needs at least one review document');
   const deps = make(f, 'complete no depends_on');
   const path = join(f.folder, 'phases', `${deps}.md`);
   const { fm: dfm, body } = doc(f, deps);
@@ -176,25 +174,26 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
   store.write({ path, fm: dfm, body }, f.folder); // an item written before depends_on existed
   const con = db.connect(f.folder); try { db.scan(con, f.folder); } finally { con.close(); }
   gaps.depends_on = deps;
+  for (const slug of Object.values(gaps)) up(f, slug, '--set-team', 't1'); // team rules apply to the items of a team
   for (const [field, slug] of Object.entries(gaps)) { // a member never claims an item missing any one field
-    assert.match(no(f, ['update', slug, '--claim', 'archy'], 'incomplete item, missing ').stdout, new RegExp(`missing [^:]*\\b${field}\\b`));
+    assert.match(no(f, ['update', slug, '--claim', 'bob'], 'incomplete item, missing ').stdout, new RegExp(`missing [^:]*\\b${field}\\b`));
     no(f, ['update', slug, '--note', 'working on it', '--append', 'x'], '--note', team);
   }
-  const cl = JSON.parse(ok(f, ['query', '--claimable', '--agent', 'archy', '--json']).stdout).map(x => x.slug);
+  const cl = JSON.parse(ok(f, ['query', '--claimable', '--agent', 'bob', '--json']).stdout).map(x => x.slug);
   assert.ok(!Object.values(gaps).some(s => cl.includes(s)), cl.join(' '));
-  let p = pop(f, 'archy', team); // a member is never offered an incomplete item
-  assert.deepEqual([p.action, p.item], ['chunk', null]); // only small-chunk work, no item
-  p = pop(f, 'cody', { ...team, TEAM_LEAD: 'cody' }); // the lead is told to refine one, with the gaps
+  const tn = { ...team, TEAM_NAME: 't1' }; // the team session
+  let p = pop(f, 'bob', tn); // a member is never offered an incomplete item
+  assert.ok(p.action !== 'claim' && !p.instruction.includes('never action it'), JSON.stringify(p)); // a member only refines it in the first round, it never claims or works it
+  p = pop(f, 'ann', { ...tn, TEAM_LEAD: 'ann' }); // the lead is told to refine one, with the gaps
   assert.ok(p.action === 'refine' && Object.values(gaps).includes(p.item) && p.missing.length && p.instruction.includes('never action it'), JSON.stringify(p));
-  assert.equal(pop(f, 'archy', { ...team, TEAM_LEAD: 'archy' }).action, 'refine'); // TEAM_LEAD names the lead
-  no(f, ['update', gaps.estimate_min, '--claim', 'cody'], 'missing estimate_min', { ...team, TEAM_LEAD: 'cody' }); // the lead may not claim it either
+  assert.equal(pop(f, 'bob', { ...tn, TEAM_LEAD: 'bob' }).action, 'refine'); // TEAM_LEAD names the lead
+  no(f, ['update', gaps.estimate_min, '--claim', 'ann'], 'missing estimate_min', { ...team, TEAM_LEAD: 'ann' }); // the lead may not claim it either
   ok(f, ['update', gaps.estimate_min, '--append', 'ESTIMATE: 5 min, complexity low. Gap: created without an estimate'], team); // an older item's ESTIMATE line still counts
   ok(f, ['update', gaps.review_refs, '--set-review-refs', 'references/review/code.md', '--set-estimate', '9', '--set-layer', '2'], team);
   ok(f, ['update', gaps.depends_on, '--set-depends-on', 'none'], team);
   ok(f, ['update', gaps.definition_of_done, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', DOD], team); // a definition of done replaces the placeholder
-  const now = JSON.parse(ok(f, ['query', '--claimable', '--agent', 'archy', '--json'], team).stdout).map(x => x.slug);
-  for (const s of Object.values(gaps)) assert.ok(now.includes(s), s); // complete now: normal work for any member but the lead
-  ok(f, ['update', gaps.estimate_min, '--claim', 'archy'], team);
+  for (const s of Object.values(gaps)) assert.deepEqual(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, [], s); // complete now
+  ok(f, ['update', gaps.estimate_min, '--claim', 'lead'], { ...tn, BACKLOG_AGENT: 'lead' });
 });
 
 test('an incomplete item waiting in review-hitl is not offered to the lead for refinement', () => {
@@ -202,11 +201,11 @@ test('an incomplete item waiting in review-hitl is not offered to the lead for r
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1'); // not held by the lead: nothing comes before the lead's refinement of incomplete items
   const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout); // incomplete
-  up(f, c, '--request-decision', 'What: which parser? Options: A, B. Recommendation: A.', '--by', 'cody');
+  up(f, c, '--request-decision', 'What: which parser? Options: A, B. Recommendation: A.', '--by', 'ann');
   const env = { ...T1, TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   assert.deepEqual([pop(f, 'lead', env).action, pop(f, 'lead', env).item], ['idle', null]);
   up(f, c, '--decision', 'A');
-  assert.notEqual(pop(f, 'archy', env).item, c);
+  assert.notEqual(pop(f, 'bob', env).item, c);
   const p = pop(f, 'lead', env);
   assert.deepEqual([p.action, p.item], ['refine', c]); // back to refining: the lead re-refines it with the decision
 });
@@ -217,65 +216,26 @@ test('refine-done is refused while a field or the definition of done is missing;
   const w = bare('--name', 'bare work item'); // no definition of done: its split child inherits only the placeholder
   up(f, w, '--set-team', 't1');
   const c = bare('--name', 'bare child', '--split-from', w);
-  up(f, c, '--refine-start', '--by', 'cody'); // an incomplete item in refining: its refinement steps are allowed
-  up(f, c, '--set-review-refs', 'references/review/code.md', '--by', 'cody');
-  no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing estimate_min, definition_of_done');
-  up(f, c, '--set-estimate', '5', '--by', 'cody');
-  no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing definition_of_done: complete it before --refine-done');
-  up(f, c, '--note', 'a note while refining', '--by', 'cody');
-  no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing definition_of_done'); // the event lines after the placeholder do not count
-  no(f, ['update', c, '--request-review', 'any', '--note', 'x', '--by', 'cody'], 'before stage ready only its refinement steps run (--request-review refused)'); // only refinement steps
-  no(f, ['update', c, '--claim', 'cody', '--force'], 'incomplete item, missing definition_of_done');
-  no(f, ['update', c, '--status', 'in_progress', '--by', 'cody'], '--status refused'); // nothing but a refinement while incomplete
-  no(f, ['update', c, '--append', 'some notes', '--by', 'cody'], '--append refused'); // text that is no definition of done
-  up(f, c, '--append', '  ESTIMATE: 5 min, complexity low', '--by', 'cody'); // an estimate line (indented, too) is refinement, and no definition of done
-  no(f, ['update', c, '--refine-done', '--by', 'cody', '--note', 'x'], 'still missing definition_of_done');
-  no(f, ['update', c, '--set-team', '', '--status', 'in_progress', '--by', 'cody'], 'an item in stage refining keeps a team'); // clearing the team does not lift the rule
+  up(f, c, '--refine-start', '--by', 'ann'); // an incomplete item in refining: its refinement steps are allowed
+  up(f, c, '--set-review-refs', 'references/review/code.md', '--by', 'ann');
+  no(f, ['update', c, '--refine-done', '--by', 'ann', '--note', 'x'], 'still missing estimate_min, definition_of_done');
+  up(f, c, '--set-estimate', '5', '--by', 'ann');
+  no(f, ['update', c, '--refine-done', '--by', 'ann', '--note', 'x'], 'still missing definition_of_done: complete it before --refine-done');
+  up(f, c, '--note', 'a note while refining', '--by', 'ann');
+  no(f, ['update', c, '--refine-done', '--by', 'ann', '--note', 'x'], 'still missing definition_of_done'); // the event lines after the placeholder do not count
+  no(f, ['update', c, '--request-review', 'any', '--note', 'x', '--by', 'ann'], 'before stage ready only its refinement steps run (--request-review refused)'); // only refinement steps
+  no(f, ['update', c, '--claim', 'ann', '--force'], 'incomplete item, missing definition_of_done');
+  no(f, ['update', c, '--status', 'in_progress', '--by', 'ann'], '--status refused'); // nothing but a refinement while incomplete
+  no(f, ['update', c, '--append', 'some notes', '--by', 'ann'], '--append refused'); // text that is no definition of done
+  up(f, c, '--append', '  ESTIMATE: 5 min, complexity low', '--by', 'ann'); // an estimate line (indented, too) is refinement, and no definition of done
+  no(f, ['update', c, '--refine-done', '--by', 'ann', '--note', 'x'], 'still missing definition_of_done');
+  no(f, ['update', c, '--set-team', '', '--status', 'in_progress', '--by', 'ann'], 'an item in stage refining keeps a team'); // clearing the team does not lift the rule
   no(f, ['update', c, '--set-team', ''], 'an item in stage refining keeps a team'); // nor on its own
-  no(f, ['update', c, '--set-team', 't9', '--status', 'in_progress', '--by', 'cody'], '--status refused'); // another team in the same call: the rule reads the item as it was
-  up(f, c, '--summary', 'a better summary', '--by', 'cody'); // the text fields are refinement
-  up(f, c, '--append', DOD, '--by', 'cody');
-  up(f, c, '--refine-done', '--by', 'cody', '--note', 'definition of done written');
+  no(f, ['update', c, '--set-team', 't9', '--status', 'in_progress', '--by', 'ann'], '--status refused'); // another team in the same call: the rule reads the item as it was
+  up(f, c, '--summary', 'a better summary', '--by', 'ann'); // the text fields are refinement
+  up(f, c, '--append', DOD, '--by', 'ann');
+  up(f, c, '--refine-done', '--by', 'ann', '--note', 'definition of done written');
   assert.equal(fm(f, c).stage, 'refined');
-});
-
-test("Codex's 5-hour limit authorizes Claude for its round only", () => {
-  const f = fixture();
-  const w = work(f);
-  const c = make(f, 'child', '--split-from', w);
-  const round = () => { up(f, c, '--refine-start', '--by', 'zed'); up(f, c, '--refine-done', '--by', 'zed', '--note', 'x'); up(f, c, '--request-refinement-review', '--by', 'lead'); };
-  round();
-  up(f, c, '--refinement-review', 'limit', '--by', 'codex', '--comments', '5-hour limit exceeded; thread t-1');
-  up(f, c, '--refinement-review', 'changes', '--by', 'claude', '--comments', 'add a test step; session s-1');
-  round();
-  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'claude', '--comments', 'ok'], 'Codex reports its 5-hour limit'); // a new round: Codex first again
-  up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready; thread t-2');
-  assert.equal(fm(f, c).stage, 'ready');
-});
-
-test("144: after three CHANGES rounds the lead's verdict is recorded without a Codex limit record; below the cap it is refused", () => {
-  const f = fixture();
-  const w = work(f);
-  const c = make(f, 'child', '--split-from', w);
-  const round = () => { up(f, c, '--refine-start', '--by', 'zed'); up(f, c, '--refine-done', '--by', 'zed', '--note', 'x'); };
-  const changes = () => up(f, c, '--refinement-review', 'changes', '--by', 'codex', '--comments', 'fix; thread t');
-  const LEAD_PASS = ['update', c, '--refinement-review', 'pass', '--by', 'claude', '--comments', 'ok; session s'];
-  round(); up(f, c, '--request-refinement-review', '--by', 'lead'); changes();
-  round(); up(f, c, '--request-refinement-review', '--by', 'lead'); changes(); // two CHANGES rounds: below the cap
-  round();
-  no(f, LEAD_PASS, 'no refinement review is requested (stage refined)'); // stage refined, below the cap
-  up(f, c, '--request-refinement-review', '--by', 'lead');
-  no(f, LEAD_PASS, 'Codex reports its 5-hour limit'); // stage refinement-review, below the cap
-  changes(); // the third CHANGES round
-  assert.equal(fm(f, c).stage, 'refining');
-  no(f, LEAD_PASS, 'no refinement review is requested (stage refining)'); // an unfinished refinement takes no verdict
-  round(); // the item reaches stage refined: the lead records its verdict there, with no request and no fourth Codex round
-  up(f, c, '--refinement-review', 'changes', '--by', 'claude', '--comments', 'one more edit; session s');
-  assert.equal(fm(f, c).stage, 'refining');
-  round(); up(f, c, '--request-refinement-review', '--by', 'lead'); // and in stage refinement-review
-  up(f, c, ...LEAD_PASS.slice(2));
-  assert.equal(fm(f, c).stage, 'ready');
-  assert.equal(fm(f, c).refinement_reviewed_by, 'claude');
 });
 
 test('a complete team item before stage ready takes only its refinement steps: no work, review, close or status change', () => {
@@ -283,12 +243,12 @@ test('a complete team item before stage ready takes only its refinement steps: n
   const w = work(f);
   const c = make(f, 'complete child', '--split-from', w); // complete, in refining
   for (const [args, flag] of [[['--status', 'in_progress'], '--status'], [['--request-review', 'any', '--note', 'x'], '--request-review'],
-    [['--close', '--summary', 'x', '--by', 'cody'], '--close'], [['--waiting', 'x', '--by', 'cody'], '--waiting']]) {
+    [['--close', '--summary', 'x', '--by', 'ann'], '--close'], [['--waiting', 'x', '--by', 'ann'], '--waiting']]) {
     no(f, ['update', c, ...args], `team t1 item in stage refining: before stage ready only its refinement steps run (${flag} refused)`);
   }
-  up(f, c, '--refine-start', '--by', 'cody'); up(f, c, '--refine-done', '--by', 'cody', '--note', 'x');
+  up(f, c, '--refine-start', '--by', 'ann'); up(f, c, '--refine-done', '--by', 'ann', '--note', 'x');
   no(f, ['update', c, '--status', 'done'], 'item in stage refined: before stage ready only its refinement steps run (--status refused)');
-  up(f, c, '--request-decision', 'Q?', '--by', 'cody');
+  up(f, c, '--request-decision', 'Q?', '--by', 'ann');
   no(f, ['update', c, '--request-review', 'any', '--note', 'x'], 'item in stage review-hitl');
   up(f, c, '--note', 'notes and text fields stay open', '--summary', 'a better summary');
 });
@@ -296,51 +256,41 @@ test('a complete team item before stage ready takes only its refinement steps: n
 test("the lead never starts a first-round refinement nor is offered a member's child; the parent's definition of done is no child's", () => {
   const f = fixture();
   const w = make(f, 'team work item'); // its body has a definition of done
-  up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // item 098: an unclaimed work item is offered to a member for refinement; the lead holds it
+  up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // an unclaimed work item is offered to a member for refinement; the lead holds it
   const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout);
   assert.ok(doc(f, c).body.includes("- [ ] the test's check holds")); // the parent's definition of done, inherited as context
   assert.ok(!hasDefinitionOfDone(doc(f, c).body)); // only the placeholder is the child's own
   no(f, ['update', c, '--refine-start', '--by', 'lead'], 'a member, not the team lead, refines in the first round');
   assert.notEqual(pop(f, 'lead', T1).item, c); // a member's first-round refinement
-  assert.deepEqual([pop(f, 'archy', T1).action, pop(f, 'archy', T1).item], ['refine', c]);
+  assert.deepEqual([pop(f, 'bob', T1).action, pop(f, 'bob', T1).item], ['refine', c]);
 });
 
-test('in a team session a split of a team item may keep the placeholder, a split of another item may not; only the lead changes an incomplete item there', () => {
+test('a split of a team item may keep the placeholder outside a team session, a split of another item may not inside one; only the lead changes an incomplete item there', () => {
   const f = fixture();
-  const TR = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const TR = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1');
   const plain = make(f, 'plain item');
-  const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none'], TR).stdout);
+  const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout); // outside a team session the split may keep the placeholder
   assert.deepEqual([fm(f, c).team, fm(f, c).stage], ['t1', 'refining']);
   no(f, ['new', '--name', 'bare split', '--split-from', plain, '--depends-on', 'none'], '--body must hold a definition of done', TR);
   const bare = createdSlug(ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout); // no team field
-  no(f, ['update', bare, '--set-estimate', '5'], 'only the team lead (lead) refines it, not archy', { ...TR, QWEN_CODE_AGENT_ID: 'archy@t1' });
-});
-
-test('a team split with review documents and no body starts in refining; --by names the member the lead-only rule refuses', () => {
-  const f = fixture();
-  const TR = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
-  const w = make(f, 'team work item');
-  up(f, w, '--set-team', 't1');
-  const c = createdSlug(ok(f, ['new', '--name', 'child', '--split-from', w, '--depends-on', 'none', '--review-refs', 'references/review/code.md'], TR).stdout);
-  assert.equal(fm(f, c).stage, 'refining');
-  const bare = createdSlug(ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout);
-  no(f, ['update', bare, '--set-estimate', '5', '--by', 'archy'], 'only the team lead (lead) refines it, not archy', TR);
-  ok(f, ['update', bare, '--set-estimate', '5', '--by', 'lead'], TR);
+  no(f, ['update', bare, '--set-estimate', '5'], 'only the team lead (lead) refines it, not bob', { ...TR, BACKLOG_AGENT: 'bob' });
+  no(f, ['update', bare, '--set-estimate', '5', '--by', 'bob'], 'only the team lead (lead) refines it, not bob', { ...TR, BACKLOG_AGENT: 'bob' });
+  ok(f, ['update', bare, '--set-estimate', '5', '--by', 'lead'], { ...TR, BACKLOG_AGENT: 'lead' });
 });
 
 test('backlog work --lead names only the lead the updates know; pop --lead keeps a member\'s lock', () => {
   const f = fixture();
   const w = make(f, 'team work item');
-  up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // item 098: an unclaimed work item is offered to a member for refinement; the lead holds it
+  up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // an unclaimed work item is offered to a member for refinement; the lead holds it
   const c = make(f, 'child', '--split-from', w);
-  const r = run(f, ['work', '--agent', 'cody', '--lead', 'lead', '--json'], { TEAM_LEAD: '', TEAM_NAME: 't1' });
+  const r = run(f, ['work', '--agent', 'ann', '--lead', 'zed', '--json'], { TEAM_NAME: 't1', BACKLOG_AGENT: 'ann' });
   assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /--lead lead is not the team lead of this session \(cody; TEAM_LEAD\)/);
-  const ok2 = run(f, ['work', '--agent', 'cody', '--lead', 'lead', '--json'], T1);
+  assert.match(r.stderr, /--lead zed is not the team lead of this session \(lead; TEAM_LEAD\)/);
+  const ok2 = run(f, ['work', '--agent', 'ann', '--lead', 'lead', '--json'], { ...T1, BACKLOG_AGENT: 'ann' });
   assert.equal(ok2.status, 0, ok2.stdout + ok2.stderr);
-  assert.deepEqual([JSON.parse(ok2.stdout).item, fm(f, c).refiner], [c, 'cody']);
+  assert.deepEqual([JSON.parse(ok2.stdout).item, fm(f, c).refiner], [c, 'ann']);
 });
 
 test('the lead edits a refining item only as its refiner; an append of ESTIMATE lines plus text is no estimate note', () => {
@@ -360,10 +310,10 @@ test('a refinement verdict changes nothing else in the same call', () => {
   const f = fixture();
   const w = work(f);
   const c = make(f, 'child', '--split-from', w);
-  up(f, c, '--refine-start', '--by', 'archy');
-  up(f, c, '--refine-done', '--by', 'archy', '--note', 'x');
+  up(f, c, '--refine-start', '--by', 'bob');
+  up(f, c, '--refine-done', '--by', 'bob', '--note', 'x');
   up(f, c, '--request-refinement-review', '--by', 'lead');
-  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok', '--append', '## Definition of done\n- [ ] other'], '--refinement-review records the verdict alone');
+  no(f, ['update', c, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok', '--append', '## Definition of done\n- [ ] other'], '--refinement-review records the verdict alone');
   assert.notEqual(fm(f, c).stage, 'ready');
 });
 
@@ -371,8 +321,8 @@ test('in stage refinement-review the item takes no edit until its verdict', () =
   const f = fixture();
   const w = work(f);
   const c = make(f, 'child', '--split-from', w);
-  up(f, c, '--refine-start', '--by', 'archy');
-  up(f, c, '--refine-done', '--by', 'archy', '--note', 'x');
+  up(f, c, '--refine-start', '--by', 'bob');
+  up(f, c, '--refine-done', '--by', 'bob', '--note', 'x');
   up(f, c, '--request-refinement-review', '--by', 'lead');
   no(f, ['update', c, '--append', '## Definition of done\n- [ ] other'], 'in stage refinement-review the item stays as the reviewer reads it');
   no(f, ['update', c, '--set-estimate', '9'], 'in stage refinement-review the item stays as the reviewer reads it');
@@ -385,20 +335,16 @@ test('the lead edits nothing of a first-round refinement, with a step or without
   no(f, ['update', c, '--request-decision', 'Q?', '--set-estimate', '9', '--by', 'lead'], 'a member, not the team lead, refines in the first round');
 });
 
-test('075: the successful stage steps print exactly what they record', () => {
+test('the successful stage steps print exactly what they record', () => {
   const f = fixture();
   const w = make(f, 'work item');
   assert.equal(up(f, w, '--set-team', 't1').stdout, `✅ ${w} updated (team=t1)\n`);
   const c = make(f, 'child', '--split-from', w);
   const TS = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS');
-  assert.equal(TS(up(f, c, '--refine-start', '--by', 'cody').stdout), `✅ ${c} updated (refine_started=Refinement started by cody at TS)\n`);
-  assert.equal(TS(up(f, c, '--refine-done', '--by', 'cody', '--note', 'checked').stdout), `✅ ${c} updated (refined=Refined by cody at TS)\n`);
-  // the refinement reviewers this test sets up (the agent names the CLI accepts, in order); the request text's
-  // display form is the capital of the agent name, so the expected text is built from the test's own values
-  const cap = n => n[0].toUpperCase() + n.slice(1);
-  assert.equal(TS(up(f, c, '--request-refinement-review', '--by', 'lead').stdout),
-    `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (${cap('codex')} first; ${cap('claude')} when ${cap('codex')}'s 5-hour limit is exceeded or after three CHANGES rounds))\n`);
-  assert.equal(TS(up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready').stdout),
-    `✅ ${c} updated (refinement_reviewed=Refinement review by codex: PASS: ready (TS))\n`);
+  assert.equal(TS(up(f, c, '--refine-start', '--by', 'ann').stdout), `✅ ${c} updated (refine_started=Refinement started by ann at TS)\n`);
+  assert.equal(TS(up(f, c, '--refine-done', '--by', 'ann', '--note', 'checked').stdout), `✅ ${c} updated (refined=Refined by ann at TS)\n`);
+  assert.equal(TS(up(f, c, '--request-refinement-review', '--by', 'lead').stdout), `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS)\n`);
+  assert.equal(TS(up(f, c, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'ready').stdout),
+    `✅ ${c} updated (refinement_reviewed=Refinement review by rex: PASS: ready (TS))\n`);
   assert.equal(fm(f, c).stage, 'ready');
 });

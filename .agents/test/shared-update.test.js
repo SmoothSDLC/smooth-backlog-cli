@@ -64,28 +64,11 @@ function seed({ permuteIds = false } = {}) {
 
 const run = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });
 const fm = (f, name) => parse(readFileSync(join(f.folder, 'phases', name), 'utf8'));
-// item 088: --status done runs only after both review stages passed for the item's commit, with or without
-// review_refs; these tests complete seeded items, so the stages run here (a fresh cody card, then the external
-// reviewer, each with a fresh view of the item). An incomplete item takes only the lead's refinement, so the
-// item is completed first (refs, estimate, definition of done).
+// An item outside a team closes with --status done and no review; these tests complete the seeded items first (refs,
+// estimate, definition of done) so that they close as a refined item does.
 const bothStages = (f, item) => {
-  let r = run(f, [item, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', '## Definition of done\n- [ ] it holds']);
+  const r = run(f, [item, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', '## Definition of done\n- [ ] it holds']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  r = run(f, [item, '--request-review', 'any', '--note', 'n']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  r = cli(['query', '--phase', item, '--agent', 'cody-a'], { cwd: f.cons, tmp: f.t });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  for (const args of [
-    [item, '--start-review', '--by', 'cody-a'],
-    [item, '--review', 'pass', '--by', 'cody-a', '--comments', 'fine per references/review/code.md'],
-    [item, '--request-review', 'codex', '--note', 'n'],
-  ]) { r = run(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); }
-  r = cli(['query', '--phase', item, '--agent', 'codex'], { cwd: f.cons, tmp: f.t });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  for (const args of [
-    [item, '--start-review', '--by', 'codex'],
-    [item, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md'],
-  ]) { r = run(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); }
 };
 
 test('the class options are gone: --set-work-class and --set-review-classes are unrecognized, nothing is written', () => {
@@ -125,7 +108,7 @@ test('order of work: pull first, then change, write, scan the db, log the event,
   assert.equal(r.status, 0, r.stderr);
   assert.equal(fm(f, '004-delta.md').fm.summary, 'remote summary'); // the pull happened before the item was read and rewritten
   const log = git(f.home, 'log', '--format=%s', '-1');
-  assert.equal(log, 'acme/demo: update.py 4 --status');
+  assert.equal(log, 'acme/demo: update 4 --status');
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   const con = db.connect(f.folder);
@@ -171,7 +154,7 @@ test('a repository without a backlog yet: no phase, exit 1', () => {
   assert.match(r.stdout, /^❌ no phase '1' \(create it with backlog new\)\n$/);
 });
 
-// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 11)
+// ---------------------------------------------------------------- review fixes (job 11)
 
 test('review P1: update holds the per-repository run lock from the pull to the push (a held lock makes it wait)', async () => {
   const f = seed();
@@ -209,7 +192,7 @@ test('review P2: --summary="two words" and --append="extra text" are options wit
   assert.equal(run(f, ['an item', '--bogus x']).status, 2);       // an unknown option with a space is a positional: two of them are an error
 });
 
-// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 15)
+// ---------------------------------------------------------------- review fixes (job 15)
 
 // An item that a team can claim: a review document, an estimate and a definition of done.
 function claimable(f) {
@@ -220,14 +203,14 @@ function claimable(f) {
 test('review P1 (job 15): two processes cannot both claim an unclaimed item; a claim waits for the run lock', async () => {
   const f = seed();
   claimable(f);
-  const w = await waitsForRunLock(f, ['update', '2', '--claim', 'cody'], () => fm(f, '002-beta.md').fm.claimed_by);
+  const w = await waitsForRunLock(f, ['update', '2', '--claim', 'ann'], () => fm(f, '002-beta.md').fm.claimed_by);
   assert.deepEqual(w.during, { exited: false, same: true }, 'the claim waits while another command holds the lock');
   assert.equal(w.result.status, 0, w.result.stdout + w.result.stderr);
   const g = seed();
   claimable(g);
-  const both = await Promise.all(['cody', 'amy'].map(who => cliAsync(['update', '2', '--claim', who], { cwd: g.cons, tmp: g.t }).done));
+  const both = await Promise.all(['ann', 'amy'].map(who => cliAsync(['update', '2', '--claim', who], { cwd: g.cons, tmp: g.t }).done));
   assert.deepEqual(both.map(r => r.status).sort(), [0, 1], both.map(r => r.stdout + r.stderr).join('\n'));
-  const winner = both[0].status === 0 ? 'cody' : 'amy';
+  const winner = both[0].status === 0 ? 'ann' : 'amy';
   assert.equal(fm(g, '002-beta.md').fm.claimed_by, winner);
   assert.equal(git(g.home, 'status', '--porcelain'), '');
   assert.equal(git(g.home, 'rev-parse', 'origin/main'), git(g.home, 'rev-parse', 'HEAD'));
@@ -252,7 +235,7 @@ test('review P2: update on an archived item is refused for every flag that goes 
   const file = join(f.folder, 'archive', 'phases', '002-beta.md');
   const before = readFileSync(file, 'utf8');
   const head = git(f.home, 'rev-parse', 'HEAD');
-  for (const args of [['002-beta', '--summary', 'new'], ['2', '--status', 'done'], ['002-beta', '--claim', 'me'], ['002-beta', '--request-review', 'codex'], ['002-beta', '--close']]) {
+  for (const args of [['002-beta', '--summary', 'new'], ['2', '--status', 'done'], ['002-beta', '--claim', 'me'], ['002-beta', '--request-review', 'rex'], ['002-beta', '--close']]) {
     const r = run(f, args);
     assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
     assert.match(r.stdout, /002-beta is archived and cannot be edited/, args.join(' '));
@@ -298,7 +281,7 @@ test('review P1: update of an item of another team (field edit, note, append) is
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
-for (const [title, args] of [['query', ['query', '--all']], ['next', ['next']], ['pop', ['pop', '--agent', 'cody']]]) {
+for (const [title, args] of [['query', ['query', '--all']], ['next', ['next']], ['pop', ['pop', '--agent', 'ann']]]) {
   test(`review P1: ${title} (a read that pulls) waits while another command holds the operation lock of the clone`, async () => {
     const f = seed();
     const w = await waitsForRunLock(f, args, () => git(f.home, 'rev-parse', 'HEAD'));
@@ -499,7 +482,7 @@ test('refusals: exit 1, nothing written, nothing committed', () => {
   const f = seed();
   const before = snapshot(f);
   for (const args of [['--status', 'done'], ['2', '--branch', 'x'], ['2', '--commit', ''], ['2', '--commit', '  '], ['999', '--status', 'done'],
-    ['nosuch'], ['0'], ['5', '--status', 'done'], ['2', '--set-estimate', '0']]) {
+    ['nosuch'], ['0'], ['2', '--set-estimate', '0']]) {
     assert.equal(step(f, args).status, 1, args.join(' '));
   }
   assert.deepEqual(snapshot(f), before);

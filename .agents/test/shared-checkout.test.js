@@ -29,29 +29,29 @@ function fixture() {
 
 test('025: the waiting agent is told which agent holds the checkout and since when', async () => {
   const f = fixture();
-  const was = process.env.QWEN_CODE_AGENT_ID;
-  process.env.QWEN_CODE_AGENT_ID = 'amy@t1';
+  const was = process.env.BACKLOG_AGENT;
+  process.env.BACKLOG_AGENT = 'amy@t1';
   let refused;
   try {
     await store.cloneLocked(f.home, async () => {
-      refused = cli(['update', '1', '--note', 'n', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400', QWEN_CODE_AGENT_ID: 'bob@t1' } });
+      refused = cli(['update', '1', '--note', 'n', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400', BACKLOG_AGENT: 'bob' } });
     });
-  } finally { if (was === undefined) delete process.env.QWEN_CODE_AGENT_ID; else process.env.QWEN_CODE_AGENT_ID = was; }
+  } finally { if (was === undefined) delete process.env.BACKLOG_AGENT; else process.env.BACKLOG_AGENT = was; }
   assert.equal(refused.status, 1, refused.stdout + refused.stderr);
   assert.match(refused.stderr, /locked by another process \(agent amy@t1, pid \d+, .*since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\)/);
 });
 
-test('025: the record names the --by agent of the holder when it has no QWEN_CODE_AGENT_ID', async () => {
+test('025: the record names the --by agent of the holder when it has no BACKLOG_AGENT', async () => {
   const f = fixture();
-  const [was, argv] = [process.env.QWEN_CODE_AGENT_ID, process.argv];
-  delete process.env.QWEN_CODE_AGENT_ID;
+  const [was, argv] = [process.env.BACKLOG_AGENT, process.argv];
+  delete process.env.BACKLOG_AGENT;
   process.argv = [...argv, '--by', 'zoe'];
   let refused;
   try {
     await store.cloneLocked(f.home, async () => {
       refused = cli(['update', '1', '--note', 'n', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400' } });
     });
-  } finally { process.argv = argv; if (was !== undefined) process.env.QWEN_CODE_AGENT_ID = was; }
+  } finally { process.argv = argv; if (was !== undefined) process.env.BACKLOG_AGENT = was; }
   assert.match(refused.stderr, /locked by another process \(agent zoe, pid \d+/);
 });
 
@@ -70,8 +70,8 @@ test('025: two agents writing different items at once both succeed, and both cha
   const f = fixture();
   let a, b; const ended = new Set();
   await store.cloneLocked(f.home, async () => { // both start while the checkout is held: each must wait for it
-    a = cliAsync(['update', '1', '--append', 'from amy', '--by', 'amy'], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: 'amy@t1' } });
-    b = cliAsync(['update', '2', '--append', 'from bob', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: 'bob@t1' } });
+    a = cliAsync(['update', '1', '--append', 'from amy', '--by', 'amy'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: 'amy' } });
+    b = cliAsync(['update', '2', '--append', 'from bob', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: 'bob' } });
     a.done.then(() => ended.add('a')); b.done.then(() => ended.add('b'));
     await new Promise(res => setTimeout(res, 2000));
     assert.equal(ended.size, 0, 'neither writer goes past a held checkout');

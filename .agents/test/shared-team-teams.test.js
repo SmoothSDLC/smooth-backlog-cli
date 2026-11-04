@@ -1,4 +1,4 @@
-// Tests for teams in the CLI (item 037; spec 2026-10-28-pr1-learnings.md section 3): the team field set and cleared by
+// Tests for teams in the CLI : the team field set and cleared by
 // update and new, and the offers (pop, --claimable, --reviewable, --blocked).
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
@@ -24,13 +24,13 @@ function fixture(prefix = 'team-teams-') {
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
-const LEAD = { TEAM_LEAD: 'lead' }; // cody, archy and zed are plain members
+const LEAD = { TEAM_LEAD: 'lead' }; // ann, bob and zed are plain members
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
-// item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it or is offered it as work
-const refined = (f, slug, cwd = f.cons) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']].forEach(a => {
+// a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it or is offered it as work
+const refined = (f, slug, cwd = f.cons) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => {
   const r = cli(['update', slug, ...a], { cwd, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 const pop = (f, agent, env) => JSON.parse(run(f, ['query', '--pop', '--agent', agent, '--json'], env).stdout);
@@ -62,7 +62,7 @@ test('backlog new --team writes the team and starts the item in stage refining; 
   const plain = make(f, 'no team');
   assert.ok(!('team' in fm(f, plain)) && !('stage' in fm(f, plain)));
   const s = make(f, 'split of an item without team', '--split-from', plain);
-  assert.ok(!('team' in fm(f, s)) && fm(f, s).stage === 'refining'); // item 088: a split slice needs its refinement review, with or without a team
+  assert.ok(!('team' in fm(f, s)) && !('stage' in fm(f, s))); // outside a team session a split of a teamless item needs no refinement review
 });
 
 test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimable, --reviewable and --blocked', () => {
@@ -75,14 +75,14 @@ test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimabl
   assert.deepEqual(slugs(f, ['--claimable'], T1), [mine]);
   assert.deepEqual(slugs(f, ['--claimable'], T2), [theirs]);
   assert.deepEqual(slugs(f, ['--claimable']), [mine, theirs, none]); // without TEAM_NAME every item
-  assert.deepEqual([pop(f, 'cody', T2).action, pop(f, 'cody', T2).item], ['claim', theirs]);
-  ok(f, ['update', mine, '--claim', 'archy']);
+  assert.deepEqual([pop(f, 'ann', T2).action, pop(f, 'ann', T2).item], ['claim', theirs]);
+  ok(f, ['update', mine, '--claim', 'bob']);
   ok(f, ['update', mine, '--request-review', 'any', '--note', 'commit abc']);
   assert.deepEqual(slugs(f, ['--reviewable', '--agent', 'zed'], T1), [mine]);
   assert.deepEqual(slugs(f, ['--reviewable', '--agent', 'zed'], T2), []);
   const p = pop(f, 'zed', T2); // t2's member: the claim of its own item, never the review of t1's
   assert.deepEqual([p.action, p.item], ['claim', theirs]);
-  ok(f, ['update', theirs, '--claim', 'cody']);
+  ok(f, ['update', theirs, '--claim', 'ann']);
   const q = pop(f, 'zed', T2);
   assert.ok(q.item !== mine && q.item !== none, JSON.stringify(q)); // nothing of another team or of no team
   const dep = make(f, 't2 waits', '--depends-on', theirs.split('-')[0]);
@@ -99,8 +99,8 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
   refined(f, theirs);
   writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
   const T1 = { TEAM_NAME: 't1' };
-  const popAll = env => JSON.parse(run(f, ['query', '--pop', '--agent', 'cody', '--scope', 'all', '--json'], env).stdout);
-  const p = pop(f, 'cody', T1);
+  const popAll = env => JSON.parse(run(f, ['query', '--pop', '--agent', 'ann', '--scope', 'all', '--json'], env).stdout);
+  const p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['chunk', null]); // small-chunk work, but not t2's item
   const newIn = name => { const r = cli(['new', ...NEW(name), '--chunk'], { cwd: other, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr); return r.stdout.split('created phase ')[1].split(' ')[0]; };
   const far = newIn('t2 chunk there');
@@ -136,6 +136,6 @@ test('--set-team, --team and a split child of a team item: every step succeeds',
   step('update', ['1', '--claim', 'lead']);
   step('new', [...NEW('child'), '--split-from', '1']);
   step('new', [...NEW('other'), '--team', 't2']);
-  step('update', ['3', '--set-team', 't3']); // another team; clearing the team of an item in a stage is refused (item 036)
+  step('update', ['3', '--set-team', 't3']); // another team; clearing the team of an item in a stage is refused
   step('update', ['1', '--set-team', '']);
 });

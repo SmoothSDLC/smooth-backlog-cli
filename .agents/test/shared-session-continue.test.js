@@ -2,11 +2,10 @@
 // claimed (a rework after review, or the close): the claim records the new session name on the item, with
 // no takeover and no lead reassignment, and the self-review block still applies to every earlier session.
 // Owner design 2026-10-31: session names <item 3 digits><card id>:<increment 2 digits> (082aa:01), teams
-// join their card ids with colons (t07:09:1a). HOME is a temporary folder: the real ~/.qwen/teams is never
-// read or written. Local bare repos only.
+// join their card ids with colons (t07:09:1a). Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
@@ -28,28 +27,26 @@ function fixture() {
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  const user = join(t, 'user'); // HOME: the team folders live under it
-  const tdir = join(user, '.qwen', 'teams', 't07-09-1a'); // the folder Qwen writes for TEAM (its sanitized name)
-  mkdirSync(tdir, { recursive: true });
-  return { t, home, cons, user, tdir, folder: join(home, 'acme', 'demo') };
+  const user = join(t, 'user');
+  return { t, home, cons, user, folder: join(home, 'acme', 'demo') };
 }
 const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', REF,
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  // QWEN_CODE_SESSION_ID stays out: these tests pin the continuation rules, not the author-session rule
+  // BACKLOG_SESSION stays out: these tests pin the continuation rules, not the author-session rule
   // (item 088), which a session id inherited from the running shell would apply to the session-name reviewers
-  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', HOME: f.user, QWEN_CODE_SESSION_ID: '', ...env } };
+  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', HOME: f.user, BACKLOG_SESSION: '', ...env } };
   if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => { const slug = ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0]; return slug; };
-// item 098: a team item is refined (a member, the lead's review request, Codex's pass) before anyone claims it
+// item 098: a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
 const teamItem = (f, name) => {
   const s = make(f, name); ok(f, ['update', s, '--set-team', TEAM]);
-  for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']]) ok(f, ['update', s, ...a]);
+  for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']]) ok(f, ['update', s, ...a]);
   return s;
 };
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
@@ -116,27 +113,6 @@ test('082: after the continuation 082aa:01 still cannot review', () => {
   assert.match(r2.stdout, new RegExp(`^❌ ${s}: ${A2}: the same session cannot review its own work; a new session may\\n$`));
 });
 
-test('082: the hand-off lock of 082aa:01 does not lock 082aa:02', () => {
-  const f = fixture();
-  writeFileSync(join(f.tdir, 'config.json'), JSON.stringify({
-    name: TEAM, leadAgentId: `lead@${TEAM}`,
-    members: [
-      { name: A1, agentId: `${A1}@${TEAM}`, joinedAt: 1000 },
-      { name: A2, agentId: `${A2}@${TEAM}`, joinedAt: 1000 },
-    ],
-  }));
-  const s = teamItem(f, 'hand-off lock and continuation');
-  ok(f, ['update', s, '--claim', A1]);
-  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]); // writes the hand-off marker for A1
-  assert.ok(existsSync(join(f.tdir, 'handoff', `${A1}.json`)), 'the marker of the earlier session exists');
-  // the locked session stops; the new session of the same card does not
-  assert.equal(JSON.parse(run(f, ['pop', '--agent', A1, '--json'], { TEAM_NAME: TEAM }).stdout).action, 'stop');
-  assert.notEqual(JSON.parse(run(f, ['pop', '--agent', A2, '--json'], { TEAM_NAME: TEAM }).stdout).action, 'stop');
-  // the lock did not stop the continuing session: its claim goes through
-  ok(f, ['update', s, '--claim', A2], { TEAM_NAME: TEAM });
-  assert.equal(itemFm(f, s).claimed_by, A2);
-});
-
 test('082: query --plan offers the rework to the new session of the card while the earlier session still holds the item', () => {
   const f = fixture();
   const s = teamItem(f, 'plan rework for the new session');
@@ -156,12 +132,7 @@ test('082: query --plan offers the close to the new session of the card while th
   ok(f, ['update', s, '--claim', A1]);
   ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', B1]);
-  // item 088: the cody-stage pass must run in a session of the item's team, or it sets no pin
-  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`], { TEAM_NAME: TEAM });
-  // item 088: the close waits for the external review on the same commit
-  ok(f, ['update', s, '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', A1]);
-  ok(f, ['update', s, '--start-review', '--by', 'codex']);
-  ok(f, ['update', s, '--review', 'pass', '--by', 'codex', '--comments', `fine per ${REF}`]);
+  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
   const roster = join(f.t, 'roster.json');
   writeFileSync(roster, JSON.stringify({ [A2]: {} })); // only the new session is present
   const out = run(f, ['query', '--plan', '--roster', roster]).stdout;
@@ -187,12 +158,7 @@ test('082: a fresh session of the card is told to claim the item before it close
   ok(f, ['update', s, '--claim', A1]);
   ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', B1]);
-  // item 088: the cody-stage pass must run in a session of the item's team, or it sets no pin
-  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`], { TEAM_NAME: TEAM });
-  // item 088: the close waits for the external review on the same commit
-  ok(f, ['update', s, '--request-review', 'codex', '--note', 'the cody pass, external stage', '--by', A1]);
-  ok(f, ['update', s, '--start-review', '--by', 'codex']);
-  ok(f, ['update', s, '--review', 'pass', '--by', 'codex', '--comments', `fine per ${REF}`]);
+  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
   const w = JSON.parse(run(f, ['pop', '--agent', A2, '--json']).stdout);
   assert.equal(w.action, 'continue', w.instruction);
   assert.ok(w.instruction.includes(`--claim ${A2}`), `the close instruction starts with the continuation claim: ${w.instruction}`);

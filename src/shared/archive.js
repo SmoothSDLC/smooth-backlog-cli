@@ -1,4 +1,4 @@
-// Shared-mode `backlog archive` (cli-parity job 17). Port of archive.py:22-110 and its commit tail (archive.py:112-117) in the
+// Shared-mode `backlog archive`. Port of archive.py:22-110 and its commit tail (archive.py:112-117) in the
 // oracle's order: pull, resolve the item, git mv under archive/, stamp status, mirror row and event, scan, reflow, commit and
 // push. The item is found by number (seq) or slug, never by database row id. The helpers at the top are shared with move.js.
 // shortcut: argparse's unique-prefix abbreviations (--for) are not accepted.
@@ -13,7 +13,7 @@ import * as store from './store.js';
 import * as sync from './sync.js';
 import { outsideTeam, teamScope } from './team.js';
 
-// Python repr of a str, for the oracle's `{x!r}`.
+// Python repr of a str, for the earlier scripts `{x!r}`.
 export function pyStr(s) {
   const q = s.includes("'") && !s.includes('"') ? '"' : "'";
   let out = '';
@@ -42,7 +42,7 @@ export const teamRefusal = item => {
   return why ? `${item.slug ?? item.phase}: ${why}` : null;
 };
 
-// lib_db.py:587-595
+//
 export function find(con, text) {
   const sel = itemSelector(text);
   const row = sel && (sel.number !== undefined
@@ -59,7 +59,7 @@ export async function withBacklog(fn, tail) {
   let repo;
   try { repo = teamScope().repo || store.repoId(process.cwd()); } catch (e) { return die(e.message); } // update's rule: a team session works on its repository
   return store.cloneLocked(home, async () => {
-    await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
+    await sync.pull(home); // every script works on origin/main as it is now
     const folder = store.folder(home, repo);
     const forget = db.freshDb(folder);
     const con = db.connect(folder); // refuses a link at the owner or the repository folder

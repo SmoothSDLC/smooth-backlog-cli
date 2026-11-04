@@ -1,5 +1,5 @@
-// `backlog new` in shared mode (cli-parity job 10): a port of new_phase.py:28-192 of the pinned oracle.
-// Order of work as the oracle: pull, number, write, scan into backlog.db, reflow, scan, commit and push.
+// `backlog new` in shared mode: a a port of the earlier scriptsof the pinned oracle.
+// Order of work as the earlier scripts: pull, number, write, scan into backlog.db, reflow, scan, commit and push.
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { input } from '../errors.js';
@@ -11,10 +11,10 @@ import { branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, 
 import { pull } from './sync.js';
 import { foreignItem, isForeign, outsideTeam, strip, teamName, teamScope } from './team.js';
 
-const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; // lib_db.py:224
+const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; //
 const pad = n => String(n).padStart(3, '0');
 
-// new_phase.py:29-58. 's' = text, 'i' = integer, an array = choices, true = a switch. argparse also takes a unique prefix.
+//. 's' = text, 'i' = integer, an array = choices, true = a switch. argparse also takes a unique prefix.
 const OPTIONS = {
   name: 's', objective: 's', summary: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
   'review-refs': 's', 'depends-on': 's', estimate: 'i', team: 's', chunk: true,
@@ -47,17 +47,17 @@ function parseArgs(argv) {
   return out;
 }
 
-// lib_db.py as_list: 'none' or empty is no list; comma separated.
+// as_list: 'none' or empty is no list; comma separated.
 const asList = v => (v === undefined || v.trim().toLowerCase() === '' || v.trim().toLowerCase() === 'none' ? [] : v.split(',').map(x => x.trim()).filter(Boolean));
 
-// lib_db.py:225-237: a 'Definition of done' heading or line followed by content other than the placeholder. Beyond the
-// oracle (Codex review of item 036): the event lines the CLI appends to an item (a claim, a refinement start, a wait, a
+// a 'Definition of done' heading or line followed by content other than the placeholder. Beyond the
+// oracle: the event lines the CLI appends to an item (a claim, a refinement start, a wait, a
 // decision, a chunk) and an older item's ESTIMATE line are no definition of done, so an item whose body ends in the
 // placeholder stays incomplete.
 const EVENT_LINE = /^[ \t]*(?:Claimed by|Released by|Review started by|Review by \S+ stale|Refinement started by|Refinement review requested by|WAITING |WAIT DONE |DECISION |CHUNK |ESTIMATE:)[^\n]*$/gm;
 export function hasDefinitionOfDone(text) {
   const body = (text || '').replaceAll(DOD_PLACEHOLDER, '').replace(EVENT_LINE, '');
-  // beyond the oracle (Codex review of item 036): the last one decides, since a split child carries its parent's body,
+  // beyond the earlier scripts: the last one decides, since a split child carries its parent's body,
   // definition of done included, before its own section
   const m = [...body.matchAll(/^[ \t]*(?:#{1,6}[ \t]*|\*\*|[-*][ \t]+)?definition of done\b/gim)].at(-1);
   if (!m) return false;
@@ -67,7 +67,7 @@ export function hasDefinitionOfDone(text) {
   return Boolean(content) && !/^(?:[-*][ \t]+(?:\[[ x]\][ \t]*)?)?(?:tbd|tba|todo|to ?do|n\/?a|none|-|\.\.\.|…)\.?$/i.test(content); // a placeholder word is no definition of done
 }
 
-// lib_db.py:587-595: by number (a live item before an archived one) or by slug; the mirror database is the lookup.
+// by number (a live item before an archived one) or by slug; the mirror database is the lookup.
 function byIdent(db, ident) {
   const sel = itemSelector(ident);
   if (sel?.number !== undefined) return db.prepare("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id").get(sel.number);
@@ -112,7 +112,7 @@ async function create(argv, { home, folder, repo, team }) {
   try {
     const deps = [];
     for (const d of asList(a.dependsOn)) {
-      if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--depends-on: no item '${d}' in the backlog repository`); } // item 042
+      if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--depends-on: no item '${d}' in the backlog repository`); }
       else if (!byIdent(db, d)) return refuse(`--depends-on: no item '${d}' in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }
@@ -122,17 +122,17 @@ async function create(argv, { home, folder, repo, team }) {
       if (!src) return refuse(`--split-from: no phase '${a.splitFrom}'`);
       const outside = outsideTeam({ repository: src.repository, branch: src.branch }); // the split logs an event on the parent
       if (outside) return refuse(`${src.slug}: ${outside}`);
-      // INTENTIONAL (new_phase.py:103-107): the parent's body goes in verbatim, duplicate headings included.
+      // INTENTIONAL: the parent's body goes in verbatim, duplicate headings included.
       const file = join(folder, String(src.path));
       await assertInside(folder, file); // the path comes from the mirror database: untrusted
       if (!existsSync(file)) return refuse(`--split-from: the contents of '${src.slug}' are missing from the backlog repository`);
       check(folder, repo, actor(), src.slug, src.path); // the split logs a parent event based on this version and scope
       const doc = parse(readFileSync(file, 'utf8'));
-      a.team = a.team || doc.fm.team || undefined; // new_phase.py:99: a split item inherits the source's team
+      a.team = a.team || doc.fm.team || undefined; // a split item inherits the source's team
       const parent = Array.from(doc.body.trim()).slice(0, 800).join('');
       inherited = { objective: src.objective, summary: src.summary, context: `Split from \`${src.slug}\`. Inherited context:\n\n${parent}` };
     }
-    // item 039 (beyond the oracle): in a named team session (TEAM_NAME, set by the team runner) the creator names how the
+    // in a named team session (TEAM_NAME, set by the team runner) the creator names how the
     // item is reviewed, unless the item starts in stage refining (it has a team, its own or its source's), where the
     // members' refinement gives it its review documents. TEAM_REPOSITORY alone (a write into another repository's folder)
     // is no team session here.
@@ -189,7 +189,7 @@ async function create(argv, { home, folder, repo, team }) {
     written = true;
   } finally { db.close(); if (!written) forget(); }
 
-  // every change is committed and pushed at once (new_phase.py:187-192); a file renumbered on the way is scanned and committed again
+  // every change is committed and pushed at once; a file renumbered on the way is scanned and committed again
   const message = ['new', ...argv.slice(0, 2)].join(' ');
   const pairs = await commitSettled(home, folder, message);
   [{ slug, path: rel }] = recordWrites(folder, repo, actor(), [{ slug, path: rel }], pairs); // the creator has seen what it wrote

@@ -206,7 +206,7 @@ test('diagnostics that echo the input are redacted', () => {
   }
 });
 
-// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 17)
+// ---------------------------------------------------------------- review fixes (review fixes 2026-10-23)
 
 test('review P1: a symlink at archive/ or archive/phases/ refuses the archive before anything is moved or stamped', t => {
   for (const nested of [false, true]) {

@@ -1,6 +1,6 @@
-// Shared-mode team views (cli-parity job 16): `backlog query --claimable | --reviewable | --blocked` with --agent,
-// --roster and --scope. Port of query.py:76-153 (scopes, refinement cap, team_rows) and :330-372 (the views),
-// lib_db.py:731-742 (review_offer) and :621-624 (job_fields). Rows and dependencies come from the backlog.db mirror as
+// Shared-mode team views: `backlog query --claimable | --reviewable | --blocked` with --agent,
+// --roster and --scope. a port of the earlier scripts(scopes, refinement cap, team_rows) and :330-372 (the views),
+// (review_offer) and :621-624 (job_fields). Rows and dependencies come from the backlog.db mirror as
 // in query.js (team.js); the item files of the repository folder give only the front matter the rows do not hold.
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,11 +15,11 @@ const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
 export const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
 const JSON_FIELDS = ['chunk', 'review_refs', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'estimate_min', 'complexity', 'layer'];
 
-const refinement = fm => team.isChunk(fm); // query.py _refinement: chunk items, the only work another repository's agents may pick up (--scope all)
+const refinement = fm => team.isChunk(fm); // _refinement: chunk items, the only work another repository's agents may pick up (--scope all)
 const files = dir => new Map(store.load(dir).map(i => [i.path, i]));
 const dirs = dir => { try { return readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(); } catch { return []; } };
 
-// query.py:80-90: refinement_scope from <folder>/backlog.scope, one line 'refinement_scope: off|branch|repo|all' (default branch).
+// refinement_scope from <folder>/backlog.scope, one line 'refinement_scope: off|branch|repo|all' (default branch).
 export function refinementCap(folder, repr) {
   const p = join(folder, 'backlog.scope');
   let st; try { st = lstatSync(p); } catch { st = null; }
@@ -30,14 +30,14 @@ export function refinementCap(folder, repr) {
   return v;
 }
 
-// lib_db.review_offer (owner 2026-10-22/28): any member but the author may review a requested item at once; the item's
+// lib_db.review_offer: any member but the author may review a requested item at once; the item's
 // review_refs say how to review it. null = not offered to agent, [] = offered.
 export function reviewOffer(fm, agent) {
   if (team.isReviewAuthor(fm, agent) || !team.reviewOpenTo(fm, agent)) return null;
   return [];
 }
 
-// query.py:93-129 team_rows: [{r, fm, undone, f}] of the open items within scope, in priority order. branch = the caller's
+// team_rows: [{r, fm, undone, f}] of the open items within scope, in priority order. branch = the caller's
 // repository and branch, repo = every branch of it, all = also the chunk items of every other repository folder.
 export async function teamRows({ open, scope, cap, every, excluded, repo, branch, folder, home }) {
   const ref = RANK[scope] <= RANK[cap] ? scope : cap;
@@ -76,12 +76,12 @@ export async function teamRows({ open, scope, cap, every, excluded, repo, branch
   return out;
 }
 
-// lib_db.py:621-624
+//
 const jobFields = fm => [['estimate', fm.estimate_min], ['complexity', fm.complexity], ['layer', fm.layer]]
   .filter(([, v]) => v != null && v !== '').map(([k, v]) => ` ${k}=${v}${k === 'estimate' ? 'm' : ''}`).join('');
 export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d.item.slug : null, status: d.item ? d.item.status : 'missing', claimed_by: d.fm.claimed_by || '', ...(d.foreign && d.item ? { repository: d.item.repository } : {}) }));
 
-// Beyond the oracle (topology item 288): the items that wait in stage review-hitl for an owner decision, with the question
+// Beyond the earlier scripts: the items that wait in stage review-hitl for an owner decision, with the question
 // (the last "Owner decision needed" section of the item), for the morning report. Answer: backlog update <item> --decision.
 function decisionsView(found, { a, scope, repo, branch, own, say, dump }) {
   const rows = found.map(({ r, fm }) => ({ ...r, team: fm.team || null, decision_requested_by: fm.decision_requested_by || null,
@@ -97,7 +97,7 @@ function decisionsView(found, { a, scope, repo, branch, own, say, dump }) {
   return 0;
 }
 
-// query.py:330-372. io = {say, dump, die, repr} of query.js; hid = the active handoff of the mirror, all = its row reader.
+//. io = {say, dump, die, repr} of query.js; hid = the active handoff of the mirror, all = its row reader.
 export async function teamView(a, { all, hid, excluded, repo, branch, folder, home, io }) {
   const { say, dump, die, repr } = io;
   try {
@@ -107,14 +107,14 @@ export async function teamView(a, { all, hid, excluded, repo, branch, folder, ho
     const own = files(folder);
     const found = (await teamRows({ open: all(OPEN, hid), scope, cap: refinementCap(folder, repr), every: a.all, excluded, repo, branch, folder, home }))
       .filter(({ r, fm, undone, f }) => {
-        if (a.decisions) return f === repo && fm.stage === 'review-hitl' && team.inTeam(fm); // the owner decisions of the morning report (item 036)
+        if (a.decisions) return f === repo && fm.stage === 'review-hitl' && team.inTeam(fm); // the owner decisions of the morning report
         if (inTeam && f === repo) { // an incomplete item is never claimed or reviewed in team mode
           const file = own.get(r.path);
           if (!file || missingFields(file.fm, file.body).length) return false;
         }
         if (!team.offeredTo(fm, f, repo)) return false; // another team's item (TEAM_NAME)
         if (a.claimable) return r.status === 'pending' && !fm.claimed_by && !undone.length && team.isReady({ stage: stageOf(fm, f === repo ? own.get(r.path)?.body : '') }) && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
-        return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) && !undone.some(d => d.foreign && d.item?.status !== 'done') : undone.length > 0; // never a review of an item before ready (036), nor of one waiting on another repository (042)
+        return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) && !undone.some(d => d.foreign && d.item?.status !== 'done') : undone.length > 0; // never a review of an item before ready , nor of one waiting on another repository 
       });
     if (a.decisions) return decisionsView(found, { a, scope, repo, branch, own, say, dump });
     if (a.json) {

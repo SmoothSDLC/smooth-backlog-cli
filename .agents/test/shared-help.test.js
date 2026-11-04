@@ -172,9 +172,8 @@ test('COMMANDS.md has the section "Shared backlog repository mode" with the help
   for (const command of COMMANDS) assert.ok(section.includes(`\`\`\`text\n${HELP[command].trimEnd()}\n\`\`\``), `${command}: the help text is not in COMMANDS.md verbatim`);
 });
 
-test('096: the update help and the built-in skill say the retired classification keys have no effect and are dropped at the next write', () => {
-  const skill = readFileSync(new URL('../../templates/skills/backlog/SKILL.md', import.meta.url), 'utf8');
-  for (const [name, text] of [['update help', backlog('update', '--help').stdout], ['skill', skill]]) {
+test('096: the update help says the retired classification keys have no effect and are dropped at the next write', () => {
+  for (const [name, text] of [['update help', backlog('update', '--help').stdout]]) {
     assert.match(text, /retired classification keys[^.]*have no effect/, name);
     assert.match(text, /next writes/, name);
   }
@@ -189,8 +188,7 @@ test('127: the team pop help states a refined work item is claimable by members 
 
 test('059.V2: the --close and --status help blocks name the hand-off close rule, NONE and the legacy exemption', () => {
   const help = backlog('update', '--help').stdout;
-  const skill = readFileSync(new URL('../../templates/skills/backlog/SKILL.md', import.meta.url), 'utf8');
-  for (const [name, text] of [['--close', block(help, 'close')], ['--status', block(help, 'status')], ['skill', skill]]) {
+  for (const [name, text] of [['--close', block(help, 'close')], ['--status', block(help, 'status')]]) {
     const flat = text.replace(/\s+/g, ' ');
     assert.match(flat, /each dependent's hand-off is recorded and accepted/, name);
     assert.match(flat, /records handoffs: none/, name);

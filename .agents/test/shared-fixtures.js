@@ -90,8 +90,8 @@ export function cli(args = [], opts = {}) {
   const bin = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'));
   const p = spawnSync(process.execPath, [bin, ...args], {
     cwd: opts.cwd,
-    // a command without a named agent is a different writer each time (QWEN_CODE_AGENT_ID, else USER, would make every call one agent with one stale view)
-    env: { ...process.env, QWEN_CODE_AGENT_ID: `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
+    // a command without a named agent is a different writer each time (BACKLOG_AGENT, else USER, would make every call one agent with one stale view)
+    env: { ...process.env, BACKLOG_AGENT: `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
     stdin: 'ignore',
     encoding: 'utf8',
     timeout: opts.timeout ?? 60000,

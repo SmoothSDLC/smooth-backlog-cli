@@ -226,7 +226,7 @@ test('now(): second-precision UTC with a Z suffix', () => {
   assert.ok(Math.abs(Date.now() - new Date(n).getTime()) < 5000);
 });
 
-// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 5)
+// ---------------------------------------------------------------- review fixes (review fixes 2026-10-23)
 
 function link(t, target, path) {
   try { symlinkSync(target, path); } catch (e) { t.skip(`cannot create a symlink here: ${e.code}`); return false; }
@@ -342,7 +342,7 @@ test('review P2: a quoted numeric priority already at its rank is left alone (in
   assert.match(readItem(folder, 'phases/003-i3.md'), /^priority: 2$/m);
 });
 
-// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 5, second review)
+// ---------------------------------------------------------------- review fixes (review fixes 2026-10-23, second review)
 
 test('review P1: a symlinked repository folder or owner folder is refused from the home by load, reflow, nextSeq, findings and write; nothing outside is touched', t => {
   for (const owner of [true, false]) {

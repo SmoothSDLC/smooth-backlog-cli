@@ -1,7 +1,7 @@
-// Shared-mode `backlog update` (cli-parity job 11), non-team flags. Port of update.py:88-257 and its commit tail
-// (update.py:327-332) in the oracle's order: pull, resolve the item, change, write the file, log the event, scan into
+// Shared-mode `backlog update`, non-team flags. a port of the earlier scriptsand its commit tail
+// in the earlier scripts order: pull, resolve the item, change, write the file, log the event, scan into
 // backlog.db, planning event (--priority move, completion, --replan), commit and push. The item is found by number
-// (seq) or slug, never by database row id. The team flags (update.py:27-104) go to lifecycle.js (job 15).
+// (seq) or slug, never by database row id. The team flags go to lifecycle.js.
 // shortcut: argparse's unique-prefix abbreviations (--stat) are not accepted.
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -20,18 +20,18 @@ import { asList, foreignCycle, foreignItem, heldBy, isForeign, teamLead, teamSco
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
 const BOOL = ['dry-run'];
-// Item 059.V1: the hand-off flags of item 059 (the record is the producer's, the accept and reject the team lead's).
+// the hand-off flags of an earlier change (the record is the producer's, the accept and reject the team lead's).
 export const TEAM_VALUE = ['wip-override', 'claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason', 'reassign-review',
   'handoff', 'handoff-commit', 'handoff-contract', 'handoff-verification', 'handoff-outputs', 'handoff-pickup', 'handoff-risks', 'accept-handoff', 'reject-handoff', 'checks'];
 export const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close', 'refine-start', 'refine-done', 'request-refinement-review'];
 const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'], 'set-chunk': ['yes', 'no'], severity: ['normal', 'critical'], 'refinement-review': ['pass', 'changes', 'limit'] };
 
-// Python str.strip()/rstrip() whitespace (not JS's: \x1c-\x1f and \x85 count, ﻿ does not).
+// Python str.strip/rstrip whitespace (not JS's: \x1c-\x1f and \x85 count, ﻿ does not).
 const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
 const rstrip = s => s.replace(new RegExp(`[${WS}]+$`), '');
 const strip = s => rstrip(s).replace(new RegExp(`^[${WS}]+`), '');
 const pyInt = s => (/^\s*[+-]?\d+\s*$/.test(s) ? Number(s) : null);
-// Python repr of a str, for the oracle's `{x!r}` and dict/list prints.
+// Python repr of a str, for the earlier scripts `{x!r}` and dict/list prints.
 function pyStr(s) {
   const q = s.includes("'") && !s.includes('"') ? '"' : "'";
   let out = '';
@@ -53,7 +53,7 @@ const usage = message => new BacklogError('INVALID_INPUT', message); // argparse
 // A token that argparse takes as a value or positional: no leading dash, a lone dash, a negative number, or a space inside.
 const valueLike = s => s !== undefined && (!s.startsWith('-') || s === '-' || /^-(\d+|\d*\.\d+)$/.test(s) || s.includes(' '));
 
-// update.py:107-140 argparse.
+// argparse.
 function parse(argv) {
   const a = {}; let past = false;
   for (let i = 0; i < argv.length; i++) {
@@ -82,8 +82,8 @@ function parse(argv) {
 
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
-const refuse = message => { say(`❌ ${message}`); return 1; }; // update.py's refusals: stdout, exit 1
-// lib_db.py:587-595
+const refuse = message => { say(`❌ ${message}`); return 1; }; // 's refusals: stdout, exit 1
+//
 function find(con, text) {
   const sel = itemSelector(text);
   const row = sel && (sel.number !== undefined
@@ -102,9 +102,9 @@ async function update(argv) {
   a.named = Boolean(a.by ?? a.claim ?? a.release);
   const { home } = store.resolveHome();
   let repo; let folder;
-  try { repo = teamScope().repo || store.repoId(process.cwd()); folder = store.folder(home, repo); } catch (e) { return die(e.message); } // lib_db.py:122-129
-  return store.cloneLocked(home, async () => { // update.py's run_lock: from the pull to the push
-    await sync.pull(home); // lib_db.py:101-110: every script works on origin/main as it is now
+  try { repo = teamScope().repo || store.repoId(process.cwd()); folder = store.folder(home, repo); } catch (e) { return die(e.message); } //
+  return store.cloneLocked(home, async () => { // the run lock: from the pull to the push
+    await sync.pull(home); // every script works on origin/main as it is now
     const forget = db.freshDb(folder);
     const con = db.connect(folder); // refuses a link at the owner or the repository folder
     let open = true;
@@ -112,10 +112,10 @@ async function update(argv) {
     let code;
     try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); throw e; } finally { close(); }
     if (code || a['dry-run']) { forget(); return code; }
-    // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
-    // Item 082: the agent a command names goes into the commit subject (session names with colons are audit data too);
+    // the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
+    // the agent a command names goes into the commit subject (session names with colons are audit data too);
     // the actor the step acts as (a.by ?? a.claim ?? a.release), whatever the order of the options
-    const subjectParts = ['update.py', ...argv.slice(0, 2)];
+    const subjectParts = ['update', ...argv.slice(0, 2)];
     const agent = a.by ?? a.claim ?? a.release;
     if (agent !== undefined) subjectParts.push(agent);
     let pairs;
@@ -149,7 +149,7 @@ async function change(a, con, folder, repo) {
   const one = (sql, ...p) => { const r = con.prepare(sql).get(...p); return r ? { ...r } : null; };
   const hid = one("SELECT id FROM handoff WHERE status='active' LIMIT 1")?.id ?? null;
 
-  // --- pure planning event: explicit replan of the whole backlog (update.py:150-166)
+  // --- pure planning event: explicit replan of the whole backlog
   if (a.replan) {
     const idents = a.replan.split(',').map(strip).filter(Boolean);
     for (const ident of idents) { // a bound team session reorders only its own items: naming another team's item is refused, before anything is written
@@ -175,14 +175,14 @@ async function change(a, con, folder, repo) {
   const path = join(folder, row.path);
   await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way
   const { fm, body: text } = parseDoc(readFileSync(path, 'utf8'));
-  const statusBefore = fm.status; // item 059.V2: the close gate (059.3) runs on the pre-transition status
+  const statusBefore = fm.status; // the close gate (059.3) runs on the pre-transition status
   // The step's effective actor, not the environment actor: only the holder asks for a review of its work, and the
-  // hand-off record acts as the claimer (item 059.V1, review r2: a --handoff without --by records as the claimer,
+  // hand-off record acts as the claimer (an earlier change, review r2: a --handoff without --by records as the claimer,
   // so the stale-view check must run against the claimer's view).
   if (!a.named && (a['request-review'] !== undefined || a.handoff !== undefined)) seen.setActor(fm.claimed_by);
   seen.check(folder, repo, seen.actor(), row.slug, row.path); // refuses (exit 5) when someone else changed the item since this agent read it
   a.guard = [{ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` }];
-  // item 082: a new session of the same card reclaims the in-progress item (the continuation, no new work to
+  // a new session of the same card reclaims the in-progress item (the continuation, no new work to
   // start); the active-item limit of the other items of the card still applies, checked against heldBy below
   a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: heldBy(fm.claimed_by, a.claim) && fm.status === 'in_progress' }] : [];
   let body = text;
@@ -196,7 +196,7 @@ async function change(a, con, folder, repo) {
     let n;
     if (['priority', 'seq', 'size_score'].includes(k) && (n = pyInt(v)) === null) throw new BacklogError('INVALID_INPUT', `invalid literal for int() with base 10: ${pyStr(v)}`, 1);
     if (k === 'status' && !['pending', 'in_progress', 'done'].includes(v)) return refuse(`--status ${pyStr(v)}: use pending, in_progress or done (backlog archive moves a finished item to archive/)`);
-    if (k === 'status' && v === 'in_progress' && fm.status !== 'in_progress') { // item 034: starting work by status is starting work
+    if (k === 'status' && v === 'in_progress' && fm.status !== 'in_progress') { // starting work by status is starting work
       const wip = wipRefusal(folder, repo, { ...fm, team: a['set-team'] !== undefined ? strip(a['set-team']) : fm.team }, fm.claimed_by || a.by || caller(), row.slug);
       if (wip) return refuse(`${row.slug}: ${wip}`);
     }
@@ -213,7 +213,7 @@ async function change(a, con, folder, repo) {
   }
   const incomplete = missingFields(fm, body); // as the item is before this call
   const before = { team: fm.team, stage: fm.stage };
-  if (a['wip-override'] !== undefined) { // item 034: the lead lifts the team and agent limits for this item, with a recorded reason
+  if (a['wip-override'] !== undefined) { // the lead lifts the team and agent limits for this item, with a recorded reason
     const who = a.by || caller();
     if (caller() && caller() !== who) return refuse(`${row.slug}: you are ${caller()} (BACKLOG_AGENT): a member acts only as itself, not as ${who}`);
     if (who !== teamLead()) return refuse(`${row.slug}: only the team lead (${teamLead()}) lifts the team and agent work-in-progress limits for an item (got ${who || 'nobody'}; --by <lead>)`);
@@ -222,17 +222,17 @@ async function change(a, con, folder, repo) {
     Object.assign(fm, { wip_override: reason, wip_override_by: who, wip_override_at: store.now() });
     changes.wip_override = reason;
   }
-  if (a['set-team'] !== undefined) { // update.py:255-258
+  if (a['set-team'] !== undefined) {
     const name = strip(a['set-team']);
-    if (!name && fm.stage) return refuse(`${row.slug}: an item in stage ${fm.stage} keeps a team (the stages are team work); set another team instead`); // beyond the oracle (Codex review of item 036)
-    if (name && name !== fm.team && inProgress(fm)) { // item 034: work in progress joins a team only within its limit
+    if (!name && fm.stage) return refuse(`${row.slug}: an item in stage ${fm.stage} keeps a team (the stages are team work); set another team instead`); // beyond the earlier scripts
+    if (name && name !== fm.team && inProgress(fm)) { // work in progress joins a team only within its limit
       const full = wipRefusal(folder, repo, { ...fm, team: name }, fm.claimed_by || fm.refiner || '', row.slug);
       if (full) return refuse(`${row.slug}: in progress, and in team ${name}: ${full}`);
     }
     fm.team = name; changes.team = name || 'none';
   }
-  if (a['set-chunk'] !== undefined) { fm.chunk = a['set-chunk'] === 'yes'; changes.chunk = a['set-chunk']; } // update.py:259-261
-  if (a.severity !== undefined) { fm.severity = a.severity; changes.severity = a.severity; } // item 046: new sets it, update changes it
+  if (a['set-chunk'] !== undefined) { fm.chunk = a['set-chunk'] === 'yes'; changes.chunk = a['set-chunk']; } //
+  if (a.severity !== undefined) { fm.severity = a.severity; changes.severity = a.severity; } // new sets it, update changes it
   for (const [k, v] of [['estimate_min', a['set-estimate'] === undefined ? undefined : pyInt(a['set-estimate'])], ['complexity', a['set-complexity']], ['layer', a['set-layer']]]) {
     if (v === undefined) continue;
     if (k === 'estimate_min' && v <= 0) return refuse('--set-estimate: minutes must be > 0');
@@ -242,12 +242,12 @@ async function change(a, con, folder, repo) {
   if (a['set-depends-on'] !== undefined) {
     const deps = [];
     for (const d of asList(a['set-depends-on'])) {
-      if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in the backlog repository`); } // item 042
+      if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in the backlog repository`); }
       else if (!find(con, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }
     const cycle = dependencyCycle(con, folder, row.id, deps);
-    if (!cycle && foreignCycle(folder, repo, row.seq, deps)) return refuse(`--set-depends-on: it would make a dependency cycle through another repository's items back to ${repo}#${row.seq}`); // item 042
+    if (!cycle && foreignCycle(folder, repo, row.seq, deps)) return refuse(`--set-depends-on: it would make a dependency cycle through another repository's items back to ${repo}#${row.seq}`);
     if (cycle) return refuse(`--set-depends-on: ${cycle === row.id ? 'an item cannot depend on itself' : `it would make a dependency cycle through ${cycle}`}`);
     fm.depends_on = deps;
     changes.depends_on = deps.join(',') || 'none';
@@ -259,7 +259,7 @@ async function change(a, con, folder, repo) {
     changes.review_refs = refs.join(',');
   }
   const holder = fm.claimed_by || '';
-  const todo = step(a, { fm, body, before, slug: row.slug, folder, repo, incomplete, statusBefore, given: [...SETTABLE, 'severity'].filter(k => a[k] !== undefined) }); // --severity is a field edit too (046) // update.py:181-241
+  const todo = step(a, { fm, body, before, slug: row.slug, folder, repo, incomplete, statusBefore, given: [...SETTABLE, 'severity'].filter(k => a[k] !== undefined) }); // --severity is a field edit too  //
   if (todo.refuse) return refuse(todo.refuse);
   const { event } = todo;
   if (todo.text) {
@@ -275,7 +275,7 @@ async function change(a, con, folder, repo) {
     // the refusal names the unmet rule. The owner's decision closes with --close --by owner --reason.
     const refusal = reviewRefusal(fm);
     if (refusal) return refuse(`${row.slug}: ${refusal}`);
-    // item 059.V2: the close gate (059.3) - this path never calls closeItem, so the gate runs here, on the
+    // the close gate (059.3) - this path never calls closeItem, so the gate runs here, on the
     // pre-transition status; while a dependent's edge is not accepted the completion is refused the same way as
     // --close. With no dependents the gate records handoffs: none and the NONE line itself.
     const gate = runCloseGate({ fm, statusBefore, folder, repo, slug: row.slug });
@@ -307,7 +307,7 @@ async function change(a, con, folder, repo) {
     db.scan(con, folder); // rescan -> the db follows the file
   };
 
-  // --- the planning event: a move-to-rank, or completion re-densifying the remaining backlog (update.py:288-306)
+  // --- the planning event: a move-to-rank, or completion re-densifying the remaining backlog
   let order = null;
   if (moveTarget !== null) {
     order = store.reflow(folder, { slug: row.slug, target: moveTarget }, recordChange);
@@ -326,9 +326,9 @@ async function change(a, con, folder, repo) {
 
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
   if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug));
-  // item 033 (spec section 7): the hand-off to review, a changes verdict and a close end the agent's session
+  // the hand-off to review, a changes verdict and a close end the agent's session
   const ender = event === 'review_requested' ? a.by || caller() || holder : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
-  const ends = ender && ender !== teamLead(); // spec section 7: these three end the agent's session (the lead is no member)
+  const ends = ender && ender !== teamLead(); // the design: these three end the agent's session (the lead is no member)
   if (completing) {
     say('   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).');
     if (order.length) say(`      backlog now ${order.length} item(s), P0..P${order.length - 1}; next = P0 ${order[0][0]}`);
@@ -340,6 +340,6 @@ async function change(a, con, folder, repo) {
       say('        backlog update --replan "<id,id,id,...>"       # set the leading order');
     }
   }
-  if (ends) a.shutdown = ender; // printed by update() once the change is published: the last line of the output
+  if (ends) a.shutdown = ender; // printed by update once the change is published: the last line of the output
   return 0;
 }

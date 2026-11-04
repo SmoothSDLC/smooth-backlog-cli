@@ -1,18 +1,18 @@
-// Item 043: `backlog setup [--ask]` points a repository at the shared backlog repository and deploys the CLI's skill.
-// Contract (decided here, recorded in item 043; the shared backlog repository is a setting since item 091):
-// - the repository config is .smooth-backlog.json at the repository's top folder, committed, {"backlog_repository": P};
-//   P is relative to that folder (portable: the repository and the clone can move together), an absolute path is kept
-//   as given;
+// `backlog setup [--ask]` points a repository at the shared backlog repository and deploys the CLI's skill.
+// Contract:
+// - the repository config is.smooth-backlog.json at the repository's top folder, committed, {"backlog_repository": P};
+// P is relative to that folder (portable: the repository and the clone can move together), an absolute path is kept
+// as given;
 // - the shared backlog repository's clone URL is read from the environment variable BACKLOG_ORIGIN_URL first, then
-//   from the backlog_origin_url key of .smooth-backlog.json; there is no built-in default, and a command that needs
-//   it refuses (naming both sources) when neither is set;
-// - the default P is ../<name> (the clone beside the repository), where <name> is the configured repository's name
-//   part (a neutral folder name without the setting); used unless --ask is given;
+// from the backlog_origin_url key of.smooth-backlog.json; there is no built-in default, and a command that needs
+// it refuses (naming both sources) when neither is set;
+// - the default P is../<name> (the clone beside the repository), where <name> is the configured repository's name
+// part (a neutral folder name without the setting); used unless --ask is given;
 // - the backlog repository is found in this order: BACKLOG_HOME, the repository config, the per-user record
-//   (~/.config/<name>/home, written by --use-backlog-repo), then ~/git/<name> (<name> as above);
+// (~/.config/<name>/home, written by --use-backlog-repo), then ~/git/<name> (<name> as above);
 // - a missing clone is cloned from the setting; an existing one is left as it is;
-// - the template skill replaces the copy in every agent folder present (.agents, .claude, .github, .qwen), and shared
-//   mode is switched on. A second setup does the same and keeps the config unless --ask is given.
+// - the template skill replaces the copy in every agent folder present (.agents,.an agent,.github,.an agent), and shared
+// mode is switched on. A second setup does the same and keeps the config unless --ask is given.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -26,7 +26,7 @@ import { setMode } from './store.js';
 export const CONFIG = '.smooth-backlog.json';
 export const ORIGIN_KEY = 'backlog_origin_url';
 export const NEUTRAL_NAME = 'backlog-repo';
-// Item 091: the refusal for a shared-mode command that needs the shared backlog repository but finds it in neither
+// the refusal for a shared-mode command that needs the shared backlog repository but finds it in neither
 // source; it names both the environment variable and the config key.
 export const ORIGIN_REFUSAL = `the shared backlog repository is not set: set the environment variable BACKLOG_ORIGIN_URL or the ${ORIGIN_KEY} key of ${CONFIG} to its clone URL (the variable wins); there is no built-in default`;
 const say = text => process.stdout.write(`${redact(text)}\n`);
@@ -41,8 +41,8 @@ export function configuredHome(cwd = process.cwd()) {
   const p = cfg && typeof cfg.backlog_repository === 'string' ? cfg.backlog_repository.trim() : '';
   return p ? resolve(top, p) : null;
 }
-// The shared backlog repository's clone URL (item 091): the environment variable BACKLOG_ORIGIN_URL first, then the
-// backlog_origin_url key of the repository's .smooth-backlog.json; '' when neither is set (no built-in default).
+// The shared backlog repository's clone URL: the environment variable BACKLOG_ORIGIN_URL first, then the
+// backlog_origin_url key of the repository's.smooth-backlog.json; '' when neither is set (no built-in default).
 export function originUrl(cwd = process.cwd()) {
   const v = (process.env.BACKLOG_ORIGIN_URL || '').trim();
   if (v) return v;
@@ -99,7 +99,7 @@ export async function run(argv) {
       say(`✅ cloned the backlog repository to ${home}`);
     } else { mkdirSync(home, { recursive: true }); say(`✅ created the backlog folder ${home}`); }
   } else say(`ℹ️  the backlog folder is at ${home} (left unchanged)`);
-  if (home !== join(top, '.backlog') && (!kept || ask)) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys (the origin setting, item 091)
+  if (home !== join(top, '.backlog') && (!kept || ask)) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys
     const value = relative(top, realpathSync(home)); // relative to the repository: portable (both real paths: macOS /var is /private/var)
     let previous = null;
     try { previous = JSON.parse(readFileSync(join(top, CONFIG), 'utf8')); } catch { /* no config */ }

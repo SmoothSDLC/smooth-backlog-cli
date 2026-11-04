@@ -1,6 +1,6 @@
-// Shared store for the shared backlog repository mode (cli-parity job 5): reads and
+// Shared store for the shared backlog repository mode: reads and
 // writes the Python skill's item files in <home>/<owner>/<name>. Cited source: the pinned
-// oracle at ec5b254e (contract v3). It never clones, commits or pushes (sync is job 8).
+// oracle at ec5b254e (contract v3). It never clones, commits or pushes.
 // The surface is synchronous (spawnSync, tmp + rename) so sync and async callers can use it.
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -15,13 +15,13 @@ import { actor, created, guarded, guardReflow } from './seen.js';
 import { configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
 import { outsideTeam, setTeamsHome } from './team.js';
 
-const ACTIONABLE = ['pending', 'in_progress'];          // lib_db.py:515
+const ACTIONABLE = ['pending', 'in_progress'];
 
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
-const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); // lib_db.py:45
+const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //
 
-// The one storage setting. A backlog repository is named somewhere (BACKLOG_ORIGIN_URL or the .smooth-backlog.json origin key,
-// BACKLOG_HOME, the repository's .smooth-backlog.json path, or the per-user record): the items live in its clone, found in
+// The one storage setting. A backlog repository is named somewhere (BACKLOG_ORIGIN_URL or the.smooth-backlog.json origin key,
+// BACKLOG_HOME, the repository's.smooth-backlog.json path, or the per-user record): the items live in its clone, found in
 // that order, else at ~/git/<name>; a configured but missing clone is returned tagged (ask), never cloned here. Nothing named:
 // the items live inside the repository, in <repo>/.backlog, with the lock, views and journal in <repo>/.backlog/.state
 // (ignored by git).
@@ -29,7 +29,7 @@ export function resolveHome() {
   const setting = originSetting();
   const name = setting.name || NEUTRAL_NAME;
   let home = process.env.BACKLOG_HOME;
-  if (!home) home = configuredHome() ?? undefined; // the repository's .smooth-backlog.json comes before the per-user record
+  if (!home) home = configuredHome() ?? undefined; // the repository's.smooth-backlog.json comes before the per-user record
   if (!home) {
     try { home = readFileSync(join(configDir(), name, 'home'), 'utf8').trim(); } catch { /* no record */ }
   }
@@ -56,7 +56,7 @@ export function resolveHome() {
   };
 }
 
-// Where the lock, the views and the journal live: the clone's .git folder, or .state inside the repository's .backlog folder.
+// Where the lock, the views and the journal live: the clone's.git folder, or.state inside the repository's.backlog folder.
 export const stateDir = home => (existsSync(join(home, '.git')) ? join(home, '.git') : join(home, '.state'));
 
 // Contract section 1: $XDG_CONFIG_HOME/smooth-backlog-cli/mode.json, one JSON object; absent means local.
@@ -71,7 +71,7 @@ export function setMode(mode) {
   atomicWrite(modeFile(), JSON.stringify({ mode }));
 }
 
-// lib_db.py:142-144: <home>/<owner>/<name>. Each part must be a plain name: no separators, no . or ..
+// <home>/<owner>/<name>. Each part must be a plain name: no separators, no. or..
 export function folder(home, repoId) {
   const parts = String(repoId).split('/');
   if (parts.length !== 2 || parts.some(p => !p || p === '.' || p === '..' || p.includes('\\'))) throw new Error(`not an owner/name repository id: ${repoId}`);
@@ -103,14 +103,14 @@ function git(args, cwd) {
   return { stdout: String(p.stdout || ''), code: p.status ?? 1 };
 }
 
-// lib_db.py:122-135: owner/name from the origin; a worktree shares its main tree's remotes.
+// owner/name from the origin; a worktree shares its main tree's remotes.
 export function repoId(cwd) {
   if (git(['rev-parse', '--path-format=absolute', '--git-common-dir'], cwd).code) throw new Error('run this from inside a git repository (the repository whose backlog you want)');
   const id = repoIdFromUrl(git(['remote', 'get-url', 'origin'], cwd).stdout);
   return id || `local/${basename(git(['rev-parse', '--show-toplevel'], cwd).stdout.trim())}`; // no origin: the folder's name
 }
 
-// lib_db.py:273-277
+//
 export function branch(cwd) {
   const b = git(['branch', '--show-current'], cwd).stdout.trim();
   if (!b) throw new Error('HEAD is detached; check out the branch the item belongs to first');
@@ -119,7 +119,7 @@ export function branch(cwd) {
 
 function atomicWrite(path, text) { // the semantics of src/storage.js atomicWrite, synchronous
   mkdirSync(dirname(path), { recursive: true });
-  const temp = join(dirname(path), `.${randomUUID()}.tmp`); // item 047: never the item's name plus a suffix, which can pass 255 bytes
+  const temp = join(dirname(path), `.${randomUUID()}.tmp`); // never the item's name plus a suffix, which can pass 255 bytes
   try {
     writeFileSync(temp, text, { flag: 'wx', mode: 0o600 });
     renameSync(temp, path);
@@ -144,15 +144,15 @@ export function assertNoSymlinks(root, target) {
 // so a link at either is refused before anything is read or written through it.
 export const assertFolder = dir => assertNoSymlinks(dirname(dirname(resolve(dir))), dir);
 
-// lib_db.py:182-184. item.path is absolute (the caller joins the folder and the load-relative path).
+//. item.path is absolute (the caller joins the folder and the load-relative path).
 // root is the repository folder; without it, the folder is what precedes the first phases/ or archive/ segment.
 // The paths a command writes, renames or removes, with their content before (null: absent): db.undoOnThrow puts back exactly these.
-// Whoever changes an item file calls note(path) first; write() does.
+// Whoever changes an item file calls note(path) first; write does.
 const journals = [];
 export const journalled = fn => { const j = new Map(); journals.push(j); return fn(j).finally(() => journals.pop()); };
 
 // The recovery journal: the same priors, on disk (fsynced) before each write, for the outermost undoOnThrow only. A process killed inside that
-// window (no catch runs) leaves it behind; the next command that takes the clone lock rolls it back first (recoverJournal). It lives in .git:
+// window (no catch runs) leaves it behind; the next command that takes the clone lock rolls it back first (recoverJournal). It lives in.git:
 // git never sees it. persist = {home, files: Map<path, base64 | null>, folders: Set}.
 let persist = null;
 const journalFile = home => join(stateDir(home), 'smooth-backlog-cli-journal.json');
@@ -202,7 +202,7 @@ export function recoverJournal(home) {
   process.stderr.write(`backlog: rolled back a command that was killed half-way (${Object.keys(rec.files).length} path(s) restored in ${home})\n`);
 }
 
-// Item 096 (of 050): every write drops the two retired classification keys. The names are built from parts because the 049
+// every write drops the two retired classification keys. The names are built from parts because the 049
 // contract greps src for the literal words; this is the one place that has to name them.
 const RETIRED_KEYS = [['work', 'class'].join('_'), ['review', 'classes'].join('_')];
 
@@ -217,7 +217,7 @@ export function write(item, root, { frontMatterOnly = false } = {}) {
   atomicWrite(item.path, frontMatterOnly ? replaceFrontMatter(readFileSync(item.path, 'utf8'), item.fm) : dump(item.fm, item.body));
 }
 
-// lib_db.py:482-503: phases/*.md, then archive/**/*.md. path is folder-relative with '/'.
+// phases/*.md, then archive/**/*.md. path is folder-relative with '/'.
 // The phases/*.md files without a front matter block: left alone by every command, reported by query.
 export function bareFiles(dir) {
   assertFolder(dir);
@@ -239,7 +239,7 @@ export function load(dir) {
       if (e.isDirectory() && deep) walk(path, deep);
       else if (e.isFile() && e.name.endsWith('.md')) {
         const text = readFileSync(join(dir, path), 'utf8');
-        const sha256 = createHash('sha256').update(text).digest('hex'); // lib_db.py:163-164
+        const sha256 = createHash('sha256').update(text).digest('hex'); //
         if (rel === 'phases' && !hasFrontMatter(text)) continue; // a README or a stray note in phases/ is not an item: ranking it would rewrite it as an empty one (see bareFiles)
         items.push({ path, ...parse(text), sha256, sha: sha256 });
       }
@@ -265,7 +265,7 @@ function withMirror(dir, fn) {
   } finally { db.close(); }
 }
 
-// new_phase.py:23-25 with contract section 3: 1 + max(seq of phases/ and archive/, MAX(seq) of backlog.db).
+// with contract section 3: 1 + max(seq of phases/ and archive/, MAX(seq) of backlog.db).
 export function nextSeq(dir) {
   const max = Math.max(0, ...load(dir).map(i => Number(i.fm.seq) || 0));
   return Math.max(max, withMirror(dir, db => Number(db.prepare('SELECT COALESCE(MAX(seq), 0) AS m FROM phase').get().m)) ?? 0) + 1;
@@ -281,9 +281,9 @@ export function nextSeqFor(dir, tail) {
   return n;
 }
 
-const slugOf = i => i.fm.phase || basename(i.path, '.md'); // lib_db.py:ingest_phase slug
+const slugOf = i => i.fm.phase || basename(i.path, '.md'); // ingest_phase slug
 
-// lib_db.py:523-530: pending/in_progress items of phases/ (all branches), priority then seq. The oracle ranks mirror rows: a ghost
+// pending/in_progress items of phases/ (all branches), priority then seq. The oracle ranks mirror rows: a ghost
 // (an actionable row whose file is gone) keeps its rank and is counted, but has no file to rewrite.
 // Absent keys read as the mirror database defaults (status pending, priority 50, seq 0); an explicit null stays null.
 const statusOf = i => (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending');
@@ -297,7 +297,7 @@ function actionable(dir) {
   return [...files, ...ghosts].sort((a, b) => ((a.fm.priority ?? 50) - (b.fm.priority ?? 50)) || ((a.fm.seq ?? 0) - (b.fm.seq ?? 0)));
 }
 
-// lib_db.py:541-556: rank i onto the i-th item; only a file whose priority changes is rewritten.
+// rank i onto the i-th item; only a file whose priority changes is rewritten.
 // int(priority): a quoted "0" equals rank 0.
 const asInt = p => (typeof p === 'string' && /^\s*[+-]?\d+\s*$/.test(p) ? Number(p) : p);
 function applyDense(dir, items, inScope, beforeApply) {
@@ -307,7 +307,7 @@ function applyDense(dir, items, inScope, beforeApply) {
   guardReflow(dir, writes);
   beforeApply?.(writes);
   return items.map((i, rank) => {
-    if (changes[rank]) write({ path: join(dir, i.path), fm: { ...i.fm, priority: rank }, body: i.body }, dir); // item 034: a rank is no change of the item: updated stays
+    if (changes[rank]) write({ path: join(dir, i.path), fm: { ...i.fm, priority: rank }, body: i.body }, dir); // a rank is no change of the item: updated stays
     return [slugOf(i), rank];
   });
 }
@@ -324,7 +324,7 @@ function within(items, arrange) {
   return out;
 }
 
-// lib_db.py:558-567: re-densify in current order; with {slug, target}, first move that item to the clamped rank.
+// re-densify in current order; with {slug, target}, first move that item to the clamped rank.
 // exclude omits explicitly departed items before their mirror rows are changed.
 export function reflow(dir, move, beforeApply) {
   const items = within(actionable(dir).filter(i => !move?.exclude?.includes(slugOf(i))), mine => {
@@ -337,7 +337,7 @@ export function reflow(dir, move, beforeApply) {
   return applyDense(dir, items, inScope, beforeApply);
 }
 
-// lib_db.py:570-584: idents (slugs or item numbers, never row ids) lead; the rest keeps its order.
+// idents (slugs or item numbers, never row ids) lead; the rest keeps its order.
 export function reorder(dir, idents, beforeApply) {
   const all = actionable(dir);
   const items = all.filter(inScope);
@@ -354,7 +354,7 @@ export function reorder(dir, idents, beforeApply) {
 }
 
 
-// lib_db.py:302-313. The folder repository is the folder's last two path parts. Archived items (and a NULL status,
+//. The folder repository is the folder's last two path parts. Archived items (and a NULL status,
 // which NOT IN never matches) are out of every finding; ghost is a non-archived mirror row whose file is gone.
 export function findings(dir) {
   const out = { foreign: [], untagged: [], ghost: [] };
@@ -369,7 +369,7 @@ export function findings(dir) {
   return out;
 }
 
-// lib_db.py:159-160
+//
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 // the one way an item write marks itself: when, and by whom (see seen.js)
 export function stamp(fm) {

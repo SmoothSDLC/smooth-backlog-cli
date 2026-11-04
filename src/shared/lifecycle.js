@@ -1,7 +1,7 @@
-// The team lifecycle of `backlog update` in shared mode (cli-parity job 15): claim, release, request-review, start-review,
-// review, waiting, waiting-done and close. Port of update.py:26-96 (team_action) and the guards around it, update.py:181-246.
+// The team lifecycle of `backlog update` in shared mode: claim, release, request-review, start-review,
+// review, waiting, waiting-done and close. a port of the earlier scripts(team_action) and the guards around it.
 // Each action takes item = {fm, folder, repo, body}, changes item.fm and returns {event, text}, or throws Rejected(message)
-// with the refusal text; step() runs the guards and one action, and update.js writes the front matter and appends the text.
+// with the refusal text; step runs the guards and one action, and update.js writes the front matter and appends the text.
 import { spawnSync } from 'node:child_process';
 import { hasDefinitionOfDone } from './new.js';
 import { actor } from './seen.js';
@@ -20,9 +20,9 @@ export class Rejected extends Error {}
 const reject = message => { throw new Rejected(message); };
 // The rule is per session (the agent name is the session name); a new session of the same worker is a new name.
 const NO_SELF_REVIEW = by => `${by}: the same session cannot review its own work; a new session may`;
-// The item's list of every session name that claimed it or asked for its review (item 082); append, no duplicates.
+// The item's list of every session name that claimed it or asked for its review; append, no duplicates.
 const withSession = (list, name) => (name ? [...asList(list).filter(n => n !== name), name] : asList(list));
-// Item 082: every write that changes or clears the holder, or records a review request, keeps the item's earlier
+// every write that changes or clears the holder, or records a review request, keeps the item's earlier
 // authors: it seeds the list from the current holder and the review requester (an item written before the list
 // existed has no list yet) and adds the session this write names, so the self-review block of each earlier
 // session survives the transition.
@@ -31,10 +31,10 @@ export const REFINE_HOW = 'backlog update <item> --set-review-refs <review docum
   + '--set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / '
   + "--append '## Definition of done\\n- [ ] <checkable line>'";
 
-// update.py:239: the first line of a text as a splitlines() would give it.
+// the first line of a text as a splitlines would give it.
 export const headline = text => text.replace(/^[# ]+/, '').split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/)[0];
 
-// lib_db.py:229-253 estimate_min: front matter estimate_min, else an 'ESTIMATE: <n> min' body line; null when there is none.
+// estimate_min: front matter estimate_min, else an 'ESTIMATE: <n> min' body line; null when there is none.
 function estimateMin(fm, body) {
   const v = fm.estimate_min;
   const n = typeof v === 'number' ? Math.trunc(v) : typeof v === 'string' && /^\s*[+-]?\d+\s*$/.test(v) ? Number(v) : 0;
@@ -52,23 +52,23 @@ export function missingFields(fm, body) {
     ['definition_of_done', !hasDefinitionOfDone(body)]].filter(([, bad]) => bad).map(([f]) => f);
 }
 
-// item 088: the marker new.js writes into a split slice's body (## Split from `<parent-slug>`. Inherited context:);
+// the marker new.js writes into a split slice's body (## Split from `<parent-slug>`. Inherited context:);
 // a slice created before the stage field existed has no stage, and the marker names it.
 export const isSplitSlice = body => /Split from `[^`]+`/.test(String(body ?? ''));
-// Owner 2026-11-02 (decision 083-A): nothing is implemented before it is refined. A team item without a stage (a team's work
+// The owner: nothing is implemented before it is refined. A team item without a stage (a team's work
 // item, or one written before the stage field existed) and a split slice without one are unrefined: refining. Only an item
 // without a team and without the split marker has no stage (solo work), which counts as ready.
 export const stageOf = (fm, body) => fm.stage || (fm.team || (isSplitSlice(body) && teamName()) ? 'refining' : undefined);
 
 export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
-  if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
+  if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); //
   // a split slice with no team is claimed by the team that refined it - the dispatch offers the slice's refinement to the
   // team's members, and the claim joins the slice to the claiming session's team, so the slice belongs to that team from on.
   // A plain teamless item (no split marker) stays outside the session's team.
   if (teamName() && !fm.team && fm.repository === repo && isSplitSlice(body)) fm.team = teamName();
-  // spec section 8 (item 039): the lead never claims a split item; the team runner claims the team's work item (no stage) for it
-  // item 056: a team session (TEAM_NAME) claims only what pop offers it: an item of its own team in its repository (any
+  // the design: the lead never claims a split item; the team runner claims the team's work item (no stage) for it
+  // a team session (TEAM_NAME) claims only what pop offers it: an item of its own team in its repository (any
   // item without another team elsewhere). Checked inside the locked write, so team pop's scope is the claim's precondition.
   if (teamName() && !offeredTo(fm, fm.repository, repo)) {
     reject(fm.team ? `the item belongs to team ${fm.team}, not to this session's team ${teamName()} (TEAM_NAME)`
@@ -76,14 +76,14 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   }
   if (agent === teamLead() && fm.team && fm.stage) reject(`the team lead (${agent}) never claims an item of its team's split; a member claims it`);
   if (fm.stage === 'review-hitl') reject('the item waits in stage review-hitl for an owner decision; nobody claims it, --force included (backlog update <item> --decision "<answer>" first)');
-  // update.py:75-77; beyond the oracle (spec section 4, Codex review of item 036), --force does not pass the stages.
-  // Item 088: a split slice is in stage refining with or without a team field, so the gate covers it too; a slice
+  // beyond the earlier scripts, --force does not pass the stages.
+  // a split slice is in stage refining with or without a team field, so the gate covers it too; a slice
   // created before the stage field existed has no stage, and the body's split marker names it as refining.
   // the team lead's own claim of its team's work item (backlog team pop, to split it) is the one claim of an unrefined item; a split slice is never it
   const stage = agent === teamLead() && fm.team && !fm.stage && !isSplitSlice(body) ? undefined : stageOf(fm, body);
   if (!isReady({ stage })) reject(`team ${fm.team || 'none'} item in stage ${stage || 'none'}${fm.stage ? '' : ' (not refined yet)'}: it is claimed only when its refinement review passed (stage ready)`
     + (stage === 'refining' && !fm.refiner ? `; refine it first: backlog update ${fm.phase || '<item>'} --refine-start --by <you>` : ''));
-  // item 082: a new session of the same card continues the item (no takeover, no lead reassignment): the
+  // a new session of the same card continues the item (no takeover, no lead reassignment): the
   // holder check and the "already holding" checks treat the earlier session's item as the agent's own
   const cont = heldBy(who, agent);
   if (who && who !== agent && !cont) reject(`claimed by ${who} since ${fm.claimed_at}; message ${who} or pick another item`);
@@ -91,36 +91,36 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   if (undone.length) reject(`dependencies not done: ${undone.map(describeDependency).join('; ')}`);
   const refusal = cont ? null : claimRefusal(folder, agent);
   if (refusal && !force) reject(refusal);
-  const wip = cont && fm.status === 'in_progress' ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // item 034: --force never passes a limit; a reclaim of a pending item is a start
+  const wip = cont && fm.status === 'in_progress' ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // --force never passes a limit; a reclaim of a pending item is a start
   if (wip) reject(wip);
-  // item 082: the claiming session joins the list; the write seeds it from the current holder and the review
+  // the claiming session joins the list; the write seeds it from the current holder and the review
   // requester, so an item without session_authors (written before the list existed) keeps the self-review block
   // of its earlier authors when the new session takes over claimed_by (a continuation keeps the earlier holder).
-  // item 088: the claim's session becomes the author session - a Cody review by that same session is refused (the
+  // the claim's session becomes the author session - an agent review by that same session is refused (the
   // same card reviews only in a fresh session).
   Object.assign(fm, { status: 'in_progress', claimed_by: agent, claimed_at: t, session_authors: seededAuthors(fm, agent), author_session: callerSession() });
   return { event: 'claimed', text: `Claimed by ${agent} at ${t} repository=${repo} branch=${gitBranch(process.cwd()) || '(detached)'} cwd=${process.cwd()}${refusal ? ` (--force past the claim rule: ${refusal.split(';')[0]})` : ''}` };
 }
 
-// The stages before any work (item 036; update.py:36-71): refining -> refined -> refinement-review -> ready, and review-hitl
-// for an owner decision (topology item 288). A member refines first, the lead requests the refinement review, and Codex
-// records the verdict; Claude only after Codex's 5-hour limit is recorded for the round, or at the cap of three CHANGES rounds (item 144).
+// The stages before any work: refining -> refined -> refinement-review -> ready, and review-hitl
+// for an owner decision. A member refines first, the lead requests the refinement review, and a configured
+// refinement reviewer records the verdict.
 const inStage = fm => `team ${fm.team || 'none'}, stage ${fm.stage || 'none'}`;
 export function refineStart({ fm, folder, repo, body = '' }, by, { force } = {}) {
   if (!by) reject('--refine-start needs --by <agent>');
-  // item 088: a split slice is in stage refining with or without a team field - both refine through the same stages;
+  // a split slice is in stage refining with or without a team field - both refine through the same stages;
   // a slice created before the stage field existed has no stage, and the body's split marker names it as refining.
   const stage = stageOf(fm, body) || 'none';
   if (stage !== 'refining') reject(`only an item of a team in stage refining is refined (team ${fm.team || 'none'}, stage ${stage})`);
-  // item 088: a teamless split slice joins the refining session's team here, so the team's pop and plan offer it after
+  // a teamless split slice joins the refining session's team here, so the team's pop and plan offer it after
   // its refinement review (the claim-time join below covers a slice refined before this rule)
   if (teamName() && !fm.team && fm.repository === repo) fm.team = teamName();
   if (fm.claimed_by) reject(`claimed by ${fm.claimed_by}: the work item itself is refined and split by the team lead, not refined here`);
   if (fm.refiner && fm.refiner !== by) reject(`${fm.refiner} is refining it since ${fm.refine_started}; refine another item`);
   if (by === teamLead() && fm.refiner !== by) reject(`a member, not the team lead, refines in the first round (spec section 4); the lead re-refines only an item an owner decision returned to it`);
-  const busy = fm.refiner === by || by === teamLead() ? null : claimRefusal(folder, by); // spec section 6: a refinement is new work too
+  const busy = fm.refiner === by || by === teamLead() ? null : claimRefusal(folder, by); // the design: a refinement is new work too
   if (busy && !force) reject(busy);
-  const wip = fm.refiner === by ? null : wipRefusal(folder, repo, fm, by, fm.phase); // item 034
+  const wip = fm.refiner === by ? null : wipRefusal(folder, repo, fm, by, fm.phase);
   if (wip) reject(wip);
   const t = now();
   Object.assign(fm, { stage: 'refining', refiner: by, refine_started: t }); // the stage: a slice without one (created before it existed) gets it here
@@ -157,7 +157,7 @@ export function refinementReview({ fm }, verdict, { by, comments } = {}) {
   return { event: 'refinement_reviewed', text: `## Refinement review by ${by}: ${passed ? 'PASS: ready' : 'CHANGES: back to refining'} (${t})\n\n${comments}` };
 }
 
-// Beyond the oracle (topology item 288, owner 2026-10-28): an item whose refinement needs an owner decision waits in stage
+// Beyond the earlier scripts: an item whose refinement needs an owner decision waits in stage
 // review-hitl, with the question; the owner's answer sends it back to refining, where the lead re-refines it.
 const BEFORE_READY = ['refining', 'refined', 'refinement-review'];
 export function requestDecision({ fm }, by, question) {
@@ -173,7 +173,7 @@ export function decision({ fm, folder, repo }, answer) {
   if (fm.stage !== 'review-hitl') reject(`no owner decision is pending (stage ${fm.stage || 'none'})`);
   if (!strip(answer || '')) reject('--decision needs the owner\'s answer');
   const t = now();
-  // spec section 4: the lead re-refines it with the decision; past a work-in-progress limit (034) the answer is recorded
+  // the design: the lead re-refines it with the decision; past a work-in-progress limit  the answer is recorded
   // all the same and the item waits in refining for whoever may start it (the owner's answer is never refused)
   const full = folder ? wipRefusal(folder, repo, { ...fm, stage: 'refining', refiner: '' }, teamLead(), fm.phase) : null;
   Object.assign(fm, { stage: 'refining', refiner: full ? '' : teamLead(), refine_started: full ? '' : t, decided_at: t, decision_question: '' });
@@ -184,15 +184,15 @@ export function release({ fm }, agent, { by, reason } = {}) {
   const who = fm.claimed_by || '';
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be released into the queue`);
   if (who !== agent) reject(`claimed by ${who || 'nobody'}, not by ${agent}`);
-  // item 033 (spec section 8): only the team lead gives back another agent's item, and says why
+  // only the team lead gives back another agent's item, and says why
   if (by && by !== agent && (by !== teamLead() || !strip(reason || ''))) reject(`${by} cannot release ${agent}'s item: only the team lead (${teamLead()}) does, with --reason "<why>"`);
-  // item 082: the release clears claimed_by but keeps the holder in session_authors (seeded for an item written
+  // the release clears claimed_by but keeps the holder in session_authors (seeded for an item written
   // before the list existed), so the holder's self-review block stands after the release.
-  Object.assign(fm, { status: 'pending', claimed_by: '', claimed_at: '', session_authors: seededAuthors(fm, ''), ...(fm.wait_on ? { wait_on: '' } : {}) }); // beyond update.py parity: a wait belongs to the holder; left behind it hides the item from pop's continue AND offers it as a claim
+  Object.assign(fm, { status: 'pending', claimed_by: '', claimed_at: '', session_authors: seededAuthors(fm, ''), ...(fm.wait_on ? { wait_on: '' } : {}) }); // beyond parity: a wait belongs to the holder; left behind it hides the item from pop's continue AND offers it as a claim
   return { event: 'released', text: by && by !== agent ? `Released by ${by} for ${agent} at ${now()}: ${reason}` : `Released by ${agent} at ${now()}` };
 }
 
-// item 033 (spec section 8): the team lead takes an item from one agent and gives it to another, with the reason.
+// the team lead takes an item from one agent and gives it to another, with the reason.
 export function reassign({ fm }, agent, { by, reason } = {}) {
   if (!by || by !== teamLead()) reject(`--reassign --by <the team lead>: only the lead (${teamLead()}; TEAM_LEAD) gives one agent's item to another (got ${by || 'none'})`);
   if (!strip(reason || '')) reject('--reassign needs --reason "<why>"');
@@ -201,14 +201,14 @@ export function reassign({ fm }, agent, { by, reason } = {}) {
   if (!from) reject('nobody holds the item: the agent claims it (backlog update <item> --claim <agent>)');
   if (from === agent) reject(`${agent} holds it already`);
   const t = now();
-  // item 082: a reassignment is a hand-off of the work: the former holder and the review requester stay in
+  // a reassignment is a hand-off of the work: the former holder and the review requester stay in
   // session_authors (the write seeds it for an item written before the list existed), and the new holder joins,
   // so the self-review block survives the hand-off.
   Object.assign(fm, { claimed_by: agent, claimed_at: t, session_authors: seededAuthors(fm, agent), ...(fm.wait_on ? { wait_on: '' } : {}) });
   return { event: 'reassigned', text: `## Reassigned by ${by} from ${from} to ${agent} at ${t}\n\n${reason}` };
 }
 
-// item 033: the team lead hands a review on from its reviewer (a stale one, say) to another agent, with the reason.
+// the team lead hands a review on from its reviewer (a stale one, say) to another agent, with the reason.
 export function reassignReview({ fm }, agent, { by, reason } = {}) {
   if (!by || by !== teamLead()) reject(`--reassign-review --by <the team lead>: only the lead (${teamLead()}; TEAM_LEAD) hands a review on (got ${by || 'none'})`);
   if (!strip(reason || '')) reject('--reassign-review needs --reason "<why>"');
@@ -284,12 +284,12 @@ export const reviewRefusal = (fm, cwd) => {
 export function requestReview({ fm }, reviewer, note, by = '') {
   if (!strip(note || '')) reject('--request-review needs --note "<what to review: commits, deployed evidence>"');
   if (fm.review_state === 'in_review') reject(`${fm.reviewer} is reviewing it since ${fm.review_started}: wait for the verdict; the team lead hands a stale review on (--reassign-review)`);
-  // item 033: the one who asks never reviews it and ends its session, so an unclaimed team item names it
+  // the one who asks never reviews it and ends its session, so an unclaimed team item names it
   if (fm.team && !fm.claimed_by && !by) reject('--request-review of an unclaimed team item needs --by <agent>, the one who asks');
   if (fm.claimed_by && by && by !== fm.claimed_by && by !== teamLead()) reject(`${fm.claimed_by} holds it: only the holder, or the team lead, asks for its review (not ${by})`);
   const t = now();
   // review_author outlives a release: the one who asked for the review never reviews it, whatever claimed_by says later;
-  // item 082: the asking session joins session_authors, the list that keeps the block for every earlier session -
+  // the asking session joins session_authors, the list that keeps the block for every earlier session -
   // the requester is recorded, even when it is not the claimer (a team lead asking for a claimed item); the write
   // also seeds the list from the current holder and the earlier review requester, so an item written before the
   // list existed keeps the holder's block when a later release clears claimed_by
@@ -359,13 +359,13 @@ export function waitingDone({ fm }, by) {
 export function closeItem({ fm }, by, summary, reason) {
   if (!strip(summary || '')) reject('--close needs --summary "<what was delivered>"');
   const owner = by === 'owner';
-  // item 088: the owner closes on a written decision, recorded as such; no review required
+  // the owner closes on a written decision, recorded as such; no review required
   if (owner && !strip(reason || '')) reject(`--close --by owner needs --reason "<the owner's decision>"`);
   const closer = by || fm.claimed_by || (fm.team ? '' : actor()); // outside a team the person running the command closes it
   if (!closer) reject('nobody claimed this item: pass --by <agent>');
-  // item 039 (spec section 9, owner 2026-10-25): only the claimer closes its item, else the team lead; the owner closes on a decision
+  // only the claimer closes its item, else the team lead; the owner closes on a decision
   if (fm.claimed_by && closer !== fm.claimed_by && closer !== teamLead() && closer !== 'owner') reject(`only the claimer (${fm.claimed_by}) closes it, else the team lead (${teamLead()}); not ${closer}`);
-  if (!fm.claimed_by && fm.team && closer !== teamLead() && closer !== 'owner') reject(`nobody holds this item of team ${fm.team}: the team lead (${teamLead()}) closes it; not ${closer}`); // a team's item (beyond the oracle)
+  if (!fm.claimed_by && fm.team && closer !== teamLead() && closer !== 'owner') reject(`nobody holds this item of team ${fm.team}: the team lead (${teamLead()}) closes it; not ${closer}`); // a team's item (beyond the earlier scripts)
   // the review rules of the item's team must be met for the current work commit (none for an item without a team or rules)
   if (!owner) {
     const refusal = reviewRefusal(fm);
@@ -377,18 +377,18 @@ export function closeItem({ fm }, by, summary, reason) {
     : `## Closed by ${closer} at ${now()}\n\n${summary}` };
 }
 
-// update.py:181-241: the guards and the one team action of a call. ctx = {fm, slug, folder, repo, body, incomplete, given}:
+// the guards and the one team action of a call. ctx = {fm, slug, folder, repo, body, incomplete, given}:
 // incomplete = missingFields before the call, given = the SETTABLE flags on the command line. Returns {refuse} (the text after
 // the "❌ ") or {event, text} (event 'state_change' and no text when no action was asked).
 const REFINEMENT_STEPS = ['refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision'];
-// the agent each step acts as (item 033: a member acts only as itself)
+// the agent each step acts as
 const ACTS_AS = { claim: a => a.claim, release: a => a.by || a.release, reassign: a => a.by, 'reassign-review': a => a.by, 'request-review': (a, fm) => a.by || fm.claimed_by,
   close: (a, fm) => a.by || fm.claimed_by, 'waiting-done': (a, fm) => a.by || fm.claimed_by,
-  'handoff': (a, fm) => a.by || fm.claimed_by, // the record acts as the claimer (item 059.V1)
-  'accept-handoff': a => a.by, 'reject-handoff': a => a.by }; // the accept and reject act as --by, the team lead, and need it (item 059.V1, review r1)
+  'handoff': (a, fm) => a.by || fm.claimed_by, // the record acts as the claimer
+  'accept-handoff': a => a.by, 'reject-handoff': a => a.by }; // the accept and reject act as --by, the team lead, and need it
 const ACTIONS = ['reassign', 'reassign-review', 'refine-start', 'refine-done', 'request-refinement-review', 'refinement-review', 'request-decision', 'decision',
   'claim', 'release', 'request-review', 'start-review', 'review', 'close', 'waiting', 'waiting-done', 'handoff', 'accept-handoff', 'reject-handoff'];
-// The hand-off steps (item 059.2, src/shared/handoff-commands.js) are pure: they return {refuse} (the refusal
+// The hand-off steps are pure: they return {refuse} (the refusal
 // text) or {fm: {<keys to set, in the stored form>}, text, event}; this applies the front matter keys and
 // refuses as the other steps do.
 const handoffStep = (slug, item, r) => {
@@ -396,7 +396,7 @@ const handoffStep = (slug, item, r) => {
   Object.assign(item.fm, r.fm);
   return { event: r.event, text: r.text };
 };
-// item 059.V2: the close gate (059.3) as the CLI teaches its own rules (owner 2026-11-01). The gate runs on the
+// the close gate (059.3) as the CLI teaches its own rules. The gate runs on the
 // pre-transition front matter: update.js already set status to done before the gate runs, and a done producer
 // without a handoffs key is legacy - a satisfied mark - although the edge was missing before the close attempt.
 // An item that is already done is not re-checked (a producer closed before the rule has no handoffs key). The
@@ -412,7 +412,7 @@ export function runCloseGate({ fm, statusBefore, folder, repo, slug }) {
   return gate;
 }
 export function step(a, { fm, body, slug, folder, repo, incomplete, given, before = fm, statusBefore = fm.status }) {
-  // Item 059.V1 review r3 (codex round 4 at 7bd4b10): the hand-off flags are detected by presence, not truthiness -
+  // the hand-off flags are detected by presence, not truthiness -
   // parse accepts an empty value (update.js), so without this --handoff '' / --accept-handoff '' / --reject-handoff ''
   // select no action and fall through to a successful state change; now they select the action and are refused below.
   const actions = ACTIONS.filter(k => (k === 'handoff' || k === 'accept-handoff' || k === 'reject-handoff') ? a[k] !== undefined : a[k]);
@@ -420,7 +420,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   if (actions.length && a[actions[0]] === '') return { refuse: `${slug}: --${actions[0]} needs the dependent (an empty value records nothing)` };
   const me = caller();
   if (actions.length && (actions[0] === 'accept-handoff' || actions[0] === 'reject-handoff') && !a.by) {
-    // Item 059.V1 review r1: the receipt is the team lead's - the lead's --by is required, with no fallback to the
+    // the receipt is the team lead's - the lead's --by is required, with no fallback to the
     // claimer (a member without --by would otherwise act as the claimer when the lead holds the item).
     return { refuse: `${slug}: --${actions[0]} needs --by <the team lead>` };
   }
@@ -429,12 +429,12 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
     if (as && as !== me) return { refuse: `${slug}: you are ${me} (BACKLOG_AGENT): a member acts only as itself, not as ${as}; only the team lead (${teamLead()}) takes or gives another agent's work (backlog update <item> --reassign <agent> --by <lead> --reason "<why>")` };
   }
   const note = a.note ?? '';
-  // Beyond the oracle (update.py:241 guards only steps and notes): a field, --set-* or body edit is a change too.
+  // Beyond the earlier scripts: a field, --set-* or body edit is a change too.
   if (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-'))) {
     const why = outsideTeam(fm);
     if (why) return { refuse: `${slug}: ${why}` };
   }
-  // a refinement verdict is about the item as the reviewer saw it: nothing changes in the same call (Codex review of item 036)
+  // a refinement verdict is about the item as the reviewer saw it: nothing changes in the same call
   if (a['refinement-review'] && (a.append || given.length || Object.keys(a).some(k => k.startsWith('set-')))) {
     return { refuse: `${slug}: --refinement-review records the verdict alone; change the item first and have it reviewed again` };
   }
@@ -443,21 +443,21 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
     return { refuse: `${slug}: in stage refinement-review the item stays as the reviewer reads it; a changes verdict returns it to refining` };
   }
   const steps = actions.filter(k => k !== 'release');
-  // item 088: the owner's written-decision close (--close --by owner) is no refinement step and no team work: it runs
+  // the owner's written-decision close (--close --by owner) is no refinement step and no team work: it runs
   // before any stage (a team item in its refinement stages included) and past the incomplete-item refusal.
   const ownerClose = actions.length === 1 && actions[0] === 'close' && a.by === 'owner';
-  if (a['refine-done'] && missingFields(fm, body).length) { // a refined item is complete (owner 2026-10-28; update.py:303-307)
+  if (a['refine-done'] && missingFields(fm, body).length) { // a refined item is complete
     return { refuse: `${slug}: still missing ${missingFields(fm, body).join(', ')}: complete it before --refine-done (${REFINE_HOW})` };
   }
   // Being refined (or waiting for its decision), an incomplete item takes its refinement steps, notes, its text fields
-  // and appended team fields or definition of done, and nothing else. Beyond the oracle (update.py:309 lets every step
-  // through; Codex review of item 036): a status change, another step or appended text that is no definition of done is
+  // and appended team fields or definition of done, and nothing else. Beyond the earlier scripts ( lets every step
+  // through; a review): a status change, another step or appended text that is no definition of done is
   // refused, so nothing but a refinement completes it.
   const refining = before.team && ['refining', 'review-hitl'].includes(before.stage); // as the item was before this call: --set-team '' does not lift the rule
-  // Beyond the oracle (Codex review of item 036): a team's item before stage ready takes only its refinement steps, complete
+  // Beyond the earlier scripts: a team's item before stage ready takes only its refinement steps, complete
   // or not: no work, review, close or status change until its refinement review passed.
   if (before.team && before.stage && before.stage !== 'ready') {
-    const work = [...steps.filter(k => !REFINEMENT_STEPS.includes(k) && k !== 'claim' && !(k === 'close' && ownerClose)).map(k => `--${k}`), ...given.filter(k => k === 'status').map(k => `--${k}`)]; // a claim has its own gate (claim())
+    const work = [...steps.filter(k => !REFINEMENT_STEPS.includes(k) && k !== 'claim' && !(k === 'close' && ownerClose)).map(k => `--${k}`), ...given.filter(k => k === 'status').map(k => `--${k}`)]; // a claim has its own gate (claim)
     if (work.length) return { refuse: `${slug}: team ${before.team} item in stage ${before.stage}: before stage ready only its refinement steps run (${work.join(', ')} refused)` };
   }
   // outside the refinement stages only the lead refines an incomplete item of its team (a member known by BACKLOG_AGENT
@@ -465,7 +465,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   const who = me || a.by; // the team-session caller, else the agent named by --by
   // the DAG is the lead's (refine-and-split: the lead links the split items), so --set-depends-on is no refinement edit
   const edits = strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-') && k !== 'set-depends-on');
-  // spec section 4: a member, not the lead, refines in the first round; the lead edits a refining item only as its refiner
+  // the design: a member, not the lead, refines in the first round; the lead edits a refining item only as its refiner
   if (who === teamLead() && before.team && before.stage === 'refining' && fm.refiner !== who && edits) { // with a step or without
     return { refuse: `${slug}: a member, not the team lead, refines in the first round (spec section 4); the lead edits an item in stage refining only as its refiner` };
   }
@@ -477,7 +477,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   const teamwork = Boolean(before.team || fm.team || teamScope().repo || teamName());
   if (incomplete.length && teamwork && (teamScope().repo || steps.length || refining)) { // team work: an incomplete item is only refined
     const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k)) && !(k === 'close' && ownerClose)).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),
-      // item 088: the owner's close of an incomplete item carries its --summary (the decision needs no refinement)
+      // the owner's close of an incomplete item carries its --summary (the decision needs no refinement)
       ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k)) && !(ownerClose && k === 'summary')).map(k => `--${k}`),
       ...(a.append && !/^(?:[ \t]*ESTIMATE:[^\n]*(?:\n|$))+$/.test(a.append.trim()) && !hasDefinitionOfDone(a.append) ? ['--append'] : [])]; // only ESTIMATE lines pass as such
     if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${REFINE_HOW}` };
@@ -501,15 +501,15 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
       case 'review': return review(item, a.review, { by: a.by, comments: a.comments });
       case 'waiting': return waiting(item, a.by, a.waiting);
       case 'waiting-done': return waitingDone(item, a.by);
-      // Item 059.V1: the hand-off steps. The record is made by the claimer (--by, else the claimer); the accept and
+      // the hand-off steps. The record is made by the claimer (--by, else the claimer); the accept and
       // reject act as --by, the team lead, which the step requires (refused above, review r1). The functions are pure
       // (059.2), handoffStep applies their front matter.
       case 'handoff': return handoffStep(slug, item, recordHandoff(item, { dependent: a.handoff, commit: a['handoff-commit'], contract: a['handoff-contract'], verification: a['handoff-verification'],
         outputs: a['handoff-outputs'], pickup: a['handoff-pickup'], risks: a['handoff-risks'], by: a.by || fm.claimed_by }));
       case 'accept-handoff': return handoffStep(slug, item, acceptHandoff(item, { dependent: a['accept-handoff'], checks: a.checks, by: a.by, lead: teamLead() }));
       case 'reject-handoff': return handoffStep(slug, item, rejectHandoff(item, { dependent: a['reject-handoff'], reason: a.reason, by: a.by, lead: teamLead() }));
-      // item 088: --close --by owner --reason "<the decision>" closes on a written decision, recorded as such.
-      // item 059.V2: the close gate (059.3) - a producer with an open dependent edge cannot close; the refusal
+      // --close --by owner --reason "<the decision>" closes on a written decision, recorded as such.
+      // the close gate (059.3) - a producer with an open dependent edge cannot close; the refusal
       // lists each open edge, its state and the next command. With no dependents the gate records handoffs: none
       // and the NONE line as part of the closed event.
       default: {
@@ -526,7 +526,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   }
 }
 
-// item 033 (spec section 7): the last line of the command that hands an item to review, asks for changes or closes it.
+// the last line of the command that hands an item to review, asks for changes or closes it.
 export const shutdown = agent => `🛑 ${agent}: END THE SESSION NOW. Reply with text only and make no further tool call; your next task starts in a fresh session.`;
 
 // Printed after a passing review: the next step towards the close. The claimer closes, else the team lead, never the reviewer.

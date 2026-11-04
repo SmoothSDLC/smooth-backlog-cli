@@ -19,7 +19,7 @@ test('046: --severity changes the field, is published with an event, and refuses
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  const run = args => cli(args, { cwd: cons, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester' } });
+  const run = args => cli(args, { cwd: cons, tmp: t, env: { BACKLOG_AGENT: 'tester' } });
   const made = run(['new', '--name', 'loud item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--severity', 'critical', '--body', '## Definition of done\n\n- [ ] it holds']);
   assert.equal(made.status, 0, made.stdout + made.stderr);
   const file = join(home, 'acme', 'demo', 'phases', '001-loud-item.md');
@@ -45,7 +45,7 @@ test('046: --severity is a field edit: refused on another team\'s item like any 
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  const run = (args, env = {}) => cli(args, { cwd: cons, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester', TEAM_LEAD: 'lead', ...env } });
+  const run = (args, env = {}) => cli(args, { cwd: cons, tmp: t, env: { BACKLOG_AGENT: 'tester', TEAM_LEAD: 'lead', ...env } });
   assert.equal(run(['new', '--name', 'other team item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds', '--team', 't2']).status, 0);
   run(['query', '--phase', '1', '--agent', 'tester']);
   const r = run(['update', '1', '--severity', 'critical', '--by', 'tester'], { TEAM_NAME: 't1' });

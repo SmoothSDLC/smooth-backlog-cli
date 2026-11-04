@@ -7,7 +7,7 @@
 // git calls. With the variable set, a positive control proves the preload catches the one
 // recorder call (<hook> record backlog.js). The PATH-fake tests of
 // script-runs.test.js are kept; this proof adds the any-executable and any-absolute-path
-// coverage the fakes cannot see (lead ruling 2026-10-31 after codex round 2).
+// coverage the fakes cannot see (lead ruling 2026-10-31 after rex round 2).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

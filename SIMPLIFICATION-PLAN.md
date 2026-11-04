@@ -140,7 +140,19 @@ second pull rebuilds, `query` agrees with the files.
   codebase-memory re-index and `search_code` for the mode names → 0 hits; the diff against the branch tip removes
   more lines than it adds; REVIEW-LOG.md complete; ponytail-review of the whole diff; requesting-code-review.
 
+## Decisions received (2026-11-04)
+
+- A: option b — the branch's command set is the CLI; 1.x names stay only as exact aliases (`list` = `query`); the owner
+  reviews the keep/remove list before the 1.x code is deleted (Task 2 waits for that go). The storage setting is a folder
+  path: a git repository there is synchronised, any other folder is used as it is; the clone's origin and branch are not
+  validated per command; nothing of a remote backlog is ever written into the repository.
+- B: the team rules apply only to team work (an item with a team, or a session bound to a team); a single user who
+  uses no team command uses the whole CLI unrestrained. Done (Task 4).
+- C: no agent, model or product name in the CLI: teams, members, leads and review rules are configuration of the
+  backlog folder (`teams.json`); the review rule of a team is "N members of team X and M members of team Y pass the
+  current work commit". Done in src (Task 5); the tests follow.
+- D: open.
+
 ## Order
 
-1 → 3 → 7 (no decision) · 2 (A) · 4 (B) · 5 (C) · 6 (D) · 8. Tasks 2, 4, 5 and 6 wait for their decision and are
-reported as recommendations if it does not arrive.
+1 → 3 → 4 → 5 → 7 (done or in progress) · 2 (waits for the owner's go on the removal list) · 6 (D) · 8.

@@ -1,7 +1,7 @@
-// Trust-boundary safety for the shared backlog repository mode (cli-parity job 3).
-// Cited source: the pinned oracle at commit ec5b254e — lib_db.py:58-64 (url_repo_id),
+// Trust-boundary safety for the shared backlog repository mode.
+// Cited source: the pinned oracle at commit ec5b254e — (url_repo_id),
 // 77-100 (ensure_home checks), 188-193 (_git), 587-595 (phase_by_ident);
-// new_phase.py:19-20 (_slugify). The item adds two checks with no oracle line:
+// (_slugify). The item adds two checks with no oracle line:
 // an absolute path (own message, before any git call) and a symlink check that
 // reuses safePath (src/storage.js:8-17).
 import { execFile } from 'node:child_process';
@@ -9,34 +9,34 @@ import { existsSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { safePath } from '../storage.js';
 
-// owner/name from a git URL or path (lib_db.py:58-64): https://host/Owner/name(.git),
+// owner/name from a git URL or path: https://host/Owner/name(.git),
 // git@host:Owner/name(.git), /srv/Owner/name.git. The last two parts win, so a
 // token in the URL changes nothing; fewer than two parts -> "". The setting's value
-// and the clone's origin are parsed by this one function (item 091), so the two
+// and the clone's origin are parsed by this one function, so the two
 // sides of the origin check compare the same way.
 export function repoIdFromUrl(url) {
   // user-info (user:token@) is stripped here, at the one place origins are parsed: no identity, log or error carries it
   let u = String(url ?? '').trim().replace(/\/+$/, '').replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, '$1').replace(/^[^/\\:@]*:[^/\\@]*@/, '');
   if (u.endsWith('.git')) u = u.slice(0, -4);
-  // Also splits on \ (beyond the oracle) so a Windows local-path origin (C:\srv\Owner\name.git) works.
+  // Also splits on \ (beyond the earlier scripts) so a Windows local-path origin (C:\srv\Owner\name.git) works.
   const parts = u.split(/[/\\:]/).filter(Boolean);
   return parts.length >= 2 ? parts.slice(-2).join('/') : '';
 }
 
-// Validate a shared-mode home exactly as the oracle's checks (lib_db.py:77-100),
+// Validate a shared-mode home exactly as the earlier scripts checks,
 // in the order the item fixes: absolute (item), exists (77-80, the path-naming
 // message), top folder of a git repository (92-94, compared after resolving
-// symlinks like Python's Path.resolve()), no symlink on the path (item, via
+// symlinks like Python's Path.resolve), no symlink on the path (item, via
 // safePath), the expected owner/name case-insensitive (95-97), branch main
 // (98-100). expected is the shared backlog repository's owner/name and
-// defaultHome its default home - the CLI carries no built-in name (item 091):
+// defaultHome its default home - the CLI carries no built-in name:
 // both come from the caller's setting. Returns the home path with its parent
 // resolved or throws the message.
 // native: expands Windows 8.3 short names (RUNNER~1) the way git reports them;
 // Windows paths compare case-insensitively.
 const realPath = p => { const r = realpathSync.native(p); return process.platform === 'win32' ? r.toLowerCase() : r; };
 
-// setting is the configured clone URL (item 091); when given, the origin-mismatch
+// setting is the configured clone URL; when given, the origin-mismatch
 // error names it, so the failure points at the value that was checked.
 export async function validateHome(path, expected, defaultHome, setting) {
   if (!isAbsolute(path)) throw new Error(`${path} is not an absolute path; use the absolute path to a clone of ${expected}`);
@@ -48,23 +48,23 @@ export async function validateHome(path, expected, defaultHome, setting) {
   const home = join(parent, basename(path));
   await safePath(parent, home);
   const origin = repoIdFromUrl((await git(['remote', 'get-url', 'origin'], path)).stdout);
-  // A missing origin is a refusal: the empty id of a clone without an origin must not compare equal to an empty expected id (item 091)
+  // A missing origin is a refusal: the empty id of a clone without an origin must not compare equal to an empty expected id
   if (!origin || origin.toLowerCase() !== String(expected).toLowerCase())
     throw new Error(`${path} has origin '${origin || 'none'}'; expected ${expected}${setting ? ` (the setting is '${setting}')` : ''}`);
   const branch = (await git(['branch', '--show-current'], path)).stdout.trim();
   if (branch !== 'main') throw new Error(`${path} is on branch '${branch || 'detached HEAD'}'; the backlog repository stays on main`);
-  return home; // the resolved path, as set_home.py records it
+  return home; // the resolved path, as records it
 }
 
-// The item name slug (new_phase.py:19-20): lowercase, runs of non-alphanumerics
-// to one dash, dash-trimmed, "phase" when nothing is left. Never contains / or ..
+// The item name slug: lowercase, runs of non-alphanumerics
+// to one dash, dash-trimmed, "phase" when nothing is left. Never contains / or..
 // because no other character class survives.
 export function slugify(text) {
   return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/, '') || 'phase';
 }
 
 // A phase by its NUMBER (the NNN of its file name) or by its slug — never by the
-// database row id (lib_db.py:587-595). Digits select by number, anything else
+// database row id. Digits select by number, anything else
 // selects by slug, an empty/absent selector selects nothing.
 export function itemSelector(text) {
   if (text === null || text === undefined) return null;
@@ -74,7 +74,7 @@ export function itemSelector(text) {
   return { slug: ident };
 }
 
-// Assert that path lives inside root (no .. escape, no symlink component on the
+// Assert that path lives inside root (no.. escape, no symlink component on the
 // way down) and return the relative path. The check is safePath
 // (src/storage.js:8-17), the repository's standing path device.
 export async function assertInside(root, path) {
@@ -83,7 +83,7 @@ export async function assertInside(root, path) {
 }
 
 // Review refs are relative paths into the coding-model repository: each must be
-// non-empty, relative, and free of '..' components. An absolute or ..-crossing
+// non-empty, relative, and free of '..' components. An absolute or..-crossing
 // ref would let a file name pick where it is resolved.
 export function checkRefs(refs) {
   if (!Array.isArray(refs)) throw new Error(`review refs must be a list of paths, got ${typeof refs}`);
@@ -103,7 +103,7 @@ export function redact(text) {
   return String(text).replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/?#]*@/gi, '$1').replace(/\b[\w.-]+:[\w.~+/%-]+@/g, '');
 }
 
-// Run git with an argv array — never a shell (pattern lib_db.py:188-193) — with
+// Run git with an argv array — never a shell — with
 // GIT_TERMINAL_PROMPT=0 so a git subprocess can never prompt on a terminal.
 // Resolves {stdout, stderr, code}; a failed or unspawable run has code != 0.
 export function git(args, cwd, config = {}) { // config: git settings for this run only, through GIT_CONFIG_* (argv stays as the caller wrote it)

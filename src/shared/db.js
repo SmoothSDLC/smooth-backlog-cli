@@ -1,6 +1,6 @@
-// backlog.db mirror for the shared backlog repository mode (cli-parity job 9). The item files are
-// the source of truth; <folder>/backlog.db mirrors them so the Python scripts (new_phase.py takes
-// its next number from MAX(seq) here) see what Node wrote. Oracle: lib_db.py SCHEMA/connect/
+// backlog.db mirror for the shared backlog repository mode. The item files are
+// the source of truth; <folder>/backlog.db mirrors them so the Python scripts ( takes
+// its next number from MAX(seq) here) see what Node wrote. Oracle: SCHEMA/connect/
 // _migrate, ensure_handoff_anchor, ingest_phase, scan_stack, log_event and archive.py:89-93.
 // Synchronous like store.js. The caller closes the handle.
 import { createHash } from 'node:crypto';
@@ -21,7 +21,7 @@ function sqlite() {
   try { return process.getBuiltinModule('node:sqlite'); } finally { process.emitWarning = emit; }
 }
 
-// lib_db.py SCHEMA, verbatim: the table SQL in a committed db must not differ from Python's.
+// SCHEMA, verbatim: the table SQL in a committed db must not differ from Python's.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS handoff (
   id INTEGER PRIMARY KEY, slug TEXT UNIQUE NOT NULL, title TEXT, objective TEXT,
@@ -53,12 +53,12 @@ function loadPhases(folder) {
     const path = `phases/${n}`;
     assertNoSymlinks(folder, join(folder, path));
     const text = readFileSync(join(folder, path), 'utf8');
-    const sha256 = createHash('sha256').update(text).digest('hex'); // lib_db.py:163-164
+    const sha256 = createHash('sha256').update(text).digest('hex'); //
     return { path, text, ...parse(text), sha256, sha: sha256 };
   }).filter(i => hasFrontMatter(i.text)).map(({ text, ...item }) => item); // a README or note is no item: same rule as store.load
 }
 
-// lib_db.py connect + _migrate; the busy timeout is Python's 30 s. Opening an up-to-date db writes nothing.
+// connect + _migrate; the busy timeout is Python's 30 s. Opening an up-to-date db writes nothing.
 // readOnly (a dry run): no folder, file or migration is created; an absent backlog.db reads as an empty mirror (in memory).
 // A run that leaves nothing to commit (refused, dry-run, failed) must not leave the backlog.db it created: untracked, it blocks every later pull.
 // Call before connect; call the result when the run did not end in a commit.
@@ -88,7 +88,7 @@ export function connect(folder, { readOnly = false } = {}) {
 }
 
 // A command that writes item files and then scans must leave nothing behind when it throws (nothing is committed yet, so the
-// next successful command would publish it): fn() runs, and on a throw exactly the files it wrote, renamed or removed (store.note,
+// next successful command would publish it): fn runs, and on a throw exactly the files it wrote, renamed or removed (store.note,
 // called by every writer) and every row of the mirror go back as they were. A file the command did not write is never touched.
 // Beyond python parity. shortcut: the files are held in memory; fine for a backlog folder.
 export async function undoOnThrow(db, folder, fn) {
@@ -118,13 +118,13 @@ export async function undoOnThrow(db, folder, fn) {
   } finally { if (opened) endJournal(); }
 }
 
-// lib_db.py log_event
+// log_event
 export function logEvent(db, event, { handoffId = null, phaseId = null, branch = '', commitSha = '', note = '' } = {}) {
   db.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)')
     .run(now(), handoffId, phaseId, event, branch, commitSha, note);
 }
 
-// lib_db.py ensure_handoff_anchor: the single synthetic row the phases point at.
+// ensure_handoff_anchor: the single synthetic row the phases point at.
 export function ensureAnchor(db) {
   const row = db.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get();
   if (row) return Number(row.id);
@@ -132,7 +132,7 @@ export function ensureAnchor(db) {
   return Number(db.prepare("SELECT id FROM handoff WHERE slug='BACKLOG'").get().id);
 }
 
-// lib_db.py ingest_phase: upsert by slug; the row changes (and logs) only when the sha differs.
+// ingest_phase: upsert by slug; the row changes (and logs) only when the sha differs.
 // item = a store.load entry. Returns { id, changed }.
 export function ingest(db, item, hid = ensureAnchor(db)) {
   const fm = item.fm;
@@ -149,7 +149,7 @@ export function ingest(db, item, hid = ensureAnchor(db)) {
   if (!row) {
     const names = ['handoff_id', 'slug', ...Object.keys(cols), 'created_at', 'updated_at'];
     const id = Number(db.prepare(`INSERT INTO phase(${names}) VALUES(${names.map(() => '?')})`).run(hid, slug, ...Object.values(cols), now(), now()).lastInsertRowid);
-    // Beyond the oracle: phase.id is a bare INTEGER PRIMARY KEY, so after move.py deleted the row with the highest id the new row
+    // Beyond the earlier scripts: phase.id is a bare INTEGER PRIMARY KEY, so after move.py deleted the row with the highest id the new row
     // reuses it. Events still naming that id belong to the departed item (move.py keeps its history there): detach them, keep them.
     db.prepare('UPDATE event SET phase_id=NULL WHERE phase_id=?').run(id);
     logEvent(db, 'ingested', { ...ev, phaseId: id, note: `new phase ${slug}` });
@@ -161,7 +161,7 @@ export function ingest(db, item, hid = ensureAnchor(db)) {
   return { id: Number(row.id), changed: true };
 }
 
-// lib_db.py scan_stack over phases/*.md (reconciliation opts into archive/ too): ingest what is new or changed, log
+// scan_stack over phases/*.md (reconciliation opts into archive/ too): ingest what is new or changed, log
 // file_missing for every non-archived row without a file. One transaction, so a failed scan leaves the db as it was.
 // renumbered = the [old, new] pairs sync.commit returned: a row of the old number whose file is gone is the stale
 // row of a renumbered item, and is renamed in place to the new number so it is not reported as a ghost.

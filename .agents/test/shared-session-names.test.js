@@ -1,17 +1,15 @@
 // Tests for item 082, slice A: session names with colons work everywhere the CLI uses an agent or team name
-// (front matter, event log, commit subject, the hand-off marker file name and --by/--claim validation).
+// (front matter, event log, commit subject and --by/--claim validation).
 // Owner design 2026-10-31: a card's sessions are named <item 3 digits><card id>:<increment 2 digits> (082aa:01),
-// teams join their card ids with colons (t07:09:1a). HOME is a temporary folder: the real ~/.qwen/teams is never
-// read or written. Local bare repos only.
+// teams join their card ids with colons (t07:09:1a). Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
 import * as db from '../../src/shared/db.js';
-import { pendingHandoff } from '../../src/shared/team.js';
 import * as store from '../../src/shared/store.js';
 
 const TEAM = 't07:09:1a';
@@ -28,10 +26,7 @@ function fixture() {
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  const user = join(t, 'user'); // HOME: the team folders live under it
-  const tdir = join(user, '.qwen', 'teams', 't07-09-1a'); // the folder Qwen writes for TEAM (its sanitized name)
-  mkdirSync(tdir, { recursive: true });
-  return { t, home, cons, user, tdir, folder: join(home, 'acme', 'demo') };
+  return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
 
 const git = (cwd, ...args) => {
@@ -44,7 +39,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', HOME: f.user, ...env } };
+  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', ...env } };
   if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
@@ -52,7 +47,7 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const make = (f, name, ...extra) => { const slug = ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0]; return slug; };
 const teamItem = (f, name) => { // a refined team item (stage ready): nothing is claimed before its refinement review passed (item 098)
   const s = make(f, name); ok(f, ['update', s, '--set-team', TEAM]);
-  for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']]) ok(f, ['update', s, ...a]);
+  for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']]) ok(f, ['update', s, ...a]);
   return s;
 };
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
@@ -69,7 +64,7 @@ test('082: an agent name with colons (082aa:01) is stored in claimed_by, the eve
   assert.ok(claimed, 'the claimed event is in the log');
   assert.ok(claimed.note.includes(`Claimed by ${A1}`), claimed.note);
   // the commit subject carries the name
-  assert.equal(git(f.home, 'log', '-1', '--format=%s'), `acme/demo: update.py ${s} --claim ${A1}`);
+  assert.equal(git(f.home, 'log', '-1', '--format=%s'), `acme/demo: update ${s} --claim ${A1}`);
   // --by accepts the name
   ok(f, ['update', s, '--append', 'CHUNK slice A step', '--by', A1]);
   // --claim accepts it again (a reclaim by the same session)
@@ -81,35 +76,5 @@ test('082: the commit subject carries the agent named by --by wherever the optio
   const s = make(f, 'subject carries a later --by');
   ok(f, ['update', s, '--claim', A1]);
   ok(f, ['update', s, '--append', 'CHUNK a step with a later --by', '--by', A2]);
-  assert.equal(git(f.home, 'log', '-1', '--format=%s'), `acme/demo: update.py ${s} --append ${A2}`);
-});
-
-test('082: the hand-off marker for 082aa:01 is written under the team hand-off folder and locks only that session name, not 082aa:02', () => {
-  const f = fixture();
-  writeFileSync(join(f.tdir, 'config.json'), JSON.stringify({
-    name: TEAM, leadAgentId: `lead@${TEAM}`,
-    members: [
-      { name: A1, agentId: `${A1}@${TEAM}`, joinedAt: 1000 },
-      { name: A2, agentId: `${A2}@${TEAM}`, joinedAt: 1000 },
-    ],
-  }));
-  const s = teamItem(f, 'session hand-off');
-  ok(f, ['update', s, '--claim', A1]);
-  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
-  // the marker file: <team>/handoff/<session name>.json
-  const file = join(f.tdir, 'handoff', `${A1}.json`);
-  assert.ok(existsSync(file), `the marker ${file} is written`);
-  const mk = JSON.parse(readFileSync(file, 'utf8'));
-  assert.deepEqual(Object.keys(mk).sort(), ['at_ms', 'seq']);
-  assert.equal(mk.seq, Number(s.split('-')[0]));
-  // the lock is keyed by the session name: it stops 082aa:01, not 082aa:02
-  const oldHome = process.env.HOME;
-  process.env.HOME = f.user;
-  try {
-    assert.ok(pendingHandoff(A1, TEAM), 'the marker locks its own session');
-    assert.equal(pendingHandoff(A2, TEAM), null, 'no marker for the other session of the card');
-  } finally { if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome; }
-  // e2e: the locked session gets stop, the other one does not
-  assert.equal(JSON.parse(run(f, ['pop', '--agent', A1, '--json'], { TEAM_NAME: TEAM }).stdout).action, 'stop');
-  assert.notEqual(JSON.parse(run(f, ['pop', '--agent', A2, '--json'], { TEAM_NAME: TEAM }).stdout).action, 'stop');
+  assert.equal(git(f.home, 'log', '-1', '--format=%s'), `acme/demo: update ${s} --append ${A2}`);
 });

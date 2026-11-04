@@ -29,12 +29,12 @@ function fixture(repos = ['demo']) {
   };
   const make = (repo, name, ...extra) => run(repo, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', '## Definition of done\n\n- [ ] x', ...extra]).stdout.split('created phase ')[1].split(' ')[0];
   const limits = l => writeFileSync(join(home, 'wip-limits.json'), JSON.stringify(l));
-  // item 098: a team item is refined (member, lead's review request, Codex pass) before anyone claims it; one refinement at a time, so no limit is crossed
+  // item 098: a team item is refined (member, lead's review request, reviewer's pass) before anyone claims it; one refinement at a time, so no limit is crossed
   const refine = (repo, slug) => {
     run(repo, ['update', slug, '--refine-start', '--by', 'refiner']);
     run(repo, ['update', slug, '--refine-done', '--by', 'refiner', '--note', 'refined']);
     run(repo, ['update', slug, '--request-refinement-review', '--by', 'lead']);
-    run(repo, ['update', slug, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ok']);
+    run(repo, ['update', slug, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']);
   };
   return { t, home, cons, run, make, limits, refine };
 }
@@ -60,7 +60,7 @@ test('034: each of the five levels refuses the claim past its limit; the lead\'s
   assert.match(f.run('demo', ['update', c, '--claim', 'cat'], 1).stdout, /the team work-in-progress limit of t1 is 1 and 1 item\(s\) are in progress/);
   assert.match(f.run('demo', ['update', c, '--wip-override', 'urgent fix', '--by', 'bob'], 1).stdout, /only the team lead \(lead\) lifts/);
   // a member cannot record the lead's override as the lead
-  assert.match(f.run('demo', ['update', c, '--wip-override', 'mine', '--by', 'lead'], 1, { QWEN_CODE_AGENT_ID: 'bob@t1' }).stdout, /you are bob \(QWEN_CODE_AGENT_ID\): a member acts only as itself, not as lead/);
+  assert.match(f.run('demo', ['update', c, '--wip-override', 'mine', '--by', 'lead'], 1, { TEAM_NAME: 't1', BACKLOG_AGENT: 'bob' }).stdout, /you are bob \(BACKLOG_AGENT\): a member acts only as itself, not as lead/);
   f.run('demo', ['update', c, '--wip-override', 'the release needs it today', '--by', 'lead']);
   f.run('demo', ['update', c, '--claim', 'cat']); // lifted for this item, recorded
   const fm = parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${c}.md`), 'utf8')).fm;
@@ -78,11 +78,11 @@ test('034: with a team limit of three, pop offers no fourth item while three are
   f.limits({ team: 3 });
   const items = ['a', 'b', 'c', 'd'].map(n => f.make('demo', `item ${n}`));
   for (const s of items) { f.run('demo', ['update', s, '--set-team', 't1']); f.refine('demo', s); }
-  const T = { TEAM_NAME: 't1' };
-  ['m1', 'm2', 'm3'].forEach((m, i) => f.run('demo', ['update', items[i], '--claim', m], 0, T));
-  const p = JSON.parse(f.run('demo', ['pop', '--agent', 'm4', '--json'], [0, 3], T).stdout);
+  const T = m => ({ TEAM_NAME: 't1', BACKLOG_AGENT: m }); // a team session acts only as itself
+  ['m1', 'm2', 'm3'].forEach((m, i) => f.run('demo', ['update', items[i], '--claim', m], 0, T(m)));
+  const p = JSON.parse(f.run('demo', ['pop', '--agent', 'm4', '--json'], [0, 3], T('m4')).stdout);
   assert.notEqual(p.action, 'claim', JSON.stringify(p));
-  assert.match(f.run('demo', ['update', items[3], '--claim', 'm4'], 1, T).stdout, /team work-in-progress limit of t1 is 3 and 3/);
+  assert.match(f.run('demo', ['update', items[3], '--claim', 'm4'], 1, T('m4')).stdout, /team work-in-progress limit of t1 is 3 and 3/);
 });
 
 test('034: query --wip prints the counts and the stale items; a renumbering leaves updated of the re-ranked items', () => {

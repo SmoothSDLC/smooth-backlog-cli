@@ -26,7 +26,7 @@ function fixture() {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const roster = join(t, 'team.json');
-  writeFileSync(roster, JSON.stringify({ cody: {}, archy: {}, zed: {} })); // the lead (TEAM_LEAD below) is none of them
+  writeFileSync(roster, JSON.stringify({ amy: {}, ada: {}, zed: {} })); // the lead (TEAM_LEAD below) is none of them
   return { t, cons, roster, user: join(t, 'user'), folder: join(home, 'acme', 'demo') };
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
@@ -35,7 +35,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
 const T1 = { TEAM_NAME: 't1' };
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  const o = { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '', TEAM_LEAD: 'lead', HOME: f.user, ...env } };
+  const o = { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', TEAM_LEAD: 'lead', HOME: f.user, ...env } };
   if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
@@ -46,14 +46,14 @@ const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`
 const teamItem = f => { const s = make(f, 'unrefined team item'); ok(f, ['update', s, '--set-team', 't1']); return s; }; // team set, no stage
 const pop = (f, agent) => JSON.parse(run(f, ['pop', '--agent', agent, '--json'], T1).stdout);
 const claimable = (f, env) => JSON.parse(ok(f, ['query', '--claimable', '--json'], env).stdout).map(x => x.slug);
-const plan = f => JSON.parse(ok(f, ['query', '--plan', '--agents', 'cody,archy,zed', '--roster', f.roster, '--json'], T1).stdout);
+const plan = f => JSON.parse(ok(f, ['query', '--plan', '--agents', 'amy,ada,zed', '--roster', f.roster, '--json'], T1).stdout);
 
 test('a member cannot claim a team item without a stage: the refusal names --refine-start, and nothing is written', () => {
   const f = fixture();
   const s = teamItem(f);
-  const r = no(f, ['update', s, '--claim', 'cody'], 'not refined yet');
+  const r = no(f, ['update', s, '--claim', 'amy'], 'not refined yet');
   assert.ok(r.stdout.includes('--refine-start --by <you>') && r.stdout.includes('refine it first'), r.stdout);
-  no(f, ['update', s, '--claim', 'cody', '--force'], '--refine-start'); // --force does not pass the stages
+  no(f, ['update', s, '--claim', 'amy', '--force'], '--refine-start'); // --force does not pass the stages
   assert.deepEqual([fm(f, s).claimed_by, fm(f, s).stage], ['', undefined]);
 });
 
@@ -75,16 +75,16 @@ test("the team lead's claim of a team split slice without a stage is refused, na
 test('--refine-start accepts a team item without a stage', () => {
   const f = fixture();
   const s = teamItem(f);
-  ok(f, ['update', s, '--refine-start', '--by', 'cody']);
-  assert.deepEqual([fm(f, s).stage, fm(f, s).refiner], ['refining', 'cody']);
+  ok(f, ['update', s, '--refine-start', '--by', 'amy']);
+  assert.deepEqual([fm(f, s).stage, fm(f, s).refiner], ['refining', 'amy']);
 });
 
 test('pop offers an unrefined team item as refine, never as claim; query --claimable and --plan do not offer it', () => {
   const f = fixture();
   const s = teamItem(f);
-  const p = pop(f, 'cody');
+  const p = pop(f, 'amy');
   assert.deepEqual([p.action, p.item], ['refine', s], JSON.stringify(p));
-  assert.ok(p.instruction.includes('--refine-start --by cody'), p.instruction);
+  assert.ok(p.instruction.includes('--refine-start --by amy'), p.instruction);
   assert.deepEqual(claimable(f, T1), []);
   assert.deepEqual(claimable(f, {}), []);
   assert.deepEqual(plan(f), []);
@@ -94,6 +94,6 @@ test('an item without a team and without the split marker stays claimable: no st
   const f = fixture();
   const s = make(f, 'solo item');
   assert.deepEqual(claimable(f, {}), [s]);
-  ok(f, ['update', s, '--claim', 'cody']);
-  assert.equal(fm(f, s).claimed_by, 'cody');
+  ok(f, ['update', s, '--claim', 'amy']);
+  assert.equal(fm(f, s).claimed_by, 'amy');
 });

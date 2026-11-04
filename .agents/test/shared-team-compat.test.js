@@ -21,9 +21,19 @@ function fixture() {
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-const run = (f, command, args) => cli([command, ...args], { cwd: f.cons, tmp: f.t, env: { QWEN_CODE_AGENT_ID: '', QWEN_CODE_SESSION_ID: '' } });
+const run = (f, command, args) => cli([command, ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
 const ok = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
-const COMMIT = 'def45678def45678def45678def45678def45678'; // a 40-hex commit for the hand-off records (item 059)
+const COMMIT = 'def45678def45678def45678def45678def45678'; // a 40-hex commit for the hand-off records
+// a close with a dependent needs a hand-off recorded by the claimer and accepted by the team lead
+const handoff = (f, slug, job, claimer) => {
+  ok(f, slug, '--request-review', 'any', '--note', 'commit abc1234');
+  ok(f, slug, '--review', 'pass', '--by', 'bob', '--comments', 'fine per docs/review/code.md');
+  run(f, 'query', ['--phase', slug, '--agent', claimer]);
+  ok(f, slug, '--handoff', String(Number(job.split('-')[0])), '--handoff-commit', COMMIT, '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', claimer);
+  run(f, 'query', ['--phase', slug, '--agent', 'lead']);
+  const r = cli(['update', slug, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'lead'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: 'lead', BACKLOG_SESSION: '', TEAM_LEAD: 'lead' } });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+};
 const refused = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };
 const q = (f, ...args) => { const r = run(f, 'query', [...args, '--json']); assert.equal(r.status, 0, r.stdout + r.stderr); return JSON.parse(r.stdout).map(x => x.slug); };
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
@@ -33,10 +43,9 @@ const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 function make(f, name, extra = []) {
   const has = k => extra.includes(k);
   const args = ['--name', name, '--objective', 'o', '--summary', 's', ...(has('--depends-on') ? [] : ['--depends-on', 'none'])];
-  // owner 2026-10-28: no classes. A team item names its review documents; the default is references/review/code.md
-  // (conftest.Repos.new). '--no-review-refs' (this helper's own flag) makes an item without any.
+  // A team item names its review documents; the default is docs/review/code.md. '--no-review-refs' (this helper's own flag) makes an item without any.
   const bare = has('--no-review-refs'); extra = extra.filter(x => x !== '--no-review-refs');
-  if (!has('--review-refs') && !bare) args.push('--review-refs', 'references/review/code.md');
+  if (!has('--review-refs') && !bare) args.push('--review-refs', 'docs/review/code.md');
   if (!has('--estimate')) args.push('--estimate', '5', '--complexity', 'low');
   const r = run(f, 'new', [...args, '--body', DOD, ...extra]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -46,12 +55,10 @@ function make(f, name, extra = []) {
 test('test_new_item_refusals: refusals at creation, the class options are gone, release only by the holder', () => {
   const f = fixture();
   const count = () => { try { return readdirSync(join(f.folder, 'phases')).length; } catch { return 0; } }; // no folder before the first item
-  const before = count();
   const base = ['--name', 'x', '--objective', 'o', '--summary', 's'];
-  let p = run(f, 'new', base);
-  assert.ok(p.status === 1 && p.stdout.includes('--depends-on is required'), p.stdout + p.stderr);
-  p = run(f, 'new', [...base, '--depends-on', 'none', '--review-refs', 'docs/notes.md']); // not a review document (owner 2026-10-28)
-  assert.ok(p.status === 1 && p.stdout.includes('needs at least one review document'), p.stdout + p.stderr);
+  let p = run(f, 'new', base); // outside a team an item needs no --depends-on
+  assert.equal(p.status, 0, p.stdout + p.stderr);
+  const before = count();
   for (const flag of ['--work-class', '--review-classes']) { // work and review classes are gone
     p = run(f, 'new', [...base, '--depends-on', 'none', flag, 'docs']);
     assert.ok(p.status === 2 && p.stderr.includes('unrecognized arguments'), p.stdout + p.stderr);
@@ -61,17 +68,16 @@ test('test_new_item_refusals: refusals at creation, the class options are gone, 
   assert.equal(count(), before);
   const s = make(f, 'released only by its holder', ['--depends-on', 'none']);
   assert.ok(run(f, 'query', ['--reviewable']).stderr.includes('--reviewable needs --agent'));
-  assert.ok(run(f, 'update', [s, '--set-review-refs', 'docs/notes.md']).stdout.includes('needs at least one review document'));
   // after the first item: a refused creation leaves no backlog (and no empty db) behind, and query needs one
-  ok(f, s, '--claim', 'cody');
-  assert.ok(refused(f, s, '--release', 'archy').includes('claimed by cody, not by archy'));
-  ok(f, s, '--release', 'cody');
+  ok(f, s, '--claim', 'bob');
+  assert.ok(refused(f, s, '--release', 'ann').includes('claimed by bob, not by ann'));
+  ok(f, s, '--release', 'bob');
   assert.ok(q(f, '--claimable').includes(s));
 });
 
 test('test_item_without_team_fields_keeps_working: an item written before team work stays visible and claimable', () => {
   const f = fixture();
-  const s = make(f, 'written before team work', ['--no-review-refs']); // no review: --status done finishes it
+  const s = make(f, 'written before team work', ['--no-review-refs']); // outside a team, --status done finishes it
   const path = join(f.folder, 'phases', `${s}.md`);
   const OLD = ['work_class', 'review_classes', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer'];
   const { fm, body } = item(f, s);
@@ -87,10 +93,7 @@ test('test_item_without_team_fields_keeps_working: an item written before team w
   assert.ok(q(f, '--claimable').includes(s)); // no dependencies
   const text = readFileSync(path, 'utf8');
   assert.ok(text.includes('a note added the old way') && !OLD.some(k => text.includes(`\n${k}:`)));
-  // item 088: --status done needs both review stages passed - the old item's pins, then the actor re-reads
-  const { fm: current, body: currentBody } = item(f, s);
-  store.write({ path, fm: { ...current, cody_pass_commit: current.commit || '', external_pass_commit: current.commit || '' }, body: currentBody }, f.folder);
-  run(f, 'query', ['--phase', s, '--agent', 'smooth']);
+  run(f, 'query', ['--phase', s, '--agent', 'smooth']); // the actor re-reads
   ok(f, s, '--status', 'done', '--by', 'smooth'); // read and write run as the same explicit actor (the CI runner's USER differs)
 });
 
@@ -98,30 +101,20 @@ test('test_claim_review_close_lifecycle: the query views along the lifecycle (th
   const f = fixture();
   const first = make(f, 'dependency first', []);
   const seq = first.split('-')[0];
-  const job = make(f, 'the job', ['--review-refs', 'references/review/code.md', '--depends-on', seq]);
+  const job = make(f, 'the job', ['--review-refs', 'docs/review/code.md', '--depends-on', seq]);
   assert.ok(q(f, '--blocked').includes(job) && !q(f, '--claimable').includes(job));
-  assert.ok(refused(f, job, '--claim', 'cody').includes(`${first} (status pending`)); // dependency not done
-  ok(f, first, '--claim', 'archy');
-  ok(f, first, '--request-review', 'any', '--note', 'tests written'); // every complete item is reviewed
-  ok(f, first, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/code.md');
-  run(f, 'query', ['--phase', first, '--agent', 'archy']); // archy's view is stale after cody's pass; the claimer reads it before handing on
-  ok(f, first, '--request-review', 'codex', '--note', 'tests written, external stage', '--by', 'archy');
-  ok(f, first, '--start-review', '--by', 'codex');
-  ok(f, first, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md');
-  run(f, 'query', ['--phase', first, '--agent', 'smooth']); // the environment agent (the creator here) re-reads after the codex pass
-  // item 059: the close needs the hand-off for the job, recorded by the claimer and accepted by the lead (cody, the default)
-  run(f, 'query', ['--phase', first, '--agent', 'archy']);
-  ok(f, first, '--handoff', String(Number(job.split('-')[0])), '--handoff-commit', COMMIT, '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'archy');
-  run(f, 'query', ['--phase', first, '--agent', 'cody']);
-  ok(f, first, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'cody');
-  run(f, 'query', ['--phase', first, '--agent', 'archy']); // the claimer re-reads; the claimer closes, as the same explicit actor
-  ok(f, first, '--close', '--summary', 'tests written', '--by', 'archy');
+  assert.ok(refused(f, job, '--claim', 'bob').includes(`${first} (status pending`)); // dependency not done
+  ok(f, first, '--claim', 'ann');
+  run(f, 'query', ['--phase', first, '--agent', 'ann']); // the claimer re-reads; the claimer closes, as the same explicit actor
+  handoff(f, first, job, 'ann');
+  run(f, 'query', ['--phase', first, '--agent', 'ann']); // the claimer re-reads
+  ok(f, first, '--close', '--summary', 'tests written', '--by', 'ann');
   assert.ok(!q(f, '--blocked').includes(job));
   assert.ok(q(f, '--claimable').includes(job));
 
-  ok(f, job, '--claim', 'cody');
+  ok(f, job, '--claim', 'bob');
   ok(f, job, '--request-review', 'any', '--note', 'commit abc1234, deployed evidence in run 13');
-  assert.ok(q(f, '--reviewable', '--agent', 'archy').includes(job) && !q(f, '--reviewable', '--agent', 'cody').includes(job)); // any member but the author
+  assert.ok(q(f, '--reviewable', '--agent', 'ann').includes(job) && !q(f, '--reviewable', '--agent', 'bob').includes(job)); // any member but the author
 });
 
 test('--reviewable needs --agent; the text view lists the item with its dependencies', () => {
@@ -134,7 +127,7 @@ test('--reviewable needs --agent; the text view lists the item with its dependen
   const text = run(f, 'query', ['--blocked']);
   assert.equal(text.status, 0, text.stderr);
   assert.equal(text.stdout, `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P1   ${b} (pending) — second\n`
-    + `        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n`
+    + `        review_refs=docs/review/code.md claimed_by=- review=none estimate=5m complexity=low\n`
     + `        waits on ${a} (status pending, claimed by nobody)\n`);
   const waiting = JSON.parse(run(f, 'query', ['--blocked', '--json']).stdout)[0].waiting_on;
   assert.deepEqual(waiting, [{ id: String(Number(a.split('-')[0])), slug: a, status: 'pending', claimed_by: '' }]);
@@ -142,30 +135,26 @@ test('--reviewable needs --agent; the text view lists the item with its dependen
 
 test('a completed dependency whose file is gone does not hold the dependent item back (the row decides)', () => {
   const f = fixture();
-  const dep = make(f, 'ghost dependency'); // a complete item: the hand-off of item 059 is refused on an incomplete one
-  const { fm: depFm, body: depBody } = item(f, dep);
-  store.write({ path: join(f.folder, 'phases', `${dep}.md`), fm: { ...depFm, cody_pass_commit: depFm.commit || '', external_pass_commit: depFm.commit || '', review_state: 'passed', claimed_by: 'archy' }, body: depBody }, f.folder);
-  run(f, 'query', ['--phase', dep, '--agent', 'smooth']); // the environment agent (the creator here) re-reads after the pins
+  const dep = make(f, 'ghost dependency');
   const job = make(f, 'waits for the ghost', ['--depends-on', dep.split('-')[0]]);
   assert.ok(q(f, '--blocked').includes(job) && !q(f, '--claimable').includes(job));
-  // item 059: both stages pinned, the review passed and archy holds it, so archy records the hand-off and the lead accepts it
-  ok(f, dep, '--handoff', String(Number(job.split('-')[0])), '--handoff-commit', COMMIT, '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'archy');
-  run(f, 'query', ['--phase', dep, '--agent', 'cody']);
-  ok(f, dep, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'cody');
-  run(f, 'query', ['--phase', dep, '--agent', 'archy']); // archy holds the item; it re-reads and finishes it as the same explicit actor
-  ok(f, dep, '--status', 'done', '--by', 'archy');
+  ok(f, dep, '--claim', 'ann');
+  run(f, 'query', ['--phase', dep, '--agent', 'ann']); // ann holds the item; it re-reads and finishes it as the same explicit actor
+  handoff(f, dep, job, 'ann');
+  run(f, 'query', ['--phase', dep, '--agent', 'ann']);
+  ok(f, dep, '--status', 'done', '--by', 'ann');
   rmSync(join(f.folder, 'phases', `${dep}.md`)); // the row stays done; only the file is missing
   assert.ok(!q(f, '--blocked').includes(job), 'blocked by a done dependency');
   assert.ok(q(f, '--claimable').includes(job), 'not claimable although its dependency is done');
   assert.deepEqual(JSON.parse(run(f, 'query', ['--blocked', '--json']).stdout).map(x => x.slug), []);
 });
 
-test('an item with old work_class and review_classes fields behaves exactly like one without them (owner 2026-10-28)', () => {
+test('an item with old work_class and review_classes fields behaves exactly like one without them ', () => {
   const f = fixture();
   const plain = make(f, 'plain job');
   const old = make(f, 'old job');
   const path = join(f.folder, 'phases', `${old}.md`);
-  // as a class-era item looks: the keys are written straight into the file (store.write drops them since item 096)
+  // as a class-era item looks: the keys are written straight into the file (store.write drops them)
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^---\n/, '---\nwork_class:\n- chunk\n- docs\nreview_classes:\n- security\n'));
   assert.ok(/^work_class:/m.test(readFileSync(path, 'utf8')) && /^review_classes:/m.test(readFileSync(path, 'utf8')), 'the seeded file carries both keys');
   run(f, 'query', ['--phase', old, '--agent', 'me']); // the file changed behind the CLI: read it again before the writes below
@@ -176,8 +165,8 @@ test('an item with old work_class and review_classes fields behaves exactly like
   assert.equal(rows.length, 2);
   assert.deepEqual(rows[1], rows[0]);
   assert.deepEqual(q(f, '--claimable'), [plain, old]); // both complete and claimable: no class makes either chunk work
-  assert.deepEqual([pop('archy').action, pop('archy').item], ['claim', plain]);
-  ok(f, plain, '--claim', 'archy');
+  assert.deepEqual([pop('ann').action, pop('ann').item], ['claim', plain]);
+  ok(f, plain, '--claim', 'ann');
   assert.deepEqual([pop('eve').action, pop('eve').item], ['claim', old]); // work_class chunk does not make it a chunk item
   for (const s of [plain, old]) {
     if (s === old) ok(f, s, '--claim', 'eve');

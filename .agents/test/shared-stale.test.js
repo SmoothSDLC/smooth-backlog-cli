@@ -47,21 +47,10 @@ function seed(items = ['alpha', 'beta', 'gamma'], repo = 'demo') {
   return { t, home, home2, cons, folder, folder2: join(home2, 'acme', repo), bare: join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`) };
 }
 // the CLI as the clone `home`; the agent is named by --agent/--by on the command
-const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { BACKLOG_HOME: home, QWEN_CODE_AGENT_ID: '', USER: 'nobody', ...opts.env } });
+const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { BACKLOG_HOME: home, BACKLOG_AGENT: '', USER: 'nobody', ...opts.env } });
 const fm = (folder, file) => parse(readFileSync(join(folder, 'phases', file), 'utf8')).fm;
 const onOrigin = (f, path) => git(f.t, '--git-dir', f.bare, 'show', `main:${path}`);
 const sleepSec = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100); // updated has a resolution of one second
-// item 088: a completion needs both review stages passed on the current commit; seed the stage pins so the test's
-// completion (a --status done) is review-complete. Written and pushed before any actor reads the item, so the read
-// that follows is a fresh view of the pinned file.
-function pinnedDone(f, slug) {
-  const path = join(f.folder, 'phases', `${slug}.md`);
-  const doc = parse(readFileSync(path, 'utf8'));
-  const head = git(f.cons, 'rev-parse', 'HEAD').trim(); // the work commit the gate compares the pins to
-  store.write({ path, fm: { ...doc.fm, cody_pass_commit: head, external_pass_commit: head }, body: doc.body }, f.folder);
-  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'both review stages pinned'); git(f.home, 'push', '-q');
-}
 
 test('every write stamps updated_by next to updated; an item without updated_by is read and written', () => {
   const f = seed();
@@ -72,9 +61,9 @@ test('every write stamps updated_by next to updated; an item without updated_by 
   const keys = Object.keys(fm(f.folder, '001-alpha.md'));
   assert.equal(fm(f.folder, '001-alpha.md').updated_by, 'amy');
   assert.equal(keys.indexOf('updated_by'), keys.indexOf('updated') + 1);
-  const env = run(f, f.home, ['update', '2', '--append', 'y'], { env: { QWEN_CODE_AGENT_ID: 'qwen-7' } });
+  const env = run(f, f.home, ['update', '2', '--append', 'y'], { env: { BACKLOG_AGENT: 'agent-7' } });
   assert.equal(env.status, 0, env.stderr);
-  assert.equal(fm(f.folder, '002-beta.md').updated_by, 'qwen-7');
+  assert.equal(fm(f.folder, '002-beta.md').updated_by, 'agent-7');
 });
 
 test('a write to an item another writer changed after the agent read it is refused (exit 5) and changes nothing', () => {
@@ -251,17 +240,16 @@ test('nextSeqFor never returns a number whose file name is held, also by a file 
 
 test('the creator of an item has seen it: another writer\'s change is refused on her next update', () => {
   const f = seed();
-  const made = run(f, f.home, ['new', '--name', 'fresh job', '--depends-on', 'none'], { env: { QWEN_CODE_AGENT_ID: 'amy' } });
+  const made = run(f, f.home, ['new', '--name', 'fresh job', '--depends-on', 'none'], { env: { BACKLOG_AGENT: 'amy' } });
   assert.equal(made.status, 0, made.stdout + made.stderr);
   const bob = run(f, f.home2, ['update', '4', '--append', 'bob', '--by', 'bob']);
   assert.equal(bob.status, 0, bob.stderr + bob.stdout);
-  const amy = run(f, f.home, ['update', '4', '--append', 'amy'], { env: { QWEN_CODE_AGENT_ID: 'amy' } });
+  const amy = run(f, f.home, ['update', '4', '--append', 'amy'], { env: { BACKLOG_AGENT: 'amy' } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
 });
 
 test('what the agent itself re-ranked on the side is not news to it: completing item 1 reflows item 2, and her next update of 2 goes through', () => {
   const f = seed();
-  pinnedDone(f, '001-alpha'); // item 088: the completion below needs both review stages already passed
   for (const slug of ['001-alpha', '002-beta']) run(f, f.home, ['query', '--phase', slug, '--agent', 'amy']);
   const done = run(f, f.home, ['update', '1', '--status', 'done', '--by', 'amy']);
   assert.equal(done.status, 0, done.stderr + done.stdout);
@@ -275,7 +263,6 @@ for (const [name, args] of [
   ['completion reflow', ['1', '--status', 'done']],
 ]) test(`the leading pull preserves Amy's expected version of item 2 before a ${name}`, () => {
   const f = seed();
-  pinnedDone(f, '001-alpha'); // item 088: the completion case needs both review stages already passed; the direct write case is unaffected
   const read = run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']);
   assert.equal(read.status, 0, read.stderr + read.stdout);
   const cache = viewCache(f.home, 'amy');
@@ -303,10 +290,7 @@ function closeFixture() {
   const f = seed();
   const path = join(f.folder, 'phases', '001-alpha.md');
   const doc = parse(readFileSync(path, 'utf8'));
-  const head = git(f.cons, 'rev-parse', 'HEAD'); // item 088: the work commit is the working repository's HEAD
-  store.write({ path, fm: { ...doc.fm,
-    review_refs: ['references/review/tests.md'], review_state: 'passed', estimate_min: 5,
-    cody_pass_commit: head, external_pass_commit: head }, // item 088: both stages passed for the work commit
+  store.write({ path, fm: { ...doc.fm, review_refs: ['docs/review/tests.md'], review_state: 'passed', estimate_min: 5 },
     body: doc.body + '\n## Definition of done\n\n- [x] Tested\n' }, f.folder);
   const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'ready to close'); git(f.home, 'push', '-q');
@@ -383,7 +367,7 @@ for (const [name, args, target] of [
   const bob = run(f, f.home2, ['update', '2', '--append', 'Bob edit survives', '--by', 'bob']);
   assert.equal(bob.status, 0, bob.stderr + bob.stdout);
   const before = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
-  const amy = run(f, f.home, args, { cwd, env: { QWEN_CODE_AGENT_ID: 'amy' } });
+  const amy = run(f, f.home, args, { cwd, env: { BACKLOG_AGENT: 'amy' } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
   assert.match(amy.stderr, /item 002-beta was changed by bob/);
   // 053: the command reads the item from inside its own repository (a move runs in the source repository)
@@ -407,7 +391,7 @@ test('053: a cross-repository move refused for its own item also names the chang
   assert.equal(run(f, f.home2, ['update', '2', '--append', 'bob', '--by', 'bob']).status, 0);
   const src2 = run(f, f.home2, ['update', '1', '--append', 'bob', '--by', 'bob'], { cwd });
   assert.equal(src2.status, 0, src2.stderr + src2.stdout);
-  const amy = run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd, env: { QWEN_CODE_AGENT_ID: 'amy' } });
+  const amy = run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd, env: { BACKLOG_AGENT: 'amy' } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
   assert.match(amy.stderr, /item 001-source was changed by bob .*1 other item\(s\) you read changed too \(002-beta of acme\/demo\); read them again \(backlog query --phase 001-source --agent <you>; in repository acme\/demo: backlog query --phase 002-beta --agent <you>\)/);
 });
@@ -507,7 +491,7 @@ for (const [name, args, target] of [
   // the real path, as the CLI resolves its home (macOS: /var is /private/var)
   const runLock = join(realpathSync(f.home), '.git', 'smooth-backlog-cli-run.lock');
   if (name.includes('inherited')) writeFileSync(runLock, JSON.stringify({ pid: process.pid, host: hostname(), command: 'test' }));
-  const amy = run(f, f.home, args, { cwd, env: { QWEN_CODE_AGENT_ID: 'amy',
+  const amy = run(f, f.home, args, { cwd, env: { BACKLOG_AGENT: 'amy',
     ...(name.includes('inherited') ? { BACKLOG_RUN_LOCK_HELD: `${runLock}:${process.pid}` } : {}),
   } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
@@ -620,7 +604,6 @@ test('review P2: a renumbered incidental write retains proof of the previously r
 // item's content still refuses its write, and the refusal names one command that reads every item a move re-ranks.
 test('053: after bob closes an item, amy moves another at once; a content change still refuses her write until she reads', () => {
   const f = seed(['alpha', 'beta', 'gamma', 'delta']);
-  pinnedDone(f, '001-alpha'); // item 088: bob's completion below needs both review stages already passed
   for (const item of ['002-beta', '003-gamma', '004-delta']) assert.equal(run(f, f.home, ['query', '--phase', item, '--agent', 'amy']).status, 0);
   assert.equal(run(f, f.home2, ['query', '--phase', '001-alpha', '--agent', 'bob']).status, 0);
   const bob = run(f, f.home2, ['update', '1', '--status', 'done', '--by', 'bob']); // the reflow re-ranks beta, gamma and delta
@@ -640,7 +623,6 @@ test('053: after bob closes an item, amy moves another at once; a content change
 
 test('053: a reflow over several items with new content names them all in one refusal and one command reads them', () => {
   const f = seed(['alpha', 'beta', 'gamma', 'delta']);
-  pinnedDone(f, '001-alpha'); // item 088: the completion below needs both review stages already passed
   for (const item of ['001-alpha', '002-beta', '003-gamma', '004-delta']) assert.equal(run(f, f.home, ['query', '--phase', item, '--agent', 'amy']).status, 0);
   for (const n of ['2', '3']) {
     assert.equal(run(f, f.home2, ['query', '--phase', n, '--agent', 'bob']).status, 0);

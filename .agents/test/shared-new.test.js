@@ -47,11 +47,9 @@ const rows = (f, sql) => { const con = db.connect(f.folder); try { return con.pr
 // ---------------------------------------------------------------- refusals
 
 const REFUSALS = [
-  ['no --depends-on', BASE, 1, '❌ --depends-on is required: the item numbers or slugs this work needs done first, or --depends-on none\n', ''],
   ['no --name', ['--depends-on', 'none'], 1, '❌ --name is required (or --split-from <phase>)\n', ''],
   ['a work class (the classes are gone)', [...NONE, '--work-class', 'docs'], 2, '', '❌ backlog: unrecognized arguments: --work-class docs\n'],
   ['a review class (the classes are gone)', [...NONE, '--review-classes', 'code'], 2, '', '❌ backlog: unrecognized arguments: --review-classes code\n'],
-  ['review refs that name no review document', [...NONE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x'], 1, '❌ --review-refs needs at least one review document (references/review/<type>.md in the review-documents repository)\n', ''],
   ['a dependency that is not there', [...BASE, '--depends-on', 'no-such-item'], 1, "❌ --depends-on: no item 'no-such-item' in this backlog\n", ''],
   ['a number that is not there', [...BASE, '--depends-on', '99'], 1, "❌ --depends-on: no item '99' in this backlog\n", ''],
   ['--split-from not found', [...NONE, '--split-from', 'nope'], 1, "❌ --split-from: no phase 'nope'\n", ''],
@@ -75,6 +73,13 @@ for (const [title, args, code, out, err] of REFUSALS) {
     assert.equal(git(f.home, 'status', '--porcelain', '--', 'acme/demo/phases'), '');
   });
 }
+
+test('--depends-on is optional outside a team, and any path is a review ref', t => {
+  const f = fixture(t);
+  assert.equal(node(f, BASE).status, 0);
+  assert.equal(node(f, [...BASE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x']).status, 0);
+  assert.equal(items(f).length, 2);
+});
 
 test('refusal: a detached HEAD dies with exit 2 after the dependency check', t => {
   const f = fixture(t);
@@ -203,7 +208,7 @@ git -C "${other}" add -A && git -C "${other}" commit -q -m bravo && git -C "${ot
   assert.deepEqual(store.findings(f.folder).ghost, []);
 });
 
-// ---------------------------------------------------------------- review fixes (Codex review 2026-10-23, job 10)
+// ---------------------------------------------------------------- review fixes (job 10)
 
 test('review P1: a symlinked owner folder in the home is refused before any database or item write', t => {
   const f = fixture(t);

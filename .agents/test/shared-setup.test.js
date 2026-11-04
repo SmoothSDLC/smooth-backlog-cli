@@ -20,7 +20,7 @@ function fixture() {
   const app = consumer(t, 'acme', 'app', 'main');
   for (const d of ['.claude', '.qwen']) mkdirSync(join(app, d));
   const env = { HOME: join(t, 'user'), XDG_CONFIG_HOME: join(t, 'config'), BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`),
-    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid', QWEN_CODE_AGENT_ID: 'tester' };
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid', BACKLOG_AGENT: 'tester' };
   const run = (cwd, args, input) => { const r = spawnSync(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, ...env }, input: input ?? '', encoding: 'utf8' }); return { status: r.status, stdout: r.stdout, stderr: r.stderr }; };
   return { t, app, run };
 }

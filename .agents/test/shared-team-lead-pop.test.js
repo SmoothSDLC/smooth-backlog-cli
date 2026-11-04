@@ -1,4 +1,4 @@
-// Tests for item 056: `backlog team pop --team <name>`, the team lead's command that takes its team's next work item
+// Tests for `backlog team pop --team <name>`, the team lead's command that takes its team's next work item
 // (front matter team = the team, no stage) with the whole item. Local bare repos.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +26,7 @@ const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', `Body of ${name}.\n\n${DOD}`];
 const LEAD = { TEAM_LEAD: 'lead' };
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, BACKLOG_AGENT: env.TEAM_LEAD ?? 'lead', ...env } }); // the caller is the lead unless the test names another agent
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
@@ -55,57 +55,57 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   assert.ok(text.stdout.startsWith(`continue ${late}\n`) && text.stdout.includes(`--- item ${late}: body ---\n`), text.stdout);
 });
 
-test('082: team pop records the continuation claim when the lead\'s earlier session holds the work item', () => {
+test('team pop records the continuation claim when the lead\'s earlier session holds the work item', () => {
   const f = fixture();
   const s = make(f, 'continuation work item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
-  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:01' }); // the lead's earlier session holds it (item 098: only the lead's own claim takes an unrefined work item)
-  const p = pop(f, { TEAM_LEAD: '082bb:02' }, '--team', 't1');
+  ok(f, ['query', '--phase', s, '--agent', 'zed:01']);
+  ok(f, ['update', s, '--claim', 'zed:01'], { TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
+  const p = pop(f, { TEAM_LEAD: 'zed:02' }, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.status], ['continue', s, 0]);
-  assert.equal(fm(f, s).claimed_by, '082bb:02', 'the continuation records the new session as the holder');
-  assert.deepEqual(fm(f, s).session_authors, ['082bb:01', '082bb:02'], 'the earlier session stays in the list');
+  assert.equal(fm(f, s).claimed_by, 'zed:02', 'the continuation records the new session as the holder');
+  assert.deepEqual(fm(f, s).session_authors, ['zed:01', 'zed:02'], 'the earlier session stays in the list');
 });
 
-test('082: team pop exits 1 when the continuation claim is handed back before the final read', () => {
+test('team pop exits 1 when the continuation claim is handed back before the final read', () => {
   const f = fixture();
   const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
   const s = make(f, 'handed back work item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
-  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:01' }); // the lead's earlier session holds it (item 098: only the lead's own claim takes an unrefined work item)
-  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: '082bb:02', BACKLOG_TEST_SELF: wrap, HAND_BACK_AFTER_CLAIM: '1', HAND_BACK_TO: '082bb:01' });
+  ok(f, ['query', '--phase', s, '--agent', 'zed:01']);
+  ok(f, ['update', s, '--claim', 'zed:01'], { TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
+  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: 'zed:02', BACKLOG_TEST_SELF: wrap, HAND_BACK_AFTER_CLAIM: '1', HAND_BACK_TO: 'zed:01' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /changed before team pop could show it/);
   assert.equal(r.stdout, '', 'no success output: the item is not presented as held');
-  assert.equal(fm(f, s).claimed_by, '082bb:01', 'the hand-back stands: the earlier session keeps holding');
+  assert.equal(fm(f, s).claimed_by, 'zed:01', 'the hand-back stands: the earlier session keeps holding');
 });
 
-test('082: team pop exits 1 when the held item is reassigned to another session of the same card before the final read', () => {
+test('team pop exits 1 when the held item is reassigned to another session of the same card before the final read', () => {
   const f = fixture();
   const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
   const s = make(f, 'exact holder work item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', '082bb:02']);
-  ok(f, ['update', s, '--claim', '082bb:02'], { TEAM_LEAD: '082bb:02' }); // the lead's own session holds it: the call makes no claim
-  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: '082bb:02', BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'reassigned'),
-    REASSIGN_ON_READ: s, REASSIGN_TO: '082bb:03', REASSIGN_BY: '082bb:02' });
+  ok(f, ['query', '--phase', s, '--agent', 'zed:02']);
+  ok(f, ['update', s, '--claim', 'zed:02'], { TEAM_LEAD: 'zed:02' }); // the lead's own session holds it: the call makes no claim
+  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: 'zed:02', BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'reassigned'),
+    REASSIGN_ON_READ: s, REASSIGN_TO: 'zed:03', REASSIGN_BY: 'zed:02' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /changed before team pop could show it/);
   assert.equal(r.stdout, '', 'no success output: the item is not presented as held');
-  assert.equal(fm(f, s).claimed_by, '082bb:03', 'the other session of the same card holds the item');
+  assert.equal(fm(f, s).claimed_by, 'zed:03', 'the other session of the same card holds the item');
 });
 
-test('082: team pop exits 1 when the continuation claim is refused; the earlier session keeps holding', () => {
+test('team pop exits 1 when the continuation claim is refused; the earlier session keeps holding', () => {
   const f = fixture();
   const dep = make(f, 'open dependency');
   const s = make(f, 'refused continuation item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
-  ok(f, ['update', s, '--claim', '082bb:01'], { TEAM_LEAD: '082bb:01' }); // the lead's earlier session holds it (item 098: only the lead's own claim takes an unrefined work item)
-  ok(f, ['query', '--phase', s, '--agent', '082bb:01']);
-  ok(f, ['update', s, '--set-depends-on', dep.split('-')[0], '--by', '082bb:01']); // an undone dependency: the continuation claim is refused
-  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: '082bb:02' });
+  ok(f, ['query', '--phase', s, '--agent', 'zed:01']);
+  ok(f, ['update', s, '--claim', 'zed:01'], { TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
+  ok(f, ['query', '--phase', s, '--agent', 'zed:01']);
+  ok(f, ['update', s, '--set-depends-on', dep.split('-')[0], '--by', 'zed:01']); // an undone dependency: the continuation claim is refused
+  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: 'zed:02' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /the continuation claim of .* was not recorded.*dependencies not done/);
   assert.equal(r.stdout, '', 'no success output: the item is not presented as held');
-  assert.equal(fm(f, s).claimed_by, '082bb:01', 'the earlier session keeps holding');
+  assert.equal(fm(f, s).claimed_by, 'zed:01', 'the earlier session keeps holding');
 });
 
 test('team pop: an item whose claim is refused is named and skipped; nothing left is idle with exit 3', () => {
@@ -128,9 +128,9 @@ test('team pop: only the lead, only its team, only itself', () => {
   for (const [args, env, text] of [
     [['team', 'pop'], {}, /team pop needs --team/],
     [['team'], {}, /subcommand pop/],
-    [['team', 'pop', '--team', 't1', '--agent', 'archy'], {}, /only the team lead \(lead; TEAM_LEAD\)/],
+    [['team', 'pop', '--team', 't1', '--agent', 'bob'], {}, /only the team lead \(lead; TEAM_LEAD\)/],
     [['team', 'pop', '--team', 't1'], { TEAM_NAME: 't2' }, /team t2 \(TEAM_NAME\), not t1/],
-    [['team', 'pop', '--team', 't1'], { QWEN_CODE_AGENT_ID: 'archy@t1' }, /you are archy/],
+    [['team', 'pop', '--team', 't1'], { TEAM_NAME: 't1', BACKLOG_AGENT: 'bob' }, /you are bob/],
     [['team', 'pop', '--team', 't1', '--bogus'], {}, /unrecognized arguments: --bogus/],
   ]) {
     const r = run(f, args, env);
@@ -138,21 +138,21 @@ test('team pop: only the lead, only its team, only itself', () => {
   }
 });
 
-test('item 060: query --status --json rows carry claimed_by and review_state', () => {
+test('query --status --json rows carry claimed_by and review_state', () => {
   const f = fixture();
   const held = make(f, 'held item'); const reviewed = make(f, 'reviewed item'); const free = make(f, 'free item');
-  ok(f, ['query', '--phase', reviewed, '--agent', 'archy']); ok(f, ['update', reviewed, '--claim', 'archy']);
-  ok(f, ['update', reviewed, '--request-review', 'any', '--note', 'commit abc', '--by', 'archy']); // it waits: archy may pull new work
-  ok(f, ['query', '--phase', held, '--agent', 'archy']); ok(f, ['update', held, '--claim', 'archy']);
+  ok(f, ['query', '--phase', reviewed, '--agent', 'bob']); ok(f, ['update', reviewed, '--claim', 'bob']);
+  ok(f, ['update', reviewed, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']); // it waits: bob may pull new work
+  ok(f, ['query', '--phase', held, '--agent', 'bob']); ok(f, ['update', held, '--claim', 'bob']);
   const rows = Object.fromEntries(JSON.parse(ok(f, ['query', '--status', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
-  assert.deepEqual(rows[held], ['archy', 'none']);
-  assert.deepEqual(rows[reviewed], ['archy', 'requested']);
+  assert.deepEqual(rows[held], ['bob', 'none']);
+  assert.deepEqual(rows[reviewed], ['bob', 'requested']);
   assert.deepEqual(rows[free], ['', 'none']);
   ok(f, ['query', '--phase', reviewed, '--agent', 'zed']); ok(f, ['update', reviewed, '--start-review', '--by', 'zed']);
   const file = join(f.folder, 'phases', `${free}.md`); // a front matter without the two keys: '' (written by hand here, never by the CLI)
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^claimed_by:.*\n/m, '').replace(/^review_state:.*\n/m, ''));
   const again = Object.fromEntries(JSON.parse(ok(f, ['query', '--status', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
-  assert.deepEqual([again[reviewed], again[free]], [['archy', 'in_review'], ['', '']]);
+  assert.deepEqual([again[reviewed], again[free]], [['bob', 'in_review'], ['', '']]);
 });
 
 test('team pop: an unclaimed in-progress work item is taken; no output names a file of the backlog', () => {
@@ -165,7 +165,7 @@ test('team pop: an unclaimed in-progress work item is taken; no output names a f
   for (const out of [j.stdout, j.stderr, text.stdout, text.stderr]) assert.ok(!out.includes('phases/') && !out.includes(f.home), out);
 });
 
-test('item 061: query --phase --json names the team fields an item lacks', () => {
+test('query --phase --json names the team fields an item lacks', () => {
   const f = fixture();
   const full = make(f, 'complete item');
   const bare = ok(f, ['new', '--name', 'bare item', '--depends-on', 'none']).stdout.split('created phase ')[1].split(' ')[0];
@@ -184,7 +184,7 @@ const args = process.argv.slice(2); const e = process.env;
 if (e.FAIL_ON && args.join(' ').startsWith(e.FAIL_ON)) { process.stderr.write(e.FAIL_ERR + '\\n'); process.exit(Number(e.FAIL_RC)); }
 if (e.CLEAR_ON_READ && args[0] === 'query' && args.includes('--phase') && !existsSync(e.MOVE_MARK + '.cleared')) {
   writeFileSync(e.MOVE_MARK + '.cleared', '1'); // another agent takes the item out of the team just before the lead reads it
-  spawnSync(process.execPath, [bin, 'update', args[args.indexOf('--phase') + 1], '--set-team', ''], { env: { ...e, QWEN_CODE_AGENT_ID: 'other', TEAM_NAME: '' } });
+  spawnSync(process.execPath, [bin, 'update', args[args.indexOf('--phase') + 1], '--set-team', ''], { env: { ...e, BACKLOG_AGENT: 'other', TEAM_NAME: '' } });
 }
 if (e.REASSIGN_ON_READ && args[0] === 'query' && args[args.indexOf('--phase') + 1] === e.REASSIGN_ON_READ && !existsSync(e.MOVE_MARK + '.reassigned')) {
   writeFileSync(e.MOVE_MARK + '.reassigned', '1'); // another writer hands the item to another session of the same card just before the lead reads it
@@ -230,7 +230,7 @@ test('team pop: the claim itself refuses another team\'s item in a team session'
   assert.equal(r.status, 1); assert.match(r.stdout, /belongs to team t2, not to this session's team t1/);
 });
 
-test('item 060: ghost rows carry empty team fields; bare files stay paths', () => {
+test('ghost rows carry empty team fields; bare files stay paths', () => {
   const f = fixture();
   const a = make(f, 'alpha item'); make(f, 'beta item');
   writeFileSync(join(f.folder, 'phases', 'note.md'), 'a stray note, no front matter\n');
@@ -242,7 +242,7 @@ test('item 060: ghost rows carry empty team fields; bare files stay paths', () =
   if (j.findings.bare) assert.ok(j.findings.bare.every(x => typeof x === 'string'), JSON.stringify(j.findings.bare));
 });
 
-test('item 061: an item without depends_on names it; an item whose file is gone has missing null', () => {
+test('an item without depends_on names it; an item whose file is gone has missing null', () => {
   const f = fixture();
   const s = make(f, 'hand edited item'); const g = make(f, 'gone item');
   const file = join(f.folder, 'phases', `${s}.md`);
@@ -259,7 +259,7 @@ test('item 061: an item without depends_on names it; an item whose file is gone 
   writeFileSync(file, '---\n{}\n---\nan empty front matter\n'); // no keys: no item either
   assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, null);
 });
-test('item 056: in a team session a claim takes only an item of the session\'s team in its repository', () => {
+test('in a team session a claim takes only an item of the session\'s team in its repository', () => {
   const f = fixture();
   const free = make(f, 'no team item'); ok(f, ['query', '--phase', free, '--agent', 'lead']);
   const r = run(f, ['update', free, '--claim', 'lead'], { TEAM_NAME: 't1' });
@@ -279,7 +279,7 @@ test('team pop: an item taken out of the team before the read is skipped, never 
   assert.equal(r.status, 2, r.stdout + r.stderr); assert.match(r.stderr, /team pop needs a branch/);
 });
 
-test('item 061: an archived item whose file lost its front matter has missing null too', () => {
+test('an archived item whose file lost its front matter has missing null too', () => {
   const f = fixture();
   const s = make(f, 'archived item'); ok(f, ['archive', s.split('-')[0], '--force']);
   const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));

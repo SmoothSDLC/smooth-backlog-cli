@@ -19,7 +19,7 @@ test('047: update, replan, close and new work beside an item with a 250-byte fil
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
-  const run = args => { const r = cli(args, { cwd: cons, tmp: t, env: { QWEN_CODE_AGENT_ID: 'tester' } }); assert.equal(r.status, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`); return r; };
+  const run = args => { const r = cli(args, { cwd: cons, tmp: t, env: { BACKLOG_AGENT: 'tester' } }); assert.equal(r.status, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`); return r; };
   const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds'];
   const long = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ').slice(0, 242); // slug 242 + "001-" + ".md" = 249-250 bytes
   run(NEW(long));
@@ -31,12 +31,6 @@ test('047: update, replan, close and new work beside an item with a 250-byte fil
   run(['query', '--phase', slug, '--agent', 'tester']);
   run(['update', slug, '--note', 'a note', '--by', 'tester']);
   run(['update', '--replan', '2,1']);
-  run(['query', '--phase', slug, '--agent', 'tester']);
-  // item 088: a completion needs both review stages passed on the work commit: pin them (a write of the long-named file)
-  const path = join(phases, file); const d = parse(readFileSync(path, 'utf8'));
-  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: cons, encoding: 'utf8' }).stdout.trim();
-  writeFileSync(path, dump({ ...d.fm, cody_pass_commit: head, external_pass_commit: head }, d.body));
-  for (const a of [['commit', '-qam', 'pins'], ['push', '-q', 'origin', 'HEAD']]) assert.equal(spawnSync('git', a, { cwd: home, env: { ...process.env, ...GIT_IDENTITY } }).status, 0);
   run(['query', '--phase', slug, '--agent', 'tester']);
   run(['update', slug, '--status', 'done', '--by', 'tester']); // the close of an item without review_refs, with the reflow
   run(NEW('third item'));

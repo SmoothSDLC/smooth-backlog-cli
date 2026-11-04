@@ -149,7 +149,7 @@ test('dump: unsupported value types and non-identifier keys are clear errors', (
   assert.throws(() => dump({ 'a b': 1 }, ''), /key/);
 });
 
-// --- review fixes (Codex review 2026-10-23, job 4) ---
+// --- review fixes (review fixes 2026-10-23) ---
 
 test('review P1: a quoted scalar keeps blank-line breaks (PyYAML folding: n breaks -> n-1 newlines)', () => {
   assert.equal(parse("---\na: 'first line\n\n  second line'\n---\n").fm.a, 'first line\nsecond line');

@@ -314,7 +314,7 @@ test('audit: a move that empties phases/ does not carry another clone\'s new fil
 
 test('review P2: a destination-renumbered move caches the moved item and refuses a subsequent stale summary overwrite', async t => {
   const [a, b, { bare }] = writers(t);
-  const mover = process.env.QWEN_CODE_AGENT_ID || process.env.USER || 'unknown'; // cliAsync uses the inherited actor
+  const mover = process.env.BACKLOG_AGENT || process.env.USER || 'unknown'; // cliAsync uses the inherited actor
   for (const name of ['alpha', 'gamma']) assert.equal(cli([...NEW(name), '--review-refs', 'references/review/code.md',
     '--estimate', '5', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
@@ -354,7 +354,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
 
 test('review P2: update records its published identity when an added item is renumbered during recovery', async t => {
   const [a, b, { bare }] = writers(t);
-  const agent = process.env.QWEN_CODE_AGENT_ID || process.env.USER || 'unknown';
+  const agent = process.env.BACKLOG_AGENT || process.env.USER || 'unknown';
   assert.equal(cli(NEW('anchor'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const [anchor] = store.load(b.folder);
@@ -383,9 +383,9 @@ test('review P2: update records its published identity when an added item is ren
 });
 
 // Writer b stops before its first push; writer a runs `aArgs` and pushes first; then b's command (bArgs) rebases onto it.
-async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv, afterSeed } = {}) {
+async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv, afterSeed, seedEnv } = {}) {
   const [a, b, { bare }] = writers(t);
-  for (const args of seedArgs) assert.equal(cli(args, { cwd: a.cons, tmp: a.tmp }).status, 0);
+  for (const args of seedArgs) { const r = cli(args, { cwd: a.cons, tmp: a.tmp, env: seedEnv }); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); }
   afterSeed?.(a);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
@@ -723,18 +723,15 @@ const COMPLETE = name => [...NEW(name), '--review-refs', 'references/review/code
 
 test('publication graph: a claim is refused when its completed dependency reopens upstream', async t => {
   const { b, bare, result } = await race(t,
-    // item 088: a completion needs both review stages - the seed completes the dependency through them
     // item 059: the dependent exists before the producer closes, and the producer's claimer (prod) records the
-    // hand-off that the lead (cody, the default) accepts - so b's claim reaches its push and the upstream reopen refuses it
+    // hand-off that the lead accepts - so b's claim reaches its push and the upstream reopen refuses it
     [COMPLETE('dependency'), [...COMPLETE('work'), '--depends-on', '1'], ['update', '1', '--claim', 'prod'],
      ['update', '1', '--request-review', 'any', '--note', 'evidence recorded in the seed'],
-     ['update', '1', '--review', 'pass', '--by', 'cody-a', '--comments', 'ok per references/review/code.md'],
-     ['query', '--phase', '1', '--agent', 'prod'], ['update', '1', '--request-review', 'codex', '--note', 'the external stage'],
-     ['update', '1', '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md'],
+     ['update', '1', '--review', 'pass', '--by', 'rex', '--comments', 'ok per references/review/code.md'],
      ['query', '--phase', '1', '--agent', 'prod'], ['update', '1', '--handoff', '2', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'prod'],
-     ['update', '1', '--accept-handoff', '2', '--checks', 'verified', '--by', 'cody'],
+     ['update', '1', '--accept-handoff', '2', '--checks', 'verified', '--by', 'lead'],
      ['query', '--phase', '1', '--agent', 'prod'], ['update', '1', '--status', 'done', '--by', 'prod']], // prod's read and prod's write: the same explicit actor (the CI runner's USER differs)
-    ['update', '1', '--status', 'pending', '--priority', '99'], ['update', '2', '--claim', 'amy']);
+    ['update', '1', '--status', 'pending', '--priority', '99'], ['update', '2', '--claim', 'amy'], { seedEnv: { TEAM_LEAD: 'lead' } });
   rejectedPublication(t, b, bare, result, /dependencies not done/);
 });
 
@@ -837,10 +834,7 @@ for (const [name, args, change] of [
 ]) test(`publication read set: concurrent ${name} changes cannot pass earlier validation`, async t => {
   const { b, bare, before, result } = await fileRace(t,
     [COMPLETE('alpha'), ['update', '1', '--request-review', 'any', '--note', 'initial evidence'],
-      ['update', '1', '--review', 'pass', '--by', 'cody', '--comments', 'references/review/code.md passed'],
-      ['update', '1', '--request-review', 'codex', '--note', 'external stage'],
-      ['update', '1', '--start-review', '--by', 'codex'],
-      ['update', '1', '--review', 'pass', '--by', 'codex', '--comments', 'references/review/code.md passed']], args, a => {
+      ['update', '1', '--review', 'pass', '--by', 'rex', '--comments', 'references/review/code.md passed']], args, a => {
       const item = store.load(a.folder)[0];
       change(item.fm);
       store.write({ path: join(a.folder, item.path), fm: item.fm, body: item.body }, a.folder);

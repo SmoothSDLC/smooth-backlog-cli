@@ -432,7 +432,7 @@ const cliNew = (f, home, cons, name, extra = {}) => new Promise(done => {
   mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
   writeFileSync(join(f.dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const p = spawn(process.execPath, [bin, 'new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
-    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: home, QWEN_CODE_AGENT_ID: name.toLowerCase(), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
+    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: home, BACKLOG_AGENT: name.toLowerCase(), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; let err = '';
   p.stdout.on('data', c => { out += c; });
   p.stderr.on('data', c => { err += c; });

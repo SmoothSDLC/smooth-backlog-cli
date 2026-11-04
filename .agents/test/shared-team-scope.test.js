@@ -73,7 +73,7 @@ test('test_scopes_and_refinement_cap: --scope and the refinement_scope cap of ba
     assert.ok(slugs(f, [...cl, '--scope', 'repo']).includes(chunkb));
     got = slugs(f, [...cl, '--scope', 'all']);
     assert.ok(got.includes(chunk) && got.includes(chunkb) && got.includes(here) && !got.includes(impl)); // another repository: chunk items only
-    for (const [slug, who] of [[here, 'archy'], [there, 'zed']]) { // nothing else claimable: the pop has only chunk work
+    for (const [slug, who] of [[here, 'ada'], [there, 'zed']]) { // nothing else claimable: the pop has only chunk work
       const c = cli(['update', slug, '--claim', who], { cwd: f.cons, tmp: f.t });
       assert.equal(c.status, 0, c.stdout + c.stderr);
     }
@@ -161,7 +161,7 @@ test('any member but the author is offered the review at once; old class profile
   const f = fixture();
   const job = make(f, f.cons, 'reviewed by any member', ['--review-refs', 'references/review/code.md']);
   const up = (...a) => { const r = cli(['update', job, ...a], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
-  up('--claim', 'cody');
+  up('--claim', 'amy');
   up('--request-review', 'any', '--note', 'ready');
   const roster = (members) => { const p = join(f.t, 'roster.json'); writeFileSync(p, JSON.stringify(members)); return p; };
   const view = (agent, r) => {
@@ -169,10 +169,10 @@ test('any member but the author is offered the review at once; old class profile
     assert.equal(o.status, 0, o.stdout + o.stderr);
     return JSON.parse(o.stdout).map(x => x.slug);
   };
-  const old = roster({ cody: { review_classes: ['code'] }, dan: { review_classes: ['code'] }, eve: { review_classes: [] } });
-  for (const agent of ['eve', 'dan', 'archy']) assert.deepEqual(view(agent, old), [job], agent); // no holder window
-  assert.deepEqual(view('cody', old), []); // never the author
-  assert.deepEqual(view('eve', roster({ cody: {}, eve: {} })), [job]);
+  const old = roster({ amy: { review_classes: ['code'] }, dan: { review_classes: ['code'] }, eve: { review_classes: [] } });
+  for (const agent of ['eve', 'dan', 'ada']) assert.deepEqual(view(agent, old), [job], agent); // no holder window
+  assert.deepEqual(view('amy', old), []); // never the author
+  assert.deepEqual(view('eve', roster({ amy: {}, eve: {} })), [job]);
 });
 
 test('a team session whose repository id leaves the home (../x) is refused with exit 2', () => {
@@ -189,23 +189,23 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
   const held = make(f, f.cons, 'scope held job', []);
   const blocked = make(f, f.cons, 'scope blocked job', ['--depends-on', held.split('-')[0]]);
   const up = (...a) => { const r = cli(['update', held, ...a], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
-  up('--claim', 'archy');
+  up('--claim', 'ada');
   up('--request-review', 'any', '--note', 'ready');
   let r = cli(['query', '--claimable'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
     `📋 1 claimable item(s) — acme/demo, branch main, P0 = next:\n   P0   ${here} (pending) — scope here\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n`);
-  r = cli(['query', '--reviewable', '--agent', 'cody'], { cwd: f.cons, tmp: f.t });
+  r = cli(['query', '--reviewable', '--agent', 'amy'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
-    `📋 1 reviewable item(s) — acme/demo, branch main, P0 = next:\n   P1   ${held} (in_progress) — scope held job\n        review_refs=references/review/code.md claimed_by=archy review=requested reviewer=any estimate=5m complexity=low\n`);
+    `📋 1 reviewable item(s) — acme/demo, branch main, P0 = next:\n   P1   ${held} (in_progress) — scope held job\n        review_refs=references/review/code.md claimed_by=ada review=requested reviewer=any estimate=5m complexity=low\n`);
   r = cli(['query', '--blocked'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
-    `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P2   ${blocked} (pending) — scope blocked job\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n        waits on ${held} (status in_progress, claimed by archy)\n`);
+    `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P2   ${blocked} (pending) — scope blocked job\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n        waits on ${held} (status in_progress, claimed by ada)\n`);
   r = cli(['query', '--blocked', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
@@ -254,7 +254,7 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
         "id": "${Number(held.split('-')[0])}",
         "slug": "${held}",
         "status": "in_progress",
-        "claimed_by": "archy"
+        "claimed_by": "ada"
       }
     ]
   }

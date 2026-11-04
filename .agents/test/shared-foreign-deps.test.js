@@ -20,7 +20,6 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   const here = consumer(t, 'acme', 'app', 'main');
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = (cwd, args, want = 0, env = {}) => {
     const r = cli(args, { cwd, tmp: t, env: { ...env, BACKLOG_AGENT: env.BACKLOG_AGENT ?? 'tester', TEAM_LEAD: 'lead', BACKLOG_SESSION: '' } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
@@ -97,7 +96,6 @@ test('042: a lead whose team items wait only on another repository is told to st
   const here = consumer(t, 'acme', 'app', 'main');
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = (cwd, args, want = 0, env = {}) => {
     const r = cli(args, { cwd, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead', TEAM_NAME: 't1', BACKLOG_SESSION: '', ...env } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
@@ -128,7 +126,6 @@ test('042: a dependency cycle through another repository, or on the item itself,
   const here = consumer(t, 'acme', 'app', 'main');
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = (cwd, args, want = 0) => {
     const r = cli(args, { cwd, tmp: t, env: { BACKLOG_AGENT: 'tester' } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
@@ -158,7 +155,6 @@ test('042: two clones that each add one half of a cycle through another reposito
   const here = consumer(t, 'acme', 'app', 'main');
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = (cwd, args, want = 0, env = {}) => {
     const r = cli(args, { cwd, tmp: t, env: { BACKLOG_AGENT: 'tester', ...env } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);

@@ -14,13 +14,10 @@ export function makeWorld(location) {
   const repo = consumer(tmp, 'acme', 'demo', 'main');
   const config = join(tmp, 'config');
   mkdirSync(config, { recursive: true });
-  const env = { ...GIT_IDENTITY, XDG_CONFIG_HOME: config, HOME: join(tmp, 'userhome'), BACKLOG_ORIGIN_URL: ORIGIN_URL };
+  // the storage setting: a backlog repository named (remote), or nothing named at all (local: the shell's own setting is cleared)
+  const env = { ...GIT_IDENTITY, XDG_CONFIG_HOME: config, HOME: join(tmp, 'userhome'), BACKLOG_ORIGIN_URL: '', BACKLOG_HOME: '' };
   mkdirSync(env.HOME, { recursive: true });
-  if (location === 'remote') {
-    env.BACKLOG_HOME = sharedBacklog(tmp);
-    mkdirSync(join(config, 'smooth-backlog-cli'), { recursive: true });
-    writeFileSync(join(config, 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}'); // the setting the branch under review still reads
-  }
+  if (location === 'remote') { env.BACKLOG_ORIGIN_URL = ORIGIN_URL; env.BACKLOG_HOME = sharedBacklog(tmp); }
   const world = {
     location, tmp, repo, env, agentEnv: {}, agent: 0, last: null,
     // every command runs from inside the consuming repository, as a user or agent would
@@ -29,10 +26,12 @@ export function makeWorld(location) {
       this.last = { args, ...runCli(args, { cwd: this.repo, env: { ...env, ...agent, ...this.agentEnv, ...extra.env } }) };
       return this.last;
     },
+    backlogRepo() { return env.BACKLOG_HOME || this.repo; },
+    gitIn(cwd, ...a) { const p = spawnSync('git', a, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } }); if (p.status !== 0) throw new Error(`git ${a.join(' ')}: ${p.stderr}`); return p.stdout.trim(); },
     git(...a) { const p = spawnSync('git', a, { cwd: this.repo, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } }); if (p.status !== 0) throw new Error(`git ${a.join(' ')}: ${p.stderr}`); return p.stdout.trim(); },
     dispose() { rmSync(tmp, { recursive: true, force: true }); },
     // the backlog folder: the clone, or .backlog inside the repository
-    home() { return env.BACKLOG_HOME ?? join(this.repo, '.backlog'); },
+    home() { return env.BACKLOG_HOME || join(this.repo, '.backlog'); },
     // the team configuration <home>/teams.json, merged key by key
     configureTeam(name, fields) {
       const file = join(this.home(), 'teams.json');

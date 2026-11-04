@@ -426,11 +426,10 @@ const assertPublish = (f, home, folder, files) => {
   rmSync(clone, { recursive: true, force: true });
 };
 
-// `backlog new` run as a separate process (a writer), in shared mode on the given clone. stdout and stderr are kept separate.
+// `backlog new` run as a separate process (a writer), on the given clone. stdout and stderr are kept separate.
 const cliNew = (f, home, cons, name, extra = {}) => new Promise(done => {
   const bin = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js');
   mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(f.dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const p = spawn(process.execPath, [bin, 'new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
     { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: home, BACKLOG_AGENT: name.toLowerCase(), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; let err = '';
@@ -466,7 +465,6 @@ test('075: CLI steps publish a clean, in-sync state: after new, archive and an o
   const f = fixture(t);
   const cons = consumer(f.dir, 'acme', 'demo', 'main');
   mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(f.dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = (args, exact) => { const r = cli(args, { cwd: cons, tmp: f.dir }); assert.equal(r.status, 0, r.stdout + r.stderr); assert.equal(r.stdout, exact); assert.equal(r.stderr, ''); };
   run(['new', '--name', 'Alpha', '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
     '✅ created phase 001-alpha (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');

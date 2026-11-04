@@ -79,7 +79,6 @@ function writers(t) {
   return dirs.map(tmp => {
     const cons = consumer(tmp, 'acme', 'demo', 'main');
     mkdirSync(join(tmp, 'config', 'smooth-backlog-cli'), { recursive: true });
-    writeFileSync(join(tmp, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
     return { tmp, cons, home: join(tmp, 'home'), folder: join(tmp, 'home', 'acme', 'demo') };
   }).concat({ bare });
 }

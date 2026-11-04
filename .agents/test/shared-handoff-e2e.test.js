@@ -19,7 +19,6 @@ function fixture() {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'work'); // a branch the item front matter must name in the record block
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
 

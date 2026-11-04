@@ -18,7 +18,6 @@ function fixture(prefix = 'team-teams-') {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";

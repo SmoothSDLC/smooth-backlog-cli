@@ -17,7 +17,6 @@ function solo(t) {
   const home = sharedBacklog(tmp);
   const cons = consumer(tmp, 'acme', 'demo', 'main');
   mkdirSync(join(tmp, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(tmp, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = (args, env) => cli(args, { cwd: cons, tmp, env });
   return { tmp, home, cons, folder: join(home, 'acme', 'demo'), run };
 }

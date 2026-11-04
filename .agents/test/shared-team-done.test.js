@@ -20,7 +20,6 @@ function fixture(name, extra) {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const args = ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--complexity', 'low',
     '--body', '## Definition of done\n\n- [ ] the test\'s check holds', ...extra];
   const r = cli(['new', ...args], { cwd: cons, tmp: t });

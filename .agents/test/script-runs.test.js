@@ -20,7 +20,7 @@ function setup(t) {
   writeFileSync(join(d, 'stub.sh'), STUB); chmodSync(join(d, 'stub.sh'), 0o755); const out = join(d, 'out.txt');
   return { f, out, stub: join(d, 'stub.sh'), dir: d };
 }
-for (const [label, args, rc] of [['success', ['--json', '--version'], '0'], ['failure', ['--json', 'no-such-command'], null]]) {
+for (const [label, args, rc] of [['success', ['--version'], '0'], ['failure', ['--json', 'no-such-command'], null]]) {
   test(`backlog.js records one run with its name and exit code (${label})`, async t => {
     const { f, out, stub } = setup(t);
     const p = f.raw(args, { env: { ...f.env, BACKLOG_RUN_HOOK: stub, RECORD_OUT: out } });

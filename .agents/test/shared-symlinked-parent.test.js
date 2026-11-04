@@ -1,7 +1,7 @@
 // Regression (backlog item 019): symlinks ABOVE the trusted root are not attacker-controlled and are allowed
 // (macOS os.tmpdir() is under /var -> /private/var; a home or clone reached through a link). The whole
 // fixture below lives under a symlinked parent, so every path the CLI sees passes through one.
-// Refusals for symlinks INSIDE the root stay in the per-module tests (shared-store, -db, -mode, -query).
+// Refusals for symlinks INSIDE the root stay in the per-module tests (shared-store, -db, -query).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -50,10 +50,8 @@ test('safety: validateHome and assertInside accept a path whose ancestors contai
   assert.equal(await assertInside(f.home, join(f.folder, 'backlog.db')), join('acme', 'demo', 'backlog.db'));
 });
 
-test('mode switch, new, update, query, archive and move (each commits through sync.js) run under a symlinked parent', t => {
+test('new, update, query, archive and move (each commits through sync.js) run under a symlinked parent', t => {
   const f = linked(t);
-  ok(f, ['--use-backlog-repo', f.home]);
-  assert.equal(readFileSync(join(f.tmp, 'config', BACKLOG_NAME, 'home'), 'utf8'), `${realpathSync(f.home)}\n`);
   for (const name of ['Alpha', 'Beta']) ok(f, ['new', '--name', name, '--objective', `do ${name}`, '--summary', 's', '--depends-on', 'none']);
   ok(f, ['update', '1', '--status', 'in_progress']);
   assert.match(ok(f, ['query', '--status']).stdout, /001-alpha/);

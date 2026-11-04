@@ -18,8 +18,8 @@ metadata:
 The backlog of this repository and branch: items with a number, a name, an objective, a priority (P0 is next) and a
 status (pending, in_progress, done, archived). The CLI is the only interface to the backlog: read and change it through
 `backlog` commands, never through its files. `backlog --help` lists the commands; `backlog <command> --help` is the
-contract of each (also in references/commands.md). Where the items live is a setting of the repository (a backlog
-folder, or a git repository the CLI synchronises); it changes no command.
+contract of each (also in references/commands.md). Where the items live is a setting of the repository (inside it, or
+in a backlog repository shared by many); it changes no command, and every change is committed and pushed by the CLI.
 
 When the `backlog` command is missing, run `bash <this skill folder>/scripts/install-backlog-cli.sh` from inside the
 repository: it installs or updates the CLI and runs `backlog setup`.

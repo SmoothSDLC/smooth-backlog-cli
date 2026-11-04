@@ -24,9 +24,7 @@ function fixture(t) {
   t.after(() => rmSync(d, { recursive: true, force: true }));
   const home = sharedBacklog(d); // clone at <d>/home, origin acme/backlog-repo
   const cons = consumer(d, 'acme', 'demo', 'main');
-  // shared mode for the fixture's consumer (the mode file is per user, in the fixture's XDG_CONFIG_HOME)
   mkdirSync(join(d, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(d, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { d, home, cons };
 }
 
@@ -107,15 +105,12 @@ test('the repository cannot be cloned or reached: setup says so, naming the conf
   const f = fixture(t);
   const app = consumer(f.d, 'acme', 'app', 'main');
   mkdirSync(join(app, '.claude'));
-  const modeFile = join(f.d, 'config', 'smooth-backlog-cli', 'mode.json');
-  const modeBefore = readFileSync(modeFile, 'utf8');
   for (const url of [join(f.d, 'origins', 'acme', 'missing.git'), 'https://127.0.0.1:1/acme/backlog-repo']) {
     const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: url } });
     assert.equal(r.status, 3, `${url}: ${r.stdout}${r.stderr}`);
     assert.match(r.stderr, /could not clone/);
     assert.match(r.stderr, new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${url}: the error names the configured value`);
   }
-  assert.equal(readFileSync(modeFile, 'utf8'), modeBefore, 'shared mode was not switched on');
   assert.ok(!existsSync(join(app, '.smooth-backlog.json')), 'no config was written');
   assert.ok(!existsSync(join(app, '.claude', 'skills')), 'no skill copy was deployed');
 });

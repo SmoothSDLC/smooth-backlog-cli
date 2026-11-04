@@ -6,11 +6,22 @@ import { join, resolve, delimiter } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { runNpm } from '../../src/process.js';
 const exec = promisify(execFile);
 const packageName = '@smoothsdlc/smooth-backlog-cli';
 const registry = 'https://npm.pkg.github.com';
 
+// npm, with its notifier and funding messages off; the output stays private (a registry error can carry a credential-bearing URL).
+export async function runNpm(args, options = {}) {
+  try {
+    const result = await exec('npm', args, { timeout: 20000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, ...options, env: { ...process.env, npm_config_update_notifier: 'false', npm_config_fund: 'false', ...(options.env ?? {}) } });
+    return result.stdout.trim();
+  } catch (e) { throw new Error(`npm ${args[0]} failed (${e.code || e.signal || 'unknown error'}). Check network access, registry authentication and filesystem permissions.`); }
+}
+
+// The installed package runs the one command set against a repository in a temporary folder: setup deploys the skill
+// into every agent folder present, the items live inside the repository (no backlog repository is configured), and the
+// commands create, read, change, finish and archive items. upgradeFrom: the prefix holds an older version; the newer
+// one is installed over it and the item it created is still there.
 export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry = false, upgradeFrom }) {
   const work = await fs.mkdtemp(join(tmpdir(), 'backlog-release-check-'));
   try {
@@ -20,68 +31,62 @@ export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry 
     const metadata = JSON.parse(await fs.readFile(join(installed, 'package.json'), 'utf8'));
     assert.equal(metadata.name, packageName); assert.equal(metadata.version, upgradeFrom || expectedVersion);
     const shim = process.platform === 'win32' ? join(prefix, 'backlog.cmd') : join(prefix, 'bin/backlog'); await fs.access(shim);
-    const repo = join(work, 'repo'), config = join(work, 'config');
-    await fs.mkdir(repo); await fs.mkdir(join(config, 'smooth-backlog-cli'), { recursive: true });
-    await fs.writeFile(join(config, 'smooth-backlog-cli/config.json'), JSON.stringify({ schema_version: 1, weekly: false, auto: false }));
-    const env = { ...process.env, XDG_CONFIG_HOME: config, APPDATA: config, BACKLOG_CLI_BRANCH: '', BACKLOG_CLI_REPONAME: '', PATH: (process.platform === 'win32' ? prefix : join(prefix, 'bin')) + delimiter + process.env.PATH };
+    const repo = join(work, 'repo'), config = join(work, 'config'), home = join(work, 'home');
+    await fs.mkdir(repo); await fs.mkdir(config, { recursive: true }); await fs.mkdir(home);
+    const env = { ...process.env, XDG_CONFIG_HOME: config, HOME: home, BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: '', BACKLOG_AGENT: 'verifier', PATH: (process.platform === 'win32' ? prefix : join(prefix, 'bin')) + delimiter + process.env.PATH };
     const options = { cwd: repo, env, windowsHide: true, timeout: 30000 };
     const git = args => exec('git', args, options);
-    await git(['init', '-b', 'main']); await git(['config', 'user.email', 'release-test@example.invalid']); await git(['config', 'user.name', 'Published package verification']); await git(['commit', '--allow-empty', '-m', 'verification root']);
+    await git(['init', '-b', 'main']); await git(['config', 'user.email', 'release-test@example.invalid']); await git(['config', 'user.name', 'Published package verification']); await git(['commit', '--allow-empty', '-m', 'fixture root']);
+    const origin = join(work, 'origin.git'); await exec('git', ['init', '--bare', '-q', origin], { windowsHide: true }); // every backlog change is pushed
+    await git(['remote', 'add', 'origin', origin]); await git(['push', '-q', '-u', 'origin', 'main']);
     let commands = 0;
-    const cli = async (...args) => {
-      const { stdout } = await exec(process.execPath, [bin, '--json', ...args], options); commands++;
-      const result = JSON.parse(stdout); assert.equal(result.ok, true); return result.data;
+    const cli = async (...args) => { const { stdout } = await exec(process.execPath, [bin, ...args], options); commands++; return stdout; };
+    const json = async (...args) => JSON.parse(await cli(...args, '--json'));
+    const queue = async (...args) => (await json('query', ...args)).phases.filter(p => !['done', 'archived'].includes(p.status)).map(p => p.seq); // the open items; query lists finished ones last
+    const fail = async (code, ...args) => {
+      try { await exec(process.execPath, [bin, ...args], options); assert.fail(`Expected backlog ${args.join(' ')} to be refused`); }
+      catch (error) { assert.equal(error.code, code, `backlog ${args.join(' ')}: exit ${error.code}\n${error.stdout}${error.stderr}`); commands++; }
     };
-    const fail = async (...args) => {
-      try { await exec(process.execPath, [bin, '--json', ...args], options); assert.fail('Expected command to reject invalid input'); }
-      catch (error) { assert.equal(error.code, 2); assert.equal(JSON.parse(error.stdout).ok, false); commands++; }
-    };
-    assert.equal((await exec(process.execPath, [bin, '--version'], options)).stdout.trim(), upgradeFrom || expectedVersion);
-    assert.match((await exec(process.execPath, [bin, '--help'], options)).stdout, /backlog/);
+    assert.equal((await cli('--version')).trim(), upgradeFrom || expectedVersion);
+    assert.match(await cli('--help'), /backlog new --name/);
     for (const vendor of ['.agents', '.claude', '.github', '.qwen']) await fs.mkdir(join(repo, vendor));
-    const init = await cli('init'); assert.equal(init.installed_agents.length, 4);
-    const first = await cli('new', 'First published task', '--description', 'Verify the downloaded CLI', '--ac', 'The installed commands work');
+    assert.match(await cli('setup'), /the backlog skill in/);
+    await cli('new', '--name', 'First published task', '--objective', 'Verify the downloaded CLI', '--summary', 'the installed commands work');
     if (upgradeFrom) {
-      const updated = await cli('update', 'auto'); assert.equal(updated.installed, expectedVersion);
-      assert.equal((await exec(process.execPath, [bin, '--version'], options)).stdout.trim(), expectedVersion);
-      assert.equal((await cli()).id, first.id, 'A published-version upgrade must retain the permanent item identity');
-      const stored = JSON.parse(await fs.readFile(join(repo, '.backlog/config.json'), 'utf8'));
-      assert.equal(stored.generated_version, expectedVersion);
+      await runNpm(['install', '--global', '--prefix', prefix, '--ignore-scripts', '--engine-strict', '--no-audit', '--no-fund', '--registry', registry, '--prefer-online', `${packageName}@${expectedVersion}`], { timeout: 120000 });
+      assert.equal((await cli('--version')).trim(), expectedVersion);
+      assert.equal((await json('query', '--phase', '1')).name, 'First published task', 'an upgrade keeps the items');
     }
-    const second = await cli('new', 'Second published task', '--description', 'Verify ordering', '--ac', 'Priorities normalize');
-    assert.match(first.id, /^[0-9a-f-]{36}$/); assert.equal(second.priority, 1);
-    await cli('1', 'priority', '0'); assert.equal((await cli()).id, second.id);
-    await cli('0', 'add', 'tasks', 'Inspect,Downloaded artifacts are executable');
-    await cli('set', '0', 'tasks', 'Validate,Generated instructions exist');
-    assert.equal((await cli('priority', '0', 'tasks', '2', '1')).tasks[0].name, 'Validate');
-    await cli('remove', '0', 'tasks', '2');
-    await cli('set', '0', 'outcomes', '["Complete"]', '--force');
-    await fail('archive', '0', '--force');
-    await cli(second.id, 'done');
-    const done = await cli('list', 'done'); assert.equal(done[0].id, second.id); assert.ok(done[0].item_completed_at);
-    await cli('archive', 'done'); const archive = await cli('list', 'archive'); assert.equal(archive[0].id, second.id); assert.ok(archive[0].item_archived_at);
+    await cli('new', '--name', 'Second published task', '--objective', 'Verify ordering', '--summary', 'priorities stay dense', '--priority', '0');
+    assert.deepEqual(await queue(), [2, 1]);
+    assert.equal((await json('next')).seq, 2);
+    await cli('update', '1', '--priority', '0'); assert.equal((await json('next')).seq, 1);
+    await cli('update', '1', '--append', '## Findings\n- the installed commands work');
+    assert.match((await json('query', '--phase', '1')).body, /the installed commands work/);
+    await fail(1, 'archive', '1');
+    await cli('update', '1', '--status', 'done');
+    assert.equal((await json('query', '--phase', '1')).status, 'done');
+    assert.match(await cli('archive', '1'), /archived/);
+    assert.equal((await json('query', '--phase', '1')).status, 'archived');
     await git(['switch', '-c', 'feature']);
-    const feature = await cli('new', 'Feature', '--description', 'Cross-branch isolation', '--ac', 'Wrong-branch writes fail');
-    await git(['switch', 'main']); await fail('set', feature.id, 'name', 'Forbidden');
-    assert.equal((await cli('list', '--branch', 'feature'))[0].id, feature.id);
-    await cli('import', '--branch', 'feature'); assert.deepEqual((await cli('list')).map(x => x.id), [first.id, feature.id]);
-    assert.equal((await cli('list', 'branch')).find(x => x.branch === 'main').total, 3);
-    const backup = await cli('init', 'backup'); await fs.access(join(backup.backup, 'backlog_manifest.json'));
-    assert.equal((await cli('list')).length, 2);
+    await cli('new', '--name', 'Feature', '--objective', 'Cross-branch isolation', '--summary', 'items follow their branch');
+    assert.deepEqual(await queue(), [3]);
+    assert.equal((await json('query', '--all')).phases.length, 3);
+    await git(['switch', 'main']); // inside the repository the items are committed on their branch: main does not carry the feature's item
+    assert.deepEqual(await queue(), [2]);
+    assert.equal((await json('query', '--all')).phases.length, 2);
+    await fail(2, 'frobnicate');
     if (verifyRegistry) {
-      const check = await cli('update', 'check'); assert.match(check.latest, /^\d+\.\d+\.\d+$/);
-      // Verify auto-enable for this real custom-prefix installation without upgrading an older artifact.
-      if (check.latest === expectedVersion) await cli('update', 'auto');
+      const latest = JSON.parse(await runNpm(['view', packageName, 'version', '--json', '--registry', registry, '--prefer-online']));
+      assert.match(latest, /^\d+\.\d+\.\d+$/);
     }
-    await cli('update', 'disable'); await cli('update', 'off');
     for (const vendor of ['.agents', '.claude', '.github', '.qwen']) {
       const skill = join(repo, vendor, 'skills/backlog');
       assert.match(await fs.readFile(join(skill, 'SKILL.md'), 'utf8'), /name: backlog/);
       await fs.access(join(skill, 'scripts/install-backlog-cli.sh'));
       await fs.access(join(skill, 'references/commands.md'));
     }
-    await cli('init', 'clean'); assert.deepEqual(await cli('list'), []);
-    return { ok: true, package: packageName, version: expectedVersion, platform: process.platform, node: process.versions.node, commands, installed_agents: init.installed_agents.length, ...(upgradeFrom ? { upgraded_from: upgradeFrom, permanent_identity_preserved: true } : {}) };
+    return { ok: true, package: packageName, version: expectedVersion, platform: process.platform, node: process.versions.node, commands, installed_agents: 4, ...(upgradeFrom ? { upgraded_from: upgradeFrom } : {}) };
   } finally { await fs.rm(work, { recursive: true, force: true }); }
 }
 

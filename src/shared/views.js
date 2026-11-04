@@ -1,4 +1,4 @@
-// Shared-mode team views: `backlog query --claimable | --reviewable | --blocked` with --agent,
+// Team views: `backlog query --claimable | --reviewable | --blocked` with --agent,
 // --roster and --scope. a port of the earlier scripts(scopes, refinement cap, team_rows) and :330-372 (the views),
 // (review_offer) and :621-624 (job_fields). Rows and dependencies come from the backlog.db mirror as
 // in query.js (team.js); the item files of the repository folder give only the front matter the rows do not hold.

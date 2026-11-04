@@ -19,7 +19,6 @@ function fixture(repos = ['demo']) {
   const home = sharedBacklog(t);
   const cons = Object.fromEntries(repos.map(r => [r, consumer(t, 'acme', r, 'main')]));
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = (repo, args, want = 0, env = {}) => {
     const by = args[args.indexOf('--by') + 1] || args[args.indexOf('--claim') + 1];
     if (args[0] === 'update' && (args.includes('--by') || args.includes('--claim'))) cli(['query', '--phase', args[1], '--agent', by], { cwd: cons[repo], tmp: t, env: { TEAM_LEAD: 'lead', ...env } });

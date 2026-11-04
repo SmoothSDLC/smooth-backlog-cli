@@ -1,56 +1,20 @@
-import { parse, modeOptions, sharedCommand } from './args.js';
-import { redact } from './shared/safety.js';
-import { getMode } from './shared/store.js';
-import { gitContext } from './context.js';
-import { withStore } from './storage.js';
-import { initialize, refreshIntegrations } from './integrations.js';
-import { execute } from './commands.js';
-import { promptMissing } from './prompt.js';
-import { updater } from './updates.js';
-import { help, human } from './output.js';
 import { readFileSync } from 'node:fs';
+import { redact } from './shared/safety.js';
 const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-export async function run({ installationRoot } = {}) {
-  let json = process.argv.includes('--json');
+// One command set, wherever the item files live: setup here, everything else through the router. No arguments means next.
+export async function run() {
+  const argv = process.argv.slice(2);
   try {
-    let argv = process.argv.slice(2);
-    const mode = modeOptions(argv);
-    if (mode) {
-      const code = await (await import('./shared/router.js')).switchMode(mode);
-      if (code || !mode.rest.length) { process.exitCode = code; return; }
-      argv = mode.rest; // the command after the mode options runs in the mode just switched to
-    }
-    // backlog setup works in either mode (it is what points a repository at the backlog repository)
+    if (argv[0] === '--version' || argv[0] === 'version') { process.stdout.write(`${packageInfo.version}\n`); return; }
+    if (argv[0] === '--help' || argv[0] === 'help' || argv[0] === '-h') { process.stdout.write((await import('./help.js')).USAGE); return; }
     if (argv[0] === 'setup') { process.exitCode = await (await import('./shared/setup.js')).run(argv.slice(1)); return; }
-    // Shared mode (contract section 1) skips init, withStore and refreshIntegrations: the router owns the command.
-    const shared = getMode() === 'shared' ? sharedCommand(argv) : null;
-    if (shared) { process.exitCode = await (await import('./shared/router.js')).run(shared.command, shared.argv); return; }
-    const parsed = parse(argv); json = Boolean(parsed.flags.json);
-    if (parsed.command === 'help' || parsed.command === 'version') {
-      const data = parsed.command === 'help' ? help : packageInfo.version;
-      process.stdout.write(json ? JSON.stringify({ ok: true, data }) + '\n' : data + '\n');
-    } else {
-      const context = gitContext(parsed.flags, parsed.command);
-      await promptMissing(parsed);
-      let data;
-      const updates = updater({ context, packageRoot: installationRoot });
-      if (parsed.command === 'update') { await withStore(context, () => null); data = await updates.command(parsed.args[0]); }
-      else {
-        data = parsed.command === 'init' ? await initialize(context, parsed.args) : await withStore(context, store => execute(parsed, context, store));
-        if (parsed.command !== 'init') {
-          try { await refreshIntegrations(context, packageInfo.version); }
-          catch (e) { process.stderr.write(`backlog: Could not refresh generated skills: ${redact(e.message)}\n`); }
-        }
-        await updates.scheduled();
-      }
-      if (parsed.command === 'init') process.stderr.write('Commit the initialization changes to Git.\n');
-      process.stdout.write(json ? JSON.stringify({ ok: true, data }) + '\n' : human(data) + '\n');
-    }
+    let at = 0; while (argv[at] === '--json') at++; // a leading --json belongs to the command
+    const named = argv[at] !== undefined && !argv[at].startsWith('-');
+    const command = named ? argv[at] : 'next';
+    const rest = named ? [...argv.slice(0, at), ...argv.slice(at + 1)] : argv;
+    process.exitCode = await (await import('./shared/router.js')).run(command, rest);
   } catch (error) {
-    const data = { code: error.code || 'OPERATION_FAILED', message: redact(error.message) };
-    if (json) process.stdout.write(JSON.stringify({ ok: false, error: data }) + '\n');
-    else process.stderr.write(`${data.code}: ${data.message}\n`);
-    process.exitCode = error.exitCode || 1;
+    process.stderr.write(`❌ backlog: ${redact(error.message)}\n`);
+    process.exitCode = error.exitCode || 2;
   }
-
 }

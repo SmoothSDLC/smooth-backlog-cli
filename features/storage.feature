@@ -64,3 +64,20 @@ Feature: Storage - where the item files live changes nothing about the commands
     When I run `backlog --version`
     Then the command succeeds
     And the output matches /\d+\.\d+\.\d+/
+
+  Scenario: every change is committed and pushed, wherever the items live
+    Given an item "Published" exists
+    When I run `backlog update 1 --status in_progress`
+    Then the command succeeds
+    And the backlog repository has no uncommitted or unpushed change
+    When I run `backlog update 1 --status done`
+    And I run `backlog archive 1`
+    Then the command succeeds
+    And the backlog repository has no uncommitted or unpushed change
+
+  Scenario: a change that cannot be pushed is reported
+    Given an item "Stranded" exists
+    And the backlog repository's origin is unreachable
+    When I run `backlog update 1 --status in_progress`
+    Then the command fails with exit code 3
+    And the output matches /could not update .* from origin|was not published/

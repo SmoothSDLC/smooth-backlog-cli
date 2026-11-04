@@ -118,13 +118,13 @@ item is `idle`, not `chunk`. Test: features/plain-use.feature (6 scenarios) and 
 (`BACKLOG_AGENT`), `src/help.js`, the skill, COMMANDS.md, the tests that use the names. Test: features/agents.feature
 and team.feature rewritten with neutral names; the deny list extended with the agent names on the owner's machine.
 
-### Task 6: the database mirror as a local cache (needs decision D)
+### Task 6: the database mirror as a local cache (decision D: not in this pull request)
 
-**Files:** delete `src/shared/sync.js` repairConflicts/renumber-mirror/localDbs paths and `src/shared/db.js`
-replayLocal; `backlog.db` listed in the backlog repository's `.gitignore` and removed from its index (data change in
-the backlog repository); `db.connect` rebuilds the mirror from the files when the file is absent or older than the
-newest item file. Test: the sync tests that stage a mirror conflict are replaced by one test: two clones write, the
-second pull rebuilds, `query` agrees with the files.
+The plan above assumed the mirror is derived from the files. It is not: the item history (`query --events`) lives
+only in its `event` table (REVIEW.md 2.5). Making it an ignored cache needs the events written to a file beside the
+items first (one line per event), then `db.connect` rebuilds the mirror from items and events when the file is absent
+or older, and `src/shared/sync.js` repairConflicts/renumber-mirror/localDbs and `src/shared/db.js` replayLocal go.
+Recommended as a later change; the backlog repository's content (an untracked `backlog.db`) changes with it.
 
 ### Task 7: documentation describes one mode
 
@@ -151,8 +151,13 @@ second pull rebuilds, `query` agrees with the files.
 - C: no agent, model or product name in the CLI: teams, members, leads and review rules are configuration of the
   backlog folder (`teams.json`); the review rule of a team is "N members of team X and M members of team Y pass the
   current work commit". Done in src (Task 5); the tests follow.
-- D: open.
+- D (2026-11-04): the backlog is always a git repository, and the CLI commits and pushes every change to it - the
+  repository itself when the items live inside it (its current branch, the backlog's paths only, pushed to origin under
+  the same branch name; nothing pulled, the repository's own branch workflow does that), or the backlog repository's
+  clone (pulled before every command, pushed after every change). The storage location is a folder path and nothing
+  more; the structure of the backlog is never shown except in a failure. Done in Task 2 (`sync.commitInRepository`,
+  features/storage.feature "every change is committed and pushed"). The mirror itself stays as it is (Task 6).
 
 ## Order
 
-1 → 3 → 4 → 5 → 7 (done or in progress) · 2 (waits for the owner's go on the removal list) · 6 (D) · 8.
+1 → 3 → 4 → 5 → 7 → 2 (prepared and green; committed on the owner's go) · 8. Task 6 is a later change.

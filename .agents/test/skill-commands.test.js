@@ -1,4 +1,4 @@
-// Item 040: the template skill is the single source of the backlog skill in shared mode. Every team flag of
+// The template skill is the single source of the backlog skill. Every team flag of
 // `backlog update` (the ones a member or the lead uses) and every team command is in SKILL.md; the skill names no
 // backlog folder, file, git command or Python script; its description stays as it is (never shortened).
 import test from 'node:test';
@@ -39,4 +39,23 @@ test('040: the skill names no backlog folder, item file, git command or Python b
   without naming the backlog. Manage branch-local tasks and evidence through
   smooth-backlog-cli. It does not manage unrelated project trackers or Git branch cleanup.
 `));
+});
+
+test('the skill is complete: front matter, size, referenced files, eval fixtures', () => {
+  assert.match(skill, /^---\n(?:[\s\S]*?\n)?name: backlog\n[\s\S]*?\n---\n/);
+  assert.ok(skill.split('\n').length < 500);
+  for (const ref of new Set(skill.match(/(?<![\w./-])(?:scripts|references|assets|evals)\/[\w./-]+/g) || [])) assert.ok(statSync(join(dir, ref)).isFile(), ref);
+  const queries = JSON.parse(readFileSync(join(dir, 'scripts/eval_queries.json'), 'utf8'));
+  assert.ok(queries.filter(x => x.should_trigger === true).length >= 10 && queries.filter(x => x.should_trigger === false).length >= 8);
+  assert.equal(new Set(queries.map(x => x.query)).size, queries.length);
+  const cases = JSON.parse(readFileSync(join(dir, 'evals/evals.json'), 'utf8')).evals;
+  assert.ok(cases.length && cases.every(x => x.prompt && x.expected_output && x.assertions));
+});
+
+test('the skill, the help and COMMANDS.md name no script, storage file or old pattern', () => {
+  const bad = /\.py\b|python|oracle|backlog\.db|phases\/|scripts\/(query|update|new_phase|lib_db|move|archive)|\.transaction\.json|\.smooth-backlog-cli\.lock/i;
+  for (const f of files(dir)) { const hit = readFileSync(f, 'utf8').split('\n').find(l => bad.test(l)); assert.equal(hit, undefined, `${f}: ${hit}`); }
+  assert.match(skill, /The CLI is the\s+only interface to the backlog/);
+  for (const [cmd, text] of Object.entries(HELP)) assert.doesNotMatch(text, /python|\.py\b|oracle/i, cmd);
+  assert.doesNotMatch(readFileSync(new URL('../../COMMANDS.md', import.meta.url), 'utf8'), /python|\.py\b|oracle/i);
 });

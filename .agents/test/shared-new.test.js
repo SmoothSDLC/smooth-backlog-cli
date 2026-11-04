@@ -1,4 +1,4 @@
-// Tests for src/shared/new.js — cli-parity job 10 (`backlog new` in shared mode).
+// Tests for src/shared/new.js (`backlog new`).
 // Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +17,7 @@ const git = (cwd, ...args) => {
   return p.stdout.trim();
 };
 
-// A fixture: the shared home, a consumer (origin acme/demo, branch main) in shared mode, the item folder.
+// A fixture: the shared home, a consumer (origin acme/demo, branch main) on a backlog repository, the item folder.
 function fixture(t, prefix = 'new-test-') {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -25,7 +25,6 @@ function fixture(t, prefix = 'new-test-') {
   const home = sharedBacklog(dir);
   const cons = consumer(dir, 'acme', 'demo', 'main');
   mkdirSync(join(dir, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { dir, home, cons, folder: join(home, 'acme', 'demo'), bare: join(dir, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`) };
 }
 const node = (f, args, env) => cli(['new', ...args], { cwd: f.cons, tmp: f.dir, env });
@@ -143,7 +142,7 @@ test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name 
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   assert.deepEqual(rows(f, 'SELECT slug, seq, priority, status FROM phase'), [{ slug: '001-alpha-job', seq: 1, priority: 0, status: 'pending' }]);
   assert.deepEqual(rows(f, 'SELECT event FROM event ORDER BY id').map(r => r.event), ['ingested', 'planning_event', 'reingested']);
-  assert.equal(git(f.cons, 'status', '--porcelain'), '', 'shared mode writes nothing into the consuming repository');
+  assert.equal(git(f.cons, 'status', '--porcelain'), '', 'a backlog repository: nothing is written into the consuming repository');
   assert.ok(!existsSync(join(f.cons, '.backlog')));
 });
 

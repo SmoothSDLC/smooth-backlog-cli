@@ -23,7 +23,6 @@ function fixture() {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
 const LEAD = { TEAM_LEAD: 'lead' };
@@ -163,7 +162,6 @@ function foreignFixture(prefix) {
   const cons = consumer(t, 'acme', 'demo', 'main');
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const f = { t, home, cons, folder: join(home, 'acme', 'demo'), there, producerFolder: join(home, 'acme', 'lib') };
   const p = ok(f, NEW('library change', 'none'), there).stdout.split('created phase ')[1].split(' ')[0];
   ok(f, ['query', '--phase', '1', '--agent', 'tester'], there); // the producer's claimer reads its item before it closes

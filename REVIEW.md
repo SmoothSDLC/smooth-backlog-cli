@@ -143,8 +143,12 @@ a binary file. `src/shared/sync.js:217-292` (repairConflicts), `:159-215` (renum
 (replayLocal, reconcileFolders) exist to merge it: set the local copy aside, take upstream's, replay the local rows
 and events, rescan, amend, retry. About 320 lines serve a derived file. Risk: `db.js:205` replays columns of rows
 present in both copies by inequality with the base; a column both sides changed takes the local value silently.
-Recommendation: make the mirror an untracked local cache, rebuilt from the files when absent or older than them
-(decision D, section 4).
+Correction after the implementation review: the mirror is not purely derived. The item history (`query --events`,
+every `logEvent` of `update`, `move`, `archive`, the reviews and claims) lives only in the `event` table of
+`backlog.db` (`src/shared/update.js:163,303-323`); the files hold no event log. An untracked cache rebuilt from the
+files would lose the history. Recommendation: a later change that writes the events to a file beside the items
+(one line per event) and then makes `backlog.db` an ignored cache; the conflict-repair code goes with it. Not done in
+this pull request (decision D, section 4).
 
 ### 2.6 Dead code, unused options, speculative abstractions — SIMPLIFY
 
@@ -188,6 +192,23 @@ Per-export inventory (deterministic: every `export` of `src/**`, grep of its nam
 
 ### 2.9 Other risks — NOTE, EVIDENCED-RISK
 
+- CONFIRMED (fixed in Task 2): with the items inside the repository, the item folder was `.backlog/<owner>/<name>`
+  from the origin URL, else `.backlog/local/<folder name>` — renaming the checkout folder or changing the origin
+  orphaned every item (`.agents/test/storage-location.test.js`, "survive a renamed folder"). Inside the repository the
+  id is now constant (`store.INSIDE_REPO_ID`).
+- CONFIRMED (fixed): `.agents/test/shared-query.test.js` "a row path through a symlink ... is a ghost" passed at the
+  tip only because `query --next` failed with the 1.x `{"ok":false}` JSON envelope, which parsed; the behaviour it
+  describes never held (the symlink is refused by `store.load`). The test now asserts the refusal.
+- NOTE: `query` (the queue view) lists finished and archived items after the open ones; `next`, `pop` and `work` skip
+  them. `.agents/scripts/verify-published-package.mjs` filters the open ones.
+- NOTE: the per-user file `~/.config/<name>/home` is still read as a storage setting but nothing writes it since the
+  mode switches went; it is documented as a file the user may write.
+- NOTE (decision D): inside the repository every change is a commit on the current branch (`backlog: <message>`, the
+  backlog's paths only) pushed to origin under the same branch name; the repository's own commit hooks run on it, and
+  a repository without a reachable origin refuses every write with exit 3 while keeping the commit. The items ride with
+  the branch: `--all` shows what the checked-out branch carries. The backlog repository's clone is still pulled before
+  every command; the repository itself is not (its branch workflow is the user's).
+
 - `src/shared/store.js:117-127` and `src/storage.js:9-19`: symlink checks are check-then-write (marked as a shortcut
   for a single-user clone); fine at the assumed load.
 - `src/shared/sync.js:20`: every pull and push targets `origin/main` of the backlog repository by name; the backlog
@@ -223,7 +244,8 @@ Not changed by this pull request unless approved:
 3. The team-process gates on items that have no team (`--depends-on` required at creation, refinement fields
    required before any step, two review stages before any close, chunk work for plain agents) — decision B.
 4. The agent-product-specific names in flag values, environment variables, output and default values — decision C.
-5. The committed `backlog.db` mirror and its conflict-repair code — decision D.
+5. The committed `backlog.db` mirror and its conflict-repair code — decision D: recommended as a later change (the
+   events must move to a file first, 2.5); not changed here.
 6. The hand-off record options of `update` (`--handoff*`, `--accept-handoff`, `--reject-handoff`, `--checks`) as a
    separate concern from the team workflow — not recommended for removal now; recorded as the largest optional
    surface (290 lines, 9 options).

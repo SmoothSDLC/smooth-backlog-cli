@@ -23,7 +23,7 @@ export function repoIdFromUrl(url) {
   return parts.length >= 2 ? parts.slice(-2).join('/') : '';
 }
 
-// Validate a shared-mode home exactly as the earlier scripts checks,
+// Validate a backlog repository clone:
 // in the order the item fixes: absolute (item), exists (77-80, the path-naming
 // message), top folder of a git repository (92-94, compared after resolving
 // symlinks like Python's Path.resolve), no symlink on the path (item, via

@@ -1,4 +1,4 @@
-// `backlog new` in shared mode: a a port of the earlier scriptsof the pinned oracle.
+// `backlog new`: adds an item to the queue.
 // Order of work as the earlier scripts: pull, number, write, scan into backlog.db, reflow, scan, commit and push.
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';

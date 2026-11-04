@@ -58,7 +58,7 @@ function parseFm(block) {
         fm[key] = items;
         i = j;
       } else if (next !== undefined && /^[ \t]/.test(next)) {
-        throw err(`front matter key '${key}' has a nested block, which the shared-mode subset does not support`);
+        throw err(`front matter key '${key}' has a nested block, which the front matter subset does not support`);
       } else {
         fm[key] = null;
         i += 1;
@@ -99,7 +99,7 @@ function decodeValue(label, chunk, inList) {
   const head = chunk[0];
   if (head.startsWith('"') || head.startsWith("'")) return decodeQuoted(chunk, head[0], label);
   if (head.startsWith('[') && !inList) {
-    if (chunk.length !== 1 || !head.endsWith(']')) throw err(`front matter ${label} is a flow list that wraps over a line, which the shared-mode subset does not support`);
+    if (chunk.length !== 1 || !head.endsWith(']')) throw err(`front matter ${label} is a flow list that wraps over a line, which the front matter subset does not support`);
     const inner = trim(head.slice(1, -1));
     if (inner === '') return [];
     return splitFlow(inner).map((part) => decodeScalar(trim(part), `an item of ${label}`));
@@ -187,7 +187,7 @@ function decodePlain(s) {
     if (!Number.isSafeInteger(n)) throw err(`front matter integer ${s} is outside the safe range of ±${Number.MAX_SAFE_INTEGER}`);
     return n;
   }
-  const bad = (what) => err(`front matter value ${JSON.stringify(s)} ${what}, which the shared-mode subset does not support`);
+  const bad = (what) => err(`front matter value ${JSON.stringify(s)} ${what}, which the front matter subset does not support`);
   if (s.startsWith('- ')) throw err(`front matter value ${JSON.stringify(s)} starts with a block-list marker`);
   if (/^[&!]/.test(s)) throw bad('uses an anchor or tag');
   if (s.startsWith('*')) throw bad('is an alias');

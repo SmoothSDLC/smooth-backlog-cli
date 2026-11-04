@@ -101,9 +101,8 @@ const TABLE = {
   "  assert.ok(!('work_class' in item.fm) && !('review_classes' in item.fm) && !('chunk' in item.fm));": 1,
  },
  ".agents/test/shared-no-classes.test.js": {
-  "// The class options removed from the CLI (owner 2026-10-28): the work and review class fields and the": 1,
-  "// --classes / --review-classes options, with no class profiles.": 1,
-  "test('049: the help of every command names no work or review class option', () => {": 1,
+  "// The class options removed from the CLI: the work and review class fields and the --classes / --review-classes options.": 1,
+  "test('the help of every command names no work or review class option', () => {": 1,
  },
  ".agents/test/shared-team-compat.test.js": {
   "  for (const flag of ['--work-class', '--review-classes']) { // work and review classes are gone": 1,

@@ -21,7 +21,6 @@ test('the team workflow through the CLI only, step by step', async ctx => {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   writeFileSync(join(home, 'teams.json'), JSON.stringify({
     t1: { lead: 'lead', members: ['ann', 'bob', 'zed'], review: [{ team: 't1', count: 1 }, { team: 'reviewers', count: 1 }], refinement_review: [{ team: 'reviewers', count: 1 }] },
     reviewers: { lead: 'rex', members: ['rex', 'ria'] },

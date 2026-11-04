@@ -64,27 +64,6 @@ test('resolveHome: BACKLOG_HOME > home record > the default ~/git/<name>; a conf
   assert.deepEqual(store.resolveHome(), { home: realpathSync(dflt), remote: true, ask: null });
 });
 
-// ---------------------------------------------------------------- getMode / setMode
-
-test('getMode/setMode: mode.json in $XDG_CONFIG_HOME (or ~/.config), exactly one JSON object, absent means local', t => {
-  const d = scratch(t);
-  withEnv(t, { HOME: join(d, 'home'), XDG_CONFIG_HOME: join(d, 'config') });
-  const file = join(d, 'config', 'smooth-backlog-cli', 'mode.json');
-  assert.equal(store.getMode(), 'local');
-  store.setMode('shared');
-  assert.equal(readFileSync(file, 'utf8'), '{"mode":"shared"}');
-  assert.equal(store.getMode(), 'shared');
-  store.setMode('local');
-  assert.equal(readFileSync(file, 'utf8'), '{"mode":"local"}');
-  assert.equal(store.getMode(), 'local');
-  writeFileSync(file, 'not json');
-  assert.equal(store.getMode(), 'local', 'an unreadable record means local');
-  delete process.env.XDG_CONFIG_HOME;
-  store.setMode('shared');
-  assert.equal(readFileSync(join(d, 'home', '.config', 'smooth-backlog-cli', 'mode.json'), 'utf8'), '{"mode":"shared"}');
-  assert.throws(() => store.setMode('team'), /mode/);
-});
-
 // ---------------------------------------------------------------- folder / repoId / branch
 
 test('folder(home, repoId): <home>/<owner>/<name>', () => {
@@ -365,13 +344,12 @@ test('review P1: a symlinked repository folder or owner folder is refused from t
   }
 });
 
-// Three items made with `backlog new` in shared mode; returns their slugs (the file stem = the front-matter `phase`) and file names.
+// Three items made with `backlog new`; returns their slugs (the file stem = the front-matter `phase`) and file names.
 function fixturePair(t) {
   const dir = scratch(t);
   const home = sharedBacklog(dir);
   const cons = consumer(dir, 'acme', 'demo', 'main');
   mkdirSync(join(dir, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t: dir, home, cons, folder: join(home, 'acme', 'demo') };
 }
 function threeItems(f) {

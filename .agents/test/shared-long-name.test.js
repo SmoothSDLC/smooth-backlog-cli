@@ -1,4 +1,4 @@
-// Item 047: an item whose file name is 250 bytes long takes every shared-mode write (the temporary file of the atomic
+// Item 047: an item whose file name is 250 bytes long takes every write (the temporary file of the atomic
 // write once added 41 characters to the item's file name and passed the 255-byte limit: ENAMETOOLONG). Local bare repos.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,7 +18,6 @@ test('047: update, replan, close and new work beside an item with a 250-byte fil
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const run = args => { const r = cli(args, { cwd: cons, tmp: t, env: { BACKLOG_AGENT: 'tester' } }); assert.equal(r.status, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`); return r; };
   const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds'];
   const long = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ').slice(0, 242); // slug 242 + "001-" + ".md" = 249-250 bytes

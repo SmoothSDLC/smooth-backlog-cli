@@ -3,7 +3,7 @@ phase: 004-cli-parity-job-4-front-matter-codec-compatible-with-pyyaml
 seq: 4
 name: 'cli-parity job 4: front-matter codec compatible with PyYAML'
 objective: Read the item files PyYAML writes and write files PyYAML reads, without
-  a dependency. The codec keeps the shared-mode format byte-for-byte per oracle.
+  a dependency. The codec keeps the file format byte-for-byte.
 status: in_progress
 work_class:
 - app-code

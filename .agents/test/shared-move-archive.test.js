@@ -32,7 +32,6 @@ function seed({ permuteIds = false } = {}) {
   const folder = join(home, 'acme', 'demo');
   const other = join(home, 'other', 'proj');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const item = (dir, seq, name, extra = {}) => {
     const num = String(seq).padStart(3, '0');
     store.write({
@@ -136,7 +135,6 @@ test('review P2: a new item does not inherit the events of the moved-away item w
   sharedBacklog(t);
   const f = { t, cons: consumer(t, 'acme', 'demo', 'main') };
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const mk = name => {
     const r = run(f, 'new', ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
     assert.equal(r.status, 0, r.stderr);

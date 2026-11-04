@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fixture } from './helpers.js';
-import { runNpm } from '../../src/process.js';
+import { runNpm } from '../scripts/verify-published-package.mjs';
 test('the packed npm artifact installs offline and runs with its bundled templates', async t => {
   const f = fixture(t); const source = resolve('.');
   const [pack] = JSON.parse(await runNpm(['pack', '--json', '--pack-destination', f.dir], { cwd: source }));
@@ -16,9 +16,10 @@ test('the packed npm artifact installs offline and runs with its bundled templat
   await runNpm(['install', '--global', '--prefix', prefix, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', join(f.dir, pack.filename)]);
   const modules = await runNpm(['root', '--global', '--prefix', prefix]);
   const installed = join(modules, '@smoothsdlc/smooth-backlog-cli/bin/backlog.js');
-  const p = spawnSync(process.execPath, [installed, 'init', '--json'], { cwd: f.root, env: f.env, encoding: 'utf8' });
-  assert.equal(p.status, 0, p.stderr || p.stdout); assert.equal(JSON.parse(p.stdout).ok, true);
-  assert.ok(existsSync(join(f.root, '.backlog/skills/backlog/SKILL.md')));
+  await import('node:fs').then(m => m.mkdirSync(join(f.root, '.agents')));
+  const p = spawnSync(process.execPath, [installed, 'setup'], { cwd: f.root, env: { ...f.env, BACKLOG_ORIGIN_URL: '', BACKLOG_HOME: '' }, encoding: 'utf8' });
+  assert.equal(p.status, 0, p.stderr || p.stdout);
+  assert.ok(existsSync(join(f.root, '.agents/skills/backlog/SKILL.md')));
   const link = process.platform === 'win32' ? join(prefix, 'backlog.cmd') : join(prefix, 'bin/backlog'); assert.ok(existsSync(link));
 });
 test('release verification exercises the installed artifact independently of checkout product code', async t => {

@@ -1,4 +1,4 @@
-// Tests for the shared-mode help text (cli-parity job 18, HELP): src/help.js, the help constant of src/output.js, COMMANDS.md.
+// Tests for the help text: src/help.js, backlog --help, COMMANDS.md.
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,13 +11,11 @@ import { HELP } from '../../src/help.js';
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 
-// A shared-mode setup: the home clone, a consumer repository and mode.json = shared, all inside one temp dir.
+// The home clone and a consumer repository, inside one temp dir.
 const t = mkdtempSync(join(tmpdir(), 'help-test-'));
 dirs.push(t);
 sharedBacklog(t);
 const cons = consumer(t, 'acme', 'demo', 'main');
-mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
 const COMMANDS = ['new', 'update', 'query', 'next', 'pop', 'work', 'team', 'move', 'archive'];
@@ -87,14 +85,14 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
   assert.match(backlog('query', '--phase', '1', '--json').stdout, /"status": "pending"/);
 });
 
-test('every command of the router has a help text, the shared section of backlog --help and a block in COMMANDS.md', async () => {
+test('every command of the router has a help text, a line of backlog --help and a block in COMMANDS.md', async () => {
   const { TABLE } = await import('../../src/shared/router.js');
-  assert.deepEqual(Object.keys(TABLE).sort(), [...COMMANDS].sort());
-  assert.deepEqual(Object.keys(HELP).sort(), [...COMMANDS, 'setup'].sort()); // setup (item 043) runs before the router, in either mode
+  assert.deepEqual(Object.keys(TABLE).sort(), [...COMMANDS, 'list'].sort());
+  assert.deepEqual(Object.keys(HELP).sort(), [...COMMANDS, 'setup'].sort()); // setup runs before the router; list prints the query help
   const top = cli(['--help'], { cwd: cons, tmp: t }).stdout;
   for (const command of Object.keys(TABLE)) {
     assert.match(top, new RegExp(`^ {2}backlog ${command}( |$)`, 'm'), `${command}: backlog --help`);
-    assert.equal(backlog(command, '--help').stdout, HELP[command], `${command}: --help`);
+    assert.equal(backlog(command, '--help').stdout, HELP[command === 'list' ? 'query' : command], `${command}: --help`);
   }
 });
 
@@ -114,8 +112,6 @@ test('exit code 3 is described for both cases: the update before the command fai
   dirs.push(broken);
   sharedBacklog(broken);
   const demo = consumer(broken, 'acme', 'demo', 'main');
-  mkdirSync(join(broken, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(broken, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   renameSync(join(broken, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), join(broken, 'origin-gone.git'));
   for (const args of [['query', '--status'], ['pop', '--agent', 'x']]) {
     const r = cli(args, { cwd: demo, tmp: broken });
@@ -146,29 +142,23 @@ test('the help is written in plain sentences: no internal job numbers, script na
   for (const command of COMMANDS) assert.doesNotMatch(HELP[command], /\bjob \d+|\.py\b|SKILL\.md|lib_db|update\.js|query\.js/i, command);
 });
 
-test('backlog --help names both mode options and every shared command', () => {
+test('backlog --help names every command and the storage setting, and is the same wherever the items live', () => {
   const r = cli(['--help'], { cwd: cons, tmp: t });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /--use-backlog-repo <path>/);
-  assert.match(r.stdout, /--use-local-repo/);
-  for (const command of COMMANDS) assert.match(r.stdout, new RegExp(`^ {2}backlog ${command}( |$)`, 'm'), `${command} is missing from the shared section`);
+  for (const command of [...COMMANDS, 'list', 'setup']) assert.match(r.stdout, new RegExp(`^ {2}backlog ${command}( |$)`, 'm'), `${command} is missing`);
   assert.match(r.stdout, /backlog <command> --help/, 'how to get the help of one command');
+  assert.match(r.stdout, /committed and pushed before the command exits/);
+  assert.doesNotMatch(r.stdout, /mode|--use-backlog-repo|--use-local-repo|backlog init/);
+  const inside = cli(['--help'], { cwd: cons, tmp: t, env: { BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: '', XDG_CONFIG_HOME: join(t, 'other-config') } });
+  assert.equal(inside.stdout, r.stdout);
 });
 
-test('backlog --help is the same in local mode and keeps the local commands', () => {
-  const r = cli(['--help'], { cwd: cons, tmp: t, env: { XDG_CONFIG_HOME: join(t, 'other-config') } });
-  assert.match(r.stdout, /backlog init \[repo-name\]/);
-  assert.match(r.stdout, /--use-backlog-repo/);
-});
-
-test('COMMANDS.md has the section "Shared backlog repository mode" with the help text of every command', () => {
+test('COMMANDS.md has the section "Commands" with the help text of every command, and names no mode', () => {
   const doc = readFileSync(new URL('../../COMMANDS.md', import.meta.url), 'utf8');
-  const at = doc.indexOf('\n## Shared backlog repository mode\n');
+  assert.doesNotMatch(doc, /shared mode|local mode|--use-backlog-repo|--use-local-repo/);
+  const at = doc.indexOf('\n## Commands\n');
   assert.ok(at >= 0, 'section heading missing');
-  const next = doc.indexOf('\n## ', at + 5);
-  const section = doc.slice(at, next < 0 ? undefined : next);
-  assert.match(section, /--use-backlog-repo <path>/);
-  assert.match(section, /--use-local-repo/);
+  const section = doc.slice(at);
   for (const command of COMMANDS) assert.ok(section.includes(`\`\`\`text\n${HELP[command].trimEnd()}\n\`\`\``), `${command}: the help text is not in COMMANDS.md verbatim`);
 });
 

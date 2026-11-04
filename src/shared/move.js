@@ -1,4 +1,4 @@
-// Shared-mode `backlog move`. Port of move.py:12-110 and its commit tails (move.py:107, 113-118) in the
+// `backlog move`: moves an item to another branch or repository and renumbers both queues.
 // oracle's order: pull, resolve the item, change, write, log the event, scan into backlog.db, commit and push. The item is found by
 // number (seq) or slug, never by database row id.
 // Beyond the earlier scripts: a target branch must exist on the origin of the consuming repository, and a target repository

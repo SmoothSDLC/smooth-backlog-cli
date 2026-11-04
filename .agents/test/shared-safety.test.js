@@ -1,4 +1,4 @@
-// Shared-mode safety tests for src/shared/safety.js (cli-parity job 3, SAFETY).
+// Safety tests for src/shared/safety.js.
 // Hostile inputs come from the item: '../x', '/etc/passwd', 'a;rm -rf x',
 // a symlinked home, a home with another origin, and git stderr that contains
 // https://u:ghp_x@github.com/... .
@@ -69,8 +69,8 @@ test('itemSelector: digits -> {number}, anything else -> {slug}, empty -> null',
   assert.deepEqual(itemSelector('5'), { number: 5 });
   assert.deepEqual(itemSelector(' 12 '), { number: 12 });
   assert.deepEqual(itemSelector('007'), { number: 7 });
-  assert.deepEqual(itemSelector('003-cli-parity-job-3-path-input-and-credential-safety-for-the-shared-mode'),
-    { slug: '003-cli-parity-job-3-path-input-and-credential-safety-for-the-shared-mode' });
+  assert.deepEqual(itemSelector('003-path-input-and-credential-safety-for-the-backlog-repository'),
+    { slug: '003-path-input-and-credential-safety-for-the-backlog-repository' });
   assert.deepEqual(itemSelector('abc'), { slug: 'abc' });
   // any non-digit ident is a slug
   assert.deepEqual(itemSelector('a;rm -rf x'), { slug: 'a;rm -rf x' });

@@ -3,14 +3,14 @@
 // NODE_OPTIONS=--require: it wraps the child_process functions spawn, spawnSync, exec, execFile,
 // execSync and fork and records every call, so no executable - a name on the PATH, an absolute
 // path or a detached child - can escape the assertion. With BACKLOG_RUN_HOOK unset, no
-// call executes the recorder: local mode starts no child process, shared mode starts only its
+// call executes the recorder: a command that needs no backlog folder starts no child process, one on a backlog repository starts only its
 // git calls. With the variable set, a positive control proves the preload catches the one
 // recorder call (<hook> record backlog.js). The PATH-fake tests of
 // script-runs.test.js are kept; this proof adds the any-executable and any-absolute-path
 // coverage the fakes cannot see (lead ruling 2026-10-31 after rex round 2).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,35 +25,33 @@ const written = file => existsSync(file) && readFileSync(file, 'utf8').endsWith(
 async function waitFor(file) { for (let i = 0; i < 100 && !written(file); i++) await new Promise(r => setTimeout(r, 50)); }
 // The calls the preload recorded: one JSON object per child process the CLI started.
 const calls = file => (existsSync(file) ? readFileSync(file, 'utf8') : '').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
-// A shared-mode fixture: the shared backlog clone, a consumer repository, shared mode on.
+// A backlog repository clone and a consumer repository.
 function sharedFixture(t, prefix) {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const home = sharedBacklog(dir);
   const cons = consumer(dir, 'acme', 'demo', 'main');
-  mkdirSync(join(dir, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(dir, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { dir, home, cons };
 }
 
-test('no child process: local mode, BACKLOG_RUN_HOOK unset - the CLI starts none', t => {
+test('no child process: --version, BACKLOG_RUN_HOOK unset - the CLI starts none', t => {
   const f = fixture(t);
   const log = join(f.dir, 'calls.jsonl');
   const env = { ...f.env, NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log };
   delete env.BACKLOG_RUN_HOOK;
-  const p = f.raw(['--json', '--version'], { env });
+  const p = f.raw(['--version'], { env });
   assert.equal(p.status, 0, p.stderr || p.stdout);
   assert.deepEqual(calls(log), [], `child processes the CLI started although the recorder variable is unset: ${JSON.stringify(calls(log))}`);
 });
 
-test('no child process: local mode, the recorder variable set - the preload catches the one recorder call', async t => {
+test('no child process: --version, the recorder variable set - the preload catches the one recorder call', async t => {
   const f = fixture(t);
   const stub = join(f.dir, 'stub.sh');
   const out = join(f.dir, 'record-out.txt');
   const log = join(f.dir, 'calls.jsonl');
   writeFileSync(stub, STUB, { mode: 0o755 });
   const env = { ...f.env, NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log, BACKLOG_RUN_HOOK: stub, RECORD_OUT: out };
-  const p = f.raw(['--json', '--version'], { env });
+  const p = f.raw(['--version'], { env });
   assert.equal(p.status, 0, p.stderr || p.stdout);
   const rec = calls(log);
   assert.equal(rec.length, 1, `expected the one recorder call, the CLI started: ${JSON.stringify(rec)}`);
@@ -64,7 +62,7 @@ test('no child process: local mode, the recorder variable set - the preload catc
   assert.equal(readFileSync(out, 'utf8').trim(), 'record backlog.js 0', 'the recorded child actually ran the recorder');
 });
 
-test('no child process: shared mode, BACKLOG_RUN_HOOK unset - the only child processes are git', t => {
+test('no child process: a backlog repository, BACKLOG_RUN_HOOK unset - the only child processes are git', t => {
   const f = sharedFixture(t, 'proof-shared-unset-');
   const log = join(f.dir, 'calls.jsonl');
   const r = cli(['new', '--name', 'Proof item', '--summary', 's', '--depends-on', 'none'], {
@@ -78,7 +76,7 @@ test('no child process: shared mode, BACKLOG_RUN_HOOK unset - the only child pro
   assert.deepEqual(rec, rec.filter(c => c.command === 'git'), `a child process other than a git call was started although the recorder variable is unset: ${JSON.stringify(rec)}`);
 });
 
-test('no child process: shared mode, the recorder variable set - the recorder is the one non-git call', async t => {
+test('no child process: a backlog repository, the recorder variable set - the recorder is the one non-git call', async t => {
   const f = sharedFixture(t, 'proof-shared-set-');
   const stub = join(f.dir, 'stub.sh');
   const out = join(f.dir, 'record-out.txt');

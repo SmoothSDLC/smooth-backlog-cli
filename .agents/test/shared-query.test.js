@@ -51,7 +51,6 @@ function build(withFindings) {
   const cons = consumer(t, 'acme', 'demo', 'main');
   const f = { t, home, cons, folder: join(home, 'acme', 'demo') };
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   newItem(f, 'Alpha');
   newItem(f, 'Beta', '--severity', 'critical');
   newItem(f, 'Gamma');
@@ -628,15 +627,19 @@ test('review P2: a row path that leaves the folder (.. or absolute) is a ghost, 
   }
 });
 
-test('review P2: a row path through a symlink to a file outside the folder is a ghost', () => {
+test('review P2: a symlink in the item folder is refused, and the file outside it is never read', () => {
   const f = build(false);
   writeFileSync(join(f.t, 'secret.md'), 'outside\n');
   symlinkSync(join(f.t, 'secret.md'), join(f.folder, 'phases', 'link.md'));
-  const r = withRowPath(f, 'phases/link.md');
-  assert.notEqual(r.next.slug, '001-alpha');
-  assert.deepEqual(r.status.findings.ghost.map(x => x.slug), ['001-alpha']);
-  // a file inside the folder is still found
-  assert.deepEqual(withRowPath(f, 'phases/002-beta.md').status.findings.ghost, []);
+  const con = db.connect(f.folder);
+  con.prepare("UPDATE phase SET path=?, priority=-1 WHERE slug='001-alpha'").run('phases/link.md');
+  con.close();
+  const status = cli(['query', '--status', '--json'], { cwd: f.cons, tmp: f.t });
+  assert.deepEqual(JSON.parse(status.stdout).findings.ghost.map(x => x.slug), ['001-alpha'], 'the row whose path leaves the folder is a ghost');
+  const next = cli(['query', '--next', '--json'], { cwd: f.cons, tmp: f.t }); // reads the item files: the symlink itself is refused
+  assert.equal(next.status, 1, next.stdout + next.stderr);
+  assert.match(next.stderr, /Symlink destination is unsupported/);
+  assert.doesNotMatch(status.stdout + next.stdout + next.stderr, /outside/);
 });
 
 test('review P2: input echoed in a diagnostic is redacted (flags, missing items)', () => {

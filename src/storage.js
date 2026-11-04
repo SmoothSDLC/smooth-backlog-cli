@@ -4,7 +4,6 @@ import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { operation, BacklogError } from './errors.js';
-import { validateStore } from './schema.js';
 export const exists = async path => { try { await fs.lstat(path); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; } };
 export async function safePath(root, target) {
   const rel = relative(resolve(root), resolve(target));
@@ -24,7 +23,7 @@ export async function atomicWrite(path, text) {
   try { await fs.rename(temp, path); } finally { await fs.rm(temp, { force: true }); }
 }
 // wait: how long to wait for a holder (ms). takeOver: a lock whose pid is no longer running (on this host) is taken over and said so once,
-// instead of refused (shared mode; the local store keeps asking the user to look first).
+// instead of refused.
 let tookOver = false;
 // the record names the agent (--by or --agent of the command, else BACKLOG_AGENT or the user) and the time
 const argOf = flag => { const v = process.argv.find((x, i) => process.argv[i - 1] === flag) ?? process.argv.find(x => x.startsWith(`${flag}=`))?.slice(flag.length + 1); return v && !v.startsWith('--') ? v : ''; };
@@ -153,46 +152,4 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
   // removed on check-in; for a process that died, taken over (takeOver) or reported (STALE_LOCK)
   try { return await callback(); }
   finally { await fs.rm(path, { force: true }); }
-}
-export async function repositoryLocked(root, callback) {
-  const filename = '.smooth-backlog-cli.lock';
-  const lock = join(root, filename), legacyLock = join(root, filename.replace('smooth-', ''));
-  await safePath(root, lock); await safePath(root, legacyLock);
-  // Acquire the pre-rename lock first to coordinate with already-published CLIs.
-  return locked(legacyLock, () => locked(lock, callback));
-}
-export const dataFiles = { config: 'config.json', manifest: 'backlog_manifest.json', archive: 'backlog_archive.json' };
-export async function readJSON(path) {
-  try { return JSON.parse(await fs.readFile(path, 'utf8')); }
-  catch (e) { throw new BacklogError('INVALID_STORAGE', `Cannot read ${path}: ${e.message}. Resolve missing files, invalid JSON, or merge conflicts; data was not reset.`, 1); }
-}
-export async function recover(root) {
-  const journal = join(root, '.backlog', '.transaction.json');
-  await safePath(root, journal);
-  if (!await exists(journal)) return;
-  const pending = await readJSON(journal); operation(pending.version === 1, 'Unsupported pending transaction.');
-  validateStore(pending.store);
-  for (const [key, filename] of Object.entries(dataFiles)) { const path = join(root, '.backlog', filename); await safePath(root, path); await atomicWrite(path, JSON.stringify(pending.store[key], null, 2) + '\n'); }
-  await fs.rm(journal);
-}
-export async function withStore(context, callback) {
-  return repositoryLocked(context.root, async () => {
-    const dir = join(context.root, '.backlog'); await safePath(context.root, dir);
-    operation(await exists(dir), 'Backlog is not initialized. Run backlog init.');
-    await recover(context.root);
-    const store = {};
-    for (const [key, filename] of Object.entries(dataFiles)) { await safePath(context.root, join(dir, filename)); store[key] = await readJSON(join(dir, filename)); }
-    validateStore(store); process.env.BACKLOG_CLI_REPONAME = store.config.repo_name;
-    const before = JSON.stringify(store); const oldItems = new Map([...store.manifest, ...store.archive].map(x => [x.id, JSON.stringify(x)]));
-    const result = await callback(store);
-    const now = new Date().toISOString();
-    for (const item of [...store.manifest, ...store.archive]) if (oldItems.has(item.id) && oldItems.get(item.id) !== JSON.stringify(item)) item.item_updated_at = now;
-    const newest = (a, b) => b.item_created_at.localeCompare(a.item_created_at) || a.id.localeCompare(b.id);
-    if (JSON.stringify(store) !== before) {
-      store.manifest.sort(newest); store.archive.sort(newest); validateStore(store);
-      const journal = join(dir, '.transaction.json'); await safePath(context.root, journal);
-      await atomicWrite(journal, JSON.stringify({ version: 1, store })); await recover(context.root);
-    }
-    return result;
-  });
 }

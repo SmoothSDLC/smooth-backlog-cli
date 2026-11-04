@@ -24,7 +24,6 @@ test('shared fixtures: a new phase lands on the local bare and the real backlog 
   const before = realHead();
 
   mkdirSync(join(tmp, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(tmp, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const r = cli(['new', '--name', 'x', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: repo, tmp });
   assert.equal(r.status, 0, `backlog new failed: ${r.stdout}${r.stderr}`);
 

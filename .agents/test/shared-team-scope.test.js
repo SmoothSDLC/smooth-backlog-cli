@@ -25,7 +25,6 @@ function fixture() {
   const cons = consumer(t, 'acme', 'demo', 'main');
   const other = consumer(t, 'other', 'thing', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   return { t, home, cons, other, folder: join(home, 'acme', 'demo'), cfg: join(home, 'acme', 'demo', 'backlog.scope') };
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";

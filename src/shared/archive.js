@@ -1,4 +1,4 @@
-// Shared-mode `backlog archive`. Port of archive.py:22-110 and its commit tail (archive.py:112-117) in the
+// `backlog archive`: archives a finished item (number or slug) and renumbers the queue.
 // oracle's order: pull, resolve the item, git mv under archive/, stamp status, mirror row and event, scan, reflow, commit and
 // push. The item is found by number (seq) or slug, never by database row id. The helpers at the top are shared with move.js.
 // shortcut: argparse's unique-prefix abbreviations (--for) are not accepted.

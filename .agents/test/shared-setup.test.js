@@ -1,6 +1,6 @@
 // Item 043: backlog setup writes the repository's .smooth-backlog.json (a path relative to the repository), clones the
 // backlog repository beside it when it is missing, deploys the template skill into every agent folder present and
-// switches on shared mode; --ask asks for the path. Local bare repos only; BACKLOG_HOME unset.
+// --ask asks for the path. Local bare repos only; BACKLOG_HOME unset.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

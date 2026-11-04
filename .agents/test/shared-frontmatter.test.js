@@ -1,4 +1,4 @@
-// Shared-mode front-matter codec tests for src/shared/frontmatter.js (cli-parity job 4, CODEC).
+// Front-matter codec tests for src/shared/frontmatter.js.
 // The fixtures under fixtures/shared/ (item files and the JSON of their front matter) were generated once, on 2026-10-22,
 // with PyYAML 6.0.3; the generating script is in this file's git history (before item 062).
 import test from 'node:test';

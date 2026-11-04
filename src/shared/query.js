@@ -1,4 +1,4 @@
-// Shared-mode read views: `backlog query` and `backlog next`. a port of the earlier scripts
+// Read views: `backlog query` and `backlog next`.
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the backlog.db mirror,
 // the earlier scripts order: pull, no-backlog check, branch, connect, findings. Output strings and --json match.
 // Never writes an item (the db is opened as lib_db.connect does). The team views are views.js, --pop and --plan are pop.js; --headless is refused.

@@ -1,4 +1,4 @@
-// Shared-mode agent pop: `backlog pop`, `backlog query --pop` and `--next --agent`. a port of the earlier scripts
+// Agent pop: `backlog pop`, `backlog query --pop` and `--next --agent`.
 // (pop) in the earlier scripts order: pull, no-backlog check, branch, connect, findings, then the one next action of the agent,
 // continue > review > claim > refine > chunk > idle (exit 3), over the backlog.db mirror and the item files (views.js, team.js).
 // --claim-now claims through `backlog update --claim` as runs. Never writes an item itself.

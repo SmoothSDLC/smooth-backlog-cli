@@ -17,6 +17,15 @@ step(/^team "([^"]+)" work needs (\d+) pass(?:es)? by "([^"]+)"(?: and (\d+) pas
   w.configureTeam(team, { review });
 });
 step(/^team "([^"]+)" refinements are reviewed by "([^"]+)"$/, (w, team, by) => w.configureTeam(team, { refinement_review: [{ team: by, count: 1 }] }));
+// the repository that holds the items: the backlog repository clone, or the repository itself when the items live inside it
+step(/^the backlog repository has no uncommitted or unpushed change$/, w => {
+  const top = w.backlogRepo();
+  const status = w.gitIn(top, 'status', '--porcelain');
+  assert.equal(status, '', `uncommitted changes in the backlog repository:\n${status}`);
+  const branch = w.gitIn(top, 'branch', '--show-current');
+  assert.equal(w.gitIn(top, 'rev-list', '--count', `origin/${branch}..HEAD`), '0', 'unpushed commits in the backlog repository');
+});
+step(/^the backlog repository's origin is unreachable$/, w => { w.gitIn(w.backlogRepo(), 'remote', 'set-url', 'origin', 'https://127.0.0.1:1/nowhere.git'); });
 step(/^I commit a change to the repository$/, w => { w.git('commit', '-q', '--allow-empty', '-m', 'work'); });
 step(/^a branch "([^"]+)" exists on the origin$/, (w, name) => { w.git('branch', name); w.git('push', '-q', 'origin', name); });
 

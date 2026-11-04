@@ -16,7 +16,6 @@ function fixture(prefix = 'team-plan-') {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const roster = join(t, 'team.json');
   writeFileSync(roster, JSON.stringify({ ann: {}, bob: {}, zed: {} })); // the lead (TEAM_LEAD below) is none of them
   return { t, home, cons, roster, user: join(t, 'user'), folder: join(home, 'acme', 'demo') };

@@ -1,4 +1,4 @@
-// Shared-mode `backlog update`, non-team flags. a port of the earlier scriptsand its commit tail
+// `backlog update`, non-team flags.
 // in the earlier scripts order: pull, resolve the item, change, write the file, log the event, scan into
 // backlog.db, planning event (--priority move, completion, --replan), commit and push. The item is found by number
 // (seq) or slug, never by database row id. The team flags go to lifecycle.js.

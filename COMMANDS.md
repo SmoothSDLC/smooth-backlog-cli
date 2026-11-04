@@ -1,259 +1,51 @@
 # Backlog command reference
 
-Backlog stores work in the Git working tree's `.backlog/` folder. Every item
-belongs to a stored branch. Commands never switch, merge, stage, or commit Git
-content. A Git working tree is required; a dirty tree is valid.
+One backlog per repository and branch, one set of commands. An item is its number (`1`) or its slug
+(`001-fix-the-login-redirect`). Priorities are ranks: P0 is next, the queue runs without gaps and is renumbered when
+work is added, moved or finished. Commands never switch, merge, stage or commit the repository's own content; a git
+working tree is required and a dirty tree is valid.
 
-## Identity and priorities
+## Where the items live
 
-Each record has a permanent GUID `id`. A numeric item selector means its CURRENT
-active priority on the working branch, starting at 0. Completing priority 0
-closes the gap; the next item becomes 0. Retain GUIDs in scripts, saved links,
-and agent plans. Done and archived records have no priority: use their GUIDs.
+The backlog is always a git repository, and every change to it is committed and pushed before the command exits. Where the
+items live is a setting of the repository that changes no command, option, output or help text:
 
-The separate entry numbers inside tasks/outcomes/evidence/references start at 1.
-`new` and `open` are active states; other states are `done` and `archived`.
-New and moved items append by default. Reopening done work inserts at priority 0.
+- by default the folder `.backlog/` inside the repository: every change is committed on the repository's current branch,
+  with the backlog's paths only, and pushed to origin under the same branch name (its `.state/` folder - lock, views,
+  journal - is ignored by git). The items ride with the branch: `--all` shows the items the checked-out branch carries,
+  and a merge carries them across;
+- a backlog folder named by `backlog setup` in `.smooth-backlog.json` (`backlog_repository`, a path relative to the
+  repository), by the environment variable `BACKLOG_HOME`, or by the per-user file `~/.config/<name>/home`. When the
+  folder is a git repository, every command pulls it first and a command that changes an item commits and pushes the
+  change before it exits, so many repositories and people share one backlog repository. Its clone URL, for
+  `backlog setup` to clone it, is the environment variable `BACKLOG_ORIGIN_URL` or the `backlog_origin_url` key of
+  `.smooth-backlog.json`. Nothing is written into the repository itself.
 
-## Initialization
+**Two writers never overwrite each other.** Every write records who made it (`--by`, `--claim` or `--agent`, else
+`BACKLOG_AGENT`, else `USER`) and when. A command that shows an item to an agent records what that agent saw; the
+agent's next write to the item is refused with exit code 5 when somebody else changed it since, and the message says to
+read it again (`backlog query --phase <item>`). The same refusal comes when another writer's change reaches the shared
+repository while this command is pushing: the change is taken back, never merged. A change that cannot be published
+is rolled back, and the command exits 3.
 
-```sh
-backlog init
-backlog init "Display name"
-backlog init backup
-backlog init clean
-```
+## Who and which team
 
-Plain init fails if `.backlog/` exists. `init backup` snapshots existing backlog
-content and installed backlog skills into `.backlog/backup-yyyyMMddHHmm/`, retaining
-live data/config and existing backups, then replaces backlog skills. Existing
-backups are excluded from the new snapshot; minute collisions get numeric suffixes.
-It requires valid existing backlog data, or initializes normally if none exists.
+`BACKLOG_AGENT` names the agent running a command; `BACKLOG_SESSION` its session. Items of a team follow the team
+rules - refinement before work, the team's review rules before the close, work-in-progress limits (`wip-limits.json`
+in the backlog folder). Teams, their leads and members and their review rules are configuration in the backlog folder
+(`teams.json`); a team session is bound by `TEAM_NAME`, `TEAM_REPOSITORY` and `TEAM_BRANCH`. An item without a team is
+not bound by them.
 
-`init clean` removes and recreates the ENTIRE `.backlog/` folder, including every
-branch's data and all contained backups, and replaces installed backlog skills.
-This operation has no branch scope. `init --force` is invalid. Init actions remind
-you to commit; the CLI does not commit anything. Preserve custom skill edits in
-Git because init and package updates replace generated backlog skill copies.
+## Output and exit codes
 
-## Reading work
+`--json` prints the data itself. Refusals and failures print one `❌ backlog: ...` line. Exit codes: 0 success;
+1 refused (the reason on standard output); 2 invalid input or a failure; 3 idle (`pop`, `work`, `team pop`: nothing to
+do now) or a change that was not published; 4 the configured backlog repository is not cloned (run `backlog setup`);
+5 stale view.
 
-```sh
-backlog                         # next active item, or an empty result
-backlog list                    # current branch, new/open only
-backlog list new
-backlog list open
-backlog list done               # newest completion first, with GUIDs and dates
-backlog list archive            # newest archive first, with GUIDs and dates
-backlog list archived           # alias for archive
-backlog list --branch feature
-backlog list branch             # stored branch names and state counts
-backlog branch                  # alias for list branch
-```
+## Commands
 
-Done uses `item_completed_at`; archive uses `item_archived_at`. Archiving retains
-an existing completion date. Directly archiving active work leaves completion
-null. Reopening clears completion until the item is completed again. Timestamp
-ties use GUID order. Data arrays are stored newest-created first.
-
-## Creating and editing
-
-```sh
-backlog new "Fix login" --description "Expired cookies prevent sign-in" --ac "An expired cookie permits a fresh sign-in"
-backlog new "Fix login" '{"description":"Expired cookies prevent sign-in","ac":"Fresh sign-in works","tasks":[{"name":"Reproduce","goal":"A failing test captures the cookie bug"}]}'
-backlog new --ask
-backlog set 0 name "Fix stale login cookie"
-backlog 0 set state open
-backlog 0 done
-backlog set <guid> state open
-```
-
-Both command-first and item-first forms work for set/add/replace/remove/priority/
-done/move/archive. GUID placeholders above must be replaced with actual GUIDs.
-`backlog set <guid> state done` and `backlog <guid> done` are equivalent.
-
-Creation requires name, description, and `ac` (acceptance criteria). Other text
-defaults to `_`; lists default to `[]`; state defaults to `new`; active priority
-defaults to the bottom. Named flags include `--state`, `--priority`,
-`--item-state-description`, `--work_item_id`, `--tasks`, `--outcomes`, `--evidence`,
-and `--references`. List flags take JSON arrays. Creation uses JSON or named
-flags, without positional CSV fields. JSON cannot assign GUID, branch, or dates.
-Creation cannot directly create an archived item. Done creation accepts null
-priority in JSON; active priority must be a nonnegative integer.
-
-`--ask` prompts for omitted free text, list entries, state and priority. Explicit
-inputs win. Enter accepts the displayed default; `_` is an intentional placeholder
-for missing planning text in interactive mode. Each list offers add/finish.
-Generated GUID, branch, and dates are never prompted. A terminal is required,
-and cancellation writes nothing. `--ask --json` sends prompts to stderr.
-
-## Lists and ordering
-
-```sh
-backlog add 0 tasks "Reproduce,Failing test captures the bug"
-backlog 0 set tasks '{"name":"Fix","goal":"Regression passes"}'
-backlog add 0 evidence "npm test passes" --top
-backlog set 0 outcomes '["A","B"]'       # append both entries
-backlog replace 0 outcomes '["Only"]'     # replace the whole list
-backlog set 0 outcomes '["Only"]' --force # explicit replacement alias
-backlog remove 0 tasks 1                  # remove the first task
-backlog priority 2 0                     # move current priority 2 to priority 0
-backlog 0 priority tasks 2 1              # second task becomes first
-backlog set 2 priority                   # compatibility alias: priority 0
-```
-
-`set` replaces scalar fields but appends to list fields. `add` appends by default;
-`--top` prepends. Tasks accept JSON objects/arrays or one quoted CSV `name,goal`
-record, with CSV quotes for embedded commas. Missing task components become `_`.
-String entries retain commas literally. Whole-list replacement requires JSON.
-`remove` deletes one existing one-based entry, not the backlog item itself.
-
-**`--force` is supported only for whole-list `set` replacement.** Archive, init,
-move, priority, and all other commands reject it. It never overrides branch scope.
-`set` cannot change GUID, branch, or generated dates. Only archive sets archived
-state. Archived records are read-only; no unarchive or item-delete command exists.
-
-## Branch transfers and archiving
-
-```sh
-backlog move 0 feature
-backlog import --branch feature
-backlog branch import feature --higher
-backlog archive 0
-backlog archive <guid>
-backlog archive done
-```
-
-Ordinary writes require the item's assigned branch to be the current branch,
-even with GUID selection. Switch branches to work on another backlog. `move`
-transfers exactly one current-branch item to a destination branch. Active work
-appends there; done work remains done. `import` transfers all unarchived source
-items into the current branch, preserving identities, states and relative order.
-Target active items precede source items unless `--higher` reverses the groups.
-It merges backlog queues, not Git branches. Archives remain on their stored branch.
-
-`archive done` only archives current-branch completed items. Explicit archive
-can archive active or done work. An already archived GUID is a no-op; unknown IDs
-fail. There is no archive force option or cross-branch bulk archive.
-
-If Git cannot identify a named branch (including detached HEAD), supply
-`--branch <name>` or set `BACKLOG_CLI_BRANCH` in the calling shell. A detected
-named Git branch governs ordinary writes. List/import can select another source
-branch; move names its destination positionally. In detached HEAD, import uses
-BACKLOG_CLI_BRANCH for its destination and --branch for its source. The CLI sets BACKLOG_CLI_BRANCH
-and BACKLOG_CLI_REPONAME for its own process and children; it cannot modify the
-parent shell. Local default-branch detection may be unknown without blocking use.
-
-## Updates
-
-```sh
-backlog update check     # immediate check and enable weekly notices
-backlog update auto      # enable automatic compatible patch/minor updates
-backlog update off       # disable automatic installs, preserve notice preference
-backlog update disable   # disable weekly notices, preserve auto preference
-backlog update          # manually install latest stable, including a newer major
-```
-
-Weekly notices are enabled by default; automatic installation is disabled.
-Checks run during successful CLI execution, not in a background service or skill
-hook. Auto checks are at most once per 24 hours; notification-only checks weekly.
-Failed checks retry after one hour. Last-check time/status and known installed/
-available versions are written only when a check occurs; skipped checks do not
-rewrite history. Commands changing preferences write those preferences.
-
-Automatic checks warn on stderr and let backlog work continue when offline or
-unauthenticated. Major releases produce a notice and require explicit update.
-Prereleases and downgrades are never implicit. Help/version never check updates.
-
-Preferences/history are user-scoped at `smooth-backlog-cli/config.json` beneath:
-Linux `$XDG_CONFIG_HOME` or `~/.config`; macOS `$XDG_CONFIG_HOME` or
-`~/Library/Application Support`; Windows `%APPDATA%`. Do not commit this file.
-
-Writable npm global/user-prefix installations support staged replacement, an
-executable smoke check, and rollback on failed activation. The npm executable
-remains in place: complete runtimes are retained under the package installation
-and selected through an atomic pointer, so interruption leaves a callable old or
-new runtime. Previously installed runtimes are retained for running processes;
-a normal npm reinstall replaces the managed installation. Enabling auto checks
-installation ownership and write access (including a custom npm --prefix); it refuses installations needing
-elevation. It never requests elevation. Repository-local dependency installs and
-linked/source checkouts receive exact npm instructions instead so their lockfiles
-and source remain under their normal tooling. Notification checks do not need to
-inspect installation scope. Updates refresh installed backlog skills in the
-current repository; other repositories refresh on their next successful CLI use.
-
-GitHub Packages needs the scoped registry configured:
-
-```sh
-npm config set @smoothsdlc:registry https://npm.pkg.github.com
-npm login --scope=@smoothsdlc --auth-type=legacy --registry=https://npm.pkg.github.com
-```
-
-Use an account/token with package-read access. Public GitHub source does not
-imply anonymous package access. The CLI never writes registry settings or tokens.
-
-## Storage and output
-
-The CLI owns the backlog's storage: read and change items only through its commands, never
-its files. Every item has GUID, priority, name, branch, state, item-state-description,
-description, ac, tasks, outcomes, evidence, references, work_item_id, item_created_at,
-item_updated_at, item_completed_at, and item_archived_at. Tasks contain name/goal strings.
-The CLI serializes local processes with a lock and recovers interrupted multi-file writes.
-Corrupt JSON, duplicate GUIDs, merge conflicts, unsupported schemas, invalid
-priorities and symlinked destinations fail explicitly instead of resetting data.
-Resolve cross-clone merge conflicts manually; local locking is not distributed
-conflict resolution. If an owner process crashed and left its lock, the CLI
-identifies that process and gives the lock path. Verify no backlog process is
-using the storage, remove that abandoned lock, and rerun to replay the journal.
-The CLI never unlinks a lock based on a possibly stale owner observation. Do not commit transient locks/journals during a running
-transaction. Normal completed commands remove them.
-
-Human list output uses tables with separate continuation rows for list entries.
-`--json` writes exactly one stdout envelope: `{"ok":true,"data":...}` or
-`{"ok":false,"error":{"code":"...","message":"..."}}`. Diagnostics, update
-notices and prompts use stderr. Exit codes: 0 success/no-op, 2 invalid usage/input,
-1 operational failure. Global --json/--ask/--help may appear before or after a command.
-
-## Shared backlog repository mode
-
-In this mode the items of every repository live in one Git repository, the shared backlog repository
-(its clone URL is a setting: the environment variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url`
-key of `.smooth-backlog.json`; there is no built-in default, and a shared-mode command that needs it refuses,
-naming both sources, when it is in neither), in a folder per consuming repository, instead of in each
-repository's own `.backlog/` folder. Two global options, put before the command, choose the mode. The choice
-is kept per user.
-
-**Two writers never overwrite each other.** Every item write sets `updated_by` (the `--by`/`--claim` agent of the command, else
-`BACKLOG_AGENT`, else `USER`) next to `updated`; older items without it read as written by nobody. A command that shows an
-item to an agent (`backlog query --phase <item> --agent <you>`, `backlog pop --agent <you>`) records what that agent saw (`updated`,
-`updated_by`, the backlog commit) in `.git/smooth-backlog-cli-views/<agent>.json` of the backlog clone, and so does every write after
-it succeeds. The next write of that agent to the item first compares the item, after the update from origin, with that record: when
-somebody else changed it since, the write is refused with exit code 5 and the message `item <item> was changed by <who> at <when>
-after you last read it (<what you saw>); read it again (backlog query --phase <item>) and retry`. The same refusal comes when another
-writer's change to the item reaches origin while this command is pushing; the command's change is then taken back (never merged,
-never parked on a branch). Changes to different items rebase and push on their own. An item the agent never read is written without
-the check (its first write). The same holds for `backlog move` and `backlog archive`. The leading pull never refreshes the agent's
-cached view. Completing or closing an item also checks every other item whose priority the reflow rewrites, and guards that whole
-write set against changes arriving during push.
-A stale item refuses the entire write without publishing any of it.
-Every shared change succeeds only after its commit is pushed. A push that still fails after retries rolls the local branch
-back to origin/main and restores the starting working files and staging, including both folders of a cross-repository move.
-Before every push, the CLI validates the entire write set against the merged backlog, including live/archive sequence and slug uniqueness, dependency existence and cycles, and incoming dependencies of moved or renumbered items. Claims recheck that dependencies are finished and the agent's other work permits another claim (`--force` still overrides only the active-work limit). The read guard also protects a split's parent. A rejected publication preflight restores the starting files, databases, and staging.
-The CLI refuses existing unpublished commits before changing anything and lists their hashes, subjects, and explicit commands
-to publish or drop them; it never silently rewrites a legacy stack.
-
-```sh
-backlog --use-backlog-repo <path>   # use the clone at <path>: shared mode
-backlog --use-local-repo            # back to the repository's own .backlog folder: local mode
-```
-
-Either option may be followed by a command, which then runs in that mode. `--use-backlog-repo` checks that the
-path is a clone of the backlog repository on its `main` branch and pulls it. In shared mode nothing is written into
-the consuming repository. Only the commands below exist in this mode; each pulls the backlog repository first, and a
-command that changes an item commits and pushes the change before it exits. An item is named by its number or its
-slug. With `--json`, the shared-mode commands print the data itself and not the `{"ok","data"}` envelope of the local mode. The team flags of `update`, the team views of `query` (`--plan` included) and `pop` work; the
-flags that a list below marks "Not in this build" are refused. In shared mode `backlog update` changes an item, while in local mode
-it updates the CLI itself. The text of each command below is what `backlog <command> --help` prints.
+The text of each command below is what `backlog <command> --help` prints. `backlog list` is `backlog query`.
 
 ### backlog new
 
@@ -271,12 +63,11 @@ The item belongs to the branch that is checked out in the repository you run the
 TEAM_REPOSITORY (owner/name) and TEAM_BRANCH are set, a team session files the item under that repository and
 branch instead, and then --body must hold a definition of done.
 
-In shared backlog repository mode the command first updates the local clone of the backlog repository
-(git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
-Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
-child process when the variable is unset.
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
 
 Options:
   --name NAME
@@ -363,15 +154,14 @@ Changes the item named by its number or slug. The item file is the source of tru
 records an event in the history of the item and refreshes the backlog database from the file. Setting --status to
 done completes the item (its completion time is set) and renumbers the rest of the backlog; so does --priority.
 Both are planning events, so look at the order again afterwards. The item may be left out only together with
---replan. Do not confuse this command with the local mode command that updates the CLI itself.
+--replan.
 The two retired classification keys of older items have no effect. An item that still carries them shows them until the CLI next writes that item; every write drops them.
 
-In shared backlog repository mode the command first updates the local clone of the backlog repository
-(git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
-Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
-child process when the variable is unset.
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
 
 Options:
   --status STATUS
@@ -599,12 +389,11 @@ items in queue order (priority 0 is next), then the finished ones. Items that ar
 is gone, or because they name another repository or no branch, are reported as findings above the queue.
 With --json the command prints the data itself, without any wrapper.
 
-In shared backlog repository mode the command first updates the local clone of the backlog repository
-(git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
-Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
-child process when the variable is unset.
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
 
 Options:
   --next
@@ -748,12 +537,11 @@ the same as backlog query --next and reads the backlog without changing it. When
 (with --json it prints {}). Critical items are announced in a banner first. With --agent <name> it is the pop of
 that agent instead, see backlog pop --help. The other options of backlog query are described in backlog query --help.
 
-In shared backlog repository mode the command first updates the local clone of the backlog repository
-(git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
-Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
-child process when the variable is unset.
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
 
 Options:
   --all
@@ -821,12 +609,11 @@ follows. With --json the command prints one object with the keys action, item, s
 claimed, blocked and held (and missing when the action is refine). backlog next --agent <name> and backlog query --pop
 print the same.
 
-In shared backlog repository mode the command first updates the local clone of the backlog repository
-(git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
-Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
-child process when the variable is unset.
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
 
 Options:
   --agent AGENT
@@ -982,12 +769,11 @@ merged. With --to-repository an item that names another repository goes to the f
 backlog repository; without a value it goes to the repository the item names, under a new item number there.
 Every move is recorded as an event in the history of the item.
 
-In shared backlog repository mode the command first updates the local clone of the backlog repository
-(git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
-Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
-child process when the variable is unset.
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
 
 Argument:
   <item>
@@ -1028,12 +814,11 @@ renumbers the remaining backlog to 0..M-1, because archiving takes the item off 
 that is already archived does nothing and says so. The command refuses when the item does not exist, or when its
 status is not done and --force was not given.
 
-In shared backlog repository mode the command first updates the local clone of the backlog repository
-(git pull --rebase --autostash). A command that changes an item commits and pushes the change before it exits.
-Run the command from inside the repository whose backlog you mean; its folder in the backlog repository is found
-from the origin of that repository. The executable reports each run to an optional run recorder hook: the hook
-spawns a child process only when the environment variable BACKLOG_RUN_HOOK names an executable, and no
-child process when the variable is unset.
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
 
 Argument:
   <item>
@@ -1068,37 +853,31 @@ Example:
 ### backlog setup
 
 ```text
-backlog setup — point this repository at the shared backlog repository and deploy the backlog skill into it
+backlog setup — choose where this repository's backlog lives and deploy the backlog skill
 
 Usage:
   backlog setup [--ask]
 
-Run inside the git repository to set up; works in local and shared mode. The command:
-  1. finds the backlog repository path: the one in .smooth-backlog.json at the repository's top folder, else
-     ../<name> (the clone beside the repository, where <name> is the backlog repository's name part from the
-     setting below, or a neutral name when the setting is absent); with --ask it asks for the path, showing that
-     default;
-  2. clones the backlog repository there with git when the path does not exist (from the setting: the environment
-     variable BACKLOG_ORIGIN_URL first, then the backlog_origin_url key of .smooth-backlog.json; there is no
-     built-in default); an existing clone is left as it is;
-  3. writes .smooth-backlog.json {"backlog_repository": "<path relative to the repository>"} when there is none, or
-     with --ask; otherwise keeps it. A write keeps the file's other keys, so an origin URL that lives only in the
-     backlog_origin_url key survives the write. Commit the file, so every clone of the repository finds the backlog
-     repository, also after the repository and the clone move together;
-  4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's;
-  5. switches on shared mode.
+Run inside the git repository to set up. The command:
+  1. finds the backlog folder: the one .smooth-backlog.json at the repository's top folder names; else, when a clone
+     URL is set (the environment variable BACKLOG_ORIGIN_URL, then the backlog_origin_url key of .smooth-backlog.json),
+     ../<name> beside the repository (<name> from the URL); else .backlog inside the repository. With --ask it asks for
+     the path, showing that default;
+  2. clones the backlog repository there with git when the path does not exist and a clone URL is set (a clone that
+     cannot be made is refused: exit 3, nothing changed); creates the folder when no URL is set; leaves an existing
+     folder exactly as it is;
+  3. writes .smooth-backlog.json {"backlog_repository": "<path relative to the repository>"} when the folder is not
+     .backlog inside the repository and there is no config yet, or with --ask; otherwise keeps it. A write keeps the
+     file's other keys. Commit the file, so every clone of the repository finds the backlog folder, also after the
+     repository and the folder move together;
+  4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's.
 
-The shared backlog repository's clone URL is a setting: the environment variable BACKLOG_ORIGIN_URL first, then the
-backlog_origin_url key of .smooth-backlog.json; there is no built-in default. A shared-mode command that needs it
-refuses (naming both sources) when it is in neither. The origin check uses the configured value: a clone whose
-origin is a different repository, or has no origin, is refused, and the error names the configured value; a setup
-clone that cannot be made (the repository cannot be cloned or reached) is refused the same way (exit 3, nothing
-changed). Every shared-mode command finds the backlog repository in this order: BACKLOG_HOME, .smooth-backlog.json,
-the per-user record of --use-backlog-repo, ~/git/<name> (the folder names derive from the setting; a neutral name
-without it). When none is there the command names backlog setup. The per-user record of --use-backlog-repo is the
-file <name>/home under the config folder ($XDG_CONFIG_HOME, else ~/.config); a record written before the setting
-existed keeps working when the setting names the same repository - the folder name is unchanged, so no migration is
-needed.
+Every command finds the backlog folder in this order: BACKLOG_HOME, .smooth-backlog.json, the per-user file
+<name>/home under the config folder ($XDG_CONFIG_HOME, else ~/.config), ~/git/<name>; when none of them names one,
+the items live in .backlog inside the repository. A configured folder that is missing is refused (exit 4) naming
+backlog setup. A backlog repository is pulled before every command and pushed after every change; nothing is written
+into the repository being set up. Inside the repository, every change is committed on the current branch, with the
+backlog's paths only, and pushed to origin under the same branch name.
 
 Options:
   --ask

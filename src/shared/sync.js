@@ -3,10 +3,10 @@
 // pinned ec5b254e. Node has no flock, so the lock is a pid file (locked of src/storage.js)
 // and a number two clones picked at once is repaired after the rebase (renumber below).
 // A failure to sync throws BacklogError with exitCode 3; the caller prints it and exits.
-import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
-import { basename, dirname, join, posix, resolve, sep } from 'node:path';
+import { basename, dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
@@ -393,6 +393,22 @@ async function validatePublication(home, folders, names, claims, renumbered) {
   }
 }
 
+// The items live inside the repository (<repo>/.backlog, no clone of its own): the change is committed in the repository, on its
+// current branch and with only the backlog's paths (work staged elsewhere stays staged), and pushed to origin under the same branch
+// name. The repository's own branch workflow updates it, so nothing is pulled first; a push that fails leaves the commit in place
+// (exit 3, the message says so). Resolves to [] (no renumbering: one writer per repository).
+async function commitInRepository(home, message) {
+  const top = (await g(home, ['rev-parse', '--show-toplevel'])).stdout.trim();
+  const rel = posix.join(...relative(realpathSync(top), realpathSync(home)).split(sep)); // the backlog's paths, from the repository's top
+  await must(top, ['add', '-A', '--', lit(rel)], 'stage the backlog');
+  if (!(await g(top, ['diff', '--cached', '--quiet', '--', lit(rel)])).code) return [];
+  const c = await commitOnly(top, [lit(rel)], ['-m', `backlog: ${message}`]);
+  if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${top} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
+  const ps = await g(top, ['push', '-q', 'origin', 'HEAD']);
+  if (ps.code) throw new BacklogError('SYNC_FAILED', `The change was not published from ${top} (push failed: ${ps.stderr.slice(0, 300)}); it is committed on this branch: push the branch, then continue`, 3);
+  return [];
+}
+
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
 // [old, new] pairs renumbered on the way (with.mirror = true when backlog.db was taken from upstream: rescan it and commit again). Recorded only when on origin/main.
 // `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
@@ -400,7 +416,7 @@ async function validatePublication(home, folders, names, claims, renumbered) {
 // gains a change to one of them from someone else before the push, the commit is taken back (clone and index as before the command) and the command
 // is refused with the stale-item message, never merged or parked on a side branch.
 export async function commit(home, folders, message, reconcile = null, guard = [], claims = []) {
-  if (!isClone(home)) return [];
+  if (!isClone(home)) return commitInRepository(home, message);
   guard = publicationGuard(guard);
   const list = [].concat(folders);
   const names = [];

@@ -1,4 +1,4 @@
-// The team lifecycle of `backlog update` in shared mode: claim, release, request-review, start-review,
+// The team lifecycle of `backlog update`: claim, release, request-review, start-review,
 // review, waiting, waiting-done and close. a port of the earlier scripts(team_action) and the guards around it.
 // Each action takes item = {fm, folder, repo, body}, changes item.fm and returns {event, text}, or throws Rejected(message)
 // with the refusal text; step runs the guards and one action, and update.js writes the front matter and appends the text.

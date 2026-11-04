@@ -26,7 +26,6 @@ function fixture() {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const user = join(t, 'user');
   return { t, home, cons, user, folder: join(home, 'acme', 'demo') };
 }

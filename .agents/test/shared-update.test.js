@@ -1,4 +1,4 @@
-// Tests for src/shared/update.js - cli-parity job 11 (UPDATE): `backlog update` in shared mode, non-team flags.
+// Tests for src/shared/update.js: `backlog update`, non-team flags.
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,7 +30,6 @@ function seed({ permuteIds = false } = {}) {
   const cons = consumer(t, 'acme', 'demo', 'main');
   const folder = join(home, 'acme', 'demo');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const item = (seq, name, extra = {}) => {
     const num = String(seq).padStart(3, '0');
     store.write({

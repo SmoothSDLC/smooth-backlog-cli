@@ -1,18 +1,7 @@
-// `backlog setup [--ask]` points a repository at the shared backlog repository and deploys the CLI's skill.
-// Contract:
-// - the repository config is.smooth-backlog.json at the repository's top folder, committed, {"backlog_repository": P};
-// P is relative to that folder (portable: the repository and the clone can move together), an absolute path is kept
-// as given;
-// - the shared backlog repository's clone URL is read from the environment variable BACKLOG_ORIGIN_URL first, then
-// from the backlog_origin_url key of.smooth-backlog.json; there is no built-in default, and a command that needs
-// it refuses (naming both sources) when neither is set;
-// - the default P is../<name> (the clone beside the repository), where <name> is the configured repository's name
-// part (a neutral folder name without the setting); used unless --ask is given;
-// - the backlog repository is found in this order: BACKLOG_HOME, the repository config, the per-user record
-// (~/.config/<name>/home, written by --use-backlog-repo), then ~/git/<name> (<name> as above);
-// - a missing clone is cloned from the setting; an existing one is left as it is;
-// - the template skill replaces the copy in every agent folder present (.agents,.an agent,.github,.an agent), and shared
-// mode is switched on. A second setup does the same and keeps the config unless --ask is given.
+// `backlog setup [--ask]` chooses where a repository's backlog lives and deploys the CLI's skill. See HELP.setup.
+// The config is .smooth-backlog.json at the repository's top folder, committed: {"backlog_repository": P} with P relative
+// to that folder (portable), and optionally backlog_origin_url, the clone URL (the environment variable BACKLOG_ORIGIN_URL
+// wins). The agent folders: .agents, .claude, .github, .qwen.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -21,14 +10,11 @@ import { atomicWrite } from '../storage.js';
 import { adapters, safeTree, templateRoot } from '../integrations.js';
 import { safePath } from '../storage.js';
 import { redact, repoIdFromUrl } from './safety.js';
-import { setMode } from './store.js';
 
 export const CONFIG = '.smooth-backlog.json';
 export const ORIGIN_KEY = 'backlog_origin_url';
 export const NEUTRAL_NAME = 'backlog-repo';
-// the refusal for a shared-mode command that needs the shared backlog repository but finds it in neither
-// source; it names both the environment variable and the config key.
-export const ORIGIN_REFUSAL = `the shared backlog repository is not set: set the environment variable BACKLOG_ORIGIN_URL or the ${ORIGIN_KEY} key of ${CONFIG} to its clone URL (the variable wins); there is no built-in default`;
+// the refusal for a command that needs the clone URL but finds it in neither source.
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 export const topOf = cwd => { const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
@@ -115,7 +101,5 @@ export async function run(argv) {
     deployed.push(destination);
   }
   say(deployed.length ? `✅ the backlog skill in ${deployed.join(', ')}` : 'ℹ️  no agent folder (.agents, .claude, .github, .qwen) here: no skill copy deployed');
-  setMode('shared');
-  say('✅ shared backlog mode');
   return 0;
 }

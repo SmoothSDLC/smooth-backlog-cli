@@ -29,7 +29,6 @@ function seed(items = ['alpha', 'beta', 'gamma'], repo = 'demo') {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', repo, 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
   const folder = join(home, 'acme', repo);
   items.forEach((name, i) => store.write({
     path: join(folder, 'phases', `${String(i + 1).padStart(3, '0')}-${name}.md`),

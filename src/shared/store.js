@@ -37,6 +37,7 @@ export function resolveHome() {
     const top = topOf(process.cwd());
     if (!top) return { home: null, remote: false, ask: { code: 2, text: 'run this from inside a git repository (the repository whose backlog you want)' } };
     const inside = join(top, '.backlog');
+    insideRepo = true;
     mkdirSync(join(inside, '.state'), { recursive: true });
     if (!existsSync(join(inside, '.gitignore'))) writeFileSync(join(inside, '.gitignore'), '.state/\n');
     setTeamsHome(inside);
@@ -59,17 +60,6 @@ export function resolveHome() {
 // Where the lock, the views and the journal live: the clone's.git folder, or.state inside the repository's.backlog folder.
 export const stateDir = home => (existsSync(join(home, '.git')) ? join(home, '.git') : join(home, '.state'));
 
-// Contract section 1: $XDG_CONFIG_HOME/smooth-backlog-cli/mode.json, one JSON object; absent means local.
-const modeFile = () => join(configDir(), 'smooth-backlog-cli', 'mode.json');
-
-export function getMode() {
-  try { return JSON.parse(readFileSync(modeFile(), 'utf8')).mode === 'shared' ? 'shared' : 'local'; } catch { return 'local'; }
-}
-
-export function setMode(mode) {
-  if (mode !== 'shared' && mode !== 'local') throw new Error(`mode must be 'shared' or 'local', got ${JSON.stringify(mode)}`);
-  atomicWrite(modeFile(), JSON.stringify({ mode }));
-}
 
 // <home>/<owner>/<name>. Each part must be a plain name: no separators, no. or..
 export function folder(home, repoId) {
@@ -103,9 +93,13 @@ function git(args, cwd) {
   return { stdout: String(p.stdout || ''), code: p.status ?? 1 };
 }
 
-// owner/name from the origin; a worktree shares its main tree's remotes.
+// owner/name from the origin; a worktree shares its main tree's remotes. Inside the repository (resolveHome found no backlog
+// repository) the id is constant: the folder is the repository, and its items survive a renamed folder or a changed origin.
+let insideRepo = false;
+export const INSIDE_REPO_ID = 'local/repository';
 export function repoId(cwd) {
   if (git(['rev-parse', '--path-format=absolute', '--git-common-dir'], cwd).code) throw new Error('run this from inside a git repository (the repository whose backlog you want)');
+  if (insideRepo) return INSIDE_REPO_ID;
   const id = repoIdFromUrl(git(['remote', 'get-url', 'origin'], cwd).stdout);
   return id || `local/${basename(git(['rev-parse', '--show-toplevel'], cwd).stdout.trim())}`; // no origin: the folder's name
 }

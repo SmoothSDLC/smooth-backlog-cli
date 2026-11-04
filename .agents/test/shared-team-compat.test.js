@@ -91,7 +91,7 @@ test('test_item_without_team_fields_keeps_working: an item written before team w
   const { fm: current, body: currentBody } = item(f, s);
   store.write({ path, fm: { ...current, cody_pass_commit: current.commit || '', external_pass_commit: current.commit || '' }, body: currentBody }, f.folder);
   run(f, 'query', ['--phase', s, '--agent', 'smooth']);
-  ok(f, s, '--status', 'done');
+  ok(f, s, '--status', 'done', '--by', 'smooth'); // read and write run as the same explicit actor (the CI runner's USER differs)
 });
 
 test('test_claim_review_close_lifecycle: the query views along the lifecycle (the part job 15 left out)', () => {
@@ -114,8 +114,8 @@ test('test_claim_review_close_lifecycle: the query views along the lifecycle (th
   ok(f, first, '--handoff', String(Number(job.split('-')[0])), '--handoff-commit', COMMIT, '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'archy');
   run(f, 'query', ['--phase', first, '--agent', 'cody']);
   ok(f, first, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'cody');
-  run(f, 'query', ['--phase', first, '--agent', 'smooth']);
-  ok(f, first, '--close', '--summary', 'tests written');
+  run(f, 'query', ['--phase', first, '--agent', 'archy']); // the claimer re-reads; the claimer closes, as the same explicit actor
+  ok(f, first, '--close', '--summary', 'tests written', '--by', 'archy');
   assert.ok(!q(f, '--blocked').includes(job));
   assert.ok(q(f, '--claimable').includes(job));
 
@@ -152,8 +152,8 @@ test('a completed dependency whose file is gone does not hold the dependent item
   ok(f, dep, '--handoff', String(Number(job.split('-')[0])), '--handoff-commit', COMMIT, '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'archy');
   run(f, 'query', ['--phase', dep, '--agent', 'cody']);
   ok(f, dep, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'cody');
-  run(f, 'query', ['--phase', dep, '--agent', 'smooth']);
-  ok(f, dep, '--status', 'done');
+  run(f, 'query', ['--phase', dep, '--agent', 'archy']); // archy holds the item; it re-reads and finishes it as the same explicit actor
+  ok(f, dep, '--status', 'done', '--by', 'archy');
   rmSync(join(f.folder, 'phases', `${dep}.md`)); // the row stays done; only the file is missing
   assert.ok(!q(f, '--blocked').includes(job), 'blocked by a done dependency');
   assert.ok(q(f, '--claimable').includes(job), 'not claimable although its dependency is done');

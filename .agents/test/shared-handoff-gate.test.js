@@ -49,21 +49,35 @@ const hex = n => n.toString(16).padStart(40, '0');
 // dependent as the producer's repository names it (its unpadded number for a same-repository producer,
 // <owner/name>#<number> for one of another repository); folder/cwd: the producer's folder and checkout of the
 // backlog clone (another repository's when the producer is foreign).
+// The edge's stored form after the close: the named keys take the given values, the others are removed
+// (edgeState in handoff.js tells the states apart by the key's presence and value).
+function edgeState(f, slug, keys, folder = f.folder) {
+  const file = join(folder, 'phases', `${slug}.md`); const d = parse(readFileSync(file, 'utf8'));
+  const fm = { ...d.fm };
+  for (const k of ['handoffs', 'handoff_receipts']) { if (k in keys) fm[k] = keys[k]; else delete fm[k]; }
+  writeFileSync(file, dump(fm, d.body));
+  for (const a of [['commit', '-qam', `test: ${slug}`], ['push', '-q', 'origin', 'HEAD']]) {
+    const p = spawnSync('git', a, { cwd: f.home, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+    assert.equal(p.status, 0, p.stderr);
+  }
+}
 function producerDone(f, p, state, who, { folder = f.folder, cwd = f.cons } = {}) {
   // item 088: a completion needs both review stages passed on the working repository's current commit
   const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).stdout.trim();
-  setFront(f, p, { cody_pass_commit: head, external_pass_commit: head }, folder);
-  ok(f, ['query', '--phase', p, '--agent', 'tester'], cwd); // the pins are a change: the closer reads the item again
-  ok(f, ['update', p, '--status', 'done', '--by', 'tester'], cwd);
-  if (state === 'legacy') return; // closed before the rule: done, no handoffs key
   const rec = handoff.makeRecord({ dependent: who, commit: hex(1), contract: 'the contract', verification: 'the check', by: 'prod', at: '2026-10-30T00:00:00Z' });
   const replaced = handoff.makeRecord({ dependent: who, commit: hex(2), contract: 'the contract', verification: 'the check', by: 'prod', at: '2026-10-30T00:00:00Z' });
   const rcpt = (r, result = 'accepted') => handoff.makeReceipt({ dependent: who, digest: r.digest, result, by: 'lead', at: '2026-10-30T00:00:00Z', checks: 'verified' });
-  const keys = { handoffs: state === 'missing' ? 'none' : [handoff.encode(state === 'stale' ? replaced : rec)] };
-  if (state === 'unaccepted') return setFront(f, p, keys, folder); // a record, no receipt
-  if (state === 'stale') return setFront(f, p, { ...keys, handoff_receipts: [handoff.encode(rcpt(rec))] }, folder); // the acceptance pins the replaced record
-  keys.handoff_receipts = state === 'accepted' ? [handoff.encode(rcpt(rec))] : [handoff.encode(rcpt(rec, 'rejected'))];
-  setFront(f, p, keys, folder);
+  // item 059.V2: the close gate runs on --status done, so the edge is satisfied (record + acceptance) while the
+  // producer closes; the state under test is written afterwards, as the stored form.
+  setFront(f, p, { cody_pass_commit: head, external_pass_commit: head, handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(rcpt(rec))] }, folder);
+  ok(f, ['query', '--phase', p, '--agent', 'tester'], cwd); // the pins are a change: the closer reads the item again
+  ok(f, ['update', p, '--status', 'done', '--by', 'tester'], cwd);
+  if (state === 'accepted') return; // the satisfied edge is the accepted state itself
+  if (state === 'legacy') return edgeState(f, p, {}, folder); // closed before the rule: done, no handoffs key
+  if (state === 'missing') return edgeState(f, p, { handoffs: 'none' }, folder);
+  if (state === 'unaccepted') return edgeState(f, p, { handoffs: [handoff.encode(rec)] }, folder); // a record, no receipt
+  if (state === 'stale') return edgeState(f, p, { handoffs: [handoff.encode(replaced)], handoff_receipts: [handoff.encode(rcpt(rec))] }, folder); // the acceptance pins the replaced record
+  return edgeState(f, p, { handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(rcpt(rec, 'rejected'))] }, folder);
 }
 // The gate over every offer command. With a satisfied edge the dependent (the only open item) is offered by
 // every command and claimed by work; with an unsatisfied edge it is refused and never offered - the commands

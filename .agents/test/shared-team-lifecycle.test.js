@@ -344,7 +344,7 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   both([B, '--review', 'changes', '--by', 'archy', '--comments', 'no refs cited'], undefined, 1);
   both([B, '--review', 'changes', '--by', 'archy', '--comments', 'add a test (references/review/code.md)'], undefined, 0);
   both([B, '--waiting', 'ci', '--by', 'cody', '--note', 'x'], undefined, 0);
-  both([B, '--note', 'the holder continues'], undefined, 0); // ends the wait
+  both([B, '--note', 'the holder continues', '--by', 'cody'], undefined, 0); // ends the wait; the holder writes it, as the same explicit actor that wrote above
   both([B, '--request-review', 'archy', '--note', 'commit 9999999'], undefined, 0);
   both([B, '--review', 'pass', '--by', 'archy', '--comments', 'good (references/review/code.md)'], undefined, 0); // item 088: the NEXT line, the cody stage is still open
   both([B, '--request-review', 'cody-a', '--note', 'commit 9999999, cody stage'], undefined, 0);

@@ -733,7 +733,7 @@ test('publication graph: a claim is refused when its completed dependency reopen
      ['update', '1', '--review', 'pass', '--by', 'codex', '--comments', 'ok per references/review/code.md'],
      ['query', '--phase', '1', '--agent', 'prod'], ['update', '1', '--handoff', '2', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'prod'],
      ['update', '1', '--accept-handoff', '2', '--checks', 'verified', '--by', 'cody'],
-     ['query', '--phase', '1', '--agent', 'prod'], ['update', '1', '--status', 'done']],
+     ['query', '--phase', '1', '--agent', 'prod'], ['update', '1', '--status', 'done', '--by', 'prod']], // prod's read and prod's write: the same explicit actor (the CI runner's USER differs)
     ['update', '1', '--status', 'pending', '--priority', '99'], ['update', '2', '--claim', 'amy']);
   rejectedPublication(t, b, bare, result, /dependencies not done/);
 });

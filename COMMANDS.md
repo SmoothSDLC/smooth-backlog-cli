@@ -943,7 +943,9 @@ Usage:
 A work item of a team is an item of this repository and branch (in a team session the ones it is bound to,
 TEAM_REPOSITORY and TEAM_BRANCH, as for every command) whose front matter team is the team's name and that has
 no stage (backlog update <item> --set-team <name> gives an item to a team; the items split from it carry a stage and are
-the members' work). When the lead holds an open work item of the team, the answer is continue with that item. When an
+the members' work). A refined work item (its stage set, its refinement review passed) is an ordinary item any member
+may claim; team pop offers a work item only while its stage is unset, and the lead still refines it and splits it
+only when it is too big for one member. When the lead holds an open work item of the team, the answer is continue with that item. When an
 earlier session of the lead's card holds it, the command records the continuation claim first - the new session name as
 claimed_by and in session_authors - and then answers continue. A refused continuation claim is no success: the earlier
 session keeps holding, and the command stops (exit 1, the reason on standard error). The final read requires the lead's
@@ -952,7 +954,7 @@ between the selection and the final read is no success - the command stops (exit
 shown) and the other session keeps holding. Otherwise the command claims for
 the lead the team's
 first open, unclaimed work item in the work order (priority, then seq) whose claim backlog update --claim accepts (its
-dependencies are done, no work-in-progress limit is passed), and the answer is claim. The output is the action, the one instruction (refine and split the item with the team), the items not taken
+dependencies are done, no work-in-progress limit is passed), and the answer is claim. The output is the action, the one instruction (refine the item, split it only when it is too big for one member), the items not taken
 with the reason, and the whole item: its front matter and its body. When there is no work item to take, the action is
 idle and the command exits with 3. Only the team lead runs it.
 

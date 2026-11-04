@@ -180,6 +180,13 @@ test('096: the update help and the built-in skill say the retired classification
   }
 });
 
+test('127: the team pop help states a refined work item is claimable by members and team pop offers it only while the stage is unset', () => {
+  const flat = backlog('team', '--help').stdout.replace(/\s+/g, ' ');
+  assert.match(flat, /A refined work item[^.]*is an ordinary item any member may claim/);
+  assert.match(flat, /only while its stage is unset/);
+  assert.match(flat, /too big for one member/);
+});
+
 test('059.V2: the --close and --status help blocks name the hand-off close rule, NONE and the legacy exemption', () => {
   const help = backlog('update', '--help').stdout;
   const skill = readFileSync(new URL('../../templates/skills/backlog/SKILL.md', import.meta.url), 'utf8');

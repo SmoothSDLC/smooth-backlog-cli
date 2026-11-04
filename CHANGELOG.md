@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Item 127 (owner decision 43): a refined team work item is an ordinary item any member may claim. The behaviour already
+  held (a member claims a ready work item; the lead's `backlog team pop` offers a work item only while its stage is unset,
+  and the lead's own claim of it is refused once its stage is set); this change says so in the help of `backlog team pop`,
+  the built-in skill, the README and COMMANDS.md, and the lead's dispatch instruction now tells it to split an item only
+  when it is too big for one member.
 - Item 144 (owner decision 46): After three refinement-review CHANGES rounds the lead records its own verdict (--refinement-review pass|changes --by claude) without a Codex limit record, from stage refinement-review or, once the refiner finished, stage refined; below three rounds Claude still needs Codex's recorded 5-hour limit. `backlog pop` tells the lead to record its own verdict instead of asking Codex for such an item.
 - Item 107 (of 057): `backlog new`, `backlog archive` and `backlog move` name an item by its slug and number and never
   print a file or folder of the backlog repository (for example `created phase 004-example (seq 4)`, `📦 004-example

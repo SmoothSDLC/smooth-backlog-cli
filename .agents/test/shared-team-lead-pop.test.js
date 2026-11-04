@@ -41,7 +41,8 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   assert.deepEqual([p.action, p.item, p.status, fm(f, early).claimed_by], ['claim', early, 0, 'lead']);
   assert.deepEqual(Object.keys(p), ['action', 'item', 'team', 'repository', 'branch', 'instruction', 'skipped', 'front_matter', 'body', 'status']); // status: added by pop() here
   assert.ok(p.body.includes('Body of early work item.') && p.front_matter.claimed_by === 'lead', JSON.stringify(p));
-  assert.match(p.instruction, new RegExp(`refine and split it .*backlog new --split-from ${early}`));
+  assert.match(p.instruction, /refine it, and split it only when it is too big for one member/);
+  assert.match(p.instruction, new RegExp(`backlog new --split-from ${early}`));
   p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item, fm(f, late).claimed_by], ['continue', early, '']);
   const child = make(f, 'child', '--split-from', early); // a split item carries a stage: the members' work, never the lead's

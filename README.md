@@ -110,7 +110,7 @@ The branch's shipped install helper, `install-backlog-cli.sh`, can set up a cons
 
 PR #3 treats **one backlog item** as the unit of assignment, execution, review, and closure. Its controls are designed for autonomous and collaborative execution:
 
-1. **Refine:** Clarify and split the source work into independently executable, dependency-linked items; required refinement reviews must pass before claims.
+1. **Refine:** Clarify and split the source work into independently executable, dependency-linked items; required refinement reviews must pass before claims: once a work item is refined, it is an ordinary item any member may claim, the lead's `backlog team pop` offers it only while its stage is unset, and the lead still refines it and splits it only when it is too big for one member.
 2. **Claim:** A distinct execution session claims an eligible item. Session authors are recorded to prevent the same session from approving its own work.
 3. **Implement:** Associate commits and acceptance evidence with the specific item instead of relying on an agent's end-of-session summary.
 4. **Review:** Require an agent review followed by an independent external review against the item's pinned `work_commit`.

@@ -105,9 +105,9 @@ export async function run(argv) {
     }
   }
   const instruction = item
-    ? `you hold ${item}, the work item of team ${a.team}: refine and split it into items of at most 45 minutes `
+    ? `you hold ${item}, the work item of team ${a.team}: refine it, and split it only when it is too big for one member `
       + `(backlog new --split-from ${item} --depends-on <ids|none> --estimate <minutes> per item; they start in stage refining `
-      + `for the members), then run backlog pop --agent ${agent} for each next step`
+      + `for the members); a refined work item is an ordinary item any member may claim; then run backlog pop --agent ${agent} for each next step`
     : `no work item of team ${a.team} to take in ${own}${branch ? ` on branch ${branch}` : ''}`;
   const out = { action, item, team: a.team, repository: own, branch, instruction, skipped,
     front_matter: shown ? shown.front_matter : null, body: shown ? shown.body : null };

@@ -150,8 +150,8 @@ sees and changes the backlog only through them.
   on the item first; a refused continuation claim stops the command, exit 1, the earlier session keeps holding; the
   final read requires your own session still holding the item, on every path: a hand-back or a reassignment to
   another session of the same card between the selection and the final read stops the command, exit 1, and the other
-  session keeps holding), then
-  split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of an item starts in stage refining, with or without a team, and takes its refinement review before it is claimed; a child of a team's item inherits the team); send a refined
+  session keeps holding), then split it only when it is too big for one member with
+  `backlog new --split-from <item> --depends-on <ids|none>` (a child of an item starts in stage refining, with or without a team, and takes its refinement review before it is claimed; a child of a team's item inherits the team); a refined work item is an ordinary item any member may claim (the lead's claim of it is refused once its stage is set); send a refined
   item on with `--request-refinement-review --by <you>`, record Codex's verdict with `--refinement-review
   pass|changes --by codex --comments "<findings; thread id>"`; only when Codex answers that its limit is exceeded (or the item already has three CHANGES rounds: then the lead records its verdict with no limit record, in stage refined or refinement-review), record that with
   `--refinement-review limit --by codex --comments "<Codex's answer>"`, then Claude's verdict with `--by claude
@@ -166,7 +166,7 @@ them; `backlog query --wip` shows the counts. Only the team lead lifts a team or
 
 Act only as yourself: another agent's item or review is the team lead's to hand on (`--reassign <agent> --reason
 "<why>" --by <lead>`, `--reassign-review <agent> --reason "<why>" --by <lead>`). A split item (with or without a
-team) or of a team is claimed only in stage ready; a team item without a stage is unrefined (stage refining): `--claim` refuses it, naming `--refine-start`, `pop` offers its refinement, never a claim, and `query --claimable` and `query --plan` leave it out until it is refined. Only the team lead's own claim of its team's work item (`backlog team pop`, to split it; never a split slice) is accepted. An item without a team and without the split marker has no stage and is claimed directly; one waiting in review-hitl waits for the owner's `--decision`.
+team) or of a team is claimed only in stage ready; a team item without a stage is unrefined (stage refining): `--claim` refuses it, naming `--refine-start`, `pop` offers its refinement, never a claim, and `query --claimable` and `query --plan` leave it out until it is refined. Only the team lead's own claim of its team's work item (`backlog team pop`, to split it; never a split slice) is accepted. A refined work item (stage ready) is an ordinary item any member may claim; the lead's claim of it is refused once its stage is set, and `backlog team pop` offers it only while its stage is unset. An item without a team and without the split marker has no stage and is claimed directly; one waiting in review-hitl waits for the owner's `--decision`.
 
 Session names: a card's sessions are named `<item, 3 digits><card id>:<increment, 2 digits>` (a colon inside the
 name) and a team joins its card ids with colons. The colon is part of the name: it works in every command, in the

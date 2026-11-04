@@ -1,4 +1,4 @@
-// Tests for `backlog pop` and `backlog query --pop` (src/shared/pop.js) - cli-parity job 20 (POP).
+// Tests for `backlog pop` (src/shared/pop.js) - cli-parity job 20 (POP).
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -55,10 +55,9 @@ const ok = (f, slug, ...args) => {
 const refuse = (f, slug, ...args) => cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
 // ann is a plain member here; popLead asks as the team lead, who does no chunk work.
 const LEAD = { TEAM_LEAD: 'lead' };
-const popCli = (f, args, opts = {}) => cli(['query', '--pop', '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, ...opts, env: { ...LEAD, ...opts.env } });
+const popCli = (f, args, opts = {}) => cli(['pop', '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, ...opts, env: { ...LEAD, ...opts.env } });
 
-// The JSON of --pop: exit 3 exactly when the action is idle. Unless the pop changes the backlog
-// (--claim-now), `backlog pop` must print the same thing as `backlog query --pop`.
+// The JSON of pop: exit 3 exactly when the action is idle.
 function pop(f, ...args) { return popAs(f, LEAD, ...args); }
 function popLead(f, ...args) { return popAs(f, { TEAM_LEAD: 'ann' }, ...args); }
 function popAs(f, env, ...args) {
@@ -67,10 +66,6 @@ function popAs(f, env, ...args) {
   assert.equal(r.stderr, '', r.stdout + r.stderr); // the JSON of a successful pop has no stderr
   const out = JSON.parse(r.stdout);
   assert.equal(r.status === 3, out.action === 'idle', r.stdout);
-  if (!args.includes('--claim-now')) {
-    const same = cli(['pop', '--agent', 'ann', '--json', ...args], { cwd: f.cons, tmp: f.t, env });
-    assert.deepEqual([same.status, same.stdout, same.stderr], [r.status, r.stdout, r.stderr], 'backlog pop == backlog query --pop');
-  }
   return out;
 }
 
@@ -105,18 +100,15 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   assert.equal(item(f, job).fm.claimed_by, 'ann');
   const spare = make(f, f.cons, 'pop spare job', []);
   ok(f, dep, '--request-review', 'any', '--note', 'tests in commit abc');
-  const z = JSON.parse(cli(['query', '--pop', '--agent', 'zed', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD }).stdout);
+  const z = JSON.parse(cli(['pop', '--agent', 'zed', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD }).stdout);
   assert.deepEqual([z.action, z.item], ['review', dep]); // (b) review beats claim; any member but the author
   assert.ok(z.instruction.includes('--review pass|changes --by zed') && spare);
   p = pop(f); // (a) continue beats review
   assert.deepEqual([p.action, p.item], ['continue', job]);
-  for (const cmd of [['query', '--next'], ['next']]) { // --next --agent is the same pop
-    const n = cli([...cmd, '--agent', 'ann'], { cwd: f.cons, tmp: f.t, env: LEAD });
-    assert.ok(n.status === 0 && n.stdout.startsWith(`continue ${job}\n`), n.stdout + n.stderr);
-  }
+  const n = cli(['pop', '--agent', 'ann'], { cwd: f.cons, tmp: f.t, env: LEAD });
+  assert.ok(n.status === 0 && n.stdout.startsWith(`continue ${job}\n`), n.stdout + n.stderr);
   ok(f, dep, '--review', 'pass', '--by', 'ann', '--comments', 'fine per references/review/tests.md');
-  assert.ok(cli(['query', '--pop'], { cwd: f.cons, tmp: f.t }).stderr.includes('--pop needs --agent'));
-  assert.ok(cli(['pop'], { cwd: f.cons, tmp: f.t }).stderr.includes('--pop needs --agent'));
+  assert.ok(cli(['pop'], { cwd: f.cons, tmp: f.t }).stderr.includes('pop needs --agent'));
 });
 
 test('075: the pop of an idle lead and of a claimable item prints its text and its JSON exactly, with empty stderr', () => {
@@ -129,7 +121,7 @@ test('075: the pop of an idle lead and of a claimable item prints its text and i
   assert.equal(idleText.status, 3, idleText.stdout + idleText.stderr);
   assert.equal(idleText.stderr, '');
   assert.equal(idleText.stdout, `idle\n   nothing for ann: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in_progress, claimed by bob)\n`);
-  // the same state as the JSON of --pop: the whole document, word for word (the CLI's Python-style separators)
+  // the same state as the JSON of pop: the whole document, word for word (the CLI's Python-style separators)
   const idleJson = popCli(f, ['--json'], { env: { TEAM_LEAD: 'ann' } });
   assert.equal(idleJson.status, 3, idleJson.stdout + idleJson.stderr);
   assert.equal(idleJson.stderr, '');
@@ -218,7 +210,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   git(f.cons, 'checkout', '-q', '-b', 'poprefs');
   const job = make(f, f.cons, 'refs job', ['--review-refs',
     'references/review/contract.example.md,references/patterns/x.md']);
-  let r = cli(['query', '--pop', '--agent', 'bob', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
+  let r = cli(['pop', '--agent', 'bob', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.ok(JSON.parse(r.stdout).instruction.includes('definition of done: references/review/contract.example.md, references/patterns/x.md'), r.stdout + r.stderr);
   ok(f, job, '--claim', 'bob');
   ok(f, job, '--request-review', 'any', '--note', 'commit abc');
@@ -258,11 +250,11 @@ test('a roster member with review_only never claims; a missing roster is an erro
   const job = make(f, f.cons, 'review only job', []);
   const roster = join(f.t, 'team.json');
   writeFileSync(roster, JSON.stringify({ rev: { review_only: true }, ann: {} }));
-  const as = (agent, ...args) => cli(['query', '--pop', '--agent', agent, '--roster', roster, '--json', ...args], { cwd: f.cons, tmp: f.t, env: LEAD });
+  const as = (agent, ...args) => cli(['pop', '--agent', agent, '--roster', roster, '--json', ...args], { cwd: f.cons, tmp: f.t, env: LEAD });
   for (const args of [[], ['--claim-now']]) assert.equal(JSON.parse(as('rev', ...args).stdout).action, 'idle', args.join(' '));
   assert.ok(!item(f, job).fm.claimed_by);
   assert.deepEqual([JSON.parse(as('ann').stdout).action, JSON.parse(as('ann').stdout).item], ['claim', job]);
-  const gone = cli(['query', '--pop', '--agent', 'ann', '--roster', join(f.t, 'missing.json')], { cwd: f.cons, tmp: f.t, env: LEAD });
+  const gone = cli(['pop', '--agent', 'ann', '--roster', join(f.t, 'missing.json')], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.equal(gone.status, 2);
   assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'missing.json')}: `), gone.stderr);
 });
@@ -289,14 +281,14 @@ test('test_no_new_flags_unchanged', () => {
   assert.ok(n.status === 0 && n.stdout.includes(`NEXT: P0 (rank 0 = next) — [${String(Number(s.split('-')[0])).padStart(3)}] ${s}`), n.stdout);
 });
 
-// The --pop assertions of the scope rules.
-test('--pop with --scope all and the refinement_scope cap of backlog.scope', () => {
+// The pop assertions of the scope rules.
+test('pop with --scope all and the refinement_scope cap of backlog.scope', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'scope-a');
   make(f, f.other, 'scope chunk other repository', ['--chunk']);
   const here = make(f, f.cons, 'scope docs here', []);
   ok(f, here, '--claim', 'bob'); // nothing else claimable: the pop has only chunk work
-  const t = (...a) => cli(['query', '--pop', '--agent', 't', '--json', ...a], { cwd: f.cons, tmp: f.t, env: LEAD });
+  const t = (...a) => cli(['pop', '--agent', 't', '--json', ...a], { cwd: f.cons, tmp: f.t, env: LEAD });
   try {
     writeFileSync(f.cfg, 'refinement_scope: all\n');
     let p = t('--scope', 'all');
@@ -309,7 +301,7 @@ test('--pop with --scope all and the refinement_scope cap of backlog.scope', () 
   } finally { rmSync(f.cfg, { force: true }); }
 });
 
-test('--agents without --plan, --critical and --headless stay refused with --pop', () => {
+test('--agents without --plan, --critical and --headless stay refused with pop', () => {
   const f = fixture();
   make(f, f.cons, 'x', []);
   for (const args of [['query', '--agents', 'a,b'], ['pop', '--agent', 't', '--agents', 'a'], ['pop', '--agent', 't', '--critical'], ['pop', '--agent', 't', '--headless']]) {
@@ -327,7 +319,7 @@ test('credentials in a wait are redacted in the text and the JSON of the pop (bl
   const { fm, body } = item(f, held);
   store.write({ path: join(f.folder, 'phases', `${held}.md`), fm: { ...fm, wait_on: 'https://user:hunter2secret@host/run' }, body }, f.folder);
   for (const args of [[], ['--json']]) {
-    for (const cmd of [['query', '--pop'], ['pop']]) {
+    for (const cmd of [['pop']]) {
       const r = cli([...cmd, '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t });
       assert.equal(r.status, 3, r.stdout + r.stderr); // idle: it only waits
       assert.ok(r.stdout.includes('https://host/run'), r.stdout); // the wait is still named
@@ -377,10 +369,7 @@ test('--claim-now: the diagnostics of a failed claim are forwarded with its exit
   assert.ok(!(r.stdout + r.stderr).includes('hunter2secret'), r.stdout + r.stderr);
 });
 
-test('the exit codes of query --pop and next --agent are described: 3 is idle, 1 a claim that failed', () => {
-  for (const command of ['query', 'next']) {
-    assert.match(HELP[command], /With --pop[^]*exit codes are those of backlog pop[^]*3 the action is idle[^]*1 a --claim-now claim was refused or could not run/, command);
-  }
+test('the exit codes of backlog pop are described: 3 is idle, 1 a claim that failed', () => {
   assert.match(HELP.pop, /1 {2}A --claim-now claim was refused or could not be run/);
 });
 
@@ -389,7 +378,7 @@ test('the JSON of the pop stays valid when a credential follows a non-ASCII char
   git(f.cons, 'checkout', '-q', '-b', 'pop-unicode');
   make(f, f.cons, 'pop unicode agent', []);
   const agent = 'https://\u00e9user:review_dummy@host/path';
-  for (const cmd of [['query', '--pop'], ['pop']]) {
+  for (const cmd of [['pop']]) {
     const r = cli([...cmd, '--agent', agent, '--json'], { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 0, r.stdout + r.stderr); // claim: the instruction names the agent
     const out = JSON.parse(r.stdout); // invalid JSON if the escape \u00e9 was cut

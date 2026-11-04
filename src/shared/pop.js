@@ -1,4 +1,4 @@
-// Agent pop: `backlog pop`, `backlog query --pop` and `--next --agent`.
+// Agent pop: `backlog pop` and the lead's plan view `backlog query --plan`.
 // (pop) in the earlier scripts order: pull, no-backlog check, branch, connect, findings, then the one next action of the agent,
 // continue > review > claim > refine > chunk > idle (exit 3), over the backlog.db mirror and the item files (views.js, team.js).
 // --claim-now claims through `backlog update --claim` as runs. Never writes an item itself.
@@ -18,7 +18,7 @@ import * as team from './team.js';
 import { OPEN, SCOPES, refinementCap, reviewOffer, teamRows, waitingOn } from './views.js';
 import { wipRefusal } from './wip.js';
 
-const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'pop', 'plan', 'claim-now', 'headless'];
+const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'plan', 'claim-now'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
 const narrower = (a, b) => (RANK[a] <= RANK[b] ? a : b);
@@ -324,15 +324,14 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   return 0;
 }
 
-// up to the call of pop; argv is that of `backlog query` (with --pop, or --next --agent) or of `backlog pop`.
+// up to the call of pop; argv is that of `backlog pop` or of `backlog query --plan`.
 export const run = argv => store.cloneLocked(store.resolveHome().home, () => popCommand(argv)); // a read that pulls waits for a writer of the clone
 async function popCommand(argv) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
-  if (a.headless) return die('--headless is not in this build');
   if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
-  if (a.critical) return die('--critical cannot be combined with --pop in this build');
-  if (!a.agent && !a.plan) return die('--pop needs --agent <your name>');
+  if (a.critical) return die('--critical cannot be combined with pop in this build');
+  if (!a.agent && !a.plan) return die('pop needs --agent <your name>');
   const cwd = process.cwd();
   let repo;
   try { repo = team.teamScope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }

@@ -19,10 +19,10 @@ const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
 const COMMANDS = ['new', 'update', 'query', 'next', 'pop', 'work', 'team', 'move', 'archive'];
-// Flags this build refuses (query.js TEAM, pop.js and --headless); --db is no flag of the CLI (item 058: not in its help).
+// Flags this build refuses (query.js TEAM and pop.js); --db is no flag of the CLI (item 058: not in its help).
 const REFUSED = {
   update: [],
-  query: ['headless'],
+  query: [],
   new: [], move: [], archive: [], pop: [],
 };
 const flagsOf = text => [...new Set((text.match(/--[a-z][\w-]*/g) ?? []).filter(f => !f.endsWith('-')))];
@@ -66,9 +66,7 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
     [['archive', '1', '--force', '--dry-run', '--db', 'x.db'], unknown],
     [['query', '--status', '--db', 'x.db'], unknown],
     [['query', '--agents', 'x', '--roster', roster], /^--agents goes with --plan/],
-    [['query', '--headless'], /^--headless is not in this build$/],
     [['pop', '--agent', 'x', '--agents', 'x'], /^--agents goes with --plan/],
-    [['pop', '--agent', 'x', '--headless'], /^--headless is not in this build$/],
     [['pop', '--agent', 'x', '--db', 'x.db'], unknown],
   ];
   for (const [args, diagnostic] of cases) {
@@ -106,7 +104,6 @@ test('exit code 3 is described for both cases: the update before the command fai
   assert.match(backlog('move', '--help').stdout, /3 the update of the local clone failed before\nthe move \(nothing was changed\), or the move was not published and was rolled back/);
   assert.match(backlog('pop', '--help').stdout, /^ {2}3 {2}The action is idle: nothing is left for the agent\. The same code is used when the local clone/m);
   assert.match(backlog('pop', '--help').stdout, /--claim-now claim was not published and was rolled back/);
-  for (const command of ['query', 'next']) assert.match(backlog(command, '--help').stdout, /a --claim-now claim could not be pushed/, command);
   // the build does what the text says: an origin that cannot be reached fails the update, exit 3, and nothing is read
   const broken = mkdtempSync(join(tmpdir(), 'help-exit3-'));
   dirs.push(broken);
@@ -184,4 +181,8 @@ test('059.V2: the --close and --status help blocks name the hand-off close rule,
     assert.match(flat, /records handoffs: none/, name);
     assert.match(flat, /already done is not checked again/, name);
   }
+});
+
+test('query and pop help: one pop command, no headless option', () => {
+  for (const command of ['query', 'next', 'pop']) assert.doesNotMatch(HELP[command], /--pop\b|--headless|BACKLOG_HEADLESS|next --agent/, command);
 });

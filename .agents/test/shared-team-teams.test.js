@@ -32,7 +32,7 @@ const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`
 const refined = (f, slug, cwd = f.cons) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => {
   const r = cli(['update', slug, ...a], { cwd, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr);
 });
-const pop = (f, agent, env) => JSON.parse(run(f, ['query', '--pop', '--agent', agent, '--json'], env).stdout);
+const pop = (f, agent, env) => JSON.parse(run(f, ['pop', '--agent', agent, '--json'], env).stdout);
 const slugs = (f, args, env) => JSON.parse(ok(f, ['query', ...args, '--json'], env).stdout).map(x => x.slug);
 
 test('the runner sets the team on the work item and claims it for the lead; --set-team "" clears it', () => {
@@ -98,7 +98,7 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
   refined(f, theirs);
   writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
   const T1 = { TEAM_NAME: 't1' };
-  const popAll = env => JSON.parse(run(f, ['query', '--pop', '--agent', 'ann', '--scope', 'all', '--json'], env).stdout);
+  const popAll = env => JSON.parse(run(f, ['pop', '--agent', 'ann', '--scope', 'all', '--json'], env).stdout);
   const p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['chunk', null]); // small-chunk work, but not t2's item
   const newIn = name => { const r = cli(['new', ...NEW(name), '--chunk'], { cwd: other, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr); return r.stdout.split('created phase ')[1].split(' ')[0]; };

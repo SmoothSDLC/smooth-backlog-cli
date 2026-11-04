@@ -567,17 +567,14 @@ test('a failed pull stops the read: exit 3 and nothing printed on stdout', t => 
   assert.match(n.stderr, /^❌ backlog: could not update .* from origin\/main/);
 });
 
-test('--headless is refused with exit 2 (the team views are views.js, --pop and --plan are pop.js)', t => {
+test('--next with --agent is refused: the next action of an agent is backlog pop', () => {
   const f = fx();
-  for (const args of [['--next', '--headless']]) {
-    const n = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
-    assert.equal(n.status, 2, args.join(' '));
+  for (const cmd of [['query', '--next'], ['next']]) {
+    const n = cli([...cmd, '--agent', 'ann'], { cwd: f.cons, tmp: f.t });
+    assert.equal(n.status, 2, cmd.join(' '));
     assert.equal(n.stdout, '');
-    assert.match(n.stderr, /^❌ backlog: .*(not built yet|not in this build)/);
+    assert.match(n.stderr, /backlog pop --agent/);
   }
-  const n = cli(['query', '--pop'], { cwd: f.cons, tmp: f.t });
-  assert.equal(n.status, 2);
-  assert.match(n.stderr, /--pop needs --agent <your name>/);
 });
 
 test('an unknown flag is exit 2', () => {
@@ -671,4 +668,15 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
     assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));
     assert.ok(n.stdout.length > 0, `${args.join(' ')} printed nothing (${n.stderr})`);
   }
+});
+
+test('query --pop and --headless are not options; query --plan still answers', () => {
+  const f = fx();
+  for (const args of [['query', '--pop', '--agent', 'x'], ['query', '--headless'], ['pop', '--headless', '--agent', 'x']]) {
+    const r = cli(args, { cwd: f.cons, tmp: f.t });
+    assert.equal(r.status, 2, args.join(' '));
+    assert.match(r.stderr, /unrecognized arguments: --(pop|headless)/);
+  }
+  const plan = cli(['query', '--plan', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_NAME: '', BACKLOG_AGENT: 'lead' } });
+  assert.ok([0, 3].includes(plan.status), plan.stdout + plan.stderr); // the plan view answers or is idle, it is not an unknown flag
 });

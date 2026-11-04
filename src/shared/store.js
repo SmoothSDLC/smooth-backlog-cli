@@ -69,7 +69,7 @@ export function folder(home, repoId) {
 }
 
 // The one operation lock of the clone: every command that can pull, write item files or touch backlog.db (reads that pull included) holds it
-// from before its pull to after its push, whatever repository folders it works on. Re-entrant in the process (query --pop runs pop), and for
+// from before its pull to after its push, whatever repository folders it works on. Re-entrant in the process (query --plan runs the pop module), and for
 // a child its holder runs and waits for, which is given lockEnv(home) (pop --claim-now runs update).
 const held = new Set();
 const lockPath = home => join(stateDir(home), 'smooth-backlog-cli-run.lock');

@@ -44,7 +44,7 @@ const up = (f, slug, ...args) => ok(f, ['update', slug, ...args]);
 const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
 const doc = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const fm = (f, slug) => doc(f, slug).fm;
-const pop = (f, agent, env) => { const r = run(f, ['query', '--pop', '--agent', agent, '--json'], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
+const pop = (f, agent, env) => { const r = run(f, ['pop', '--agent', agent, '--json'], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
 const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => up(f, slug, ...a));
 const work = (f, title = 'team work item') => { const w = make(f, title); up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); return w; }; // the runner, for the lead

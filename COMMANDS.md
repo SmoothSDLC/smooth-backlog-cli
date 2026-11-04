@@ -380,10 +380,9 @@ Usage:
   backlog query [--status] [--all] [--branch <name>] [--json]
   backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
   backlog query --claimable | --reviewable | --blocked | --decisions [--agent <name>] [--roster <file>] [--scope branch|repo|all] [--json]
-  backlog query --pop --agent <name> [--lead <name>] [--roster <file>] [--scope branch|repo|all] [--claim-now] [--json]
   backlog query --changed [--agent <name>] [--json]
 
-Reads the backlog and never changes it, except that --pop with --claim-now claims an item and --changed advances
+Reads the backlog and never changes it, except that --changed advances
 the agent's own last-use reference (its record of its own use, not an item). Without a view option it prints the full stack of the branch: the open
 items in queue order (priority 0 is next), then the finished ones. Items that are not on the queue because their file
 is gone, or because they name another repository or no branch, are reported as findings above the queue.
@@ -458,14 +457,9 @@ Options:
       owner/name:branch, the team or the agent, and stale_hours), and the items in progress without a change of their own
       for longer than stale_hours (default 48). A claim or a
       refinement start past a limit is refused, naming the limit and the items holding it.
-  --pop
-      The one next action of the agent named by --agent: continue, review, refine, claim, refinement-review, reassign-review,
-      stop, chunk or idle
-      (exit code 3, with the blockers named) (team session).
-      It is the same as backlog pop; see backlog pop --help. With --next, --agent does the same.
   --agent AGENT
       The agent that asks. With --claimable or --reviewable it also switches to team rules: an incomplete item is not offered
-      and the agent never reviews its own work. With --pop it is the agent whose next action is answered (team session).
+      and the agent never reviews its own work.
       With --phase the agent has read that item (or each of a comma-separated list, printed as a JSON array): its next
       write of it is checked against that version. A change of an item's rank alone (another agent's move or reflow)
       never makes the agent's view stale; a change of its content does, and the refusal names every such item of the
@@ -476,29 +470,22 @@ Options:
       are the roster's (--roster, else TEAM_ROSTER). Entries come by action (respond and close, review, claim, refine), a
       claim to the member holding the fewest items, then in roster order (team session). Read-only.
   --lead LEAD
-      With --pop or --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default
+      With --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default
       is the environment variable TEAM_LEAD, else the lead of the session's team in teams.json (team session).
   --agents AGENTS
       With --plan: the team members present, comma-separated; the default is the whole roster (team session).
-  --claim-now
-      With --pop: claim the item when the next action is to claim (team session).
   --roster ROSTER
-      With --pop and --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
+      With --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
       file named by TEAM_ROSTER.
       Any session may review an item except the sessions recorded on it (session_authors: the claimer and the one who
       asked for the review, kept on release); a new session of the same card may review it. A member with "review_only":
       true never claims (team session).
   --scope {branch,repo,all}
-      With --pop, --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk items
+      With --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk items
       of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
       in the file backlog.scope of the folder of this repository (default branch).
-  --headless
-      Not in this build. Record the next-step decision without asking a question. BACKLOG_HEADLESS=1 is refused
-      the same way by the human-readable --next view.
   --help
       Print this text and exit. Nothing is read or changed.
-
-The option --headless is refused with exit code 2 in this build.
 
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
@@ -513,11 +500,6 @@ Exit codes:
      records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
      names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
      without the check (its first write).
-
-With --pop, and with --next and --agent, the exit codes are those of backlog pop (see backlog pop --help): 0 the command
-answered with an action, 3 the action is idle (3 is also used when the local clone could not be updated before the answer, or a --claim-now claim could not be pushed),
-1 a --claim-now claim was refused or could not run, 2 the arguments or the place were wrong, 4 the backlog repository is
-not set up.
 
 Example:
   backlog query --status --branch main
@@ -534,8 +516,7 @@ Usage:
 Prints the open item with the lowest priority on the branch that is checked out here, with its objective, summary,
 file and progress, followed by the instruction to hand the decision about the next step back to the user. It is
 the same as backlog query --next and reads the backlog without changing it. When the queue is empty it says so
-(with --json it prints {}). Critical items are announced in a banner first. With --agent <name> it is the pop of
-that agent instead, see backlog pop --help. The other options of backlog query are described in backlog query --help.
+(with --json it prints {}). Critical items are announced in a banner first. The other options of backlog query are described in backlog query --help.
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
@@ -567,11 +548,6 @@ Exit codes:
      records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
      names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
      without the check (its first write).
-
-With --pop, and with --next and --agent, the exit codes are those of backlog pop (see backlog pop --help): 0 the command
-answered with an action, 3 the action is idle (3 is also used when the local clone could not be updated before the answer, or a --claim-now claim could not be pushed),
-1 a --claim-now claim was refused or could not run, 2 the arguments or the place were wrong, 4 the backlog repository is
-not set up.
 
 Example:
   backlog next --json
@@ -606,8 +582,7 @@ When nothing is left the action is idle, the blockers are named, and the command
 
 Without --json the first line is the action and the item, the second line says what to do, and one line per blocked item
 follows. With --json the command prints one object with the keys action, item, seq, repository, branch, instruction,
-claimed, blocked and held (and missing when the action is refine). backlog next --agent <name> and backlog query --pop
-print the same.
+claimed, blocked and held (and missing when the action is refine).
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
@@ -622,7 +597,7 @@ Options:
       The team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the environment
       variable TEAM_LEAD, else the lead of the session's team in teams.json.
   --roster ROSTER
-      With --pop and --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
+      The team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
       file named by TEAM_ROSTER.
       Any session may review an item except the sessions recorded on it (session_authors: the claimer and the one who
       asked for the review, kept on release); a new session of the same card may review it. A member with "review_only":

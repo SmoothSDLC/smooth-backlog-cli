@@ -157,7 +157,7 @@ test('an item with old work_class and review_classes fields behaves exactly like
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^---\n/, '---\nwork_class:\n- chunk\n- docs\nreview_classes:\n- security\n'));
   assert.ok(/^work_class:/m.test(readFileSync(path, 'utf8')) && /^review_classes:/m.test(readFileSync(path, 'utf8')), 'the seeded file carries both keys');
   run(f, 'query', ['--phase', old, '--agent', 'me']); // the file changed behind the CLI: read it again before the writes below
-  const pop = agent => JSON.parse(run(f, 'query', ['--pop', '--agent', agent, '--json']).stdout);
+  const pop = agent => JSON.parse(run(f, 'pop', ['--agent', agent, '--json']).stdout);
   // the team view of both items is the same but for identity, rank and time stamps
   const IDENTITY = ['id', 'slug', 'seq', 'name', 'objective', 'summary', 'priority', 'path', 'sha', 'created_at', 'updated_at'];
   const rows = JSON.parse(run(f, 'query', ['--claimable', '--json']).stdout).map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !IDENTITY.includes(k))));

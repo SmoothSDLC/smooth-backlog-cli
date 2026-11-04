@@ -1,7 +1,7 @@
 // Read views: `backlog query` and `backlog next`.
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the backlog.db mirror,
 // the earlier scripts order: pull, no-backlog check, branch, connect, findings. Output strings and --json match.
-// Never writes an item (the db is opened as lib_db.connect does). The team views are views.js, --pop and --plan are pop.js; --headless is refused.
+// Never writes an item (the db is opened as lib_db.connect does). The team views are views.js, --plan is pop.js.
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
@@ -17,7 +17,7 @@ import { missingFields } from './lifecycle.js';
 import { SCOPES, teamView } from './views.js';
 import { wipView } from './wip.js';
 
-const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'pop', 'plan', 'claim-now', 'headless', 'wip', 'changed'];
+const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip', 'changed'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
 const ACTIONABLE = ['pending', 'in_progress'];
 const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
@@ -146,11 +146,9 @@ export const run = argv => store.cloneLocked(store.resolveHome().home, () => que
 async function query(argv) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
-  if (a.next && a.agent) a.pop = true;
-  if (a.pop && !a.agent) return die('--pop needs --agent <your name>');
-  if (a.headless) return die('--headless is not in this build');
+  if (a.next && a.agent) return die('--agent does not go with --next; the next action of an agent is backlog pop --agent <your name>');
   if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
-  if (a.pop || a.plan) return (await import('./pop.js')).run(argv); // pop.js repeats the preamble below for its own flags
+  if (a.plan) return (await import('./pop.js')).run(argv); // pop.js repeats the preamble below for its own flags
 
   const cwd = process.cwd();
   let repo;
@@ -221,7 +219,6 @@ async function query(argv) {
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
       const skip = skipped.flatMap(s => s.deps.map(d => ({ item: s.row.slug, edge: d.id, handoff: d.handoff })));
       if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), ...(skip.length ? { skipped: skip } : {}) }); return 0; }
-      if (process.env.BACKLOG_HEADLESS === '1') return die('BACKLOG_HEADLESS=1 is not in this build');
       criticalBanner(critical());
       say(`➡️  NEXT: P${r.priority} (rank 0 = next) — [${pad(r.seq, 3)}] ${r.slug}  (${r.status})${(r.severity || 'normal') === 'critical' ? '  ⚠️ CRITICAL' : ''}`);
       say(`    ${r.name}`);

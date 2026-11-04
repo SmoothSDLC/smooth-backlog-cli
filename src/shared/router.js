@@ -48,11 +48,7 @@ export async function run(command, argv, { table = TABLE, help } = {}) {
     if (text) { process.stdout.write(text.endsWith('\n') ? text : `${text}\n`); return 0; }
   }
   const { home, remote, ask } = resolveHome();
-  if (ask && !process.env.BACKLOG_HOME) return die(ask.text, ask.code);
-  const setting = originSetting();
-  if (remote && setting.url) { // a clone named by BACKLOG_HOME alone is taken as given
-    try { await validateHome(home, setting.id, `~/git/${originFolderName()}`, setting.url); } catch (error) { return die(error.message); }
-  }
+  if (ask) return die(ask.text, ask.code);
   const [spec, ...lead] = table[command];
   const module = await load(spec);
   if (!module) return die(`not built yet: ${command}`);

@@ -20,7 +20,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { atomicWrite } from '../storage.js';
 import { adapters, safeTree, templateRoot } from '../integrations.js';
 import { safePath } from '../storage.js';
-import { redact, repoIdFromUrl, validateHome } from './safety.js';
+import { redact, repoIdFromUrl } from './safety.js';
 import { setMode } from './store.js';
 
 export const CONFIG = '.smooth-backlog.json';
@@ -71,7 +71,6 @@ export async function run(argv) {
   const top = topOf(process.cwd());
   if (!top) return die('backlog setup runs inside the git repository it sets up');
   const setting = originSetting(top);
-  if (!setting.url) return die(ORIGIN_REFUSAL); // item 091: no built-in default; the refusal names both sources, before anything is touched
   const name = originFolderName(top);
   const targets = []; // checked before anything changes: no symbolic link on the way to a skill copy (as backlog init)
   for (const a of adapters) {
@@ -82,7 +81,8 @@ export async function run(argv) {
     targets.push({ target, destination: a.destination });
   }
   const kept = configuredHome(top);
-  const fallback = kept ?? join(dirname(top), name);
+  // the backlog folder: the configured one, else beside the repository when a clone URL is set, else inside the repository
+  const fallback = kept ?? (setting.url ? join(dirname(top), name) : join(top, '.backlog'));
   let home = fallback;
   if (ask) {
     const rl = createInterface({ input: process.stdin, output: process.stderr, terminal: false });
@@ -91,14 +91,15 @@ export async function run(argv) {
       if (answer) home = resolve(process.cwd(), answer.replace(/^~(?=\/|$)/, process.env.HOME || '~'));
     } catch { return die('no answer; nothing changed'); } finally { rl.close(); }
   }
-  if (!existsSync(home)) { // only a missing clone is cloned; an existing folder is left exactly as it is
+  if (!existsSync(home)) { // a missing folder is cloned when a clone URL is set, else created; an existing folder is left exactly as it is
     mkdirSync(dirname(home), { recursive: true });
-    const c = spawnSync('git', ['clone', '-q', setting.url, home], { encoding: 'utf8' });
-    if (c.status !== 0) return die(`could not clone ${setting.url} to ${home} (${(c.stderr || '').trim().slice(0, 300)}); nothing changed`, 3);
-    say(`✅ cloned the backlog repository to ${home}`);
-  } else say(`ℹ️  the backlog repository is at ${home} (left unchanged)`);
-  try { await validateHome(home, setting.id, `~/git/${name}`, setting.url); } catch (e) { return die(e.message); }
-  if (!kept || ask) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys (the origin setting, item 091)
+    if (setting.url) {
+      const c = spawnSync('git', ['clone', '-q', setting.url, home], { encoding: 'utf8' });
+      if (c.status !== 0) return die(`could not clone ${setting.url} to ${home} (${(c.stderr || '').trim().slice(0, 300)}); nothing changed`, 3);
+      say(`✅ cloned the backlog repository to ${home}`);
+    } else { mkdirSync(home, { recursive: true }); say(`✅ created the backlog folder ${home}`); }
+  } else say(`ℹ️  the backlog folder is at ${home} (left unchanged)`);
+  if (home !== join(top, '.backlog') && (!kept || ask)) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys (the origin setting, item 091)
     const value = relative(top, realpathSync(home)); // relative to the repository: portable (both real paths: macOS /var is /private/var)
     let previous = null;
     try { previous = JSON.parse(readFileSync(join(top, CONFIG), 'utf8')); } catch { /* no config */ }

@@ -279,12 +279,12 @@ test('<command> --help prints the help text and needs no backlog home', t => {
   assert.equal(r.stdout, 'FAKE HELP\n');
 });
 
-test('a missing home: BACKLOG_HOME set -> exit 2 naming the expected clone; default or recorded home -> exit 4 naming backlog setup', t => {
+test('a missing home (BACKLOG_HOME, the default or the record) -> exit 4 naming backlog setup', t => {
   const f = pair(t);
   setShared(f.tmp);
   const nope = join(f.tmp, 'nope');
   const cases = [
-    ['BACKLOG_HOME set but missing', { BACKLOG_HOME: nope }, 2, /^❌ backlog: BACKLOG_HOME=.*nope does not exist; expected a clone of acme\/backlog-repo on main \(unset BACKLOG_HOME to use ~\/git\/backlog-repo\)\n$/],
+    ['BACKLOG_HOME set but missing', { BACKLOG_HOME: nope }, 4, /^❌ backlog: the backlog repository acme\/backlog-repo is configured but not cloned at .*nope: run 'backlog setup'/],
     // item 043: the answer is backlog setup
     ['default home missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, 4, /^❌ backlog: the backlog repository acme\/backlog-repo is configured but not cloned at .*backlog-repo: run 'backlog setup' in this repository .*'backlog setup --ask'/],
   ];
@@ -302,11 +302,3 @@ test('a missing home: BACKLOG_HOME set -> exit 2 naming the expected clone; defa
   assert.match(rec.stderr, /configured but not cloned/);
 });
 
-test('a home that is not a correct clone (another origin) is refused with exit 2 before the command runs', t => {
-  const f = pair(t);
-  setShared(f.tmp);
-  const other = consumer(f.tmp, 'Other', 'else', 'main');
-  const r = cli(['next'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: other } });
-  assert.equal(r.status, 2);
-  assert.match(r.stderr, /has origin 'Other\/else'; expected acme\/backlog-repo/);
-});

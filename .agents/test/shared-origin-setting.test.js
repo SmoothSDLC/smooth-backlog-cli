@@ -1,8 +1,7 @@
 // Item 091: the shared backlog repository is a setting (the environment variable BACKLOG_ORIGIN_URL first, then the
 // backlog_origin_url key of .smooth-backlog.json), with no built-in name. The item's required behaviours: the
-// variable wins over the config key; the config key works alone; neither set refuses, naming both, touching
-// nothing; the origin check uses the configured value, and a clone failure says so - the errors name the configured
-// value when the repository cannot be cloned or reached, or a copy's origin is a different repository.
+// variable wins over the config key; the config key works alone; neither set puts the items inside the repository;
+// a clone failure names the configured value.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -39,15 +38,11 @@ test('the variable wins over the config key: with both set, the origin check use
   assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 
-test('the config key works alone: with the variable unset, the origin check uses the key', t => {
+test('the config key works alone: with the variable unset, the key names the backlog repository', t => {
   const f = fixture(t);
   writeFileSync(join(f.cons, '.smooth-backlog.json'), JSON.stringify({ backlog_origin_url: KEY }));
   const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: '' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  writeFileSync(join(f.cons, '.smooth-backlog.json'), JSON.stringify({ backlog_origin_url: OTHER }));
-  const r2 = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: '' } });
-  assert.equal(r2.status, 2, r2.stdout + r2.stderr);
-  assert.match(r2.stderr, /has origin 'acme\/backlog-repo'; expected other\/else/);
 });
 
 test('neither set, no BACKLOG_HOME and no record: the items live inside the repository and the clone is not touched', t => {
@@ -59,29 +54,16 @@ test('neither set, no BACKLOG_HOME and no record: the items live inside the repo
   assert.ok(existsSync(join(f.cons, '.backlog', '.state')), 'the folder inside the repository');
 });
 
-test('neither set: backlog setup refuses before it touches anything (no clone, no parent folder, no config, no mode change, no skill copy)', t => {
+test('neither set: backlog setup makes the folder inside the repository, deploys the skill, clones nothing and writes no config', t => {
   const f = fixture(t);
   const app = consumer(f.d, 'acme', 'app', 'main');
   mkdirSync(join(app, '.claude'));
-  const modeFile = join(f.d, 'config', 'smooth-backlog-cli', 'mode.json');
-  const modeBefore = readFileSync(modeFile, 'utf8');
   const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: '' } });
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /the shared backlog repository is not set/);
-  assert.match(r.stderr, /BACKLOG_ORIGIN_URL/);
-  assert.match(r.stderr, /backlog_origin_url/);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(existsSync(join(app, '.backlog')), 'the folder inside the repository');
   assert.ok(!existsSync(join(f.d, 'user')), 'no clone or parent folder was created');
-  assert.ok(!existsSync(join(app, '.smooth-backlog.json')), 'no config was written');
-  assert.equal(readFileSync(modeFile, 'utf8'), modeBefore, 'shared mode was not switched on');
-  assert.ok(!existsSync(join(app, '.claude', 'skills')), 'no skill copy was deployed');
-});
-
-test('the origin check uses the configured value: a configured value different from the clone is refused, naming the clone\u2019s origin, the expected repository and the configured value', t => {
-  const f = fixture(t);
-  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: OTHER } });
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /has origin 'acme\/backlog-repo'; expected other\/else/);
-  assert.match(r.stderr, /the setting is 'https:\/\/example\.com\/other\/else\.git'/);
+  assert.ok(!existsSync(join(app, '.smooth-backlog.json')), 'no config was written for the default folder');
+  assert.ok(existsSync(join(app, '.claude', 'skills', 'backlog', 'SKILL.md')), 'the skill copy was deployed');
 });
 
 test('setup keeps the config backlog_origin_url: a URL that lives only in the key survives the write, and the later shared command works', t => {

@@ -6,7 +6,7 @@
 
 1. **Owner contract:** [Atomic item execution and dependency handoffs](../specs/2026-10-26-atomic-item-execution-dependency-handoffs.md) (2026-10-26).
 2. **Implementation execution plan:** [Updated PR #3 test-first implementation handoff](2026-10-25-pr3-test-first-implementation-handoff.md). This is planning/agent-orientation documentation only; actual item state, claimed executor, review and dependencies belong in the authoritative backlog.
-3. **Authoritative source item:** the shared backlog repository, the `SmoothSDLC/backlog-cli` folder (the historical name of this repository), phases file `030-pull-request-3-patch-item-placeholder-content-to-come-from-chatgpt.md`, using **legacy item repository identity `SmoothSDLC/backlog-cli`**, branch `team-cli-parity-1`. That file contains item-level PR3 source requirements; the old placeholder name/metadata must be normalized by a backed, authorized backlog mutation.
+3. **Authoritative source item:** the shared backlog repository, the former repository folder (the historical name of this repository), phases file `030-pull-request-3-patch-item-placeholder-content-to-come-from-chatgpt.md`, using **the legacy item repository identity (the former name)**, branch `team-cli-parity-1`. That file contains item-level PR3 source requirements; the old placeholder name/metadata must be normalized by a backed, authorized backlog mutation.
 4. **Current coding methods:** the coding-model repository, PR #29 `references-review-v2` / `references/methods/refine-and-split.md`; PR #23 is already merged and does not substitute for PR #29.
 5. **Qwen runtime:** the topology repository, draft PR #1 (the team-member lifecycle reuse patch) — untested runtime patch, not a completed deployment.
 

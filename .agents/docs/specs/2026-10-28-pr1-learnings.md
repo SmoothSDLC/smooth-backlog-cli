@@ -115,7 +115,7 @@ recorder never blocks or fails the run, including a recorder that raises or exit
 this since d0dc5f1; its tests set `CODY_SCRIPT_RUNS_FILE=/dev/null`, so test runs write no records.
 
 ## 13. Repository identity and dependencies across repositories
-The backlog folder is keyed by the origin's owner/name. This repository was renamed from SmoothSDLC/backlog-cli to
+The backlog folder is keyed by the origin's owner/name. This repository was renamed (its former name) to
 SmoothSDLC/smooth-backlog-cli, and its folder was moved to SmoothSDLC/smooth-backlog-cli on 2026-10-28, keeping its history. Items depend on items of other repositories
 (owner/name#seq in depends_on, CLI item 042); a not-done foreign dependency blocks claim and next-work like a local one.
 

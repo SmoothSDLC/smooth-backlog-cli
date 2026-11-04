@@ -2,7 +2,7 @@
 
 **Updated:** 2026-10-26. **Status:** scoped work program, not proof of implementation. Applies to `SmoothSDLC/smooth-backlog-cli` PR #3 **existing branch `team-cli-parity-1`**, not `main`. Owner review is mandatory before merge (merging can publish a release).
 
-**Priority authority:** [2026-10-26 atomic-item contract](../specs/2026-10-26-atomic-item-execution-dependency-handoffs.md), then backlog item 030 (legacy folder `SmoothSDLC/backlog-cli`), then [270-UC behavior matrix](../analysis/2026-10-25-pr3-use-cases-interaction-behavior-matrix.md), then this document. The coding-model repository, PR #29 `references/methods/refine-and-split.md`, is the newer cross-repo method; coding-model PR #23 already merged. Old instructions to split into task sections of one item or to let a waiting claimer pick another implementation item are superseded.
+**Priority authority:** [2026-10-26 atomic-item contract](../specs/2026-10-26-atomic-item-execution-dependency-handoffs.md), then backlog item 030 (the repository's former folder), then [270-UC behavior matrix](../analysis/2026-10-25-pr3-use-cases-interaction-behavior-matrix.md), then this document. The coding-model repository, PR #29 `references/methods/refine-and-split.md`, is the newer cross-repo method; coding-model PR #23 already merged. Old instructions to split into task sections of one item or to let a waiting claimer pick another implementation item are superseded.
 
 ## 0. Refresh and verify
 

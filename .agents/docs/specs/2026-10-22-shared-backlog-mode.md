@@ -8,7 +8,7 @@ line the reviewer can open, and a row that contradicts its cited source is a def
 `~/git/<backlog-repo>/skill/backlog/scripts/<script>.py` (the oracle for all shared-mode
 behavior; the scripts at commit `ec5b254e`; item 091: the folder name derives from the shared
 backlog repository's setting, a neutral name without it). `src/<path>:<line>` = this repository at the start
-commit. `item <NNN>:<line>` = line `<line>` of `phases/<NNN>-*.md` in the SmoothSDLC/backlog-cli
+commit. `item <NNN>:<line>` = line `<line>` of `phases/<NNN>-*.md` in the repository's former
 backlog (item 002 = this job). The push line each job pastes into its item is tagged `<TAG> <sha>`
 (item 002:41); a job that needs another module pulls that tag's line first.
 

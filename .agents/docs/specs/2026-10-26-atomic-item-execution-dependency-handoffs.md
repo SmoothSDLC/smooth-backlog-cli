@@ -47,7 +47,7 @@ An agent may **review other items** while eligible within its existing claimed w
 | Repository / ref | Responsibility |
 |---|---|
 | `smooth-backlog-cli` PR3, `team-cli-parity-1` | New/update/split/depends-on, claim/close/review invariant and merged-remote checks; portable public CLI with organization-specific configuration; deterministic isolation, race and rejection tests; no session spawning |
-| the shared backlog repository, authoritative Python skill | Same item, claim and closure contracts at least until full CLI cutover; procedure for dependency artifacts, no direct Markdown/SQLite edits; preserve the historical `SmoothSDLC/backlog-cli` folder mapping |
+| the shared backlog repository, authoritative Python skill | Same item, claim and closure contracts at least until full CLI cutover; procedure for dependency artifacts, no direct Markdown/SQLite edits; preserve the historical former folder mapping |
 | the coding-model repository, active refinement methods | Refine source -> create distinct child items -> reviewed dependency outputs, independent review and final lead gate |
 | the topology repository, draft Qwen PR1 | Team lead/member skills, dispatcher/wake, Qwen same-name release patch, dependency approval dispatch barrier, proof suite + deployed upgrade/rollback gate |
 

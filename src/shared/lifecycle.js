@@ -104,7 +104,7 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
 
 // The stages before any work (item 036; update.py:36-71): refining -> refined -> refinement-review -> ready, and review-hitl
 // for an owner decision (topology item 288). A member refines first, the lead requests the refinement review, and Codex
-// records the verdict; Claude only after Codex's 5-hour limit is recorded for the round.
+// records the verdict; Claude only after Codex's 5-hour limit is recorded for the round, or at the cap of three CHANGES rounds (item 144).
 const inStage = fm => `team ${fm.team || 'none'}, stage ${fm.stage || 'none'}`;
 export function refineStart({ fm, folder, repo, body = '' }, by, { force } = {}) {
   if (!by) reject('--refine-start needs --by <agent>');
@@ -135,17 +135,21 @@ export function refineDone({ fm }, by, note) {
   return { event: 'refined', text: `## Refined by ${by} at ${t}\n\n${note}` };
 }
 
+// Item 144 (owner decision 46): the refinement-review CHANGES rounds are the body's event lines; three end Codex's rounds.
+export const atReviewCap = body => (String(body || '').match(/^## Refinement review by \w+: CHANGES/gm) || []).length >= 3;
+
 export function requestRefinementReview({ fm }, by) {
   if (!by || by !== teamLead()) reject(`--request-refinement-review --by <the team lead>: the lead (${teamLead()}; TEAM_LEAD) sends a refined item to the refinement review (got ${by || 'none'})`);
   if (fm.stage !== 'refined') reject(`only a refined item goes to the refinement review (stage ${fm.stage || 'none'})`);
   const t = now();
   Object.assign(fm, { stage: 'refinement-review', refinement_review_requested_at: t, refinement_codex_limit: '' });
-  return { event: 'refinement_review_requested', text: `Refinement review requested by ${by} at ${t} (Codex first; Claude only when Codex's 5-hour limit is exceeded)` };
+  return { event: 'refinement_review_requested', text: `Refinement review requested by ${by} at ${t} (Codex first; Claude when Codex's 5-hour limit is exceeded or after three CHANGES rounds)` };
 }
 
-export function refinementReview({ fm }, verdict, { by, comments } = {}) {
+export function refinementReview({ fm, body }, verdict, { by, comments } = {}) {
   if (!REFINEMENT_REVIEWERS.includes(by)) reject(`--refinement-review --by codex|claude: the refinement is reviewed by Codex or Claude (got ${by || 'none'})`);
-  if (fm.stage !== 'refinement-review') reject(`no refinement review is requested (stage ${fm.stage || 'none'})`);
+  const cap = by === 'claude' && atReviewCap(body); // the human lead's verdict at the cap needs no Codex round: also from stage refined
+  if (fm.stage !== 'refinement-review' && !(cap && fm.stage === 'refined')) reject(`no refinement review is requested (stage ${fm.stage || 'none'})`);
   if (!strip(comments || '')) reject('--refinement-review needs --comments "<the reviewer\'s findings, and its thread or session id>"');
   const t = now();
   if (verdict === 'limit') { // beyond the oracle (item 036): Codex's 5-hour limit is recorded before Claude may review
@@ -153,8 +157,8 @@ export function refinementReview({ fm }, verdict, { by, comments } = {}) {
     fm.refinement_codex_limit = t;
     return { event: 'refinement_codex_limit', text: `## Refinement review: Codex 5-hour limit (${t})\n\n${comments}` };
   }
-  if (by === 'claude' && !fm.refinement_codex_limit) {
-    reject('--refinement-review --by claude: Claude reviews a refinement only when Codex reports its 5-hour limit; record it first (--refinement-review limit --by codex --comments "<Codex\'s answer>")');
+  if (by === 'claude' && !fm.refinement_codex_limit && !cap) {
+    reject('--refinement-review --by claude: Claude reviews a refinement only after three CHANGES rounds or when Codex reports its 5-hour limit; record the limit first (--refinement-review limit --by codex --comments "<Codex\'s answer>")');
   }
   const passed = verdict === 'pass';
   Object.assign(fm, { stage: passed ? 'ready' : 'refining', refiner: passed ? fm.refiner || '' : '', refinement_reviewed_by: by, refinement_reviewed_at: t });

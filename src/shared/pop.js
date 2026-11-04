@@ -9,7 +9,7 @@ import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
-import { REFINE_HOW, missingFields, stageMissing, stageOf as stageOfItem, stageRefusal } from './lifecycle.js';
+import { REFINE_HOW, atReviewCap, missingFields, stageMissing, stageOf as stageOfItem, stageRefusal } from './lifecycle.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -186,12 +186,17 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     // item 088: a teamless split slice goes through the same refinement review (the lead requests it and records the verdict)
     const rv = here.filter(x => ((x.fm.team && team.inTeam(x.fm)) || !x.fm.team) && ['refined', 'refinement-review'].includes(x.fm.stage) && !waitsAway(folder, x)); // 042
     if (rv.length) {
-      act = { name: 'refinement-review', r: rv[0].r, f: repo, say: `have the refinement of ${rv.map(x => x.r.seq).join(', ')} reviewed before anyone works on them: `
+      const capped = rv.filter(x => atReviewCap(x.body)); // item 144: three CHANGES rounds end Codex's rounds; the lead records its own verdict
+      const codex = rv.filter(x => !capped.includes(x));
+      const seqs = xs => xs.map(x => x.r.seq).join(', ');
+      act = { name: 'refinement-review', r: rv[0].r, f: repo, say: (codex.length ? `have the refinement of ${seqs(codex)} reviewed before anyone works on them: `
         + `backlog update <item> --request-refinement-review --by ${me} for each refined one; send them to Codex with the codex-agent tool codex `
         + '(Claude with the claude-agent tool claude_code only when Codex answers that its 5-hour usage limit is exceeded; record that answer first: '
         + 'backlog update <item> --refinement-review limit --by codex --comments "<Codex\'s answer>"), asking for a pass or changes verdict per item '
         + "against the team standard (backlog skill 'complete item', the item's review documents); then record each verdict: "
-        + 'backlog update <item> --refinement-review pass|changes --by codex|claude --comments "<findings; thread or session id>"' };
+        + 'backlog update <item> --refinement-review pass|changes --by codex|claude --comments "<findings; thread or session id>"' : '')
+        + (capped.length ? `${codex.length ? '; ' : ''}${seqs(capped)} had three CHANGES rounds: send nothing to Codex, record your own verdict (refined or in review): `
+          + `backlog update <item> --refinement-review pass|changes --by claude --comments "<findings; session id>"` : '') };
     }
   }
   if (lead && plain()) { // item 033: a stale review of its team is the lead's to hand on (members never take it over); before its own plain work, never before its close or rework

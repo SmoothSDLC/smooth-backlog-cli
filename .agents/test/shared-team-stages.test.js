@@ -253,6 +253,31 @@ test("Codex's 5-hour limit authorizes Claude for its round only", () => {
   assert.equal(fm(f, c).stage, 'ready');
 });
 
+test("144: after three CHANGES rounds the lead's verdict is recorded without a Codex limit record; below the cap it is refused", () => {
+  const f = fixture();
+  const w = work(f);
+  const c = make(f, 'child', '--split-from', w);
+  const round = () => { up(f, c, '--refine-start', '--by', 'zed'); up(f, c, '--refine-done', '--by', 'zed', '--note', 'x'); };
+  const changes = () => up(f, c, '--refinement-review', 'changes', '--by', 'codex', '--comments', 'fix; thread t');
+  const LEAD_PASS = ['update', c, '--refinement-review', 'pass', '--by', 'claude', '--comments', 'ok; session s'];
+  round(); up(f, c, '--request-refinement-review', '--by', 'lead'); changes();
+  round(); up(f, c, '--request-refinement-review', '--by', 'lead'); changes(); // two CHANGES rounds: below the cap
+  round();
+  no(f, LEAD_PASS, 'no refinement review is requested (stage refined)'); // stage refined, below the cap
+  up(f, c, '--request-refinement-review', '--by', 'lead');
+  no(f, LEAD_PASS, 'Codex reports its 5-hour limit'); // stage refinement-review, below the cap
+  changes(); // the third CHANGES round
+  assert.equal(fm(f, c).stage, 'refining');
+  no(f, LEAD_PASS, 'no refinement review is requested (stage refining)'); // an unfinished refinement takes no verdict
+  round(); // the item reaches stage refined: the lead records its verdict there, with no request and no fourth Codex round
+  up(f, c, '--refinement-review', 'changes', '--by', 'claude', '--comments', 'one more edit; session s');
+  assert.equal(fm(f, c).stage, 'refining');
+  round(); up(f, c, '--request-refinement-review', '--by', 'lead'); // and in stage refinement-review
+  up(f, c, ...LEAD_PASS.slice(2));
+  assert.equal(fm(f, c).stage, 'ready');
+  assert.equal(fm(f, c).refinement_reviewed_by, 'claude');
+});
+
 test('a complete team item before stage ready takes only its refinement steps: no work, review, close or status change', () => {
   const f = fixture();
   const w = work(f);
@@ -372,7 +397,7 @@ test('075: the successful stage steps print exactly what they record', () => {
   // display form is the capital of the agent name, so the expected text is built from the test's own values
   const cap = n => n[0].toUpperCase() + n.slice(1);
   assert.equal(TS(up(f, c, '--request-refinement-review', '--by', 'lead').stdout),
-    `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (${cap('codex')} first; ${cap('claude')} only when ${cap('codex')}'s 5-hour limit is exceeded))\n`);
+    `✅ ${c} updated (refinement_review_requested=Refinement review requested by lead at TS (${cap('codex')} first; ${cap('claude')} when ${cap('codex')}'s 5-hour limit is exceeded or after three CHANGES rounds))\n`);
   assert.equal(TS(up(f, c, '--refinement-review', 'pass', '--by', 'codex', '--comments', 'ready').stdout),
     `✅ ${c} updated (refinement_reviewed=Refinement review by codex: PASS: ready (TS))\n`);
   assert.equal(fm(f, c).stage, 'ready');

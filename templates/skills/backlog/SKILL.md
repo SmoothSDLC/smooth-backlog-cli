@@ -153,7 +153,7 @@ sees and changes the backlog only through them.
   session keeps holding), then
   split it with `backlog new --split-from <item> --depends-on <ids|none>` (a child of an item starts in stage refining, with or without a team, and takes its refinement review before it is claimed; a child of a team's item inherits the team); send a refined
   item on with `--request-refinement-review --by <you>`, record Codex's verdict with `--refinement-review
-  pass|changes --by codex --comments "<findings; thread id>"`; only when Codex answers that its limit is exceeded, record that with
+  pass|changes --by codex --comments "<findings; thread id>"`; only when Codex answers that its limit is exceeded (or the item already has three CHANGES rounds: then the lead records its verdict with no limit record, in stage refined or refinement-review), record that with
   `--refinement-review limit --by codex --comments "<Codex's answer>"`, then Claude's verdict with `--by claude
   --comments "<findings; session id>"`; ask the owner with `--request-decision "<question>" --by <you>`
   (`backlog query --decisions` lists them; the owner answers with `--decision "<answer>"`); `backlog query --plan` is

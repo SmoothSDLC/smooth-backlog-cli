@@ -466,12 +466,13 @@ Options:
       The refiner finished (--by <the refiner>, --note "<what you refined>"): stage refined. Refused while a team field or
       the definition of done is missing.
   --request-refinement-review
-      The team lead sends a refined item to the refinement review (--by <lead>; Codex first, Claude only when Codex's
-      5-hour limit is exceeded): stage refinement-review.
+      The team lead sends a refined item to the refinement review (--by <lead>; Codex first, Claude when Codex's
+      5-hour limit is exceeded or after three CHANGES rounds): stage refinement-review.
   --refinement-review {pass,changes,limit}
       Record the refinement verdict, --by codex|claude with --comments "<findings; thread or session id>": pass makes the
       item ready, changes sends it back to refining. limit (--by codex) records Codex's answer that its 5-hour limit is
-      exceeded; only then may Claude record a verdict for that round.
+      exceeded; Claude may record a verdict for that round only then, or at any time after three CHANGES rounds (also in stage
+      refined, no limit record needed).
   --request-decision QUESTION
       The item needs an owner decision (--by <agent>): stage review-hitl, the question is written in the item (what, why,
       how it came up, the options and a recommendation). Nobody claims it, or an item that depends on it, until the answer.

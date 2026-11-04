@@ -183,6 +183,26 @@ test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_clo
   assert.ok(p.instruction.startsWith(`close ${seq} with --close --summary`));
 });
 
+test('144: the lead is told to record its own verdict at the three-round cap, and to ask Codex below it', () => {
+  const f = fixture();
+  git(f.cons, 'checkout', '-q', '-b', 'popcap');
+  const parent = make(f, f.cons, 'cap parent', []);
+  const slice = make(f, f.cons, 'cap slice', ['--split-from', parent]);
+  const L = { env: { TEAM_LEAD: 'lead' } };
+  const round = () => { ok(f, slice, '--refine-start', '--by', 'archy'); ok(f, slice, '--refine-done', '--by', 'archy', '--note', 'complete'); ok(f, slice, '--request-refinement-review', '--by', 'lead', L); };
+  for (let i = 0; i < 3; i++) {
+    round();
+    assert.ok(!popLead(f).instruction.includes('--by claude'), `below the cap (${i} rounds): Codex first`);
+    assert.ok(popLead(f).instruction.includes('codex-agent'));
+    ok(f, slice, '--refinement-review', 'changes', '--by', 'codex', '--comments', 'fix; thread t');
+  }
+  ok(f, slice, '--refine-start', '--by', 'archy'); ok(f, slice, '--refine-done', '--by', 'archy', '--note', 'complete');
+  const p = popLead(f);
+  assert.deepEqual([p.action, p.item], ['refinement-review', slice]);
+  assert.ok(p.instruction.includes('--refinement-review pass|changes --by claude'), p.instruction);
+  assert.ok(!p.instruction.includes('codex-agent'), p.instruction);
+});
+
 test('a teamless split slice is dispatched to the member for refinement and to the lead for its refinement review (item 088)', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'popslice');

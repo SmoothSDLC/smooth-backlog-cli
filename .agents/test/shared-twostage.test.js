@@ -554,3 +554,21 @@ test('a failed commit lookup fails closed: the close is refused the Cody stage a
   assert.ok(r.stdout.includes('fail closed'), r.stdout);
   assert.equal(fm(f, s).status, 'in_progress'); // the failed lookup refused the close; the item is still open
 });
+
+// Item 088: the edge the Cody stage recorded for the external review - when both passes are pinned to the item's
+// work commit and that commit is unresolvable in the closing checkout, the failed lookup cannot move the pins:
+// they compare equal to the work commit and the close proceeds. The reason text appears on the Cody-missing case.
+test('both passes pinned to an unresolvable work commit pass the gate: the pins compare equal to it', () => {
+  const f = fixture();
+  const s = make(f, 'pinned lookup item');
+  ok(f, ['update', s, '--claim', 'archy']);
+  bothStages(f, s, 'archy');
+  const file = join(f.folder, 'phases', `${s}.md`);
+  const doc = parse(readFileSync(file, 'utf8'));
+  const unresolvable = 'a'.repeat(40);
+  store.write({ path: file, fm: { ...doc.fm, work_commit: unresolvable, cody_pass_commit: unresolvable, external_pass_commit: unresolvable }, body: doc.body }, f.folder);
+  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
+  ok(f, ['query', '--phase', s, '--agent', 'archy']);
+  ok(f, ['update', s, '--close', '--summary', 'done', '--by', 'archy']); // the pins compare equal to the work commit
+  assert.equal(fm(f, s).status, 'done');
+});

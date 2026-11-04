@@ -1,0 +1,249 @@
+// Tests for item 082, slice B: the self-review block is per session name. claim and --request-review record the
+// session name in a new front-matter list session_authors (kept on release, like review_author); the session that
+// claimed or asked cannot review (the refusal says the same session cannot review its own work, a new session may),
+// and a new session (a new name) may. Items without session names keep the old agent-name rule. Local bare repos only.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { mkdirSync } from 'node:fs';
+import * as store from '../../src/shared/store.js';
+
+const git = (cwd, ...args) => {
+  const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+  if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
+  return p.stdout.trim();
+};
+
+const A1 = '082aa:01'; // the session that builds and asks
+const A2 = '082aa:02'; // a new session of the same card
+const B1 = '082bb:01'; // a new session of another card
+
+const dirs = [];
+test.after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
+
+function fixture() {
+  const t = mkdtempSync(join(tmpdir(), 'session-review-'));
+  dirs.push(t);
+  const home = sharedBacklog(t);
+  const cons = consumer(t, 'acme', 'demo', 'main');
+  mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(t, 'config', 'smooth-backlog-cli', 'mode.json'), '{"mode":"shared"}');
+  return { t, home, cons, folder: join(home, 'acme', 'demo') };
+}
+
+const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
+const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
+  '--estimate', '5', '--complexity', 'low', '--body', DOD];
+const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
+const run = (f, args, env = {}) => {
+  // QWEN_CODE_SESSION_ID stays out: these tests pin the agent-name rules, not the author-session rule (item 088),
+  // which a session id inherited from the running shell would apply to the cody-* names
+  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', QWEN_CODE_SESSION_ID: '', ...env } };
+  if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
+  return cli(args, o);
+};
+const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
+const no = (f, args, text) => { const r = run(f, args); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
+const make = f => { const slug = ok(f, ['new', ...NEW('review session')]).stdout.split('created phase ')[1].split(' ')[0]; return slug; };
+const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
+// the setup of every test: the building session claims and asks for the review
+const setup = f => { const s = make(f); ok(f, ['update', s, '--claim', A1]); ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]); return s; };
+
+test('082: 082aa:01 claims and asks for a review; 082aa:02 starts and passes it', () => {
+  const f = fixture();
+  const s = setup(f);
+  ok(f, ['update', s, '--start-review', '--by', A2]);
+  ok(f, ['update', s, '--review', 'pass', '--by', A2, '--comments', 'fine per references/review/code.md']);
+  const fm = itemFm(f, s);
+  assert.equal(fm.review_state, 'passed');
+  assert.equal(fm.review_author, A1); // the one who asked survives
+  assert.deepEqual(fm.session_authors, [A1]); // the claiming and asking session, recorded once
+});
+
+test('082: 082aa:01 is refused --start-review and --review with the same-session message', () => {
+  const f = fixture();
+  const s = setup(f);
+  no(f, ['update', s, '--start-review', '--by', A1], `${A1}: the same session cannot review its own work; a new session may`);
+  no(f, ['update', s, '--review', 'pass', '--by', A1, '--comments', 'fine per references/review/code.md'], `${A1}: the same session cannot review its own work; a new session may`);
+  const fm = itemFm(f, s);
+  assert.equal(fm.review_state, 'requested'); // neither refusal changed the item
+});
+
+test('082: pop, work and query --reviewable offer the review to 082aa:02 and 082bb:01, never to 082aa:01', () => {
+  const f = fixture();
+  const s = setup(f);
+  const reviewable = (agent) => run(f, ['query', '--reviewable', '--agent', agent]).stdout;
+  assert.ok(reviewable(A2).includes(s), 'offered to the new session of the card');
+  assert.ok(reviewable(B1).includes(s), 'offered to the other card');
+  assert.ok(!reviewable(A1).includes(s), 'never offered to the asking session');
+  // pop offers it to both new sessions; 082aa:01 gets no review action
+  assert.equal(JSON.parse(run(f, ['pop', '--agent', A2, '--json']).stdout).action, 'review');
+  assert.equal(JSON.parse(run(f, ['pop', '--agent', B1, '--json']).stdout).action, 'review');
+  assert.notEqual(JSON.parse(run(f, ['pop', '--agent', A1, '--json']).stdout).action, 'review');
+  // work starts the review for the new session of the card
+  const w = JSON.parse(run(f, ['work', '--agent', A2, '--json']).stdout);
+  assert.equal(w.action, 'review');
+  assert.ok(w.marked, 'work marks the review start for the new session');
+  assert.equal(itemFm(f, s).reviewer, A2);
+});
+
+test('082: a release keeps session_authors', () => {
+  const f = fixture();
+  const s = setup(f);
+  ok(f, ['update', s, '--release', A1]);
+  const fm = itemFm(f, s);
+  assert.equal(fm.claimed_by, '');
+  assert.equal(fm.review_author, A1); // as today
+  assert.deepEqual(fm.session_authors, [A1]); // the release does not drop the recorded sessions
+});
+
+test('082: an item without session names keeps the old agent-name rule', () => {
+  const f = fixture();
+  const s = make(f);
+  ok(f, ['update', s, '--claim', 'cody-a']);
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'cody-a']);
+  no(f, ['update', s, '--start-review', '--by', 'cody-a'], 'the same session cannot review its own work');
+  ok(f, ['update', s, '--start-review', '--by', 'cody-b']);
+  ok(f, ['update', s, '--review', 'pass', '--by', 'cody-b', '--comments', 'fine per references/review/code.md']);
+  const fm = itemFm(f, s);
+  assert.equal(fm.review_state, 'passed');
+  assert.deepEqual(fm.session_authors, ['cody-a']);
+});
+
+test('082: the lead requests the review of a claimed item: its session is recorded and it cannot review its own request', () => {
+  const f = fixture();
+  const s = make(f);
+  ok(f, ['update', s, '--claim', A1]);
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'lead']); // a session other than the claimer asks
+  const fm = itemFm(f, s);
+  assert.equal(fm.review_author, 'lead', 'the one who asked is recorded, not the claimer');
+  assert.deepEqual(fm.session_authors, [A1, 'lead'], 'the claimer and the requester are both recorded');
+  no(f, ['update', s, '--start-review', '--by', 'lead'], `lead: the same session cannot review its own work; a new session may`);
+  no(f, ['update', s, '--review', 'pass', '--by', 'lead', '--comments', 'fine per references/review/code.md'], `lead: the same session cannot review its own work; a new session may`);
+  // a new session of the card may review the request
+  ok(f, ['update', s, '--start-review', '--by', A2]);
+  ok(f, ['update', s, '--review', 'pass', '--by', A2, '--comments', 'fine per references/review/code.md']);
+  assert.equal(itemFm(f, s).review_state, 'passed');
+});
+
+test('082: a pass by a session-named reviewer pins the Cody stage, and the external review runs', () => {
+  const f = fixture();
+  const s = setup(f); // A1 claims and asks
+  const commit = 'a'.repeat(40);
+  ok(f, ['update', s, '--commit', commit]); // the item's commit record: it no longer drives the gate
+  ok(f, ['update', s, '--start-review', '--by', A2]);
+  ok(f, ['update', s, '--review', 'pass', '--by', A2, '--comments', 'fine per references/review/code.md']);
+  // item 088: the pass pins the work commit - the working repository's HEAD at review time - not the commit record
+  assert.equal(itemFm(f, s).cody_pass_commit, git(f.cons, 'rev-parse', 'HEAD'), 'the session-named Cody pass pins the work commit');
+  assert.notEqual(itemFm(f, s).cody_pass_commit, commit);
+  ok(f, ['update', s, '--request-review', 'codex', '--note', 'the cody pass', '--by', A1]);
+  ok(f, ['update', s, '--start-review', '--by', 'codex']);
+  ok(f, ['update', s, '--review', 'pass', '--by', 'codex', '--comments', 'fine per references/review/code.md']);
+  assert.equal(itemFm(f, s).external_pass_commit, itemFm(f, s).cody_pass_commit);
+});
+
+test('082: query --plan offers the requested review to the new session of the card, never to the asking session', () => {
+  const f = fixture();
+  const s = setup(f); // A1 claims and asks
+  const roster = join(f.t, 'roster.json');
+  writeFileSync(roster, JSON.stringify({ [A2]: {}, [B1]: {}, [A1]: {} }));
+  const out = run(f, ['query', '--plan', '--roster', roster]).stdout;
+  const line = out.split('\n').find(l => l.includes(`review ${s}`));
+  assert.ok(line, `the plan offers the review: ${out}`);
+  assert.ok(line.startsWith(`${A2}: review ${s}`), `offered to the first session that is not an authoring one: ${line}`);
+  assert.ok(!out.split('\n').some(l => l.startsWith(`${A1}: review ${s}`)), 'never offered to the asking session');
+});
+
+test('082: in a team session the author session is the session name, not the team name', () => {
+  const f = fixture();
+  const s = make(f);
+  ok(f, ['update', s, '--claim', A1], { QWEN_CODE_AGENT_ID: `${A1}@t07:09:1a` }); // a team session, no session id
+  assert.equal(itemFm(f, s).author_session, A1, 'the claim records the session name as the author session, not the team name');
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1], { QWEN_CODE_AGENT_ID: `${A1}@t07:09:1a` });
+  // a fresh session of the same team: a different session name, the same team in QWEN_CODE_AGENT_ID
+  ok(f, ['update', s, '--start-review', '--by', B1], { QWEN_CODE_AGENT_ID: `${B1}@t07:09:1a` });
+  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', 'fine per references/review/code.md'], { QWEN_CODE_AGENT_ID: `${B1}@t07:09:1a` });
+  assert.equal(itemFm(f, s).review_state, 'passed', 'the verdict of a fresh session of the same team is accepted');
+});
+
+test('082: a reassignment keeps the former holder blocked: the legacy item keeps its self-review rule', () => {
+  const f = fixture();
+  const s = make(f);
+  ok(f, ['update', s, '--claim', A1]);
+  // an item claimed before session_authors existed: the list is not in the file
+  const file = join(f.folder, 'phases', `${s}.md`);
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
+  assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
+  ok(f, ['update', s, '--reassign', A2, '--by', 'lead', '--reason', 'the earlier session ended']);
+  const fm = itemFm(f, s);
+  assert.equal(fm.claimed_by, A2);
+  assert.deepEqual(fm.session_authors, [A1, A2], 'the reassignment keeps the former holder and the new holder in the list');
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'lead']);
+  const r = run(f, ['update', s, '--start-review', '--by', A1]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, new RegExp(`^❌ ${s}: ${A1}: the same session cannot review its own work; a new session may\\n$`));
+});
+
+test('082: a legacy item keeps its original author in session_authors across every holder or review-request write', () => {
+  // Each row starts from a legacy item: one claimed by 082aa:01 before session_authors existed, so the list is
+  // not in the file. The row runs the one write that changes or clears the holder or records a review request;
+  // the write must seed the list from the item's current holder and review requester and add the session it
+  // names, so the self-review block of the earlier session survives the transition (Codex round 5: a release
+  // after a lead's review request erased the original author of such an item).
+  const legacy = (f, s) => {
+    const file = join(f.folder, 'phases', `${s}.md`);
+    writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
+    assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
+  };
+  const refuse = (f, s, by) => no(f, ['update', s, '--start-review', '--by', by], 'the same session cannot review its own work');
+  const rows = [
+    ['a new claim of an unclaimed item', (f, s) => {
+      // the review was requested before the list existed: the requester is on the item, the list is not
+      ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
+      legacy(f, s);
+      ok(f, ['update', s, '--release', A1]);
+      legacy(f, s);
+      ok(f, ['update', s, '--claim', B1]);
+      return [A1, B1];
+    }, (f, s) => refuse(f, s, A1)],
+    ['a continuation claim', (f, s) => {
+      ok(f, ['update', s, '--claim', A2]);
+      return [A1, A2];
+    }, (f, s) => { ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A2]); refuse(f, s, A1); }],
+    ['a reassignment', (f, s) => {
+      ok(f, ['update', s, '--reassign', B1, '--by', 'lead', '--reason', 'the earlier session ended']);
+      return [A1, B1];
+    }, (f, s) => { ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', B1]); refuse(f, s, A1); }],
+    ['a release', (f, s) => {
+      ok(f, ['update', s, '--release', A1]);
+      return [A1];
+    }, (f, s) => { ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'lead']); refuse(f, s, A1); }],
+    ['a review request by the lead', (f, s) => {
+      ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', 'lead']);
+      return [A1, 'lead'];
+    }, (f, s) => refuse(f, s, A1)],
+    ['a team pop continuation claim', (f, s) => {
+      ok(f, ['update', s, '--set-team', 't1']);
+      const p = run(f, ['team', 'pop', '--team', 't1', '--json'], { TEAM_LEAD: A2 });
+      assert.equal(p.status, 0, p.stdout + p.stderr);
+      return [A1, A2];
+    }, (f, s) => { ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A2]); refuse(f, s, A1); }],
+  ];
+  const failures = [];
+  for (const [name, write, check] of rows) {
+    const f = fixture();
+    const s = make(f);
+    ok(f, ['update', s, '--claim', A1]);
+    legacy(f, s);
+    try {
+      const expected = write(f, s);
+      assert.deepEqual(itemFm(f, s).session_authors, expected, `${name}: the list is ${JSON.stringify(itemFm(f, s).session_authors)}`);
+      check(f, s);
+    } catch (e) { failures.push(`${name}: ${String(e.message).split('\n')[0]}`); }
+  }
+  assert.deepEqual(failures, [], `rows that lost the original author:\n${failures.join('\n')}`);
+});

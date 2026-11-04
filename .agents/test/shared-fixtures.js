@@ -1,0 +1,107 @@
+// Shared test fixtures for the shared-backlog-repository mode (cli-parity job 1).
+// Tests run against local bare repositories only: origins under <tmp>/origins,
+// clones under <tmp>, with BACKLOG_HOME and XDG_CONFIG_HOME inside the test's
+// temp dir - never the real backlog repository or ~/.config.
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+export const BACKLOG_OWNER = 'acme';
+export const BACKLOG_NAME = 'backlog-repo';
+// Item 091: the CLI carries no built-in backlog repository name; the tests give it this neutral clone URL.
+export const ORIGIN_URL = `https://example.com/${BACKLOG_OWNER}/${BACKLOG_NAME}.git`;
+export const GIT_IDENTITY = {
+  GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t',
+  GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t',
+  GIT_TERMINAL_PROMPT: '0',
+};
+
+function git(cwd, ...args) {
+  const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+  if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${(p.stderr || '').trim()}`);
+  return p.stdout.trim();
+}
+
+// A local bare origin plus a working clone. The backlog repository is always
+// acme/backlog-repo as owner/name (the tests' neutral name), which is why
+// the shared backlog origin keeps exactly that folder layout.
+function originBare(tmp, owner, name, branch) {
+  const bare = join(tmp, 'origins', owner, `${name}.git`);
+  if (existsSync(bare)) return bare;
+  mkdirSync(join(tmp, 'origins', owner), { recursive: true });
+  git(tmp, 'init', '-q', '--bare', '-b', 'main', bare);
+  const seed = join(tmp, 'seed', owner, name);
+  mkdirSync(join(tmp, 'seed', owner), { recursive: true });
+  git(tmp, 'init', '-q', '-b', 'main', seed);
+  git(seed, 'commit', '-q', '--allow-empty', '-m', 'init');
+  if (branch && branch !== 'main') {
+    git(seed, 'branch', branch);
+    git(seed, 'push', '-q', bare, 'main', branch);
+  } else {
+    git(seed, 'push', '-q', bare, 'main');
+  }
+  rmSync(join(tmp, 'seed'), { recursive: true, force: true });
+  return bare;
+}
+
+// The shared backlog repository: bare <tmp>/origins/acme/backlog-repo.git
+// with one commit on main, cloned to <tmp>/home. The per-repository folders
+// (<home>/<owner>/<name>/) live inside that clone.
+export function sharedBacklog(tmp) {
+  const bare = originBare(tmp, BACKLOG_OWNER, BACKLOG_NAME, 'main');
+  const dest = join(tmp, 'home');
+  if (!existsSync(dest)) {
+    git(tmp, 'clone', '-q', bare, dest);
+  }
+  return dest;
+}
+
+// A consuming repository: bare <tmp>/origins/<owner>/<name>.git plus a clone
+// checked out on `branch`, at <tmp>/consumer/<name>.
+export function consumer(tmp, owner, name, branch = 'main') {
+  const bare = originBare(tmp, owner, name, branch);
+  const dest = join(tmp, 'consumer', name);
+  if (!existsSync(dest)) {
+    mkdirSync(join(tmp, 'consumer'), { recursive: true });
+    if (branch === 'main' || !branch) git(tmp, 'clone', '-q', bare, dest);
+    else git(tmp, 'clone', '-q', '-b', branch, bare, dest);
+  }
+  return dest;
+}
+
+// The environment every child process must run under: BACKLOG_HOME points at the
+// fixture's local clone, XDG_CONFIG_HOME at a temp config dir, git identity set,
+// no terminal prompts. Throws when the resulting BACKLOG_HOME is outside tmp.
+export function env(tmp) {
+  const raw = String(tmp ?? '');
+  const t = resolve(raw);
+  const home = join(t, 'home');
+  if (!raw || !isAbsolute(raw) || !home.startsWith(t + sep)) {
+    throw new Error(`BACKLOG_HOME ${home} is outside tmp ${raw || '<empty>'}`);
+  }
+  // item 091: the shared backlog repository's setting - the variable the CLI must use in the tests
+  return { ...GIT_IDENTITY, BACKLOG_HOME: home, XDG_CONFIG_HOME: join(t, 'config'), BACKLOG_ORIGIN_URL: ORIGIN_URL };
+}
+
+let calls = 0;
+// Runs node bin/backlog.js (this repository's CLI) from a consumer checkout.
+export function cli(args = [], opts = {}) {
+  const bin = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'));
+  const p = spawnSync(process.execPath, [bin, ...args], {
+    cwd: opts.cwd,
+    // a command without a named agent is a different writer each time (QWEN_CODE_AGENT_ID, else USER, would make every call one agent with one stale view)
+    env: { ...process.env, QWEN_CODE_AGENT_ID: `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
+    stdin: 'ignore',
+    encoding: 'utf8',
+    timeout: opts.timeout ?? 60000,
+  });
+  return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
+}
+
+// The slug a `new` output names: `created phase <slug> (seq N)`.
+export const createdSlug = stdout => {
+  const m = String(stdout).match(/created phase ([0-9A-Za-z][0-9A-Za-z._-]*) \(/);
+  return m ? m[1] : undefined;
+};
+

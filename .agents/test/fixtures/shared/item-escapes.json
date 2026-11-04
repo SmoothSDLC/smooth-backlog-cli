@@ -1,0 +1,6 @@
+{
+  "controls": "nul\u0000 esc\u001b bell\u0007 vt\u000b back\b ff\f",
+  "del_c1": "del\u007f c1\u009f end",
+  "bom": "bom\ufeff end",
+  "mixed": "tab\t cr\r nl\n quote\" backslash\\"
+}

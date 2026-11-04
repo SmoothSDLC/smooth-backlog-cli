@@ -77,7 +77,7 @@ export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry 
     for (const vendor of ['.agents', '.claude', '.github', '.qwen']) {
       const skill = join(repo, vendor, 'skills/backlog');
       assert.match(await fs.readFile(join(skill, 'SKILL.md'), 'utf8'), /name: backlog/);
-      await fs.access(join(skill, 'scripts/snapshot.py'));
+      await fs.access(join(skill, 'scripts/install-backlog-cli.sh'));
       await fs.access(join(skill, 'references/commands.md'));
     }
     await cli('init', 'clean'); assert.deepEqual(await cli('list'), []);

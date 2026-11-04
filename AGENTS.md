@@ -8,9 +8,18 @@ This is a dependency-free Node.js 24+ CLI, licensed under Apache-2.0.
   .agents/scripts/verify-published-package.mjs. Keep GitHub workflows under
   .github/workflows/ so GitHub can execute them.
 - Product agent integrations live in templates/skills/backlog/ and ship with the CLI.
+- Every change to the CLI's behaviour ships with its documentation in the same change. That covers a command, an option, an output, a refusal, a rule or a stored field. The required documentation is:
+  - the built-in skill, templates/skills/backlog/SKILL.md;
+  - the help text, src/help.js;
+  - COMMANDS.md, regenerated with `node .agents/scripts/sync-commands-md.mjs`;
+  - README.md, wherever it describes the behaviour;
+  - CHANGELOG.md.
+  None of them may describe the old behaviour. A change without them is not done, and a review returns CHANGES for it (owner decision, 2026-10-31).
 - Only the main release workflow assigns release versions. Keep the private
   development placeholder in package.json and package-lock.json; never bump a
   release version in a pull request. Publishing derives its version from the tag.
+- Tests run locally first (Node 24): push only what passes locally. A test that passes locally and fails in CI is investigated first for why the environments differ, and that cause is fixed. Never patch the code until the difference is understood (owner decision, 2026-10-31).
+- Never put a host name, local path, port, model name or any other detail of a private environment into this public repository: not in files, not in commit messages.
 - Run npm test and npm run check after code changes. Use npm pack --dry-run to
   verify that only public package files are shipped.
 - Preserve GUID identity, branch isolation, transactional writes, and compatibility

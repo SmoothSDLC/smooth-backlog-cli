@@ -1,10 +1,9 @@
 name: CI
+# Owner 2026-10-31: CI runs only when started by hand (or called by another workflow). Agents commit on every change
+# and every backlog update, so a run per push costs without adding value; the pull request's final validation item
+# starts this workflow and checks its result.
 on:
-  push:
-    branches-ignore: [master]
-    tags-ignore: ['**']
-  pull_request:
-    branches-ignore: [master]
+  workflow_dispatch:
   workflow_call:
 permissions:
   contents: read
@@ -13,7 +12,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Owner 2026-10-31: macOS and Windows are off until pull request #3 works completely on Linux, to keep the CI
+        # loop and its cost small. They come back afterwards (backlog-cli item 085), and their failures are fixed then.
+        # Windows: shared backlog mode does not support it yet (owner 2026-10-24; backlog-cli item 024).
+        os: [ubuntu-latest] # macos-latest, windows-latest
         node: [24, 26]
     runs-on: ${{ matrix.os }}
     steps:
@@ -21,9 +23,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run check
@@ -32,7 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.12'
-      - run: python templates/skills/backlog/scripts/validate-skill.py
+          node-version: 24
+      # item 058: the skill's checks are tests (no Python validator ships with the skill any more)
+      - run: node --test .agents/test/integrations.test.js

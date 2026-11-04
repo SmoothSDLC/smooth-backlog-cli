@@ -8,7 +8,7 @@ import { runNpm } from '../../src/process.js';
 test('the packed npm artifact installs offline and runs with its bundled templates', async t => {
   const f = fixture(t); const source = resolve('.');
   const [pack] = JSON.parse(await runNpm(['pack', '--json', '--pack-destination', f.dir], { cwd: source }));
-  assert.ok(pack.files.some(x => x.path === 'templates/skills/backlog/scripts/snapshot.py'));
+  assert.ok(pack.files.some(x => x.path === 'templates/skills/backlog/scripts/install-backlog-cli.sh'));
   assert.ok(pack.files.some(x => x.path === 'COMMANDS.md'));
   assert.ok(pack.files.some(x => x.path === 'CHANGELOG.md'));
   assert.equal(pack.files.some(x => x.path.startsWith('.agents/')), false);

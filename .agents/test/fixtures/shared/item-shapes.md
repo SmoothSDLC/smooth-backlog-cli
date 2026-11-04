@@ -1,0 +1,16 @@
+---
+seq: 7
+negative: -15
+big: 123456789
+flag_true: true
+flag_false: false
+nothing: null
+empty_list: []
+numbers:
+- 1
+- 2
+- 3
+---
+# shapes
+
+Lists, integers, booleans and null.

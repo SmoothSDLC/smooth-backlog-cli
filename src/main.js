@@ -1,4 +1,6 @@
-import { parse } from './args.js';
+import { parse, modeOptions, sharedCommand } from './args.js';
+import { redact } from './shared/safety.js';
+import { getMode } from './shared/store.js';
 import { gitContext } from './context.js';
 import { withStore } from './storage.js';
 import { initialize, refreshIntegrations } from './integrations.js';
@@ -11,7 +13,19 @@ const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.me
 export async function run({ installationRoot } = {}) {
   let json = process.argv.includes('--json');
   try {
-    const parsed = parse(process.argv.slice(2)); json = Boolean(parsed.flags.json);
+    let argv = process.argv.slice(2);
+    const mode = modeOptions(argv);
+    if (mode) {
+      const code = await (await import('./shared/router.js')).switchMode(mode);
+      if (code || !mode.rest.length) { process.exitCode = code; return; }
+      argv = mode.rest; // the command after the mode options runs in the mode just switched to
+    }
+    // item 043: backlog setup works in either mode (it is what points a repository at the backlog repository)
+    if (argv[0] === 'setup') { process.exitCode = await (await import('./shared/setup.js')).run(argv.slice(1)); return; }
+    // Shared mode (contract section 1) skips init, withStore and refreshIntegrations: the router owns the command.
+    const shared = getMode() === 'shared' ? sharedCommand(argv) : null;
+    if (shared) { process.exitCode = await (await import('./shared/router.js')).run(shared.command, shared.argv); return; }
+    const parsed = parse(argv); json = Boolean(parsed.flags.json);
     if (parsed.command === 'help' || parsed.command === 'version') {
       const data = parsed.command === 'help' ? help : packageInfo.version;
       process.stdout.write(json ? JSON.stringify({ ok: true, data }) + '\n' : data + '\n');
@@ -25,7 +39,7 @@ export async function run({ installationRoot } = {}) {
         data = parsed.command === 'init' ? await initialize(context, parsed.args) : await withStore(context, store => execute(parsed, context, store));
         if (parsed.command !== 'init') {
           try { await refreshIntegrations(context, packageInfo.version); }
-          catch (e) { process.stderr.write(`backlog: Could not refresh generated skills: ${e.message}\n`); }
+          catch (e) { process.stderr.write(`backlog: Could not refresh generated skills: ${redact(e.message)}\n`); }
         }
         await updates.scheduled();
       }
@@ -33,7 +47,7 @@ export async function run({ installationRoot } = {}) {
       process.stdout.write(json ? JSON.stringify({ ok: true, data }) + '\n' : human(data) + '\n');
     }
   } catch (error) {
-    const data = { code: error.code || 'OPERATION_FAILED', message: error.message };
+    const data = { code: error.code || 'OPERATION_FAILED', message: redact(error.message) };
     if (json) process.stdout.write(JSON.stringify({ ok: false, error: data }) + '\n');
     else process.stderr.write(`${data.code}: ${data.message}\n`);
     process.exitCode = error.exitCode || 1;

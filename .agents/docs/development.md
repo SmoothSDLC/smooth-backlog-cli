@@ -1,6 +1,6 @@
 # Package development
 
-Use Node.js 24+, npm, Git, and Python 3.8+ for the bundled skill helper tests.
+Use Node.js 24+, npm and Git; the interactive tests drive a terminal with python3.
 No development framework or code-indexing service is required.
 
 From the repository root:
@@ -12,10 +12,24 @@ npm run check
 npm pack --dry-run
 ```
 
+The suite ships a development guard for the shared backlog store:
+`node .agents/scripts/check-real-backlog-clean.mjs -- npm test` records the store's
+`git status` and HEAD before and after the wrapped command and prints one final JSON
+line; it exits 0 only when the store is unchanged and the command succeeded. It refuses
+to start on a store that is not clean and reports any change of status or HEAD during
+the run as a changed store - run it in a quiet period, with no other session writing
+to the store.
+
 The CLI sources are under `src/`, its executable is `bin/backlog.js`, and its
 public integration templates are under `templates/`. Tests are in `.agents/test/`;
 the release verifier is `.agents/scripts/verify-published-package.mjs`. Development-only documents
 are kept in `.agents/docs/`; public usage documentation stays at the root.
+
+On exit, the executable reports the run to an optional run recorder hook: when
+the environment variable `CODY_SCRIPT_RUNS_MODULE` names a module, `bin/backlog.js`
+spawns `python3 <module> record backlog.js <exit code> <start time> <end time>`
+as a detached child process it never waits for; with the variable unset the hook
+spawns no child process. The variable is a development hook, not a user feature.
 
 GitHub Actions validates the supported operating systems and Node.js versions
 before publishing tagged releases. The first-party release verifier downloads
@@ -51,3 +65,10 @@ verified across all supported OS/Node combinations. A tag identifies the assigne
 release; the publish workflow result records whether publication and verification
 succeeded. Reruns never overwrite npm versions or move existing tags. Registry
 authentication or network failures stop publication instead of indicating absence.
+
+## Commit conventions
+
+The repository is public: a commit message names no private environment detail -
+no host name, local path, port, model name, card number or private repository
+name. Evidence that carries such details belongs in the backlog item, never in a
+commit message.

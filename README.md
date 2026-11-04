@@ -4,7 +4,7 @@ Keep a backlog of tasks, priorities, progress, and evidence alongside your code.
 Each Git branch has its own work list, shared by people and coding agents through
 version-controlled files in `.backlog/`.
 
-Requires **Node.js 24+**, npm, and Git. Supports Linux, macOS, and Windows.
+Requires **Node.js 24+**, npm, and Git. Supports Linux and macOS. Windows is not supported or tested right now: CI does not run on Windows until Windows support for the shared backlog mode is done (backlog item 024).
 The package is **`@smoothsdlc/smooth-backlog-cli`**; the command is **`backlog`**.
 
 ## Install
@@ -21,6 +21,31 @@ backlog --version
 GitHub Packages requires authentication even for public packages. When npm login
 asks for a password, use a GitHub personal access token (classic) with
 `read:packages`.
+
+### Install a pinned release, and roll back
+
+An installation that must not move on its own (an agent host, a team runner) pins the release it installs and rolls
+back by installing the release before. In the shared backlog repository mode the CLI never updates itself (the
+update notices and automatic installation are the local mode's).
+
+```sh
+npm install --global @smoothsdlc/smooth-backlog-cli@<version> --registry=https://npm.pkg.github.com
+backlog --version                # the pinned release
+# roll back: the same command with the previous release
+npm install --global @smoothsdlc/smooth-backlog-cli@<previous version> --registry=https://npm.pkg.github.com
+```
+
+In a repository, `bash <skill folder>/scripts/install-backlog-cli.sh` (shipped with the backlog skill) installs the
+CLI when it is missing or older than the registry's release and then runs `backlog setup`, which points the
+repository at the shared backlog repository (`.smooth-backlog.json`) and deploys the skill; the shared backlog
+repository's clone URL is a setting (the environment variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url`
+key of `.smooth-backlog.json` — there is no built-in default, and a shared-mode command that needs it refuses,
+naming both sources, when it is in neither; the origin check uses the configured value — a clone whose origin is a
+different repository, or has no origin, is refused, and the error names the configured value, and a setup clone that
+cannot be made (the repository cannot be cloned or reached) is refused the same way; a `backlog setup` write keeps
+the key in the file); `--ask` asks for the path. The per-user record of `backlog --use-backlog-repo <path>` is the file `<name>/home` under the config
+folder ($XDG_CONFIG_HOME, else `~/.config`, `<name>` the repository name from the setting); a record written
+before the setting existed keeps working when the setting names the same repository, with no migration.
 
 ## Get started
 
@@ -58,10 +83,69 @@ arguments to see the next active item.
   `.agents`, `.claude`, `.github`, and `.qwen` folders, plus `.backlog/skills`.
   Commit your backlog data and generated skills to share them. Preserve custom
   skill edits through Git because initialization and updates can replace them.
+- **Run reporting:** the executable reports each run to an optional run recorder hook.
 
 If the backlog already exists, `backlog init backup` preserves its data and
 backs up existing files before replacing the generated skills. **`backlog init
 clean` deletes the entire backlog, including every branch and contained backups.**
+
+**Shared backlog repository:** `backlog --use-backlog-repo <path>` switches to a shared mode where the items of
+every repository live in one Git backlog repository instead of each repository's `.backlog/` folder.
+`backlog --use-local-repo` switches back. [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode)
+describes the mode and its commands. Every shared change succeeds only after it is committed and pushed.
+A failed publication rolls back the change and restores starting edits and staging. Existing unpublished commits
+require an explicit publish or drop decision before another command can change the backlog.
+The two retired classification keys of older items have no effect; the CLI drops them whenever it next writes an item.
+
+In shared mode, a write to an item that somebody else changed after you last read it is refused with exit code 5 (read it again, then retry); every write records `updated_by`. See [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode).
+
+An agent asks which items changed since its own last use with `backlog query --changed --agent <you>`: the reference
+point is the commit of the agent's own last write or its own `query --changed` (stated in every result, even an
+empty one), never a global timestamp, so a change made while the agent is idle still appears in the agent's next
+report and the agent's own reads never move it. The items the agent holds (its name in `claimed_by`, `reviewer` or
+`refiner`) are listed in a "held" section apart from the other changed items ("others"); a file moved inside the
+folder (an archive, a renumbering) is one "D" entry for its old name. When the comparison fails (the reference commit
+is no longer in the clone), the command reports the failure (exit 2) and keeps the agent's reference, so the change
+is not lost. The report is printed before the reference is written, so a failed output consumes no change (the
+same changes repeat in the next report); on a first use the report is empty and the write happens first, so the
+result states exactly what was stored. A failed write of the reference is stated in the result and keeps the
+previous reference: a failed first use prints "no earlier use: the reference could not be set" (with `--json`
+the reference is null), and a failed write after an earlier use says so in the text and, with `--json`, adds
+the line `{"reference_write": "failed"}` after the report (the exit is 0). The result names the agents that use
+the backlog with their last-use time.
+
+The self-review rule is per session, not per card: an agent name is a session name, so the session that claimed an
+item or asked for its review (recorded in `session_authors`) may not review it, and a new session of the same card
+may — it continues the item its earlier session claimed; a continuation of an item without the list (claimed before
+it existed) keeps the earlier holder in it. A `--reassign` keeps the former holder in the list (and adds the new
+holder), so the block survives a hand-off. Every claim, reassign, release and review request seeds the list from
+the item's current holder and review requester, so an item written before the list existed keeps the block of its
+earlier sessions.
+
+Two review stages are enforced before any close, with or without review documents: first a Cody review (for an item of
+a team, a registered member of that team — Qwen's team `config.json`, else a Cody name in a session of the item's
+team — or the team lead (`TEAM_LEAD`) in a session of the item's team; for an item without a team, a name starting with `cody` or a session name — in a fresh session, never the author session that claimed
+the item), then an external review by `codex` or `claude` on the same commit. A pass pins the item's work commit (`work_commit`) — the
+requester's `HEAD` at its review request (an external-stage request after the Cody pass keeps it) — so the reviewer's
+checkout and other items' commits on the branch move nothing; the item's own new work (a later commit whose subject
+names the item as a producer at the start - the item number alone, or joined with another item's number by `and`)
+moves the work commit, so both stages run again; a `--close` or `--status done` whose commit lookup fails is refused
+fail closed, and the refusal records the reason; a changes verdict at either stage clears both. `--close` is refused until both stages passed for
+the current work commit, and the refusal names the missing stage; a passing Cody review asks for the external
+review, and a passing external review asks for the close. `--status done` is a close too: refused until both
+stages passed, with or without review documents. An item that other items depend on closes (`--close` or `--status done`) only when each
+dependent's hand-off is recorded (`--handoff`) and accepted by the team lead (`--accept-handoff`); the refusal lists
+every open dependent, the state of its hand-off and the next command. An item without dependents closes and records
+`handoffs: none`; an item already done is not checked again. A changes verdict is recorded at either stage even after the
+work commit moved. A pass that counts for no stage asks for the Cody review first. A teamless split slice joins the
+team of the member who starts its refinement (or, refined earlier, who claims it). Every split item starts in
+stage refining, with or without a team field, and needs its refinement review (a `codex` or `claude` verdict)
+before it may be claimed; a slice written before the stage field existed is named by its body's split marker and
+takes the same gate. After three refinement-review CHANGES rounds the lead records its own verdict (`--refinement-review pass|changes --by claude`) without a Codex limit record, from stage refinement-review or, once the refiner finished, stage refined; below three rounds Claude still needs Codex's recorded 5-hour limit. A team item without a stage (a team's work item, or one written before the stage field existed) is
+unrefined too: `--claim` refuses it for every agent but the team lead's own claim of its team's work item (`backlog team
+pop`, to split it; never a split slice) and names `--refine-start`; `--refine-start` accepts it, `pop` offers its refinement, never a claim,
+and `query --claimable` and `query --plan` leave it out until it is refined. An item without a team and without the split marker has no stage and is claimable. The owner closes without a review on a written decision — `--close --by owner --reason
+"<the decision>"`, recorded as an owner decision — even for a team item still in its refinement stages.
 
 ## Command help
 

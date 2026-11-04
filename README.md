@@ -4,7 +4,7 @@
 
 [Latest published release](https://github.com/SmoothSDLC/smooth-backlog-cli/releases) · [Command reference](COMMANDS.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
 
-> **Development branch — not yet released.** This README describes the functionality being developed and reviewed in [PR #3](https://github.com/SmoothSDLC/smooth-backlog-cli/pull/3) (\`team-cli-parity-1\`). The published [v1.0.1 release](https://github.com/SmoothSDLC/smooth-backlog-cli/releases/tag/v1.0.1) includes the core local, branch-aware backlog CLI, **not** the shared-repository coordination and review gates described below. Unmerged behavior should not be treated as release-ready.
+> **Development branch — not yet released.** This README describes the functionality being developed and reviewed in [PR #3](https://github.com/SmoothSDLC/smooth-backlog-cli/pull/3) (`team-cli-parity-1`). The published [v1.0.1 release](https://github.com/SmoothSDLC/smooth-backlog-cli/releases/tag/v1.0.1) includes the core local, branch-aware backlog CLI, **not** the shared-repository coordination and review gates described below. Unmerged behavior should not be treated as release-ready.
 
 ## Why this exists
 
@@ -20,7 +20,7 @@ This is **a workflow and evidence-control tool**, not an automatic guarantee tha
 | --- | --- | --- |
 | Branch-aware tasks, priorities, GUIDs, acceptance criteria, evidence, JSON | Yes | Yes |
 | Coding-agent skill integration | Yes | Yes |
-| Local \`.backlog/\` storage | Yes | Yes |
+| Local `.backlog/` storage | Yes | Yes |
 | Shared Git repository for multiple project backlogs | No | Implemented; under review |
 | Git synchronization, stale-write detection and conflict safeguards | No | Implemented; under review |
 | Agent sessions, team coordination, refinement and claim rules | No | Implemented; under review |
@@ -38,50 +38,50 @@ Requires Node.js **24+**, npm and Git. The released local mode supports Linux, m
 
 GitHub Packages requires authentication even for a public package:
 
-\`\`\`sh
+```sh
 npm config set @smoothsdlc:registry https://npm.pkg.github.com
 npm login --scope=@smoothsdlc --auth-type=legacy --registry=https://npm.pkg.github.com
 npm install --global @smoothsdlc/smooth-backlog-cli@1.0.1 --registry=https://npm.pkg.github.com
 backlog --version
-\`\`\`
+```
 
-When npm requests a password, use a classic GitHub personal access token with \`read:packages\`. The package is \`@smoothsdlc/smooth-backlog-cli\` and its executable is \`backlog\`.
+When npm requests a password, use a classic GitHub personal access token with `read:packages`. The package is `@smoothsdlc/smooth-backlog-cli` and its executable is `backlog`.
 
 ### Create and manage work
 
 From a Git working tree:
 
-\`\`\`sh
+```sh
 backlog init
 backlog new "Fix login" --description "Expired cookies prevent sign-in" --ac "An expired cookie permits a fresh sign-in"
 backlog 0 add tasks "Reproduce,Failing test captures the regression"
 backlog list
 backlog 0 done
 backlog list done --json
-\`\`\`
+```
 
-Run \`backlog\` to see the next active item, \`backlog new --ask\` for interactive creation, and \`backlog --help\` for installed-version help.
+Run `backlog` to see the next active item, `backlog new --ask` for interactive creation, and `backlog --help` for installed-version help.
 
-In local mode, work lives under \`.backlog/\`. The CLI does **not** automatically commit, push, merge, or switch your Git branches. Commit backlog records alongside code when you want to share them.
+In local mode, work lives under `.backlog/`. The CLI does **not** automatically commit, push, merge, or switch your Git branches. Commit backlog records alongside code when you want to share them.
 
 ### Release pinning and rollback
 
 Pin an exact version on agent hosts and CI runners; install a prior published version to roll back:
 
-\`\`\`sh
+```sh
 npm install --global @smoothsdlc/smooth-backlog-cli@<version> --registry=https://npm.pkg.github.com
 backlog --version
-\`\`\`
+```
 
-Use a real published version in place of \`<version>\`. In the developing shared mode, the CLI does not self-update.
+Use a real published version in place of `<version>`. In the developing shared mode, the CLI does not self-update.
 
 ## Architecture: shared-repository mode (PR #3)
 
 PR #3 adds an optional way for multiple project repositories to keep their backlogs in **one separate Git repository**, with a folder per project. The original local mode remains available.
 
-- \`backlog --use-backlog-repo <path>\` opts into the shared backlog; \`backlog --use-local-repo\` switches back.
-- \`backlog setup\` configures a consuming repository and its agent skill integration.
-- The shared repository's clone URL is **explicit configuration**: \`BACKLOG_ORIGIN_URL\` or the \`backlog_origin_url\` field in \`.smooth-backlog.json\`. There is no baked-in organization or server address.
+- `backlog --use-backlog-repo <path>` opts into the shared backlog; `backlog --use-local-repo` switches back.
+- `backlog setup` configures a consuming repository and its agent skill integration.
+- The shared repository's clone URL is **explicit configuration**: `BACKLOG_ORIGIN_URL` or the `backlog_origin_url` field in `.smooth-backlog.json`. There is no baked-in organization or server address.
 - Shared writes synchronize through Git. Successful mutations are committed and pushed; publication failure restores the original working state rather than pretending the change was shared.
 - The shared store uses front-matter work records, a SQLite mirror, concurrency locks, and stale-write protection. An agent is refused when it tries to update a record that someone else changed after its last read.
 
@@ -97,7 +97,7 @@ The advanced workflow treats an individually claimable backlog item—not an ent
 4. **Review the implementation.** The first review is a distinct agent review; the second is an independent external review. Both are tied to the relevant work commit rather than whichever unrelated commit happens to be the branch HEAD.
 5. **Re-review if the work changes.** A change to that item's implementation invalidates its previous passes. The close command refuses missing or stale approvals.
 6. **Accept dependencies before closure.** If another item depends on this one, the dependent handoff must be recorded and accepted by the lead before the producer can close.
-7. **Close only with evidence.** Both \`--close\` and \`--status done\` observe the gates. An owner may record an explicit override with a written reason; it is not a silent bypass.
+7. **Close only with evidence.** Both `--close` and `--status done` observe the gates. An owner may record an explicit override with a written reason; it is not a silent bypass.
 
 The workflow also protects against an agent reviewing the work from its *own* session while allowing a fresh, distinct session to continue a claim. Failed checks generate actionable refusals instead of reporting success. The full reviewer identity, state transition, handoff and exception contracts are in [COMMANDS.md](COMMANDS.md).
 
@@ -106,7 +106,7 @@ These are **PR3 implementation semantics, not claims of proven end-to-end produc
 ## Concurrent work and traceability (PR #3)
 
 - **Independent branches and durable identity:** each item has a GUID and priority; branch scope is explicit.
-- **Changed-since-last-use:** \`backlog query --changed --agent <name>\` compares against that agent's own last-use reference—not an arbitrary global timestamp—so other agents' changes are visible on return.
+- **Changed-since-last-use:** `backlog query --changed --agent <name>` compares against that agent's own last-use reference—not an arbitrary global timestamp—so other agents' changes are visible on return.
 - **Stale-write protection:** conflicting edits refuse with a specific error rather than overwriting unseen changes.
 - **Commit-pinned review:** unrelated commits do not invalidate approved work, but new work for that item does.
 - **Handoff tracking:** producer/consumer dependencies require recorded handoffs and lead acceptance at closure.
@@ -116,9 +116,9 @@ Command syntax, schema details, structured JSON responses and failure modes belo
 
 ## Coding-agent integration
 
-Initialization installs backlog skills for detected agent directory conventions: \`.agents\`, \`.claude\`, \`.github\`, \`.qwen\`, and \`.backlog/skills\`. The same structured records can be read by people, automation and coding agents.
+Initialization installs backlog skills for detected agent directory conventions: `.agents`, `.claude`, `.github`, `.qwen`, and `.backlog/skills`. The same structured records can be read by people, automation and coding agents.
 
-For the developing shared mode, the provided \`install-backlog-cli.sh\` helper can install the published CLI and run \`backlog setup\` for a configured shared repository. This setup path requires a **future compatible published release** before PR3's shared-mode commands can be used.
+For the developing shared mode, the provided `install-backlog-cli.sh` helper can install the published CLI and run `backlog setup` for a configured shared repository. This setup path requires a **future compatible published release** before PR3's shared-mode commands can be used.
 
 Keep customized skill changes in Git: initialization and package updates may replace generated skill copies.
 
@@ -126,8 +126,8 @@ Keep customized skill changes in Git: initialization and package updates may rep
 
 - **Local mode:** Git data is version-controlled, but the CLI does not commit for you.
 - **Shared mode:** successful changes require a committed and pushed Git state; conflicts and stale edits are refused.
-- **Backups:** \`backlog init backup\` preserves existing backlog data before refreshing skills.
-- **Destructive reset:** **\`backlog init clean\` deletes all backlog branches and any backups stored inside the backlog.** It is not a routine upgrade operation.
+- **Backups:** `backlog init backup` preserves existing backlog data before refreshing skills.
+- **Destructive reset:** **`backlog init clean` deletes all backlog branches and any backups stored inside the backlog.** It is not a routine upgrade operation.
 - **Compatibility:** the shared mode is currently tested on Linux only. Do not imply macOS or Windows shared-mode support from the released local CLI.
 - **Scope:** a passing review workflow is evidence of a recorded decision, not by itself proof that a software product is correct or secure.
 
@@ -135,18 +135,18 @@ Keep customized skill changes in Git: initialization and package updates may rep
 
 The project is written in JavaScript for Node.js **24+** and uses Node's built-in test runner. To check out and exercise this *development branch*:
 
-\`\`\`sh
+```sh
 npm ci
 npm test
 npm run check
 npm pack --dry-run
-\`\`\`
+```
 
 The shared-mode oracle tests can compare Node behavior with the existing Python backlog implementation when its script path is provided:
 
-\`\`\`sh
+```sh
 SMOOTH_BACKLOG_SCRIPTS=<backlog-repo>/skill/backlog/scripts npm test
-\`\`\`
+```
 
 That second command requires Python 3 and PyYAML, with a valid path to the reference scripts. Without the reference scripts, oracle tests can skip; a local pass is not evidence of full parity coverage.
 

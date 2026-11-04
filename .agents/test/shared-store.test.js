@@ -200,16 +200,8 @@ test('reflow: only pending/in_progress items of ALL branches are ranked; done an
   assert.equal(sha256File(join(folder, 'phases/003-i3.md')), doneSha);
 });
 
-// ---------------------------------------------------------------- inQueue / findings / now
+// ---------------------------------------------------------------- findings / now
 
-test('inQueue: only the exact repository and branch match; missing fields never match', () => {
-  const it = { fm: { repository: 'acme/demo', branch: 'main' } };
-  assert.equal(store.inQueue(it, 'acme/demo', 'main'), true);
-  assert.equal(store.inQueue(it, 'acme/demo', 'dev'), false);
-  assert.equal(store.inQueue(it, 'acme/other', 'main'), false);
-  assert.equal(store.inQueue({ fm: { branch: 'main' } }, 'acme/demo', 'main'), false);
-  assert.equal(store.inQueue({ fm: {} }, '', ''), true, 'both sides empty compare equal, as in_queue does');
-});
 
 test('findings: a foreign and an untagged item are flagged, archived items are not', t => {
   const d = scratch(t);
@@ -518,7 +510,7 @@ test('075: findings: an item of another repository is foreign, an item without r
   assert.equal(r.stdout.replace(f.folder, '<folder>'),
     `⚠️  CRITICAL: phases/004-foreign.md says repository acme/other but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 004-foreign --to-repository\n`
     + `⚠️  item 005-untagged records no repository or branch; it is out of the queue until its repository and branch are filled in\n`
-    + `📋 acme/demo — branch main — <folder>\n`
+    + '📋 acme/demo — branch main\n'
     + `   objective: phase anchor (no document)\n`
     + `   phases (3) — work queue order, P0 = next:\n`
     + `   • [  1] 001-one                      pending      P  0  one\n`

@@ -86,34 +86,6 @@ function criticalBanner(crit) {
   return crit.length;
 }
 
-// query.py:42-67, the text --next must emit after the item.
-const MANDATE = `
-================ NEXT-STEPS-MANDATE (NON-OPTIONAL — DO NOT SKIP) ================
-The lines above are NOT your answer. "What's next / the next backlog item / what's
-on the backlog" is a POP, not a lookup. Relaying the raw item above as your reply is
-a HARD FAILURE. Before you respond to the user you MUST, in order:
-
-  1. CODEBASE-MEMORY-FIRST: verify this phase's concrete claims against the live repo
-     (codebase-memory-mcp search_graph/trace_path/search_code). Mark each ✅ confirmed or ⚠️ drifted.
-  2. PRODUCE THE PHASE READINESS BRIEF — all five parts, in this order:
-       (a) What it is      — [NNN-slug] identity, queue position, framework vs product.
-       (b) Verification    — claims checked against the repo (✅ / ⚠️ from step 1).
-       (c) Readiness       — what is implementable now vs. needs refinement; soft
-                             spots; the documentation surface it will touch.
-       (d) Bottom line     — one-paragraph verdict (start as-is / carve-outs / refine).
-       (e) (read-only — no backlog update/archive/new, no status change here)
-  3. STOP AND ASK — end with EXACTLY ONE AskUserQuestion (rule 11: one decision);
-     if that tool says it cannot ask in non-interactive mode, end your turn
-     with a DECISION NEEDED line (SKILL.md, hand the decision back),
-     a single question ("How do you want to proceed with [NNN-slug]?") offering these
-     THREE options as the next steps — never fewer, never auto-picked:
-       • Further refinement   — Socratically tighten scope / split coupled parts first.
-       • Impact analysis      — trace blast-radius incl. the documentation surface.
-       • Full implementation  — execute the ready portions now (resume Workflow B at B4).
-
-Do not pick for the user. Do not proceed past the brief without their answer.
-====================== END-MANDATE — produce the brief now ======================`;
-
 // item 027: which items of this repository folder changed since the calling agent's last use. The
 // reference is the agent's own ~use record - its last write or its last --changed, never a global
 // timestamp - so a change made while the agent is idle still appears in the agent's next report.
@@ -255,11 +227,9 @@ async function query(argv) {
       say(`    ${r.name}`);
       say(`    objective: ${r.objective}`);
       say(`    summary:   ${r.summary}`);
-      say(`    file:      ${r.path}`);
       if (r.branch || r.commit_sha || r.location) say(`    progress:  branch=${r.branch} commit=${sha7(r)} loc=${r.location}`);
       for (const x of away) say(`    ⛓ waits on ${x.item} (${x.slug}, status ${x.status}): do that first in repository ${x.repository}`);
       for (const s of skipped) for (const d of s.deps) say(`    ⛓ ${s.row.slug} waits on ${team.describeDependency(d)}: skipped until the edge is satisfied`);
-      say(MANDATE);
       return 0;
     }
 
@@ -340,7 +310,7 @@ async function query(argv) {
       return 0;
     }
     criticalBanner(critical());
-    say(`📋 ${repo} — branch ${a.all ? '(all)' : redact(branch)} — ${folder}`);
+    say(`📋 ${repo} — branch ${a.all ? '(all)' : redact(branch)}`);
     say(`   objective: ${h.objective}`);
     say(`   phases (${rows.length}) — work queue order, P0 = next:`);
     let byPath;

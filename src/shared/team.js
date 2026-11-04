@@ -288,7 +288,6 @@ export function teamMembership(name, agent) {
 function memberCount(tdir) {
   try { const cfg = JSON.parse(readFileSync(join(tdir, 'config.json'), 'utf8')); return Array.isArray(cfg?.members) ? cfg.members.length : 0; } catch { return 0; }
 }
-export function memberJoinedMs(tdir, agent) { const m = member(tdir, agent); return typeof m === 'object' ? m.joined : null; }
 const warned = new Set();
 const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
 // Owner 2026-10-30: nothing locks a member but a valid hand-off. The marker is written only for a registered member of

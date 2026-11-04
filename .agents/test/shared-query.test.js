@@ -106,33 +106,7 @@ const NEXT_HEADER = '➡️  NEXT: P0 (rank 0 = next) — [  2] 002-beta  (pendi
   + '    Beta\n'
   + '    objective: Café ☕ Beta\n'
   + '    summary:   sum Beta\n'
-  + '    file:      phases/002-beta.md\n'
-  + '    progress:  branch=main commit=SHA loc=\n\n';
-const MANDATE = '================ NEXT-STEPS-MANDATE (NON-OPTIONAL — DO NOT SKIP) ================\n'
-  + 'The lines above are NOT your answer. "What\'s next / the next backlog item / what\'s\n'
-  + 'on the backlog" is a POP, not a lookup. Relaying the raw item above as your reply is\n'
-  + 'a HARD FAILURE. Before you respond to the user you MUST, in order:\n'
-  + '\n'
-  + "  1. CODEBASE-MEMORY-FIRST: verify this phase's concrete claims against the live repo\n"
-  + '     (codebase-memory-mcp search_graph/trace_path/search_code). Mark each ✅ confirmed or ⚠️ drifted.\n'
-  + '  2. PRODUCE THE PHASE READINESS BRIEF — all five parts, in this order:\n'
-  + '       (a) What it is      — [NNN-slug] identity, queue position, framework vs product.\n'
-  + '       (b) Verification    — claims checked against the repo (✅ / ⚠️ from step 1).\n'
-  + '       (c) Readiness       — what is implementable now vs. needs refinement; soft\n'
-  + '                             spots; the documentation surface it will touch.\n'
-  + '       (d) Bottom line     — one-paragraph verdict (start as-is / carve-outs / refine).\n'
-  + '       (e) (read-only — no backlog update/archive/new, no status change here)\n'
-  + '  3. STOP AND ASK — end with EXACTLY ONE AskUserQuestion (rule 11: one decision);\n'
-  + '     if that tool says it cannot ask in non-interactive mode, end your turn\n'
-  + '     with a DECISION NEEDED line (SKILL.md, hand the decision back),\n'
-  + '     a single question ("How do you want to proceed with [NNN-slug]?") offering these\n'
-  + '     THREE options as the next steps — never fewer, never auto-picked:\n'
-  + '       • Further refinement   — Socratically tighten scope / split coupled parts first.\n'
-  + '       • Impact analysis      — trace blast-radius incl. the documentation surface.\n'
-  + '       • Full implementation  — execute the ready portions now (resume Workflow B at B4).\n'
-  + '\n'
-  + 'Do not pick for the user. Do not proceed past the brief without their answer.\n'
-  + '====================== END-MANDATE — produce the brief now ======================\n';
+  + '    progress:  branch=main commit=SHA loc=\n';
 
 test('075: --status --json prints handoff, repository, branch, phases, gone_branch_items and findings', () => {
   const f = fx();
@@ -367,7 +341,7 @@ test('075: --status text: the findings, the critical banner, the queue and the g
   const f = fx();
   assert.equal(view(f, ['--status']).stdout,
     STATUS_FINDINGS
-    + `📋 acme/demo — branch main — ${f.folder}\n`
+    + '📋 acme/demo — branch main\n'
     + '   objective: phase anchor (no document)\n'
     + '   phases (4) — work queue order, P0 = next:\n'
     + '   • [  2] 002-beta                     pending      P  0 ⚠️CRIT  Beta\n'
@@ -386,7 +360,7 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
   const f = fx();
   assert.equal(view(f, ['--status', '--all']).stdout,
     STATUS_FINDINGS
-    + `📋 acme/demo — branch (all) — ${f.folder}\n`
+    + '📋 acme/demo — branch (all)\n'
     + '   objective: phase anchor (no document)\n'
     + '   phases (5) — work queue order, P0 = next:\n'
     + '   • [  2] 002-beta                     pending      P  0 ⚠️CRIT  Beta\n'
@@ -401,7 +375,7 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
     + '        ↳ sum Delta\n');
   assert.equal(view(f, ['--status', '--branch', 'feature']).stdout,
     STATUS_FINDINGS
-    + `📋 acme/demo — branch feature — ${f.folder}\n`
+    + '📋 acme/demo — branch feature\n'
     + '   objective: phase anchor (no document)\n'
     + '   phases (1) — work queue order, P0 = next:\n'
     + '   • [  5] 005-feat                     pending      P  3  Feat\n'
@@ -429,16 +403,13 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
   });
 });
 
-test('075: --next --json prints the queue head; --next text prints the findings, the item and the mandate', () => {
+test('075: --next --json prints the queue head; --next text prints the findings and the item', () => {
   const f = fx();
   assert.deepEqual(normJson(view(f, ['--next', '--json']).stdout), {
     id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta',
     status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA',
     location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null });
-  const text = norm(view(f, ['--next']).stdout);
-  const at = text.indexOf('================ NEXT-STEPS-MANDATE');
-  assert.equal(text.slice(0, at), STATUS_FINDINGS + NEXT_HEADER, 'the findings, the item and the blank line before the mandate');
-  assert.equal(text.slice(at), MANDATE, 'the mandate, word for word');
+  assert.equal(norm(view(f, ['--next']).stdout), STATUS_FINDINGS + NEXT_HEADER, 'the findings and the item');
   view(f, ['--next', '--all']);
   assert.equal(JSON.parse(view(f, ['--next', '--branch', 'feature', '--json']).stdout).slug, '005-feat');
 });

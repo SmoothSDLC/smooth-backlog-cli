@@ -55,6 +55,10 @@ Feature: Storage - where the item files live changes nothing about the commands
     Then the command succeeds
     And the output does not contain "phases/"
     And the output does not contain ".md"
+    When I run `backlog next`
+    Then the command succeeds
+    And the output does not contain "phases/"
+    And the output does not contain ".md"
 
   Scenario: the version is printed
     When I run `backlog --version`

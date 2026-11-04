@@ -352,8 +352,6 @@ export function reorder(dir, idents, beforeApply) {
   return applyDense(dir, within(all, () => order), inScope, beforeApply);
 }
 
-// lib_db.py:296-299
-export const inQueue = (item, repo, branchName) => (item.fm.repository || '') === repo && (item.fm.branch || '') === branchName;
 
 // lib_db.py:302-313. The folder repository is the folder's last two path parts. Archived items (and a NULL status,
 // which NOT IN never matches) are out of every finding; ghost is a non-archived mirror row whose file is gone.

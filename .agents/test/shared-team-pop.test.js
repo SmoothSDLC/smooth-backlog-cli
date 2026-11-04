@@ -114,7 +114,7 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   assert.deepEqual([p.action, p.item], ['continue', job]);
   for (const cmd of [['query', '--next'], ['next']]) { // --next --agent is the same pop
     const n = cli([...cmd, '--agent', 'cody'], { cwd: f.cons, tmp: f.t, env: LEAD });
-    assert.ok(n.status === 0 && n.stdout.startsWith(`continue ${job}\n`) && !n.stdout.includes('NEXT-STEPS-MANDATE'), n.stdout + n.stderr);
+    assert.ok(n.status === 0 && n.stdout.startsWith(`continue ${job}\n`), n.stdout + n.stderr);
   }
   ok(f, dep, '--review', 'pass', '--by', 'cody', '--comments', 'fine per references/review/tests.md');
   assert.ok(cli(['query', '--pop'], { cwd: f.cons, tmp: f.t }).stderr.includes('--pop needs --agent'));
@@ -343,9 +343,8 @@ test('test_no_new_flags_unchanged', () => {
   const c = q('--claimable').stdout;
   assert.ok(c.includes(`   P0   ${s} (pending) — compat job\n        review_refs=references/review/code.md claimed_by=- review=none`), c);
   assert.ok(q('--claimable', '--all').stdout.includes(other)); // --all as before
-  const n = q('--next'); // the owner-facing pop keeps its readiness-brief mandate
+  const n = q('--next');
   assert.ok(n.status === 0 && n.stdout.includes(`NEXT: P0 (rank 0 = next) — [${String(Number(s.split('-')[0])).padStart(3)}] ${s}`), n.stdout);
-  assert.ok(n.stdout.includes('NEXT-STEPS-MANDATE'));
 });
 
 // The --pop assertions of the scope rules.

@@ -515,7 +515,7 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
 test('075: a repository without a backlog folder prints the info line or {}, exit 0', () => {
   const f = fx();
   const other = consumer(f.t, 'acme', 'fresh', 'main');
-  const info = `ℹ️  acme/fresh has no backlog yet (no folder ${join(f.home, 'acme', 'fresh')})\n`;
+  const info = `ℹ️  acme/fresh has no backlog yet\n`;
   const s1 = cli(['query', '--status'], { cwd: other, tmp: f.t });
   assert.equal(s1.status, 0, s1.stdout + s1.stderr);
   assert.equal(s1.stderr, '', 'a successful query prints nothing to stderr');

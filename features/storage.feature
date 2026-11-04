@@ -50,11 +50,17 @@ Feature: Storage - where the item files live changes nothing about the commands
     And the output does not contain "mode"
 
   Scenario: the output never names the item files or their folder
+    When I run `backlog query`
+    Then the command succeeds
+    And the output does not contain the backlog folder path
+    When I run `backlog pop --agent ada`
+    Then the output does not contain the backlog folder path
     Given an item "Hidden file" exists
     When I run `backlog query`
     Then the command succeeds
     And the output does not contain "phases/"
     And the output does not contain ".md"
+    And the output does not contain the backlog folder path
     When I run `backlog next`
     Then the command succeeds
     And the output does not contain "phases/"

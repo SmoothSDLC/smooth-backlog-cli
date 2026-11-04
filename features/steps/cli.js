@@ -44,6 +44,7 @@ step(/^the command succeeds$/, w => assert.equal(w.last.status, 0, `exit ${w.las
 step(/^the command fails$/, w => assert.notEqual(w.last.status, 0, `the command succeeded: ${output(w.last)}`));
 step(/^the command fails with exit code (\d+)$/, (w, code) => assert.equal(w.last.status, Number(code), `exit ${w.last.status}: ${output(w.last)}`));
 step(/^the output contains "((?:[^"\\]|\\.)*)"$/, (w, text) => assert.ok(output(w.last).includes(text.replace(/\\"/g, '"')), `not in the output: ${text}\n${output(w.last)}`));
+step(/^the output does not contain the backlog folder path$/, w => assert.ok(!output(w.last).includes(w.home()), `the backlog folder path is in the output:\n${output(w.last)}`));
 step(/^the output does not contain "((?:[^"\\]|\\.)*)"$/, (w, text) => assert.ok(!output(w.last).includes(text.replace(/\\"/g, '"')), `in the output: ${text}\n${output(w.last)}`));
 step(/^the output matches \/(.+)\/$/, (w, re) => assert.match(output(w.last), new RegExp(re), output(w.last)));
 step(/^the JSON output has (\d+) items?$/, (w, n) => { const v = JSON.parse(w.last.stdout); const items = Array.isArray(v) ? v : v.phases ?? []; assert.equal(items.length, Number(n), w.last.stdout); });

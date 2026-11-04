@@ -340,7 +340,7 @@ async function popCommand(argv) {
   let folder;
   try { folder = store.folder(home, repo); } catch (e) { return die(e.message); }
   if (!existsSync(join(folder, 'backlog.db'))) {
-    say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet (no folder ${folder})`);
+    say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet`);
     return 0;
   }
   let branch;

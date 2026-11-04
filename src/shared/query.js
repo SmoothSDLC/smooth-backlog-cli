@@ -168,7 +168,7 @@ async function query(argv) {
   try { folder = store.folder(home, repo); } catch (e) { return die(e.message); } // TEAM_REPOSITORY=../x passes the owner/name pattern; the folder must stay inside the home
   if (a.changed) return changedReport(home, folder, repo, a); // what changed since the calling agent's last use
   if (!existsSync(join(folder, 'backlog.db'))) {
-    say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet (no folder ${folder})`);
+    say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet`);
     return 0;
   }
   const branch = a.branch || teamScope().branch || (await git(['branch', '--show-current'], cwd)).stdout.trim(); // lib_db.git_branch: TEAM_BRANCH wins

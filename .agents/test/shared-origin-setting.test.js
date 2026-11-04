@@ -50,15 +50,13 @@ test('the config key works alone: with the variable unset, the origin check uses
   assert.match(r2.stderr, /has origin 'acme\/backlog-repo'; expected other\/else/);
 });
 
-test('neither set: a shared-mode command refuses, naming both the variable and the config key, and touches nothing', t => {
+test('neither set, no BACKLOG_HOME and no record: the items live inside the repository and the clone is not touched', t => {
   const f = fixture(t);
-  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: '' } });
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /the shared backlog repository is not set/);
-  assert.match(r.stderr, /BACKLOG_ORIGIN_URL/);
-  assert.match(r.stderr, /backlog_origin_url/);
-  assert.match(r.stderr, /\.smooth-backlog\.json/);
-  assert.equal(r.stdout, '', 'no queue is printed');
+  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: '', BACKLOG_HOME: '', HOME: join(f.d, 'user') } });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /no backlog yet/);
+  assert.equal(r.stderr, '');
+  assert.ok(existsSync(join(f.cons, '.backlog', '.state')), 'the folder inside the repository');
 });
 
 test('neither set: backlog setup refuses before it touches anything (no clone, no parent folder, no config, no mode change, no skill copy)', t => {
@@ -114,14 +112,13 @@ test('a second setup --ask keeps the config backlog_origin_url', t => {
   assert.equal(cfg.backlog_repository, 'backlog-repo');
 });
 
-test('neither set and no clone at the default path: the setting refusal comes first, not the missing-clone question', t => {
+test('the origin set and no clone anywhere: the missing-clone error names backlog setup and nothing is written inside the repository', t => {
   const f = fixture(t);
-  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: '' } });
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /the shared backlog repository is not set/);
-  assert.match(r.stderr, /BACKLOG_ORIGIN_URL/);
-  assert.match(r.stderr, /backlog_origin_url/);
-  assert.doesNotMatch(r.stderr, /backlog repository is not at/);
+  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user') } });
+  assert.equal(r.status, 4, r.stdout + r.stderr);
+  assert.match(r.stderr, /configured but not cloned/);
+  assert.match(r.stderr, /backlog setup/);
+  assert.ok(!existsSync(join(f.cons, '.backlog')), 'nothing inside the repository');
 });
 
 test('the repository cannot be cloned or reached: setup says so, naming the configured value, and touches nothing (exit 3)', t => {

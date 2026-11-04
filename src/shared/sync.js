@@ -106,7 +106,9 @@ async function pullLocked(home) {
   starting.set(resolve(home), await snapshot(home));
 }
 
-export const pull = home => locked(lockFile(home), () => pullLocked(home), { takeOver: true });
+// A folder inside the repository (no clone) has nothing to pull or push: the user commits it with the repository.
+const isClone = home => existsSync(join(home, '.git'));
+export const pull = home => (isClone(home) ? locked(lockFile(home), () => pullLocked(home), { takeOver: true }) : Promise.resolve());
 
 const targetOf = (path, next) => posix.join(posix.dirname(path), pad(next) + posix.basename(path).replace(/^\d+/, ''));
 const retagged = (item, next) => ({ // the item with its number changed in the phase/seq keys and the body heading
@@ -398,6 +400,7 @@ async function validatePublication(home, folders, names, claims, renumbered) {
 // gains a change to one of them from someone else before the push, the commit is taken back (clone and index as before the command) and the command
 // is refused with the stale-item message, never merged or parked on a side branch.
 export async function commit(home, folders, message, reconcile = null, guard = [], claims = []) {
+  if (!isClone(home)) return [];
   guard = publicationGuard(guard);
   const list = [].concat(folders);
   const names = [];

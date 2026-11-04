@@ -12,7 +12,7 @@ import { asChild, locked } from '../storage.js';
 import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
 import { actor, created, guarded, guardReflow } from './seen.js';
-import { configuredHome, NEUTRAL_NAME, originSetting } from './setup.js';
+import { configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
 import { outsideTeam } from './team.js';
 
 const ACTIONABLE = ['pending', 'in_progress'];          // lib_db.py:515
@@ -20,29 +20,43 @@ const ACTIONABLE = ['pending', 'in_progress'];          // lib_db.py:515
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); // lib_db.py:45
 
-// lib_db.py:49-55 and 81-85. A missing home is returned tagged (ask.code 4), never cloned;
-// the caller prints ask.text and exits with ask.code.
+// The one storage setting. A backlog repository is named somewhere (BACKLOG_ORIGIN_URL or the .smooth-backlog.json origin key,
+// BACKLOG_HOME, the repository's .smooth-backlog.json path, or the per-user record): the items live in its clone, found in
+// that order, else at ~/git/<name>; a configured but missing clone is returned tagged (ask), never cloned here. Nothing named:
+// the items live inside the repository, in <repo>/.backlog, with the lock, views and journal in <repo>/.backlog/.state
+// (ignored by git).
 export function resolveHome() {
-  const setting = originSetting(); // item 091: no built-in name; the folder names derive from the setting
+  const setting = originSetting();
   const name = setting.name || NEUTRAL_NAME;
   let home = process.env.BACKLOG_HOME;
-  if (!home) home = configuredHome() ?? undefined; // item 043: the repository's .smooth-backlog.json comes before the per-user record
+  if (!home) home = configuredHome() ?? undefined; // the repository's .smooth-backlog.json comes before the per-user record
   if (!home) {
     try { home = readFileSync(join(configDir(), name, 'home'), 'utf8').trim(); } catch { /* no record */ }
   }
+  if (!setting.url && !home) { // no backlog repository named anywhere: the items live inside the repository
+    const top = topOf(process.cwd());
+    if (!top) return { home: null, remote: false, ask: { code: 2, text: 'run this from inside a git repository (the repository whose backlog you want)' } };
+    const inside = join(top, '.backlog');
+    mkdirSync(join(inside, '.state'), { recursive: true });
+    if (!existsSync(join(inside, '.gitignore'))) writeFileSync(join(inside, '.gitignore'), '.state/\n');
+    return { home: inside, remote: false, ask: null };
+  }
   home = resolve(expand(home || join('~/git', name)));
   // Symlinks above the home (macOS /var, a linked ~) are resolved once here; a link AT the home is kept for validateHome to refuse.
-  if (existsSync(home)) return { home: join(realpathSync(dirname(home)), basename(home)), ask: null };
+  if (existsSync(home)) return { home: join(realpathSync(dirname(home)), basename(home)), remote: true, ask: null };
   return {
     home,
+    remote: true,
     ask: {
       code: 4,
-      text: `the backlog repository is not at ${home}. ASK THE USER: where is the local clone of ${setting.id || 'the shared backlog repository'}, `
-        + `or should it be cloned to ${home}? Then run 'backlog setup' in this repository (it clones it beside the repository) or `
-        + `'backlog setup --ask' (it asks for the path), and run this command again.`,
+      text: `the backlog repository ${setting.id} is configured but not cloned at ${home}: run 'backlog setup' in this repository `
+        + "(it clones it beside the repository) or 'backlog setup --ask' (it asks for the path), then run this command again.",
     },
   };
 }
+
+// Where the lock, the views and the journal live: the clone's .git folder, or .state inside the repository's .backlog folder.
+export const stateDir = home => (existsSync(join(home, '.git')) ? join(home, '.git') : join(home, '.state'));
 
 // Contract section 1: $XDG_CONFIG_HOME/smooth-backlog-cli/mode.json, one JSON object; absent means local.
 const modeFile = () => join(configDir(), 'smooth-backlog-cli', 'mode.json');
@@ -67,7 +81,7 @@ export function folder(home, repoId) {
 // from before its pull to after its push, whatever repository folders it works on. Re-entrant in the process (query --pop runs pop), and for
 // a child its holder runs and waits for, which is given lockEnv(home) (pop --claim-now runs update).
 const held = new Set();
-const lockPath = home => join(home, '.git', 'smooth-backlog-cli-run.lock');
+const lockPath = home => join(stateDir(home), 'smooth-backlog-cli-run.lock');
 export const lockEnv = home => ({ BACKLOG_RUN_LOCK_HELD: `${lockPath(home)}:${process.pid}` });
 export function cloneLocked(home, fn) {
   const path = lockPath(home);
@@ -92,8 +106,7 @@ function git(args, cwd) {
 export function repoId(cwd) {
   if (git(['rev-parse', '--path-format=absolute', '--git-common-dir'], cwd).code) throw new Error('run this from inside a git repository (the repository whose backlog you want)');
   const id = repoIdFromUrl(git(['remote', 'get-url', 'origin'], cwd).stdout);
-  if (!id) throw new Error("this repository has no remote 'origin'. Add it first (git remote add origin <url>): the backlog is keyed by the repository's owner/name");
-  return id;
+  return id || `local/${basename(git(['rev-parse', '--show-toplevel'], cwd).stdout.trim())}`; // no origin: the folder's name
 }
 
 // lib_db.py:273-277
@@ -141,7 +154,7 @@ export const journalled = fn => { const j = new Map(); journals.push(j); return 
 // window (no catch runs) leaves it behind; the next command that takes the clone lock rolls it back first (recoverJournal). It lives in .git:
 // git never sees it. persist = {home, files: Map<path, base64 | null>, folders: Set}.
 let persist = null;
-const journalFile = home => join(home, '.git', 'smooth-backlog-cli-journal.json');
+const journalFile = home => join(stateDir(home), 'smooth-backlog-cli-journal.json');
 function saveJournal() {
   const tmp = `${journalFile(persist.home)}.${process.pid}.tmp`;
   const fd = openSync(tmp, 'w', 0o600);
@@ -150,7 +163,7 @@ function saveJournal() {
 }
 export function beginJournal(folder) { // true when this call opened the journal (the outermost undo); it also covers `folder`
   const home = dirname(dirname(resolve(folder)));
-  if (!persist && existsSync(join(home, '.git'))) { persist = { home, files: new Map(), folders: new Set() }; var opened = true; }
+  if (!persist && existsSync(stateDir(home))) { persist = { home, files: new Map(), folders: new Set() }; var opened = true; }
   if (persist) { persist.folders.add(resolve(folder)); persistNote(join(resolve(folder), 'backlog.db')); }
   return Boolean(opened);
 }

@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 
 import { basename, dirname, join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { parse } from './frontmatter.js';
-import { now, repoId } from './store.js'; // a cycle (store.js imports this file): used only at run time
+import { now, repoId, stateDir } from './store.js'; // a cycle (store.js imports this file): used only at run time
 
 export const STALE_EXIT = 5;
 let current; // the --by/--agent of the running command
@@ -18,7 +18,7 @@ export const setActor = name => { if (name) current = String(name); };
 const qwen = () => { const id = (process.env.QWEN_CODE_AGENT_ID || '').trim(); return /^[^@\s]+@\S+$/.test(id) ? id.split('@')[0] : id; };
 export const actor = () => current || qwen() || process.env.USER || 'unknown';
 // Hash the exact name: replacement aliases distinct agents. Old lossy names are deliberately not read.
-const viewsFile = (home, agent) => join(home, '.git', 'smooth-backlog-cli-views', `${createHash('sha256').update(agent).digest('hex')}.json`);
+const viewsFile = (home, agent) => join(stateDir(home), 'smooth-backlog-cli-views', `${createHash('sha256').update(agent).digest('hex')}.json`);
 const homeOf = folder => dirname(dirname(folder)); // <home>/<owner>/<name>
 const operation = new AsyncLocalStorage();
 
@@ -101,7 +101,7 @@ export const setUse = (home, agent) => {
 // The agents that have a reference point, read from the views files of this clone (name and
 // last-use time). Other clones' views are not visible here: the list is per clone.
 export function agentsUsing(home) {
-  const dir = join(home, '.git', 'smooth-backlog-cli-views');
+  const dir = join(stateDir(home), 'smooth-backlog-cli-views');
   let files;
   try { files = readdirSync(dir); } catch { return []; }
   const out = [];

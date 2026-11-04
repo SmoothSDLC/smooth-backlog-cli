@@ -40,29 +40,28 @@ function putItem(folder, fm, rel = `phases/${fm.phase}.md`) {
 
 // ---------------------------------------------------------------- resolveHome
 
-test('resolveHome: BACKLOG_HOME > home record > the default ~/git/<name>; a missing home is tagged exit 4 with the ASK text, never cloned', t => {
+test('resolveHome: BACKLOG_HOME > home record > the default ~/git/<name>; a configured but missing clone is tagged exit 4 naming backlog setup, never cloned', t => {
   const d = scratch(t);
   const homeA = join(d, 'homeA'); const homeB = join(d, 'homeB');
   mkdirSync(homeA); mkdirSync(homeB);
   mkdirSync(join(d, 'config', BACKLOG_NAME), { recursive: true });
   // item 091: the folder names derive from the setting; the test pins the setting explicitly
   withEnv(t, { HOME: join(d, 'home'), XDG_CONFIG_HOME: join(d, 'config'), BACKLOG_HOME: homeA, BACKLOG_ORIGIN_URL: ORIGIN_URL });
-  assert.deepEqual(store.resolveHome(), { home: realpathSync(homeA), ask: null });
+  assert.deepEqual(store.resolveHome(), { home: realpathSync(homeA), remote: true, ask: null });
   delete process.env.BACKLOG_HOME;
   writeFileSync(join(d, 'config', BACKLOG_NAME, 'home'), `${homeB}\n`);
-  assert.deepEqual(store.resolveHome(), { home: realpathSync(homeB), ask: null });
+  assert.deepEqual(store.resolveHome(), { home: realpathSync(homeB), remote: true, ask: null });
   rmSync(join(d, 'config', BACKLOG_NAME, 'home'));
   const dflt = join(d, 'home', 'git', BACKLOG_NAME);
   const missing = store.resolveHome();
   assert.equal(missing.home, dflt, 'the default location');
   assert.equal(missing.ask.code, 4);
   assert.equal(missing.ask.text,
-    `the backlog repository is not at ${dflt}. ASK THE USER: where is the local clone of acme/${BACKLOG_NAME}, `
-    + `or should it be cloned to ${dflt}? Then run 'backlog setup' in this repository (it clones it beside the repository) or `
-    + `'backlog setup --ask' (it asks for the path), and run this command again.`, 'item 043: the answer is backlog setup');
+    `the backlog repository acme/${BACKLOG_NAME} is configured but not cloned at ${dflt}: run 'backlog setup' in this repository `
+    + "(it clones it beside the repository) or 'backlog setup --ask' (it asks for the path), then run this command again.", 'the answer is backlog setup');
   assert.equal(existsSync(dflt), false, 'never clones');
   mkdirSync(dflt, { recursive: true });
-  assert.deepEqual(store.resolveHome(), { home: realpathSync(dflt), ask: null });
+  assert.deepEqual(store.resolveHome(), { home: realpathSync(dflt), remote: true, ask: null });
 });
 
 // ---------------------------------------------------------------- getMode / setMode
@@ -92,7 +91,7 @@ test('folder(home, repoId): <home>/<owner>/<name>', () => {
   assert.equal(store.folder('/srv/home', 'acme/demo'), join('/srv/home', 'acme', 'demo'));
 });
 
-test('repoId: owner/name of the origin; a worktree maps to it; refused without an origin or outside git', t => {
+test('repoId: owner/name of the origin; a worktree maps to it; local/<folder> without an origin; refused outside git', t => {
   const d = scratch(t);
   const cons = consumer(d, 'acme', 'demo', 'main');
   const e = { ...process.env, ...env(d) };
@@ -103,7 +102,7 @@ test('repoId: owner/name of the origin; a worktree maps to it; refused without a
   const noOrigin = join(d, 'noorigin');
   mkdirSync(noOrigin);
   execFileSync('git', ['init', '-q'], { cwd: noOrigin, env: e });
-  assert.throws(() => store.repoId(noOrigin), /no remote 'origin'/);
+  assert.equal(store.repoId(noOrigin), 'local/noorigin');
   const plain = join(d, 'plain');
   mkdirSync(plain);
   assert.throws(() => store.repoId(plain), /inside a git repository/);

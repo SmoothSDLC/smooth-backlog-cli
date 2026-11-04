@@ -279,14 +279,14 @@ test('<command> --help prints the help text and needs no backlog home', t => {
   assert.equal(r.stdout, 'FAKE HELP\n');
 });
 
-test('a missing home: BACKLOG_HOME set -> exit 2 naming the expected clone; default or recorded home -> exit 4 with the ASK text', t => {
+test('a missing home: BACKLOG_HOME set -> exit 2 naming the expected clone; default or recorded home -> exit 4 naming backlog setup', t => {
   const f = pair(t);
   setShared(f.tmp);
   const nope = join(f.tmp, 'nope');
   const cases = [
     ['BACKLOG_HOME set but missing', { BACKLOG_HOME: nope }, 2, /^❌ backlog: BACKLOG_HOME=.*nope does not exist; expected a clone of acme\/backlog-repo on main \(unset BACKLOG_HOME to use ~\/git\/backlog-repo\)\n$/],
     // item 043: the answer is backlog setup
-    ['default home missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, 4, /^❌ backlog: the backlog repository is not at .*backlog-repo\. ASK THE USER: where is the local clone of acme\/backlog-repo, or should it be cloned to .*\? Then run 'backlog setup' in this repository .*'backlog setup --ask'/],
+    ['default home missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, 4, /^❌ backlog: the backlog repository acme\/backlog-repo is configured but not cloned at .*backlog-repo: run 'backlog setup' in this repository .*'backlog setup --ask'/],
   ];
   for (const [label, e, code, pattern] of cases) {
     const extra = { BACKLOG_HEADLESS: '', ...e };
@@ -299,7 +299,7 @@ test('a missing home: BACKLOG_HOME set -> exit 2 naming the expected clone; defa
   writeFileSync(recordFile(f.tmp), `${nope}\n`);
   const rec = cli(['next'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: '' } });
   assert.equal(rec.status, 4);
-  assert.match(rec.stderr, /ASK THE USER/);
+  assert.match(rec.stderr, /configured but not cloned/);
 });
 
 test('a home that is not a correct clone (another origin) is refused with exit 2 before the command runs', t => {

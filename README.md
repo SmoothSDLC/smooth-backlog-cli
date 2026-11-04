@@ -1,214 +1,164 @@
-# smooth-backlog-cli
+# Smooth Backlog CLI
 
-Keep a backlog of tasks, priorities, progress, and evidence alongside your code.
-Each Git branch has its own work list, shared by people and coding agents through
-version-controlled files in `.backlog/`.
+**Git-native work management for engineering teams and coding agents.** Define what must be delivered, coordinate parallel work, keep acceptance criteria and evidence with the source, and make completion an auditable engineering decision.
 
-Requires **Node.js 24+**, npm, and Git. Supports Linux and macOS. Windows is not supported or tested right now: CI does not run on Windows until Windows support for the shared backlog mode is done (backlog item 024).
-The package is **`@smoothsdlc/smooth-backlog-cli`**; the command is **`backlog`**.
+[Latest published release](https://github.com/SmoothSDLC/smooth-backlog-cli/releases) · [Command reference](COMMANDS.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
 
-## Install
+> **Development branch — not yet released.** This README describes the functionality being developed and reviewed in [PR #3](https://github.com/SmoothSDLC/smooth-backlog-cli/pull/3) (\`team-cli-parity-1\`). The published [v1.0.1 release](https://github.com/SmoothSDLC/smooth-backlog-cli/releases/tag/v1.0.1) includes the core local, branch-aware backlog CLI, **not** the shared-repository coordination and review gates described below. Unmerged behavior should not be treated as release-ready.
 
-Configure GitHub Packages, authenticate, and install by package name:
+## Why this exists
 
-```sh
+A conventional task list can tell you that work is marked “done.” It does not necessarily establish *which implementation was reviewed, who independently checked it, what evidence was supplied, or whether downstream work received a valid handoff*.
+
+Smooth Backlog CLI makes these questions part of the engineering workflow. Its records remain in Git, available to humans, scripts, and coding agents. The developing shared-repository mode adds explicit ownership, concurrency controls, dependency handoffs, and review gates intended to make autonomous execution accountable.
+
+This is **a workflow and evidence-control tool**, not an automatic guarantee that code is correct. A reviewer must still perform substantive verification.
+
+## Capabilities and release status
+
+| Capability | Published v1.0.1 | PR #3 development branch |
+| --- | --- | --- |
+| Branch-aware tasks, priorities, GUIDs, acceptance criteria, evidence, JSON | Yes | Yes |
+| Coding-agent skill integration | Yes | Yes |
+| Local \`.backlog/\` storage | Yes | Yes |
+| Shared Git repository for multiple project backlogs | No | Implemented; under review |
+| Git synchronization, stale-write detection and conflict safeguards | No | Implemented; under review |
+| Agent sessions, team coordination, refinement and claim rules | No | Implemented; under review |
+| Independent, commit-pinned review gates before closing items | No | Implemented; under review |
+| Dependency-specific handoffs and lead acceptance | No | Implemented; under review |
+| Per-agent changes since last use and traceable run reporting | No | Implemented; under review |
+
+**Status matters:** PR #3 is open. Its substantial implementation and test suite do not make its features part of a published release. See the [pull request](https://github.com/SmoothSDLC/smooth-backlog-cli/pull/3) for development scope and validation history.
+
+## Quick start: released local mode
+
+Requires Node.js **24+**, npm and Git. The released local mode supports Linux, macOS and Windows; the developing shared mode currently targets **Linux**. Windows shared-mode support is not yet implemented or tested, and the current PR CI matrix is limited to Linux.
+
+### Install the published package
+
+GitHub Packages requires authentication even for a public package:
+
+\`\`\`sh
 npm config set @smoothsdlc:registry https://npm.pkg.github.com
 npm login --scope=@smoothsdlc --auth-type=legacy --registry=https://npm.pkg.github.com
-npm install --global @smoothsdlc/smooth-backlog-cli --registry=https://npm.pkg.github.com
+npm install --global @smoothsdlc/smooth-backlog-cli@1.0.1 --registry=https://npm.pkg.github.com
 backlog --version
-```
+\`\`\`
 
-GitHub Packages requires authentication even for public packages. When npm login
-asks for a password, use a GitHub personal access token (classic) with
-`read:packages`.
+When npm requests a password, use a classic GitHub personal access token with \`read:packages\`. The package is \`@smoothsdlc/smooth-backlog-cli\` and its executable is \`backlog\`.
 
-### Install a pinned release, and roll back
+### Create and manage work
 
-An installation that must not move on its own (an agent host, a team runner) pins the release it installs and rolls
-back by installing the release before. In the shared backlog repository mode the CLI never updates itself (the
-update notices and automatic installation are the local mode's).
+From a Git working tree:
 
-```sh
-npm install --global @smoothsdlc/smooth-backlog-cli@<version> --registry=https://npm.pkg.github.com
-backlog --version                # the pinned release
-# roll back: the same command with the previous release
-npm install --global @smoothsdlc/smooth-backlog-cli@<previous version> --registry=https://npm.pkg.github.com
-```
-
-In a repository, `bash <skill folder>/scripts/install-backlog-cli.sh` (shipped with the backlog skill) installs the
-CLI when it is missing or older than the registry's release and then runs `backlog setup`, which points the
-repository at the shared backlog repository (`.smooth-backlog.json`) and deploys the skill; the shared backlog
-repository's clone URL is a setting (the environment variable `BACKLOG_ORIGIN_URL` first, then the `backlog_origin_url`
-key of `.smooth-backlog.json` — there is no built-in default, and a shared-mode command that needs it refuses,
-naming both sources, when it is in neither; the origin check uses the configured value — a clone whose origin is a
-different repository, or has no origin, is refused, and the error names the configured value, and a setup clone that
-cannot be made (the repository cannot be cloned or reached) is refused the same way; a `backlog setup` write keeps
-the key in the file); `--ask` asks for the path. The per-user record of `backlog --use-backlog-repo <path>` is the file `<name>/home` under the config
-folder ($XDG_CONFIG_HOME, else `~/.config`, `<name>` the repository name from the setting); a record written
-before the setting existed keeps working when the setting names the same repository, with no migration.
-
-## Get started
-
-Run these commands inside your Git working tree:
-
-```sh
+\`\`\`sh
 backlog init
 backlog new "Fix login" --description "Expired cookies prevent sign-in" --ac "An expired cookie permits a fresh sign-in"
 backlog 0 add tasks "Reproduce,Failing test captures the regression"
 backlog list
 backlog 0 done
 backlog list done --json
-```
+\`\`\`
 
-Use `backlog new --ask` for interactive item creation. Run `backlog` with no
-arguments to see the next active item.
+Run \`backlog\` to see the next active item, \`backlog new --ask\` for interactive creation, and \`backlog --help\` for installed-version help.
 
-## Working with your backlog
+In local mode, work lives under \`.backlog/\`. The CLI does **not** automatically commit, push, merge, or switch your Git branches. Commit backlog records alongside code when you want to share them.
 
-- **Priorities:** active items start at priority `0`. Numeric selectors refer to
-  the item's current priority, which can change as work is reordered or completed.
-  Each item also has a permanent GUID for durable references. List-entry positions
-  inside tasks and other lists start at `1`.
-- **States:** items are `new`, `open`, `done`, or `archived`. Completing an item
-  removes its active priority; reopening completed work puts it at priority `0`.
-  Done and archive lists show GUIDs and dates, with the newest events first.
-- **Branches:** commands use the checked-out branch. Use `list --branch` to inspect
-  another branch, `move` to transfer one item, or `import --branch` to merge its
-  unarchived work into the current branch. New and moved items append by default.
-- **Editing:** both `backlog set 0 name "Fix login"` and
-  `backlog 0 set name "Fix login"` work. List `set` and `add` append entries;
-  `replace` replaces a list, and `remove` deletes an entry. `--force` is available
-  only for whole-list replacement with `set`.
-- **Agents and Git:** initialization installs backlog skills into detected
-  `.agents`, `.claude`, `.github`, and `.qwen` folders, plus `.backlog/skills`.
-  Commit your backlog data and generated skills to share them. Preserve custom
-  skill edits through Git because initialization and updates can replace them.
-- **Run reporting:** the executable reports each run to an optional run recorder hook.
+### Release pinning and rollback
 
-If the backlog already exists, `backlog init backup` preserves its data and
-backs up existing files before replacing the generated skills. **`backlog init
-clean` deletes the entire backlog, including every branch and contained backups.**
+Pin an exact version on agent hosts and CI runners; install a prior published version to roll back:
 
-**Shared backlog repository:** `backlog --use-backlog-repo <path>` switches to a shared mode where the items of
-every repository live in one Git backlog repository instead of each repository's `.backlog/` folder.
-`backlog --use-local-repo` switches back. [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode)
-describes the mode and its commands. Every shared change succeeds only after it is committed and pushed.
-A failed publication rolls back the change and restores starting edits and staging. Existing unpublished commits
-require an explicit publish or drop decision before another command can change the backlog.
-The two retired classification keys of older items have no effect; the CLI drops them whenever it next writes an item.
+\`\`\`sh
+npm install --global @smoothsdlc/smooth-backlog-cli@<version> --registry=https://npm.pkg.github.com
+backlog --version
+\`\`\`
 
-In shared mode, a write to an item that somebody else changed after you last read it is refused with exit code 5 (read it again, then retry); every write records `updated_by`. See [COMMANDS.md](COMMANDS.md#shared-backlog-repository-mode).
+Use a real published version in place of \`<version>\`. In the developing shared mode, the CLI does not self-update.
 
-An agent asks which items changed since its own last use with `backlog query --changed --agent <you>`: the reference
-point is the commit of the agent's own last write or its own `query --changed` (stated in every result, even an
-empty one), never a global timestamp, so a change made while the agent is idle still appears in the agent's next
-report and the agent's own reads never move it. The items the agent holds (its name in `claimed_by`, `reviewer` or
-`refiner`) are listed in a "held" section apart from the other changed items ("others"); a file moved inside the
-folder (an archive, a renumbering) is one "D" entry for its old name. When the comparison fails (the reference commit
-is no longer in the clone), the command reports the failure (exit 2) and keeps the agent's reference, so the change
-is not lost. The report is printed before the reference is written, so a failed output consumes no change (the
-same changes repeat in the next report); on a first use the report is empty and the write happens first, so the
-result states exactly what was stored. A failed write of the reference is stated in the result and keeps the
-previous reference: a failed first use prints "no earlier use: the reference could not be set" (with `--json`
-the reference is null), and a failed write after an earlier use says so in the text and, with `--json`, adds
-the line `{"reference_write": "failed"}` after the report (the exit is 0). The result names the agents that use
-the backlog with their last-use time.
+## Architecture: shared-repository mode (PR #3)
 
-The self-review rule is per session, not per card: an agent name is a session name, so the session that claimed an
-item or asked for its review (recorded in `session_authors`) may not review it, and a new session of the same card
-may — it continues the item its earlier session claimed; a continuation of an item without the list (claimed before
-it existed) keeps the earlier holder in it. A `--reassign` keeps the former holder in the list (and adds the new
-holder), so the block survives a hand-off. Every claim, reassign, release and review request seeds the list from
-the item's current holder and review requester, so an item written before the list existed keeps the block of its
-earlier sessions.
+PR #3 adds an optional way for multiple project repositories to keep their backlogs in **one separate Git repository**, with a folder per project. The original local mode remains available.
 
-Two review stages are enforced before any close, with or without review documents: first a Cody review (for an item of
-a team, a registered member of that team — Qwen's team `config.json`, else a Cody name in a session of the item's
-team — or the team lead (`TEAM_LEAD`) in a session of the item's team; for an item without a team, a name starting with `cody` or a session name — in a fresh session, never the author session that claimed
-the item), then an external review by `codex` or `claude` on the same commit. A pass pins the item's work commit (`work_commit`) — the
-requester's `HEAD` at its review request (an external-stage request after the Cody pass keeps it) — so the reviewer's
-checkout and other items' commits on the branch move nothing; the item's own new work (a later commit whose subject
-names the item as a producer at the start - the item number alone, or joined with another item's number by `and`)
-moves the work commit, so both stages run again; a `--close` or `--status done` whose commit lookup fails is refused
-fail closed, and the refusal records the reason; a changes verdict at either stage clears both. `--close` is refused until both stages passed for
-the current work commit, and the refusal names the missing stage; a passing Cody review asks for the external
-review, and a passing external review asks for the close. `--status done` is a close too: refused until both
-stages passed, with or without review documents. An item that other items depend on closes (`--close` or `--status done`) only when each
-dependent's hand-off is recorded (`--handoff`) and accepted by the team lead (`--accept-handoff`); the refusal lists
-every open dependent, the state of its hand-off and the next command. An item without dependents closes and records
-`handoffs: none`; an item already done is not checked again. A changes verdict is recorded at either stage even after the
-work commit moved. A pass that counts for no stage asks for the Cody review first. A teamless split slice joins the
-team of the member who starts its refinement (or, refined earlier, who claims it). Every split item starts in
-stage refining, with or without a team field, and needs its refinement review (a `codex` or `claude` verdict)
-before it may be claimed; a slice written before the stage field existed is named by its body's split marker and
-takes the same gate. After three refinement-review CHANGES rounds the lead records its own verdict (`--refinement-review pass|changes --by claude`) without a Codex limit record, from stage refinement-review or, once the refiner finished, stage refined; below three rounds Claude still needs Codex's recorded 5-hour limit. A team item without a stage (a team's work item, or one written before the stage field existed) is
-unrefined too: `--claim` refuses it for every agent but the team lead's own claim of its team's work item (`backlog team
-pop`, to split it; never a split slice) and names `--refine-start`; `--refine-start` accepts it, `pop` offers its refinement, never a claim,
-and `query --claimable` and `query --plan` leave it out until it is refined. An item without a team and without the split marker has no stage and is claimable. The owner closes without a review on a written decision — `--close --by owner --reason
-"<the decision>"`, recorded as an owner decision — even for a team item still in its refinement stages.
+- \`backlog --use-backlog-repo <path>\` opts into the shared backlog; \`backlog --use-local-repo\` switches back.
+- \`backlog setup\` configures a consuming repository and its agent skill integration.
+- The shared repository's clone URL is **explicit configuration**: \`BACKLOG_ORIGIN_URL\` or the \`backlog_origin_url\` field in \`.smooth-backlog.json\`. There is no baked-in organization or server address.
+- Shared writes synchronize through Git. Successful mutations are committed and pushed; publication failure restores the original working state rather than pretending the change was shared.
+- The shared store uses front-matter work records, a SQLite mirror, concurrency locks, and stale-write protection. An agent is refused when it tries to update a record that someone else changed after its last read.
 
-## Command help
+**Do not install the currently published package expecting these commands or gates to be available.** Their contract, edge cases, and error codes are documented in the developing [command reference](COMMANDS.md#shared-backlog-repository-mode).
 
-Run `backlog --help` for the available commands and options:
+## Quality-first work lifecycle (PR #3)
 
-```text
-backlog — branch-specific work for people and agents
+The advanced workflow treats an individually claimable backlog item—not an entire chat session or an internal task bullet—as the unit of assignment, implementation, review and completion.
 
-Usage:
-  backlog                              Next active item (priority 0)
-  backlog init [repo-name]              Initialize once
-  backlog init clean [repo-name]        Reset ALL backlog data/skills, including backups
-  backlog init backup [repo-name]       Snapshot data/skills; replace skills only
-  backlog list [new|open|done|archive] [--branch name]
-  backlog list branch                  Branch names and item counts
-  backlog new <name> [JSON] --description <text> --ac <text>
-  backlog set <item> <property> <value>  Scalars replace; lists append
-  backlog set <item> <list> <JSON-array> --force
-  backlog add <item> <list> [entry] [--top]
-  backlog replace <item> <list> <JSON-array>
-  backlog remove <item> <list> <entry-number>
-  backlog priority <item> [position]    Active priorities start at 0
-  backlog priority <item> <list> <entry-number> <position>
-  backlog <item> done                  Complete and close the priority gap
-  backlog move <item> <destination-branch>
-  backlog import --branch <source> [--higher]
-  backlog archive <item|done>           Current branch only; no force option
-  backlog update [check|auto|off|disable]
+1. **Refine the request.** An agent or lead resolves requirements and splits dependent work into independently executable items. Team items must meet their refinement-review gate before becoming claimable.
+2. **Claim with a session identity.** An executor claims a single eligible item. Session authorship is recorded so the execution session cannot approve its own work.
+3. **Implement and record evidence.** Changes, acceptance evidence and dependent-item handoffs remain attributable to the work item.
+4. **Review the implementation.** The first review is a distinct agent review; the second is an independent external review. Both are tied to the relevant work commit rather than whichever unrelated commit happens to be the branch HEAD.
+5. **Re-review if the work changes.** A change to that item's implementation invalidates its previous passes. The close command refuses missing or stale approvals.
+6. **Accept dependencies before closure.** If another item depends on this one, the dependent handoff must be recorded and accepted by the lead before the producer can close.
+7. **Close only with evidence.** Both \`--close\` and \`--status done\` observe the gates. An owner may record an explicit override with a written reason; it is not a silent bypass.
 
-Item operations accept both orders: backlog set 0 name "Fix login"
-and backlog 0 set name "Fix login". An item is its CURRENT active priority
-or permanent GUID; done/archive rows show GUIDs. List-entry positions start at 1.
-New/moved items append; reopening done work inserts at 0. States: new/open/done/archived.
-Creation fields: --description, --ac, --state, --priority, --item-state-description,
---work_item_id, --tasks, --outcomes, --evidence, --references. Lists take JSON arrays.
-Global options: --help, --version, --json, --ask. --ask requires a terminal.
-Branch fallback: --branch or BACKLOG_CLI_BRANCH when Git cannot name a branch.
---force is valid ONLY for whole-list set replacement. Init clean affects every branch.
-JSON emits {ok,data} or {ok,error}. Exit codes: 0 success, 2 invalid input, 1 failure.
-```
+The workflow also protects against an agent reviewing the work from its *own* session while allowing a fresh, distinct session to continue a claim. Failed checks generate actionable refusals instead of reporting success. The full reviewer identity, state transition, handoff and exception contracts are in [COMMANDS.md](COMMANDS.md).
 
-See the [full command reference](COMMANDS.md) for field formats, examples,
-branch transfers, JSON output, storage recovery, and update settings.
+These are **PR3 implementation semantics, not claims of proven end-to-end production reliability**.
 
-## Updates
+## Concurrent work and traceability (PR #3)
 
-Weekly update notices are enabled by default; automatic installation is disabled.
-Settings apply to your user account:
+- **Independent branches and durable identity:** each item has a GUID and priority; branch scope is explicit.
+- **Changed-since-last-use:** \`backlog query --changed --agent <name>\` compares against that agent's own last-use reference—not an arbitrary global timestamp—so other agents' changes are visible on return.
+- **Stale-write protection:** conflicting edits refuse with a specific error rather than overwriting unseen changes.
+- **Commit-pinned review:** unrelated commits do not invalidate approved work, but new work for that item does.
+- **Handoff tracking:** producer/consumer dependencies require recorded handoffs and lead acceptance at closure.
+- **Run reporting:** an optional recorder hook supports workflow telemetry.
 
-```sh
-backlog update check     # Check now and enable weekly notices
-backlog update auto      # Enable daily automatic patch/minor updates
-backlog update off       # Disable automatic installation
-backlog update disable   # Disable weekly notices
-backlog update           # Install the latest stable release, including a new major
-```
+Command syntax, schema details, structured JSON responses and failure modes belong in the [complete reference](COMMANDS.md). That document and the built-in CLI help describe the fine-grained contracts; this README explains the system.
 
-Automatic updates require a writable npm global or user-prefix installation.
-New major versions require an explicit `backlog update`. Failed automatic checks
-leave backlog commands usable and become eligible to retry after one hour.
-To stop all automatic update checks, run both `backlog update off` and
-`backlog update disable`.
+## Coding-agent integration
+
+Initialization installs backlog skills for detected agent directory conventions: \`.agents\`, \`.claude\`, \`.github\`, \`.qwen\`, and \`.backlog/skills\`. The same structured records can be read by people, automation and coding agents.
+
+For the developing shared mode, the provided \`install-backlog-cli.sh\` helper can install the published CLI and run \`backlog setup\` for a configured shared repository. This setup path requires a **future compatible published release** before PR3's shared-mode commands can be used.
+
+Keep customized skill changes in Git: initialization and package updates may replace generated skill copies.
+
+## Safety and operational boundaries
+
+- **Local mode:** Git data is version-controlled, but the CLI does not commit for you.
+- **Shared mode:** successful changes require a committed and pushed Git state; conflicts and stale edits are refused.
+- **Backups:** \`backlog init backup\` preserves existing backlog data before refreshing skills.
+- **Destructive reset:** **\`backlog init clean\` deletes all backlog branches and any backups stored inside the backlog.** It is not a routine upgrade operation.
+- **Compatibility:** the shared mode is currently tested on Linux only. Do not imply macOS or Windows shared-mode support from the released local CLI.
+- **Scope:** a passing review workflow is evidence of a recorded decision, not by itself proof that a software product is correct or secure.
+
+## Development and validation
+
+The project is written in JavaScript for Node.js **24+** and uses Node's built-in test runner. To check out and exercise this *development branch*:
+
+\`\`\`sh
+npm ci
+npm test
+npm run check
+npm pack --dry-run
+\`\`\`
+
+The shared-mode oracle tests can compare Node behavior with the existing Python backlog implementation when its script path is provided:
+
+\`\`\`sh
+SMOOTH_BACKLOG_SCRIPTS=<backlog-repo>/skill/backlog/scripts npm test
+\`\`\`
+
+That second command requires Python 3 and PyYAML, with a valid path to the reference scripts. Without the reference scripts, oracle tests can skip; a local pass is not evidence of full parity coverage.
+
+PR #3's GitHub Actions workflow is manually triggered and currently runs Linux with Node 24 and 26. Inspect [workflow runs](https://github.com/SmoothSDLC/smooth-backlog-cli/actions) and verify the tested commit SHA before making claims about the latest branch HEAD.
+
+## Documentation and releases
+
+- [COMMANDS.md](COMMANDS.md) — complete command syntax, modes, error handling and schema details.
+- [CHANGELOG.md](CHANGELOG.md) — changes and the unreleased feature record.
+- [PR #3](https://github.com/SmoothSDLC/smooth-backlog-cli/pull/3) — outstanding development and review.
+- [Published releases](https://github.com/SmoothSDLC/smooth-backlog-cli/releases) — capabilities available for installation.
 
 ## License
 
-[Apache License 2.0](LICENSE), by [SmoothSDLC Systems Inc](https://SmoothSDLC.com).
+[Apache License 2.0](LICENSE), © [SmoothSDLC Systems Inc.](https://SmoothSDLC.com).

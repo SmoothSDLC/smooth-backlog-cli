@@ -14,7 +14,7 @@ are in its `docs/owner/DECISIONS.md` ("Decided 2026-10-28" and earlier).
 - Owner 2026-10-28, said three times: work classes and review classes are dead. They are never added, suggested, kept
   or revived in any form. The CLI must not read, write, accept, document or suggest `work_class`, `review_classes`,
   `--classes`, `--review-classes`, class profiles in a roster, or class-based claim or review rules.
-- Older items may still carry those front-matter fields: they are ignored, never read.
+- Older items may still carry those front-matter fields: no command reads them, query --phase shows them as stored until the item's next write, and every write drops them (item 096).
 - Chunk work is `chunk: true` (PR1: `lib_db.is_chunk`). A review is needed when the item has `review_refs`
   (`lib_db.needs_review`).
 - Today this repository still implements classes (src/shared/team.js, update.js, new.js, help.js, COMMANDS.md and the

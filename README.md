@@ -1,15 +1,34 @@
-# smooth-backlog-cli
+# Smooth Backlog CLI
 
-Keep a backlog of tasks, priorities, progress, and evidence alongside your code.
-Each Git branch has its own work list, shared by people and coding agents through
-version-controlled files in `.backlog/`.
+**Git-native backlog management for engineering teams and coding agents.** Keep requirements, acceptance criteria, work items, priorities, and delivery evidence close to the code they describe—without introducing a separate project-management service.
 
-Requires **Node.js 24+**, npm, and Git. Supports Linux, macOS, and Windows.
-The package is **`@smoothsdlc/smooth-backlog-cli`**; the command is **`backlog`**.
+[Releases](https://github.com/SmoothSDLC/smooth-backlog-cli/releases) · [Command reference](COMMANDS.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
+
+> **Release status:** The core CLI has a published [v1.0.1 release](https://github.com/SmoothSDLC/smooth-backlog-cli/releases/tag/v1.0.1). Advanced shared-repository, multi-agent coordination, and review-gate work is in [PR #3](https://github.com/SmoothSDLC/smooth-backlog-cli/pull/3) and is **not part of v1.0.1**.
+
+## Why it exists
+
+Software work is easier to review when the requirement, the implementation branch, and the evidence of completion can be inspected together. A backlog that lives with the repository is available to a developer at the terminal and to a coding agent using the same workflow.
+
+Smooth Backlog CLI provides **structured, version-controllable work records** instead of relying on a chat transcript or an agent's unsupported claim that a task is finished. It manages work; it does **not** independently certify the quality of an implementation.
+
+## What the released CLI does
+
+| Capability | What it gives you |
+| --- | --- |
+| **Branch-aware work** | Each Git branch has an independent backlog; inspect, move, or import items across branches. |
+| **Durable identity** | A permanent GUID identifies an item even when its active priority changes. |
+| **Defined outcomes** | Track descriptions, acceptance criteria, tasks, outcomes, evidence, and references. |
+| **Priorities and lifecycle** | Manage `new`, `open`, `done`, and `archived` items from the terminal. |
+| **Automation-friendly output** | Machine-readable JSON and a non-interactive CLI for scripts and agents. |
+| **Agent integrations** | Backlog skills can be installed for supported coding-agent directory conventions. |
+| **Git-native storage** | Work stays in version-controlled files under `.backlog/`; you choose when to commit it. |
+
+The core CLI is designed for **Node.js 24+**, npm, and Git. The released local-backlog mode supports Linux, macOS, and Windows.
 
 ## Install
 
-Configure GitHub Packages, authenticate, and install by package name:
+The package is `@smoothsdlc/smooth-backlog-cli`; the command is `backlog`. GitHub Packages requires authentication, including for public packages.
 
 ```sh
 npm config set @smoothsdlc:registry https://npm.pkg.github.com
@@ -18,13 +37,11 @@ npm install --global @smoothsdlc/smooth-backlog-cli --registry=https://npm.pkg.g
 backlog --version
 ```
 
-GitHub Packages requires authentication even for public packages. When npm login
-asks for a password, use a GitHub personal access token (classic) with
-`read:packages`.
+When npm requests a password during login, use a GitHub personal access token (classic) with `read:packages`. For a fixed version, use `@smoothsdlc/smooth-backlog-cli@1.0.1` in the install command.
 
 ## Get started
 
-Run these commands inside your Git working tree:
+In a Git working tree:
 
 ```sh
 backlog init
@@ -35,96 +52,45 @@ backlog 0 done
 backlog list done --json
 ```
 
-Use `backlog new --ask` for interactive item creation. Run `backlog` with no
-arguments to see the next active item.
+Run `backlog` with no arguments to see the next active item, or `backlog new --ask` for interactive creation. Active priorities start at **0** and can change as the list is reordered; use item GUIDs for durable references.
 
-## Working with your backlog
+## Working with Git and coding agents
 
-- **Priorities:** active items start at priority `0`. Numeric selectors refer to
-  the item's current priority, which can change as work is reordered or completed.
-  Each item also has a permanent GUID for durable references. List-entry positions
-  inside tasks and other lists start at `1`.
-- **States:** items are `new`, `open`, `done`, or `archived`. Completing an item
-  removes its active priority; reopening completed work puts it at priority `0`.
-  Done and archive lists show GUIDs and dates, with the newest events first.
-- **Branches:** commands use the checked-out branch. Use `list --branch` to inspect
-  another branch, `move` to transfer one item, or `import --branch` to merge its
-  unarchived work into the current branch. New and moved items append by default.
-- **Editing:** both `backlog set 0 name "Fix login"` and
-  `backlog 0 set name "Fix login"` work. List `set` and `add` append entries;
-  `replace` replaces a list, and `remove` deletes an entry. `--force` is available
-  only for whole-list replacement with `set`.
-- **Agents and Git:** initialization installs backlog skills into detected
-  `.agents`, `.claude`, `.github`, and `.qwen` folders, plus `.backlog/skills`.
-  Commit your backlog data and generated skills to share them. Preserve custom
-  skill edits through Git because initialization and updates can replace them.
+- **Branch isolation:** `backlog list --branch feature` inspects another branch's work; `backlog move` and `backlog import` move or bring work across branch backlogs.
+- **Human- and agent-readable records:** Acceptance criteria and supporting evidence remain attached to the item rather than buried in a separate conversation.
+- **Agent-ready setup:** `backlog init` installs skills into detected `.agents`, `.claude`, `.github`, and `.qwen` folders, as well as `.backlog/skills`.
+- **Your Git workflow stays yours:** The released local mode does not automatically commit, push, merge, or switch branches. Commit backlog data and skill files when you want to share them.
 
-If the backlog already exists, `backlog init backup` preserves its data and
-backs up existing files before replacing the generated skills. **`backlog init
-clean` deletes the entire backlog, including every branch and contained backups.**
+**Data safety:** `backlog init backup` retains a backup before refreshing generated skills. **`backlog init clean` destroys the entire backlog, including all branches and any backups inside it.** Do not use `clean` as a routine upgrade command.
 
-## Command help
-
-Run `backlog --help` for the available commands and options:
+## Command reference
 
 ```text
-backlog — branch-specific work for people and agents
-
-Usage:
-  backlog                              Next active item (priority 0)
-  backlog init [repo-name]              Initialize once
-  backlog init clean [repo-name]        Reset ALL backlog data/skills, including backups
-  backlog init backup [repo-name]       Snapshot data/skills; replace skills only
-  backlog list [new|open|done|archive] [--branch name]
-  backlog list branch                  Branch names and item counts
-  backlog new <name> [JSON] --description <text> --ac <text>
-  backlog set <item> <property> <value>  Scalars replace; lists append
-  backlog set <item> <list> <JSON-array> --force
-  backlog add <item> <list> [entry] [--top]
-  backlog replace <item> <list> <JSON-array>
-  backlog remove <item> <list> <entry-number>
-  backlog priority <item> [position]    Active priorities start at 0
-  backlog priority <item> <list> <entry-number> <position>
-  backlog <item> done                  Complete and close the priority gap
-  backlog move <item> <destination-branch>
-  backlog import --branch <source> [--higher]
-  backlog archive <item|done>           Current branch only; no force option
-  backlog update [check|auto|off|disable]
-
-Item operations accept both orders: backlog set 0 name "Fix login"
-and backlog 0 set name "Fix login". An item is its CURRENT active priority
-or permanent GUID; done/archive rows show GUIDs. List-entry positions start at 1.
-New/moved items append; reopening done work inserts at 0. States: new/open/done/archived.
-Creation fields: --description, --ac, --state, --priority, --item-state-description,
---work_item_id, --tasks, --outcomes, --evidence, --references. Lists take JSON arrays.
-Global options: --help, --version, --json, --ask. --ask requires a terminal.
-Branch fallback: --branch or BACKLOG_CLI_BRANCH when Git cannot name a branch.
---force is valid ONLY for whole-list set replacement. Init clean affects every branch.
-JSON emits {ok,data} or {ok,error}. Exit codes: 0 success, 2 invalid input, 1 failure.
+backlog                         Show the next active item
+backlog list                    List active items on this branch
+backlog new ...                 Create an item with acceptance criteria
+backlog set ...                 Update item fields
+backlog <item> done             Complete an item
+backlog move ...                Move an item between branches
+backlog list done --json        Read completed items as JSON
+backlog --help                  Show complete CLI usage
 ```
 
-See the [full command reference](COMMANDS.md) for field formats, examples,
-branch transfers, JSON output, storage recovery, and update settings.
+See [COMMANDS.md](COMMANDS.md) for the exact syntax, field formats, exit codes, storage behavior, and recovery procedures. The CLI's built-in `--help` is the authoritative reference for the installed version.
 
-## Updates
+## Development and verification
 
-Weekly update notices are enabled by default; automatic installation is disabled.
-Settings apply to your user account:
+Source changes are evaluated using Node's built-in test runner and syntax checks:
 
 ```sh
-backlog update check     # Check now and enable weekly notices
-backlog update auto      # Enable daily automatic patch/minor updates
-backlog update off       # Disable automatic installation
-backlog update disable   # Disable weekly notices
-backlog update           # Install the latest stable release, including a new major
+npm ci
+npm test
+npm run check
+npm pack --dry-run
 ```
 
-Automatic updates require a writable npm global or user-prefix installation.
-New major versions require an explicit `backlog update`. Failed automatic checks
-leave backlog commands usable and become eligible to retry after one hour.
-To stop all automatic update checks, run both `backlog update off` and
-`backlog update disable`.
+The [releases page](https://github.com/SmoothSDLC/smooth-backlog-cli/releases) distinguishes published versions from work in progress. **Do not treat unmerged PR behavior as a released capability.**
 
 ## License
 
-[Apache License 2.0](LICENSE), by [SmoothSDLC Systems Inc](https://SmoothSDLC.com).
+[Apache License 2.0](LICENSE), © [SmoothSDLC Systems Inc.](https://SmoothSDLC.com)

@@ -4,20 +4,21 @@
 // with the refusal text; step() runs the guards and one action, and update.js writes the front matter and appends the text.
 import { spawnSync } from 'node:child_process';
 import { hasDefinitionOfDone } from './new.js';
+import { actor } from './seen.js';
 import { wipRefusal } from './wip.js';
 import { now } from './store.js';
 import { acceptHandoff, recordHandoff, rejectHandoff } from './handoff-commands.js';
 import { openEdges } from './handoff.js';
 import { closeGate } from './handoff-close.js';
 import {
-  offeredTo, teamMembership, teamName,
-  REFINEMENT_REVIEWERS, REVIEW_DIR, asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, isSessionName, needsReview, outsideTeam, reviewOpenTo, strip,
-  STOP_TEXT, restarting, staleReview, teamLead, teamScope, undoneDependencies,
+  offeredTo, teamName, isTeamMember, refinementReviewRules, reviewRules,
+  asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, outsideTeam, reviewOpenTo, strip,
+  staleReview, teamLead, teamScope, undoneDependencies,
 } from './team.js';
 
 export class Rejected extends Error {}
 const reject = message => { throw new Rejected(message); };
-// Item 082: the rule is per session (the agent name is the session name); a new session of the same card is a new name.
+// The rule is per session (the agent name is the session name); a new session of the same worker is a new name.
 const NO_SELF_REVIEW = by => `${by}: the same session cannot review its own work; a new session may`;
 // The item's list of every session name that claimed it or asked for its review (item 082); append, no duplicates.
 const withSession = (list, name) => (name ? [...asList(list).filter(n => n !== name), name] : asList(list));
@@ -26,8 +27,7 @@ const withSession = (list, name) => (name ? [...asList(list).filter(n => n !== n
 // existed has no list yet) and adds the session this write names, so the self-review block of each earlier
 // session survives the transition.
 const seededAuthors = (fm, name) => withSession(withSession(withSession(fm.session_authors, fm.claimed_by), fm.review_author), name);
-// lib_db.py:258-260
-export const REFINE_HOW = 'backlog update <item> --set-review-refs references/review/<type>.md,.. / '
+export const REFINE_HOW = 'backlog update <item> --set-review-refs <review document>,.. / '
   + '--set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / '
   + "--append '## Definition of done\\n- [ ] <checkable line>'";
 
@@ -43,11 +43,11 @@ function estimateMin(fm, body) {
   return m ? Number(m[1]) : null;
 }
 
-// lib_db.missing_fields: the required team fields an item lacks; [] = complete. review_refs names at least one review
-// document (references/review/<type>.md), depends_on is written (may be none), an estimate, a definition of done.
+// The required team fields an item lacks; [] = complete. review_refs names at least one review document, depends_on is
+// written (may be none), an estimate, a definition of done.
 export function missingFields(fm, body) {
   const refs = asList(fm.review_refs);
-  return [['review_refs', !refs.some(r => r.startsWith(REVIEW_DIR))],
+  return [['review_refs', !refs.length],
     ['depends_on', fm.depends_on == null || fm.depends_on === ''], ['estimate_min', estimateMin(fm, body) === null],
     ['definition_of_done', !hasDefinitionOfDone(body)]].filter(([, bad]) => bad).map(([f]) => f);
 }
@@ -58,14 +58,14 @@ export const isSplitSlice = body => /Split from `[^`]+`/.test(String(body ?? '')
 // Owner 2026-11-02 (decision 083-A): nothing is implemented before it is refined. A team item without a stage (a team's work
 // item, or one written before the stage field existed) and a split slice without one are unrefined: refining. Only an item
 // without a team and without the split marker has no stage (solo work), which counts as ready.
-export const stageOf = (fm, body) => fm.stage || (fm.team || isSplitSlice(body) ? 'refining' : undefined);
+export const stageOf = (fm, body) => fm.stage || (fm.team || (isSplitSlice(body) && teamName()) ? 'refining' : undefined);
 
 export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
   if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); // update.py:32-33
-  // item 088: a split slice with no team is claimed by the team that refined it - the dispatch offers the slice's
-  // refinement to the team's members, and the claim joins the slice to the claiming session's team, so the slice
-  // belongs to that team from on. A plain teamless item (no split marker) stays outside the session's team.
+  // a split slice with no team is claimed by the team that refined it - the dispatch offers the slice's refinement to the
+  // team's members, and the claim joins the slice to the claiming session's team, so the slice belongs to that team from on.
+  // A plain teamless item (no split marker) stays outside the session's team.
   if (teamName() && !fm.team && fm.repository === repo && isSplitSlice(body)) fm.team = teamName();
   // spec section 8 (item 039): the lead never claims a split item; the team runner claims the team's work item (no stage) for it
   // item 056: a team session (TEAM_NAME) claims only what pop offers it: an item of its own team in its repository (any
@@ -135,31 +135,23 @@ export function refineDone({ fm }, by, note) {
   return { event: 'refined', text: `## Refined by ${by} at ${t}\n\n${note}` };
 }
 
-// Item 144 (owner decision 46): the refinement-review CHANGES rounds are the body's event lines; three end Codex's rounds.
-export const atReviewCap = body => (String(body || '').match(/^## Refinement review by \w+: CHANGES/gm) || []).length >= 3;
-
 export function requestRefinementReview({ fm }, by) {
-  if (!by || by !== teamLead()) reject(`--request-refinement-review --by <the team lead>: the lead (${teamLead()}; TEAM_LEAD) sends a refined item to the refinement review (got ${by || 'none'})`);
+  if (!by || by !== teamLead()) reject(`--request-refinement-review --by <the team lead>: the lead (${teamLead() || 'none configured'}; TEAM_LEAD) sends a refined item to the refinement review (got ${by || 'none'})`);
   if (fm.stage !== 'refined') reject(`only a refined item goes to the refinement review (stage ${fm.stage || 'none'})`);
   const t = now();
-  Object.assign(fm, { stage: 'refinement-review', refinement_review_requested_at: t, refinement_codex_limit: '' });
-  return { event: 'refinement_review_requested', text: `Refinement review requested by ${by} at ${t} (Codex first; Claude when Codex's 5-hour limit is exceeded or after three CHANGES rounds)` };
+  Object.assign(fm, { stage: 'refinement-review', refinement_review_requested_at: t });
+  return { event: 'refinement_review_requested', text: `Refinement review requested by ${by} at ${t}` };
 }
 
-export function refinementReview({ fm, body }, verdict, { by, comments } = {}) {
-  if (!REFINEMENT_REVIEWERS.includes(by)) reject(`--refinement-review --by codex|claude: the refinement is reviewed by Codex or Claude (got ${by || 'none'})`);
-  const cap = by === 'claude' && atReviewCap(body); // the human lead's verdict at the cap needs no Codex round: also from stage refined
-  if (fm.stage !== 'refinement-review' && !(cap && fm.stage === 'refined')) reject(`no refinement review is requested (stage ${fm.stage || 'none'})`);
+// The refinement reviewers of a team's item: the members of the teams its refinement_review rules name (teams.json); with no
+// rule, anyone but the author.
+export function refinementReview({ fm }, verdict, { by, comments } = {}) {
+  if (!by) reject('--refinement-review needs --by <reviewer>');
+  const rules = refinementReviewRules(fm.team);
+  if (rules.length && !rules.some(r => isTeamMember(r.team, by))) reject(`--refinement-review --by ${by}: the refinement of team ${fm.team} is reviewed by a member of ${rules.map(r => r.team).join(' or ')} (teams.json)`);
+  if (fm.stage !== 'refinement-review') reject(`no refinement review is requested (stage ${fm.stage || 'none'})`);
   if (!strip(comments || '')) reject('--refinement-review needs --comments "<the reviewer\'s findings, and its thread or session id>"');
   const t = now();
-  if (verdict === 'limit') { // beyond the oracle (item 036): Codex's 5-hour limit is recorded before Claude may review
-    if (by !== 'codex') reject('--refinement-review limit --by codex: only Codex reports its own 5-hour limit');
-    fm.refinement_codex_limit = t;
-    return { event: 'refinement_codex_limit', text: `## Refinement review: Codex 5-hour limit (${t})\n\n${comments}` };
-  }
-  if (by === 'claude' && !fm.refinement_codex_limit && !cap) {
-    reject('--refinement-review --by claude: Claude reviews a refinement only after three CHANGES rounds or when Codex reports its 5-hour limit; record the limit first (--refinement-review limit --by codex --comments "<Codex\'s answer>")');
-  }
   const passed = verdict === 'pass';
   Object.assign(fm, { stage: passed ? 'ready' : 'refining', refiner: passed ? fm.refiner || '' : '', refinement_reviewed_by: by, refinement_reviewed_at: t });
   return { event: 'refinement_reviewed', text: `## Refinement review by ${by}: ${passed ? 'PASS: ready' : 'CHANGES: back to refining'} (${t})\n\n${comments}` };
@@ -228,33 +220,21 @@ export function reassignReview({ fm }, agent, { by, reason } = {}) {
   return { event: 'review_reassigned', text: `## Review reassigned by ${by} from ${from || 'nobody'} to ${agent} at ${t}\n\n${reason}` };
 }
 
-// item 033: in a qwen-code team session the shell runs with QWEN_CODE_AGENT_ID=<name>@<team>; that agent acts only as
-// itself. Outside a team session (no such id) the caller is not known and the named agent is taken as given.
-export const caller = () => { const id = strip(process.env.QWEN_CODE_AGENT_ID || ''); return /^[^@\s]+@\S+$/.test(id) ? id.split('@')[0] : ''; };
+// In a team session (TEAM_NAME set) the caller is BACKLOG_AGENT and acts only as itself. Outside a team session the caller
+// is not known and the named agent is taken as given.
+export const caller = () => (teamName() ? strip(process.env.BACKLOG_AGENT || '') : '');
 
-// item 082/088: the session of the caller. QWEN_CODE_SESSION_ID names it outright; else the session (agent) name,
-// the part before the @ of QWEN_CODE_AGENT_ID (<name>@<team>, item 033) - never the team name, so two sessions of
-// one team are distinct author sessions; '' when the id names no session.
-export const callerSession = () => {
-  const env = strip(process.env.QWEN_CODE_SESSION_ID || '');
-  if (env) return env;
-  const id = strip(process.env.QWEN_CODE_AGENT_ID || '');
-  return /^[^@\s]+@\S+$/.test(id) ? strip(id.split('@')[0]) : '';
-};
+// The session of the caller: BACKLOG_SESSION, else the agent name (BACKLOG_AGENT); '' when nothing names it.
+export const callerSession = () => strip(process.env.BACKLOG_SESSION || process.env.BACKLOG_AGENT || '');
 
-// item 088: the item's work commit at the time of the check: the working repository's HEAD. A commit of new work after
-// a pass moves HEAD, so pins set for the older commit no longer match and both stages run again; the item's commit
-// field records the repository state at creation (backlog new) and --commit advances that record.
+// The item's work commit at the time of the check: the working repository's HEAD. A commit of new work after a pass moves
+// HEAD, so passes recorded for the older commit no longer count and the review runs again; the item's commit field records
+// the repository state at creation (backlog new) and --commit advances that record.
 export const workCommit = cwd => (spawnSync('git', ['rev-parse', '--verify', '--quiet', 'HEAD'], { cwd: cwd ?? process.cwd(), encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }).stdout ?? '').trim() || '';
-// item 088: two review stages before any close - (a) a Cody review, then (b) an external review by codex or claude on
-// the same commit, with or without review_refs. A pass pins the item's work commit (work_commit: the requester's HEAD at
-// its review request); the gate compares the pins to it at check time. An empty work commit is no commit: a pass pinned to it (or a cleared pin) counts
-// for no stage.
-// '' = both stages passed for the current work commit; 'cody' or 'external' = the missing stage
-// item 088: the item identifiers a commit subject names at the start - the repository's commit convention: the
-// producing item number, or numbers joined with "and" (a commit of two items names both), then the description; the
-// "(of <parent>)" after the last number names the parent, not a producer. A commit of another item that shares the
-// item's number prefix, or only mentions the number later in the subject, is not the item's work.
+// The item identifiers a commit subject names at the start - the repository's commit convention: the producing item number,
+// or numbers joined with "and" (a commit of two items names both), then the description; the "(of <parent>)" after the
+// last number names the parent, not a producer. A commit of another item that shares the item's number prefix, or only
+// mentions the number later in the subject, is not the item's work.
 export const leadingItemIds = subject => {
   const s = String(subject ?? '').trim();
   const first = /^(\d+)/.exec(s);
@@ -269,10 +249,8 @@ export const leadingItemIds = subject => {
   }
   return ids;
 };
-// The item's own commits after its work commit in this checkout: new work of the item made after its review request,
-// which the passes do not cover. A commit counts when the item is one of the producers the subject names at the start
-// (leadingItemIds). { reason } names the failed lookup: on a failed lookup the gate fails closed (the Cody stage is
-// missing) and the refusal records the reason.
+// The item's own commits after its work commit in this checkout: new work of the item made after its review request, which
+// the passes do not cover. { reason } names a failed lookup (the check fails closed and the refusal records the reason).
 const laterOwnWork = (fm, cwd) => {
   const seq = Number(String(fm.seq ?? fm.phase ?? '').match(/^0*(\d+)/)?.[1]);
   const head = workCommit(cwd);
@@ -281,28 +259,25 @@ const laterOwnWork = (fm, cwd) => {
   if (p.status !== 0) return { later: false, reason: String(p.stderr ?? '').trim().split('\n')[0] || `git log exited ${p.status}` };
   return { later: (p.stdout ?? '').split('\n').some(line => leadingItemIds(line).includes(seq)), reason: '' };
 };
-// { missing }: '' = both stages passed for the current work commit; 'cody' or 'external' = the missing stage.
-// { reason }: the failed commit lookup (the gate fails closed), else ''.
-const stageStatus = (fm, commit) => {
-  const c = commit ?? (fm.work_commit || workCommit());
-  if (!c) return { missing: 'cody', reason: '' };
-  let lookReason = '';
-  if (commit === undefined) {
-    const look = laterOwnWork(fm);
-    if (look.later) return { missing: 'cody', reason: '' };
-    lookReason = look.reason;
+// The passes recorded on the item: "<reviewer> <commit>" entries of fm.reviews; a changes verdict clears them.
+const passes = fm => asList(fm.reviews).map(x => { const [by, commit] = String(x).split(/\s+/); return { by, commit }; });
+// The review rules of the item's team (teams.json): each rule needs <count> distinct passes by members (or the lead) of
+// <team> on the item's current work commit. '' when every rule is met, or when the item has no team or its team no rule;
+// else the refusal naming the first unmet rule. New work of the item after its review request fails the check.
+export const reviewRefusal = (fm, cwd) => {
+  const rules = reviewRules(fm.team);
+  if (!rules.length) return '';
+  const head = fm.work_commit || workCommit(cwd);
+  if (!head) return `team ${fm.team}: the review rules need a work commit; request the review from the repository (--request-review)`;
+  const look = laterOwnWork(fm, cwd);
+  if (look.reason) return `team ${fm.team}: the commit lookup failed (${look.reason}); fail closed: request the review again`;
+  if (look.later) return `team ${fm.team}: the item has new work after its last review request; request the review again`;
+  const done = passes(fm).filter(p => p.commit === head);
+  for (const r of rules) {
+    const need = Number(r.count) > 0 ? Number(r.count) : 1;
+    const have = new Set(done.filter(p => isTeamMember(r.team, p.by)).map(p => p.by)).size;
+    if (have < need) return `team ${fm.team}: review rule not met - ${need} pass(es) by members of team ${r.team} on the current work commit needed, ${have} recorded (teams.json)`;
   }
-  const missing = fm.cody_pass_commit !== c ? 'cody' : fm.external_pass_commit === c ? '' : 'external';
-  return { missing, reason: missing === 'cody' ? lookReason : '' };
-};
-export const stageMissing = (fm, commit) => stageStatus(fm, commit).missing;
-// '' = both stages passed for the current commit, else the refusal naming the missing stage - and the failed
-// lookup's reason when the gate failed closed.
-export const stageRefusal = fm => {
-  const { missing, reason } = stageStatus(fm);
-  if (missing === 'cody') return 'missing the Cody review stage: a Cody agent (not the author session) must pass the review first, then codex or claude'
-    + (reason ? ` (the commit lookup failed: ${reason}; fail closed)` : '');
-  if (missing === 'external') return 'missing the external review stage: after the Cody pass, codex or claude must pass on the same commit';
   return '';
 };
 
@@ -319,13 +294,11 @@ export function requestReview({ fm }, reviewer, note, by = '') {
   // also seeds the list from the current holder and the earlier review requester, so an item written before the
   // list existed keeps the holder's block when a later release clears claimed_by
   const asked = by || fm.claimed_by || fm.review_author || '';
-  // the commit under review is the requester's HEAD (the work just pushed): it becomes the item's work commit, which
-  // both review stages pin and the close gate compares; another item's commit on the branch never moves it
-  // An external-stage request after the Cody pass keeps the work commit (another item's commit pulled in moves nothing);
-  // the item's own new work after its review request moves it, and both stages run again.
+  // the commit under review is the requester's HEAD (the work just pushed): it becomes the item's work commit, which the
+  // passes pin and the close compares; a request after a pass keeps the work commit (another item's commit pulled in moves
+  // nothing); the item's own new work after its review request moves it, and the review runs again.
   const head = workCommit();
-  const codyPassed = fm.work_commit && fm.cody_pass_commit === fm.work_commit;
-  if (head && (!codyPassed || laterOwnWork(fm).later)) fm.work_commit = head;
+  if (head && (!passes(fm).some(p => p.commit === fm.work_commit) || laterOwnWork(fm).later)) fm.work_commit = head;
   Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: asked, session_authors: seededAuthors(fm, asked) });
   return { event: 'review_requested', text: `## Review requested by ${by || fm.claimed_by || 'unknown'} at ${t} (reviewer: ${reviewer})\n\n${note}` };
 }
@@ -343,18 +316,6 @@ export function startReview({ fm }, by) {
   return { event: 'review_started', text: `Review started by ${by} at ${t}` };
 }
 
-// item 088: who records the Cody stage. For an item of a team, a registered member of that team (the team's Qwen
-// config.json); when the CLI cannot read the team's members, a Cody name (cody..., or a card session name) in a session
-// of the item's team. The team lead (TEAM_LEAD; Qwen does not list the lead as a member) in a session of the item's team
-// records it too. For an item without a team, a Cody name. A pass by anyone else is recorded but sets no pin.
-function codyReviewer(fm, by) {
-  const named = by.toLowerCase().startsWith('cody') || isSessionName(by);
-  if (!fm.team) return named;
-  if (by === teamLead() && fm.team === teamName()) return true;
-  const m = teamMembership(fm.team, by);
-  return m === 'member' || (m === 'unknown' && named && fm.team === teamName());
-}
-
 export function review({ fm }, verdict, { by, comments } = {}) {
   if (!by || !strip(comments || '')) reject('--review needs --by <agent> and --comments "<findings>"');
   if (isReviewAuthor(fm, by)) reject(NO_SELF_REVIEW(by));
@@ -366,30 +327,18 @@ export function review({ fm }, verdict, { by, comments } = {}) {
   if (!['requested', 'in_review'].includes(fm.review_state)) {
     reject(`no review is requested (review_state ${fm.review_state || 'none'}); the agent working on it runs --request-review first`);
   }
-  // item 088: two stages - (a) a Cody agent (not the author session), then (b) codex or claude, only after (a) passed
-  // on the current commit. A pass pins the item's work commit; a changes verdict - at either stage, or by a reviewer
-  // outside both stages - clears both stages and re-runs them.
-  // item 082: a session name (082aa:02) is a cody session name - its pass records the Cody stage too.
-  // item 088: the pass pins the item's work commit (work_commit, set by the review request to the requester's HEAD; the
-  // reviewer's own checkout and other items' commits do not matter); new work goes through a new review request, which
-  // moves the work commit, so the pins no longer match and both stages run again.
-  const externalStage = ['codex', 'claude'].includes(by);
-  const codyStage = !externalStage && by !== 'owner' && codyReviewer(fm, by);
-  const head = fm.work_commit || workCommit();
-  // a changes verdict is always recorded: it sends the item back to work whatever the pins say
-  if (externalStage && verdict === 'pass' && fm.cody_pass_commit !== head) {
-    reject('the external review runs only after the Cody review passed on the current commit: a Cody agent (not the author session) reviews it first');
-  }
-  if (codyStage && fm.author_session) {
+  // a reviewer never reviews in the author's own session
+  if (fm.author_session) {
     const session = callerSession();
-    if (session && session === fm.author_session) reject(`${by} reviews in the author session: a Cody review runs in a fresh session (same card, new session)`);
+    if (session && session === fm.author_session) reject(`${by} reviews in the author session: a review runs in a fresh session`);
   }
   const t = now();
+  // a pass is recorded against the item's work commit (set by the review request to the requester's HEAD); the review rules
+  // count the passes on the current work commit. A changes verdict sends the item back to work and clears every pass.
+  const head = fm.work_commit || workCommit();
   Object.assign(fm, {
     review_state: verdict === 'pass' ? 'passed' : 'changes-requested', reviewer: by, review_started: '', reviewed_at: t,
-    ...(codyStage && verdict === 'pass' ? { cody_pass_commit: head } : {}),
-    ...(externalStage && verdict === 'pass' ? { external_pass_commit: head } : {}),
-    ...(verdict === 'changes' ? { cody_pass_commit: '', external_pass_commit: '' } : {}),
+    reviews: verdict === 'pass' ? [...asList(fm.reviews), `${by} ${head}`] : [],
   });
   return { event: 'reviewed', text: `## Review by ${by}: ${verdict === 'pass' ? 'PASS' : 'CHANGES REQUESTED'} (${t})\n\n${comments}` };
 }
@@ -412,14 +361,14 @@ export function closeItem({ fm }, by, summary, reason) {
   const owner = by === 'owner';
   // item 088: the owner closes on a written decision, recorded as such; no review required
   if (owner && !strip(reason || '')) reject(`--close --by owner needs --reason "<the owner's decision>"`);
-  const closer = by || fm.claimed_by || '';
+  const closer = by || fm.claimed_by || (fm.team ? '' : actor()); // outside a team the person running the command closes it
   if (!closer) reject('nobody claimed this item: pass --by <agent>');
   // item 039 (spec section 9, owner 2026-10-25): only the claimer closes its item, else the team lead; the owner closes on a decision
   if (fm.claimed_by && closer !== fm.claimed_by && closer !== teamLead() && closer !== 'owner') reject(`only the claimer (${fm.claimed_by}) closes it, else the team lead (${teamLead()}); not ${closer}`);
   if (!fm.claimed_by && fm.team && closer !== teamLead() && closer !== 'owner') reject(`nobody holds this item of team ${fm.team}: the team lead (${teamLead()}) closes it; not ${closer}`); // a team's item (beyond the oracle)
-  // item 088: both review stages must have passed for the current work commit, with or without review_refs
+  // the review rules of the item's team must be met for the current work commit (none for an item without a team or rules)
   if (!owner) {
-    const refusal = stageRefusal(fm);
+    const refusal = reviewRefusal(fm);
     if (refusal) reject(refusal);
   }
   fm.status = 'done';
@@ -469,10 +418,6 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   const actions = ACTIONS.filter(k => (k === 'handoff' || k === 'accept-handoff' || k === 'reject-handoff') ? a[k] !== undefined : a[k]);
   if (actions.length > 1) return { refuse: `one team-work step at a time (got ${actions.map(k => `--${k}`).join(', ')})` };
   if (actions.length && a[actions[0]] === '') return { refuse: `${slug}: --${actions[0]} needs the dependent (an empty value records nothing)` };
-  // item 038: a member waiting for its restart takes no new work (update.py:32-35)
-  for (const [flag, agent] of [['--refine-start', a['refine-start'] && a.by], ['--claim', a.claim], ['--start-review', a['start-review'] && a.by]]) {
-    if (agent && restarting(agent)) return { refuse: `${slug}: ${flag} refused: ${agent} is waiting for its restart; ${STOP_TEXT}` };
-  }
   const me = caller();
   if (actions.length && (actions[0] === 'accept-handoff' || actions[0] === 'reject-handoff') && !a.by) {
     // Item 059.V1 review r1: the receipt is the team lead's - the lead's --by is required, with no fallback to the
@@ -481,7 +426,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   }
   if (me && actions.length && me !== teamLead()) {
     const as = (ACTS_AS[actions[0]] ?? (x => x.by))(a, fm);
-    if (as && as !== me) return { refuse: `${slug}: you are ${me} (QWEN_CODE_AGENT_ID): a member acts only as itself, not as ${as}; only the team lead (${teamLead()}) takes or gives another agent's work (backlog update <item> --reassign <agent> --by <lead> --reason "<why>")` };
+    if (as && as !== me) return { refuse: `${slug}: you are ${me} (BACKLOG_AGENT): a member acts only as itself, not as ${as}; only the team lead (${teamLead()}) takes or gives another agent's work (backlog update <item> --reassign <agent> --by <lead> --reason "<why>")` };
   }
   const note = a.note ?? '';
   // Beyond the oracle (update.py:241 guards only steps and notes): a field, --set-* or body edit is a change too.
@@ -515,9 +460,9 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
     const work = [...steps.filter(k => !REFINEMENT_STEPS.includes(k) && k !== 'claim' && !(k === 'close' && ownerClose)).map(k => `--${k}`), ...given.filter(k => k === 'status').map(k => `--${k}`)]; // a claim has its own gate (claim())
     if (work.length) return { refuse: `${slug}: team ${before.team} item in stage ${before.stage}: before stage ready only its refinement steps run (${work.join(', ')} refused)` };
   }
-  // spec section 4: outside the refinement stages only the lead refines an incomplete item of its team (a member known by
-  // QWEN_CODE_AGENT_ID changes nothing on it)
-  const who = me || a.by; // the Qwen caller, else the agent named by --by
+  // outside the refinement stages only the lead refines an incomplete item of its team (a member known by BACKLOG_AGENT
+  // changes nothing on it)
+  const who = me || a.by; // the team-session caller, else the agent named by --by
   // the DAG is the lead's (refine-and-split: the lead links the split items), so --set-depends-on is no refinement edit
   const edits = strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-') && k !== 'set-depends-on');
   // spec section 4: a member, not the lead, refines in the first round; the lead edits a refining item only as its refiner
@@ -527,7 +472,10 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   if (incomplete.length && (before.team || teamScope().repo) && !refining && who && who !== teamLead() && !ownerClose && (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-')))) {
     return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: only the team lead (${teamLead()}) refines it, not ${who}` };
   }
-  if (incomplete.length && (teamScope().repo || steps.length || refining)) { // team mode: an incomplete item is only refined
+  // The team rules hold for team work only: an item of a team, or a session bound to a team (TEAM_NAME, TEAM_REPOSITORY). An item
+  // without a team, worked outside a team session, is claimed, reviewed, worked and closed without them.
+  const teamwork = Boolean(before.team || fm.team || teamScope().repo || teamName());
+  if (incomplete.length && teamwork && (teamScope().repo || steps.length || refining)) { // team work: an incomplete item is only refined
     const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k)) && !(k === 'close' && ownerClose)).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),
       // item 088: the owner's close of an incomplete item carries its --summary (the decision needs no refinement)
       ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k)) && !(ownerClose && k === 'summary')).map(k => `--${k}`),
@@ -581,15 +529,11 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
 // item 033 (spec section 7): the last line of the command that hands an item to review, asks for changes or closes it.
 export const shutdown = agent => `🛑 ${agent}: END THE SESSION NOW. Reply with text only and make no further tool call; your next task starts in a fresh session.`;
 
-// update.py:253-255: printed after a passing review. Item 088: a Cody pass asks for the external review (codex or
-// claude, same commit); a pass that counts for no stage (a reviewer outside both stages, or outside the item's
-// team) asks for the Cody review first; the close only after both stages passed.
-// update.py:379-382: the claimer closes, else the team lead (owner 2026-10-25), never the reviewer (item 039)
+// Printed after a passing review: the next step towards the close. The claimer closes, else the team lead, never the reviewer.
 export const closeNow = (fm, slug) => {
-  const missing = stageMissing(fm);
-  if (missing === 'external') return `   ➡️  NEXT: the external review - the Cody pass is recorded; request the codex or claude review (backlog update ${slug} --request-review codex --note "<commit>"), it must pass on the same commit before the close`;
-  if (missing === 'cody') return `   ➡️  NEXT: the Cody review first - the pass counts for no stage (the reviewer is outside both stages, or outside the item's team); a Cody agent (not the author session) passes the review, then codex or claude on the same commit (backlog update ${slug} --request-review any --note "<commit>")`;
+  const refusal = reviewRefusal(fm);
+  if (refusal) return `   ➡️  NEXT: ${refusal}`;
   return !fm.claimed_by
     ? `   ➡️  CLOSE NOW: nobody holds it: the team lead closes it (backlog update ${slug} --close --by <lead> --summary "<outcome>")`
-    : `   ➡️  CLOSE NOW: ${fm.claimed_by} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...); owner 2026-10-25: only the claimer closes, else the lead`;
+    : `   ➡️  CLOSE NOW: ${fm.claimed_by} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...)`;
 };

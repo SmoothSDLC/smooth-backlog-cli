@@ -1,9 +1,8 @@
-// Team metadata rules for the shared backlog (cli-parity job 15): port of lib_db.py:205-211, 528-621, 645-707, 745-749.
-// Like the oracle, identity and status come from the rows of the mirror database (backlog.db); the item files give only
-// the metadata the rows do not hold (claims, waits, reviews).
+// Team rules of the backlog: teams, their members and leads and their review rules come from the backlog configuration
+// (<home>/teams.json); identity and status come from the rows of the mirror database (backlog.db); the item files give the
+// metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
@@ -13,16 +12,12 @@ import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 import { load } from './store.js';
 
-// An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true (owner 2026-10-28).
-export const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR: the review documents in the review-documents repository
-// lib_db.STAGES and the review-hitl stage of topology item 288; REFINEMENT_REVIEWERS record a refinement verdict.
-export const STAGES = ['refining', 'refined', 'refinement-review', 'review-hitl', 'ready'];
-export const REFINEMENT_REVIEWERS = ['codex', 'claude'];
-// lib_db.is_ready: an item may be claimed when it has no stage (no team, or the team's work item, which the runner claims
-// for the lead) or its refinement review passed. The items the lead splits off start in stage refining.
+// An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true.
+// The refinement stages of a team's item; an item may be claimed when it has no stage (no team, or the team's work item,
+// which the runner claims for the lead) or its refinement review passed. The items the lead splits off start in stage refining.
 export const isReady = fm => [undefined, null, '', 'ready'].includes(fm.stage);
-// lib_db.team_lead: --lead, else env TEAM_LEAD, else cody. Only the lead refines an incomplete item and requests the refinement review.
-export const teamLead = name => strip(name || process.env.TEAM_LEAD || 'cody');
+// The team lead: TEAM_LEAD, else the lead of the session's team in the backlog configuration (teams.json); no built-in name.
+export const teamLead = name => strip(name || process.env.TEAM_LEAD || teamsConfig()[teamName()]?.lead || '');
 const DONE_STATES = ['done', 'archived'];
 const ACTIONABLE = ['pending', 'in_progress'];
 
@@ -89,6 +84,7 @@ export function mirrorRows(folder) {
 }
 
 // Item 042: owner/name#seq names an item of another repository's backlog in the same backlog repository clone.
+const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // an owner or repository name is one path segment, never . or ..
 const FOREIGN = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
 export const isForeign = id => FOREIGN.test(String(id ?? '').trim());
 // {repository, seq, slug, status, fm} of a foreign reference; null when that repository has no backlog folder or no such
@@ -184,6 +180,39 @@ export function claimRefusal(folder, agent) {
 }
 
 // lib_db.load_roster: {agent: profile} from a team roster {agent: {...}} (the team's members, in order); {} without one.
+// The backlog configuration <home>/teams.json: { "<team>": { "lead": "<agent>", "members": ["<agent>", ...],
+// "review": [{ "team": "<team>", "count": <n> }, ...], "refinement_review": [{ "team": "<team>", "count": <n> }] } }.
+// A team's work closes when each review rule is met: <count> distinct reviewers who are members (or the lead) of <team> passed
+// the current work commit. Without a configured rule, no review is required. An unreadable file is reported once and read as empty.
+let teamsCache;
+export function teamsConfig() {
+  if (teamsCache !== undefined) return teamsCache;
+  const dir = teamsHome();
+  let raw = {};
+  if (dir) {
+    try { raw = JSON.parse(readFileSync(join(dir, 'teams.json'), 'utf8')); } catch (e) { if (e.code !== 'ENOENT') warn(`${join(dir, 'teams.json')} cannot be read or is no JSON (${e.message}); no team configuration applies`); }
+  }
+  teamsCache = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  return teamsCache;
+}
+export const forgetTeamsConfig = () => { teamsCache = undefined; };
+// the backlog folder of this process: resolved once by store.resolveHome and remembered here (store imports this file)
+let teamsHomeValue = null;
+export const setTeamsHome = home => { teamsHomeValue = home; teamsCache = undefined; };
+const teamsHome = () => teamsHomeValue;
+export const teamMembers = team => asList(teamsConfig()[team]?.members);
+export const isTeamMember = (team, agent) => Boolean(agent) && (teamMembers(team).includes(agent) || teamsConfig()[team]?.lead === agent);
+// 'member', 'absent' (the team is configured and the agent is not in it) or 'unknown' (no configuration for the team)
+export function teamMembership(name, agent) {
+  const team = teamsConfig()[strip(name || '')];
+  if (!team) return 'unknown';
+  return isTeamMember(name, agent) ? 'member' : 'absent';
+}
+export const reviewRules = team => (Array.isArray(teamsConfig()[team]?.review) ? teamsConfig()[team].review : []).filter(r => r && typeof r === 'object' && r.team);
+export const refinementReviewRules = team => (Array.isArray(teamsConfig()[team]?.refinement_review) ? teamsConfig()[team].refinement_review : []).filter(r => r && typeof r === 'object' && r.team);
+const warned = new Set();
+const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
+
 export function loadRoster(path) {
   if (!path) return {};
   const plain = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -201,21 +230,16 @@ export function loadRoster(path) {
 export const isReviewAuthor = (fm, agent) => (fm.claimed_by || '') === (agent || '')
   || (Boolean(agent) && (fm.review_author === agent || asList(fm.session_authors).includes(agent)));
 
-// Item 082: session names of one card are <item 3 digits><card id>:<increment 2 digits>; two such names are
-// sessions of the same card when both match the scheme and share the part before the colon (item and card).
-const SESSION_NAME = /^(\d{3}[A-Za-z0-9]+):\d{2}$/;
-export const sameCard = (a, b) => {
+// An agent name may end in :<number>, a session counter (worker:3); two such names are sessions of the same worker when the
+// part before the colon is the same. A new session of a worker continues the item its earlier session claimed.
+const SESSION_NAME = /^(.+):\d+$/;
+export const sameWorker = (a, b) => {
   const ma = String(a ?? '').match(SESSION_NAME);
   const mb = String(b ?? '').match(SESSION_NAME);
   return Boolean(ma && mb && ma[1] === mb[1]);
 };
-// Item 082: a name in the session-name scheme is a cody session name; its pass records the Cody review stage,
-// as the old cody-* agent names did.
-export const isSessionName = name => SESSION_NAME.test(String(name ?? ''));
-// Item 082: work held by the agent's own name, or by an earlier session of the same card: a new session of
-// the card continues the item its earlier session claimed (no takeover, no lead reassignment). Every
-// "is this item mine" check goes through here; older names compare by equality only.
-export const heldBy = (holder, agent) => (holder === agent) || sameCard(holder, agent);
+// Work held by the agent's own name, or by an earlier session of the same worker. Every "is this item mine" check goes through here.
+export const heldBy = (holder, agent) => (holder === agent) || sameWorker(holder, agent);
 
 // lib_db.py:710-715: seconds since a front-matter time stamp; -1 when there is none.
 export const age = ts => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(String(ts)) ? (Date.now() - Date.parse(ts)) / 1000 : -1);
@@ -248,112 +272,5 @@ export function describeDependency({ id, item, fm, foreign, handoff }) {
   return item ? `${item.slug} (${state})` : `${id} (no such item in ${isForeign(id) ? 'the backlog repository' : 'this backlog'})`;
 }
 
-// The hand-off lock (item 038; spec 2026-10-28-pr1-learnings.md section 7; PR1 lib_db.py:770-827). A member that hands its
-// item to review or closes it gets ~/.qwen/teams/<team>/handoff/<agent>.json ({"at_ms", "seq"}), and is locked until Qwen
-// registers a session of that agent (config.json members[].joinedAt) newer than the marker. The lead is not a member and
-// gets none. The same files and format as PR1, so its dispatcher and wake loop keep working during the cut-over.
 export const STOP_TEXT = 'your session is being replaced by a fresh one for your next task (you handed your item to review or '
   + 'closed it): end your turn now with a text-only reply and no other tool call';
-const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // a team or agent name is one path segment, never . or ..; item 082: a card's
-// session names and a team name join their card ids with colons, so a colon is part of the name
-// a time stamp is a finite number or a string of digits; anything else (an array, an object, text) is no time stamp
-const ms = v => { const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : NaN; return Number.isFinite(n) ? n : null; };
-const teamsRoot = () => join(homedir(), '.qwen', 'teams');
-// Qwen's team_create stores a team under its sanitized name (lower case; every character but a-z, 0-9 and - becomes -;
-// runs of - collapse; no - at either end): a team named Blue:Team is the folder blue-team.
-export const qwenTeamName = t => String(t).toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-export function teamDirs(name) {
-  const t = strip(name || process.env.TEAM_NAME || '');
-  if (t) return SAFE.test(t) ? [join(teamsRoot(), qwenTeamName(t) || t)] : [];
-  try { return readdirSync(teamsRoot(), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => join(teamsRoot(), e.name)).sort(); } catch { return []; }
-}
-// What config.json says of the agent: 'none' (no config.json, or one that cannot be read or has no members list),
-// 'absent' (not registered), or {joined} (the time stamp of its registered session, null when it is invalid).
-function member(tdir, agent) {
-  let cfg;
-  try { cfg = JSON.parse(readFileSync(join(tdir, 'config.json'), 'utf8')); } catch { return 'none'; }
-  if (!cfg || typeof cfg !== 'object' || !Array.isArray(cfg.members)) return 'none';
-  const m = cfg.members.filter(x => x && typeof x === 'object' && x.name === agent);
-  return m.length ? { joined: ms(m[0].joinedAt) } : 'absent';
-}
-// Whether AGENT is a registered member of team NAME: 'member', 'absent' (the team's config.json lists members, not
-// AGENT), or 'unknown' (no team folder, a config.json that cannot be read, or one that lists no members).
-export function teamMembership(name, agent) {
-  if (!strip(name || '')) return 'unknown';
-  const m = teamDirs(name).map(d => member(d, agent));
-  if (m.some(x => typeof x === 'object')) return 'member';
-  // a config.json with an empty members list names nobody: unknown, as one that cannot be read
-  return m.includes('absent') && teamDirs(name).some(d => memberCount(d) > 0) ? 'absent' : 'unknown';
-}
-function memberCount(tdir) {
-  try { const cfg = JSON.parse(readFileSync(join(tdir, 'config.json'), 'utf8')); return Array.isArray(cfg?.members) ? cfg.members.length : 0; } catch { return 0; }
-}
-const warned = new Set();
-const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
-// Owner 2026-10-30: nothing locks a member but a valid hand-off. The marker is written only for a registered member of
-// a Qwen team whose session time stamp is valid; else no marker (Claude, Codex, the lead, a team the CLI cannot read).
-// Returns {text} (the marker written, null when none is needed) or {why} (why it cannot be written: the CLI then refuses
-// the hand-off).
-export function markHandoff(teamName, agent, seq) {
-  if (!teamName || !SAFE.test(teamName) || !SAFE.test(agent || '')) return { text: null }; // no team folder: nothing to mark
-  if (agent === teamLead()) return { text: null }; // the lead is not a member
-  const tdir = join(teamsRoot(), qwenTeamName(teamName) || teamName); // the folder Qwen writes
-  const m = member(tdir, agent);
-  if (m === 'none' && existsSync(tdir)) warn(`${join(tdir, 'config.json')} cannot be read or names no members; no hand-off marker for ${agent}`);
-  if (typeof m === 'object' && m.joined === null) warn(`the session time stamp (joinedAt) of ${agent} in ${join(tdir, 'config.json')} is no number; no hand-off marker`);
-  if (typeof m !== 'object' || m.joined === null) return { text: null }; // no registered session to replace: no marker
-  if (!Number.isInteger(seq)) return { why: `the item number ${seq} is no whole number` };
-  const tmp = join(tdir, 'handoff', `.${agent}.${randomUUID()}.tmp`); // one per writer: two clones never share a temp file
-  try {
-    mkdirSync(join(tdir, 'handoff'), { recursive: true });
-    const text = JSON.stringify({ at_ms: Date.now(), seq });
-    writeFileSync(tmp, text);
-    renameSync(tmp, join(tdir, 'handoff', `${agent}.json`));
-    return { text };
-  } catch (e) { rmSync(tmp, { force: true }); return { why: e.message }; }
-}
-// {tdir, marker} while the agent's valid hand-off waits for a fresh session, else null. Owner 2026-10-30: only a valid
-// marker ({at_ms, seq}) of a registered member with a valid session time stamp not newer than the marker stops it; a
-// marker that cannot be read or is malformed, an unreadable config.json and a missing name stop nobody (a warning names
-// the file, which the CLI never writes malformed).
-export function pendingHandoff(agent, teamName) {
-  if (!SAFE.test(agent || '')) return null;
-  for (const tdir of teamDirs(teamName)) {
-    const file = join(tdir, 'handoff', `${agent}.json`);
-    let mk;
-    try { mk = JSON.parse(readFileSync(file, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') warn(`${file} cannot be read or is no JSON; it stops nobody`); continue; }
-    const at = mk && typeof mk === 'object' && !Array.isArray(mk) ? ms(mk.at_ms) : null;
-    if (at === null || !Number.isInteger(mk.seq)) { warn(`${file} is no hand-off marker ({"at_ms", "seq"}); it stops nobody`); continue; }
-    const m = member(tdir, agent);
-    const cfg = join(tdir, 'config.json');
-    if (m === 'none') { warn(`${cfg} cannot be read or names no members; the hand-off marker ${file} stops nobody`); continue; }
-    if (m === 'absent') { warn(`${agent} is not registered in ${cfg}; its hand-off marker stops nobody`); continue; }
-    if (m.joined === null) { warn(`the session time stamp (joinedAt) of ${agent} in ${cfg} is no number; its hand-off marker stops nobody`); continue; }
-    if (m.joined <= at) return { tdir, marker: mk };
-  }
-  return null;
-}
-// A marker whose hand-off was not published is set aside as <agent>.released (the dispatcher's name for a released one).
-export function releaseHandoff(teamName, agent, text) {
-  if (!SAFE.test(teamName || '') || !SAFE.test(agent || '')) return;
-  const dir = join(teamsRoot(), qwenTeamName(teamName) || teamName, 'handoff');
-  const file = join(dir, `${agent}.json`);
-  const grab = join(dir, `.${agent}.${process.pid}.release`);
-  try { renameSync(file, grab); } catch (e) { // none there, or one this change cannot set aside: say so, it would stop the member
-    if (e.code !== 'ENOENT') warn(`${file} of a hand-off that was not published cannot be set aside (${e.message}); remove it, or ${agent} is stopped until a fresh session registers`);
-    return;
-  }
-  // the marker is ours alone now: set it aside if it is the one this change wrote, else put it back (a later hand-off
-  // from another clone, unless an even newer one took the name meanwhile)
-  let mine = false;
-  try { mine = readFileSync(grab, 'utf8') === text; } catch { /* unreadable: not ours */ }
-  if (mine) {
-    try { renameSync(grab, join(dir, `${agent}.released`)); } catch { rmSync(grab, { force: true, recursive: true }); } // never left in place: an unpublished hand-off holds nobody
-  } else {
-    try { linkSync(grab, file); } catch (e) { // EEXIST: a newer marker is there; anything else: say whose hand-off is lost
-      if (e.code !== 'EEXIST') warn(`the hand-off marker of ${agent} (another clone's) could not be put back at ${file} (${e.message}): ${agent} is not stopped by it`);
-    }
-    rmSync(grab, { force: true, recursive: true });
-  }
-}
-export const restarting = (agent, lead = teamLead()) => agent !== lead && pendingHandoff(agent) !== null; // the lead is never locked

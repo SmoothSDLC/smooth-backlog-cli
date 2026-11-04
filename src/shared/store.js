@@ -13,7 +13,7 @@ import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.j
 import { repoIdFromUrl } from './safety.js';
 import { actor, created, guarded, guardReflow } from './seen.js';
 import { configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
-import { outsideTeam } from './team.js';
+import { outsideTeam, setTeamsHome } from './team.js';
 
 const ACTIONABLE = ['pending', 'in_progress'];          // lib_db.py:515
 
@@ -39,11 +39,12 @@ export function resolveHome() {
     const inside = join(top, '.backlog');
     mkdirSync(join(inside, '.state'), { recursive: true });
     if (!existsSync(join(inside, '.gitignore'))) writeFileSync(join(inside, '.gitignore'), '.state/\n');
+    setTeamsHome(inside);
     return { home: inside, remote: false, ask: null };
   }
   home = resolve(expand(home || join('~/git', name)));
   // Symlinks above the home (macOS /var, a linked ~) are resolved once here; a link AT the home is kept for validateHome to refuse.
-  if (existsSync(home)) return { home: join(realpathSync(dirname(home)), basename(home)), remote: true, ask: null };
+  if (existsSync(home)) { setTeamsHome(home); return { home: join(realpathSync(dirname(home)), basename(home)), remote: true, ask: null }; }
   return {
     home,
     remote: true,

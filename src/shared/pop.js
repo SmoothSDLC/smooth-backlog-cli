@@ -9,7 +9,7 @@ import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
-import { REFINE_HOW, atReviewCap, missingFields, stageMissing, stageOf as stageOfItem, stageRefusal } from './lifecycle.js';
+import { REFINE_HOW, missingFields, reviewRefusal, stageOf as stageOfItem } from './lifecycle.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -76,11 +76,11 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   const noClaim = lead || Boolean(team.loadRoster(a.roster || process.env.TEAM_ROSTER || '')[me]?.review_only);
   const open = all(OPEN, hid);
   const files = new Map(store.load(folder).map(i => [i.path, i]));
-  const incomplete = new Map(); // members never claim, review or work an incomplete item
+  const incomplete = new Map(); // members never claim, review or work an incomplete item of a team; an item without a team has no such fields
   for (const r of open) {
     if (excluded.has(r.id)) continue;
     const file = files.get(r.path);
-    const m = file ? missingFields(file.fm, file.body) : ['the item file'];
+    const m = !file ? ['the item file'] : file.fm.team || team.teamName() ? missingFields(file.fm, file.body) : [];
     if (m.length) incomplete.set(r.id, m);
   }
   excluded = new Set([...excluded, ...incomplete.keys()]);
@@ -106,13 +106,12 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   // spec section 5 and query.py:199: your review in progress comes first; another member's request, however old, comes
   // after your own work (item 033; the review-first window of this build is gone)
   let act = reviews.find(x => x.fm.review_state === 'in_review' && x.fm.reviewer === me);
-  if (!lead && team.restarting(me, team.teamLead(a.lead))) act = { name: 'stop', r: null, f: repo, say: team.STOP_TEXT }; // query.py:201-202: handed off, no new work until a fresh session
   // query.py:197-221: the item you work on, your refinement in progress, then your passed and your changes-requested items
   // item 082: heldBy matches an earlier session of the same card - a new session continues the item
   let mine = own.filter(({ fm, undone }) => team.heldBy(fm.claimed_by, me) && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on && team.isReady(fm) // waiting for a verdict or a run is not work; nor an item before ready
     && !undone.some(d => d.foreign && d.item?.status !== 'done')); // item 042: nor one that waits on another repository (named below as the work to do first)
   // query.py:203-211 (item 039, spec section 8): while its team works the split items the lead's work item waits: no busy
-  // continue (proof runs 01 and 02 died of qwen-code loop detection while the lead polled), but a passed or
+  // continue (a polling lead would loop), but a passed or
   // changes-requested item of the lead's keeps its action, and items blocked on the lead's own work do not count
   let busy = [];
   if (lead) {
@@ -134,16 +133,14 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     const holder = fm.claimed_by || '';
     const claimFirst = holder && holder !== me ? `first claim it as ${me} (backlog update ${r.slug} --claim ${me}), then ` : '';
     return (teamDone({ r, fm }) && !['passed', 'changes-requested'].includes(fm.review_state) // item 039: the lead closes the work item when every item of its team is done
-      ? { name: 'continue', r, f, say: stageRefusal(fm) === ''
+      ? { name: 'continue', r, f, say: reviewRefusal(fm) === ''
         ? `${claimFirst}every item of team ${fm.team} is done: close ${r.seq} (backlog update ${r.slug} --close --summary "<outcome>")`
-        : `${claimFirst}every item of team ${fm.team} is done: have ${r.seq} reviewed first (backlog update ${r.slug} --request-review any --note "<the items and their evidence>") - the two review stages, a Cody pass and the codex or claude pass on the same commit, must pass before the close` } // item 088: the close is after both stages
+        : `${claimFirst}every item of team ${fm.team} is done: have ${r.seq} reviewed first (backlog update ${r.slug} --request-review any --note "<the items and their evidence>") - the team's review rules must be met before the close` }
       : fm.review_state === 'passed'
-      ? { name: 'continue', r, f, say: stageRefusal(fm) === ''
+      ? { name: 'continue', r, f, say: reviewRefusal(fm) === ''
         ? `${claimFirst}close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")`
-        : stageMissing(fm) === 'external'
-        ? `${claimFirst}the Cody pass is recorded: request the external review (backlog update ${r.slug} --request-review codex --note "<the commit>"); after it passes on the same commit, close ${r.seq}`
-        : `${claimFirst}the pass is for older work: run the two review stages again on the current commit (backlog update ${r.slug} --request-review any --note "<what changed>")` } // item 088: the close is after both stages on the current work commit
-      : { name: 'continue', r, f, say: `you hold it: ${claimFirst}keep working and record each step in the item (backlog update ${r.slug} --append "..."), then write the reviewer handoff and --request-review - the two review stages (a Cody pass, then the codex or claude pass on the same commit) must pass before the close${dod(fm)}` }); // item 088: every item needs the two stages, with or without review_refs
+        : `${claimFirst}${reviewRefusal(fm)}: request the next review (backlog update ${r.slug} --request-review <reviewer> --note "<the commit>"); after the rules are met, close ${r.seq}` }
+      : { name: 'continue', r, f, say: `you hold it: ${claimFirst}keep working and record each step in the item (backlog update ${r.slug} --append "..."), then write the reviewer handoff and --request-review - the team's review rules must be met before the close${dod(fm)}` }); // item 088: every item needs the two stages, with or without review_refs
   };
   const pick = (...states) => mine.find(({ fm }) => states.includes(fm.review_state ?? null));
   if (!act) { const x = pick(null, '', 'none'); if (x) act = cont(x); }
@@ -186,17 +183,11 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
     // item 088: a teamless split slice goes through the same refinement review (the lead requests it and records the verdict)
     const rv = here.filter(x => ((x.fm.team && team.inTeam(x.fm)) || !x.fm.team) && ['refined', 'refinement-review'].includes(x.fm.stage) && !waitsAway(folder, x)); // 042
     if (rv.length) {
-      const capped = rv.filter(x => atReviewCap(x.body)); // item 144: three CHANGES rounds end Codex's rounds; the lead records its own verdict
-      const codex = rv.filter(x => !capped.includes(x));
       const seqs = xs => xs.map(x => x.r.seq).join(', ');
-      act = { name: 'refinement-review', r: rv[0].r, f: repo, say: (codex.length ? `have the refinement of ${seqs(codex)} reviewed before anyone works on them: `
-        + `backlog update <item> --request-refinement-review --by ${me} for each refined one; send them to Codex with the codex-agent tool codex `
-        + '(Claude with the claude-agent tool claude_code only when Codex answers that its 5-hour usage limit is exceeded; record that answer first: '
-        + 'backlog update <item> --refinement-review limit --by codex --comments "<Codex\'s answer>"), asking for a pass or changes verdict per item '
-        + "against the team standard (backlog skill 'complete item', the item's review documents); then record each verdict: "
-        + 'backlog update <item> --refinement-review pass|changes --by codex|claude --comments "<findings; thread or session id>"' : '')
-        + (capped.length ? `${codex.length ? '; ' : ''}${seqs(capped)} had three CHANGES rounds: send nothing to Codex, record your own verdict (refined or in review): `
-          + `backlog update <item> --refinement-review pass|changes --by claude --comments "<findings; session id>"` : '') };
+      act = { name: 'refinement-review', r: rv[0].r, f: repo, say: `have the refinement of ${seqs(rv)} reviewed before anyone works on them: `
+        + `backlog update <item> --request-refinement-review --by ${me} for each refined one; have a reviewer of the team's refinement_review rule (teams.json) `
+        + "give a pass or changes verdict per item against the team standard (the item's review documents); then record each verdict: "
+        + 'backlog update <item> --refinement-review pass|changes --by <reviewer> --comments "<findings; thread or session id>"' };
     }
   }
   if (lead && plain()) { // item 033: a stale review of its team is the lead's to hand on (members never take it over); before its own plain work, never before its close or rework
@@ -222,7 +213,7 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
   if (!act && cap !== 'off' && !(lead && busy.length)) { // a busy team's lead waits (spec section 8)
     const chunks = (await rows(scope, a.all)).filter(({ r, fm, undone, f }) => team.isChunk(fm) && r.status === 'pending' && !fm.claimed_by && !undone.length
       && team.offeredTo(fm, f, repo) && team.isReady({ stage: stageOfItem(fm, '') })); // never another team's chunk item (item 037), nor one before ready (036), nor an unrefined team item (098)
-    if (chunks.length || !noClaim) { // query.py:271: a member with nothing else does small-chunk work; the lead does not
+    if (chunks.length || (!noClaim && team.teamName())) { // a team member with nothing else does small-chunk work; the lead does not; outside a team the agent is idle
       const { r, f } = chunks[0] ?? { r: null, f: repo };
       const where = f === repo ? '' : ` (repository ${f}: work from its clone)`;
       act = { name: 'chunk', r, f, say: r ? `do one small chunk (<= 10 min) of it${where}, then backlog update ${r.slug} --append "CHUNK <time> <what> <result>"`
@@ -274,7 +265,7 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
   const held = Object.fromEntries(members.map(m => [m, team.heldItems(folder, m, { refining: true })]));
   const active = Object.fromEntries(members.map(m => [m, held[m].filter(h => h.state === 'active').length]));
   const busy = new Set([...rows.filter(x => x.fm.review_state === 'in_review' && !team.staleReview(x.fm)).map(x => x.fm.reviewer),
-    ...members.filter(m => m !== lead && team.restarting(m, lead))]);
+  ]);
   const out = [];
   const give = (m, action, r, say, reason, key = '') => {
     busy.add(m);
@@ -284,7 +275,7 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
     const holder = fm.claimed_by || '';
     // item 082: the holder's card may be in the roster as a new session - the exact holder first, then a
     // continuation; the new session claims the item before the close or the request-review can run as it
-    const m = members.includes(holder) ? holder : (holder ? members.find(x => team.sameCard(x, holder)) : '');
+    const m = members.includes(holder) ? holder : (holder ? members.find(x => team.sameWorker(x, holder)) : '');
     if (!m || busy.has(m) || fm.wait_on || !team.isReady(fm)) continue; // nothing before stage ready (036)
     if (held[m].some(h => !h.fm.claimed_by && h.fm.refiner === m)) continue; // a refinement in progress comes first (spec section 5)
     const claimFirst = m !== holder ? `first claim it as ${m} (backlog update ${r.slug} --claim ${m}), then ` : '';
@@ -292,11 +283,9 @@ async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
       give(m, 'respond', r, `the review by ${fm.reviewer || 'the reviewer'} asked for changes (${fm.reviewed_at || 'time not recorded'}): ${claimFirst}read its findings in the item, fix them, record each step (backlog update ${r.slug} --append "..."), then backlog update ${r.slug} --request-review any --note "<what changed>"`,
         'claimer', fm.reviewed_at ? ` ${fm.reviewed_at}` : '');
     } else if (fm.review_state === 'passed') {
-      // item 088: the plan offers the close only after both stages passed on the current work commit; a lone Cody pass
-      // asks for the external review; a pass for older work asks for both stages again
-      if (stageRefusal(fm) === '') give(m, 'close', r, `${claimFirst}close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")`, 'claimer');
-      else if (stageMissing(fm) === 'external') give(m, 'review-request', r, `${claimFirst}the Cody pass is recorded: request the external review (backlog update ${r.slug} --request-review codex --note "<the commit>") and close after it passes on the same commit`, 'external stage pending');
-      else give(m, 'review-request', r, `${claimFirst}the pass is for older work: run the two review stages again on the current commit (backlog update ${r.slug} --request-review any --note "<what changed>")`, 'stale passes');
+      // the plan offers the close only when the team's review rules are met for the current work commit
+      if (reviewRefusal(fm) === '') give(m, 'close', r, `${claimFirst}close ${r.seq} with --close --summary (backlog update ${r.slug} --close --summary "<outcome>")`, 'claimer');
+      else give(m, 'review-request', r, `${claimFirst}${reviewRefusal(fm)}: request the next review (backlog update ${r.slug} --request-review <reviewer> --note "<the commit>") and close after the rules are met`, 'review rules pending');
     }
   }
   for (const { r, fm } of rows) {

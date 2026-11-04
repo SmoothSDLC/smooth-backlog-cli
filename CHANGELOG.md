@@ -114,7 +114,7 @@
   (which now carries the agent a `--claim`, `--release` or `--by` command names, wherever the option is placed),
   the hand-off marker file name and every `--claim`/`--release`/`--by` value (item 082).
 - The optional run recorder hook of `bin/backlog.js` spawns a child process only when
-  `CODY_SCRIPT_RUNS_MODULE` names a module, and no child process when the variable is unset;
+  `BACKLOG_RUN_HOOK` names an executable, and no child process when the variable is unset;
   the help, the built-in skill and the README confine the claim to the hook (item 086). A
   proof test preloads a module that records every child process the CLI starts and shows the
   hook is the only one (local mode starts none, shared mode only git); the PATH-fake

@@ -9,13 +9,13 @@ import { BacklogError } from '../errors.js';
 import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { teamRefusal } from './archive.js';
-import { caller, closeNow, headline, missingFields, runCloseGate, shutdown, stageRefusal, step } from './lifecycle.js';
+import { caller, closeNow, headline, missingFields, reviewRefusal, runCloseGate, shutdown, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { inProgress, wipRefusal } from './wip.js';
-import { REVIEW_DIR, asList, foreignCycle, foreignItem, heldBy, heldItems, isForeign, markHandoff, needsReview, pendingHandoff, releaseHandoff, teamLead, teamScope } from './team.js';
+import { asList, foreignCycle, foreignItem, heldBy, isForeign, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
@@ -110,9 +110,8 @@ async function update(argv) {
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
     let code;
-    const unlock = () => { if (a.handoff) releaseHandoff(a.handoff.team, a.handoff.agent, a.handoff.text); }; // not published: no hand-off, no lock
-    try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); unlock(); throw e; } finally { close(); }
-    if (code || a['dry-run']) { forget(); unlock(); return code; }
+    try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); throw e; } finally { close(); }
+    if (code || a['dry-run']) { forget(); return code; }
     // update.py:327-332: the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
     // Item 082: the agent a command names goes into the commit subject (session names with colons are audit data too);
     // the actor the step acts as (a.by ?? a.claim ?? a.release), whatever the order of the options
@@ -120,10 +119,7 @@ async function update(argv) {
     const agent = a.by ?? a.claim ?? a.release;
     if (agent !== undefined) subjectParts.push(agent);
     let pairs;
-    try { pairs = await db.commitSettled(home, folder, subjectParts.join(' '), a.guard, a.claims); } catch (e) {
-      unlock();
-      throw e;
-    }
+    pairs = await db.commitSettled(home, folder, subjectParts.join(' '), a.guard, a.claims);
     seen.recordWrites(folder, repo, seen.actor(), a.wrote ? [a.wrote] : [], pairs); // after the push, including a pure replan
     if (a.shutdown) process.stdout.write(`${shutdown(a.shutdown)}\n`); // after anything the publication prints
     return 0;
@@ -219,7 +215,7 @@ async function change(a, con, folder, repo) {
   const before = { team: fm.team, stage: fm.stage };
   if (a['wip-override'] !== undefined) { // item 034: the lead lifts the team and agent limits for this item, with a recorded reason
     const who = a.by || caller();
-    if (caller() && caller() !== who) return refuse(`${row.slug}: you are ${caller()} (QWEN_CODE_AGENT_ID): a member acts only as itself, not as ${who}`);
+    if (caller() && caller() !== who) return refuse(`${row.slug}: you are ${caller()} (BACKLOG_AGENT): a member acts only as itself, not as ${who}`);
     if (who !== teamLead()) return refuse(`${row.slug}: only the team lead (${teamLead()}) lifts the team and agent work-in-progress limits for an item (got ${who || 'nobody'}; --by <lead>)`);
     const reason = strip(a['wip-override']);
     if (!reason) return refuse(`${row.slug}: --wip-override needs the reason`);
@@ -259,7 +255,6 @@ async function change(a, con, folder, repo) {
   if (a['set-review-refs'] !== undefined) {
     const refs = asList(a['set-review-refs']);
     checkRefs(refs); // before any assignment
-    if (!refs.some(r => r.startsWith(REVIEW_DIR))) return refuse(`${row.slug}: --set-review-refs needs at least one review document (${REVIEW_DIR}<type>.md in the review-documents repository)`);
     fm.review_refs = refs;
     changes.review_refs = refs.join(',');
   }
@@ -276,10 +271,9 @@ async function change(a, con, folder, repo) {
     body = `${rstrip(body)}\n\nWAIT DONE ${store.now()} (next step on the item)\n`;
   }
   if (a.status === 'done' && event !== 'closed') {
-    // item 088: --status done is a close: it finishes only after both review stages passed for the current work
-    // commit, with or without review documents (as --close); the refusal names the missing stage. The owner's
-    // decision closes with --close --by owner --reason.
-    const refusal = stageRefusal(fm);
+    // --status done is a close: the review rules of the item's team must be met for the current work commit (as --close);
+    // the refusal names the unmet rule. The owner's decision closes with --close --by owner --reason.
+    const refusal = reviewRefusal(fm);
     if (refusal) return refuse(`${row.slug}: ${refusal}`);
     // item 059.V2: the close gate (059.3) - this path never calls closeItem, so the gate runs here, on the
     // pre-transition status; while a dependent's edge is not accepted the completion is refused the same way as
@@ -303,20 +297,6 @@ async function change(a, con, folder, repo) {
     return 0;
   }
 
-  // item 038 (update.py:372-378): a member's hand-off of its own item locks it until a fresh session, unless it still holds
-  // another active item; never the lead. The marker is written before the item (a marker that cannot be written refuses the
-  // hand-off: nothing changes), and set aside again when the change is not published (update() below).
-  const claimer = holder || fm.claimed_by || '';
-  const actor = a.by || caller() || claimer;
-  const own = ['review_requested', 'closed'].includes(event) && actor === claimer; // the lead handing on a member's item locks nobody
-  const lockTeam = before.team || fm.team; // the team the item had when the command began: --set-team in the same call changes nothing here
-  if (own && lockTeam && claimer && claimer !== teamLead() && !heldItems(folder, claimer, { refining: true }).some(h => h.slug !== row.slug && h.state === 'active')) {
-    if (pendingHandoff(claimer, lockTeam) === null) { // a lock already there stays as it is, whatever happens to this change
-      const { text, why } = markHandoff(lockTeam, claimer, row.seq);
-      if (why) return refuse(`${row.slug}: the hand-off marker of ${claimer} cannot be written (${why}); nothing changed`);
-      if (text) a.handoff = { team: lockTeam, agent: claimer, text }; // only the marker this change wrote is set aside on failure
-    }
-  }
   store.write({ path, fm, body }, folder);
   a.wrote = { slug: row.slug, path: row.path };
   const recordChange = () => {

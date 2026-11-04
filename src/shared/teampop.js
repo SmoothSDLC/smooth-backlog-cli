@@ -37,8 +37,8 @@ export async function run(argv) {
   if (!a.team) return die('team pop needs --team <name>');
   const agent = a.agent || teamLead();
   if (agent !== teamLead()) return die(`only the team lead (${teamLead()}; TEAM_LEAD) takes its team's work item, not ${agent}`);
-  const me = caller(); // a qwen-code team identity (name@team), as backlog work: a bare QWEN_CODE_AGENT_ID is an actor id, no team member
-  if (me && me !== agent) return die(`you are ${me} (QWEN_CODE_AGENT_ID): team pop answers only for yourself, not for ${agent}`);
+  const me = caller(); // the team session's agent (BACKLOG_AGENT in a team session)
+  if (me && me !== agent) return die(`you are ${me} (BACKLOG_AGENT): team pop answers only for yourself, not for ${agent}`);
   if (teamName() && teamName() !== a.team) return die(`this session is team ${teamName()} (TEAM_NAME), not ${a.team}`);
   let own; let branch;
   try { own = teamScope().repo || repoId(process.cwd()); branch = gitBranch(process.cwd()); } catch (e) { return die(e.message); }

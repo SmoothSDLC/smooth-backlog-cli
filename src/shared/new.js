@@ -11,7 +11,6 @@ import { branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, 
 import { pull } from './sync.js';
 import { foreignItem, isForeign, outsideTeam, strip, teamName, teamScope } from './team.js';
 
-const REVIEW_DIR = 'references/review/'; // lib_db.py REVIEW_DIR
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; // lib_db.py:224
 const pad = n => String(n).padStart(3, '0');
 
@@ -98,12 +97,10 @@ async function create(argv, { home, folder, repo, team }) {
   const severity = a.severity ?? 'normal';
   const priority = a.priority ?? (severity === 'critical' ? 0 : undefined); // a critical finding jumps the queue (:62)
   if (!a.name && !a.splitFrom) return refuse('--name is required (or --split-from <phase>)');
-  if (!(a.dependsOn || '').trim()) return refuse('--depends-on is required: the item numbers or slugs this work needs done first, or --depends-on none');
   const refs = asList(a.reviewRefs);
   checkRefs(refs); // before any database access
-  if (refs.length && !refs.some(r => r.startsWith(REVIEW_DIR))) return refuse(`--review-refs needs at least one review document (${REVIEW_DIR}<type>.md in the review-documents repository)`); // new_phase.py: the creator names how it is reviewed
   // an item of a team (--team, or a split of a team's item) starts in stage refining, where a member writes it
-  const intoRefining = a.team || a.splitFrom;
+  const intoRefining = a.team || (a.splitFrom && teamName()); // outside a team session a split is a plain item
   if (!hasDefinitionOfDone(a.body) && (team.repo || refs.length) && !intoRefining) {
     return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
   }
@@ -143,7 +140,7 @@ async function create(argv, { home, folder, repo, team }) {
       return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
     }
     if (teamName() && !refs.length && !a.team) {
-      return refuse(`in a team session an item names its review documents at creation: --review-refs ${REVIEW_DIR}<type>.md (an item of a team, which starts in stage refining, gets them in its refinement)`);
+      return refuse(`in a team session an item names its review documents at creation: --review-refs <review document> (an item of a team, which starts in stage refining, gets them in its refinement)`);
     }
 
     const name = a.name || `${a.splitFrom || 'split'}-cont`;
@@ -160,8 +157,8 @@ async function create(argv, { home, folder, repo, team }) {
       repository: repo, branch: team.branch || callerBranch(process.cwd()),
       commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(), updated_by: actor(),
     };
-    if (a.team) Object.assign(fm, { team: strip(a.team), stage: 'refining', refiner: '' }); // new_phase.py:126-127
-    else if (a.splitFrom) Object.assign(fm, { stage: 'refining', refiner: '' }); // item 088: a split slice needs its refinement review too, with or without a team field
+    if (a.team) Object.assign(fm, { team: strip(a.team), stage: 'refining', refiner: '' });
+    else if (intoRefining) Object.assign(fm, { stage: 'refining', refiner: '' }); // a slice split in a team session needs its refinement review too
     if (a.chunk) fm.chunk = true;
     if (refs.length) fm.review_refs = refs;
     for (const [k, v] of [['estimate_min', a.estimate], ['complexity', a.complexity], ['layer', a.layer]]) if (v !== undefined) fm[k] = v;

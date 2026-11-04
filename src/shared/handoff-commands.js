@@ -40,7 +40,7 @@ export function recordHandoff(ctx, { dependent, commit, contract, verification, 
   }
   const records = (decodeList(fm.handoffs) ?? []).filter(r => !(r && r.dependent === dependent));
   records.push(record);
-  const block = recordBlock(record, source(ctx), { branch: fm.branch, session: strip(process.env.QWEN_CODE_SESSION_ID || '') || by });
+  const block = recordBlock(record, source(ctx), { branch: fm.branch, session: strip(process.env.BACKLOG_SESSION || '') || by });
   return { fm: { handoffs: records.map(encode) }, text: block, event: 'handoff' };
 }
 

@@ -2,10 +2,10 @@
 // A test-only module (no-child-process-preload.cjs) is preloaded into the CLI child through
 // NODE_OPTIONS=--require: it wraps the child_process functions spawn, spawnSync, exec, execFile,
 // execSync and fork and records every call, so no executable - a name on the PATH, an absolute
-// path or a detached child - can escape the assertion. With CODY_SCRIPT_RUNS_MODULE unset, no
+// path or a detached child - can escape the assertion. With BACKLOG_RUN_HOOK unset, no
 // call executes the recorder: local mode starts no child process, shared mode starts only its
 // git calls. With the variable set, a positive control proves the preload catches the one
-// recorder call (python3 <module> record backlog.js). The PATH-fake tests of
+// recorder call (<hook> record backlog.js). The PATH-fake tests of
 // script-runs.test.js are kept; this proof adds the any-executable and any-absolute-path
 // coverage the fakes cannot see (lead ruling 2026-10-31 after codex round 2).
 import test from 'node:test';
@@ -19,7 +19,7 @@ import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const PRELOAD = join(dirname(fileURLToPath(import.meta.url)), 'no-child-process-preload.cjs');
 // Stub recorder: appends its argv to $RECORD_OUT, like a run recorder would record the run.
-const STUB = "import os, sys\nopen(os.environ['RECORD_OUT'], 'a').write(' '.join(sys.argv[1:4]) + '\\n')\n";
+const STUB = '#!/bin/sh\nprintf "%s %s %s\\n" "$1" "$2" "$3" >> "$RECORD_OUT"\n';
 // the stub creates the file before it writes the line: wait for the whole line, not the file (a CI run read it empty)
 const written = file => existsSync(file) && readFileSync(file, 'utf8').endsWith('\n');
 async function waitFor(file) { for (let i = 0; i < 100 && !written(file); i++) await new Promise(r => setTimeout(r, 50)); }
@@ -36,11 +36,11 @@ function sharedFixture(t, prefix) {
   return { dir, home, cons };
 }
 
-test('no child process: local mode, CODY_SCRIPT_RUNS_MODULE unset - the CLI starts none', t => {
+test('no child process: local mode, BACKLOG_RUN_HOOK unset - the CLI starts none', t => {
   const f = fixture(t);
   const log = join(f.dir, 'calls.jsonl');
   const env = { ...f.env, NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log };
-  delete env.CODY_SCRIPT_RUNS_MODULE;
+  delete env.BACKLOG_RUN_HOOK;
   const p = f.raw(['--json', '--version'], { env });
   assert.equal(p.status, 0, p.stderr || p.stdout);
   assert.deepEqual(calls(log), [], `child processes the CLI started although the recorder variable is unset: ${JSON.stringify(calls(log))}`);
@@ -48,23 +48,23 @@ test('no child process: local mode, CODY_SCRIPT_RUNS_MODULE unset - the CLI star
 
 test('no child process: local mode, the recorder variable set - the preload catches the one recorder call', async t => {
   const f = fixture(t);
-  const stub = join(f.dir, 'stub.py');
+  const stub = join(f.dir, 'stub.sh');
   const out = join(f.dir, 'record-out.txt');
   const log = join(f.dir, 'calls.jsonl');
-  writeFileSync(stub, STUB);
-  const env = { ...f.env, NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log, CODY_SCRIPT_RUNS_MODULE: stub, RECORD_OUT: out };
+  writeFileSync(stub, STUB, { mode: 0o755 });
+  const env = { ...f.env, NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log, BACKLOG_RUN_HOOK: stub, RECORD_OUT: out };
   const p = f.raw(['--json', '--version'], { env });
   assert.equal(p.status, 0, p.stderr || p.stdout);
   const rec = calls(log);
   assert.equal(rec.length, 1, `expected the one recorder call, the CLI started: ${JSON.stringify(rec)}`);
   assert.equal(rec[0].fn, 'spawn');
-  assert.equal(rec[0].command, 'python3');
-  assert.deepEqual(rec[0].args.slice(0, 3), [stub, 'record', 'backlog.js'], 'the recorder call names the module and the record command');
+  assert.equal(rec[0].command, stub);
+  assert.deepEqual(rec[0].args.slice(0, 2), ['record', 'backlog.js'], 'the hook call carries the record command');
   await waitFor(out);
   assert.equal(readFileSync(out, 'utf8').trim(), 'record backlog.js 0', 'the recorded child actually ran the recorder');
 });
 
-test('no child process: shared mode, CODY_SCRIPT_RUNS_MODULE unset - the only child processes are git', t => {
+test('no child process: shared mode, BACKLOG_RUN_HOOK unset - the only child processes are git', t => {
   const f = sharedFixture(t, 'proof-shared-unset-');
   const log = join(f.dir, 'calls.jsonl');
   const r = cli(['new', '--name', 'Proof item', '--summary', 's', '--depends-on', 'none'], {
@@ -80,21 +80,21 @@ test('no child process: shared mode, CODY_SCRIPT_RUNS_MODULE unset - the only ch
 
 test('no child process: shared mode, the recorder variable set - the recorder is the one non-git call', async t => {
   const f = sharedFixture(t, 'proof-shared-set-');
-  const stub = join(f.dir, 'stub.py');
+  const stub = join(f.dir, 'stub.sh');
   const out = join(f.dir, 'record-out.txt');
   const log = join(f.dir, 'calls.jsonl');
-  writeFileSync(stub, STUB);
+  writeFileSync(stub, STUB, { mode: 0o755 });
   const r = cli(['new', '--name', 'Proof item', '--summary', 's', '--depends-on', 'none'], {
     cwd: f.cons,
     tmp: f.dir,
-    env: { NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log, CODY_SCRIPT_RUNS_MODULE: stub, RECORD_OUT: out },
+    env: { NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log, BACKLOG_RUN_HOOK: stub, RECORD_OUT: out },
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const rec = calls(log);
-  const recorder = rec.filter(c => c.command === 'python3');
+  const recorder = rec.filter(c => c.command === stub);
   assert.equal(recorder.length, 1, `expected the one recorder call; the CLI started: ${JSON.stringify(rec)}`);
-  assert.deepEqual(recorder[0].args.slice(0, 3), [stub, 'record', 'backlog.js']);
-  assert.deepEqual(rec.filter(c => c.command !== 'python3'), rec.filter(c => c.command === 'git'), `a child process other than the recorder or a git call was started: ${JSON.stringify(rec)}`);
+  assert.deepEqual(recorder[0].args.slice(0, 2), ['record', 'backlog.js']);
+  assert.deepEqual(rec.filter(c => c.command !== stub), rec.filter(c => c.command === 'git'), `a child process other than the recorder or a git call was started: ${JSON.stringify(rec)}`);
   await waitFor(out);
   assert.equal(readFileSync(out, 'utf8').trim(), 'record backlog.js 0', 'the recorded child actually ran the recorder');
 });

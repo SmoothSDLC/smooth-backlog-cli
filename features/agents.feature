@@ -1,11 +1,10 @@
 Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and closes it
-  Agents are named; a claim marks the item as theirs. An item an agent claims is refined: it names its review
-  documents, an estimate and a definition of done. Two review stages precede the close: a first pass by a reviewer
-  whose name starts with "cody" (or a team member), then a pass by "codex" or "claude" on the same commit.
+  Agents are named; a claim marks the item as theirs; the holder may ask another agent for a review; the author never
+  reviews its own work. Outside a team no review rule applies: the holder closes when it is done.
 
   Background:
     Given a repository with a backlog
-    And a refined item "Agent work" exists
+    And an item "Agent work" exists
 
   Scenario: pop tells an idle agent to claim the next item
     When I act as agent "alice"
@@ -52,11 +51,11 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
   Scenario: the holder asks for a review and another agent reviews it
     Given I act as agent "alice"
     And I run `backlog update 1 --claim alice`
-    When I run `backlog update 1 --request-review cody-r --note "commit abc123"`
+    When I run `backlog update 1 --request-review bob --note "commit abc123"`
     Then the command succeeds
     And item 1 has review_state "requested"
-    When I act as agent "cody-r"
-    And I run `backlog update 1 --review pass --by cody-r --comments "looks right, see references/review/code.md"`
+    When I act as agent "bob"
+    And I run `backlog update 1 --review pass --by bob --comments "looks right"`
     Then the command succeeds
     And item 1 has review_state "passed"
 
@@ -64,7 +63,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     Given I act as agent "alice"
     And I run `backlog update 1 --claim alice`
     And I run `backlog update 1 --request-review any --note "commit abc123"`
-    When I run `backlog update 1 --review pass --by alice --comments "fine, references/review/code.md"`
+    When I run `backlog update 1 --review pass --by alice --comments "fine"`
     Then the command fails
     And the output contains "cannot review its own work"
 
@@ -73,26 +72,16 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     And I run `backlog update 1 --claim alice`
     And I run `backlog update 1 --request-review bob --note "commit abc123"`
     When I act as agent "bob"
-    And I run `backlog update 1 --review changes --by bob --comments "missing tests, references/review/code.md"`
+    And I run `backlog update 1 --review changes --by bob --comments "missing tests"`
     Then the command succeeds
     And item 1 has review_state "changes-requested"
 
-  Scenario: the holder closes the item after both review stages passed
+  Scenario: the holder closes the reviewed item
     Given I act as agent "alice"
     And I run `backlog update 1 --claim alice`
-    And I run `backlog update 1 --request-review cody-r --note "commit abc123"`
-    And I act as agent "cody-r"
-    And I run `backlog update 1 --review pass --by cody-r --comments "first stage, references/review/code.md"`
-    When I act as agent "alice"
-    And I have read item 1
-    And I run `backlog update 1 --close --summary "delivered"`
-    Then the command fails
-    And the output contains "external review"
-    When I run `backlog update 1 --request-review codex --note "commit abc123"`
-    Then the command succeeds
-    When I act as agent "codex"
-    And I run `backlog update 1 --review pass --by codex --comments "second stage, references/review/code.md"`
-    Then the command succeeds
+    And I run `backlog update 1 --request-review bob --note "commit abc123"`
+    And I act as agent "bob"
+    And I run `backlog update 1 --review pass --by bob --comments "looks right"`
     When I act as agent "alice"
     And I have read item 1
     And I run `backlog update 1 --close --summary "delivered"`

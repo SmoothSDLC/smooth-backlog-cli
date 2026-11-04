@@ -26,7 +26,7 @@ the release verifier is `.agents/scripts/verify-published-package.mjs`. Developm
 are kept in `.agents/docs/`; public usage documentation stays at the root.
 
 On exit, the executable reports the run to an optional run recorder hook: when
-the environment variable `CODY_SCRIPT_RUNS_MODULE` names a module, `bin/backlog.js`
+the environment variable `BACKLOG_RUN_HOOK` names an executable, `bin/backlog.js`
 spawns `python3 <module> record backlog.js <exit code> <start time> <end time>`
 as a detached child process it never waits for; with the variable unset the hook
 spawns no child process. The variable is a development hook, not a user feature.

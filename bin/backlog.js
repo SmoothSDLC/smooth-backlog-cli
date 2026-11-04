@@ -4,9 +4,10 @@ import { promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-// Report this run (script name, exit code, times) to the script-run recorder where it is installed: detached, never waited for, never a failure.
+// Report this run to an optional hook (BACKLOG_RUN_HOOK names an executable): `<hook> record backlog.js <exit code> <start> <end>`,
+// detached, never waited for, never a failure of the command.
 const RUN_START = Date.now() / 1000;
-process.on('exit', rc => { const module = process.env.CODY_SCRIPT_RUNS_MODULE; if (module) { try { spawn('python3', [module, 'record', 'backlog.js', String(rc), String(RUN_START), String(Date.now() / 1000)], { detached: true, stdio: 'ignore' }).unref(); } catch {} } });
+process.on('exit', rc => { const hook = process.env.BACKLOG_RUN_HOOK; if (hook) { try { spawn(hook, ['record', 'backlog.js', String(rc), String(RUN_START), String(Date.now() / 1000)], { detached: true, stdio: 'ignore' }).unref(); } catch {} } });
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 try {
   let active = root;

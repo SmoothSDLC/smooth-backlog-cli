@@ -43,7 +43,7 @@ export async function run(argv) {
   try { a = parse(argv); } catch (e) { return die(e.message); }
   if (!a.agent) return die('work needs --agent <your name>');
   const me = caller();
-  if (me && me !== strip(a.agent)) return die(`you are ${me} (QWEN_CODE_AGENT_ID): backlog work answers only for yourself, not for ${a.agent}`);
+  if (me && me !== strip(a.agent)) return die(`you are ${me} (BACKLOG_AGENT): backlog work answers only for yourself, not for ${a.agent}`);
   if (a.lead && strip(a.lead) !== teamLead()) return die(`--lead ${a.lead} is not the team lead of this session (${teamLead()}; TEAM_LEAD): backlog work acts as the lead the updates know`);
   let p; let marked; let step; let status;
   for (let attempt = 1; ; attempt++) { // the pop and the mark are two commands: a step another agent took meanwhile is asked again

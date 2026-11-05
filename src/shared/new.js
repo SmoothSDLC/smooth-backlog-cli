@@ -107,7 +107,7 @@ async function create(argv, { home, folder, repo, team }) {
 
   const db = connect(folder, { readOnly: Boolean(a.dryRun) }); // a dry run only looks: nothing is created in the backlog clone
   let written = false;
-  let seq; let slug; let rel; let order; let rank; let summary; let where;
+  let seq; let slug; let rel; let order; let rank; let where;
   try {
     const deps = [];
     for (const d of asList(a.dependsOn)) {
@@ -182,7 +182,7 @@ async function create(argv, { home, folder, repo, team }) {
       rank = Object.fromEntries(order)[slug];
       if (src) logEvent(db, 'split', { handoffId: src.handoff_id, phaseId: src.id, note: `spawned sibling ${slug}` }); // after the reflow: it rewrites the parent from what it read before
       logEvent(db, 'planning_event', { handoffId: hid, phaseId: db.prepare('SELECT id FROM phase WHERE slug=?').get(slug)?.id, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
-      summary = scan(db, folder);
+      scan(db, folder);
       where = priority === undefined ? 'appended' : `inserted at P${priority}`;
     });
     written = true;
@@ -199,7 +199,6 @@ async function create(argv, { home, folder, repo, team }) {
     process.stdout.write(`${bar}\n⚠️  CRITICAL phase filed at P${rank} — ${slug}\n⚠️  SURFACE THIS TO THE USER NOW, in your FIRST line, with a ⚠️ marker. Do NOT bury it.\n${bar}\n`);
   }
   process.stdout.write(`✅ created phase ${slug} (seq ${seq}) — ${where}, now at P${rank}\n`
-    + `   📋 planning event: backlog re-densified to ${order.length} item(s) (P0..P${order.length - 1})\n`
-    + `   rescan: ${summary.phases} phase(s) tracked, ${summary.changed} (re)ingested\n`);
+    + `   📋 planning event: backlog re-densified to ${order.length} item(s) (P0..P${order.length - 1})\n`);
   return 0;
 }

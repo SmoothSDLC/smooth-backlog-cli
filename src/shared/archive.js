@@ -130,10 +130,9 @@ async function archive(a, con, { repo, folder, close, guard }) {
   store.write({ path: join(folder, to), fm: { ...fm, status: 'archived' } }, folder, { frontMatterOnly: true });
   // archiving removes an item from the backlog -> planning event: re-densify the remainder to 0..M-1
   const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
-  let s;
   const recordArchive = () => {
     db.markArchived(con, row.slug, to);
-    s = db.scan(con, folder);
+    db.scan(con, folder);
   };
   // Exclude the departed item's mirror ghost while validating, so no mirror
   // writes are needed before the whole ranking write set has passed its guard.
@@ -144,7 +143,6 @@ async function archive(a, con, { repo, folder, close, guard }) {
   }
   close();
   say(`📦 ${row.slug} archived`);
-  say(`   rescan: ${s.changed} (re)ingested, ${s.missing} missing`);
   if (order.length) say(`   📋 planning event: backlog re-densified to ${order.length} item(s) (P0..P${order.length - 1})`);
   return 0;
 }

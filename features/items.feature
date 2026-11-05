@@ -8,6 +8,7 @@ Feature: Items - a person creates, reads, changes and finishes backlog items
     When I run `backlog new --name "Fix the login redirect" --objective "Users land on their page after login" --summary "login redirect" --depends-on none`
     Then the command succeeds
     And the output contains "created phase 001-fix-the-login-redirect"
+    And the output does not contain "rescan"
     And item 1 has status "pending"
     And item 1 has priority 0
 

@@ -455,7 +455,7 @@ test('075: archive of a done item: git mv, status stamp, reflow, one commit', ()
   const f = seed();
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, '📦 005-epsilon archived\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
+  assert.equal(r.stdout, '📦 005-epsilon archived\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
   assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
   assert.ok(!existsSync(join(f.folder, 'phases/005-epsilon.md')));
@@ -623,7 +623,7 @@ test('075: archive --force of an open item: the exact output, the stamp, the row
   const f = seed();
   const r = run(f, 'archive', ['2', '--force']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, '📦 002-beta archived\n   rescan: 0 (re)ingested, 0 missing\n   📋 planning event: backlog re-densified to 4 item(s) (P0..P3)\n');
+  assert.equal(r.stdout, '📦 002-beta archived\n   📋 planning event: backlog re-densified to 4 item(s) (P0..P3)\n');
   assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'archive/phases/002-beta.md').fm.status, 'archived');
   assert.ok(!existsSync(join(f.folder, 'phases/002-beta.md')));
@@ -640,7 +640,7 @@ test('057: archive and move print the slug and no path', () => {
   const outputs = [];
   const runs = (script, args) => { const r = run(f, script, args); outputs.push(r.stdout + r.stderr); return r; };
   assert.equal(runs('archive', ['5', '--dry-run']).stdout, 'ℹ️  [dry-run] would archive 005-epsilon and mark it archived\n');
-  assert.match(runs('archive', ['5']).stdout, /^📦 005-epsilon archived\n {3}rescan: /);
+  assert.match(runs('archive', ['5']).stdout, /^📦 005-epsilon archived\n/);
   assert.equal(runs('archive', ['5']).stdout, 'ℹ️  005-epsilon already archived\n');
   assert.equal(runs('move', ['5', '--to-branch', 'release']).stdout,
     '❌ 005-epsilon is archived and cannot be moved (an archived item is not scanned, so its branch or repository would not follow)\n');

@@ -136,7 +136,7 @@ test('new: writes the item, records its history, commits as "acme/demo: new --na
   assert.equal(r.status, 0, r.stderr);
   assert.equal(commits(), before + 1, 'exactly one commit is published');
   assert.equal(r.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n'
-    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   const [item] = items(f);
   assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'priority', 'repository', 'branch', 'commit',
     'location', 'created', 'updated', 'updated_by', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'events']);
@@ -196,7 +196,7 @@ git -C "${other}" add -A && git -C "${other}" commit -q -m bravo && git -C "${ot
   const r = node(f, NONE);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'renumbered 001 -> 002\n✅ created phase 002-alpha-job (seq 2) — appended, now at P0\n'
-    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   assert.deepEqual(items(f).map(i => [i.path, i.fm.phase, i.fm.seq]), [['phases/001-bravo.md', '001-bravo', 1], ['phases/002-alpha-job.md', '002-alpha-job', 2]]);
   assert.match(items(f)[1].body, /^\n# Phase 002 — Alpha job\n/);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'));
@@ -290,7 +290,7 @@ test('075: team mode: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the b
   assert.equal(refused.stderr, '');
   const ok = node(f, [...NONE, '--body', '## Definition of done\n- [ ] x'], env);
   assert.equal(ok.status, 0);
-  assert.equal(ok.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+  assert.equal(ok.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   assert.equal(ok.stderr, '');
   const [item] = store.load(join(f.home, 'acme', 'other'));
   assert.equal(item.fm.repository, 'acme/other'); assert.equal(item.fm.branch, 'team-1');
@@ -304,7 +304,7 @@ test('075: a skills.md review document is accepted and persisted; no class field
   const f = fixture(t);
   const r = node(f, [...NONE, '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
   assert.equal(r.status, 0);
-  assert.equal(r.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+  assert.equal(r.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   assert.equal(r.stderr, '');
   const [item] = items(f);
   assert.deepEqual(item.fm.review_refs, ['references/review/skills.md']);
@@ -320,7 +320,7 @@ test('075: --split-from copies the objective, summary and body of the source and
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout, '✅ created phase 002-1-cont (seq 2) — inserted at P0, now at P0\n'
-    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 2 (re)ingested\n'); // the reflowed parent and the child, which gained its history after the first scan
+    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n'); // the reflowed parent and the child, which gained its history after the first scan
   const [, child] = items(a);
   assert.equal(child.fm.name, '1-cont'); assert.equal(child.fm.objective, 'parent objective'); assert.equal(child.fm.summary, 'parent summary');
   assert.deepEqual(child.fm.depends_on, [1]);
@@ -360,14 +360,11 @@ for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
     const created = setup.length
       ? (title === 'a rank beyond the end is clamped, a layer of process' ? 'inserted at P7, now at P1' : 'inserted at P0, now at P0')
       : 'appended, now at P0';
-    const rescan = title === 'inserted at rank 0 before older work'
-      ? `   rescan: ${all.length} phase(s) tracked, ${setup.length + 1} (re)ingested\n` // the reflowed setup items and the new item, which gained its history after the first scan
-      : `   rescan: ${all.length} phase(s) tracked, ${setup.length && !title.startsWith('a rank beyond') ? 2 : 1} (re)ingested\n`;
     const banner = title === 'critical, forced to P0 with the banner'
       ? `⚠️ ========================================================================\n⚠️  CRITICAL phase filed at P0 — ${slug}\n⚠️  SURFACE THIS TO THE USER NOW, in your FIRST line, with a ⚠️ marker. Do NOT bury it.\n⚠️ ========================================================================\n`
       : '';
     assert.equal(r.stdout, banner + `✅ created phase ${slug} (seq ${item.fm.seq}) — ${created}\n`
-      + `   📋 planning event: backlog re-densified to ${all.length} item(s) (P0..P${all.length - 1})\n` + rescan);
+      + `   📋 planning event: backlog re-densified to ${all.length} item(s) (P0..P${all.length - 1})\n`);
     assert.equal(subject(f), title === 'a prefix of an option and --opt=value' ? SUBJECT.newDependsNone() : SUBJECT.newName(item.fm.name));
     assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'), 'published');
     if (title === 'critical, forced to P0 with the banner') assert.equal(item.fm.severity, 'critical', 'forced to P0 with the banner');
@@ -380,7 +377,7 @@ test('075: new: every flag, appended: the item carries the carried context, the 
   const r = node(f, [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--chunk',
     '--review-refs', 'references/review/code.md,references/review/tests.example.md', '--estimate', '30', '--complexity', 'medium', '--layer', '3']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(r.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+  assert.equal(r.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   assert.equal(r.stderr, '');
   const [item] = items(f);
   assert.deepEqual(fmNorm(item.fm), { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
@@ -395,7 +392,7 @@ test('075: new: a prefix of an option and --opt=value: the item takes the abbrev
   const r = node(f, ['--depends', 'none', '--name=Abbrev', '--obj', 'o=1', '--summ=s']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stdout, '✅ created phase 001-abbrev (seq 1) — appended, now at P0\n'
-    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   const [item] = items(f);
   assert.equal(item.fm.name, 'Abbrev'); assert.equal(item.fm.objective, 'o=1'); assert.equal(item.fm.summary, 's');
 });
@@ -405,7 +402,7 @@ test('075: new: unicode and quotes in the name: the slug is slugified, the front
   const r = node(f, ['--name', 'Ünï "quoted" it\'s: a/b', '--objective', 'x: y # z', '--depends-on', 'none', '--body', 'plain body']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stdout, '✅ created phase 001-n-quoted-it-s-a-b (seq 1) — appended, now at P0\n'
-    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
+    + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   const [item] = items(f);
   assert.equal(item.fm.name, 'Ünï "quoted" it\'s: a/b');
   assert.equal(item.fm.objective, 'x: y # z');
@@ -417,7 +414,7 @@ test('075: --split-from a long parent: the inherited context is trimmed to 800 c
   const r = node(f, ['--split-from', '001-long', '--depends-on', 'none']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stdout, '✅ created phase 002-001-long-cont (seq 2) — appended, now at P1\n'
-    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 2 (re)ingested\n');
+    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
   assert.equal(subject(f), SUBJECT.newSplitFrom('001-long'));
   const [, child] = items(f);
   const parent = store.load(f.folder).find(i => i.path === 'phases/001-long.md');

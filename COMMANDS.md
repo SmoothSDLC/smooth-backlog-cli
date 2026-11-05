@@ -128,15 +128,18 @@ Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
   2  The arguments or the place were wrong: the message is on standard error.
-  3  The local clone of the backlog repository could not be synchronised with its origin. Either the update before the
-     command failed: then nothing was read or changed, and the command can be run again once the cause is fixed. Or the
-     change was not published and was rolled back: fix the cause and retry the command. Existing unpublished commits
-     are refused before any change; the message lists them and gives explicit publish or drop commands.
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
   4  The backlog repository is not set up; the printed question must be answered by the user.
   5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
      records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
-     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
-     without the check (its first write).
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
 
 Example:
   backlog new --name "Fix login" --objective "An expired cookie no longer blocks sign-in" --summary "Login cookie handling" --depends-on none
@@ -359,15 +362,18 @@ Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
   2  The arguments or the place were wrong: the message is on standard error.
-  3  The local clone of the backlog repository could not be synchronised with its origin. Either the update before the
-     command failed: then nothing was read or changed, and the command can be run again once the cause is fixed. Or the
-     change was not published and was rolled back: fix the cause and retry the command. Existing unpublished commits
-     are refused before any change; the message lists them and gives explicit publish or drop commands.
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
   4  The backlog repository is not set up; the printed question must be answered by the user.
   5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
      records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
-     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
-     without the check (its first write).
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
 
 Example:
   backlog update 18 --status in_progress --note "Started the help text"
@@ -493,15 +499,18 @@ Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
   2  The arguments or the place were wrong: the message is on standard error.
-  3  The local clone of the backlog repository could not be synchronised with its origin. Either the update before the
-     command failed: then nothing was read or changed, and the command can be run again once the cause is fixed. Or the
-     change was not published and was rolled back: fix the cause and retry the command. Existing unpublished commits
-     are refused before any change; the message lists them and gives explicit publish or drop commands.
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
   4  The backlog repository is not set up; the printed question must be answered by the user.
   5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
      records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
-     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
-     without the check (its first write).
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
 
 Example:
   backlog query --status --branch main
@@ -541,15 +550,18 @@ Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
   2  The arguments or the place were wrong: the message is on standard error.
-  3  The local clone of the backlog repository could not be synchronised with its origin. Either the update before the
-     command failed: then nothing was read or changed, and the command can be run again once the cause is fixed. Or the
-     change was not published and was rolled back: fix the cause and retry the command. Existing unpublished commits
-     are refused before any change; the message lists them and gives explicit publish or drop commands.
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
   4  The backlog repository is not set up; the printed question must be answered by the user.
   5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
      records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
-     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
-     without the check (its first write).
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
 
 Example:
   backlog next --json
@@ -813,15 +825,18 @@ Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
   2  The arguments or the place were wrong: the message is on standard error.
-  3  The local clone of the backlog repository could not be synchronised with its origin. Either the update before the
-     command failed: then nothing was read or changed, and the command can be run again once the cause is fixed. Or the
-     change was not published and was rolled back: fix the cause and retry the command. Existing unpublished commits
-     are refused before any change; the message lists them and gives explicit publish or drop commands.
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
   4  The backlog repository is not set up; the printed question must be answered by the user.
   5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
      records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
-     names who changed it and when. Read the item again, then repeat the command. An item this agent never read is written
-     without the check (its first write).
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
 
 Example:
   backlog archive 12
@@ -859,9 +874,12 @@ earlier builds is still read), the per-user file <name>/home under the config fo
 ~/.config; without the clone-URL setting, the only such file there), ~/git/<name> when a clone URL is set. When none of
 them names one, the backlog is .backlog inside the repository, created with its configuration on first use. A
 configured folder that is missing is refused (exit 4) naming backlog setup. setup commits and pushes what it wrote
-(the configuration and the skill copies) on the current branch. A backlog repository is pulled before every command and pushed after every change; nothing is written
-into the repository being set up. Inside the repository, every change is committed on the current branch, with the
-backlog's paths only, and pushed to origin under the same branch name.
+(the configuration and the skill copies) on the current branch. Both locations are updated from their origin before every command and pushed after every change; nothing is written
+into the repository being set up by that. Inside the repository, every change is committed on the current branch, with
+the backlog's paths only, and the branch is pushed to origin under the same name, the user's own commits included; the
+command then prints "<id> - <name> committed; all pending branch changes pushed". A branch the origin does not have yet
+is created by the first push. A command that only reads and cannot reach the origin answers from the local copy with a
+warning; a write is refused (exit 3).
 
 Options:
   --ask

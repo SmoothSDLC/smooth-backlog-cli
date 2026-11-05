@@ -97,14 +97,14 @@ test('every command of the router has a help text, a line of backlog --help and 
 test('exit code 3 is described for both cases: the update before the command failed, and the change was not pushed', () => {
   for (const command of ['new', 'update', 'query', 'next', 'archive']) {
     const text = backlog(command, '--help').stdout;
-    assert.match(text, /^ {2}3 {2}The local clone of the backlog repository could not be synchronised with its origin\./m, command);
-    assert.match(text, /update before the\s+command failed: then nothing was read or changed/, command);
+    assert.match(text, /^ {2}3 {2}The repository that holds the items could not be synchronised with its origin\./m, command);
+    assert.match(text, /update before a\s+change failed: then nothing was changed/, command);
     assert.match(text, /change was not published.*rolled back/, command);
   }
   assert.match(backlog('move', '--help').stdout, /3 the update of the local clone failed before\nthe move \(nothing was changed\), or the move was not published and was rolled back/);
   assert.match(backlog('pop', '--help').stdout, /^ {2}3 {2}The action is idle: nothing is left for the agent\. The same code is used when the local clone/m);
   assert.match(backlog('pop', '--help').stdout, /--claim-now claim was not published and was rolled back/);
-  // the build does what the text says: an origin that cannot be reached fails the update, exit 3, and nothing is read
+  // the build does what the text says: a command that only reads answers from the local copy with the offline warning
   const broken = mkdtempSync(join(tmpdir(), 'help-exit3-'));
   dirs.push(broken);
   sharedBacklog(broken);
@@ -112,9 +112,7 @@ test('exit code 3 is described for both cases: the update before the command fai
   renameSync(join(broken, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), join(broken, 'origin-gone.git'));
   for (const args of [['query', '--status'], ['pop', '--agent', 'x']]) {
     const r = cli(args, { cwd: demo, tmp: broken });
-    assert.equal(r.status, 3, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
-    assert.equal(r.stdout, '');
-    assert.match(r.stderr, /nothing was read or changed/);
+    assert.match(r.stderr, /origin offline, local backlog updates may be behind and need manual remediation later/, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
   }
 });
 

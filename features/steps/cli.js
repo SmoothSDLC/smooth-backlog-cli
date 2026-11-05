@@ -1,5 +1,8 @@
 // Step definitions. Every check goes through the CLI itself (backlog query --json), never through the item files.
 import assert from 'node:assert/strict';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { step } from '../support/gherkin.js';
 
 // `backlog ...` with shell-like splitting: double quotes group words, \" is a quote inside them
@@ -39,6 +42,32 @@ step(/^a refined item "([^"]+)" exists$/, (w, name) => {
   assert.equal(r.status, 0, `could not create the refined item: ${output(r)}`);
 });
 step(/^I have read item (\S+)$/, (w, item) => { const r = command(w, `backlog query --phase ${item} --json`); assert.equal(r.status, 0, output(r)); });
+
+// the second checkout of the same backlog (see world.other)
+step(/^another checkout runs `(.+)`$/, (w, text) => {
+  const args = split(text); assert.equal(args.shift(), 'backlog');
+  const by = args.indexOf('--by'); const env = by >= 0 ? { BACKLOG_AGENT: args[by + 1] } : {};
+  const r = w.runOther(args, { env }); assert.equal(r.status, 0, `the other checkout failed: ${output(r)}`);
+});
+step(/^another checkout sees item (\S+) with status "([^"]*)"$/, (w, item, status) => {
+  const r = w.runOther(['query', '--phase', item, '--json']); assert.equal(r.status, 0, output(r));
+  assert.equal(JSON.parse(r.stdout).status, status, r.stdout);
+});
+step(/^another checkout sees (\d+) items$/, (w, n) => {
+  const r = w.runOther(['query', '--json']); assert.equal(r.status, 0, output(r));
+  assert.equal((JSON.parse(r.stdout).phases ?? []).length, Number(n), r.stdout);
+});
+// a pre-push hook in the repository that holds the items: on its first run only, the other checkout publishes a change, so this push is rejected once
+step(/^the origin will receive another checkout's change just before my push$/, w => {
+  const hooks = join(w.gitIn(w.backlogRepo(), 'rev-parse', '--git-dir').replace(/^(?!\/)/, `${w.backlogRepo()}/`), 'hooks');
+  const marker = join(w.tmp, 'raced');
+  const other = w.other();
+  const bin = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
+  const env = w.env.BACKLOG_HOME ? `BACKLOG_HOME='${other}' ` : '';
+  const cwd = w.env.BACKLOG_HOME ? w.repo : other;
+  mkdirSync(hooks, { recursive: true });
+  writeFileSync(join(hooks, 'pre-push'), `#!/bin/sh\n[ -e '${marker}' ] && exit 0\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX\ntouch '${marker}'\ncd '${cwd}' && ${env}BACKLOG_AGENT=racer '${process.execPath}' '${bin}' update 1 --note raced >/dev/null 2>&1\nexit 0\n`, { mode: 0o755 });
+});
 
 step(/^the command succeeds$/, w => assert.equal(w.last.status, 0, `exit ${w.last.status}: ${output(w.last)}`));
 step(/^the command fails$/, w => assert.notEqual(w.last.status, 0, `the command succeeded: ${output(w.last)}`));

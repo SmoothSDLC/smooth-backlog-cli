@@ -93,7 +93,7 @@ function find(con, text) {
 }
 
 export async function run(argv) {
-  try { return await update(argv); } catch (e) { return die(e.message, e instanceof BacklogError ? e.exitCode : 1); }
+  try { return await update(argv); } catch (e) { return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); }
 }
 
 async function update(argv) {

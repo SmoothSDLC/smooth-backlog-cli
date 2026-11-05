@@ -545,13 +545,16 @@ test('a read view pulls first: an item pushed from another clone is shown, and n
   assert.equal(git(f.home, 'status', '--porcelain'), '');
 });
 
-test('a failed pull stops the read: exit 3 and nothing printed on stdout', t => {
+test('a failed pull does not stop a read: it answers from the local copy with the offline warning; a write is refused with exit 3', t => {
   const f = build(false);
   git(f.home, 'remote', 'set-url', 'origin', join(f.t, 'gone', BACKLOG_OWNER, `${BACKLOG_NAME}.git`));
   const n = cli(['query', '--status'], { cwd: f.cons, tmp: f.t });
-  assert.equal(n.status, 3);
-  assert.equal(n.stdout, '');
-  assert.match(n.stderr, /^❌ backlog: could not update .* from origin\/main/);
+  assert.equal(n.status, 0, n.stdout + n.stderr);
+  assert.match(n.stderr, /origin offline, local backlog updates may be behind and need manual remediation later/);
+  const w = cli(['new', '--name', 'x', '--objective', 'o', '--summary', 's'], { cwd: f.cons, tmp: f.t });
+  assert.equal(w.status, 3);
+  assert.equal(w.stdout, '');
+  assert.match(w.stderr, /^❌ backlog: could not update .* from origin\/main .*nothing was read or changed/s);
 });
 
 test('--next with --agent is refused: the next action of an agent is backlog pop', () => {

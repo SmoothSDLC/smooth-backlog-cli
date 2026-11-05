@@ -79,6 +79,8 @@ export function cacheFile(folder) {
 }
 
 // Where the lock, the views and the journal live: the clone's.git folder, or.state inside the repository's.backlog folder.
+// The remote branch the items are published to: the backlog clone's main, or the current branch of the repository that holds a .backlog folder.
+export const originRef = home => (existsSync(join(home, '.git')) ? 'origin/main' : `origin/${git(['branch', '--show-current'], home).stdout.trim() || 'main'}`);
 export const stateDir = home => (existsSync(join(home, '.git')) ? join(home, '.git') : join(home, '.state'));
 
 

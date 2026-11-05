@@ -335,7 +335,7 @@ async function popCommand(argv) {
   let repo;
   try { repo = team.teamScope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }
   const { home } = store.resolveHome();
-  try { await sync.pull(home); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
+  try { await sync.pull(home, { read: true }); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
   let folder;
   try { folder = store.folder(home, repo); } catch (e) { return die(e.message); }
   if (!existsSync(folder)) {

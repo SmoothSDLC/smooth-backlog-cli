@@ -100,7 +100,7 @@ export async function run(argv) {
   try {
     const a = parse(argv);
     return await withBacklog((con, ctx) => archive(a, con, ctx), a['dry-run'] ? null : ['archive.py', ...argv.slice(0, 2)].join(' '));
-  } catch (e) { return die(e.message, e instanceof BacklogError ? e.exitCode : 1); }
+  } catch (e) { return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); }
 }
 
 async function archive(a, con, { repo, folder, close, guard }) {

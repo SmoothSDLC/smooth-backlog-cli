@@ -76,6 +76,9 @@ test('a write to an item another writer changed after the agent read it is refus
   const a = run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']);
   assert.equal(a.status, 5, a.stderr + a.stdout);
   assert.match(a.stderr, /item 001-alpha was changed by bob at \d{4}-\d\d-\d\dT[\d:]+Z after you last read it \(2026-10-01T00:00:00Z\); read it again \(backlog query --phase 001-alpha --agent <you>\) and retry/);
+  assert.match(a.stdout, /^--- current 001-alpha ---$/m, 'the refusal shows the item as it is now');
+  assert.match(a.stdout, /from bob/, "with the other writer's change");
+  assert.doesNotMatch(a.stdout, /phases\//, 'and no path');
   assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
   assert.ok(!onOrigin(f, 'acme/demo/phases/001-alpha.md').includes('from amy'));
   assert.ok(!readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8').includes('from amy'));
@@ -167,6 +170,7 @@ test('push race on the same item: one wins, the other is refused, and its change
   const a = run(f, f.home, ['update', '1', '--append', 'amy lost', '--by', 'amy']);
   assert.equal(a.status, 5, a.stderr + a.stdout);
   assert.match(a.stderr, /item 001-alpha was changed by bob at .* after you last read it/);
+  assert.match(a.stdout, /^--- current 001-alpha ---$[^]*bob won/m, 'the item as the push race left it on the origin is shown');
   assert.match(onOrigin(f, 'acme/demo/phases/001-alpha.md'), /bob won/);
   assert.ok(!onOrigin(f, 'acme/demo/phases/001-alpha.md').includes('amy lost'));
   assert.equal(git(f.home, 'branch', '--list').split('\n').filter(Boolean).length, 1); // no side branch

@@ -146,7 +146,7 @@ async function query(argv) {
   let repo;
   try { repo = teamScope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }
   const { home } = store.resolveHome();
-  try { await sync.pull(home); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
+  try { await sync.pull(home, { read: true }); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
   if (a.wip) { // the counts against every work-in-progress limit and the stale in-progress items, whole backlog home
     const v = wipView(home);
     if (a.json) { dump(v); return 0; }

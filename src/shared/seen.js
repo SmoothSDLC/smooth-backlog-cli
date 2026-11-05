@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 
 import { basename, dirname, join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { parse } from './frontmatter.js';
-import { now, repoId, stateDir } from './store.js'; // a cycle (store.js imports this file): used only at run time
+import { now, originRef, repoId, stateDir } from './store.js'; // a cycle (store.js imports this file): used only at run time
 
 export const STALE_EXIT = 5;
 let current; // the --by/--agent of the running command
@@ -25,6 +25,8 @@ const operation = new AsyncLocalStorage();
 // publication retries. Ranking callers cannot forget to pass a guard callback.
 export const guarded = fn => operation.getStore() ? fn() : operation.run({ guard: [], created: new Set(), incidental: new Map() }, fn);
 export const created = (folder, path) => operation.getStore()?.created.add(join(folder, path));
+// the slug of the item the running command created (new), for the status line
+export const primarySlug = () => { const c = operation.getStore()?.created; return c?.size ? basename([...c][0], '.md') : null; };
 export function publicationGuard(given = []) {
   const guard = operation.getStore()?.guard ?? [];
   for (const g of given) if (!guard.some(x => x.path === g.path)) guard.push(g);
@@ -43,7 +45,7 @@ const contentOf = doc => { const fm = { ...doc.fm }; for (const k of RANK_ONLY) 
 const textView = text => { const doc = parse(text); return { fm: doc.fm, sha: createHash('sha256').update(text).digest('hex'), content: contentOf(doc) }; };
 const fileView = (folder, path) => textView(readFileSync(join(folder, path), 'utf8'));
 // the item as a git revision of the backlog home has it (throws when it has none)
-const revView = (home, rev, file) => { const r = spawnSync('git', ['show', `${rev}:${file}`], { cwd: home, encoding: 'utf8' }); if (r.status) throw new Error(r.stderr); return textView(r.stdout); };
+const revView = (home, rev, file) => { const r = spawnSync('git', ['show', `${rev}:./${file}`], { cwd: home, encoding: 'utf8' }); if (r.status) throw new Error(r.stderr); return textView(r.stdout); };
 
 export function record(folder, repo, agent, views) {
   const home = homeOf(folder);
@@ -121,7 +123,7 @@ export function agentsUsing(home) {
 // another git error): an empty report would be read as "no changes", and the caller must decide
 // what to do with the reference before it is advanced.
 export function changedSince(home, folder, repo, reference, agent) {
-  const r = spawnSync('git', ['diff', '--name-status', reference.commit, 'HEAD', '--', `${repo}/phases`, `${repo}/archive`], { cwd: home, encoding: 'utf8' });
+  const r = spawnSync('git', ['diff', '--name-status', '--relative', reference.commit, 'HEAD', '--', `${repo}/phases`, `${repo}/archive`], { cwd: home, encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`git diff ${reference.commit} HEAD failed: ${(r.stderr || '').trim() || `exit ${r.status}`}`);
   const rows = r.stdout.split('\n').filter(Boolean).map(l => { const [status, ...paths] = l.split('\t'); return { status, path: paths[0], to: paths[1] }; });
   const base = p => p.split('/').pop();
@@ -140,7 +142,7 @@ export function changedSince(home, folder, repo, reference, agent) {
       const moved = isMove ? x.to : added.get(b);
       if (moved) { try { fm = parse(readFileSync(join(folder, rel(moved)), 'utf8')).fm; } catch { /* gone: no author or time */ } }
       else {
-        const v = spawnSync('git', ['show', `${reference.commit}:${x.path}`], { cwd: home, encoding: 'utf8' });
+        const v = spawnSync('git', ['show', `${reference.commit}:./${x.path}`], { cwd: home, encoding: 'utf8' });
         if (!v.status) fm = parse(v.stdout).fm;
       }
     } else {
@@ -178,7 +180,7 @@ export const view = (agent, folder, repo, row) => record(folder, repo, agent || 
 // the refusal names every item of this folder the agent has read whose content changed since, in one command
 // others: slugs of repo, or {repo, slug} of another repository folder. The command to read them again is the one to run
 // from inside each repository (a cross-repository move or publication may hit items of the other one).
-export function staleError(slug, by, at, was, others = [], repo) {
+export function staleError(slug, by, at, was, others = [], repo, text) {
   const groups = new Map([[repo, [slug]]]);
   for (const o of others) {
     const [r, s] = typeof o === 'string' ? [repo, o] : [o.repo, o.slug];
@@ -190,17 +192,29 @@ export function staleError(slug, by, at, was, others = [], repo) {
   const also = all.length > 1 ? `; ${all.length - 1} other item(s) you read changed too (${all.slice(1).join(', ')})` : '';
   const how = [...groups].map(([r, ss]) => `${r && r !== here ? `in repository ${r}: ` : ''}backlog query --phase ${ss.join(',')} --agent <you>`).join('; ');
   const e = new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was})${also}; read ${all.length > 1 ? 'them' : 'it'} again (${how}) and retry`, STALE_EXIT);
-  e.stale = { slug, by, at, was, groups, repo };
+  e.stale = { slug, by, at, was, groups, repo, text }; // text: the item as it is now
   return e;
 }
 // A refusal of a command over several repository folders (a cross-repository move) names the changed items the agent
 // read in each of them, not only in the folder checked first: [[folder, repo],...]
 export function widen(e, folders = []) {
   if (e?.code !== 'STALE_ITEM' || !e.stale || !folders.length) return e;
-  const { slug, by, at, was, groups, repo } = e.stale;
+  const { slug, by, at, was, groups, repo, text } = e.stale;
   const others = [...groups].flatMap(([r, ss]) => ss.map(s => ({ repo: r, slug: s })));
   for (const [f, r] of folders) others.push(...staleViews(f, r, actor()).map(s => ({ repo: r, slug: s })));
-  return staleError(slug, by, at, was, others, repo);
+  return staleError(slug, by, at, was, others, repo, text);
+}
+
+// The refusal of a write made on a stale view: the error, then the item as it is now (with --json, one object holding both), and the exit code.
+export function reportStale(e, die, code) {
+  const text = e?.code === 'STALE_ITEM' && e.stale?.text;
+  if (!text) return die(e.message, code);
+  const { fm, body } = parse(text);
+  if (process.argv.includes('--json')) { process.stdout.write(`${JSON.stringify({ error: { code: e.code, message: e.message }, item: { front_matter: fm, body } })}\n`); return code; }
+  const out = die(e.message, code);
+  const value = v => (typeof v === 'string' ? v : JSON.stringify(v));
+  process.stdout.write(`--- current ${e.stale.slug} ---\n${Object.entries(fm).map(([k, v]) => `${k}: ${value(v)}`).join('\n')}\n\n${body.replace(/\n+$/, '')}\n`);
+  return out;
 }
 // The items of folder the agent has read whose content changed since (or that are gone), by slug.
 // rev: compare with that revision of the backlog home (a publication: origin/main), not the working tree
@@ -218,12 +232,12 @@ export function staleViews(folder, repo, agent, rev) {
 export function check(folder, repo, agent, slug, path) {
   const seen = read(homeOf(folder), agent)[`${repo}/${slug}`];
   const { fm, sha, content } = fileView(folder, path);
-  if (seen && seen.sha !== sha && !(seen.content && seen.content === content)) throw staleError(slug, fm.updated_by, fm.updated, `${seen.updated}${seen.updated_by ? ` by ${seen.updated_by}` : ''}`, staleViews(folder, repo, agent), repo);
+  if (seen && seen.sha !== sha && !(seen.content && seen.content === content)) throw staleError(slug, fm.updated_by, fm.updated, `${seen.updated}${seen.updated_by ? ` by ${seen.updated_by}` : ''}`, staleViews(folder, repo, agent), repo, readFileSync(join(folder, path), 'utf8'));
   const guard = operation.getStore()?.guard;
   if (guard && !guard.some(g => g.path === `${repo}/${path}`)) {
     // A retry may first encounter this item after rebasing. Protect the upstream
     // version just read, rather than treating that already-merged change as a race.
-    const base = spawnSync('git', ['rev-parse', '--verify', 'origin/main'], { cwd: homeOf(folder), encoding: 'utf8' }).stdout.trim();
+    const base = spawnSync('git', ['rev-parse', '--verify', originRef(homeOf(folder))], { cwd: homeOf(folder), encoding: 'utf8' }).stdout.trim();
     guard.push({ path: `${repo}/${path}`, slug, base, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   }
   return seen?.sha;

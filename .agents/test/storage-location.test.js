@@ -91,14 +91,17 @@ test('inside the repository the items survive a renamed folder and a changed ori
   spawnSync('git', ['init', '-q', '-b', 'main', alone]);
   spawnSync('git', ['commit', '-q', '--allow-empty', '-m', 'init'], { cwd: alone, env: { ...process.env, ...GIT_IDENTITY } });
   run(['setup'], { cwd: alone });
-  // no origin: the change is committed but cannot be pushed - refused with exit 3, the commit kept
+  // no origin: the repository cannot be updated, so the change is refused with exit 3 and nothing of it is kept
   const r = run(['new', '--name', 'x', '--objective', 'o', '--summary', 's'], { cwd: alone });
   assert.equal(r.status, 3, r.stdout + r.stderr);
-  assert.match(r.stderr, /was not published [^]*it is committed on this branch/);
-  assert.match(git(alone, 'log', '-1', '--format=%s'), /^backlog: /);
+  assert.match(r.stderr, /could not update/);
+  assert.doesNotMatch(git(alone, 'log', '--format=%s'), /new --name/);
+  assert.ok(!existsSync(join(alone, '.backlog', 'local')), 'no item file left');
   const bare = join(tmp, 'alone.git');
   spawnSync('git', ['init', '-q', '--bare', bare]);
   spawnSync('git', ['remote', 'add', 'origin', bare], { cwd: alone });
+  const again = run(['new', '--name', 'x', '--objective', 'o', '--summary', 's'], { cwd: alone }); // once the origin exists: the first push creates the branch there
+  assert.equal(again.status, 0, again.stdout + again.stderr);
   const moved = join(tmp, 'renamed');
   renameSync(alone, moved);
   spawnSync('git', ['remote', 'set-url', 'origin', bare], { cwd: moved }); // a changed origin
@@ -147,4 +150,78 @@ test('the per-user record is found without the origin setting when it is the onl
   const two = run(['query']);
   assert.equal(two.status, 4, 'two records and no setting: the CLI does not guess');
   assert.match(two.stderr, /two backlog records|run backlog setup/);
+});
+
+// ---- inside the repository, every command updates from the origin first and publishes after, as a backlog repository clone does
+function clone2(t, w) {
+  const dir = join(w.tmp, 'other');
+  spawnSync('git', ['clone', '-q', git(w.repo, 'remote', 'get-url', 'origin'), dir], { encoding: 'utf8' });
+  return { dir, run: (args, extra = {}) => w.run(args, { cwd: dir, env: { BACKLOG_AGENT: 'other', ...extra.env } }) };
+}
+
+test('inside the repository every command pulls first: a change published from another clone is read without a manual pull', t => {
+  const w = world(t); const o = clone2(t, w);
+  assert.equal(w.run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']).status, 0);
+  assert.equal(spawnSync('git', ['pull', '-q'], { cwd: o.dir }).status, 0);
+  assert.equal(o.run(['update', '1', '--summary', 'from the other clone']).status, 0);
+  const q = w.run(['query', '--phase', '1', '--json']);
+  assert.equal(q.status, 0, q.stdout + q.stderr);
+  assert.equal(JSON.parse(q.stdout).summary, 'from the other clone');
+});
+
+test("the user's own unpushed commit survives and is pushed with the backlog change", t => {
+  const w = world(t);
+  writeFileSync(join(w.repo, 'work.txt'), 'mine\n'); git(w.repo, 'add', 'work.txt'); git(w.repo, 'commit', '-q', '-m', 'my work');
+  const r = w.run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(git(w.repo, 'log', '--format=%s', 'origin/main..HEAD'), '', 'everything is pushed');
+  assert.ok(git(w.repo, 'log', '--format=%s', '-3').includes('my work'), 'the user commit is kept');
+  assert.match(r.stdout, /committed; all pending branch changes pushed/);
+});
+
+test('a dirty tree survives the pull', t => {
+  const w = world(t); const o = clone2(t, w);
+  assert.equal(w.run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']).status, 0);
+  spawnSync('git', ['pull', '-q'], { cwd: o.dir });
+  assert.equal(o.run(['update', '1', '--note', 'elsewhere']).status, 0);
+  writeFileSync(join(w.repo, 'draft.txt'), 'uncommitted\n'); git(w.repo, 'add', 'draft.txt'); writeFileSync(join(w.repo, 'draft.txt'), 'edited again\n');
+  const q = w.run(['query']);
+  assert.equal(q.status, 0, q.stdout + q.stderr);
+  assert.equal(readFileSync(join(w.repo, 'draft.txt'), 'utf8'), 'edited again\n');
+  assert.equal(git(w.repo, 'status', '--porcelain', '--', 'draft.txt'), 'AM draft.txt');
+});
+
+test('a rejected publication puts only the backlog back; a read with the origin down answers with a warning', t => {
+  const w = world(t);
+  assert.equal(w.run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']).status, 0);
+  writeFileSync(join(w.repo, 'keep.txt'), 'keep\n'); git(w.repo, 'add', 'keep.txt'); git(w.repo, 'commit', '-q', '-m', 'keep');
+  const head = git(w.repo, 'rev-parse', 'HEAD');
+  git(w.repo, 'remote', 'set-url', 'origin', 'https://127.0.0.1:1/nowhere.git');
+  const r = w.run(['update', '1', '--status', 'in_progress']);
+  assert.equal(r.status, 3, r.stdout + r.stderr);
+  assert.equal(git(w.repo, 'rev-parse', 'HEAD'), head, 'HEAD is where the user left it');
+  assert.equal(git(w.repo, 'status', '--porcelain'), '', 'nothing of the rejected write is left');
+  const q = w.run(['query', '--phase', '1', '--json']);
+  assert.equal(q.status, 0, q.stdout + q.stderr);
+  assert.equal(JSON.parse(q.stdout).status, 'pending', 'the answer comes from the local copy');
+  assert.match(q.stderr, /origin offline, local backlog updates may be behind and need manual remediation later/);
+});
+
+test('a new branch gets its origin branch on the first push', t => {
+  const w = world(t);
+  git(w.repo, 'switch', '-q', '-c', 'feature');
+  assert.equal(w.run(['query']).status, 0, 'no origin branch yet: nothing to pull, no failure');
+  const r = w.run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(git(w.repo, 'rev-list', '--count', 'origin/feature..HEAD'), '0');
+});
+
+test('push-backlog-updates=false commits the change and pushes nothing', t => {
+  const w = world(t); w.setup();
+  const file = join(w.repo, '.backlog', 'config.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), 'push-backlog-updates': false }));
+  const r = w.run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /committed; push is off \(push-backlog-updates=false\)/);
+  assert.equal(git(w.repo, 'rev-list', '--count', 'origin/main..HEAD'), '1', 'committed, not pushed');
 });

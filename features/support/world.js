@@ -41,6 +41,21 @@ export function makeWorld(location) {
       cfg[name] = { ...(cfg[name] ?? {}), ...fields };
       writeFileSync(file, JSON.stringify(cfg, null, 2));
     },
+    // a second checkout of the same backlog: another clone of the backlog repository (remote) or of the consuming repository (local)
+    other() {
+      if (!this.otherDir) {
+        const source = env.BACKLOG_HOME ? env.BACKLOG_HOME : this.repo;
+        this.otherDir = join(tmp, 'other');
+        this.gitIn(tmp, 'clone', '-q', this.gitIn(source, 'remote', 'get-url', 'origin'), this.otherDir);
+      }
+      return this.otherDir;
+    },
+    runOther(args, extra = {}) {
+      const dir = this.other();
+      const agent = { BACKLOG_AGENT: extra.env?.BACKLOG_AGENT ?? 'other' };
+      const home = env.BACKLOG_HOME ? { BACKLOG_HOME: dir } : {};
+      return runCli(args, { cwd: env.BACKLOG_HOME ? this.repo : dir, env: { ...env, ...home, ...agent, ...extra.env } });
+    },
     hasItemFolder() { return existsSync(join(this.repo, '.backlog')) || (env.BACKLOG_HOME && existsSync(join(env.BACKLOG_HOME, 'acme', 'demo'))); },
   };
   return world;

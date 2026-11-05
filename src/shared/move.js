@@ -45,7 +45,7 @@ export async function run(argv) {
   try {
     a = parse(argv);
     return await withBacklog((con, ctx) => move(a, con, ctx), ['move.py', ...argv.slice(0, 2)].join(' '));
-  } catch (err) { const e = seen.widen(err, a?.folders); return die(e.message, e instanceof BacklogError ? e.exitCode : 1); } // both folders of a move
+  } catch (err) { const e = seen.widen(err, a?.folders); return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); } // both folders of a move
 }
 
 // Branch names on the origin of the consuming repository: a Set, or the git error text.

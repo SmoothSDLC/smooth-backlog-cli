@@ -113,11 +113,13 @@ test('two clones create at once: both items reach the bare with different number
 test('renumber: the later pusher gets nextSeq in file name, phase, seq and heading, and says so', async t => {
   const f = fixture(t);
   putItem(f.folder, 1, 'alpha'); putItem(f.folder2, 1, 'beta');
+  const line = store.addEvent(f.folder2, 'phases/001-beta.md', { event: 'claimed', note: 'before the renumbering' });
   await sync.commit(f.home, f.folder, 'new alpha');
   const { result, out } = await captureStdout(() => sync.commit(f.home2, f.folder2, 'new beta'));
   assert.equal(out, 'renumbered 001 -> 002\n');
   assert.deepEqual(result, [[1, 2]]);
   const beta = store.load(f.folder2).find(i => i.fm.name === 'beta');
+  assert.deepEqual(beta.fm.events, [line], 'the history survives a renumbering');
   assert.equal(beta.path, 'phases/002-beta.md');
   assert.equal(beta.fm.phase, '002-beta'); assert.equal(beta.fm.seq, 2);
   assert.match(beta.body, /^\n# Phase 002 — beta\n/);

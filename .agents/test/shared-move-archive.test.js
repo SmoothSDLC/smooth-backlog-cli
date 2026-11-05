@@ -145,7 +145,6 @@ test('review P2: a new item does not inherit the events of the moved-away item w
   const fresh = mk('second one'); // the only row is gone: its INTEGER PRIMARY KEY comes round again
   const ev = run(f, 'query', ['--events', fresh]);
   assert.equal(ev.status, 0, ev.stderr);
-  assert.ok(ev.stdout.includes('new phase ' + fresh), ev.stdout);
   assert.ok(!ev.stdout.includes('first') && !ev.stdout.includes('moved_out'), `no event of the moved item:\n${ev.stdout}`);
   const con = db.connect(join(t, 'home', 'acme', 'demo'));
   try { assert.equal(con.prepare('SELECT COUNT(*) n FROM event WHERE note LIKE ?').get('%first-one%').n > 0, true, 'its history is kept, detached'); } finally { con.close(); }

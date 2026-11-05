@@ -448,6 +448,29 @@ test('075: --phase prints the full item (row, front matter, body, missing) by sl
   assert.match(view(f, ['--phase', 'nope'], 1).stdout, /no phase 'nope'/);
 });
 
+test('query --events reads the item history from the items, newest first, archived items included', () => {
+  const f = build(false);
+  const run = (...args) => cli(args, { cwd: f.cons, tmp: f.t });
+  run('update', '1', '--note', 'first note');
+  run('update', '1', '--note', 'second note');
+  const one = run('query', '--events', '1');
+  assert.equal(one.status, 0, one.stderr);
+  const lines = one.stdout.split('\n').filter(Boolean);
+  assert.ok(lines[0].includes('second note') && lines.some(l => l.includes('first note')), one.stdout);
+  assert.match(lines[0], /^ {2}\d{4}-\d\d-\d\dT\S+ {2}\S.{13} branch=\S* commit=\S* /);
+  assert.equal(run('archive', '4').status, 0);
+  const arch = run('query', '--events', '4');
+  assert.equal(arch.status, 0, arch.stderr);
+  assert.match(arch.stdout, /archived/);
+  const all = run('query', '--events');
+  assert.ok(all.stdout.includes('second note') && all.stdout.includes('archived'), all.stdout);
+  // the database is not the source: an event that exists only in a file is listed
+  const file = join(f.folder, 'phases', '002-beta.md');
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^---\n/, '---\nevents:\n- "2020-01-01T00:00:00Z note - - only in the file"\n'));
+  assert.match(run('query', '--events', '2').stdout, /only in the file/);
+  assert.equal(run('query', '--events', '99').status, 1);
+});
+
 test('075: --critical lists the open critical items (JSON and text) and says so when there are none', () => {
   const f = fx();
   assert.equal(view(f, ['--critical']).stdout,
@@ -465,49 +488,21 @@ test('075: --critical lists the open critical items (JSON and text) and says so 
 
 test('075: --events (all, and for one item) and --by-branch: the exact lines', () => {
   const f = fx();
-  assert.equal(norm(view(f, ['--events']).stdout),
-    '  TS  ingested       branch= commit=SHA new phase 008-untagged\n'
-    + '  TS  ingested       branch=main commit=SHA new phase 007-foreign\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  planning_event branch= commit= added 006-ghost at rank end; backlog re-densified to 5 item(s)\n'
-    + '  TS  ingested       branch=main commit=SHA new phase 006-ghost\n'
-    + '  TS  reingested     branch=feature commit=SHA sha drift SHA->SHA\n'
-    + '  TS  planning_event branch= commit= added 005-feat at rank end; backlog re-densified to 4 item(s)\n'
-    + '  TS  ingested       branch=feature commit=SHA new phase 005-feat\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  state_change   branch=main commit=SHA set status=done, handoffs=none\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    // item 088: the fixture completes Delta through both review stages before the done transition; their events are here
-    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by rex: PASS (TS)\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  review_started branch=main commit=SHA set review_started=Review started by rex at TS\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  review_requested branch=main commit=SHA n\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  reviewed       branch=main commit=SHA set reviewed=Review by amy-a: PASS (TS)\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  review_started branch=main commit=SHA set review_started=Review started by amy-a at TS\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  review_requested branch=main commit=SHA n\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  state_change   branch=main commit=SHA set estimate_min=5, review_refs=references/review/code.md\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  state_change   branch=main commit=SHA set status=in_progress\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  planning_event branch= commit= added 004-delta at rank end; backlog re-densified to 4 item(s)\n'
-    + '  TS  ingested       branch=main commit=SHA new phase 004-delta\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  planning_event branch= commit= added 003-gamma at rank end; backlog re-densified to 3 item(s)\n'
-    + '  TS  ingested       branch=main commit=SHA new phase 003-gamma\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  planning_event branch= commit= added 002-beta at rank 0; backlog re-densified to 2 item(s)\n'
-    + '  TS  ingested       branch=main commit=SHA new phase 002-beta\n'
-    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
-    + '  TS  planning_event branch= commit= added 001-alpha at rank end; backlog re-densified to 1 item(s)\n'
-    + '  TS  ingested       branch=main commit=SHA new phase 001-alpha\n');
-  assert.equal(norm(view(f, ['--events', '002-beta']).stdout), '  TS  ingested       branch=main commit=SHA new phase 002-beta\n', 'one item: only its own lines');
+  // the history comes from the items; events logged within one second have no order between items, so the lines are compared as a set
+  const sorted = out => norm(out).split('\n').filter(Boolean).sort();
+  assert.deepEqual(sorted(view(f, ['--events']).stdout), [
+    '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)',
+    '  TS  review_requested branch=main commit=SHA n',
+    '  TS  review_requested branch=main commit=SHA n',
+    '  TS  review_started branch=main commit=SHA set review_started=Review started by amy-a at TS',
+    '  TS  review_started branch=main commit=SHA set review_started=Review started by rex at TS',
+    '  TS  reviewed       branch=main commit=SHA set reviewed=Review by amy-a: PASS (TS)',
+    '  TS  reviewed       branch=main commit=SHA set reviewed=Review by rex: PASS (TS)',
+    '  TS  state_change   branch=main commit=SHA set estimate_min=5, review_refs=references/review/code.md',
+    '  TS  state_change   branch=main commit=SHA set status=done, handoffs=none',
+    '  TS  state_change   branch=main commit=SHA set status=in_progress',
+  ]);
+  assert.equal(view(f, ['--events', '002-beta']).stdout, '', 'one item: only its own lines');
   assert.equal(norm(view(f, ['--by-branch', 'main']).stdout),
     '  [  1] 001-alpha                    pending      commit=SHA \n'
     + '  [  2] 002-beta                     pending      commit=SHA \n'

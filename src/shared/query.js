@@ -259,17 +259,21 @@ async function query(argv) {
     }
 
     if (a.events !== undefined) {
-      let rows;
-      if (a.events === '*') rows = all('SELECT * FROM event ORDER BY id DESC LIMIT 50');
-      else {
+      // the history is kept in the items themselves (archived ones included); the database is not read
+      let path = null;
+      if (a.events !== '*') {
         // The oracle crashes on an unknown item here; a refusal like --phase is the same exit status.
         const sel = itemSelector(a.events);
         const p = sel && (sel.number !== undefined
           ? one("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id", sel.number)
           : one('SELECT * FROM phase WHERE slug=?', sel.slug));
         if (!p) { say(`❌ no phase ${repr(a.events)}`); return 1; }
-        rows = all('SELECT * FROM event WHERE phase_id=? ORDER BY id DESC', p.id);
+        path = p.path;
       }
+      // newest first: the lines of one item are appended in time order, so reversing first keeps equal timestamps in that order
+      const rows = store.load(folder).filter(i => path === null || i.path === path)
+        .flatMap(i => team.asList(i.fm.events).map(store.parseEvent)).reverse().sort((x, y) => (x.ts < y.ts ? 1 : x.ts > y.ts ? -1 : 0));
+      if (path === null) rows.length = Math.min(rows.length, 50);
       for (const e of rows) say(`  ${e.ts}  ${String(e.event).padEnd(14)} branch=${e.branch} commit=${sha7(e)} ${e.note}`);
       return 0;
     }

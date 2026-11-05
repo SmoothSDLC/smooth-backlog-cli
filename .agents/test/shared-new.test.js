@@ -201,8 +201,7 @@ git -C "${other}" add -A && git -C "${other}" commit -q -m bravo && git -C "${ot
   assert.match(items(f)[1].body, /^\n# Phase 002 — Alpha job\n/);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
-  assert.deepEqual(rows(f, 'SELECT slug, seq FROM phase ORDER BY seq'), [{ slug: '001-bravo', seq: 1 }, { slug: '002-alpha-job', seq: 2 }]); // the stale 001 row moved on to 002, no ghost
-  assert.deepEqual(store.findings(f.folder).ghost, []);
+  assert.deepEqual(rows(f, 'SELECT slug, seq FROM phase ORDER BY seq'), [{ slug: '001-bravo', seq: 1 }, { slug: '002-alpha-job', seq: 2 }]); // one row per file
 });
 
 // ---------------------------------------------------------------- review fixes (job 10)

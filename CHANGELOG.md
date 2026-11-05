@@ -8,7 +8,7 @@ One backlog, one CLI. Compared with 1.0.1:
   with a history of events; the JSON manifest of 1.x is not read. A repository with a 1.x `.backlog/backlog_manifest.json`
   starts a new backlog; recreate the items you still need with `backlog new`.
 - **The CLI keeps a private cache of the items per clone;** no database is stored in the backlog (older backlogs may still
-  hold one; it is ignored). The cache is rebuilt from the item files at the start of every command.
+  hold one; it is ignored). The cache is rebuilt from the item files at the start of every command, and a file deleted outside the CLI is simply an absent item.
 - **The history of an item is part of the item** (`backlog query --events`); a replan records no event of its own.
 - **Where the items live is a setting, not a mode.** The backlog is always a git repository and every change to it is
   committed and pushed before the command exits. By default the items live in `.backlog/` inside the repository

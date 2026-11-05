@@ -297,11 +297,23 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
         "claimed_by": "",
         "review_state": ""
       }
-    ],
-    "ghost": []
+    ]
   }
 }
 `);
+});
+
+test('an item file deleted outside the CLI is simply absent: no ghost, no crash', () => {
+  const f = build(true); // a fresh fixture: the shared one is read by other tests
+  rmSync(join(f.folder, 'phases', '002-beta.md'));
+  const r = cli(['query', '--status', '--json'], { cwd: f.cons, tmp: f.t });
+  assert.equal(r.status, 0, r.stderr);
+  const v = JSON.parse(r.stdout);
+  assert.ok(!v.phases.some(p => p.slug === '002-beta'));
+  assert.equal(v.findings.ghost, undefined);
+  const text = cli(['query'], { cwd: f.cons, tmp: f.t });
+  assert.equal(text.status, 0, text.stderr);
+  assert.doesNotMatch(text.stdout, /database row/);
 });
 
 test('075: --status text: the findings, the critical banner, the queue and the gone-branch warning, exactly', () => {
@@ -364,8 +376,7 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
     gone_branch_items: [],
     findings: {
       foreign: [{ id: 6, handoff_id: 1, slug: '006-foreign', seq: 6, name: 'foreign', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/006-foreign.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'other/thing', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
-      untagged: [{ id: 7, handoff_id: 1, slug: '007-untagged', seq: 7, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/007-untagged.md', sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
-      ghost: []
+      untagged: [{ id: 7, handoff_id: 1, slug: '007-untagged', seq: 7, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/007-untagged.md', sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }]
     }
   });
 });

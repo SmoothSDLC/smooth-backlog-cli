@@ -266,8 +266,7 @@ export function nextSeqFor(dir, tail) {
 
 const slugOf = i => i.fm.phase || basename(i.path, '.md'); // ingest_phase slug
 
-// pending/in_progress items of phases/ (all branches), priority then seq. The oracle ranks mirror rows: a ghost
-// (an actionable row whose file is gone) keeps its rank and is counted, but has no file to rewrite.
+// pending/in_progress items of phases/ (all branches), priority then seq.
 // Absent keys read as the mirror database defaults (status pending, priority 50, seq 0); an explicit null stays null.
 const statusOf = i => (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending');
 function actionable(dir) {
@@ -281,7 +280,7 @@ function actionable(dir) {
 // int(priority): a quoted "0" equals rank 0.
 const asInt = p => (typeof p === 'string' && /^\s*[+-]?\d+\s*$/.test(p) ? Number(p) : p);
 function applyDense(dir, items, inScope, beforeApply) {
-  const changes = items.map((i, rank) => !i.ghost && inScope(i) && asInt(i.fm.priority ?? -1) !== rank);
+  const changes = items.map((i, rank) => inScope(i) && asInt(i.fm.priority ?? -1) !== rank);
   // Validate the entire reflow write set before rewriting any of it; a leading pull is not an agent read.
   const writes = items.filter((i, rank) => changes[rank]);
   guardReflow(dir, writes);
@@ -335,9 +334,9 @@ export function reorder(dir, idents, beforeApply) {
 
 
 //. The folder repository is the folder's last two path parts. Archived items (and a NULL status,
-// which NOT IN never matches) are out of every finding; ghost is a non-archived mirror row whose file is gone.
+// which NOT IN never matches) are out of every finding.
 export function findings(dir) {
-  const out = { foreign: [], untagged: [], ghost: [] };
+  const out = { foreign: [], untagged: [] };
   const folderRepo = resolve(dir).split(sep).slice(-2).join('/');
   for (const i of load(dir)) {
     if (!i.path.startsWith('phases/') || statusOf(i) === null || statusOf(i) === 'archived') continue;

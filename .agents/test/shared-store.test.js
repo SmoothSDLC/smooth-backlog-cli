@@ -202,10 +202,9 @@ test('findings: a foreign and an untagged item are flagged, archived items are n
   const noRepo = item(5, { repository: '' });
   putItem(folder, noRepo);
   const fd = store.findings(folder);
-  assert.deepEqual(Object.keys(fd), ['foreign', 'untagged', 'ghost']);
+  assert.deepEqual(Object.keys(fd), ['foreign', 'untagged']);
   assert.deepEqual(fd.foreign.map(i => i.fm.phase), ['002-i2']);
   assert.deepEqual(fd.untagged.map(i => i.fm.phase), ['003-i3', '005-i5']);
-  assert.deepEqual(fd.ghost, []);
 });
 
 test('now(): second-precision UTC with a Z suffix', () => {

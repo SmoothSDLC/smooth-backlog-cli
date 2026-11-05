@@ -66,34 +66,23 @@ export function connect(folder, { readOnly = false } = {}) {
   return db;
 }
 
-// A command that writes item files and then scans must leave nothing behind when it throws (nothing is committed yet, so the
-// next successful command would publish it): fn runs, and on a throw exactly the files it wrote, renamed or removed (store.note,
-// called by every writer) and every row of the mirror go back as they were. A file the command did not write is never touched.
+// A command that writes item files must leave nothing behind when it throws (nothing is committed yet, so the next successful
+// command would publish it): fn runs, and on a throw exactly the files it wrote, renamed or removed (store.note, called by every
+// writer) go back as they were. A file the command did not write is never touched.
 // Beyond python parity. shortcut: the files are held in memory; fine for a backlog folder.
 export async function undoOnThrow(db, folder, fn) {
-  const rowsOf = () => ['handoff', 'phase'].map(t => [t, db.prepare(`SELECT * FROM ${t}`).all().map(r => ({ ...r }))]);
-  const tables = rowsOf();
   let touched;
   const opened = beginJournal(folder);
   try {
-   try { return await journalled(async j => { touched = j; return fn(); }); } catch (e) {
-    for (const [p, prior] of touched) {
-      if (prior === null) rmSync(p, { force: true }); else { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, prior); }
+    try { return await journalled(async j => { touched = j; return fn(); }); } catch (e) {
+      for (const [p, prior] of touched) {
+        if (prior === null) rmSync(p, { force: true }); else { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, prior); }
+      }
+      throw e;
+    } finally {
+      // a nested undo that succeeded hands its paths to the outer one, which may still fail
+      if (touched) for (const [p, prior] of touched) note(p, prior);
     }
-    let now;
-    try { now = JSON.stringify(rowsOf()); } catch { throw e; } // the command closed its db (it is past the rescans): nothing of the mirror to put back
-    if (now === JSON.stringify(tables)) throw e; // untouched: do not rewrite the db file
-    db.exec('BEGIN');
-    for (const [t] of [...tables].reverse()) db.exec(`DELETE FROM ${t}`); // phase references handoff
-    for (const [t, rows] of tables) {
-      for (const r of rows) db.prepare(`INSERT INTO ${t}(${Object.keys(r)}) VALUES(${Object.keys(r).map(() => '?')})`).run(...Object.values(r));
-    }
-    db.exec('COMMIT');
-    throw e;
-  } finally {
-    // a nested undo that succeeded hands its paths to the outer one, which may still fail
-    if (touched) for (const [p, prior] of touched) note(p, prior);
-  }
   } finally { if (opened) endJournal(); }
 }
 

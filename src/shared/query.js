@@ -2,8 +2,8 @@
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the backlog.db mirror,
 // the earlier scripts order: pull, no-backlog check, branch, connect, findings. Output strings and --json match.
 // Never writes an item (the db is opened as lib_db.connect does). The team views are views.js, --plan is pop.js.
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { parse as parseItem } from './frontmatter.js';
 import * as db from './db.js';
@@ -47,19 +47,12 @@ const sha7 = r => String(r.commit_sha ?? '').slice(0, 7);
 const pad = (v, n) => String(v).padStart(n);
 const repr = s => redact(s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}'`);
 
-// A row's file exists only when it resolves inside the repository folder (no.., absolute path or symlink out).
-// The oracle follows such a path; here it counts as gone, since the row is mirror data and not to be trusted.
-function present(folder, path) {
-  try { return realpathSync(resolve(folder, String(path))).startsWith(realpathSync(folder) + sep); } catch { return false; }
-}
-
 // over the mirror rows: the file of a row is looked up in the repository folder.
-function findings(rows, folder, repo) {
-  const out = { foreign: [], untagged: [], ghost: [] };
+function findings(rows, repo) {
+  const out = { foreign: [], untagged: [] };
   for (const r of rows) {
     if (r.status === 'archived') continue;
-    if (!present(folder, r.path)) out.ghost.push(r);
-    else if (!r.repository || !r.branch) out.untagged.push(r);
+    if (!r.repository || !r.branch) out.untagged.push(r);
     else if (r.repository !== repo) out.foreign.push(r);
   }
   return out;
@@ -69,7 +62,6 @@ function findings(rows, folder, repo) {
 function findingLines(f, repo) {
   return [
     ...f.foreign.map(r => `⚠️  CRITICAL: ${r.path} says repository ${r.repository} but is in the folder of ${repo}; it is out of the queue. Move it: backlog move ${r.slug} --to-repository`),
-    ...f.ghost.map(r => `⚠️  CRITICAL: item ${r.slug} has a database row but its file ${r.path} is gone (deleted outside the scripts); it is out of the queue. Restore the file from git`),
     ...(f.bare ?? []).map(p => `⚠️  ${p} has no front matter block; it is not an item, is out of the queue and is never rewritten. Add the front matter or move the file out of phases/`),
     ...f.untagged.map(r => `⚠️  item ${r.slug} records no repository or branch; it is out of the queue until its repository and branch are filled in`),
   ];
@@ -182,7 +174,7 @@ async function query(argv) {
     const one = (sql, ...p) => { const r = con.prepare(sql).get(...p); return r && { ...r }; };
     const hid = one("SELECT id FROM handoff WHERE status='active' LIMIT 1")?.id ?? null;
     const critical = () => (hid === null ? [] : all("SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') AND severity='critical' ORDER BY priority ASC, seq ASC", hid));
-    const bad = findings(all("SELECT * FROM phase WHERE status NOT IN ('archived')"), folder, repo);
+    const bad = findings(all("SELECT * FROM phase WHERE status NOT IN ('archived')"), repo);
     const bare = store.bareFiles(folder);
     if (bare.length) bad.bare = bare; // only when there is one: the --json findings keep the earlier scripts three keys
     const excluded = new Set(Object.values(bad).flat().map(r => r.id));
@@ -303,8 +295,7 @@ async function query(argv) {
     }
     if (a.json) {
       // who holds each item and whether it is in review, so no caller reads the item files for them
-      // each row's own file, inside the folder only (a row that leaves it is a ghost: no file is read for it)
-      const fmOf = r => (present(folder, r.path) ? parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8')).fm : {});
+      const fmOf = r => parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8')).fm;
       const teamFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
       const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(x => (x && typeof x === 'object' ? teamFields(x) : x)) : v])); // bare files stay paths
       dump({ handoff: h, repository: repo, branch: redact(branch), phases: rows.map(teamFields), gone_branch_items: gone.map(teamFields), findings: each(bad) });

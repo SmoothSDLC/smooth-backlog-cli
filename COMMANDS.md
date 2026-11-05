@@ -385,8 +385,8 @@ Usage:
 
 Reads the backlog and never changes it, except that --changed advances
 the agent's own last-use reference (its record of its own use, not an item). Without a view option it prints the full stack of the branch: the open
-items in queue order (priority 0 is next), then the finished ones. Items that are not on the queue because their file
-is gone, or because they name another repository or no branch, are reported as findings above the queue.
+items in queue order (priority 0 is next), then the finished ones. Items that are not on the queue because they name
+another repository or no branch are reported as findings above the queue.
 With --json the command prints the data itself, without any wrapper.
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the

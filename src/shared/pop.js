@@ -4,8 +4,8 @@
 // --claim-now claims through `backlog update --claim` as runs. Never writes an item itself.
 // shortcut: parse and the findings below repeat query.js (not exported there); fold them in when that file is free.
 import { spawnSync } from 'node:child_process';
-import { existsSync, realpathSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BacklogError } from '../errors.js';
 import * as db from './db.js';
@@ -50,9 +50,8 @@ function parse(argv) {
 }
 
 // over the mirror rows: the ids of the rows that are out of every queue.
-function excludedIds(rows, folder, repo) {
-  const present = path => { try { return realpathSync(resolve(folder, String(path))).startsWith(realpathSync(folder) + sep); } catch { return false; } };
-  return new Set(rows.filter(r => r.status !== 'archived' && (!present(r.path) || !r.repository || !r.branch || r.repository !== repo)).map(r => r.id));
+function excludedIds(rows, repo) {
+  return new Set(rows.filter(r => r.status !== 'archived' && (!r.repository || !r.branch || r.repository !== repo)).map(r => r.id));
 }
 
 //
@@ -358,7 +357,7 @@ async function popCommand(argv) {
   try {
     const all = (sql, ...p) => con.prepare(sql).all(...p).map(r => ({ ...r }));
     const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
-    const excluded = excludedIds(all("SELECT * FROM phase WHERE status NOT IN ('archived')"), folder, repo);
+    const excluded = excludedIds(all("SELECT * FROM phase WHERE status NOT IN ('archived')"), repo);
     return await (a.plan ? plan : pop)(a, { all, hid, excluded, repo, branch, folder, home });
   } catch (e) {
     if (e instanceof BacklogError) return die(e.message, e.exitCode);

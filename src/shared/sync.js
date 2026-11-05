@@ -11,7 +11,6 @@ import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
 import { actor, publicationGuard, staleError, staleViews } from './seen.js';
-import { connect } from './db.js';
 import * as store from './store.js';
 import { asList, foreignCycle, foreignItem, heldBy, isForeign } from './team.js';
 import { wipRefusal } from './wip.js';
@@ -276,11 +275,6 @@ async function validatePublication(home, folders, names, claims, renumbered) {
     const slug = i => i.fm.phase || basename(i.path, '.md'); // same fallback as db ingestion
     const seq = i => Number(Object.hasOwn(i.fm, 'seq') ? i.fm.seq : 0);
     const find = d => items.find(i => /^\d+$/.test(String(d)) ? seq(i) === Number(d) : slug(i) === String(d));
-    const con = connect(folders[n], { readOnly: true });
-    let reserved;
-    try { // --seq checks mirror rows too: a ghost still reserves its number until explicitly repaired.
-      reserved = con.prepare('SELECT slug, seq FROM phase').all().filter(r => !items.some(i => slug(i) === r.slug));
-    } finally { con.close(); }
     const resolves = d => (isForeign(d) ? Boolean(foreignItem(folders[n], d)) : Boolean(find(d))); // owner/name#seq
     const leaves = items.some(i => asList(i.fm.depends_on).some(isForeign)); const others = new Map();
     const key = d => /^\d+$/.test(String(d)) ? String(Number(d)) : String(d);
@@ -305,8 +299,7 @@ async function validatePublication(home, folders, names, claims, renumbered) {
       const item = items.find(i => i.path === path);
       if (item) {
         const held = items.find(i => i !== item && seq(i) === seq(item));
-        const holder = held ? slug(held) : reserved.find(r => Number(r.seq) === seq(item))?.slug;
-        if (holder) reject(`${names[n]}: seq ${item.fm.seq} of ${slug(item)} is already held by ${holder}; the number must stay unique`);
+        if (held) reject(`${names[n]}: seq ${item.fm.seq} of ${slug(item)} is already held by ${slug(held)}; the number must stay unique`);
         const sameSlug = items.find(i => i !== item && slug(i) === slug(item));
         if (sameSlug) reject(`${names[n]}: duplicate slug ${slug(item)} in ${item.path} and ${sameSlug.path}; the slug must stay unique`);
         for (const d of asList(item.fm.depends_on)) if (!resolves(d)) reject(`${names[n]}: ${item.fm.phase} depends on missing item ${d}`);

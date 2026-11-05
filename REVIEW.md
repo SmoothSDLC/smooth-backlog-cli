@@ -152,6 +152,8 @@ this pull request (decision D, section 4).
 
 Events are in the item files since the item-history change (front-matter list `events`, read by `query --events`); the database is now derived, and a later change makes it an ignored cache.
 
+Done in the cache change (ea1ed36): the cache lives under the state folder of each clone and is rebuilt from the item files at the start of every command; no `backlog.db` is created, committed or pushed any more. The conflict-repair code goes in the next change.
+
 ### 2.6 Dead code, unused options, speculative abstractions — SIMPLIFY
 
 Per-export inventory (deterministic: every `export` of `src/**`, grep of its name in the other `src` files, `bin`,

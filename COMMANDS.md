@@ -151,7 +151,7 @@ Usage:
   backlog update --replan <item>,<item>,... [--note <text>]
 
 Changes the item named by its number or slug. The item file is the source of truth: the command writes the file,
-records an event in the history of the item and refreshes the backlog database from the file. Setting --status to
+records an event in the history of the item. Setting --status to
 done completes the item (its completion time is set) and renumbers the rest of the backlog; so does --priority.
 Both are planning events, so look at the order again afterwards. The item may be left out only together with
 --replan.

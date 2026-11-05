@@ -126,6 +126,8 @@ items first (one line per event), then `db.connect` rebuilds the mirror from ite
 or older, and `src/shared/sync.js` repairConflicts/renumber-mirror/localDbs and `src/shared/db.js` replayLocal go.
 Recommended as a later change; the backlog repository's content (an untracked `backlog.db`) changes with it.
 
+Done (ea1ed36): the events are in the item files and `db.connect` rebuilds a per-clone cache from the items at every command, under the clone's state folder; the conflict repair is removed in the next change.
+
 ### Task 7: documentation describes one mode
 
 **Files:** README.md (command reference = the one set; "where the items live" section), COMMANDS.md (regenerated),

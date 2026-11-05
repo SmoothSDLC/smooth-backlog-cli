@@ -57,6 +57,16 @@ Items are selected by their number (`1`) or slug (`001-fix-the-login-redirect`).
 - **Teams:** the team rules — refinement before work, review rules before the close, work-in-progress limits — apply to items that belong to a team. Teams, their leads and members and their review rules are configuration in the backlog folder (`teams.json`): for example "an item of team A closes when one member of team A and one member of team B passed the current commit". Nothing about a particular team or agent is built into the CLI. See `backlog update --help`, `backlog work --help` and `backlog team pop --help`.
 - **Skill for agents:** `backlog setup` deploys the built-in backlog skill (`templates/skills/backlog`) into every agent folder present in the repository (`.agents`, `.claude`, `.github`, `.qwen`), so coding agents learn the commands from the repository itself.
 
+## Data integrity
+
+The same five rules hold wherever the items live:
+
+- Every command, reads included, first updates the repository that holds the items from its origin.
+- Every change is committed and pushed before the command exits (inside your repository the branch is pushed with it; `"push-backlog-updates": false` in `.backlog/config.json` turns that off).
+- A push the origin rejects is retried after another update, up to three times.
+- A write to an item that someone else changed since you last read it is rejected (exit 5) and prints the item as it is now.
+- A claim of an item another agent holds is refused.
+
 ## Command reference
 
 | Command | Purpose |

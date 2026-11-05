@@ -211,9 +211,9 @@ Per-export inventory (deterministic: every `export` of `src/**`, grep of its nam
   mode switches went; it is documented as a file the user may write.
 - NOTE (decision D): inside the repository every change is a commit on the current branch (`backlog: <message>`, the
   backlog's paths only) pushed to origin under the same branch name; the repository's own commit hooks run on it, and
-  a repository without a reachable origin refuses every write with exit 3 while keeping the commit. The items ride with
-  the branch: `--all` shows what the checked-out branch carries. The backlog repository's clone is still pulled before
-  every command; the repository itself is not (its branch workflow is the user's).
+  a repository without a reachable origin refuses every write with exit 3 and keeps nothing of it. Since "One sync path for both storage locations" the repository is also updated from its origin before every command, with the same retry and stale-write rejection as a backlog repository clone. The items ride with
+  the branch: `--all` shows what the checked-out branch carries. Both locations are pulled before
+  every command.
 
 - `src/shared/store.js:117-127` and `src/storage.js:9-19`: symlink checks are check-then-write (marked as a shortcut
   for a single-user clone); fine at the assumed load.

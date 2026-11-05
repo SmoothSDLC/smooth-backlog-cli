@@ -9,6 +9,7 @@ One backlog, one CLI. Compared with 1.0.1:
   starts a new backlog; recreate the items you still need with `backlog new`.
 - **The CLI keeps a private cache of the items per clone;** no database is stored in the backlog (older backlogs may still
   hold one; it is ignored). The cache is rebuilt from the item files at the start of every command, and a file deleted outside the CLI is simply an absent item.
+- **The same data integrity in both storage locations.** Every command first updates the repository that holds the items from its origin (a read whose origin is unreachable answers with a warning, a write is refused), every change is pushed before the command exits, a rejected push is retried, and a write on a stale view is rejected and shows the item as it is now. Inside the repository the branch is pushed as it is, the user's own commits included; `"push-backlog-updates": false` in `.backlog/config.json` turns the push off.
 - **The history of an item is part of the item** (`backlog query --events`); a replan records no event of its own.
 - **Where the items live is configuration, not a mode.** The backlog is always a git repository and every change to it
   is committed and pushed before the command exits. The repository's `.backlog` folder holds the configuration

@@ -170,7 +170,7 @@ function remapViews(folder, views, pairs) {
   });
 }
 
-// A command showed the item (a mirror row) to `agent`.
+// A command showed the item (a row) to `agent`.
 export const view = (agent, folder, repo, row) => record(folder, repo, agent || actor(), [{ slug: row.slug, path: row.path }]);
 
 // the refusal names every item of this folder the agent has read whose content changed since, in one command

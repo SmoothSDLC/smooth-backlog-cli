@@ -78,7 +78,7 @@ function itemFm(folder, row) {
 }
 
 // All rows of the folder's items (index.rows), in file order.
-export const mirrorRows = folder => index.rows(folder).rows;
+export const folderRows = folder => index.rows(folder).rows;
 
 // owner/name#seq names an item of another repository's backlog in the same backlog repository clone.
 const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // an owner or repository name is one path segment, never. or..
@@ -139,7 +139,7 @@ const edgeRefusal = (producerFm, dependentId) => {
 // handoff (missing, unaccepted, stale or rejected); a satisfied edge (accepted, legacy) is no entry. The dependent
 // is named as the producer's repository names it: its seq for a same-repository producer,
 // <dependent repository>#<seq> for a producer of another repository.
-export function undoneDependencies(folder, fm, rows = mirrorRows(folder)) {
+export function undoneDependencies(folder, fm, rows = folderRows(folder)) {
   return asList(fm.depends_on).map(id => {
     const f = foreignItem(folder, id);
     if (f !== undefined) {
@@ -157,7 +157,7 @@ export function undoneDependencies(folder, fm, rows = mirrorRows(folder)) {
 // the open rows of the active handoff whose file says agent holds them, on every branch, by number.
 // state: awaiting-review, waiting:<what>, active.
 export function heldItems(folder, agent, { refining = false } = {}) {
-  const rows = mirrorRows(folder).filter(r => ACTIONABLE.includes(r.status)).sort((x, y) => x.seq - y.seq);
+  const rows = folderRows(folder).filter(r => ACTIONABLE.includes(r.status)).sort((x, y) => x.seq - y.seq);
   const refines = fm => refining && !fm.claimed_by && fm.refiner === agent && fm.stage === 'refining'; // a refinement in progress is active work too
   // heldBy also matches an earlier session of the same card - the continuation is the agent's own work
   return rows.map(r => ({ ...r, fm: itemFm(folder, r) })).filter(r => heldBy(r.fm.claimed_by, agent) || refines(r.fm))

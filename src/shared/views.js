@@ -42,14 +42,14 @@ export function reviewOffer(fm, agent) {
 export async function teamRows({ open, scope, cap, every, excluded, repo, branch, folder, home }) {
   const ref = RANK[scope] <= RANK[cap] ? scope : cap;
   const mine = files(folder);
-  const mirror = team.mirrorRows(folder);
+  const rowsOfFolder = team.folderRows(folder);
   const out = [];
   for (const r of open) {
     if (excluded.has(r.id)) continue;
     if (!every && !((r.repository || '') === repo && (scope !== 'branch' || r.branch === branch))) continue;
     const fm = mine.get(r.path)?.fm ?? {};
     if (!every && refinement(fm) && ['off', 'branch'].includes(ref) && r.branch !== branch) continue; // the cap
-    out.push({ r, fm, undone: team.undoneDependencies(folder, fm, mirror), f: repo });
+    out.push({ r, fm, undone: team.undoneDependencies(folder, fm, rowsOfFolder), f: repo });
   }
   if (scope !== 'all' || ref !== 'all' || every) return out;
   for (const owner of dirs(home)) {

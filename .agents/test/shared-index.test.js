@@ -87,6 +87,21 @@ test('reconcile: a move puts the item at the clamped rank among the open ones; a
   assert.deepEqual(index.reconcile(ordered.idx, items, { exclude: ['003-i3'] }).idx.branches.main.map(e => e.slug), ['001-i1', '002-i2']);
 });
 
+test('mergeOrders: upstream\'s order stands; the local side\'s moves, additions, removals and stamps are done again on it', () => {
+  const e = (n, extra = {}) => ({ seq: n, slug: `00${n}-i${n}`, name: `I${n}`, status: 'pending', ...extra });
+  const order = (...n) => ({ branches: { main: n.map(x => (typeof x === 'number' ? e(x) : x)) } });
+  const slugs = m => m.branches.main.map(x => x.slug);
+  // one item moved to the front on each side, from [1 2 3]
+  assert.deepEqual(slugs(index.mergeOrders(order(1, 2, 3), order(3, 1, 2), order(2, 1, 3))), ['002-i2', '003-i3', '001-i1']);
+  assert.deepEqual(slugs(index.mergeOrders(order(1, 2, 3), order(2, 1, 3), order(3, 1, 2))), ['003-i3', '002-i2', '001-i1']);
+  // an item added at the end on each side: both stay, the local one last
+  assert.deepEqual(slugs(index.mergeOrders(order(1), order(1, 2), order(1, 3))), ['001-i1', '002-i2', '003-i3']);
+  // an item removed locally leaves; a status changed locally is kept; a renumbered local item keeps its place
+  const merged = index.mergeOrders(order(1, 2, 3), order(1, 2, 3, 4), order(1, e(3, { status: 'done' }), 5), new Map([['005-i5', '006-i6']]));
+  assert.deepEqual(slugs(merged), ['001-i1', '003-i3', '004-i4', '006-i6'], 'the removed item 2 left, the renumbered one is last as it was');
+  assert.equal(merged.branches.main[1].status, 'done');
+});
+
 test('rows: the priority of a live item is its position in the index; a folder without an index reads its legacy priority field', t => {
   const dir = folder(t);
   put(dir, 1, { priority: 1 }); put(dir, 2, { priority: 0 }); put(dir, 3, { status: 'done' });

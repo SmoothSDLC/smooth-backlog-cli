@@ -114,6 +114,49 @@ export function reconcile(idx, items, { move, lead, exclude = [], renames = new 
   return { idx: { branches: out }, order };
 }
 
+// The entries of `local` that kept their relative order from `base` (the longest such run; of equal runs the one that leaves the earliest
+// entries out, so a single item moved to the front is the one that moved). shortcut: quadratic in the entries of one branch; fine for a
+// few thousand, a conflict on the index is rare.
+function kept(local, base) {
+  const at = new Map(base.map((e, n) => [e.slug, n]));
+  const run = local.flatMap(e => (at.has(e.slug) ? [{ slug: e.slug, n: at.get(e.slug) }] : []));
+  const len = run.map(() => 1); const next = run.map(() => -1);
+  for (let a = run.length - 1; a >= 0; a--) for (let b = a + 1; b < run.length; b++) if (run[b].n > run[a].n && len[b] + 1 > len[a]) { len[a] = len[b] + 1; next[a] = b; }
+  let start = -1;
+  run.forEach((_, a) => { if (start < 0 || len[a] >= len[start]) start = a; });
+  const out = new Set();
+  for (let a = start; a >= 0; a = next[a]) out.add(run[a].slug);
+  return out;
+}
+
+// Three-way merge of the orders of two clones that changed the index from one base (git cannot merge lines that moved): upstream's order
+// stands, and what the local side did to it is done again: the entries it removed leave, the entries it added or moved are placed after
+// the entry that precedes them locally (at the front when none does; at the end when they are last), the entries whose name or status it
+// changed take its values.
+// renames: Map(old slug -> new slug) of local items renumbered on the way.
+export function mergeOrders(base, up, local, renames = new Map()) {
+  const out = {};
+  for (const key of new Set([...Object.keys(base.branches), ...Object.keys(up.branches), ...Object.keys(local.branches)])) {
+    const b = base.branches[key] ?? []; const mine = (local.branches[key] ?? []).map(e => (renames.has(e.slug) ? { ...e, slug: renames.get(e.slug) } : e));
+    const baseOf = new Map(b.map(e => [e.slug, e]));
+    let list = [...(up.branches[key] ?? [])];
+    for (const e of b) if (!mine.some(m => m.slug === e.slug) && !renames.has(e.slug)) list = list.filter(x => x.slug !== e.slug);
+    const stay = kept(mine, b);
+    mine.forEach((e, n) => {
+      if (stay.has(e.slug)) {
+        const was = baseOf.get(e.slug);
+        if (was && JSON.stringify(was) !== JSON.stringify(e)) list = list.map(x => (x.slug === e.slug ? { ...e } : x));
+        return;
+      }
+      list = list.filter(x => x.slug !== e.slug);
+      const before = mine.slice(0, n).reverse().find(p => list.some(x => x.slug === p.slug));
+      list.splice(n === mine.length - 1 ? list.length : before ? list.findIndex(x => x.slug === before.slug) + 1 : 0, 0, { ...e });
+    });
+    if (list.length) out[key] = list;
+  }
+  return { branches: out };
+}
+
 // After a renumbering ([old, new] pairs of this folder, as sync.commit reports them) the entry of the renumbered item, whose file is gone under
 // its old name, follows the file: Map(old slug -> new slug), so the item keeps its place in the order.
 export function renamesFor(folder, pairs) {

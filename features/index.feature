@@ -32,3 +32,11 @@ Feature: Index - the order of the backlog is committed in one file per repositor
     When I run `backlog update 3 --priority 2`
     Then the command succeeds
     And the queue is 2, 1, 3
+
+  Scenario: two checkouts ranking different items from one base end with one dense order that keeps both placements
+    Given the origin will receive another checkout's rank change of item 2 just before my push
+    When I run `backlog update 3 --priority 0`
+    Then the command succeeds
+    And the queue is 3, 2, 1
+    And the backlog repository has no uncommitted or unpushed change
+    And another checkout sees 3 items

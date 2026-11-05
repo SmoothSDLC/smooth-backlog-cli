@@ -260,18 +260,14 @@ async function repairConflicts(home, t, folders, names, renumbered) {
       if (!stages.size) return false;
       const orders = new Set(); // the indexes both sides changed
       for (const [path, st] of stages) {
-        if (['23', '123'].includes(st) && names.some(name => path === `${name}/index.json`)) { orders.add(path); continue; }
+        if (['23', '123'].includes(st) && names.some(name => path === `${name}/index.json`)) { orders.add(path); continue; } // merged below, once the renumbering is known
         if (!['23', '123'].includes(st) || !itemFile(t).test(path) || nameOf(path) < 0) return false;
         if (st !== '23') return false; // a real edit of one item by both clones cannot be merged by number
       }
       // Every upstream file is restored before a number is allocated: nextSeq loads all items, and a file still holding conflict markers would not parse.
       const mines = new Map();
       for (const path of stages.keys()) {
-        if (orders.has(path)) {
-          await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
-          await must(home, ['add', '--', lit(path)], `stage ${path}`);
-          continue;
-        }
+        if (orders.has(path)) continue;
 
         mines.set(path, parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout));
         await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
@@ -290,6 +286,13 @@ async function repairConflicts(home, t, folders, names, renumbered) {
         const was = String(mine.fm.phase || posix.basename(rel, '.md'));
         moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
         written.add(`${name}/${target}`);
+      }
+      for (const path of orders) { // upstream's order, with what the local side did to it done again
+        const side = async n => { const r = await g(home, ['show', `:${n}:${path}`]); return r.code ? { branches: {} } : JSON.parse(r.stdout); };
+        const name = path.slice(0, -'/index.json'.length);
+        const renames = new Map(moves.filter(m => m.folder === name).map(m => [m.slug, m.newSlug]));
+        writeFileSync(join(home, path), index.text(index.mergeOrders(await side(1), await side(2), await side(3), renames)));
+        await must(home, ['add', '--', lit(path)], `stage ${path}`);
       }
       if (moves.length) await remapLocal(home, t, moves, [...await changedBy(home, ['REBASE_HEAD^', 'REBASE_HEAD']), ...written], 'HEAD', new Set());
       if (!(await g(home, ['-c', 'core.editor=true', 'rebase', '--continue'])).code) return true;

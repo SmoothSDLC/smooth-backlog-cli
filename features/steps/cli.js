@@ -59,7 +59,7 @@ step(/^another checkout sees (\d+) items$/, (w, n) => {
   assert.equal((JSON.parse(r.stdout).phases ?? []).length, Number(n), r.stdout);
 });
 // a pre-push hook in the repository that holds the items: on its first run only, the other checkout publishes a change, so this push is rejected once
-step(/^the origin will receive another checkout's change just before my push$/, w => {
+const raceWith = (w, change) => {
   const hooks = join(w.gitIn(w.backlogRepo(), 'rev-parse', '--git-dir').replace(/^(?!\/)/, `${w.backlogRepo()}/`), 'hooks');
   const marker = join(w.tmp, 'raced');
   const other = w.other();
@@ -67,8 +67,10 @@ step(/^the origin will receive another checkout's change just before my push$/, 
   const env = w.env.BACKLOG_HOME ? `BACKLOG_HOME='${other}' ` : '';
   const cwd = w.env.BACKLOG_HOME ? w.repo : other;
   mkdirSync(hooks, { recursive: true });
-  writeFileSync(join(hooks, 'pre-push'), `#!/bin/sh\n[ -e '${marker}' ] && exit 0\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX\ntouch '${marker}'\ncd '${cwd}' && ${env}BACKLOG_AGENT=racer '${process.execPath}' '${bin}' update 1 --note raced >/dev/null 2>&1\nexit 0\n`, { mode: 0o755 });
-});
+  writeFileSync(join(hooks, 'pre-push'), `#!/bin/sh\n[ -e '${marker}' ] && exit 0\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX\ntouch '${marker}'\ncd '${cwd}' && ${env}BACKLOG_AGENT=racer '${process.execPath}' '${bin}' update ${change} >/dev/null 2>&1\nexit 0\n`, { mode: 0o755 });
+};
+step(/^the origin will receive another checkout's change just before my push$/, w => raceWith(w, '1 --note raced'));
+step(/^the origin will receive another checkout's rank change of item 2 just before my push$/, w => raceWith(w, '2 --priority 0'));
 
 step(/^the command succeeds$/, w => assert.equal(w.last.status, 0, `exit ${w.last.status}: ${output(w.last)}`));
 step(/^the command fails$/, w => assert.notEqual(w.last.status, 0, `the command succeeded: ${output(w.last)}`));

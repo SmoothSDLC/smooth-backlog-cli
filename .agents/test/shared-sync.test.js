@@ -9,6 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
 
@@ -106,6 +107,26 @@ test('two clones create at once: both items reach the bare with different number
   const got = seqs(f.bare, f.dir);
   assert.equal(got.length, 2);
   assert.deepEqual(got.map(g => g.seq).sort(), [1, 2]);
+});
+
+// Two clones change the order of the same branch from one base: the later publication hits a conflict on the index. It keeps what the
+// first one published and puts its own item where its writer put it; the result is one order, each item once.
+test('two clones rank different items from one base: the later publication keeps both placements in one dense order', async t => {
+  const f = fixture(t);
+  for (const [n, name] of [[1, 'alpha'], [2, 'beta'], [3, 'gamma']]) putItem(f.folder, n, name);
+  await sync.commitSettled(f.home, f.folder, 'three items');
+  git(f.home2, 'pull', '-q', '--rebase');
+  store.reflow(f.folder, { slug: '003-gamma', target: 0 }); // amy: gamma first
+  await sync.commitSettled(f.home, f.folder, 'amy ranks gamma');
+  store.reflow(f.folder2, { slug: '002-beta', target: 0 }); // bob, from the same base: beta first
+  await sync.commitSettled(f.home2, f.folder2, 'bob ranks beta');
+  git(f.home, 'pull', '-q', '--rebase');
+  for (const folder of [f.folder, f.folder2]) {
+    const rows = index.open(index.rows(folder).rows);
+    assert.deepEqual(rows.map(r => [r.slug, r.priority]), [['002-beta', 0], ['003-gamma', 1], ['001-alpha', 2]], `${folder}: bob's beta is first, amy's gamma stays ahead of alpha, no duplicate`);
+  }
+  assert.equal(git(f.home2, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+  assert.equal(git(f.home2, 'status', '--porcelain'), '');
 });
 
 test('renumber: the later pusher gets nextSeq in file name, phase, seq and heading, and says so', async t => {

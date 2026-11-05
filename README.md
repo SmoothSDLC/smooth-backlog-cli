@@ -57,6 +57,10 @@ Items are selected by their number (`1`) or slug (`001-fix-the-login-redirect`).
 - **Teams:** the team rules — refinement before work, review rules before the close, work-in-progress limits — apply to items that belong to a team. Teams, their leads and members and their review rules are configuration in the backlog folder (`teams.json`): for example "an item of team A closes when one member of team A and one member of team B passed the current commit". Nothing about a particular team or agent is built into the CLI. See `backlog update --help`, `backlog work --help` and `backlog team pop --help`.
 - **Skill for agents:** `backlog setup` deploys the built-in backlog skill (`templates/skills/backlog`) into every agent folder present in the repository (`.agents`, `.claude`, `.github`, `.qwen`), so coding agents learn the commands from the repository itself.
 
+## Where the data lives
+
+The items (markdown files with front matter) and the index (`index.json`, the order of the queue of each branch) in the folder of your repository's items are the data. Both are committed and pushed with every change, a change of the order changes the index and no item, and the CLI keeps no copy of them: no database, no cache (only the lock, the journal of a running change and the record of what each agent has read stay in the clone's state folder). When an item cannot be read after the latest update, every command names the item and the field that cannot be read: set the field again with `backlog update <item> --<field> <value>`, or bring back the item's previous version with `backlog update <item> --restore`.
+
 ## Data integrity
 
 The same five rules hold wherever the items live:

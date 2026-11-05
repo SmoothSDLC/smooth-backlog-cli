@@ -7,8 +7,15 @@ One backlog, one CLI. Compared with 1.0.1:
 - **Items are markdown files with front matter**, one per item, numbered and slugged (`001-fix-the-login-redirect`),
   with a history of events; the JSON manifest of 1.x is not read. A repository with a 1.x `.backlog/backlog_manifest.json`
   starts a new backlog; recreate the items you still need with `backlog new`.
-- **The CLI keeps a private cache of the items per clone;** no database is stored in the backlog (older backlogs may still
-  hold one; it is ignored). The cache is rebuilt from the item files at the start of every command, and a file deleted outside the CLI is simply an absent item.
+- **The order of the queue is a committed index.** Each repository folder holds one text file, `index.json`, that lists
+  the items of every branch in order (P0 first), one entry per line. A change of the order changes that file and no
+  item; two clones that changed it from one base are merged (each keeps its placement); the items no longer carry a
+  priority (the priority of an item written by an earlier build is ignored and dropped when the item is next written).
+  The items and the index are the data: no copy of them is kept per clone and no database is used (older backlogs may still
+  hold a `backlog.db`; it is ignored), and a file deleted outside the CLI is simply an absent item.
+- **An item that cannot be read is named.** When an item file cannot be read after the latest update, every command of
+  that backlog exits 2 and names the item and the field; `backlog update <item> --<field> <value>` sets the field again
+  and `backlog update <item> --restore` brings back the item's previous version.
 - **The same data integrity in both storage locations.** Every command first updates the repository that holds the items from its origin (a read whose origin is unreachable answers with a warning, a write is refused), every change is pushed before the command exits, a rejected push is retried, and a write on a stale view is rejected and shows the item as it is now. Inside the repository the branch is pushed as it is, the user's own commits included; `"push-backlog-updates": false` in `.backlog/config.json` turns the push off.
 - **The history of an item is part of the item** (`backlog query --events`); a replan records no event of its own.
 - **Where the items live is configuration, not a mode.** The backlog is always a git repository and every change to it

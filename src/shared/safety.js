@@ -64,7 +64,7 @@ export function slugify(text) {
 }
 
 // A phase by its NUMBER (the NNN of its file name) or by its slug — never by the
-// database row id. Digits select by number, anything else
+// row id. Digits select by number, anything else
 // selects by slug, an empty/absent selector selects nothing.
 export function itemSelector(text) {
   if (text === null || text === undefined) return null;

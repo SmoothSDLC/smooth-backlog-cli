@@ -35,7 +35,7 @@ export function publicationGuard(given = []) {
 
 function read(home, agent) { try { return JSON.parse(readFileSync(viewsFile(home, agent), 'utf8')); } catch { return {}; } }
 
-// views: [{slug, path}] (path from the repository folder) of repo, as the agent now sees them. Never fails the command: the cache is a safety net.
+// views: [{slug, path}] (path from the repository folder) of repo, as the agent now sees them. Never fails the command: the record is a safety net.
 // The file's hash is part of the view: `updated` has a resolution of one second, so two changes in one second differ only in content.
 // content is the hash without the fields that change without a change of the item (priority, which earlier builds kept in the item, updated,
 // updated_by): another agent's planning move is no change of the item for this agent's next write

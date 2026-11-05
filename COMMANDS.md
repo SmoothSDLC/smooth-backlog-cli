@@ -127,7 +127,8 @@ the item now has, and a line about the renumbered backlog. A critical item is an
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
-  2  The arguments or the place were wrong: the message is on standard error.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
   3  The repository that holds the items could not be synchronised with its origin. Either the update before a
      change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
      only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
@@ -153,12 +154,13 @@ backlog update — change the fields of one item, move it in the queue, or re-pl
 Usage:
   backlog update <item> [options]
   backlog update --replan <item>,<item>,... [--note <text>]
+  backlog update <item> --restore
 
 Changes the item named by its number or slug. The item file is the source of truth: the command writes the file,
 records an event in the history of the item. Setting --status to
-done completes the item (its completion time is set) and renumbers the rest of the backlog; so does --priority.
-Both are planning events, so look at the order again afterwards. The item may be left out only together with
---replan.
+done completes the item (its completion time is set) and renumbers the rest of its branch's queue; so does --priority.
+Both are planning events, so look at the order again afterwards. The order is kept in the index of the folder, so a
+change of the order rewrites no other item. The item may be left out only together with --replan.
 The two retired classification keys of older items have no effect. An item that still carries them shows them until the CLI next writes that item; every write drops them.
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
@@ -184,8 +186,8 @@ Options:
   --summary SUMMARY
       Replace the semantic summary of the item.
   --priority PRIORITY
-      Move the item to this rank, an integer. 0 makes it the next item. The rest of the backlog is renumbered to
-      0..N-1 around it.
+      Move the item to this rank, an integer. 0 makes it the next item. The rest of the queue of the item's branch is
+      renumbered to 0..N-1 around it; no other item is rewritten.
   --name NAME
       Replace the name of the item.
   --objective OBJECTIVE
@@ -194,6 +196,12 @@ Options:
       Set the item number to this integer.
   --size_score SIZE_SCORE
       Set the size score of the item, an integer.
+  --restore
+      Replace the item by its previous version: its content at the commit before the last one that changed it (the last
+      committed content when the file has a local edit). An item with no earlier version is refused, and so is an earlier
+      version that cannot be read either. A restored item records a restored event. This is the way out for an item
+      that cannot be read, next to setting the unreadable field again (backlog update <item> --<field> <value>, for
+      status, commit, location, summary, name, objective, seq or size_score). It takes no other option.
   --append APPEND
       Append this text to the body of the item.
   --replan REPLAN
@@ -361,7 +369,8 @@ On success the command prints a line that starts with a check mark, the slug and
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
-  2  The arguments or the place were wrong: the message is on standard error.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
   3  The repository that holds the items could not be synchronised with its origin. Either the update before a
      change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
      only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
@@ -498,7 +507,8 @@ Options:
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
-  2  The arguments or the place were wrong: the message is on standard error.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
   3  The repository that holds the items could not be synchronised with its origin. Either the update before a
      change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
      only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
@@ -549,7 +559,8 @@ Options:
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
-  2  The arguments or the place were wrong: the message is on standard error.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
   3  The repository that holds the items could not be synchronised with its origin. Either the update before a
      change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
      only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
@@ -824,7 +835,8 @@ Options:
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
   1  The command refused: it printed a line that starts with a cross mark on standard output.
-  2  The arguments or the place were wrong: the message is on standard error.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
   3  The repository that holds the items could not be synchronised with its origin. Either the update before a
      change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
      only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog

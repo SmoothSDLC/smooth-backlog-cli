@@ -15,7 +15,7 @@ metadata:
 
 # Repository backlog
 
-The backlog of this repository and branch: items with a number, a name, an objective, a priority (P0 is next) and a
+The backlog of this repository and branch: items with a number, a name, an objective, a rank in the queue of its branch (P0 is next) and a
 status (pending, in_progress, done, archived). The CLI is the only interface to the backlog: read and change it through
 `backlog` commands, never through its files. `backlog --help` lists the commands; `backlog <command> --help` is the
 contract of each (also in references/commands.md). Where the items live is a setting of the repository (inside it, or
@@ -36,6 +36,7 @@ repository: it installs or updates the CLI and runs `backlog setup`.
   the item since your read is refused (exit 5) until you read it again.
 - Review (optional): `--request-review <agent|any> --note "<commits, evidence>"`, then the reviewer's `--start-review --by
   <reviewer>` and `--review pass|changes --by <reviewer> --comments "<findings>"`; the author never reviews its own work.
+- An item that cannot be read: every command names it and the field; `backlog update <item> --<field> <value>` sets the field again, `backlog update <item> --restore` brings back its previous version.
 - Finish: `backlog update <item> --status done` or `--close --summary "<what was delivered>"`; `backlog archive <item>`
   keeps a finished item out of the queue; `backlog move <item> --to-branch <name>` moves it to another branch.
 

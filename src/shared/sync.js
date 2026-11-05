@@ -3,8 +3,7 @@
 // pinned ec5b254e. Node has no flock, so the lock is a pid file (locked of src/storage.js)
 // and a number two clones picked at once is repaired after the rebase (renumber below).
 // A failure to sync throws BacklogError with exitCode 3; the caller prints it and exits.
-import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { basename, dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
@@ -86,7 +85,7 @@ async function foldIn(home, lits, names, message) {
   if (ahead > 1) await refuseUnpublished(home); // never squash a stack with a partial folder list
   if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
     const r = await commitOnly(home, lits, ahead === 1 ? ['--amend', '--no-edit'] : ['-m', `${names.join(', ')}: ${message}`]);
-    if (r.code) throw fail(home, 'commit the reconciled mirror', r);
+    if (r.code) throw fail(home, 'commit the reconciled queue', r);
   }
 }
 
@@ -205,9 +204,9 @@ async function renumberFiles(home, stream, added) {
 }
 
 // A pull --rebase that stopped on conflicts of this folder only, which are repairable: add/add of item files (two clones created
-// the same file name: the upstream file stays, the replayed local creation moves to nextSeq) and the binary mirror backlog.db
-// (two writers changed it: upstream's copy is taken, since the mirror is derived from the files; the caller rescans it from the files
-// afterwards, which `renumbered.mirror` asks for; renumbered.localDbs lists copies of the local db and of the merge base, to replay the local changes onto it). The rebase goes on. false (the caller aborts) when anything else is in conflict or a step fails.
+// the same file name: the upstream file stays, the replayed local creation moves to nextSeq) and item files that both clones changed in
+// nothing but their rank (upstream's copy stands; `renumbered.reranked` asks the caller for a reconcile step, which makes the merged
+// queue dense again). The rebase goes on. false (the caller aborts) when anything else is in conflict or a step fails.
 // True when the two sides of a conflicted item file (stage 2 upstream, stage 3 local) differ in nothing but priority and updated.
 async function sameButRank(home, path) {
   const side = async n => { const d = parse((await must(home, ['show', `:${n}:${path}`], `read ${path}`)).stdout); return JSON.stringify([Object.entries(d.fm).filter(([k]) => k !== 'priority' && k !== 'updated' && k !== 'updated_by').sort(([x], [y]) => (x < y ? -1 : 1)), d.body]); };
@@ -215,7 +214,6 @@ async function sameButRank(home, path) {
 }
 
 async function repairConflicts(home, folders, names, renumbered) {
-  const dbPaths = names.map(name => `${name}/backlog.db`);
   const nameOf = path => names.findIndex(name => path.startsWith(`${name}/`));
   try {
     for (let round = 0; round < 20; round++) {
@@ -226,35 +224,17 @@ async function repairConflicts(home, folders, names, renumbered) {
       if (!stages.size) return false;
       const same = new Set(); // item files that both sides changed (or both added) in nothing but their rank: upstream's copy stands, the reflow after the pull re-ranks
       for (const [path, st] of stages) {
-        if (dbPaths.includes(path)) { if (!st.includes('2')) return false; continue; }
         if (!['23', '123'].includes(st) || !/^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(path) || nameOf(path) < 0) return false;
         if (await sameButRank(home, path)) same.add(path);
         else if (st !== '23') return false; // a real edit of one item by both clones cannot be merged by number
       }
-      for (const dbPath of dbPaths) if (stages.has(dbPath)) {
-        // the local db and the merge base go aside first: db.replayLocal replays the local side's own changes onto upstream's copy
-        if (stages.get(dbPath).includes('3')) {
-          const dir = mkdtempSync(join(tmpdir(), 'backlog-localdb-'));
-          const aside = async (n, file) => {
-            const tmp = (await must(home, ['checkout-index', `--stage=${n}`, '--temp', '--', dbPath], `read stage ${n} of ${dbPath}`)).stdout.split('\t')[0];
-            copyFileSync(join(home, tmp), join(dir, file)); rmSync(join(home, tmp));
-            return join(dir, file);
-          };
-          const local = await aside(3, 'backlog.db');
-          (renumbered.localDbs ??= []).push({ folder: folders[dbPaths.indexOf(dbPath)], local, base: stages.get(dbPath).includes('1') ? await aside(1, 'base.db') : null });
-        }
-        await must(home, ['checkout', '--ours', '--', lit(dbPath)], `keep upstream ${dbPath}`);
-        await must(home, ['add', '--', lit(dbPath)], `stage ${dbPath}`);
-        renumbered.mirror = true;
-      }
       // Every upstream file is restored before a number is allocated: nextSeq loads all items, and a file still holding conflict markers would not parse.
       const mines = new Map();
       for (const path of stages.keys()) {
-        if (dbPaths.includes(path)) continue;
         if (same.has(path)) { // renumbering would duplicate the item
           await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
           await must(home, ['add', '--', lit(path)], `stage ${path}`);
-          renumbered.mirror = true;
+          renumbered.reranked = true;
           continue;
         }
         mines.set(path, parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout));
@@ -399,7 +379,7 @@ async function commitInRepository(home, message) {
 }
 
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
-// [old, new] pairs renumbered on the way (with.mirror = true when backlog.db was taken from upstream: rescan it and commit again). Recorded only when on origin/main.
+// [old, new] pairs renumbered on the way (with .reranked = true when upstream's copy of a re-ranked item was taken: reconcile and commit again). Recorded only when on origin/main.
 // `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
 // `guard`: [{path (from the clone root), slug, was}] of the items this change rewrites on the strength of what the command read. When origin/main
 // gains a change to one of them from someone else before the push, the commit is taken back (clone and index as before the command) and the command
@@ -441,7 +421,7 @@ export async function commit(home, folders, message, reconcile = null, guard = [
       await restoreStaging([...new Set([...saved.dirty, ...saved.staged])]);
     };
     try {
-      await refuseConflicts(home); // a rejected mutation must restore its starting files and mirror too
+      await refuseConflicts(home); // a rejected mutation must restore its starting files too
       await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
       // scoped to the folders: work staged elsewhere in the backlog clone is neither committed nor pushed
       if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
@@ -474,9 +454,9 @@ export async function commit(home, folders, message, reconcile = null, guard = [
           await refuseConflicts(home);
           await staleCheck();
           renumbered.push(...await renumber(home, process.stdout));
-          if (reconcile && (renumbered.length > settled || renumbered.mirror)) { // the mirror and priorities are made right in the commit itself: nothing inconsistent is ever pushed
-            const fresh = Object.assign(renumbered.slice(settled), { localDbs: renumbered.localDbs, mirror: renumbered.mirror });
-            settled = renumbered.length; renumbered.localDbs = []; renumbered.mirror = false;
+          if (reconcile && (renumbered.length > settled || renumbered.reranked)) { // the priorities are made right in the commit itself: nothing inconsistent is ever pushed
+            const fresh = renumbered.slice(settled);
+            settled = renumbered.length; renumbered.reranked = false;
             await reconcile(fresh);
             await staleCheck(); // reconciliation can add more incidental writes to the guard
             await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);

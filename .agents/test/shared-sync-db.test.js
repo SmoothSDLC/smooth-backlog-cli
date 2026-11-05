@@ -1,5 +1,5 @@
-// Review P1 of PR #3: two real CLI writers in separate clones both change backlog.db (a binary file). The rebase of the second
-// writer conflicts on it, and recovery used to refuse before the number collision was repaired. Local bare repos only.
+// Review P1 of PR #3: two real CLI writers in separate clones. Whatever the rebase of the second writer meets (a number collision,
+// a move of the other clone), the change is repaired or refused and never half-published. Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -97,7 +97,7 @@ test('two CLI writers creating different items in separate clones: both succeed 
   const [a, b, { bare }] = writers(t);
   const hold = holdFirstPush(b);
   const second = cliAsync(NEW('beta job'), { cwd: b.cons, tmp: b.tmp });
-  await hold.held(); // b has pulled, created 001-beta-job, written its backlog.db and committed
+  await hold.held(); // b has pulled, created 001-beta-job and committed
   const first = cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp });
   assert.equal(first.status, 0, first.stdout + first.stderr);
   hold.release();
@@ -120,13 +120,13 @@ test('two CLI writers creating different items in separate clones: both succeed 
   }
 });
 
-test('review P2: retrying a rolled-back creation takes the upstream number into account without ghost mirror rows', t => {
+test('review P2: retrying a rolled-back creation takes the upstream number into account', t => {
   const [a, b] = writers(t);
   const hook = join(b.home, '.git', 'hooks', 'pre-push');
   writeFileSync(hook, '#!/bin/sh\nexit 1\n'); chmodSync(hook, 0o755);
   assert.notEqual(cli(NEW('beta job'), { cwd: b.cons, tmp: b.tmp }).status, 0); // committed locally with its db, push refused
   rmSync(hook);
-  // the other clone pushes the same number as a file only, so backlog.db does not conflict
+  // the other clone pushes the same number as a file only
   store.write({ path: join(a.folder, 'phases', '001-alpha-job.md'), fm: { phase: '001-alpha-job', seq: 1, name: 'alpha job', status: 'pending', repository: 'acme/demo', branch: 'main', priority: 0, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' }, body: '\n# Phase 001\n' }, a.folder);
   gitIn(a.home, 'add', 'acme/demo/phases/001-alpha-job.md'); gitIn(a.home, 'commit', '-q', '-m', 'alpha'); gitIn(a.home, 'push', '-q');
   assert.equal(cli(NEW('beta job'), { cwd: b.cons, tmp: b.tmp }).status, 0); // a fresh command allocates 002 after pulling alpha
@@ -145,7 +145,7 @@ test('review P1: a cross-repository move racing another clone is ONE commit of t
   const hold = holdFirstPush(b);
   const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
   await hold.held(); // b holds its (only) push: source and target changed, committed together
-  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // a changes the same source backlog.db
+  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // a changes the source folder too
   hold.release();
   const r = await second.done;
   assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
@@ -192,7 +192,7 @@ test('review P1: a number collision in the destination of a cross-repository mov
   const hold = holdFirstPush(b);
   const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp }); // becomes new/place 001-alpha-job
   await hold.held();
-  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // the source backlog.db changes too
+  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // the source folder changes too
   const delta = cli([...NEW('delta job'), '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'new/place' } }); // new/place 001-delta-job
   assert.equal(delta.status, 0, delta.stdout + delta.stderr);
   hold.release();
@@ -529,7 +529,7 @@ test('review P1: publication refuses update --seq when another clone allocates t
   assert.match(result.stderr, /seq.*3.*003-gamma|003-gamma.*seq.*3/i);
   assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
-  assert.deepEqual(state(b.home), state(clone(t, bare)), 'the rejected sequence and mirror edits are both rolled back');
+  assert.deepEqual(state(b.home), state(clone(t, bare)), 'the rejected sequence edit is rolled back');
   assert.deepEqual(store.load(b.folder).map(i => [i.fm.phase, i.fm.seq]), [['001-alpha', 1], ['002-beta', 2], ['003-gamma', 3]]);
   const q = cli(['query', '--all', '--json'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(q.status, 0, q.stdout + q.stderr);
@@ -549,7 +549,7 @@ test('review P1: publication preflight rejecting an appended conflict marker res
   const r = cli(['update', '1', '--append', '<<<<<<< example'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(r.status, 3, r.stdout + r.stderr);
   assert.match(r.stderr, /conflicts/i);
-  assert.deepEqual(state(b.home), before, 'preflight failure restores Markdown, backlog.db, HEAD and index byte for byte');
+  assert.deepEqual(state(b.home), before, 'preflight failure restores Markdown, HEAD and index byte for byte');
   assert.equal(gitIn(bare, 'rev-parse', 'main'), remote, 'nothing was published');
   assert.ok(!existsSync(join(b.home, '.git', 'smooth-backlog-cli-journal.json')));
   const next = cli(['update', '1', '--append', 'valid follow-up'], { cwd: b.cons, tmp: b.tmp });
@@ -580,7 +580,7 @@ test('review P1: publication refuses a sequence change after an upstream clone a
 });
 
 // Each race passes its initial validation, then changes a different file upstream.
-// Rejection must remove the entire mutation (including its mirror/events), not park it for the next command.
+// Rejection must remove the entire mutation (including its events), not park it for the next command.
 function rejectedPublication(t, b, bare, result, why) {
   assert.equal(result.status, 3, result.stdout + result.stderr);
   assert.match(result.stderr, /not published.*rolled back/s);
@@ -669,7 +669,7 @@ test('publication graph: an outgoing slug dependency is rechecked after an upstr
   rejectedPublication(t, b, bare, result, /depends on missing item 002-beta/);
 });
 
-// File-only publishers are supported peers too; do not rely on a backlog.db conflict to trigger validation.
+// File-only publishers are supported peers too; validation must not depend on a conflict.
 async function fileRace(t, seed, args, publish, env) {
   const [a, b, { bare }] = writers(t);
   for (const cmd of seed) assert.equal(cli(cmd, { cwd: a.cons, tmp: a.tmp }).status, 0);

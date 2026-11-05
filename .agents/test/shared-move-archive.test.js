@@ -219,7 +219,7 @@ for (const [title, script, args] of [['archive', 'archive', ['5']], ['move --to-
     const r = run(f, script, args);
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.match(r.stdout, /renumbered 008 -> 009/);
-    assert.equal(git(f.home, 'status', '--porcelain'), '', 'the rescanned backlog.db is committed');
+    assert.equal(git(f.home, 'status', '--porcelain'), '', 'the tree is clean');
     assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
     const pushed = pushedState(f);
     assert.ok(pushed.slugs.includes('009-local') && !pushed.slugs.includes('008-local'), pushed.slugs.join());

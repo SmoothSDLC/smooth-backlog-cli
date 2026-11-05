@@ -1,4 +1,4 @@
-// Child of the kill -9 test: takes the clone lock, starts an archive-like mutation (file move + mirror change) and dies right after the move.
+// Child of the kill -9 test: takes the clone lock, starts an archive-like mutation (file move) and dies right after the move.
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';

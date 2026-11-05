@@ -40,7 +40,7 @@ export async function waitsForRunLock(f, args, watch, ms = 2500) {
 }
 
 // Another clone pushed phases/008-remote.md (item number 8) while this clone holds an untracked phases/008-local.md of the same
-// number: the next commit of the folder renumbers the local one (008 -> 009) and the mirror database must follow and be committed.
+// number: the next commit of the folder renumbers the local one (008 -> 009) and its dependents follow.
 export function numberClash(f) {
   const other = join(f.t, 'other-clone');
   gitIn(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), other);
@@ -54,7 +54,7 @@ export function numberClash(f) {
   put(f.folder, '008-local'); // untracked: the commit of the command adds it
 }
 
-// What a fresh clone of the shared backlog holds after the command: the pushed files and the pushed mirror rows.
+// What a fresh clone of the shared backlog holds after the command: the pushed files.
 export function pushedState(f) {
   const fresh = join(f.t, `fresh-${Date.now()}`);
   gitIn(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), fresh);

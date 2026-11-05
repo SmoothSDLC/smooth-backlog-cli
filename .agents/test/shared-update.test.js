@@ -22,7 +22,7 @@ const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 
 // A shared home with consumer acme/demo on main and seven items: four open (one in progress, one waiting), one with
-// a review class, one done. ids: the mirror db is built by the Node scan; the item files are fixed text.
+// a review class, one done. the item files are fixed text.
 function seed({ permuteIds = false } = {}) {
   const t = mkdtempSync(join(tmpdir(), 'update-test-'));
   dirs.push(t);
@@ -169,7 +169,7 @@ test('review P1: a renumbering during the commit is followed by a rescan that is
   const r = run(f, ['2', '--summary', 'with a clash']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /renumbered 008 -> 009/);
-  assert.equal(git(f.home, 'status', '--porcelain'), '', 'the rescanned backlog.db is committed');
+  assert.equal(git(f.home, 'status', '--porcelain'), '', 'the tree is clean');
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
   const pushed = pushedState(f);
   assert.ok(pushed.slugs.includes('009-local') && !pushed.slugs.includes('008-local'), pushed.slugs.join());

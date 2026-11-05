@@ -446,6 +446,50 @@ for (const [name, args] of [
   assert.equal(stale.status, 5, stale.stderr + stale.stdout);
 });
 
+// Both clones re-rank from the same base without the CLI's publication guard (plain file writes + the settled commit): alpha is ranked
+// differently by each (a conflict on rank only: upstream's copy stands), beta only by amy, gamma only by bob, so the merged queue has
+// two items at rank 0 until the reconciliation (reflow) that the same-rank repair asks for has run.
+const rerank = (folder, ranks, extra = {}) => {
+  for (const [file, priority] of Object.entries(ranks)) {
+    const path = join(folder, 'phases', file); const d = parse(readFileSync(path, 'utf8'));
+    store.write({ path, fm: { ...d.fm, priority }, body: d.body + (extra[file] ?? '') }, folder);
+  }
+};
+const queueOf = (f, home) => JSON.parse(run(f, home, ['query', '--status', '--json']).stdout).phases.map(p => p.priority).sort();
+
+test('two clones re-rank one item at once: upstream\'s copy stands and the merged queue is dense again', async () => {
+  const f = seed();
+  rerank(f.folder, { '001-alpha.md': 1, '002-beta.md': 0 });
+  await db.commitSettled(f.home, f.folder, 'amy re-ranks');
+  rerank(f.folder2, { '001-alpha.md': 2, '003-gamma.md': 0 });
+  await db.commitSettled(f.home2, f.folder2, 'bob re-ranks');
+  git(f.home, 'pull', '-q', '--rebase');
+  for (const [home, folder] of [[f.home, f.folder], [f.home2, f.folder2]]) {
+    assert.deepEqual(store.load(folder).map(i => i.fm.priority).sort(), [0, 1, 2], `${folder}: no duplicate rank`);
+    assert.deepEqual(queueOf(f, home), [0, 1, 2]);
+    assert.equal(git(home, 'status', '--porcelain'), '');
+  }
+  assert.equal(fm(f.folder2, '001-alpha.md').priority, 2, 'ties are broken by number: alpha, ranked last by upstream\'s copy, ends last');
+  assert.equal(git(f.home2, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+});
+
+test('two clones re-rank one item at once: the reconciliation still refuses a stale cached view', async () => {
+  const f = seed();
+  assert.equal(run(f, f.home2, ['query', '--phase', '003-gamma', '--agent', 'bob']).status, 0); // bob has read gamma
+  rerank(f.folder, { '001-alpha.md': 1, '002-beta.md': 0, '003-gamma.md': 2 }, { '003-gamma.md': '\nAmy edit\n' });
+  await db.commitSettled(f.home, f.folder, 'amy re-ranks and edits gamma');
+  rerank(f.folder2, { '001-alpha.md': 2, '003-gamma.md': 0 });
+  const seen = await import('../../src/shared/seen.js');
+  seen.setActor('bob');
+  const before = onOrigin(f, 'acme/demo/phases/003-gamma.md');
+  assert.ok(existsSync(viewCache(f.home2, 'bob')), 'bob has a cached view');
+  try {
+    await assert.rejects(db.commitSettled(f.home2, f.folder2, 'bob re-ranks'), { exitCode: 5 });
+  } finally { seen.setActor('nobody'); }
+  assert.equal(onOrigin(f, 'acme/demo/phases/003-gamma.md'), before, 'nothing of bob was pushed');
+  assert.equal(git(f.home2, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+});
+
 test('database reconciliation validates the entire incidental write set', async () => {
   const f = seed();
   assert.equal(run(f, f.home, ['query', '--phase', '003-gamma', '--agent', 'amy']).status, 0);

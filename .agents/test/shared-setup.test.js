@@ -34,7 +34,7 @@ test('043: setup clones beside the repository, writes a relative config, deploys
   assert.doesNotMatch(r.stdout + r.stderr, /Backlog repository path/); // no prompt without --ask
   const clone = join(t, 'consumer', BACKLOG_NAME);
   assert.ok(existsSync(join(clone, '.git')));
-  assert.deepEqual(cfg(app), { backlog_repository: `../${BACKLOG_NAME}` });
+  assert.equal(cfg(app).backlog_repository, `../${BACKLOG_NAME}`);
   for (const d of ['.claude', '.qwen']) assert.ok(existsSync(join(app, d, 'skills', 'backlog', 'SKILL.md')), d);
   const made = run(app, ['new', '--name', 'first', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x']);
   assert.equal(made.status, 0, made.stdout + made.stderr);
@@ -79,10 +79,10 @@ test('043: setup --ask shows the default, uses the answer and records it relativ
   // the CLI prints the real path (macOS: /var is /private/var)
   assert.match(r.stderr, new RegExp(`Backlog repository path \\[${join(realpathSync(t), 'consumer', BACKLOG_NAME).replace(/[/.]/g, '\\$&')}\\]: `));
   assert.ok(existsSync(join(elsewhere, '.git')));
-  assert.deepEqual(cfg(app), { backlog_repository: '../../clones/backlog' });
+  assert.equal(cfg(app).backlog_repository, '../../clones/backlog');
   const keep = run(app, ['setup', '--ask'], '\n'); // an empty answer takes the default: the configured clone
   assert.equal(keep.status, 0, keep.stdout + keep.stderr);
-  assert.deepEqual(cfg(app), { backlog_repository: '../../clones/backlog' });
+  assert.equal(cfg(app).backlog_repository, '../../clones/backlog');
 });
 
 test('043: setup removes nothing through a symbolic link in an agent folder', () => {

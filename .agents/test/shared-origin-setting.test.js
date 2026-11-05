@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -116,4 +116,28 @@ test('the repository cannot be cloned or reached: setup says so, naming the conf
   }
   assert.ok(!existsSync(join(app, '.smooth-backlog.json')), 'no config was written');
   assert.ok(!existsSync(join(app, '.claude', 'skills')), 'no skill copy was deployed');
+});
+
+test('setup records the environment it ran with: the clone URL and the clone path go into .backlog/config.json, so later runs need no variables', t => {
+  const f = fixture(t);
+  const app = consumer(f.d, 'acme', 'app', 'main');
+  const r = cli(['setup'], { cwd: app, tmp: f.d, env: { HOME: join(f.d, 'user') } }); // BACKLOG_HOME and BACKLOG_ORIGIN_URL come from the fixture env
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const cfg = JSON.parse(readFileSync(join(app, '.backlog', 'config.json'), 'utf8'));
+  assert.equal(cfg.backlog_origin_url, fixtureEnv(f.d).BACKLOG_ORIGIN_URL, 'the clone URL from the environment is recorded');
+  assert.equal(realpathSync(join(app, cfg.backlog_repository)), realpathSync(fixtureEnv(f.d).BACKLOG_HOME), 'the configured clone is the one BACKLOG_HOME named');
+  const later = cli(['query'], { cwd: app, tmp: f.d, env: { HOME: join(f.d, 'user'), BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: '' } });
+  assert.equal(later.status, 0, later.stdout + later.stderr); // the config alone finds the clone
+  // the summary names every action, never a path
+  for (const line of ['.backlog folder created', 'configuration written: backlog repository', 'committed and pushed']) assert.ok(r.stdout.includes(line), `${line}\n${r.stdout}`);
+  assert.doesNotMatch(r.stdout, /\/tmp\//);
+});
+
+test('setup inside the repository prints its summary: the folder, the configuration, the skill, the commit', t => {
+  const f = fixture(t);
+  const app = consumer(f.d, 'acme', 'app', 'main');
+  mkdirSync(join(app, '.agents'));
+  const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: '' } });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  for (const line of ['.backlog folder created', 'configuration written: backlog inside this repository', 'skill deployed to .agents', 'committed and pushed']) assert.ok(r.stdout.includes(line), `${line}\n${r.stdout}`);
 });

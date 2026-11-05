@@ -728,18 +728,22 @@ Usage:
   backlog setup [--ask]
 
 Run inside the git repository to set up. The command:
-  1. finds the backlog folder: the one the repository's configuration names; else, when a clone URL is set (the
-     environment variable BACKLOG_ORIGIN_URL, then the backlog_origin_url key of the configuration),
+  1. finds the backlog folder: BACKLOG_HOME when the variable is set; else the one the repository's configuration
+     names; else, when a clone URL is set (the environment variable BACKLOG_ORIGIN_URL, then the backlog_origin_url
+     key of the configuration),
      ../<name> beside the repository (<name> from the URL); else .backlog inside the repository. With --ask it asks for
      the path, showing that default;
   2. clones the backlog repository there with git when the path does not exist and a clone URL is set (a clone that
      cannot be made is refused: exit 3, nothing changed); creates the folder when no URL is set; leaves an existing
      folder exactly as it is;
-  3. writes .backlog/config.json {"backlog_repository": "<path relative to the repository>"} (".backlog" for the
-     folder inside it) when there is no configuration yet, or with --ask; otherwise keeps it. A write keeps the file's
-     other keys. The file is committed and pushed with the skill copies, so every clone of the repository finds the
-     backlog folder, also after the repository and the folder move together;
-  4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's.
+  3. creates the repository's .backlog folder (the configuration lives there; inside it the items too, by default) and
+     writes .backlog/config.json {"backlog_repository": "<path relative to the repository>"} (".backlog" for the
+     folder inside it) when there is no configuration yet, with --ask, or when the environment names the location
+     (BACKLOG_HOME, BACKLOG_ORIGIN_URL — the clone URL is recorded as backlog_origin_url, so later runs need no
+     variable); otherwise keeps it. A write keeps the file's other keys;
+  4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's;
+  5. commits and pushes what it wrote (the configuration and the skill copies) on the current branch, and prints a
+     summary of every action: the .backlog folder, the configuration, the skill copies, the commit. No path is printed.
 
 Every command finds the backlog folder in this order: BACKLOG_HOME, the repository's configuration (.backlog/config.json,
 backlog_repository: a path relative to the repository; .backlog means inside it; the root file .smooth-backlog.json of

@@ -50,7 +50,7 @@ export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry 
     assert.equal((await cli('--version')).trim(), upgradeFrom || expectedVersion);
     assert.match(await cli('--help'), /backlog new --name/);
     for (const vendor of ['.agents', '.claude', '.github', '.qwen']) await fs.mkdir(join(repo, vendor));
-    assert.match(await cli('setup'), /the backlog skill in/);
+    assert.match(await cli('setup'), /skill deployed to/);
     await cli('new', '--name', 'First published task', '--objective', 'Verify the downloaded CLI', '--summary', 'the installed commands work');
     if (upgradeFrom) {
       await runNpm(['install', '--global', '--prefix', prefix, '--ignore-scripts', '--engine-strict', '--no-audit', '--no-fund', '--registry', registry, '--prefer-online', `${packageName}@${expectedVersion}`], { timeout: 120000 });

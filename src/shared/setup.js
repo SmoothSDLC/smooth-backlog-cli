@@ -72,8 +72,10 @@ export async function run(argv) {
     targets.push({ target, destination: a.destination });
   }
   const kept = configuredHome(top);
-  // the backlog folder: the configured one, else beside the repository when a clone URL is set, else inside the repository
-  const fallback = kept ?? (setting.url ? join(dirname(top), name) : join(top, '.backlog'));
+  // the backlog folder: BACKLOG_HOME when set, else the configured one, else beside the repository when a clone URL is set,
+  // else inside the repository
+  const fromEnv = (process.env.BACKLOG_HOME || '').trim();
+  const fallback = fromEnv ? resolve(fromEnv.replace(/^~(?=\/|$)/, process.env.HOME || '~')) : kept ?? (setting.url ? join(dirname(top), name) : join(top, '.backlog'));
   let home = fallback;
   if (ask) {
     const rl = createInterface({ input: process.stdin, output: process.stderr, terminal: false });
@@ -82,22 +84,27 @@ export async function run(argv) {
       if (answer) home = resolve(process.cwd(), answer.replace(/^~(?=\/|$)/, process.env.HOME || '~'));
     } catch { return die('no answer; nothing changed'); } finally { rl.close(); }
   }
+  const hadFolder = existsSync(join(top, '.backlog'));
+  const inside = resolve(home) === join(top, '.backlog');
   if (!existsSync(home)) { // a missing folder is cloned when a clone URL is set, else created; an existing folder is left exactly as it is
     mkdirSync(dirname(home), { recursive: true });
     if (setting.url) {
       const c = spawnSync('git', ['clone', '-q', setting.url, home], { encoding: 'utf8' });
       if (c.status !== 0) return die(`could not clone ${setting.url} to ${home} (${(c.stderr || '').trim().slice(0, 300)}); nothing changed`, 3);
       say('✅ backlog repository cloned');
-    } else { mkdirSync(home, { recursive: true }); say('✅ backlog folder created'); }
-  } else say('ℹ️  backlog folder kept');
+    } else if (!inside) { mkdirSync(home, { recursive: true }); say('✅ backlog folder created'); }
+  } else if (!inside) say('ℹ️  backlog folder kept');
   mkdirSync(join(top, '.backlog', '.state'), { recursive: true }); // the config lives in .backlog, created by setup whatever the location
   if (!existsSync(join(top, '.backlog', '.gitignore'))) await atomicWrite(join(top, '.backlog', '.gitignore'), '.state/\n');
-  if (!kept || ask || !existsSync(join(top, CONFIG))) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys
+  say(hadFolder ? 'ℹ️  .backlog folder kept' : '✅ .backlog folder created');
+  if (!kept || ask || fromEnv || setting.url || !existsSync(join(top, CONFIG))) { // a second setup keeps the config unless --ask or the environment names the location; a rewrite keeps the file's other keys
     const value = relative(top, realpathSync(home)); // relative to the repository: portable (both real paths: macOS /var is /private/var)
     const previous = readConfig(top);
-    await atomicWrite(join(top, CONFIG), `${JSON.stringify({ ...previous, backlog_repository: value || '.' }, null, 2)}\n`);
-    say('✅ backlog configuration written');
-  } else say('ℹ️  backlog configuration kept');
+    const next = { ...previous, backlog_repository: value || '.' };
+    if (setting.url) next[ORIGIN_KEY] = setting.url; // the clone URL the setup ran with is recorded, so later runs need no variable
+    await atomicWrite(join(top, CONFIG), `${JSON.stringify(next, null, 2)}\n`);
+    say(`✅ configuration written: ${inside ? 'backlog inside this repository' : 'backlog repository'}${setting.url ? ', with its clone URL' : ''}`);
+  } else say(`ℹ️  configuration kept: ${inside ? 'backlog inside this repository' : 'backlog repository'}`);
   const deployed = [];
   for (const { target, destination } of targets) {
     rmSync(target, { recursive: true, force: true });
@@ -105,7 +112,7 @@ export async function run(argv) {
     cpSync(join(templateRoot, 'skills/backlog'), target, { recursive: true });
     deployed.push(destination);
   }
-  say(deployed.length ? `✅ the backlog skill in ${deployed.join(', ')}` : 'ℹ️  no agent folder (.agents, .claude, .github, .qwen) here: no skill copy deployed');
+  say(deployed.length ? `✅ skill deployed to ${deployed.map(d => d.split('/')[0]).join(', ')}` : 'ℹ️  no agent folder (.agents, .claude, .github, .qwen) here: no skill copy deployed');
   // setup is a change to the repository: committed on the current branch (the config and the skill copies only) and pushed
   const git = args => spawnSync('git', args, { cwd: top, encoding: 'utf8' });
   const wrote = ['.backlog/config.json', '.backlog/.gitignore', ...deployed];

@@ -56,7 +56,8 @@ export async function target(home) {
   if (!branch) throw new BacklogError('SYNC_FAILED', 'check out a branch: the backlog is committed on the current branch', 2);
   const prefix = `${posix.join(...relative(realpathSync(root), realpathSync(home)).split(sep))}/`;
   let push = true; try { push = JSON.parse(readFileSync(join(home, 'config.json'), 'utf8'))['push-backlog-updates'] !== false; } catch { /* no configuration: the default is on */ }
-  return { root, branch, ref: `origin/${branch}`, cmp: `origin/${branch}`, prefix, clone: false, push };
+  const remote = !(await g(home, ['remote', 'get-url', 'origin'])).code; // no origin remote: nothing to pull or push, the change is committed on the branch (exit 3 says so)
+  return { root, branch, ref: `origin/${branch}`, cmp: `origin/${branch}`, prefix, clone: false, push, remote };
 }
 
 // `pull --autostash` exits 0 when applying the stash back conflicted: unmerged entries, or markers in the files. Nothing may ingest, stage or push
@@ -116,6 +117,7 @@ async function abortPull(home) {
 async function pullLocked(t, read) {
   const home = t.root;
   await refuseConflicts(home, t);
+  if (t.remote === false) { starting.set(resolve(home), await snapshot(home)); return; } // no origin remote: nothing to update from
   // A read whose update fails answers from the local copy with a warning; a write is refused: a write on a possibly stale view is what the stale guard exists to prevent.
   const unreachable = async why => {
     if (!read) throw new BacklogError('SYNC_FAILED', `could not update ${home} from ${t.ref} (${why.slice(0, 300)}); nothing was read or changed`, 3);
@@ -224,7 +226,7 @@ async function renumberFiles(home, t, stream, added) {
     store.write({ path: join(folder, target), ...retagged(mine, next) });
     store.addEvent(folder, target, { event: 'renumbered', branch: mine.fm.branch || '', note: `${pad(old)} -> ${pad(next)}` });
     await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
-    const r = await commitOnly(home, [lit(name)], ['--amend', '--no-edit']);
+    const r = await commitOnly(home, [lit(name)], t.mine === false ? ['-m', 'backlog: renumbered'] : ['--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
     out.push(pairOf(old, next, folder));
@@ -235,7 +237,7 @@ async function renumberFiles(home, t, stream, added) {
     const touched = await remapLocal(home, t, moves, await changedBy(home, [t.cmp, 'HEAD']), t.cmp, new Set());
     if (touched.length) {
       const lits = [...new Set(touched.map(f => f.slice(t.prefix.length).split('/').slice(0, 2).join('/')))].map(f => lit(t.prefix + f));
-      const r = await commitOnly(home, lits, ['--amend', '--no-edit']);
+      const r = await commitOnly(home, lits, t.mine === false ? ['-m', 'backlog: renumbered'] : ['--amend', '--no-edit']);
       if (r.code) throw new BacklogError('SYNC_FAILED', `could not update the references to renumbered items in ${home} (${r.stderr.slice(0, 300)})`, 3);
     }
   }
@@ -484,6 +486,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
         } else {
           await refuseConflicts(home, t);
           await staleCheck();
+          t.mine = mine; // renumbering amends only the command's own commit; a user's unpushed commit gets a commit of its own
           renumbered.push(...await renumber(home, t, process.stdout));
           if (reconcile && (renumbered.length > settled || renumbered.reranked)) { // the priorities are made right in the commit itself: nothing inconsistent is ever pushed
             const fresh = renumbered.slice(settled);
@@ -495,7 +498,10 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
           }
           await validatePublication(home, t, list, names, claims, renumbered);
           await restoreStaging(saved.staged.filter(p => !own(p)));
-          if (t.push) {
+          if (t.push && t.remote === false && mine) { // the first release's behaviour is kept: the commit stays, the exit code says it was not published
+            throw Object.assign(new BacklogError('SYNC_FAILED', `The change was not published from ${home} (no origin remote); it is committed on this branch: add the origin and push, then continue`, 3), { keep: true });
+          }
+          if (t.push && t.remote !== false) {
             const ps = await g(home, ['push', '-q', 'origin', `HEAD:refs/heads/${t.branch}`]);
             if (ps.code) { err = `push failed: ${ps.stderr.slice(0, 300)}`; if (i < 2) await delay(1000 * (1 + i)); continue; }
           }
@@ -508,6 +514,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
     } catch (e) {
       // A stale-view refusal keeps the established parent rollback (and exit 5).
       // Publication failures return the branch to the fetched remote instead; in the user's repository, to the commit before the command's own.
+      if (e.keep) throw e; // the commit is kept on purpose
       const stale = e.code === 'STALE_ITEM';
       let to = mine ? 'HEAD~1' : 'HEAD';
       if (t.clone) {

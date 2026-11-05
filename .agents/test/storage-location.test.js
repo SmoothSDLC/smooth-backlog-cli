@@ -91,17 +91,14 @@ test('inside the repository the items survive a renamed folder and a changed ori
   spawnSync('git', ['init', '-q', '-b', 'main', alone]);
   spawnSync('git', ['commit', '-q', '--allow-empty', '-m', 'init'], { cwd: alone, env: { ...process.env, ...GIT_IDENTITY } });
   run(['setup'], { cwd: alone });
-  // no origin: the repository cannot be updated, so the change is refused with exit 3 and nothing of it is kept
+  // no origin: the change is committed but cannot be pushed - refused with exit 3, the commit kept (the first release's behaviour)
   const r = run(['new', '--name', 'x', '--objective', 'o', '--summary', 's'], { cwd: alone });
   assert.equal(r.status, 3, r.stdout + r.stderr);
-  assert.match(r.stderr, /could not update/);
-  assert.doesNotMatch(git(alone, 'log', '--format=%s'), /new --name/);
-  assert.ok(!existsSync(join(alone, '.backlog', 'local')), 'no item file left');
+  assert.match(r.stderr, /was not published [^]*no origin remote[^]*committed on this branch/);
+  assert.match(git(alone, 'log', '-1', '--format=%s'), /^backlog: /);
   const bare = join(tmp, 'alone.git');
   spawnSync('git', ['init', '-q', '--bare', bare]);
   spawnSync('git', ['remote', 'add', 'origin', bare], { cwd: alone });
-  const again = run(['new', '--name', 'x', '--objective', 'o', '--summary', 's'], { cwd: alone }); // once the origin exists: the first push creates the branch there
-  assert.equal(again.status, 0, again.stdout + again.stderr);
   const moved = join(tmp, 'renamed');
   renameSync(alone, moved);
   spawnSync('git', ['remote', 'set-url', 'origin', bare], { cwd: moved }); // a changed origin

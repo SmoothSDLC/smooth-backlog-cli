@@ -10,6 +10,7 @@ import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
+import * as index from './index.js';
 import { actor, primarySlug, publicationGuard, staleError, staleViews } from './seen.js';
 import * as store from './store.js';
 import { asList, foreignCycle, foreignItem, heldBy, isForeign } from './team.js';
@@ -245,15 +246,9 @@ async function renumberFiles(home, t, stream, added) {
 }
 
 // A pull --rebase that stopped on conflicts of this folder only, which are repairable: add/add of item files (two clones created
-// the same file name: the upstream file stays, the replayed local creation moves to nextSeq) and item files that both clones changed in
-// nothing but their rank (upstream's copy stands; `renumbered.reranked` asks the caller for a reconcile step, which makes the merged
-// queue dense again). The rebase goes on. false (the caller aborts) when anything else is in conflict or a step fails.
-// True when the two sides of a conflicted item file (stage 2 upstream, stage 3 local) differ in nothing but priority and updated.
-async function sameButRank(home, path) {
-  const side = async n => { const d = parse((await must(home, ['show', `:${n}:${path}`], `read ${path}`)).stdout); return JSON.stringify([Object.entries(d.fm).filter(([k]) => k !== 'priority' && k !== 'updated' && k !== 'updated_by').sort(([x], [y]) => (x < y ? -1 : 1)), d.body]); };
-  return (await side(2)) === (await side(3));
-}
-
+// the same file name: the upstream file stays, the replayed local creation moves to nextSeq) and the index both clones changed
+// (upstream's copy stands; the reconcile step after the pull makes it right against the merged items). The rebase goes on. false (the
+// caller aborts) when anything else is in conflict or a step fails.
 async function repairConflicts(home, t, folders, names, renumbered) {
   const nameOf = path => names.findIndex(name => path.startsWith(`${name}/`));
   try {
@@ -263,21 +258,21 @@ async function repairConflicts(home, t, folders, names, renumbered) {
         const [meta, path] = e.split('\t'); stages.set(path, `${stages.get(path) ?? ''}${meta.split(' ')[2]}`);
       }
       if (!stages.size) return false;
-      const same = new Set(); // item files that both sides changed (or both added) in nothing but their rank: upstream's copy stands, the reflow after the pull re-ranks
+      const orders = new Set(); // the indexes both sides changed
       for (const [path, st] of stages) {
+        if (['23', '123'].includes(st) && names.some(name => path === `${name}/index.json`)) { orders.add(path); continue; }
         if (!['23', '123'].includes(st) || !itemFile(t).test(path) || nameOf(path) < 0) return false;
-        if (await sameButRank(home, path)) same.add(path);
-        else if (st !== '23') return false; // a real edit of one item by both clones cannot be merged by number
+        if (st !== '23') return false; // a real edit of one item by both clones cannot be merged by number
       }
       // Every upstream file is restored before a number is allocated: nextSeq loads all items, and a file still holding conflict markers would not parse.
       const mines = new Map();
       for (const path of stages.keys()) {
-        if (same.has(path)) { // renumbering would duplicate the item
+        if (orders.has(path)) {
           await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
           await must(home, ['add', '--', lit(path)], `stage ${path}`);
-          renumbered.reranked = true;
           continue;
         }
+
         mines.set(path, parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout));
         await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
         await must(home, ['add', '--', lit(path)], `stage ${path}`);
@@ -314,10 +309,13 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
   for (let n = 0; n < folders.length; n++) {
     const items = store.load(folders[n]);
     const prefix = `${names[n]}/`;
-    const slug = i => i.fm.phase || basename(i.path, '.md'); // same fallback as db ingestion
+    const slug = i => i.fm.phase || basename(i.path, '.md');
     const seq = i => Number(Object.hasOwn(i.fm, 'seq') ? i.fm.seq : 0);
     const find = d => items.find(i => /^\d+$/.test(String(d)) ? seq(i) === Number(d) : slug(i) === String(d));
     const resolves = d => (isForeign(d) ? Boolean(foreignItem(folders[n], d)) : Boolean(find(d))); // owner/name#seq
+    const listed = Object.values(index.read(folders[n]).branches).flat().map(e => e.slug);
+    const live = items.filter(i => i.path.startsWith('phases/')).map(slug);
+    if (new Set(listed).size !== listed.length || live.length !== listed.length || live.some(s => !listed.includes(s))) reject(`${names[n]}: the index does not list every item of the folder once`);
     const leaves = items.some(i => asList(i.fm.depends_on).some(isForeign)); const others = new Map();
     const key = d => /^\d+$/.test(String(d)) ? String(Number(d)) : String(d);
     const lost = new Set();
@@ -398,7 +396,7 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
 }
 
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
-// [old, new] pairs renumbered on the way (with .reranked = true when upstream's copy of a re-ranked item was taken: reconcile and commit again). Recorded only when on origin/main.
+// [old, new] pairs renumbered on the way. Recorded only when on origin/main.
 // `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
 // `guard`: [{path (from the clone root), slug, was}] of the items this change rewrites on the strength of what the command read. When origin/main
 // gains a change to one of them from someone else before the push, the commit is taken back (clone and index as before the command) and the command
@@ -488,9 +486,9 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
           await staleCheck();
           t.mine = mine; // renumbering amends only the command's own commit; a user's unpushed commit gets a commit of its own
           renumbered.push(...await renumber(home, t, process.stdout));
-          if (reconcile && (renumbered.length > settled || renumbered.reranked)) { // the priorities are made right in the commit itself: nothing inconsistent is ever pushed
+          if (reconcile) { // the index is made right against the merged items in the commit itself: nothing inconsistent is ever pushed
             const fresh = renumbered.slice(settled);
-            settled = renumbered.length; renumbered.reranked = false;
+            settled = renumbered.length;
             await reconcile(fresh);
             await staleCheck(); // reconciliation can add more incidental writes to the guard
             await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
@@ -526,6 +524,13 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
     }
   }, { takeOver: true });
 }
+
+// sync.commit whose reconcile step makes the index of every folder right against the merged items (an item added by the other clone, a
+// renumbered one) before the first push.
+export const commitSettled = (home, folders, message, guard = [], claims = []) => {
+  const list = [].concat(folders);
+  return commit(home, list, message, fresh => { for (const folder of list) store.reflow(folder, { renames: index.renamesFor(folder, fresh) }); }, guard, claims);
+};
 
 // Inside the user's repository the branch is pushed as it is: say so after every change.
 function announce(t, guard) {

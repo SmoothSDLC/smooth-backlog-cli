@@ -6,8 +6,8 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import * as index from '../../src/shared/index.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as store from '../../src/shared/store.js';
 
@@ -41,7 +41,7 @@ const SUBJECT = {
   newDependsNone: () => 'acme/demo: new --depends none',
   newSplitFrom: (phase) => `acme/demo: new --split-from ${phase}`,
 };
-const rows = (f, sql) => { const con = db.connect(f.folder); try { return con.prepare(sql).all().map(r => ({ ...r })); } finally { con.close(); } };
+const slugSeq = f => index.rows(f.folder).rows.map(r => ({ slug: r.slug, seq: r.seq })).sort((a, b) => a.seq - b.seq);
 
 // ---------------------------------------------------------------- refusals
 
@@ -97,16 +97,13 @@ test('refusal: a dependency that is in the backlog passes, a split source that i
   assert.equal(node(f, [...BASE, '--depends-on', '001-alpha-job, none']).status, 1); // 'none' inside a list is a slug nobody has
 });
 
-test('a stale mirror cannot hand out a used number: nextSeq looks at the files too', t => {
+test('new lists the item in the index of its branch: at the end, or at --priority; the item file carries no priority', t => {
   const f = fixture(t);
-  assert.equal(node(f, NONE).status, 0);
-  const second = node(f, NONE);
-  assert.equal(second.status, 0, second.stderr);
-  assert.deepEqual(items(f).map(i => i.path), ['phases/001-alpha-job.md', 'phases/002-alpha-job.md']);
-  // a stale mirror cannot hand out a used number: nextSeq looks at the files too
-  const con = db.connect(f.folder); con.exec('DELETE FROM phase'); con.close();
-  assert.equal(node(f, NONE).status, 0);
-  assert.equal(items(f).length, 3);
+  for (const name of ['A', 'B']) assert.equal(node(f, ['--name', name, '--depends-on', 'none']).status, 0);
+  assert.equal(node(f, ['--name', 'C', '--depends-on', 'none', '--priority', '0']).status, 0);
+  assert.deepEqual(index.read(f.folder).branches.main.map(e => e.slug), ['003-c', '001-a', '002-b']);
+  assert.deepEqual(index.read(f.folder).branches.main[0], { seq: 3, slug: '003-c', name: 'C', status: 'pending' });
+  for (const i of items(f)) assert.equal(Object.hasOwn(i.fm, 'priority'), false);
 });
 
 test('refusal: a diagnostic that echoes input carries no credential of a URL', t => {
@@ -138,10 +135,10 @@ test('new: writes the item, records its history, commits as "acme/demo: new --na
   assert.equal(r.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n'
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   const [item] = items(f);
-  assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'priority', 'repository', 'branch', 'commit',
+  assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'repository', 'branch', 'commit',
     'location', 'created', 'updated', 'updated_by', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'events']);
   assert.deepEqual({ ...item.fm, created: 0, updated: 0, updated_by: 0, commit: 0, events: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
-    status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0, updated_by: 0,
+    status: 'pending', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0, updated_by: 0,
     depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', events: 0 });
   assert.equal(item.fm.commit, git(f.cons, 'rev-parse', 'HEAD'));
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
@@ -201,7 +198,7 @@ git -C "${other}" add -A && git -C "${other}" commit -q -m bravo && git -C "${ot
   assert.match(items(f)[1].body, /^\n# Phase 002 — Alpha job\n/);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
-  assert.deepEqual(rows(f, 'SELECT slug, seq FROM phase ORDER BY seq'), [{ slug: '001-bravo', seq: 1 }, { slug: '002-alpha-job', seq: 2 }]); // one row per file
+  assert.deepEqual(slugSeq(f), [{ slug: '001-bravo', seq: 1 }, { slug: '002-alpha-job', seq: 2 }]); // one row per file
 });
 
 // ---------------------------------------------------------------- review fixes (job 10)
@@ -243,29 +240,28 @@ test('review P2: a file with the name of the next item is never replaced: the it
   assert.deepEqual(items(f).map(i => i.path).sort(), ['phases/001-alpha-job.md', 'phases/002-alpha-job.md', 'phases/003-alpha-job.md']);
 });
 
-test('review P1: new whose rescan throws (an existing phase with size_score: []) removes the file it wrote and commits nothing', t => {
+test('review P1: new whose index write is refused removes the file it wrote and commits nothing', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0);
-  const first = join(f.folder, 'phases', '001-alpha-job.md');
-  writeFileSync(first, readFileSync(first, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n'));
+  breakIndex(f.home, f.folder);
   const head = git(f.home, 'rev-parse', 'HEAD');
   const r = node(f, NONE);
-  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /Symlink destination is unsupported/);
   assert.equal(existsSync(join(f.folder, 'phases', '002-alpha-job.md')), false, 'the half-created item is gone');
   assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', 'acme/demo/phases/002-alpha-job.md'), '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
-test('review P1: new --split-from whose rescan throws leaves the item files as they were (no stray split event)', t => {
+test('review P1: new --split-from whose index write is refused leaves the item files as they were (no stray split event)', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0);
   assert.equal(node(f, NONE).status, 0);
-  const bad = join(f.folder, 'phases', '002-alpha-job.md');
-  writeFileSync(bad, readFileSync(bad, 'utf8').replace('\nseq: 2\n', '\nseq: 2\nsize_score: []\n'));
+  breakIndex(f.home, f.folder);
   const files = () => readdirSync(join(f.folder, 'phases')).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8'));
   const before = files();
   const r = node(f, [...NONE, '--split-from', '1']);
-  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.deepEqual(files(), before, 'no stray split event');
 });
 
@@ -367,7 +363,7 @@ for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
     assert.equal(subject(f), title === 'a prefix of an option and --opt=value' ? SUBJECT.newDependsNone() : SUBJECT.newName(item.fm.name));
     assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'), 'published');
     if (title === 'critical, forced to P0 with the banner') assert.equal(item.fm.severity, 'critical', 'forced to P0 with the banner');
-    if (title === 'a rank beyond the end is clamped, a layer of process') { assert.equal(item.fm.priority, 1, 'a rank beyond the end is clamped'); assert.equal(item.fm.layer, 'process'); }
+    if (title === 'a rank beyond the end is clamped, a layer of process') { assert.equal(index.rank(f.folder, 'main', item.fm.phase), 1, 'a rank beyond the end is clamped'); assert.equal(item.fm.layer, 'process'); }
   });
 }
 
@@ -380,7 +376,7 @@ test('075: new: every flag, appended: the item carries the carried context, the 
   assert.equal(r.stderr, '');
   const [item] = items(f);
   assert.deepEqual(fmNorm(item.fm), { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
-    status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: 0, location: '',
+    status: 'pending', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '',
     created: 0, updated: 0, updated_by: 0, chunk: true, review_refs: ['references/review/code.md', 'references/review/tests.example.md'],
     estimate_min: 30, complexity: 'medium', layer: '3', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Carried context (from the original ask)\n\nfrom the ask\n\n\nSome body\n\n## Definition of done\n- [ ] it works\n');

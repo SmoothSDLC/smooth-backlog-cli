@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
+import * as index from '../../src/shared/index.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 import * as team from '../../src/shared/team.js';
@@ -188,27 +188,25 @@ test('team.js: the roster names the members in order; any profile fields are kep
   assert.throws(() => team.loadRoster(file), e => e.exitCode === 2);
 });
 
-// Item files of a folder, then the mirror database scanned from them (the rules read the rows, the files only for metadata).
+// Item files of a folder (the rules read the rows built from them, the files only for metadata).
 function seed(f) {
   const put = (seq, name, extra) => store.write({
     path: join(f.folder, `phases/${String(seq).padStart(3, '0')}-${name}.md`),
     fm: { phase: `${String(seq).padStart(3, '0')}-${name}`, seq, name, status: 'pending', priority: seq - 1, depends_on: [], claimed_by: '', ...extra },
     body: '\n',
   }, f.folder);
-  const scan = () => { const con = db.connect(f.folder); try { db.scan(con, f.folder); } finally { con.close(); } };
-  return { put, scan };
+  return { put };
 }
 
 test('team.js: held items, the claim rule, undone dependencies on a folder', () => {
   const f = fixture();
-  const { put, scan } = seed(f);
+  const { put } = seed(f);
   put(1, 'a', { status: 'in_progress', claimed_by: 'ann' });
   put(2, 'b', { status: 'in_progress', claimed_by: 'ann', review_state: 'requested' });
   put(3, 'c', { status: 'in_progress', claimed_by: 'ann', wait_on: 'run 5' });
   put(4, 'd', { status: 'done', claimed_by: 'ann' });
   put(5, 'e', { status: 'in_progress', claimed_by: 'bob' });
   put(6, 'f', { depends_on: [1, '004-d', 'nothing', 5] });
-  scan();
   assert.deepEqual(team.heldItems(f.folder, 'ann').map(h => [h.slug, h.state]), [['001-a', 'active'], ['002-b', 'awaiting-review'], ['003-c', 'waiting:run 5']]);
   assert.equal(team.claimRefusal(f.folder, 'ann'), 'ann holds 1 active item(s): 001-a; pull new work only when every item you hold waits (review requested, or backlog update <item> --waiting "<what>" --by ann); --force overrides');
   assert.equal(team.claimRefusal(f.folder, 'nobody'), null);
@@ -239,14 +237,8 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   const snapshot = f => {
     const files = {};
     for (const name of readdirSync(join(f.folder, 'phases'))) files[name] = JSON.stringify(parse(readFileSync(join(f.folder, 'phases', name), 'utf8'))).replace(TS, 'TS');
-    const con = db.connect(f.folder);
-    const rows = x => con.prepare(x).all().map(r => JSON.stringify({ ...r }));
-    const out = {
-      files,
-      phases: rows('SELECT id, slug, seq, status, priority, branch, commit_sha, completed_at FROM phase ORDER BY id'),
-    };
-    con.close();
-    return out;
+    const cols = ['id', 'slug', 'seq', 'status', 'priority', 'branch', 'commit_sha', 'completed_at'];
+    return { files, phases: index.rows(f.folder).rows.map(r => JSON.stringify(Object.fromEntries(cols.map(c => [c, r[c]])))) };
   };
   const both = (args, env, want) => {
     const before = want === 1 ? snapshot(n) : null;

@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
-import * as db from '../../src/shared/db.js';
+import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
 // Item 76 (ENOTEMPTY cleanup at 1566552 / 6c031b1): the writer is the child git process of a scenario CLI
@@ -108,8 +108,8 @@ test('two CLI writers creating different items in separate clones: both succeed 
   gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
   const dir = join(verify, 'c', 'acme', 'demo');
   assert.deepEqual(store.load(dir).map(i => [i.path, i.fm.name]), [['phases/001-alpha-job.md', 'alpha job'], ['phases/002-beta-job.md', 'beta job']]);
-  const con = db.connect(dir);
-  try { assert.deepEqual(con.prepare('SELECT slug, seq FROM phase ORDER BY seq').all().map(x => ({ ...x })), [{ slug: '001-alpha-job', seq: 1 }, { slug: '002-beta-job', seq: 2 }]); } finally { con.close(); }
+  assert.deepEqual(index.rows(dir).rows.map(x => ({ slug: x.slug, seq: x.seq })).sort((x, y) => x.seq - y.seq), [{ slug: '001-alpha-job', seq: 1 }, { slug: '002-beta-job', seq: 2 }]);
+  assert.deepEqual(index.read(dir).branches.main.map(e => e.slug), ['001-alpha-job', '002-beta-job'], 'the published index lists both items once');
 
   for (const w of [a, b]) { // both clones pull cleanly, are on origin/main and clean, and see both items
     const q = cli(['query', '--all'], { cwd: w.cons, tmp: w.tmp });
@@ -132,10 +132,7 @@ test('review P2: retrying a rolled-back creation takes the upstream number into 
   assert.equal(cli(NEW('beta job'), { cwd: b.cons, tmp: b.tmp }).status, 0); // a fresh command allocates 002 after pulling alpha
   const r = cli(['update', '2', '--note', 'after the renumbering'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const con = db.connect(b.folder);
-  try {
-    assert.deepEqual(con.prepare('SELECT slug, seq FROM phase ORDER BY seq').all().map(x => ({ ...x })), [{ slug: '001-alpha-job', seq: 1 }, { slug: '002-beta-job', seq: 2 }]);
-  } finally { con.close(); }
+  assert.deepEqual(index.rows(b.folder).rows.map(x => ({ slug: x.slug, seq: x.seq })).sort((x, y) => x.seq - y.seq), [{ slug: '001-alpha-job', seq: 1 }, { slug: '002-beta-job', seq: 2 }]);
 });
 
 test('review P1: a cross-repository move racing another clone is ONE commit of the source and target folders: never the target pushed without the source', async t => {
@@ -158,12 +155,10 @@ test('review P1: a cross-repository move racing another clone is ONE commit of t
   assert.ok(commit && log('new/place').length === 1, 'the target arrived in one commit');
   assert.ok(touched(commit).some(f => f.startsWith('acme/demo/')), 'the same commit changes the source folder');
   const dir = join(verify, 'c', 'acme', 'demo');
-  const con = db.connect(dir);
-  try {
-    const rows = con.prepare('SELECT slug, path FROM phase').all().map(x => ({ ...x }));
-    assert.ok(!rows.some(x => x.slug === '001-alpha-job'), JSON.stringify(rows));
-    for (const x of rows) assert.ok(existsSync(join(dir, x.path)));
-  } finally { con.close(); }
+  const rows = index.rows(dir).rows;
+  assert.ok(!rows.some(x => x.slug === '001-alpha-job'), JSON.stringify(rows));
+  for (const x of rows) assert.ok(existsSync(join(dir, x.path)));
+  assert.ok(!Object.values(index.read(dir).branches).flat().some(e => e.slug === '001-alpha-job'), 'the moved item left the order of the source');
   assert.ok(existsSync(join(verify, 'c', 'new', 'place', 'phases')));
 });
 
@@ -203,14 +198,10 @@ test('review P1: a number collision in the destination of a cross-repository mov
   gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
   for (const repo of [['acme', 'demo'], ['new', 'place']]) {
     const dir = join(verify, 'c', ...repo);
-    const con = db.connect(dir);
-    try {
-      const rows = con.prepare('SELECT slug, path FROM phase').all().map(x => ({ ...x }));
-      for (const x of rows) assert.ok(existsSync(join(dir, x.path)), `${repo.join('/')}: row ${x.slug} has its file (${JSON.stringify(rows)})`);
-    } finally { con.close(); }
+    const rows = index.rows(dir).rows;
+    for (const x of rows) assert.ok(existsSync(join(dir, x.path)), `${repo.join('/')}: row ${x.slug} has its file (${JSON.stringify(rows)})`);
   }
-  const src = db.connect(join(verify, 'c', 'acme', 'demo'));
-  try { assert.ok(!src.prepare('SELECT slug FROM phase').all().some(x => /alpha/.test(x.slug)), 'the moved item has no row in the source'); } finally { src.close(); }
+  assert.ok(!index.rows(join(verify, 'c', 'acme', 'demo')).rows.some(x => /alpha/.test(x.slug)), 'the moved item has no row in the source');
 });
 
 test('audit: a move that empties phases/ does not carry another clone\'s new file into the target (directory renames are off)', async t => {
@@ -281,7 +272,6 @@ test('review P2: update records its published identity when an added item is ren
     ...anchor.fm, phase: '002-local', seq: 2, name: 'local', priority: 1,
     review_refs: ['references/review/code.md'], estimate_min: 5,
   }, body: '\n## Definition of done\n- [ ] x\n' }, b.folder);
-  const con = db.connect(b.folder); try { db.scan(con, b.folder); } finally { con.close(); }
   const hold = holdFirstPush(b);
   const update = cliAsync(['update', '002-local', '--summary', 'local summary'], { cwd: b.cons, tmp: b.tmp });
   await hold.held();

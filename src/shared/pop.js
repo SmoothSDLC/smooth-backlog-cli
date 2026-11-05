@@ -353,6 +353,7 @@ async function popCommand(argv) {
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
   await assertInside(home, folder);
+  await index.ensure(home, folder);
   try {
     const { rows } = index.rows(folder);
     const excluded = excludedIds(rows.filter(r => r.status != null && r.status !== 'archived'), repo);

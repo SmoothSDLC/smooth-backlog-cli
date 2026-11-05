@@ -168,6 +168,7 @@ async function query(argv) {
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
   await assertInside(home, folder); // no symlink between the home and the folder
+  await index.ensure(home, folder);
   {
     const { handoff: h, rows, items } = index.rows(folder);
     const critical = () => index.open(rows).filter(r => r.severity === 'critical');

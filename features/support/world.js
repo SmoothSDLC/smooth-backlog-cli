@@ -56,6 +56,8 @@ export function makeWorld(location) {
       const home = env.BACKLOG_HOME ? { BACKLOG_HOME: dir } : {};
       return runCli(args, { cwd: env.BACKLOG_HOME ? this.repo : dir, env: { ...env, ...home, ...agent, ...extra.env } });
     },
+    // the folder of the items of this repository: <backlog>/<owner>/<name>, inside the repository the constant local/repository
+    folder() { return env.BACKLOG_HOME ? join(env.BACKLOG_HOME, 'acme', 'demo') : join(this.repo, '.backlog', 'local', 'repository'); },
     hasItemFolder() { return existsSync(join(this.repo, '.backlog')) || (env.BACKLOG_HOME && existsSync(join(env.BACKLOG_HOME, 'acme', 'demo'))); },
   };
   return world;

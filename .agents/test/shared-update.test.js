@@ -7,10 +7,10 @@ import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, readdirSy
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
-import * as db from '../../src/shared/db.js';
-import { parse } from '../../src/shared/frontmatter.js';
+import * as index from '../../src/shared/index.js';
+import { dump, parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
 const git = (cwd, ...args) => {
@@ -23,7 +23,7 @@ after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 
 // A shared home with consumer acme/demo on main and seven items: four open (one in progress, one waiting), one with
 // a review class, one done. the item files are fixed text.
-function seed({ permuteIds = false } = {}) {
+function seed() {
   const t = mkdtempSync(join(tmpdir(), 'update-test-'));
   dirs.push(t);
   const home = sharedBacklog(t);
@@ -48,13 +48,6 @@ function seed({ permuteIds = false } = {}) {
   item(4, 'delta', { wait_on: 'workflow run', wait_since: '2026-10-02T00:00:00Z' });
   item(5, 'epsilon', { review_refs: ['references/review/tests.md'], review_state: '' });
   item(6, 'zeta', { status: 'done', priority: 5, completed: '2026-10-02T00:00:00Z' });
-  const con = db.connect(folder);
-  db.scan(con, folder);
-  if (permuteIds) { // the row id of an item is no longer its number: 1 -> 2, 2 -> 3, 3 -> 1
-    con.exec('UPDATE phase SET id = id + 100');
-    con.exec('UPDATE phase SET id = CASE seq WHEN 1 THEN 2 WHEN 2 THEN 3 WHEN 3 THEN 1 ELSE id END');
-  }
-  con.close();
   git(home, 'add', '-A');
   git(home, 'commit', '-q', '-m', 'fixture');
   git(home, 'push', '-q');
@@ -62,6 +55,7 @@ function seed({ permuteIds = false } = {}) {
 }
 
 const run = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });
+const rankOf = (f, slug) => index.rows(f.folder).rows.find(r => r.slug === slug).priority; // the rank is in the index, not in the item
 const fm = (f, name) => parse(readFileSync(join(f.folder, 'phases', name), 'utf8'));
 // An item outside a team closes with --status done and no review; these tests complete the seeded items first (refs,
 // estimate, definition of done) so that they close as a refined item does.
@@ -81,8 +75,43 @@ test('the class options are gone: --set-work-class and --set-review-classes are 
   assert.equal(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), before);
 });
 
+test('update --priority changes the index and no other item file; the item itself is stamped and records the move', () => {
+  const f = seed();
+  const files = () => Object.fromEntries(readdirSync(join(f.folder, 'phases')).map(n => [n, readFileSync(join(f.folder, 'phases', n), 'utf8')]));
+  assert.equal(run(f, ['1', '--summary', 'first write builds the index']).status, 0);
+  const before = files();
+  const indexBefore = readFileSync(join(f.folder, 'index.json'), 'utf8');
+  const r = run(f, ['2', '--priority', '0']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const after = files();
+  for (const n of Object.keys(before).filter(x => !x.startsWith('002'))) assert.equal(after[n], before[n], `${n} was not rewritten`);
+  assert.notEqual(readFileSync(join(f.folder, 'index.json'), 'utf8'), indexBefore, 'the order is in the index');
+  assert.equal(rankOf(f, '002-beta'), 0);
+  assert.equal(rankOf(f, '001-alpha'), 1);
+  assert.match(parse(after['002-beta.md']).fm.events.at(-1), / planning_event /);
+});
+
+test('a folder whose items carry the rank of an earlier build gets its index at the first write; the items lose the key when they are next written', () => {
+  const f = seed();
+  for (const [n, rank] of [['001-alpha', 3], ['002-beta', 1], ['003-gamma', 2], ['004-delta', 0], ['005-epsilon', 4], ['006-zeta', 5]]) { // the ranks an earlier build wrote
+    const p = join(f.folder, 'phases', `${n}.md`);
+    const doc = parse(readFileSync(p, 'utf8'));
+    writeFileSync(p, dump({ ...doc.fm, priority: rank }, doc.body));
+  }
+  rmSync(join(f.folder, 'index.json'), { force: true }); // the fixture's writes made one; an earlier build had none
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'legacy ranks'); git(f.home, 'push', '-q');
+  assert.equal(existsSync(join(f.folder, 'index.json')), false);
+  assert.equal(fm(f, '003-gamma.md').fm.priority, 2);
+  assert.equal(run(f, ['3', '--summary', 'written']).status, 0);
+  assert.deepEqual(index.read(f.folder).branches.main.map(e => e.slug), ['004-delta', '002-beta', '003-gamma', '001-alpha', '005-epsilon', '006-zeta'], 'the order the priority fields gave, open items first');
+  assert.equal(Object.hasOwn(fm(f, '003-gamma.md').fm, 'priority'), false, 'the written item lost the key');
+  assert.equal(fm(f, '002-beta.md').fm.priority, 1, 'an item nobody wrote keeps it, ignored');
+  assert.equal(run(f, ['2', '--summary', 'written']).status, 0);
+  assert.equal(Object.hasOwn(fm(f, '002-beta.md').fm, 'priority'), false);
+});
+
 test('a bare number is the item number, never the database row id', t => {
-  const f = seed({ permuteIds: true });
+  const f = seed();
   const r = run(f, ['2', '--status', 'in_progress']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^✅ 002-beta updated/);
@@ -91,8 +120,8 @@ test('a bare number is the item number, never the database row id', t => {
   assert.equal(fm(f, '003-gamma.md').fm.updated, '2026-10-01T00:00:00Z');
   const p = run(f, ['3', '--priority', '0']);
   assert.match(p.stdout, /P0/);
-  assert.equal(fm(f, '003-gamma.md').fm.priority, 0);
-  assert.equal(fm(f, '001-alpha.md').fm.priority, 1);
+  assert.equal(rankOf(f, '003-gamma'), 0);
+  assert.equal(rankOf(f, '001-alpha'), 1);
 });
 
 test('order of work: pull first, then change, write, log the event, commit and push', () => {
@@ -234,20 +263,19 @@ test('review P2: update on an archived item is refused for every flag that goes 
   for (const args of [['002-beta', '--summary', 'new'], ['2', '--status', 'done'], ['002-beta', '--claim', 'me'], ['002-beta', '--request-review', 'rex'], ['002-beta', '--close']]) {
     const r = run(f, args);
     assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stdout, /002-beta is archived and cannot be edited/, args.join(' '));
+    assert.match(r.stdout, /002-beta is archived and cannot be edited \(archived items are read-only\)/, args.join(' '));
   }
   assert.equal(readFileSync(file, 'utf8'), before);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
-test('review P1: update whose rescan throws (another item with size_score: []) restores the file, and commits nothing', () => {
+test('review P1: update whose index write is refused restores the file, and commits nothing', () => {
   const f = seed();
-  const bad = join(f.folder, 'phases', '001-alpha.md');
-  writeFileSync(bad, readFileSync(bad, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n'));
+  breakIndex(f.home, f.folder);
   const target = join(f.folder, 'phases', '002-beta.md');
   const text = readFileSync(target, 'utf8');
   const head = git(f.home, 'rev-parse', 'HEAD');
-  const r = run(f, ['2', '--summary', 'REFUSED_EDIT']);
+  const r = run(f, ['2', '--priority', '0']); // the item is written, then the order cannot be
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
   assert.equal(readFileSync(target, 'utf8'), text);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
@@ -257,7 +285,7 @@ test('review P2: after two clones picked one number, the merged queue is re-dens
   const f = seed();
   numberClash(f);
   assert.equal(run(f, ['1', '--summary', 'touch']).status, 0);
-  const ranks = readdirSync(join(f.folder, 'phases')).map(n => parse(readFileSync(join(f.folder, 'phases', n), 'utf8')).fm).filter(m => ['pending', 'in_progress'].includes(m.status)).map(m => m.priority).sort((a, b) => a - b);
+  const ranks = actionableRanks(f);
   assert.deepEqual(ranks, ranks.map((_, i) => i));
 });
 
@@ -351,14 +379,11 @@ test('review P1: a takeover marker held by another waiter keeps the others waiti
   assert.equal(readFileSync(log, 'utf8'), 'in y\nout y\n');
 });
 
-const actionableRanks = f => readdirSync(join(f.folder, 'phases')).map(n => fm(f, n).fm).filter(m => ['pending', 'in_progress'].includes(m.status)).map(m => m.priority).sort((a, b) => a - b);
+const actionableRanks = f => index.open(index.rows(f.folder).rows).map(m => m.priority).sort((a, b) => a - b);
 
 for (const status of ['pending', 'in_progress']) {
   test(`review P2: an item that returns from done to ${status} is ranked again: no two actionable items share a priority`, () => {
     const f = seed();
-    const p = join(f.folder, 'phases', '006-zeta.md');
-    writeFileSync(p, readFileSync(p, 'utf8').replace(/^priority: .*$/m, 'priority: 0')); // what it kept from before it was completed
-    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'old priority'); git(f.home, 'push', '-q');
     const r = run(f, ['6', '--status', status]);
     assert.equal(r.status, 0, r.stdout + r.stderr);
     const ranks = actionableRanks(f);
@@ -379,10 +404,9 @@ test('review P1: a bound team session reorders and re-ranks only its own items: 
   assert.equal(refused.status, 1, refused.stdout + refused.stderr);
   assert.match(refused.stdout, /001-alpha.*team session is bound to acme\/demo branch release/);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
-  const prio = n => fm(f, n).fm.priority;
-  const [a, b] = [prio('002-beta.md'), prio('003-gamma.md')];
+  const [a, b] = [rankOf(f, '002-beta'), rankOf(f, '003-gamma')];
   assert.equal(t(['--replan', '003-gamma,002-beta']).status, 0);
-  assert.deepEqual([prio('003-gamma.md'), prio('002-beta.md')], [a, b], 'the team items trade the ranks they hold');
+  assert.deepEqual([rankOf(f, '003-gamma'), rankOf(f, '002-beta')], [a, b], 'the team items trade the ranks they hold');
   Object.assign(process.env, team); // the re-ranks of completion, --priority and the other commands go through store.reflow
   try { store.reflow(f.folder, { slug: '003-gamma', target: 0 }); store.reflow(f.folder); } finally { for (const k of Object.keys(team)) delete process.env[k]; }
   assert.equal(others(), before, 'no file of another team was written');
@@ -394,14 +418,12 @@ const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g,
 function snapshot(f) {
   const files = {};
   for (const n of readdirSync(join(f.folder, 'phases'))) files[n] = norm(JSON.stringify(parse(readFileSync(join(f.folder, 'phases', n), 'utf8'))));
-  const con = db.connect(f.folder);
-  const rows = x => con.prepare(x).all().map(r => norm(JSON.stringify({ ...r })));
+  const cols = ['id', 'handoff_id', 'slug', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'priority', 'path', 'branch', 'commit_sha', 'location', 'repository', 'size_score', 'completed_at'];
   const out = {
     files,
-    phases: rows('SELECT id, handoff_id, slug, seq, name, objective, summary, status, severity, priority, path, branch, commit_sha, location, repository, size_score, completed_at FROM phase ORDER BY id'),
+    phases: index.rows(f.folder).rows.map(r => norm(JSON.stringify(Object.fromEntries(cols.map(c => [c, r[c]]))))),
     log: git(f.home, 'log', '--format=%s').split('\n'),
   };
-  con.close();
   return out;
 }
 // Runs one update; a step either succeeds or is refused, but never crashes.

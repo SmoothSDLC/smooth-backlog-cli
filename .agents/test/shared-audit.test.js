@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
+import * as index from '../../src/shared/index.js';
 import { gitIn } from './shared-concurrency.js';
 
 function solo(t) {
@@ -150,8 +150,7 @@ test('review: a phases/ file without front matter is no item for new, query or u
   const u = s.run(['update', 'README', '--summary', 'test']);
   assert.equal(u.status, 1, out(u));
   assert.equal(readFileSync(readme, 'utf8'), note);
-  const con = db.connect(s.folder);
-  try { assert.equal(con.prepare("SELECT COUNT(*) AS n FROM phase WHERE slug LIKE 'README%'").get().n, 0); } finally { con.close(); }
+  assert.equal(index.rows(s.folder).rows.filter(r => r.slug.startsWith('README')).length, 0);
 });
 
 test('review: update --seq refuses a number another item holds (archived ones included)', t => {
@@ -209,8 +208,8 @@ test('review P1: a command killed (kill -9) mid-mutation is rolled back by the n
   assert.equal(r.status, 0, out(r)); assert.match(r.stderr, /rolled back a command that was killed/);
   assert.equal(readFileSync(item, 'utf8'), before, 'item 1 is back, still pending');
   assert.equal(existsSync(join(s.folder, 'archive', 'phases', '001-alpha-job.md')), false);
-  const con = db.connect(s.folder);
-  try { assert.deepEqual({ ...con.prepare('SELECT status, path FROM phase WHERE seq=1').get() }, { status: 'pending', path: 'phases/001-alpha-job.md' }); } finally { con.close(); }
+  const one = index.rows(s.folder).rows.find(r => r.seq === 1);
+  assert.deepEqual({ status: one.status, path: one.path }, { status: 'pending', path: 'phases/001-alpha-job.md' });
   const tree = gitIn(bare, 'ls-tree', '-r', '--name-only', 'main');
   assert.match(tree, /acme\/demo\/phases\/001-alpha-job\.md/); assert.doesNotMatch(tree, /archive/);
   assert.equal(gitIn(s.home, 'status', '--porcelain'), '');

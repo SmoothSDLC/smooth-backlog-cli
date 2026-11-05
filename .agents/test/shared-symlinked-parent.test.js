@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
+import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import { assertInside, validateHome } from '../../src/shared/safety.js';
 
@@ -35,13 +35,12 @@ function linked(t) {
 const run = (f, args) => cli(args, { cwd: f.cons, tmp: f.tmp });
 const ok = (f, args) => { const r = run(f, args); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 
-test('store and db: load, write and connect work when the folder is reached through a symlinked parent', t => {
+test('store and index: load, write and rows work when the folder is reached through a symlinked parent', t => {
   const f = linked(t);
   const path = join(f.folder, 'phases', '001-a.md');
   store.write({ path, fm: { phase: '001-a', seq: 1, name: 'a', status: 'pending' }, body: 'x\n' });
   assert.equal(store.load(f.folder).length, 1);
-  const con = db.connect(f.folder);
-  try { db.scan(con, f.folder); } finally { con.close(); }
+  assert.equal(index.rows(f.folder).rows.length, 1);
 });
 
 test('safety: validateHome and assertInside accept a path whose ancestors contain a symlink', async t => {

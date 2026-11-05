@@ -1,14 +1,14 @@
 // `backlog new`: adds an item to the queue.
-// Order of work as the earlier scripts: pull, number, write, scan into backlog.db, reflow, scan, commit and push.
+// Order of work as the earlier scripts: pull, number, write, place in the index, commit and push.
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { input } from '../errors.js';
-import { commitSettled, connect, logEvent, scan, undoOnThrow } from './db.js';
 import { parse } from './frontmatter.js';
+import { find as findItem, rows as itemRows } from './index.js';
 import { actor, check, recordWrites } from './seen.js';
-import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
-import { branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, write } from './store.js';
-import { pull } from './sync.js';
+import { assertInside, checkRefs, git, redact, slugify } from './safety.js';
+import { addEvent, branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, undoOnThrow, write } from './store.js';
+import { commitSettled, pull } from './sync.js';
 import { foreignItem, isForeign, outsideTeam, strip, teamName, teamScope } from './team.js';
 
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; //
@@ -67,12 +67,6 @@ export function hasDefinitionOfDone(text) {
   return Boolean(content) && !/^(?:[-*][ \t]+(?:\[[ x]\][ \t]*)?)?(?:tbd|tba|todo|to ?do|n\/?a|none|-|\.\.\.|…)\.?$/i.test(content); // a placeholder word is no definition of done
 }
 
-// by number (a live item before an archived one) or by slug; the mirror database is the lookup.
-function byIdent(db, ident) {
-  const sel = itemSelector(ident);
-  if (sel?.number !== undefined) return db.prepare("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id").get(sel.number);
-  return sel ? db.prepare('SELECT * FROM phase WHERE slug=?').get(sel.slug) : undefined;
-}
 
 const refuse = text => { process.stdout.write(`❌ ${redact(text)}\n`); return 1; };
 
@@ -98,32 +92,31 @@ async function create(argv, { home, folder, repo, team }) {
   const priority = a.priority ?? (severity === 'critical' ? 0 : undefined); // a critical finding jumps the queue (:62)
   if (!a.name && !a.splitFrom) return refuse('--name is required (or --split-from <phase>)');
   const refs = asList(a.reviewRefs);
-  checkRefs(refs); // before any database access
+  checkRefs(refs); // before the folder is read
   // an item of a team (--team, or a split of a team's item) starts in stage refining, where a member writes it
   const intoRefining = a.team || (a.splitFrom && teamName()); // outside a team session a split is a plain item
   if (!hasDefinitionOfDone(a.body) && (team.repo || refs.length) && !intoRefining) {
     return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
   }
 
-  const db = connect(folder, { readOnly: Boolean(a.dryRun) }); // a dry run only looks: nothing is created in the backlog clone
-  let written = false;
+  const { rows } = itemRows(folder); // a dry run only looks: nothing is created in the backlog clone
   let seq; let slug; let rel; let order; let rank; let where;
-  try {
+  {
     const deps = [];
     for (const d of asList(a.dependsOn)) {
       if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--depends-on: no item '${d}' in the backlog repository`); }
-      else if (!byIdent(db, d)) return refuse(`--depends-on: no item '${d}' in this backlog`);
+      else if (!findItem(rows, d)) return refuse(`--depends-on: no item '${d}' in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }
     let inherited = { objective: '', summary: '', context: '' };
-    const src = a.splitFrom ? byIdent(db, a.splitFrom) : null;
+    const src = a.splitFrom ? findItem(rows, a.splitFrom) : null;
     if (a.splitFrom) {
       if (!src) return refuse(`--split-from: no phase '${a.splitFrom}'`);
       const outside = outsideTeam({ repository: src.repository, branch: src.branch }); // the split logs an event on the parent
       if (outside) return refuse(`${src.slug}: ${outside}`);
       // INTENTIONAL: the parent's body goes in verbatim, duplicate headings included.
       const file = join(folder, String(src.path));
-      await assertInside(folder, file); // the path comes from the mirror database: untrusted
+      await assertInside(folder, file); // no symlink between the folder and the file
       if (!existsSync(file)) return refuse(`--split-from: the contents of '${src.slug}' are missing from the backlog repository`);
       check(folder, repo, actor(), src.slug, src.path); // the split logs a parent event based on this version and scope
       const doc = parse(readFileSync(file, 'utf8'));
@@ -152,7 +145,6 @@ async function create(argv, { home, folder, repo, team }) {
     const objective = a.objective || inherited.objective || name;
     const fm = {
       phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: 'pending', severity,
-      priority: priority ?? 10 ** 6, // a big sentinel sorts it last until the reflow places it
       repository: repo, branch: team.branch || callerBranch(process.cwd()),
       commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(), updated_by: actor(),
     };
@@ -169,22 +161,17 @@ async function create(argv, { home, folder, repo, team }) {
     if (!hasDefinitionOfDone(a.body)) parts.push(`\n## Definition of done\n\n${DOD_PLACEHOLDER}\n`);
 
     if (a.dryRun) { process.stdout.write(`ℹ️  [dry-run] would create phase ${slug} (seq ${seq})\n`); return 0; }
-    // nothing is committed yet: a failed run must not leave its file, a renumbered neighbour or a mirror row for the next command to push (beyond python parity)
-    await undoOnThrow(db, folder, async () => {
+    // nothing is committed yet: a failed run must not leave its file or its place in the index for the next command to push (beyond python parity)
+    await undoOnThrow(folder, async () => {
       write({ path, fm, body: parts.join('\n') }, folder);
-      // planning event: re-densify the backlog to 0..N-1, the new item at its insertion rank
-      order = reflow(folder, priority === undefined ? null : { slug, target: priority }, () => {
-        // The mandatory ranking guard runs before any mirror or event changes.
-        scan(db, folder);
-      });
+      // planning event: the new item at its insertion rank (the end without one) in the index of its branch
+      order = reflow(folder, { slug, target: priority, branches: [fm.branch] });
       rank = Object.fromEntries(order)[slug];
-      if (src) logEvent(db, 'split', { phaseId: src.id, note: `spawned sibling ${slug}` }); // after the reflow: it rewrites the parent from what it read before
-      logEvent(db, 'planning_event', { phaseId: db.prepare('SELECT id FROM phase WHERE slug=?').get(slug)?.id, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
-      scan(db, folder);
+      if (src) addEvent(folder, src.path, { event: 'split', note: `spawned sibling ${slug}` });
+      addEvent(folder, rel, { event: 'planning_event', note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
       where = priority === undefined ? 'appended' : `inserted at P${priority}`;
     });
-    written = true;
-  } finally { db.close(); }
+  }
 
   // every change is committed and pushed at once; a file renumbered on the way is scanned and committed again
   const message = ['new', ...argv.slice(0, 2)].join(' ');

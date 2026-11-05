@@ -64,11 +64,13 @@ test('096: backlog update --append on an item that carries both keys leaves the 
   assert.match(shown, /^-review_classes:/m);
 });
 
-test('096: a priority reflow that rewrites a neighbour drops the keys from that neighbour', () => {
+test('096: a priority move rewrites no neighbour: the keys stay in it until its own next write drops them', () => {
   const f = fixture();
   const a = make(f, 'first'); const b = make(f, 'second');
   seed(f, a); read(f, b);
   ok(f, ['update', b, '--priority', '0', '--by', 'me']);
+  assert.deepEqual(has(f, a), ['work_class', 'review_classes']);
+  ok(f, ['update', a, '--append', 'a note', '--by', 'me']);
   assert.deepEqual(has(f, a), []);
 });
 

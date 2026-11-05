@@ -1,13 +1,13 @@
 // `backlog update`, non-team flags.
 // in the earlier scripts order: pull, resolve the item, change, write the file, log the event, scan into
-// backlog.db, planning event (--priority move, completion, --replan), commit and push. The item is found by number
-// (seq) or slug, never by database row id. The team flags go to lifecycle.js.
+// the index, planning event (--priority move, completion, --replan), commit and push. The item is found by number
+// (seq) or slug. The team flags go to lifecycle.js.
 // shortcut: argparse's unique-prefix abbreviations (--stat) are not accepted.
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { BacklogError } from '../errors.js';
-import * as db from './db.js';
 import { parse as parseDoc } from './frontmatter.js';
+import { find as findItem, rows as itemRows } from './index.js';
 import { teamRefusal } from './archive.js';
 import { caller, closeNow, headline, missingFields, reviewRefusal, runCloseGate, shutdown, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
@@ -83,14 +83,6 @@ function parse(argv) {
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const refuse = message => { say(`❌ ${message}`); return 1; }; // 's refusals: stdout, exit 1
-//
-function find(con, text) {
-  const sel = itemSelector(text);
-  const row = sel && (sel.number !== undefined
-    ? con.prepare("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id").get(sel.number)
-    : con.prepare('SELECT * FROM phase WHERE slug=?').get(sel.slug));
-  return row ? { ...row } : null;
-}
 
 export async function run(argv) {
   try { return await update(argv); } catch (e) { return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); }
@@ -105,19 +97,14 @@ async function update(argv) {
   try { repo = teamScope().repo || store.repoId(process.cwd()); folder = store.folder(home, repo); } catch (e) { return die(e.message); } //
   return store.cloneLocked(home, async () => { // the run lock: from the pull to the push
     await sync.pull(home); // every script works on origin/main as it is now
-    const con = db.connect(folder); // refuses a link at the owner or the repository folder
-    let open = true;
-    const close = () => { if (open) { open = false; con.close(); } };
-    let code;
-    try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); throw e; } finally { close(); }
+    const code = await store.undoOnThrow(folder, () => change(a, folder, repo)); // refuses a link at the owner or the repository folder
     if (code || a['dry-run']) return code;
     // the agent a command names goes into the commit subject (session names with colons are audit data too);
     // the actor the step acts as (a.by ?? a.claim ?? a.release), whatever the order of the options
     const subjectParts = ['update', ...argv.slice(0, 2)];
     const agent = a.by ?? a.claim ?? a.release;
     if (agent !== undefined) subjectParts.push(agent);
-    let pairs;
-    pairs = await db.commitSettled(home, folder, subjectParts.join(' '), a.guard, a.claims);
+    const pairs = await sync.commitSettled(home, folder, subjectParts.join(' '), a.guard, a.claims);
     seen.recordWrites(folder, repo, seen.actor(), a.wrote ? [a.wrote] : [], pairs); // after the push, including a pure replan
     if (a.shutdown) process.stdout.write(`${shutdown(a.shutdown)}\n`); // after anything the publication prints
     return 0;
@@ -125,13 +112,13 @@ async function update(argv) {
 }
 
 // The slug of an item whose dependency chain (the files' depends_on, from deps on) leads back to `id`; `id` itself when deps names it. null: no cycle.
-function dependencyCycle(con, folder, id, deps) {
+function dependencyCycle(rows, folder, id, deps) {
   const edges = new Map();
-  for (const i of store.load(folder)) { const r = find(con, String(i.fm.phase || basename(i.path, '.md'))); if (r) edges.set(r.id, { slug: r.slug, deps: asList(i.fm.depends_on) }); }
+  for (const i of store.load(folder)) { const r = findItem(rows, String(i.fm.phase || basename(i.path, '.md'))); if (r) edges.set(r.id, { slug: r.slug, deps: asList(i.fm.depends_on) }); }
   const seen = new Set();
   const walk = list => {
     for (const d of list) {
-      const r = d === '' || d === null ? null : find(con, String(d));
+      const r = d === '' || d === null ? null : findItem(rows, String(d));
       if (!r) continue;
       if (r.id === id) return id;
       if (seen.has(r.id)) continue;
@@ -143,32 +130,31 @@ function dependencyCycle(con, folder, id, deps) {
   return walk(deps);
 }
 
-async function change(a, con, folder, repo) {
-
+async function change(a, folder, repo) {
+  const { rows } = itemRows(folder);
   // --- pure planning event: explicit replan of the whole backlog
   if (a.replan) {
     const idents = a.replan.split(',').map(strip).filter(Boolean);
     for (const ident of idents) { // a bound team session reorders only its own items: naming another team's item is refused, before anything is written
-      const named = find(con, ident);
+      const named = findItem(rows, ident);
       const outside = named && teamRefusal(named);
       if (outside) return refuse(outside);
     }
     if (a['dry-run']) { say(`ℹ️  [dry-run] would replan backlog leading order: [${idents.map(pyStr).join(', ')}]`); return 0; }
     a.guard = [];
     const order = store.reorder(folder, idents);
-    db.scan(con, folder);
     say('📋 PLANNING EVENT — backlog re-prioritized (P0 = next):');
     for (const [s, i] of order) say(`   P${i}  ${s}`);
     return 0;
   }
 
   if (!a.phase) return refuse('phase is required (or use --replan "id,id,...")');
-  const row = find(con, a.phase);
+  const row = findItem(rows, a.phase);
   if (!row) return refuse(`no phase ${pyStr(a.phase)} (create it with backlog new)`);
-  if (row.status === 'archived') return refuse(`${row.slug} is archived and cannot be edited (the rescan does not visit archive/)`); // covers --claim, --request-review, --review and --close too
+  if (row.status === 'archived') return refuse(`${row.slug} is archived and cannot be edited (archived items are read-only)`); // covers --claim, --request-review, --review and --close too
 
   const path = join(folder, row.path);
-  await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way
+  await assertInside(folder, path); // no symlink between the folder and the item file
   const { fm, body: text } = parseDoc(readFileSync(path, 'utf8'));
   const statusBefore = fm.status; // the close gate (059.3) runs on the pre-transition status
   // The step's effective actor, not the environment actor: only the holder asks for a review of its work, and the
@@ -196,7 +182,7 @@ async function change(a, con, folder, repo) {
       if (wip) return refuse(`${row.slug}: ${wip}`);
     }
     if (k === 'seq') { // the number selects the item: another item (archived ones too) holding it would make every numeric selector ambiguous
-      const held = con.prepare('SELECT slug FROM phase WHERE seq=? AND id<>?').get(n, row.id)?.slug
+      const held = rows.find(r => Number(r.seq) === n && r.id !== row.id)?.slug
         ?? store.load(folder).find(i => Number(i.fm.seq) === n && i.fm.phase !== row.slug)?.fm.phase;
       if (held) return refuse(`--seq ${n} is already item ${held}; the number must stay unique`);
       const by = store.load(folder).filter(i => i.fm.phase !== row.slug && asList(i.fm.depends_on).some(d => d === row.slug || (/^\d+$/.test(String(d)) && Number(d) === Number(row.seq)))).map(i => i.fm.phase ?? i.path);
@@ -238,10 +224,10 @@ async function change(a, con, folder, repo) {
     const deps = [];
     for (const d of asList(a['set-depends-on'])) {
       if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in the backlog repository`); }
-      else if (!find(con, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in this backlog`);
+      else if (!findItem(rows, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }
-    const cycle = dependencyCycle(con, folder, row.id, deps);
+    const cycle = dependencyCycle(rows, folder, row.id, deps);
     if (!cycle && foreignCycle(folder, repo, row.seq, deps)) return refuse(`--set-depends-on: it would make a dependency cycle through another repository's items back to ${repo}#${row.seq}`);
     if (cycle) return refuse(`--set-depends-on: ${cycle === row.id ? 'an item cannot depend on itself' : `it would make a dependency cycle through ${cycle}`}`);
     fm.depends_on = deps;
@@ -294,30 +280,24 @@ async function change(a, con, folder, repo) {
 
   store.write({ path, fm, body }, folder);
   a.wrote = { slug: row.slug, path: row.path };
-  const recordChange = () => {
-    db.logEvent(con, event, {
-      phaseId: row.id, branch: fm.branch || '', commitSha: fm.commit || '',
-      note: a.note || `set ${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ')}`,
-    });
-    db.scan(con, folder); // rescan -> the db follows the file
-  };
+  store.addEvent(folder, row.path, {
+    event, branch: fm.branch || '', commitSha: fm.commit || '',
+    note: a.note || `set ${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ')}`,
+  });
 
-  // --- the planning event: a move-to-rank, or completion re-densifying the remaining backlog
-  let order = null;
+  // --- the planning event: a move-to-rank, or completion re-densifying the remaining backlog. The index entry of the item (name, status) follows the
+  // file in every case: reflow makes the index right against the files, and writes only the index.
+  const branches = [String(fm.branch || '')];
+  const order = store.reflow(folder, moveTarget !== null ? { slug: row.slug, target: moveTarget, branches } : { branches });
+  const inQueue = s => ['pending', 'in_progress'].includes(s);
   if (moveTarget !== null) {
-    order = store.reflow(folder, { slug: row.slug, target: moveTarget }, recordChange);
     changes.priority = `P${new Map(order).get(row.slug) ?? 'None'}`;
-    db.logEvent(con, 'planning_event', { phaseId: row.id, note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
-  } else if (completing) {
-    order = store.reflow(folder, null, recordChange); // the done item leaves the backlog; the rest re-densify
-    db.logEvent(con, 'planning_event', { phaseId: row.id, note: `completed ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
-  } else if (['pending', 'in_progress'].includes(row.status) !== ['pending', 'in_progress'].includes(fm.status)) {
-    // into or out of the queue by a status other than done (done -> pending keeps its old priority and collides; a status out leaves a gap):
-    // rank the queue again (beyond python parity, which leaves the collision or the gap)
-    order = store.reflow(folder, null, recordChange);
-    db.logEvent(con, 'planning_event', { phaseId: row.id, note: `${row.slug} is now ${fm.status}; backlog re-prioritized to ${order.length} item(s)` });
+    store.addEvent(folder, row.path, { event: 'planning_event', note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
+  } else if (completing) { // the done item leaves the queue; the rest re-densify
+    store.addEvent(folder, row.path, { event: 'planning_event', note: `completed ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
+  } else if (inQueue(row.status) !== inQueue(fm.status)) { // into or out of the queue by a status other than done
+    store.addEvent(folder, row.path, { event: 'planning_event', note: `${row.slug} is now ${fm.status}; backlog re-prioritized to ${order.length} item(s)` });
   }
-  if (order) db.scan(con, folder); else recordChange();
 
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
   if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug));

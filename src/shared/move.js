@@ -1,16 +1,16 @@
 // `backlog move`: moves an item to another branch or repository and renumbers both queues.
-// oracle's order: pull, resolve the item, change, write, log the event, scan into backlog.db, commit and push. The item is found by
-// number (seq) or slug, never by database row id.
+// oracle's order: pull, resolve the item, change, write, log the event, update the index, commit and push. The item is found by
+// number (seq) or slug.
 // Beyond the earlier scripts: a target branch must exist on the origin of the consuming repository, and a target repository
 // must be a plain owner/name (the earlier scripts joins any text onto the home).
 // shortcut: argparse's unique-prefix abbreviations are not accepted; the target number
-// comes from store.nextSeq (phases/, archive/ and the db) where move.py:35-37 ignores archive/.
+// comes from store.nextSeq (phases/ and archive/) where move.py:35-37 ignores archive/.
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { die, find, pyStr, refuse, say, teamRefusal, usage, valueLike, withBacklog } from './archive.js';
-import * as db from './db.js';
+import { die, pyStr, refuse, say, teamRefusal, usage, valueLike, withBacklog } from './archive.js';
 import { parse as parseDoc } from './frontmatter.js';
+import { ACTIONABLE, find } from './index.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -44,7 +44,7 @@ export async function run(argv) {
   let a;
   try {
     a = parse(argv);
-    return await withBacklog((con, ctx) => move(a, con, ctx), ['move.py', ...argv.slice(0, 2)].join(' '));
+    return await withBacklog((rows, ctx) => move(a, rows, ctx), ['move.py', ...argv.slice(0, 2)].join(' '));
   } catch (err) { const e = seen.widen(err, a?.folders); return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); } // both folders of a move
 }
 
@@ -71,9 +71,9 @@ async function branchRefusal(branch, repo) {
 }
 
 // move.py:22-29
-async function toBranch(con, folder, r, branch, note, { repo, guard, wrote }) {
+async function toBranch(folder, r, branch, note, { repo, guard, wrote }) {
   const path = join(folder, r.path);
-  await assertInside(folder, path); // the row is mirror data: it names a file inside the folder, no symlink on the way
+  await assertInside(folder, path); // the file is inside the folder, no symlink on the way
   const { fm, body } = parseDoc(readFileSync(path, 'utf8'));
   seen.check(folder, repo, seen.actor(), r.slug, r.path);
   guard.push({ path: `${repo}/${r.path}`, slug: r.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
@@ -83,38 +83,35 @@ async function toBranch(con, folder, r, branch, note, { repo, guard, wrote }) {
   store.stamp(fm);
   store.write({ path, fm, body }, folder);
   wrote.push({ slug: r.slug, path: r.path });
-  db.logEvent(con, 'moved_branch', {
-    phaseId: r.id, branch,
-    note: `${r.slug}: branch '${old}' -> '${branch}'${note ? ` (${note})` : ''}`,
-  });
+  store.addEvent(folder, r.path, { event: 'moved_branch', branch, note: `${r.slug}: branch '${old}' -> '${branch}'${note ? ` (${note})` : ''}` });
 }
 
-async function move(a, con, ctx) {
-  const { home, repo, folder, close, folders, guard } = ctx;
+async function move(a, rows, ctx) {
+  const { home, repo, folder, folders, guard } = ctx;
   if (a['all-open-of-branch']) { // move.py:76-86
     const from = a['all-open-of-branch'];
     if (!a['to-branch']) throw usage('--all-open-of-branch needs --to-branch');
     const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
-    const rows = con.prepare("SELECT * FROM phase WHERE branch=? AND repository=? AND status IN ('pending','in_progress') ORDER BY id").all(from, repo);
-    const outside = rows.map(teamRefusal).find(Boolean); // before the first file is written
+    const open = rows.filter(r => r.branch === from && r.repository === repo && ACTIONABLE.includes(r.status));
+    const outside = open.map(teamRefusal).find(Boolean); // before the first file is written
     if (outside) return refuse(outside);
-    for (const r of rows) await toBranch(con, folder, { ...r }, a['to-branch'], a.note || `all open items of ${from}`, ctx);
-    db.scan(con, folder);
-    say(`✅ moved ${rows.length} open item(s) of '${from}' to '${a['to-branch']}'`);
+    for (const r of open) await toBranch(folder, r, a['to-branch'], a.note || `all open items of ${from}`, ctx);
+    store.reflow(folder); // the items leave the order of their branch and join the end of the open items of the other
+    say(`✅ moved ${open.length} open item(s) of '${from}' to '${a['to-branch']}'`);
     return 0;
   }
   if (!a.phase) throw usage('name the item, or use --all-open-of-branch');
-  const r = find(con, a.phase);
+  const r = find(rows, a.phase);
   if (!r) return refuse(`no item ${pyStr(a.phase)} in the backlog of ${repo}`);
   const outside = teamRefusal(r);
   if (outside) return refuse(outside);
-  if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (an archived item is not scanned, so its branch or repository would not follow)`);
+  if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (archived items are read-only)`);
   if (a['to-branch']) { // move.py:93-98
     const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
-    await toBranch(con, folder, r, a['to-branch'], a.note, ctx);
-    db.scan(con, folder);
+    await toBranch(folder, r, a['to-branch'], a.note, ctx);
+    store.reflow(folder);
     say(`✅ ${r.slug} now belongs to branch '${a['to-branch']}'`);
     return 0;
   }
@@ -127,10 +124,10 @@ async function move(a, con, ctx) {
   let tdir;
   try { tdir = store.folder(home, target); } catch (e) { throw usage(e.message); } // owner/name only: the target is the user's text or a file's data
   a.folders = [[folder, repo], [tdir, target]]; // a stale-view refusal names what the agent read in both
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target item is named from it`); // mirror data: no path in it
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target item is named from it`); // file data: no path in it
 
   // move.py:32-64
-  await assertInside(home, tdir); // no symlink between the home and the target folder: db.connect checks only below the owner, after the item is written
+  await assertInside(home, tdir); // no symlink between the home and the target folder
   const src = join(folder, r.path);
   await assertInside(folder, src);
   const { fm, body } = parseDoc(readFileSync(src, 'utf8'));
@@ -139,7 +136,7 @@ async function move(a, con, ctx) {
   // beyond move.py parity: depends_on names items of THIS backlog; in the target they would point at unrelated items
   if (asList(fm.depends_on).length) return refuse(`${r.slug} depends on other items of ${repo}; dependencies are resolved against the target backlog, so clear them first: update ${r.slug} --set-depends-on none`);
   // beyond move.py parity: items of this backlog that list the item (by number or slug, as update --set-depends-on stores it) would be left pointing at nothing
-  const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && asList(i.fm.depends_on).some(d => find(con, d)?.id === r.id)).map(i => i.fm.phase ?? i.path);
+  const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && asList(i.fm.depends_on).some(d => find(rows, d)?.id === r.id)).map(i => i.fm.phase ?? i.path);
   if (dependents.length) return refuse(`${dependents.join(', ')} depend${dependents.length > 1 ? '' : 's'} on ${r.slug}, which would leave their depends_on pointing at nothing; clear them first: update <dependent> --set-depends-on ... (the other dependencies, or none)`);
   // items of other repositories that name it as owner/name#seq would point at nothing too
   const elsewhere = foreignDependents(home, repo, r.seq);
@@ -151,25 +148,14 @@ async function move(a, con, ctx) {
   store.stamp(Object.assign(fm, { phase: slug, seq, repository: target }));
   fm.events = [...asList(fm.events), store.eventLine({ ts: store.now(), event: 'moved_in', branch: fm.branch, note: `from ${repo} as ${r.slug}` })]; // the history travels in the file
   const copy = join(tdir, 'phases', `${slug}.md`);
-  const tcon = db.connect(tdir);
-  try {
-    // all or nothing: a throw anywhere below, in the target scan or in the source rescan, restores both backlogs (files and mirror rows)
-    await db.undoOnThrow(tcon, tdir, async () => {
-      store.write({ path: copy, fm, body }, tdir);
-      store.note(src);
-      rmSync(src);
-      // Validate the source write set first, then the destination write set,
-      // before either reflow writes ranks or changes a mirror.
-      store.reflow(folder, { exclude: [r.slug] }, () => {
-        store.reflow(tdir); // rank the copy among the destination's items
-        db.scan(tcon, tdir);
-        con.prepare('DELETE FROM phase WHERE id=?').run(r.id);
-        db.logEvent(con, 'moved_out', { phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
-      });
-      db.scan(con, folder);
-    });
-  } finally { tcon.close(); }
-  close();
+  // all or nothing: a throw anywhere below restores both backlogs (items and indexes)
+  await store.undoOnThrow(tdir, async () => {
+    store.write({ path: copy, fm, body }, tdir);
+    store.note(src);
+    rmSync(src);
+    store.reflow(folder, { branches: [r.branch] }); // the item leaves the order of the source
+    store.reflow(tdir); // and joins the end of the open items of its branch in the destination
+  });
   ctx.wrote.push({ slug, path: `phases/${slug}.md`, folder: tdir, repo: target }); // the mover has seen the copy it made
   folders.push(tdir); // ONE commit and push covers the source and the target: never one pushed without the other
   say(`✅ ${r.slug} moved to ${target} as ${slug}`);

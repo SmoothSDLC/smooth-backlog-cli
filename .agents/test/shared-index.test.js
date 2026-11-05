@@ -1,9 +1,10 @@
 // Tests for src/shared/index.js: the committed order of a repository folder (one file, one entry per line, the array order is the priority).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, mkdirSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { dump } from '../../src/shared/frontmatter.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
@@ -14,7 +15,8 @@ function folder(t) {
   mkdirSync(join(dir, 'phases'), { recursive: true });
   return dir;
 }
-const put = (dir, n, extra = {}) => store.write({ path: join(dir, 'phases', `00${n}-i${n}.md`), fm: { phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', repository: 'acme/demo', branch: 'main', ...extra }, body: `Body ${n}.\n` }, dir);
+// An item file as an earlier build wrote it, rank included (store.write drops the rank).
+const put = (dir, n, extra = {}) => writeFileSync(join(dir, 'phases', `00${n}-i${n}.md`), dump({ phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', repository: 'acme/demo', branch: 'main', ...extra }, `Body ${n}.\n`));
 const slugs = (dir, branch = 'main') => index.read(dir).branches[branch].map(e => e.slug);
 
 test('read: a folder without an index has no branches', t => {

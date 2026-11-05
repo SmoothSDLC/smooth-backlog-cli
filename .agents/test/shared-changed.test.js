@@ -10,7 +10,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
@@ -42,7 +41,6 @@ function seed(items = ['alpha', 'beta', 'gamma']) {
     },
     body: `\n# Phase ${i + 1}\n\nBody of ${name}.\n`,
   }, folder));
-  const con = db.connect(folder); db.scan(con, folder); con.close();
   git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'fixture'); git(home, 'push', '-q');
   const home2 = join(t, 'home2');
   git(t, 'clone', '-q', join(t, 'origins', 'acme', 'backlog-repo.git'), home2);

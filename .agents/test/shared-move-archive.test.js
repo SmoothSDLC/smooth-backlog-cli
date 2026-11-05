@@ -7,9 +7,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { breakIndex, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
-import * as db from '../../src/shared/db.js';
+import * as index from '../../src/shared/index.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
@@ -23,7 +23,7 @@ after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 
 // A shared home with consumer acme/demo (branches main and release on its origin) and seven items: four open (one in
 // progress), two done, one foreign (it names other/proj). The folder other/proj holds item 001 already.
-function seed({ permuteIds = false } = {}) {
+function seed() {
   const t = mkdtempSync(join(tmpdir(), 'move-archive-test-'));
   dirs.push(t);
   const home = sharedBacklog(t);
@@ -52,15 +52,6 @@ function seed({ permuteIds = false } = {}) {
   item(folder, 6, 'zeta', { status: 'done', priority: 9, completed: '2026-10-02T00:00:00Z' });
   item(folder, 7, 'eta', { repository: 'other/proj', priority: 9 });
   item(other, 1, 'first');
-  for (const dir of [folder, other]) {
-    const con = db.connect(dir);
-    db.scan(con, dir);
-    if (permuteIds && dir === folder) { // the row id of an item is no longer its number: 1 -> 2, 2 -> 3, 3 -> 1
-      con.exec('UPDATE phase SET id = id + 100');
-      con.exec('UPDATE phase SET id = CASE seq WHEN 1 THEN 2 WHEN 2 THEN 3 WHEN 3 THEN 1 ELSE id END');
-    }
-    con.close();
-  }
   git(home, 'add', '-A');
   git(home, 'commit', '-q', '-m', 'fixture');
   git(home, 'push', '-q');
@@ -75,15 +66,10 @@ const names = (dir, sub) => (existsSync(join(dir, sub)) ? readdirSync(join(dir, 
 function snapshotFolder(dir) {
   const files = {};
   for (const sub of ['phases', 'archive']) for (const n of names(dir, sub)) files[`${sub}/${n}`] = doc(readFileSync(join(dir, sub, n), 'utf8'));
-  const con = db.connect(dir);
-  const rows = x => con.prepare(x).all().map(r => norm(JSON.stringify({ ...r })));
-  const out = {
-    files,
-    phases: rows('SELECT id, handoff_id, slug, seq, name, objective, summary, status, severity, priority, path, branch, commit_sha, location, repository, size_score, completed_at FROM phase ORDER BY id'),
-  };
-  con.close();
-  return out;
+  const cols = ['id', 'handoff_id', 'slug', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'priority', 'path', 'branch', 'commit_sha', 'location', 'repository', 'size_score', 'completed_at'];
+  return { files, phases: index.rows(dir).rows.map(r => norm(JSON.stringify(Object.fromEntries(cols.map(c => [c, r[c]]))))) };
 }
+const rowOf = (dir, slug) => index.rows(dir).rows.find(r => r.slug === slug);
 const snapshot = f => ({
   demo: snapshotFolder(f.folder),
   other: snapshotFolder(f.other),
@@ -106,7 +92,7 @@ const SUBJECT = {
 // --- archive
 
 test('archive finds the item by number, never by database row id', () => {
-  const f = seed({ permuteIds: true });
+  const f = seed();
   const r = run(f, 'archive', ['1', '--force']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^📦 001-alpha archived/);
@@ -124,8 +110,7 @@ test('review P2: a name with --- in it does not hide the closing front-matter de
   const moved = fm(f.folder, `archive/phases/${slug}.md`);
   assert.equal(moved.fm.status, 'archived');
   assert.equal(moved.fm.name, 'three---dashes');
-  const con = db.connect(f.folder);
-  try { assert.equal(con.prepare('SELECT status FROM phase WHERE slug=?').get(slug).status, 'archived'); } finally { con.close(); }
+  assert.equal(rowOf(f.folder, slug).status, 'archived');
 });
 
 // --- move --to-branch
@@ -250,10 +235,9 @@ test('review P2: move --to-repository refuses an item with depends_on, before an
   assert.equal(run(f, 'move', ['3', '--to-repository', 'other/proj']).status, 0);
 });
 
-test('review P1: move --to-repository whose target scan throws removes the target copy and leaves the source untouched', () => {
+test('review P1: move --to-repository whose target index write is refused removes the target copy and leaves the source untouched', () => {
   const f = seed();
-  const first = join(f.other, 'phases', '001-first.md'); // an existing target item the target scan cannot read
-  writeFileSync(first, readFileSync(first, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n'));
+  breakIndex(f.home, f.other); // the index of the target cannot be written
   const head = git(f.home, 'rev-parse', 'HEAD');
   const src = readFileSync(join(f.folder, 'phases', '003-gamma.md'));
   const rows = () => mirror(f);
@@ -264,7 +248,7 @@ test('review P1: move --to-repository whose target scan throws removes the targe
   assert.deepEqual(names(f.other, 'phases'), target, 'no copy is left in the target');
   assert.deepEqual(readFileSync(join(f.folder, 'phases', '003-gamma.md')), src);
   assert.equal(rows(), before);
-  assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', 'other/proj'), 'M other/proj/phases/001-first.md');
+  assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', 'other/proj'), '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
@@ -287,7 +271,7 @@ test('review P2: move --to-repository refuses an item other items depend on, by 
 });
 
 const mirror = f => JSON.stringify(['phases', 'archive'].flatMap(sub => names(f.folder, sub).map(n => readFileSync(join(f.folder, sub, n), 'utf8')))); // the item files are the whole state
-const breakItem = (f, rel) => { const p = join(f.folder, rel); writeFileSync(p, readFileSync(p, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n')); };
+
 
 for (const eol of ['\n', '\r\n', '\r']) {
   test(`review P2: archive replaces a whole escaped multiline status scalar (${JSON.stringify(eol)})`, () => {
@@ -306,8 +290,7 @@ for (const eol of ['\n', '\r\n', '\r']) {
     assert.deepEqual({ fm: rest, body: parse(text).body }, { fm: { ...before.fm, status: 'archived' }, body: before.body });
     assert.ok(text.startsWith(`\uFEFF---${eol}`), 'BOM and line endings survive');
     assert.equal(text.slice(text.indexOf(`${eol}---${eol}`) + (eol + '---' + eol).length), source.slice(source.indexOf(`${eol}---${eol}`) + (eol + '---' + eol).length), 'body bytes survive');
-    const con = db.connect(f.folder);
-    try { assert.equal(con.prepare("SELECT status FROM phase WHERE slug='002-beta'").get().status, parse(text).fm.status); } finally { con.close(); }
+    assert.equal(rowOf(f.folder, '002-beta').status, parse(text).fm.status);
   });
 }
 
@@ -322,10 +305,10 @@ test('review P2: archive stamps status: archived into an item saved with CRLF li
   assert.match(readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8'), /status: "archived"\r\n/);
 });
 
-test('review P1: archive and move --to-branch whose rescan throws put the files back and commit nothing', () => {
+test('review P1: archive and move --to-branch whose index write is refused put the files back and commit nothing', () => {
   for (const args of [['archive', ['5']], ['move', ['2', '--to-branch', 'release']]]) {
     const f = seed();
-    breakItem(f, 'phases/001-alpha.md');
+    breakIndex(f.home, f.folder);
     const files = () => JSON.stringify([names(f.folder, 'phases'), names(f.folder, 'archive'), readFileSync(join(f.folder, 'phases/002-beta.md'), 'utf8'), readFileSync(join(f.folder, 'phases/005-epsilon.md'), 'utf8')]);
     const before = [files(), mirror(f), git(f.home, 'rev-parse', 'HEAD')];
     const r = run(f, ...args);
@@ -359,9 +342,9 @@ test('review P1: a bare --to-repository (the item names its target) also waits f
   assert.equal((await child.done).status, 0);
 });
 
-test('review P1: a cross-repository move whose source rescan throws leaves no copy or row in the destination', () => {
+test('review P1: a cross-repository move whose source index write is refused leaves no copy in the destination', () => {
   const f = seed();
-  breakItem(f, 'phases/001-alpha.md');
+  breakIndex(f.home, f.folder);
   const files = () => JSON.stringify([names(f.folder, 'phases'), names(f.other, 'phases'), readFileSync(join(f.folder, 'phases/003-gamma.md'), 'utf8')]);
   const before = [files(), mirror(f), mirror({ folder: f.other }), git(f.home, 'rev-parse', 'HEAD')];
   const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
@@ -369,9 +352,9 @@ test('review P1: a cross-repository move whose source rescan throws leaves no co
   assert.deepEqual([files(), mirror(f), mirror({ folder: f.other }), git(f.home, 'rev-parse', 'HEAD')], before);
 });
 
-test('review P1: archive whose rescan throws leaves nothing staged in the index', () => {
+test('review P1: archive whose index write is refused leaves nothing staged in the git index', () => {
   const f = seed();
-  breakItem(f, 'phases/001-alpha.md');
+  breakIndex(f.home, f.folder);
   const r = run(f, 'archive', ['5']);
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
   assert.equal(git(f.home, 'diff', '--cached', '--name-only'), '');
@@ -385,7 +368,7 @@ test('review P2: move of an archived item (--to-branch, --to-repository) is refu
   for (const args of [['5', '--to-branch', 'release'], ['005-epsilon', '--to-repository', 'other/proj']]) {
     const r = run(f, 'move', args);
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.equal(r.stdout, '❌ 005-epsilon is archived and cannot be moved (an archived item is not scanned, so its branch or repository would not follow)\n');
+    assert.equal(r.stdout, '❌ 005-epsilon is archived and cannot be moved (archived items are read-only)\n');
     assert.equal(r.stderr, '');
   }
   assert.deepEqual([readFileSync(file, 'utf8'), mirror(f), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD')], before);
@@ -393,11 +376,10 @@ test('review P2: move of an archived item (--to-branch, --to-repository) is refu
 
 test('review P2: after a cross-repository move both queues are dense (the source closes the gap, the copy does not tie in the target)', () => {
   const f = seed();
-  const ranks = dir => readdirSync(join(dir, 'phases')).map(n => fm(dir, `phases/${n}`).fm).filter(m => ['pending', 'in_progress'].includes(m.status)).map(m => m.priority).sort((a, b) => a - b);
+  const ranks = (dir, branch) => index.open(index.rows(dir).rows).filter(r => r.branch === branch).map(r => r.priority);
   assert.equal(run(f, 'move', ['1', '--to-repository', 'other/proj']).status, 0); // 001-alpha is P0 of acme/demo; other/proj already holds a P0
-  for (const dir of [f.folder, f.other]) assert.deepEqual(ranks(dir), ranks(dir).map((_, i) => i), dir);
-  const c = db.connect(f.other);
-  try { assert.deepEqual(c.prepare("SELECT priority FROM phase WHERE status='pending' ORDER BY priority").all().map(r => r.priority), [0, 1]); } finally { c.close(); }
+  for (const [dir, branch] of [[f.folder, 'main'], [f.folder, 'feature/x'], [f.other, 'main']]) assert.deepEqual(ranks(dir, branch), ranks(dir, branch).map((_, i) => i), `${dir} ${branch}`);
+  assert.deepEqual(ranks(f.other, 'main'), [0, 1]);
 });
 
 // A team session bound to another branch works only on items of its own repository and branch: archive and both move modes refuse
@@ -437,7 +419,7 @@ test('review P2: archive inserts status: archived into an item whose front matte
   }
 });
 
-test('review P2: move and the reflow add the keys they set (branch, repository, priority) to an item whose front matter lacks them', () => {
+test('review P2: move adds the keys it sets (branch, repository) to an item whose front matter lacks them, and the item is listed in the index of its new place', () => {
   const f = seed();
   const p = join(f.folder, 'phases', '002-beta.md');
   writeFileSync(p, readFileSync(p, 'utf8').replace(/^(branch|repository|priority): .*\n/gm, ''));
@@ -447,18 +429,18 @@ test('review P2: move and the reflow add the keys they set (branch, repository, 
   assert.equal(run(f, 'move', ['2', '--to-repository', 'other/proj']).status, 0);
   const moved = fm(f.other, `phases/${names(f.other, 'phases').find(n => n.endsWith('-beta.md'))}`).fm;
   assert.equal(moved.repository, 'other/proj');
-  assert.equal(typeof moved.priority, 'number');
+  assert.equal(typeof index.rows(f.other).rows.find(r => r.path.endsWith('-beta.md')).priority, 'number');
 });
 
 test('075: archive of a done item: git mv, status stamp, reflow, one commit', () => {
   const f = seed();
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, '📦 005-epsilon archived\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
+  assert.equal(r.stdout, '📦 005-epsilon archived\n   📋 planning event: backlog re-densified to 4 item(s) (P0..P3)\n');
   assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
   assert.ok(!existsSync(join(f.folder, 'phases/005-epsilon.md')));
-  const row = () => { const con = db.connect(f.folder); try { return { ...con.prepare("SELECT status, path FROM phase WHERE slug='005-epsilon'").get() }; } finally { con.close(); } };
+  const row = () => { const r = rowOf(f.folder, '005-epsilon'); return { status: r.status, path: r.path }; };
   assert.deepEqual(row(), { status: 'archived', path: 'archive/phases/005-epsilon.md' });
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['archive 5']);
   assert.equal(git(f.home, 'log', '-1', '--follow', '--format=%s', '--', 'acme/demo/archive/phases/005-epsilon.md'), SUBJECT['archive 5']);
@@ -496,7 +478,7 @@ test('075: move --to-branch and --all-open-of-branch print what moved, and the m
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, "✅ 002-beta now belongs to branch 'release'\n");
   assert.equal(r.stderr, '');
-  const row = () => { const con = db.connect(f.folder); try { return { ...con.prepare("SELECT branch, status FROM phase WHERE slug='002-beta'").get() }; } finally { con.close(); } };
+  const row = () => { const r = rowOf(f.folder, '002-beta'); return { branch: r.branch, status: r.status }; };
   assert.deepEqual(row(), { branch: 'release', status: 'pending' });
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['move 2 --to-branch']);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'), 'published');
@@ -506,11 +488,10 @@ test('075: move --to-branch and --all-open-of-branch print what moved, and the m
   assert.equal(all.stdout, "✅ moved 3 open item(s) of 'main' to 'release'\n");
   assert.equal(all.stderr, '');
   assert.equal(git(g.home, 'log', '-1', '--format=%s'), SUBJECT['move --all-open-of-branch main']);
-  const con = db.connect(g.folder);
-  try {
-    assert.deepEqual(con.prepare("SELECT slug FROM phase WHERE branch='main' ORDER BY seq").all().map(x => x.slug), ['005-epsilon', '006-zeta', '007-eta'], 'the open items of main are gone; done items and the feature/x item stay');
-    assert.equal(con.prepare("SELECT COUNT(*) n FROM phase WHERE branch='release'").get().n, 3, 'the three open items moved to release');
-  } finally { con.close(); }
+  const moved = index.rows(g.folder).rows;
+  assert.deepEqual(moved.filter(x => x.branch === 'main').map(x => x.slug), ['005-epsilon', '006-zeta', '007-eta'], 'the open items of main are gone; done items and the feature/x item stay');
+  assert.equal(moved.filter(x => x.branch === 'release').length, 3, 'the three open items moved to release');
+  assert.deepEqual(index.open(moved).filter(x => x.branch === 'release').map(x => [x.slug, x.priority]), [['001-alpha', 0], ['002-beta', 1], ['003-gamma', 2]], 'in the order they had');
 });
 
 test('075: move has no --dry-run: argparse refuses it with exit 2 and nothing changes', () => {
@@ -551,7 +532,7 @@ test('075: move --to-repository: new number in the target, source file gone, one
 
 test('archive --force of an open item: the mirror row says archived, the queue no longer offers it, the change is published', () => {
   const f = seed();
-  const row = () => { const con = db.connect(f.folder); try { return { ...con.prepare("SELECT status, path FROM phase WHERE slug='002-beta'").get() }; } finally { con.close(); } };
+  const row = () => { const r = rowOf(f.folder, '002-beta'); return { status: r.status, path: r.path }; };
   assert.deepEqual(row(), { status: 'pending', path: 'phases/002-beta.md' });
   const r = run(f, 'archive', ['2', '--force']);
   assert.equal(r.status, 0, r.stderr);
@@ -620,11 +601,11 @@ test('075: archive --force of an open item: the exact output, the stamp, the row
   const f = seed();
   const r = run(f, 'archive', ['2', '--force']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, '📦 002-beta archived\n   📋 planning event: backlog re-densified to 4 item(s) (P0..P3)\n');
+  assert.equal(r.stdout, '📦 002-beta archived\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n');
   assert.equal(r.stderr, '');
   assert.equal(fm(f.folder, 'archive/phases/002-beta.md').fm.status, 'archived');
   assert.ok(!existsSync(join(f.folder, 'phases/002-beta.md')));
-  const row = () => { const con = db.connect(f.folder); try { return { ...con.prepare("SELECT status, path FROM phase WHERE slug='002-beta'").get() }; } finally { con.close(); } };
+  const row = () => { const r = rowOf(f.folder, '002-beta'); return { status: r.status, path: r.path }; };
   assert.deepEqual(row(), { status: 'archived', path: 'archive/phases/002-beta.md' });
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['archive 2 --force']);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'), 'published');
@@ -640,7 +621,7 @@ test('057: archive and move print the slug and no path', () => {
   assert.match(runs('archive', ['5']).stdout, /^📦 005-epsilon archived\n/);
   assert.equal(runs('archive', ['5']).stdout, 'ℹ️  005-epsilon already archived\n');
   assert.equal(runs('move', ['5', '--to-branch', 'release']).stdout,
-    '❌ 005-epsilon is archived and cannot be moved (an archived item is not scanned, so its branch or repository would not follow)\n');
+    '❌ 005-epsilon is archived and cannot be moved (archived items are read-only)\n');
   mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
   writeFileSync(join(f.folder, 'archive', 'phases', '006-zeta.md'), readFileSync(join(f.folder, 'phases', '006-zeta.md'), 'utf8'));
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an archived copy exists already'); git(f.home, 'push', '-q');

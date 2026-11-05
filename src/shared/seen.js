@@ -23,7 +23,7 @@ const operation = new AsyncLocalStorage();
 
 // One scope follows the clone lock through pulls, all repository folders and
 // publication retries. Ranking callers cannot forget to pass a guard callback.
-export const guarded = fn => operation.getStore() ? fn() : operation.run({ guard: [], created: new Set(), incidental: new Map() }, fn);
+export const guarded = fn => operation.getStore() ? fn() : operation.run({ guard: [], created: new Set() }, fn);
 export const created = (folder, path) => operation.getStore()?.created.add(join(folder, path));
 // the slug of the item the running command created (new), for the status line
 export const primarySlug = () => { const c = operation.getStore()?.created; return c?.size ? basename([...c][0], '.md') : null; };
@@ -37,8 +37,8 @@ function read(home, agent) { try { return JSON.parse(readFileSync(viewsFile(home
 
 // views: [{slug, path}] (path from the repository folder) of repo, as the agent now sees them. Never fails the command: the cache is a safety net.
 // The file's hash is part of the view: `updated` has a resolution of one second, so two changes in one second differ only in content.
-// content is the hash without the fields a reflow rewrites (priority, updated, updated_by): a rank-only change
-// by another agent's planning move is no change of the item for this agent's next write
+// content is the hash without the fields that change without a change of the item (priority, which earlier builds kept in the item, updated,
+// updated_by): another agent's planning move is no change of the item for this agent's next write
 // events: the history only grows (a split, an archive, a note adds a line); a line added by someone else is no change of the item either
 const RANK_ONLY = ['priority', 'updated', 'updated_by', 'events'];
 const contentOf = doc => { const fm = { ...doc.fm }; for (const k of RANK_ONLY) delete fm[k]; return createHash('sha256').update(JSON.stringify([Object.keys(fm).sort().map(k => [k, fm[k]]), doc.body])).digest('hex'); };
@@ -54,7 +54,6 @@ export function record(folder, repo, agent, views) {
     const all = read(home, agent);
     for (const v of views) { // a view may name another repository folder (a cross-repository move leaves the item there)
       const key = `${v.repo ?? repo}/${v.slug}`;
-      if (v.before !== undefined && all[`${v.repo ?? repo}/${v.beforeSlug ?? v.slug}`]?.sha !== v.before) continue;
       const { fm, sha, content } = fileView(v.folder ?? folder, v.path);
       all[key] = { updated: fm.updated ?? null, updated_by: fm.updated_by ?? null, sha, content, commit, path: v.path, folder: v.folder ?? folder };
     }
@@ -66,12 +65,10 @@ export function record(folder, repo, agent, views) {
   } catch { /* unwritable .git or an unreadable item: the next write is simply unchecked */ }
 }
 
-// Only successful publication refreshes incidental views, and only with proof
-// that their pre-write bytes were the bytes this agent had already read.
+// Only successful publication records the views of what the agent wrote.
 export function recordWrites(folder, repo, agent, views, pairs = []) {
-  const incidental = [...(operation.getStore()?.incidental.values() ?? [])].filter(v => v.agent === agent);
   const published = remapViews(folder, views, pairs);
-  if (incidental.length || views.length) record(folder, repo, agent, [...remapViews(folder, incidental, pairs), ...published]);
+  if (views.length) record(folder, repo, agent, published);
   setUse(homeOf(folder), agent); // a write is the agent's own use of the backlog: it moves its reference point
   return published;
 }
@@ -159,16 +156,15 @@ export function changedSince(home, folder, repo, reference, agent) {
   return { held: entries.filter(e => e.held), others: entries.filter(e => !e.held) };
 }
 
-// Creation's slug/path adjustment also applies to moves, updates and incidental
-// reflows. Numbers belong to one folder; follow successive publication retries.
+// Creation's slug/path adjustment also applies to moves and updates.
+// Numbers belong to one folder; follow successive publication retries.
 function remapViews(folder, views, pairs) {
   return views.map(view => {
     let v = { ...view };
     for (const [old, next] of pairs.filter(p => p.folder === undefined || p.folder === resolve(v.folder ?? folder))) {
       if (Number(v.slug.match(/^\d+/)?.[0]) !== old) continue;
       const slug = String(next).padStart(3, '0') + v.slug.replace(/^\d+/, '');
-      v = { ...v, slug, path: v.path.replace(/[^/\\]+$/, `${slug}.md`),
-        ...(v.before !== undefined ? { beforeSlug: v.beforeSlug ?? v.slug } : {}) };
+      v = { ...v, slug, path: v.path.replace(/[^/\\]+$/, `${slug}.md`) };
     }
     return v;
   });
@@ -241,22 +237,4 @@ export function check(folder, repo, agent, slug, path) {
     guard.push({ path: `${repo}/${path}`, slug, base, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   }
   return seen?.sha;
-}
-
-// The mandatory gate for the whole ranking write set, before any file changes.
-// Primary items were checked before their explicit write; new files have no
-// upstream version to protect. All other writes enter the publication guard.
-export function guardReflow(folder, items) {
-  const repo = `${basename(dirname(folder))}/${basename(folder)}`;
-  const agent = actor(); const ctx = operation.getStore();
-  const stale = []; // every item of the write set the agent must read again, in one refusal
-  for (const i of items) {
-    const path = `${repo}/${i.path}`;
-    if (ctx?.created.has(join(folder, i.path)) || ctx?.guard.some(g => g.path === path)) continue;
-    const slug = i.fm.phase || basename(i.path, '.md');
-    let before;
-    try { before = check(folder, repo, agent, slug, i.path); } catch (e) { if (e.code !== 'STALE_ITEM') throw e; stale.push({ slug, e }); continue; }
-    if (before && ctx) ctx.incidental.set(path, { folder, repo, slug, path: i.path, agent, before });
-  }
-  if (stale.length) throw stale[0].e; // its message names every item of the folder the agent read that changed since
 }

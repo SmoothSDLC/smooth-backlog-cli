@@ -2,10 +2,12 @@
 // Tests run against local bare repositories only: origins under <tmp>/origins,
 // clones under <tmp>, with BACKLOG_HOME and XDG_CONFIG_HOME inside the test's
 // temp dir - never the real backlog repository or ~/.config.
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import * as index from '../../src/shared/index.js';
+import * as store from '../../src/shared/store.js';
 
 export const BACKLOG_OWNER = 'acme';
 export const BACKLOG_NAME = 'backlog-repo';
@@ -48,6 +50,15 @@ function originBare(tmp, owner, name, branch) {
 // The shared backlog repository: bare <tmp>/origins/acme/backlog-repo.git
 // with one commit on main, cloned to <tmp>/home. The per-repository folders
 // (<home>/<owner>/<name>/) live inside that clone.
+// An index that can be read but not written (the file is a link, committed so the clone stays clean): the index write that follows any
+// item change is refused, after the item files were written. Makes a command fail half-way, to prove it puts everything back.
+export function breakIndex(home, dir) {
+  if (!index.exists(dir)) index.write(dir, index.fromItems(store.load(dir)));
+  renameSync(index.file(dir), join(dir, 'index.real'));
+  symlinkSync('index.real', index.file(dir));
+  git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'index that cannot be written'); git(home, 'push', '-q');
+}
+
 export function sharedBacklog(tmp) {
   const bare = originBare(tmp, BACKLOG_OWNER, BACKLOG_NAME, 'main');
   const dest = join(tmp, 'home');

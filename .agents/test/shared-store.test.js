@@ -9,7 +9,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BACKLOG_NAME, ORIGIN_URL, cli, consumer, env, sharedBacklog } from './shared-fixtures.js';
-import { parse } from '../../src/shared/frontmatter.js';
+import { dump, parse } from '../../src/shared/frontmatter.js';
+import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
 const STORE = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'shared', 'store.js'));
@@ -33,8 +34,10 @@ function withEnv(t, vars) {
 const item = (n, extra = {}) => ({
   phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', repository: 'acme/demo', branch: 'main', priority: n - 1, ...extra,
 });
+// An item file as it is: store.write would drop the rank an earlier build kept in the item, and these tests place such items.
 function putItem(folder, fm, rel = `phases/${fm.phase}.md`) {
-  store.write({ path: join(folder, rel), fm, body: `Body ${fm.phase}.\n` });
+  mkdirSync(dirname(join(folder, rel)), { recursive: true });
+  writeFileSync(join(folder, rel), dump(fm, `Body ${fm.phase}.\n`));
 }
 
 // ---------------------------------------------------------------- resolveHome
@@ -119,7 +122,7 @@ test('load: phases/*.md and archive/**/*.md with path, fm, body, sha256 (sha ali
 test('write: atomic, mode 0o600, parent folders created, no temp file left, key order preserved on rewrite', t => {
   const d = scratch(t);
   const abs = join(d, 'acme', 'demo', 'phases', '009-new.md');
-  const fm = item(9, { phase: '009-new', priority: 0 });
+  const { priority, ...fm } = item(9, { phase: '009-new' }); // the rank an earlier build kept in the item is dropped by every write
   store.write({ path: abs, fm, body: 'New body.\n' });
   const parsed = parse(readFileSync(abs, 'utf8'));
   assert.deepEqual(parsed.fm, fm);
@@ -127,8 +130,11 @@ test('write: atomic, mode 0o600, parent folders created, no temp file left, key 
   assert.equal(statSync(abs).mode & 0o777, 0o600);
   assert.deepEqual(readdirSync(dirname(abs)), ['009-new.md']);
   const orig = readFileSync(abs, 'utf8');
-  store.write({ path: abs, fm: { ...parsed.fm, priority: 4 }, body: parsed.body });
-  assert.equal(readFileSync(abs, 'utf8'), orig.replace(/^priority: .*$/m, 'priority: 4'));
+  store.write({ path: abs, fm: { ...parsed.fm, status: 'in_progress' }, body: parsed.body });
+  assert.equal(readFileSync(abs, 'utf8'), orig.replace(/^status: .*$/m, 'status: "in_progress"'));
+  putItem(dirname(dirname(abs)), item(8, { phase: '008-old' }));
+  store.write({ path: join(dirname(abs), '008-old.md'), fm: parse(readFileSync(join(dirname(abs), '008-old.md'), 'utf8')).fm, body: 'x\n' });
+  assert.equal(Object.hasOwn(parse(readFileSync(join(dirname(abs), '008-old.md'), 'utf8')).fm, 'priority'), false, 'a write drops the legacy rank');
 });
 
 test('addEvent appends an event line to the item file and keeps every other key', t => {
@@ -157,25 +163,27 @@ test('nextSeq: 1 on an empty folder; 1 + max of the file seqs (phases and archiv
   const r = spawnSync(process.execPath, ['-e', 'const s = await import(process.argv[1]); process.stdout.write(String(s.nextSeq(process.argv[2])));', STORE, folder],
     { encoding: 'utf8' });
   assert.equal(r.status, 0);
-  assert.equal(r.stderr, '', 'node:sqlite prints no ExperimentalWarning to stderr');
+  assert.equal(r.stderr, '', 'nextSeq prints nothing to stderr');
   assert.equal(r.stdout, '3');
 });
 
 // ---------------------------------------------------------------- reflow / reorder
 
-test('reflow: the target is clamped to 0..len(rest); zero priorities are not rewritten', t => {
+test('reflow: the target is clamped to 0..len(rest); no item is rewritten, the order is written to the index', t => {
   const d = scratch(t);
   const folder = join(d, 'acme', 'demo');
   for (const n of [1, 2, 3]) putItem(folder, item(n));
   const sha = rel => sha256File(join(folder, rel));
   const first = sha('phases/001-i1.md');
   assert.deepEqual(store.reflow(folder), [['001-i1', 0], ['002-i2', 1], ['003-i3', 2]]);
-  assert.equal(sha('phases/001-i1.md'), first, 'priority 0 at rank 0 is already right');
+  assert.equal(sha('phases/001-i1.md'), first, 'a rank change rewrites no item');
+  assert.deepEqual(index.read(folder).branches.main.map(e => e.slug), ['001-i1', '002-i2', '003-i3']);
   assert.deepEqual(store.reflow(folder, { slug: '001-i1', target: 99 }).map(x => x[0]), ['002-i2', '003-i3', '001-i1']);
   assert.deepEqual(store.reflow(folder, { slug: '003-i3', target: -3 }).map(x => x[0]), ['003-i3', '002-i2', '001-i1']);
+  assert.deepEqual(index.read(folder).branches.main.map(e => e.slug), ['003-i3', '002-i2', '001-i1']);
 });
 
-test('reflow: only pending/in_progress items of ALL branches are ranked; done and archived are left alone', t => {
+test('reflow: only pending/in_progress items are ranked, each branch in its own order; done items follow the open ones, archived ones are not listed', t => {
   const d = scratch(t);
   const folder = join(d, 'acme', 'demo');
   putItem(folder, item(1, { priority: 7 }));
@@ -183,9 +191,39 @@ test('reflow: only pending/in_progress items of ALL branches are ranked; done an
   putItem(folder, item(3, { status: 'done', priority: 5 }));
   putItem(folder, item(4, { status: 'archived', priority: 5 }), 'archive/phases/004-i4.md');
   const doneSha = sha256File(join(folder, 'phases/003-i3.md'));
-  assert.deepEqual(store.reflow(folder), [['001-i1', 0], ['002-i2', 1]]);
-  assert.match(readItem(folder, 'phases/002-i2.md'), /^priority: 1$/m);
+  assert.deepEqual(store.reflow(folder), [['001-i1', 0], ['002-i2', 0]]);
+  assert.deepEqual(Object.fromEntries(Object.entries(index.read(folder).branches).map(([b, l]) => [b, l.map(e => e.slug)])), { dev: ['002-i2'], main: ['001-i1', '003-i3'] });
   assert.equal(sha256File(join(folder, 'phases/003-i3.md')), doneSha);
+});
+
+test('reflow and reorder write the index and no item: every item keeps its bytes, the order is in <folder>/index.json', t => {
+  const d = scratch(t);
+  const folder = join(d, 'acme', 'demo');
+  for (const n of [1, 2, 3]) putItem(folder, item(n, { priority: undefined }));
+  const shas = () => ['001-i1', '002-i2', '003-i3'].map(s => sha256File(join(folder, `phases/${s}.md`)));
+  const before = shas();
+  store.reflow(folder, { slug: '003-i3', target: 0 });
+  assert.deepEqual(index.read(folder).branches.main.map(e => e.slug), ['003-i3', '001-i1', '002-i2']);
+  store.reorder(folder, ['002-i2']);
+  assert.deepEqual(index.read(folder).branches.main.map(e => e.slug), ['002-i2', '003-i3', '001-i1']);
+  assert.deepEqual(shas(), before, 'no item was rewritten');
+  assert.ok(readdirSync(folder).includes('index.json'));
+});
+
+test('undoOnThrow puts back only what the command wrote: a file that appears meanwhile (a pull) is not deleted', async t => {
+  const dir = scratch(t);
+  const folder = join(dir, 'o', 'n'); mkdirSync(join(folder, 'phases'), { recursive: true });
+  const mine = join(folder, 'phases', '001-mine.md'); const pulled = join(folder, 'phases', '002-pulled.md'); const edited = join(folder, 'phases', '003-edited.md');
+  writeFileSync(edited, '---\nphase: 003-edited\nseq: 3\n---\nold\n');
+  await assert.rejects(store.undoOnThrow(folder, async () => {
+    store.write({ path: mine, fm: { phase: '001-mine', seq: 1 }, body: 'x\n' }, folder);
+    store.write({ path: edited, fm: { phase: '003-edited', seq: 3 }, body: 'new\n' }, folder);
+    writeFileSync(pulled, 'pulled by someone else\n');
+    throw new Error('boom');
+  }), /boom/);
+  assert.equal(existsSync(mine), false, 'the file it created is removed');
+  assert.match(readFileSync(edited, 'utf8'), /old/, 'the file it changed is restored');
+  assert.equal(readFileSync(pulled, 'utf8'), 'pulled by someone else\n', 'a file it did not write stays');
 });
 
 // ---------------------------------------------------------------- findings / now
@@ -286,7 +324,7 @@ test('review P2: an explicit status: null is kept (not defaulted to pending): th
   assert.deepEqual(store.findings(folder).untagged.map(i => i.fm.phase), [], 'NOT IN (...) never matches a NULL status');
 });
 
-test('review P2: a quoted numeric priority already at its rank is left alone (int(priority) comparison)', t => {
+test('review P2: a legacy priority field written as a quoted number orders the folder at its first index; no item is rewritten', t => {
   const d = scratch(t);
   const folder = join(d, 'acme', 'demo');
   putItem(folder, item(1, { priority: '0' }));
@@ -295,10 +333,7 @@ test('review P2: a quoted numeric priority already at its rank is left alone (in
   const sha = rel => sha256File(join(folder, rel));
   const [a, b, c] = ['phases/001-i1.md', 'phases/002-i2.md', 'phases/003-i3.md'].map(sha);
   assert.deepEqual(store.reflow(folder), [['001-i1', 0], ['002-i2', 1], ['003-i3', 2]]);
-  assert.equal(sha('phases/001-i1.md'), a, '"0" at rank 0: same bytes');
-  assert.equal(sha('phases/002-i2.md'), b, '" 1 " at rank 1: same bytes');
-  assert.notEqual(sha('phases/003-i3.md'), c, '"9" at rank 2 is rewritten');
-  assert.match(readItem(folder, 'phases/003-i3.md'), /^priority: 2$/m);
+  assert.deepEqual([sha('phases/001-i1.md'), sha('phases/002-i2.md'), sha('phases/003-i3.md')], [a, b, c], 'the ranks are in the index; the legacy field stays where it is');
 });
 
 // ---------------------------------------------------------------- review fixes (review fixes 2026-10-23, second review)
@@ -341,7 +376,7 @@ function threeItems(f) {
   assert.equal(files.length, 3);
   return { files, slugs: files.map(x => x.replace(/\.md$/, '')) };
 }
-test('075: archive reflows the queue: archiving the last item is a no-op; archiving a middle one re-densifies and rewrites', t => {
+test('075: archive reflows the queue: archiving the last item is a no-op; archiving a middle one re-densifies the index and rewrites no other item', t => {
   // no-op: archive the last item (003); the survivors (001 at P0, 002 at P1) are already dense, so no file is rewritten
   const a = fixturePair(t);
   threeItems(a);
@@ -353,14 +388,14 @@ test('075: archive reflows the queue: archiving the last item is a no-op; archiv
   assert.equal(ra.stderr, '');
   assert.deepEqual(['phases/001-one.md', 'phases/002-two.md'].map(sha), before, 'a no-op reflow rewrites no file');
 
-  // re-densify: archive a middle item (002); 003 is pulled down from P2 to P1 and its file is rewritten
+  // re-densify: archive a middle item (002); 003 is pulled down from P2 to P1 in the index; its file is not rewritten
   const b = fixturePair(t);
   threeItems(b);
   const rb = cli(['archive', '2', '--force'], { cwd: b.cons, tmp: b.t });
   assert.equal(rb.status, 0, rb.stdout + rb.stderr);
   assert.equal(rb.stdout, '📦 002-two archived\n   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
   assert.equal(rb.stderr, '');
-  assert.match(readItem(b.folder, 'phases/003-three.md'), /^priority: 1$/m, '003 is re-densified from P2 to P1');
+  assert.equal(index.rank(b.folder, 'main', '003-three'), 1, '003 is re-densified from P2 to P1');
   assert.ok(!existsSync(join(b.folder, 'phases', '002-two.md')), '002 left phases/');
   assert.ok(existsSync(join(b.folder, 'archive', 'phases', '002-two.md')), '002 is in archive/');
 });
@@ -374,7 +409,7 @@ test('075: replan: slugs and item numbers lead, the rest keeps its order, unknow
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout, `📋 PLANNING EVENT — backlog re-prioritized (P0 = next):\n   P0  ${slugs[2]}\n   P1  ${slugs[0]}\n   P2  ${slugs[1]}\n`);
-  assert.match(readItem(f.folder, `phases/${slugs[2]}.md`), /^priority: 0$/m);
+  assert.equal(index.rank(f.folder, 'main', slugs[2]), 0);
   // unknown ident skipped, a repeated ident leads once
   r = cli(['update', '--replan', `999,${slugs[1]},${slugs[1]}`], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -385,7 +420,7 @@ test('075: replan: slugs and item numbers lead, the rest keeps its order, unknow
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout, `📋 PLANNING EVENT — backlog re-prioritized (P0 = next):\n   P0  ${slugs[2]}\n   P1  ${slugs[1]}\n   P2  ${slugs[0]}\n`);
-  assert.match(readItem(f.folder, `phases/${slugs[0]}.md`), /^priority: 2$/m);
+  assert.equal(index.rank(f.folder, 'main', slugs[0]), 2);
 });
 
 test('075: nextSeq: an archived item keeps its number: after archiving 2, the next new takes 4', t => {

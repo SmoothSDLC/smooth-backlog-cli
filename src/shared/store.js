@@ -11,11 +11,10 @@ import { operation } from '../errors.js';
 import { asChild, locked } from '../storage.js';
 import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
-import { actor, created, guarded, guardReflow } from './seen.js';
+import * as index from './index.js';
+import { actor, created, guarded } from './seen.js';
 import { CONFIG, configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
 import { asList, outsideTeam, setTeamsHome } from './team.js';
-
-const ACTIONABLE = ['pending', 'in_progress'];
 
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //
@@ -72,11 +71,6 @@ export function resolveHome() {
   };
 }
 
-// The per-clone cache of one backlog folder: <state>/cache/<owner>--<name>.db, rebuilt from the item files by db.connect.
-export function cacheFile(folder) {
-  const f = resolve(folder);
-  return join(stateDir(dirname(dirname(f))), 'cache', `${basename(dirname(f))}--${basename(f)}.db`);
-}
 
 // Where the lock, the views and the journal live: the clone's.git folder, or.state inside the repository's.backlog folder.
 // The remote branch the items are published to: the backlog clone's main, or the current branch of the repository that holds a .backlog folder.
@@ -163,7 +157,7 @@ export const assertFolder = dir => assertNoSymlinks(dirname(dirname(resolve(dir)
 
 //. item.path is absolute (the caller joins the folder and the load-relative path).
 // root is the repository folder; without it, the folder is what precedes the first phases/ or archive/ segment.
-// The paths a command writes, renames or removes, with their content before (null: absent): db.undoOnThrow puts back exactly these.
+// The paths a command writes, renames or removes, with their content before (null: absent): undoOnThrow puts back exactly these.
 // Whoever changes an item file calls note(path) first; write does.
 const journals = [];
 export const journalled = fn => { const j = new Map(); journals.push(j); return fn(j).finally(() => journals.pop()); };
@@ -198,7 +192,7 @@ export function note(path, prior) {
   persistNote(path, prior);
 }
 
-// Rolls back what a killed command left (see above): every path to its prior bytes or absence, the mirror db file included, and the git index
+// Rolls back what a killed command left (see above): every path to its prior bytes or absence, and the git index
 // of the folders unstaged. Runs under the clone lock, before anything else.
 export function recoverJournal(home) {
   const file = journalFile(home);
@@ -218,9 +212,9 @@ export function recoverJournal(home) {
   process.stderr.write(`backlog: rolled back a command that was killed half-way (${Object.keys(rec.files).length} path(s) restored in ${home})\n`);
 }
 
-// every write drops the two retired classification keys. The names are built from parts because the 049
-// contract greps src for the literal words; this is the one place that has to name them.
-const RETIRED_KEYS = [['work', 'class'].join('_'), ['review', 'classes'].join('_')];
+// every write drops the two retired classification keys and the rank an earlier build kept in the item (the order is the index now). The
+// names are built from parts because the 049 contract greps src for the literal words; this is the one place that has to name them.
+const RETIRED_KEYS = [['work', 'class'].join('_'), ['review', 'classes'].join('_'), 'priority'];
 
 export function write(item, root, { frontMatterOnly = false } = {}) {
   item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k))) };
@@ -228,6 +222,7 @@ export function write(item, root, { frontMatterOnly = false } = {}) {
   const base = root ?? (inferred || dirname(item.path));
   assertFolder(base);
   assertNoSymlinks(base, item.path);
+  index.seed(base);
   if (!existsSync(item.path)) created(base, relative(base, item.path));
   note(item.path);
   atomicWrite(item.path, frontMatterOnly ? replaceFrontMatter(readFileSync(item.path, 'utf8'), item.fm) : dump(item.fm, item.body));
@@ -290,71 +285,60 @@ export function nextSeqFor(dir, tail) {
 }
 
 const slugOf = i => i.fm.phase || basename(i.path, '.md'); // ingest_phase slug
-
-// pending/in_progress items of phases/ (all branches), priority then seq.
-// Absent keys read as the mirror database defaults (status pending, priority 50, seq 0); an explicit null stays null.
 const statusOf = i => (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending');
-function actionable(dir) {
-  const items = load(dir);
-  const live = items.filter(i => i.path.startsWith('phases/'));
-  const files = live.filter(i => ACTIONABLE.includes(statusOf(i)));
-  return files.sort((a, b) => ((a.fm.priority ?? 50) - (b.fm.priority ?? 50)) || ((a.fm.seq ?? 0) - (b.fm.seq ?? 0)));
-}
+const branchOf = i => String(i.fm.branch || '');
 
-// rank i onto the i-th item; only a file whose priority changes is rewritten.
-// int(priority): a quoted "0" equals rank 0.
-const asInt = p => (typeof p === 'string' && /^\s*[+-]?\d+\s*$/.test(p) ? Number(p) : p);
-function applyDense(dir, items, inScope, beforeApply) {
-  const changes = items.map((i, rank) => inScope(i) && asInt(i.fm.priority ?? -1) !== rank);
-  // Validate the entire reflow write set before rewriting any of it; a leading pull is not an agent read.
-  const writes = items.filter((i, rank) => changes[rank]);
-  guardReflow(dir, writes);
-  beforeApply?.(writes);
-  return items.map((i, rank) => {
-    if (changes[rank]) write({ path: join(dir, i.path), fm: { ...i.fm, priority: rank }, body: i.body }, dir); // a rank is no change of the item: updated stays
-    return [slugOf(i), rank];
-  });
-}
-
-// A session bound to a team (TEAM_REPOSITORY/TEAM_BRANCH) ranks only its own items, beyond python parity. The queue is one for the whole folder, so
-// the other items keep their ranks and their files are not written: the team's items are re-ordered among the ranks they already hold
-// (a move target is a position among the team's own items), and stay dense when the queue was.
+// The order of the backlog is the repository folder's index (index.js): a rank change writes it and no item. A session bound to a team
+// (TEAM_REPOSITORY/TEAM_BRANCH) orders only its own items, beyond python parity: the other items keep their places, and the team's items
+// are re-ordered among the places they already hold (a move target is a position among the team's own items).
 const inScope = i => !outsideTeam(i.fm);
-function within(items, arrange) {
-  const at = items.flatMap((i, k) => (inScope(i) ? [k] : []));
-  const mine = arrange(at.map(k => items[k]));
-  const out = [...items];
-  at.forEach((k, n) => { out[k] = mine[n]; });
-  return out;
+
+// Makes the index right against the item files (new items appended, gone ones dropped, name and status copied from the files, open items
+// first) and, with { slug, target }, first moves that item to the clamped rank among the open items of its branch. { branches: [branch] } names
+// the branch whose open order is returned, [[slug, rank]] (a move names its item's branch). { renames } follows a renumbering.
+export function reflow(dir, move = {}) {
+  const items = load(dir);
+  const moving = move.slug != null ? items.find(i => slugOf(i) === move.slug) : null;
+  const { idx, order } = index.reconcile(index.current(dir, items), items, { move, renames: move.renames, inScope, branches: move.branches ?? (moving ? [branchOf(moving)] : undefined) });
+  index.write(dir, idx);
+  return order;
 }
 
-// re-densify in current order; with {slug, target}, first move that item to the clamped rank.
-// exclude omits explicitly departed items before their mirror rows are changed.
-export function reflow(dir, move, beforeApply) {
-  const items = within(actionable(dir).filter(i => !move?.exclude?.includes(slugOf(i))), mine => {
-    if (!(move && move.slug != null && move.target != null)) return mine;
-    const moving = mine.filter(i => slugOf(i) === move.slug);
-    const rest = mine.filter(i => slugOf(i) !== move.slug);
-    const t = Math.max(0, Math.min(Math.trunc(Number(move.target)), rest.length));
-    return [...rest.slice(0, t), ...moving, ...rest.slice(t)];
-  });
-  return applyDense(dir, items, inScope, beforeApply);
-}
-
-// idents (slugs or item numbers, never row ids) lead; the rest keeps its order.
-export function reorder(dir, idents, beforeApply) {
-  const all = actionable(dir);
-  const items = all.filter(inScope);
-  const bySlug = new Map(items.map(i => [slugOf(i), i]));
-  const bySeq = new Map(items.map(i => [String(i.fm.seq), i]));
+// idents (slugs or item numbers, never row ids) lead their branch; the rest keeps its order. Resolves the open order of the branches they name.
+export function reorder(dir, idents) {
+  const items = load(dir);
+  const open = items.filter(i => i.path.startsWith('phases/') && index.ACTIONABLE.includes(statusOf(i)) && inScope(i));
+  const bySlug = new Map(open.map(i => [slugOf(i), i]));
+  const bySeq = new Map(open.map(i => [String(i.fm.seq), i]));
   const lead = [];
   for (const ident of idents) {
     const key = String(ident).trim();
     const i = bySlug.get(key) || bySeq.get(key.replace(/^0+/, '') || '0');
     if (i && !lead.includes(i)) lead.push(i);
   }
-  const order = [...lead, ...items.filter(i => !lead.includes(i))];
-  return applyDense(dir, within(all, () => order), inScope, beforeApply);
+  const { idx, order } = index.reconcile(index.current(dir, items), items, { lead: lead.map(slugOf), inScope, branches: lead.length ? [...new Set(lead.map(branchOf))] : undefined });
+  index.write(dir, idx);
+  return order;
+}
+
+// A command that writes item files must leave nothing behind when it throws (nothing is committed yet, so the next successful
+// command would publish it): fn runs, and on a throw exactly the files it wrote, renamed or removed (store.note, called by every
+// writer) go back as they were. A file the command did not write is never touched.
+// Beyond python parity. shortcut: the files are held in memory; fine for a backlog folder.
+export async function undoOnThrow(folder, fn) {
+  let touched;
+  const opened = beginJournal(folder);
+  try {
+    try { return await journalled(async j => { touched = j; return fn(); }); } catch (e) {
+      for (const [p, prior] of touched) {
+        if (prior === null) rmSync(p, { force: true }); else { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, prior); }
+      }
+      throw e;
+    } finally {
+      // a nested undo that succeeded hands its paths to the outer one, which may still fail
+      if (touched) for (const [p, prior] of touched) note(p, prior);
+    }
+  } finally { if (opened) endJournal(); }
 }
 
 

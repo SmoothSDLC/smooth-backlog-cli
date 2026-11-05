@@ -7,7 +7,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
-import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
 
@@ -116,7 +115,6 @@ test('each step refuses out of order, and one step at a time', () => {
   no(f, ['update', d, '--claim', 'ann', '--force'], 'claimed only when its refinement review passed'); // --force does not pass the stages
   const { fm: dfm, body: dbody } = doc(f, d);
   store.write({ path: join(f.folder, 'phases', `${d}.md`), fm: { ...dfm, claimed_by: 'ann' }, body: dbody }, f.folder); // as a hand edit leaves it
-  const con = db.connect(f.folder); try { db.scan(con, f.folder); } finally { con.close(); }
   no(f, ['update', d, '--refine-start', '--by', 'bob'], 'claimed by ann: the work item itself is refined and split by the team lead');
   assert.equal(fm(f, plain).stage, undefined);
 });
@@ -171,7 +169,6 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
   const { fm: dfm, body } = doc(f, deps);
   delete dfm.depends_on;
   store.write({ path, fm: dfm, body }, f.folder); // an item written before depends_on existed
-  const con = db.connect(f.folder); try { db.scan(con, f.folder); } finally { con.close(); }
   gaps.depends_on = deps;
   for (const slug of Object.values(gaps)) up(f, slug, '--set-team', 't1'); // team rules apply to the items of a team
   for (const [field, slug] of Object.entries(gaps)) { // a member never claims an item missing any one field

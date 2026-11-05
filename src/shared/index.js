@@ -3,11 +3,12 @@
 // git merges changes to different lines. The item files hold everything else: name and status here are copies that every read checks
 // against the item (the file is the truth for the item, the index for the order). Open (pending, in_progress) items come first.
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
 import { hasFrontMatter } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 import * as store from './store.js';
+import * as sync from './sync.js';
 
 export const ACTIONABLE = ['pending', 'in_progress'];
 export const file = folder => join(folder, 'index.json');
@@ -61,6 +62,13 @@ export function fromItems(items) {
 
 export const current = (folder, items) => (exists(folder) ? read(folder) : fromItems(items));
 
+// A folder with items and no index gets its index before the first item is written: a write drops the rank an item kept, which the
+// order is built from.
+export function seed(folder) {
+  const items = exists(folder) ? [] : store.load(folder);
+  if (live(items).length) write(folder, fromItems(items));
+}
+
 // The permutation of the entries `inScope` says a session may order: the others keep their places.
 function within(list, inScope, arrange) {
   const at = list.flatMap((e, k) => (inScope(e) ? [k] : []));
@@ -104,6 +112,31 @@ export function reconcile(idx, items, { move, lead, exclude = [], renames = new 
   if (lead?.length) for (const key of Object.keys(out)) arrangeBranch(key, mine => [...lead.flatMap(s => mine.filter(e => e.slug === s)), ...mine.filter(e => !lead.includes(e.slug))]);
   const order = (only ?? Object.keys(out)).flatMap(k => (out[k] ?? []).filter(isOpen).map((e, r) => [e.slug, r]));
   return { idx: { branches: out }, order };
+}
+
+// After a renumbering ([old, new] pairs of this folder, as sync.commit reports them) the entry of the renumbered item, whose file is gone under
+// its old name, follows the file: Map(old slug -> new slug), so the item keeps its place in the order.
+export function renamesFor(folder, pairs) {
+  const here = pairs.filter(p => p.folder === undefined || p.folder === resolve(folder));
+  const renames = new Map();
+  if (!here.length) return renames;
+  const items = live(store.load(folder));
+  const entries = Object.values(read(folder).branches).flat();
+  for (const [old, next] of here) {
+    const to = items.find(i => Number(i.fm.seq) === next);
+    const from = entries.find(e => Number(e.seq) === old && !items.some(i => slugOf(i) === e.slug));
+    if (to && from) renames.set(from.slug, slugOf(to));
+  }
+  return renames;
+}
+
+// A read that finds a folder without an index builds it from the items and publishes it (the subject "index"); one that cannot publish it
+// (an origin that cannot be reached) goes on with the order in memory.
+export async function ensure(home, folder) {
+  const items = exists(folder) ? [] : store.load(folder);
+  if (!live(items).length) return;
+  write(folder, fromItems(items));
+  try { await sync.commitSettled(home, folder, 'index'); } catch (e) { if (!(e instanceof BacklogError)) throw e; }
 }
 
 // ---- the folder-level operations (each reads the index, changes it, and writes it)

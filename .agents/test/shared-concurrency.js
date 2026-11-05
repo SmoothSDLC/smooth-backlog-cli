@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BACKLOG_NAME, BACKLOG_OWNER, env, GIT_IDENTITY } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
+import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
 const BIN = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'));
@@ -59,8 +59,7 @@ export function pushedState(f) {
   const fresh = join(f.t, `fresh-${Date.now()}`);
   gitIn(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), fresh);
   const dir = join(fresh, 'acme', 'demo');
-  const con = db.connect(dir);
-  try { return { slugs: con.prepare('SELECT slug FROM phase ORDER BY seq, slug').all().map(r => r.slug), files: store.load(dir).map(i => i.path) }; } finally { con.close(); }
+  return { slugs: index.rows(dir).rows.sort((a, b) => a.seq - b.seq || (a.slug < b.slug ? -1 : 1)).map(r => r.slug), files: store.load(dir).map(i => i.path) };
 }
 
 export const write = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };

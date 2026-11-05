@@ -4,11 +4,11 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { hostname, tmpdir } from 'node:os';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
+import * as index from '../../src/shared/index.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
@@ -39,7 +39,6 @@ function seed(items = ['alpha', 'beta', 'gamma'], repo = 'demo') {
     },
     body: `\n# Phase ${i + 1}\n\nBody of ${name}.\n`,
   }, folder));
-  const con = db.connect(folder); db.scan(con, folder); con.close();
   git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'fixture'); git(home, 'push', '-q');
   const home2 = join(t, 'home2');
   git(t, 'clone', '-q', join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), home2);
@@ -87,49 +86,6 @@ test('a write to an item another writer changed after the agent read it is refus
   // reading again lifts the refusal
   assert.equal(run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']).status, 0);
   assert.equal(run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']).status, 0);
-});
-
-test('item 053: a replan after another agent\'s rank-only move goes through; a content change still refuses it, changing nothing', () => {
-  const f = seed();
-  const read = run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
-  assert.equal(read.status, 0, read.stderr + read.stdout);
-  const bob = run(f, f.home2, ['update', '1', '--priority', '1', '--by', 'bob']); // ranks only
-  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
-  const amy = run(f, f.home, ['update', '--replan', '1,2', '--by', 'amy']);
-  assert.equal(amy.status, 0, amy.stderr + amy.stdout);
-  assert.match(amy.stdout, /PLANNING EVENT[\s\S]*P0 {2}001-alpha[\s\S]*P1 {2}002-beta/); // the order she set, printed
-  const content = run(f, f.home2, ['update', '1', '--append', 'from bob', '--by', 'bob']);
-  assert.equal(content.status, 0, content.stderr + content.stdout);
-  const cache = viewCache(f.home, 'amy');
-  const expected = readFileSync(cache, 'utf8');
-  const originBefore = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
-  const stale = run(f, f.home, ['update', '--replan', '2,1', '--by', 'amy']);
-  assert.equal(stale.status, 5, stale.stderr + stale.stdout);
-  assert.match(stale.stderr, /item 001-alpha was changed by bob .* after you last read it/);
-  assert.equal(readFileSync(cache, 'utf8'), expected);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), originBefore);
-  assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
-  assert.equal(fm(f.folder, '001-alpha.md').priority, 0);
-  assert.equal(git(f.home, 'status', '--porcelain'), '');
-});
-test('replan guards implicitly reordered items against a push race without a cached view', () => {
-  const f = seed();
-  const before = git(f.home, 'rev-parse', 'HEAD');
-  const hook = join(f.home, '.git', 'hooks', 'pre-push');
-  const flag = join(f.t, 'hook-ran');
-  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 1 --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
-  chmodSync(hook, 0o755);
-  const amy = run(f, f.home, ['update', '--replan', '2', '--by', 'amy']);
-  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
-  assert.match(amy.stderr, /item 001-alpha was changed by bob .* after you last read it/);
-  assert.match(onOrigin(f, 'acme/demo/phases/001-alpha.md'), /bob won/);
-  assert.equal(parse(onOrigin(f, 'acme/demo/phases/001-alpha.md')).fm.priority, 0);
-  assert.equal(parse(onOrigin(f, 'acme/demo/phases/002-beta.md')).fm.priority, 1);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
-  assert.equal(git(f.home, 'status', '--porcelain'), '');
-  assert.equal(git(f.home, 'branch', '--list').split('\n').filter(Boolean).length, 1);
-  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
-  assert.equal(existsSync(viewCache(f.home, 'amy')), false);
 });
 
 test('the read cache is a file in .git, survives across commands and is per agent; an unread item is written without a check', () => {
@@ -198,7 +154,6 @@ test('a move never replaces an item of the target that holds the file name, even
   const src = consumer(f.t, 'acme', 'demo', 'main');
   const sfolder = join(f.home, 'acme', 'demo');
   store.write({ path: join(sfolder, 'phases', '001-beta.md'), fm: { phase: '001-beta', seq: 1, name: 'Source beta', objective: 'src', summary: 's', status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: '', location: '', created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z', depends_on: [], claimed_by: '', claimed_at: '' }, body: '\n# Phase 1\n\nSOURCE BODY\n' }, sfolder);
-  const con = db.connect(sfolder); db.scan(con, sfolder); con.close();
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'src'); git(f.home, 'push', '-q');
   const dest = consumer(f.t, 'acme', 'dest', 'main');
   assert.equal(run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd: dest }).status, 0);
@@ -224,7 +179,8 @@ test('a release ends the holder\'s wait, so the released item is not offered whi
 
 test('a change in the same second by the same writer name is still a change: the view includes the content', () => {
   const f = seed();
-  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
+  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']); // the first read publishes the index of the legacy folder
+  git(f.home2, 'pull', '-q', '--rebase');
   const file = join(f.folder2, 'phases', '001-alpha.md');
   writeFileSync(file, readFileSync(file, 'utf8') + '\nedited elsewhere, updated and updated_by untouched\n');
   git(f.home2, 'add', '-A'); git(f.home2, 'commit', '-q', '-m', 'edit'); git(f.home2, 'push', '-q');
@@ -251,143 +207,11 @@ test('the creator of an item has seen it: another writer\'s change is refused on
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
 });
 
-test('what the agent itself re-ranked on the side is not news to it: completing item 1 reflows item 2, and her next update of 2 goes through', () => {
-  const f = seed();
-  for (const slug of ['001-alpha', '002-beta']) run(f, f.home, ['query', '--phase', slug, '--agent', 'amy']);
-  const done = run(f, f.home, ['update', '1', '--status', 'done', '--by', 'amy']);
-  assert.equal(done.status, 0, done.stderr + done.stdout);
-  assert.equal(fm(f.folder, '002-beta.md').priority, 0); // item 2 was rewritten by the reflow
-  const next = run(f, f.home, ['update', '2', '--append', 'x', '--by', 'amy']);
-  assert.equal(next.status, 0, next.stderr + next.stdout);
-});
-
-for (const [name, args] of [
-  ['direct write', ['2', '--append', 'from amy']],
-  ['completion reflow', ['1', '--status', 'done']],
-]) test(`the leading pull preserves Amy's expected version of item 2 before a ${name}`, () => {
-  const f = seed();
-  const read = run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']);
-  assert.equal(read.status, 0, read.stderr + read.stdout);
-  const cache = viewCache(f.home, 'amy');
-  const expected = readFileSync(cache, 'utf8');
-  const bob = run(f, f.home2, ['update', '2', '--append', 'from bob', '--by', 'bob']);
-  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
-  const originBefore = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
-  assert.notEqual(git(f.home, 'rev-parse', 'HEAD'), originBefore);
-
-  const amy = run(f, f.home, ['update', ...args, '--by', 'amy']);
-  // The command itself pulled Bob's commit; that must not count as Amy reading it.
-  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), originBefore);
-  assert.match(amy.stderr, /item 002-beta was changed by bob .* after you last read it/);
-  assert.equal(readFileSync(cache, 'utf8'), expected);
-  assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
-  assert.equal(fm(f.folder, '001-alpha.md').status, 'pending');
-  assert.equal(fm(f.folder, '002-beta.md').priority, 1);
-  assert.match(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), /from bob/);
-  assert.ok(!onOrigin(f, 'acme/demo/phases/002-beta.md').includes('from amy'));
-  assert.equal(git(f.home, 'status', '--porcelain'), '');
-});
-
-function closeFixture() {
-  const f = seed();
-  const path = join(f.folder, 'phases', '001-alpha.md');
-  const doc = parse(readFileSync(path, 'utf8'));
-  store.write({ path, fm: { ...doc.fm, review_refs: ['docs/review/tests.md'], review_state: 'passed', estimate_min: 5 },
-    body: doc.body + '\n## Definition of done\n\n- [x] Tested\n' }, f.folder);
-  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'ready to close'); git(f.home, 'push', '-q');
-  return f;
-}
-
-for (const [seq, slug] of [[2, '002-beta'], [3, '003-gamma']]) {
-  test(`close validates reflowed item ${seq}'s cached version after its leading pull`, () => {
-    const f = closeFixture();
-    for (const item of ['001-alpha', '002-beta', '003-gamma']) {
-      const r = run(f, f.home, ['query', '--phase', item, '--agent', 'amy']);
-      assert.equal(r.status, 0, r.stderr + r.stdout);
-    }
-    const cache = viewCache(f.home, 'amy');
-    const expected = readFileSync(cache, 'utf8');
-    const bob = run(f, f.home2, ['update', String(seq), '--append', 'from bob', '--by', 'bob']);
-    assert.equal(bob.status, 0, bob.stderr + bob.stdout);
-    const originBefore = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
-    const amy = run(f, f.home, ['update', '1', '--close', '--summary', 'delivered', '--by', 'amy']);
-    assert.equal(amy.status, 5, amy.stderr + amy.stdout);
-    assert.ok(amy.stderr.includes(`item ${slug} was changed by bob`), amy.stderr);
-    assert.equal(git(f.home, 'rev-parse', 'HEAD'), originBefore);
-    assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), originBefore);
-    assert.equal(readFileSync(cache, 'utf8'), expected);
-    assert.equal(fm(f.folder, '001-alpha.md').status, 'pending');
-    assert.equal(fm(f.folder, '002-beta.md').priority, 1);
-    assert.equal(fm(f.folder, '003-gamma.md').priority, 2);
-    assert.equal(git(f.home, 'status', '--porcelain'), '');
-  });
-
-  test(`close guards reflowed item ${seq} against a push race, even without a cached view`, () => {
-    const f = closeFixture();
-    const before = git(f.home, 'rev-parse', 'HEAD');
-    const hook = join(f.home, '.git', 'hooks', 'pre-push');
-    const flag = join(f.t, 'hook-ran');
-    writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update ${seq} --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
-    chmodSync(hook, 0o755);
-    const amy = run(f, f.home, ['update', '1', '--close', '--summary', 'delivered', '--by', 'amy']);
-    assert.equal(amy.status, 5, amy.stderr + amy.stdout);
-    assert.ok(amy.stderr.includes(`item ${slug} was changed by bob`), amy.stderr);
-    assert.match(onOrigin(f, `acme/demo/phases/${slug}.md`), /bob won/);
-    assert.equal(parse(onOrigin(f, 'acme/demo/phases/001-alpha.md')).fm.status, 'pending');
-    assert.equal(parse(onOrigin(f, 'acme/demo/phases/002-beta.md')).fm.priority, 1);
-    assert.equal(parse(onOrigin(f, 'acme/demo/phases/003-gamma.md')).fm.priority, 2);
-    assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
-    assert.equal(git(f.home, 'status', '--porcelain'), '');
-    assert.equal(git(f.home, 'branch', '--list').split('\n').filter(Boolean).length, 1);
-    assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
-    assert.equal(existsSync(viewCache(f.home, 'amy')), false);
-  });
-}
-
-// Every ranking caller must use the same guard, including the two queues of a move.
-for (const [name, args, target] of [
-  ['new critical insertion', ['new', '--name', 'urgent', '--severity', 'critical', '--depends-on', 'none']],
-  ['archive reflow', ['archive', '1', '--force']],
-  ['move source reflow', ['move', '1', '--to-repository', 'acme/dest']],
-  ['move destination reflow', ['move', '1', '--to-repository', 'acme/demo'], true],
-]) test(`${name} refuses stale item 2 before any ranking write`, () => {
-  const f = seed();
-  let cwd = f.cons;
-  if (target) {
-    cwd = consumer(f.t, 'acme', 'source');
-    const folder = join(f.home, 'acme', 'source');
-    store.write({ path: join(folder, 'phases', '001-source.md'), fm: {
-      ...fm(f.folder, '001-alpha.md'), phase: '001-source', repository: 'acme/source',
-    }, body: '\nSource item\n' }, folder);
-    const con = db.connect(folder); db.scan(con, folder); con.close();
-    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'move source'); git(f.home, 'push', '-q');
-  }
-  assert.equal(run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']).status, 0);
-  const cache = viewCache(f.home, 'amy');
-  const expected = readFileSync(cache, 'utf8');
-  const bob = run(f, f.home2, ['update', '2', '--append', 'Bob edit survives', '--by', 'bob']);
-  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
-  const before = git(f.t, '--git-dir', f.bare, 'rev-parse', 'main');
-  const amy = run(f, f.home, args, { cwd, env: { BACKLOG_AGENT: 'amy' } });
-  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
-  assert.match(amy.stderr, /item 002-beta was changed by bob/);
-  // 053: the command reads the item from inside its own repository (a move runs in the source repository)
-  assert.match(amy.stderr, target ? /\(in repository acme\/demo: backlog query --phase 002-beta --agent <you>\)/ : /\(backlog query --phase 002-beta --agent <you>\)/);
-  assert.equal(readFileSync(cache, 'utf8'), expected);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
-  assert.equal(git(f.t, '--git-dir', f.bare, 'rev-parse', 'main'), before);
-  assert.match(onOrigin(f, 'acme/demo/phases/002-beta.md'), /Bob edit survives/);
-  assert.equal(git(f.home, 'status', '--porcelain'), '');
-});
-
 test('053: a cross-repository move refused for its own item also names the changed item it read in the destination', () => {
   const f = seed();
   const cwd = consumer(f.t, 'acme', 'source');
   const folder = join(f.home, 'acme', 'source');
   store.write({ path: join(folder, 'phases', '001-source.md'), fm: { ...fm(f.folder, '001-alpha.md'), phase: '001-source', repository: 'acme/source' }, body: '\nSource item\n' }, folder);
-  const con = db.connect(folder); db.scan(con, folder); con.close();
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'move source'); git(f.home, 'push', '-q');
   assert.equal(run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']).status, 0);
   assert.equal(run(f, f.home, ['query', '--phase', '001-source', '--agent', 'amy'], { cwd }).status, 0);
@@ -397,158 +221,6 @@ test('053: a cross-repository move refused for its own item also names the chang
   const amy = run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd, env: { BACKLOG_AGENT: 'amy' } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
   assert.match(amy.stderr, /item 001-source was changed by bob .*1 other item\(s\) you read changed too \(002-beta of acme\/demo\); read them again \(backlog query --phase 001-source --agent <you>; in repository acme\/demo: backlog query --phase 002-beta --agent <you>\)/);
-});
-
-// A timestamp or author is not evidence of a read. The ranking refresh may update
-// beta's matching view, but must not sweep an unread change to the done item into it.
-for (const [name, args] of [
-  ['update priority', ['1', '--priority', '1']],
-  ['update completion', ['1', '--status', 'done']],
-  ['update close', ['1', '--close', '--summary', 'delivered']],
-  ['update reopening', ['1', '--status', 'pending']],
-  ['replan', ['--replan', '2,1']],
-]) test(`${name} refreshes only matching incidental views`, () => {
-  const f = closeFixture();
-  const beta = join(f.folder, 'phases', '002-beta.md');
-  if (name === 'update completion') { // a reviewed item finishes only through --close (item 039): complete one without review documents
-    const alpha = join(f.folder, 'phases', '001-alpha.md');
-    const { review_refs: _r, review_state: _s, ...rest } = parse(readFileSync(alpha, 'utf8')).fm; // eslint-disable-line no-unused-vars
-    store.write({ path: alpha, fm: rest, body: parse(readFileSync(alpha, 'utf8')).body }, f.folder);
-  }
-  if (name === 'update reopening') {
-    const alpha = join(f.folder, 'phases', '001-alpha.md');
-    const a = parse(readFileSync(alpha, 'utf8'));
-    store.write({ path: alpha, fm: { ...a.fm, status: 'done' }, body: a.body }, f.folder);
-    for (const [slug, priority] of [['002-beta', 0], ['003-gamma', 1]]) {
-      const path = join(f.folder, 'phases', `${slug}.md`); const d = parse(readFileSync(path, 'utf8'));
-      store.write({ path, fm: { ...d.fm, priority }, body: d.body }, f.folder);
-    }
-  }
-  store.write({ path: join(f.folder, 'phases', '004-done.md'), fm: {
-    ...fm(f.folder, '003-gamma.md'), phase: '004-done', seq: 4, status: 'done', updated_by: 'amy',
-  }, body: '\nA previously read done item\n' }, f.folder);
-  const con = db.connect(f.folder); db.scan(con, f.folder); con.close();
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'cache fixture'); git(f.home, 'push', '-q');
-  for (const slug of ['002-beta', '004-done']) {
-    const r = run(f, f.home, ['query', '--phase', slug, '--agent', 'amy']);
-    assert.equal(r.status, 0, r.stderr + r.stdout);
-  }
-  const cache = viewCache(f.home, 'amy');
-  const expected = JSON.parse(readFileSync(cache, 'utf8'))['acme/demo/004-done'];
-  git(f.home2, 'pull', '-q', '--rebase');
-  const done = join(f.folder2, 'phases', '004-done.md');
-  writeFileSync(done, readFileSync(done, 'utf8') + '\nUnread edit; author and timestamp unchanged\n');
-  git(f.home2, 'add', '-A'); git(f.home2, 'commit', '-q', '-m', 'unread edit'); git(f.home2, 'push', '-q');
-  const before = readFileSync(beta, 'utf8');
-  const amy = run(f, f.home, ['update', ...args, '--by', 'amy']);
-  assert.equal(amy.status, 0, amy.stderr + amy.stdout);
-  assert.notEqual(readFileSync(beta, 'utf8'), before, 'the caller really reflowed beta');
-  assert.deepEqual(JSON.parse(readFileSync(cache, 'utf8'))['acme/demo/004-done'], expected, 'unread content must not be adopted just because updated_by is amy');
-  const next = run(f, f.home, ['update', '2', '--append', 'known reflow', '--by', 'amy']);
-  assert.equal(next.status, 0, next.stderr + next.stdout);
-  const stale = run(f, f.home, ['update', '4', '--append', 'must refuse', '--by', 'amy']);
-  assert.equal(stale.status, 5, stale.stderr + stale.stdout);
-});
-
-// Both clones re-rank from the same base without the CLI's publication guard (plain file writes + the settled commit): alpha is ranked
-// differently by each (a conflict on rank only: upstream's copy stands), beta only by amy, gamma only by bob, so the merged queue has
-// two items at rank 0 until the reconciliation (reflow) that the same-rank repair asks for has run.
-const rerank = (folder, ranks, extra = {}) => {
-  for (const [file, priority] of Object.entries(ranks)) {
-    const path = join(folder, 'phases', file); const d = parse(readFileSync(path, 'utf8'));
-    store.write({ path, fm: { ...d.fm, priority }, body: d.body + (extra[file] ?? '') }, folder);
-  }
-};
-const queueOf = (f, home) => JSON.parse(run(f, home, ['query', '--status', '--json']).stdout).phases.map(p => p.priority).sort();
-
-test('two clones re-rank one item at once: upstream\'s copy stands and the merged queue is dense again', async () => {
-  const f = seed();
-  rerank(f.folder, { '001-alpha.md': 1, '002-beta.md': 0 });
-  await db.commitSettled(f.home, f.folder, 'amy re-ranks');
-  rerank(f.folder2, { '001-alpha.md': 2, '003-gamma.md': 0 });
-  await db.commitSettled(f.home2, f.folder2, 'bob re-ranks');
-  git(f.home, 'pull', '-q', '--rebase');
-  for (const [home, folder] of [[f.home, f.folder], [f.home2, f.folder2]]) {
-    assert.deepEqual(store.load(folder).map(i => i.fm.priority).sort(), [0, 1, 2], `${folder}: no duplicate rank`);
-    assert.deepEqual(queueOf(f, home), [0, 1, 2]);
-    assert.equal(git(home, 'status', '--porcelain'), '');
-  }
-  assert.equal(fm(f.folder2, '001-alpha.md').priority, 2, 'ties are broken by number: alpha, ranked last by upstream\'s copy, ends last');
-  assert.equal(git(f.home2, 'rev-list', '--count', 'origin/main..HEAD'), '0');
-});
-
-test('two clones re-rank one item at once: the reconciliation still refuses a stale cached view', async () => {
-  const f = seed();
-  assert.equal(run(f, f.home2, ['query', '--phase', '003-gamma', '--agent', 'bob']).status, 0); // bob has read gamma
-  rerank(f.folder, { '001-alpha.md': 1, '002-beta.md': 0, '003-gamma.md': 2 }, { '003-gamma.md': '\nAmy edit\n' });
-  await db.commitSettled(f.home, f.folder, 'amy re-ranks and edits gamma');
-  rerank(f.folder2, { '001-alpha.md': 2, '003-gamma.md': 0 });
-  const seen = await import('../../src/shared/seen.js');
-  seen.setActor('bob');
-  const before = onOrigin(f, 'acme/demo/phases/003-gamma.md');
-  assert.ok(existsSync(viewCache(f.home2, 'bob')), 'bob has a cached view');
-  try {
-    await assert.rejects(db.commitSettled(f.home2, f.folder2, 'bob re-ranks'), { exitCode: 5 });
-  } finally { seen.setActor('nobody'); }
-  assert.equal(onOrigin(f, 'acme/demo/phases/003-gamma.md'), before, 'nothing of bob was pushed');
-  assert.equal(git(f.home2, 'rev-list', '--count', 'origin/main..HEAD'), '0');
-});
-
-test('database reconciliation validates the entire incidental write set', async () => {
-  const f = seed();
-  assert.equal(run(f, f.home, ['query', '--phase', '003-gamma', '--agent', 'amy']).status, 0);
-  const bob = run(f, f.home2, ['update', '3', '--append', 'Bob edit survives', '--by', 'bob']);
-  assert.equal(bob.status, 0, bob.stderr + bob.stdout);
-  git(f.home, 'pull', '-q', '--rebase');
-  const alpha = join(f.folder, 'phases', '001-alpha.md');
-  const a = parse(readFileSync(alpha, 'utf8'));
-  store.write({ path: alpha, fm: { ...a.fm, status: 'done' }, body: a.body }, f.folder);
-  const before = ['002-beta.md', '003-gamma.md'].map(n => readFileSync(join(f.folder, 'phases', n), 'utf8'));
-  const seen = await import('../../src/shared/seen.js');
-  seen.setActor('amy');
-  try {
-    await assert.rejects(async () => db.reconcileFolders([f.folder], []), { exitCode: 5 });
-    assert.deepEqual(['002-beta.md', '003-gamma.md'].map(n => readFileSync(join(f.folder, 'phases', n), 'utf8')), before);
-  } finally { seen.setActor('nobody'); }
-});
-
-for (const [name, args, target] of [
-  ['new insertion', ['new', '--name', 'urgent', '--severity', 'critical', '--depends-on', 'none']],
-  ['new with inherited operation lock', ['new', '--name', 'urgent', '--severity', 'critical', '--depends-on', 'none']],
-  ['archive', ['archive', '1', '--force']],
-  ['move source', ['move', '1', '--to-repository', 'acme/dest']],
-  ['move destination', ['move', '1', '--to-repository', 'acme/demo'], true],
-]) test(`${name} publishes with a guard for incidental items never read by Amy`, () => {
-  const f = seed();
-  let cwd = f.cons;
-  if (target) {
-    cwd = consumer(f.t, 'acme', 'source');
-    const folder = join(f.home, 'acme', 'source');
-    store.write({ path: join(folder, 'phases', '001-source.md'), fm: {
-      ...fm(f.folder, '001-alpha.md'), phase: '001-source', repository: 'acme/source',
-    }, body: '\nSource item\n' }, folder);
-    const con = db.connect(folder); db.scan(con, folder); con.close();
-    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'move source'); git(f.home, 'push', '-q');
-  }
-  const before = git(f.home, 'rev-parse', 'HEAD');
-  const hook = join(f.home, '.git', 'hooks', 'pre-push'); const flag = join(f.t, 'hook-ran');
-  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 2 --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
-  chmodSync(hook, 0o755);
-  // an inherited checkout is the record of this test process, as a parent's is for its child (pop --claim-now)
-  // the real path, as the CLI resolves its home (macOS: /var is /private/var)
-  const runLock = join(realpathSync(f.home), '.git', 'smooth-backlog-cli-run.lock');
-  if (name.includes('inherited')) writeFileSync(runLock, JSON.stringify({ pid: process.pid, host: hostname(), command: 'test' }));
-  const amy = run(f, f.home, args, { cwd, env: { BACKLOG_AGENT: 'amy',
-    ...(name.includes('inherited') ? { BACKLOG_RUN_LOCK_HELD: `${runLock}:${process.pid}` } : {}),
-  } });
-  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
-  assert.match(amy.stderr, /item 002-beta was changed by bob/);
-  assert.match(onOrigin(f, 'acme/demo/phases/002-beta.md'), /bob won/);
-  assert.equal(parse(onOrigin(f, 'acme/demo/phases/002-beta.md')).fm.priority, 1);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
-  assert.equal(git(f.home, 'status', '--porcelain'), '');
-  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
-  assert.equal(existsSync(viewCache(f.home, 'amy')), false);
 });
 
 test('review P2: exact agent names keep independent views despite slash, space and Unicode collisions', async () => {
@@ -586,25 +258,6 @@ test('review P2: published write views follow chained renumberings only in their
   assert.throws(() => seen.check(target, 'new/place', 'amy', '003-alpha', path), { exitCode: 5 });
 });
 
-test('review P2: a renumbered incidental write retains proof of the previously read bytes', async () => {
-  const f = seed(['alpha']);
-  const seen = await import('../../src/shared/seen.js');
-  const old = 'phases/001-alpha.md'; const path = 'phases/003-alpha.md';
-  seen.view('amy', f.folder, 'acme/demo', { slug: '001-alpha', path: old });
-  seen.setActor('amy');
-  try {
-    await seen.guarded(() => {
-      seen.guardReflow(f.folder, store.load(f.folder));
-      renameSync(join(f.folder, old), join(f.folder, path));
-      writeFileSync(join(f.folder, path), readFileSync(join(f.folder, path), 'utf8') + '\npublished reflow\n');
-      seen.recordWrites(f.folder, 'acme/demo', 'amy', [], [Object.assign([1, 3], { folder: f.folder })]);
-    });
-    assert.doesNotThrow(() => seen.check(f.folder, 'acme/demo', 'amy', '003-alpha', path));
-    writeFileSync(join(f.folder, path), readFileSync(join(f.folder, path), 'utf8') + '\nanother writer\n');
-    assert.throws(() => seen.check(f.folder, 'acme/demo', 'amy', '003-alpha', path), { exitCode: 5 });
-  } finally { seen.setActor('nobody'); }
-});
-
 // Item 053: another agent's reflow that changed only ranks is no change for this agent's planning move; a change of an
 // item's content still refuses its write, and the refusal names one command that reads every item a move re-ranks.
 test('053: after bob closes an item, amy moves another at once; a content change still refuses her write until she reads', () => {
@@ -615,7 +268,7 @@ test('053: after bob closes an item, amy moves another at once; a content change
   assert.equal(bob.status, 0, bob.stderr + bob.stdout);
   const amy = run(f, f.home, ['update', '4', '--priority', '0', '--by', 'amy']); // reranks beta and gamma again
   assert.equal(amy.status, 0, amy.stderr + amy.stdout);
-  assert.equal(fm(f.folder, '004-delta.md').priority, 0);
+  assert.equal(index.rows(f.folder).rows.find(r => r.slug === '004-delta').priority, 0);
   const content = run(f, f.home2, ['update', '3', '--append', 'from bob', '--by', 'bob']);
   assert.equal(content.status, 0, content.stderr + content.stdout);
   const stale = run(f, f.home, ['update', '3', '--append', 'from amy', '--by', 'amy']);
@@ -626,23 +279,3 @@ test('053: after bob closes an item, amy moves another at once; a content change
   assert.equal(again.status, 0, again.stderr + again.stdout);
 });
 
-test('053: a reflow over several items with new content names them all in one refusal and one command reads them', () => {
-  const f = seed(['alpha', 'beta', 'gamma', 'delta']);
-  for (const item of ['001-alpha', '002-beta', '003-gamma', '004-delta']) assert.equal(run(f, f.home, ['query', '--phase', item, '--agent', 'amy']).status, 0);
-  for (const n of ['2', '3']) {
-    assert.equal(run(f, f.home2, ['query', '--phase', n, '--agent', 'bob']).status, 0);
-    assert.equal(run(f, f.home2, ['update', n, '--append', 'from bob', '--by', 'bob']).status, 0);
-  }
-  const close = run(f, f.home, ['update', '1', '--status', 'done', '--by', 'amy']); // re-ranks 2, 3 and 4
-  assert.equal(close.status, 5, close.stderr + close.stdout);
-  assert.match(close.stderr, /item 002-beta was changed by bob .*1 other item\(s\) you read changed too \(003-gamma\); read them again \(backlog query --phase 002-beta,003-gamma --agent <you>\)/);
-  const failed = run(f, f.home, ['query', '--phase', '002-beta,999', '--agent', 'amy']); // a list with an unknown item shows nothing and reads nothing
-  assert.equal(failed.status, 1, failed.stderr + failed.stdout);
-  assert.equal(run(f, f.home, ['update', '2', '--append', 'from amy', '--by', 'amy']).status, 5); // a primary write names the other stale item too
-  assert.match(run(f, f.home, ['update', '2', '--append', 'from amy', '--by', 'amy']).stderr, /read them again \(backlog query --phase 002-beta,003-gamma --agent <you>\)/);
-  const read = run(f, f.home, ['query', '--phase', '002-beta,003-gamma', '--agent', 'amy']);
-  assert.equal(read.status, 0, read.stderr + read.stdout);
-  assert.deepEqual(JSON.parse(read.stdout).map(x => x.slug), ['002-beta', '003-gamma']);
-  const again = run(f, f.home, ['update', '1', '--status', 'done', '--by', 'amy']);
-  assert.equal(again.status, 0, again.stderr + again.stdout);
-});

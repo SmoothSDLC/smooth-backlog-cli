@@ -1,8 +1,9 @@
 // Step definitions. Every check goes through the CLI itself (backlog query --json), never through the item files.
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { dump, parse } from '../../src/shared/frontmatter.js';
 import { step } from '../support/gherkin.js';
 
 // `backlog ...` with shell-like splitting: double quotes group words, \" is a quote inside them
@@ -97,4 +98,14 @@ step(/^the queue is (\d+(?:, \d+)*)$/, (w, list) => {
   const open = (JSON.parse(r.stdout).phases ?? []).filter(p => ['pending', 'in_progress'].includes(p.status)).sort((a, b) => a.priority - b.priority).map(p => String(p.seq));
   assert.deepEqual(open, list.split(', '), r.stdout);
 });
+// The folder as an earlier release left it: the order in a priority field of each item (the last item first), no index file.
+step(/^the order is kept in the items, as an earlier release did$/, w => {
+  const dir = w.folder();
+  const names = readdirSync(join(dir, 'phases')).filter(n => n.endsWith('.md')).sort();
+  names.forEach((n, i) => { const p = join(dir, 'phases', n); const doc = parse(readFileSync(p, 'utf8')); writeFileSync(p, dump({ ...doc.fm, priority: names.length - 1 - i }, doc.body)); });
+  rmSync(join(dir, 'index.json'), { force: true });
+  const repo = w.backlogRepo();
+  w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'earlier release'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
+});
+step(/^the backlog has an index$/, w => assert.ok(existsSync(join(w.folder(), 'index.json')), 'no index file in the backlog folder'));
 step(/^the queue is empty$/, w => { const r = w.run(['query', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r)); assert.deepEqual((JSON.parse(r.stdout).phases ?? []).filter(p => ['pending', 'in_progress'].includes(p.status)), [], r.stdout); });

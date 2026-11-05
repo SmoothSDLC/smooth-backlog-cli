@@ -410,7 +410,7 @@ test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
 test('075: --phase prints the full item (row, front matter, body, missing) by slug and by number; not found is exit 1 on stdout', () => {
   const f = fx();
   const beta = { id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
-    front_matter: { phase: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', updated: 'TS', updated_by: 'UPD', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' },
+    front_matter: { phase: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', updated: 'TS', updated_by: 'UPD', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' },
     body: '\n# Phase 002 — Beta\n\n**Objective:** Caf\u00e9 \u2615 Beta\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n',
     missing: ['review_refs', 'estimate_min', 'definition_of_done'] };
   // the item carries its history (events) in its front matter: compared apart from the rest
@@ -419,7 +419,7 @@ test('075: --phase prints the full item (row, front matter, body, missing) by sl
   assert.deepEqual(bySlug, beta, 'by slug');
   assert.match(betaEvents[0], /^TS planning_event - - added 002-beta at rank 0/);
   const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal', priority: 2, path: 'phases/003-gamma.md',
-    front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal', priority: 2 } };
+    front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal' } };
   gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
   const [byNumber, events] = noEvents(normJson(view(f, ['--phase', '3']).stdout));
   assert.deepEqual(byNumber, gamma, 'by number');
@@ -477,7 +477,7 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     '  TS  planning_event branch= commit= added 002-beta at rank 0; backlog re-densified to 2 item(s)',
     '  TS  planning_event branch= commit= added 003-gamma at rank end; backlog re-densified to 3 item(s)',
     '  TS  planning_event branch= commit= added 004-delta at rank end; backlog re-densified to 4 item(s)',
-    '  TS  planning_event branch= commit= added 005-feat at rank end; backlog re-densified to 4 item(s)',
+    '  TS  planning_event branch= commit= added 005-feat at rank end; backlog re-densified to 1 item(s)',
     '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)',
     '  TS  review_requested branch=main commit=SHA n',
     '  TS  review_requested branch=main commit=SHA n',

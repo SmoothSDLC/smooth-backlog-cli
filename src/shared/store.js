@@ -57,6 +57,12 @@ export function resolveHome() {
   };
 }
 
+// The per-clone cache of one backlog folder: <state>/cache/<owner>--<name>.db, rebuilt from the item files by db.connect.
+export function cacheFile(folder) {
+  const f = resolve(folder);
+  return join(stateDir(dirname(dirname(f))), 'cache', `${basename(dirname(f))}--${basename(f)}.db`);
+}
+
 // Where the lock, the views and the journal live: the clone's.git folder, or.state inside the repository's.backlog folder.
 export const stateDir = home => (existsSync(join(home, '.git')) ? join(home, '.git') : join(home, '.state'));
 
@@ -68,7 +74,7 @@ export function folder(home, repoId) {
   return join(resolve(home), ...parts);
 }
 
-// The one operation lock of the clone: every command that can pull, write item files or touch backlog.db (reads that pull included) holds it
+// The one operation lock of the clone: every command that can pull, write item files or touch the item files (reads that pull included) holds it
 // from before its pull to after its push, whatever repository folders it works on. Re-entrant in the process (query --plan runs the pop module), and for
 // a child its holder runs and waits for, which is given lockEnv(home) (pop --claim-now runs update).
 const held = new Set();
@@ -159,7 +165,7 @@ function saveJournal() {
 export function beginJournal(folder) { // true when this call opened the journal (the outermost undo); it also covers `folder`
   const home = dirname(dirname(resolve(folder)));
   if (!persist && existsSync(stateDir(home))) { persist = { home, files: new Map(), folders: new Set() }; var opened = true; }
-  if (persist) { persist.folders.add(resolve(folder)); persistNote(join(resolve(folder), 'backlog.db')); }
+  if (persist) persist.folders.add(resolve(folder));
   return Boolean(opened);
 }
 export function endJournal() { const p = persist; persist = null; if (p) rmSync(journalFile(p.home), { force: true }); }
@@ -188,7 +194,6 @@ export function recoverJournal(home) {
   for (const [recorded, b64] of Object.entries(rec.files)) {
     const path = inside(recorded);
     if (!path) continue;
-    if (path.endsWith('backlog.db')) for (const s of ['-journal', '-wal', '-shm']) rmSync(path + s, { force: true });
     if (b64 === null) rmSync(path, { force: true }); else { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, Buffer.from(b64, 'base64')); }
   }
   for (const recorded of rec.folders ?? []) { const folder = inside(recorded); if (folder) git(['reset', '-q', '--', '.'], folder); }
@@ -244,25 +249,9 @@ export function load(dir) {
   return items;
 }
 
-// The mirror database <dir>/backlog.db, opened read-only (never modified): fn(db) when it has a phase table, else null.
-function withMirror(dir, fn) {
-  const dbFile = join(dir, 'backlog.db');
-  if (!existsSync(dbFile)) return null;
-  // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr.
-  const emit = process.emitWarning;
-  process.emitWarning = (w, ...a) => { if (!/sqlite/i.test(String(w))) emit.call(process, w, ...a); };
-  let sqlite;
-  try { sqlite = process.getBuiltinModule('node:sqlite'); } finally { process.emitWarning = emit; }
-  const db = new sqlite.DatabaseSync(dbFile, { readOnly: true });
-  try {
-    return db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='phase'").get() ? fn(db) : null;
-  } finally { db.close(); }
-}
-
-// with contract section 3: 1 + max(seq of phases/ and archive/, MAX(seq) of backlog.db).
+// 1 + max(seq of phases/ and archive/): the item files alone number the items.
 export function nextSeq(dir) {
-  const max = Math.max(0, ...load(dir).map(i => Number(i.fm.seq) || 0));
-  return Math.max(max, withMirror(dir, db => Number(db.prepare('SELECT COALESCE(MAX(seq), 0) AS m FROM phase').get().m)) ?? 0) + 1;
+  return Math.max(0, ...load(dir).map(i => Number(i.fm.seq) || 0)) + 1;
 }
 
 // nextSeq whose file name `<seq><tail>` (tail: '-name.md') is also free in phases/ and archive/: update --seq can leave a low number unused while
@@ -285,10 +274,7 @@ function actionable(dir) {
   const items = load(dir);
   const live = items.filter(i => i.path.startsWith('phases/'));
   const files = live.filter(i => ACTIONABLE.includes(statusOf(i)));
-  const slugs = new Set(live.map(slugOf)); // a file moved to archive/ outside the CLI leaves its row unchanged: still ranked
-  const ghosts = withMirror(dir, db => db.prepare("SELECT slug, seq, priority, path FROM phase WHERE status IN ('pending', 'in_progress') AND handoff_id = (SELECT id FROM handoff WHERE status = 'active' LIMIT 1)").all()
-    .filter(r => !slugs.has(r.slug) && !existsSync(join(dir, String(r.path ?? '')))).map(r => ({ ghost: true, path: r.path, fm: { phase: r.slug, seq: r.seq, priority: r.priority } }))) ?? [];
-  return [...files, ...ghosts].sort((a, b) => ((a.fm.priority ?? 50) - (b.fm.priority ?? 50)) || ((a.fm.seq ?? 0) - (b.fm.seq ?? 0)));
+  return files.sort((a, b) => ((a.fm.priority ?? 50) - (b.fm.priority ?? 50)) || ((a.fm.seq ?? 0) - (b.fm.seq ?? 0)));
 }
 
 // rank i onto the i-th item; only a file whose priority changes is rewritten.
@@ -358,8 +344,6 @@ export function findings(dir) {
     if (!i.fm.repository || !i.fm.branch) out.untagged.push(i);
     else if (i.fm.repository !== folderRepo) out.foreign.push(i);
   }
-  out.ghost = withMirror(dir, db => db.prepare("SELECT * FROM phase WHERE status NOT IN ('archived')").all()
-    .filter(r => !existsSync(join(dir, String(r.path ?? '')))).map(r => ({ ...r }))) ?? [];
   return out;
 }
 

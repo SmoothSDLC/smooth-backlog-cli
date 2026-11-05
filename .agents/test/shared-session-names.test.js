@@ -9,7 +9,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 
 const TEAM = 't07:09:1a';
@@ -50,7 +49,7 @@ const teamItem = (f, name) => { // a refined team item (stage ready): nothing is
   return s;
 };
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
-const events = f => { const con = db.connect(f.folder); try { return con.prepare('SELECT event, note FROM event ORDER BY id DESC LIMIT 100').all(); } finally { con.close(); } };
+const events = (f, slug) => itemFm(f, slug).events.map(store.parseEvent);
 
 test('082: an agent name with colons (082aa:01) is stored in claimed_by, the event log, the commit subject and accepted by --by and --claim', () => {
   const f = fixture();
@@ -59,7 +58,7 @@ test('082: an agent name with colons (082aa:01) is stored in claimed_by, the eve
   // the front matter carries the name
   assert.equal(itemFm(f, s).claimed_by, A1);
   // the event log records it
-  const claimed = events(f).find(e => e.event === 'claimed');
+  const claimed = events(f, s).find(e => e.event === 'claimed');
   assert.ok(claimed, 'the claimed event is in the log');
   assert.ok(claimed.note.includes(`Claimed by ${A1}`), claimed.note);
   // the commit subject carries the name

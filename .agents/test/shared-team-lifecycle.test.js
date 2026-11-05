@@ -4,7 +4,6 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -217,34 +216,6 @@ test('team.js: held items, the claim rule, undone dependencies on a folder', () 
   assert.deepEqual(undone.map(d => team.describeDependency(d)), ['001-a (status in_progress, claimed by ann)', 'nothing (no such item in this backlog)', '005-e (status in_progress, claimed by bob)']);
 });
 
-test('team.js: status and identity come from the mirror rows, the files give only the metadata (drift cases)', () => {
-  const f = fixture();
-  const { put, scan } = seed(f);
-  put(1, 'a', { status: 'in_progress', claimed_by: 'ann' });
-  put(2, 'b', { status: 'done' });
-  put(3, 'c', { status: 'pending' });
-  put(4, 'd', { status: 'done', claimed_by: 'bob' });
-  scan();
-  const deps = ids => team.undoneDependencies(f.folder, { depends_on: ids }).map(d => team.describeDependency(d));
-  assert.deepEqual(deps([2, 3, 4]), ['003-c (status pending, claimed by nobody)']);
-  // a file changed to done before it is scanned: its row still says pending, so the dependency still blocks
-  put(3, 'c', { status: 'done' });
-  assert.deepEqual(deps([3]), ['003-c (status pending, claimed by nobody)']);
-  // a file changed back to pending while its row says done: the dependency is done
-  put(2, 'b', { status: 'pending' });
-  assert.deepEqual(deps([2, '002-b']), []);
-  // a done row whose file is gone is still done (a ghost), not "no such item"
-  rmSync(join(f.folder, 'phases', '004-d.md'));
-  assert.deepEqual(deps([4, '004-d']), []);
-  // an active holding whose file now says done is still held while its row is open
-  put(1, 'a', { status: 'done', claimed_by: 'ann' });
-  assert.deepEqual(team.heldItems(f.folder, 'ann').map(h => [h.slug, h.state]), [['001-a', 'active']]);
-  assert.match(team.claimRefusal(f.folder, 'ann'), /^ann holds 1 active item\(s\): 001-a;/);
-  // and a done row is not held even when its file claims to be open
-  put(2, 'b', { status: 'in_progress', claimed_by: 'ann' });
-  assert.deepEqual(team.heldItems(f.folder, 'ann').map(h => h.slug), ['001-a']);
-});
-
 test('a holder whose item file has malformed front matter still blocks a second claim: the error propagates and nothing is written', () => {
   const f = fixture();
   const a = make(f, 'held job', []);
@@ -254,12 +225,10 @@ test('a holder whose item file has malformed front matter still blocks a second 
   writeFileSync(held, readFileSync(held, 'utf8').replace(/^claimed_by:/m, 'not a pair\nclaimed_by:'));
   assert.throws(() => team.heldItems(f.folder, 'ann'), /not a 'key: value' pair/);
   const files = () => readdirSync(join(f.folder, 'phases')).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8'));
-  const events = () => { const d = new DatabaseSync(join(f.folder, 'backlog.db'), { readOnly: true }); try { return d.prepare('SELECT * FROM event ORDER BY id').all().map(r => ({ ...r })); } finally { d.close(); } };
-  const [before, evBefore] = [files(), events()];
+  const before = files();
   const out = update(f, [b, '--claim', 'ann']);
   assert.notEqual(out.status, 0, out.stdout + out.stderr);
-  assert.deepEqual(files(), before, 'no item file changed');
-  assert.deepEqual(events(), evBefore, 'no event was logged');
+  assert.deepEqual(files(), before, 'no item file changed, no event was logged');
   rmSync(held);
   assert.deepEqual(team.heldItems(f.folder, 'ann'), [], 'a genuinely missing file is {} (item_fm: p.exists() else {})');
 });

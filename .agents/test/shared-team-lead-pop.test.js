@@ -7,7 +7,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import * as db from '../../src/shared/db.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
@@ -229,35 +228,15 @@ test('team pop: the claim itself refuses another team\'s item in a team session'
   assert.equal(r.status, 1); assert.match(r.stdout, /belongs to team t2, not to this session's team t1/);
 });
 
-test('ghost rows carry empty team fields; bare files stay paths', () => {
+test('an item without depends_on names it', () => {
   const f = fixture();
-  const a = make(f, 'alpha item'); make(f, 'beta item');
-  writeFileSync(join(f.folder, 'phases', 'note.md'), 'a stray note, no front matter\n');
-  const con = db.connect(f.folder); con.prepare('UPDATE phase SET path=? WHERE slug=?').run('phases/gone.md', a); con.close();
-  const j = JSON.parse(ok(f, ['query', '--status', '--json']).stdout);
-  const ghost = j.findings.ghost.find(r => r.slug === a);
-  assert.deepEqual([ghost.claimed_by, ghost.review_state], ['', '']);
-  for (const v of Object.values(j.findings)) for (const x of v) assert.ok(typeof x === 'string' || ('claimed_by' in x && 'review_state' in x), JSON.stringify(x));
-  if (j.findings.bare) assert.ok(j.findings.bare.every(x => typeof x === 'string'), JSON.stringify(j.findings.bare));
-});
-
-test('an item without depends_on names it; an item whose file is gone has missing null', () => {
-  const f = fixture();
-  const s = make(f, 'hand edited item'); const g = make(f, 'gone item');
+  const s = make(f, 'hand edited item');
   const file = join(f.folder, 'phases', `${s}.md`);
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^depends_on:.*\n/m, '').replace(/^review_refs:\n(?:- .*\n)*/m, '').replace(/^review_refs:.*\n/m, ''));
-  rmSync(join(f.folder, 'phases', `${g}.md`));
-  assert.ok(!existsSync(join(f.folder, 'phases', `${g}.md`)));
-  const [x, y] = JSON.parse(ok(f, ['query', '--phase', `${s},${g}`, '--json']).stdout);
+  const x = JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout);
   assert.deepEqual(x.missing, ['review_refs', 'depends_on']);
-  assert.equal(y.missing, null);
-  assert.equal(JSON.parse(ok(f, ['query', '--phase', g, '--json']).stdout).missing, null);
-  ok(f, ['query', '--phase', g, '--json']);
-  writeFileSync(file, 'the front matter is gone\n'); // a file the CLI cannot read as an item
-  assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, null);
-  writeFileSync(file, '---\n{}\n---\nan empty front matter\n'); // no keys: no item either
-  assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, null);
 });
+
 test('in a team session a claim takes only an item of the session\'s team in its repository', () => {
   const f = fixture();
   const free = make(f, 'no team item'); ok(f, ['query', '--phase', free, '--agent', 'lead']);
@@ -276,13 +255,4 @@ test('team pop: an item taken out of the team before the read is skipped, never 
   spawnSync('git', ['checkout', '-q', '--detach'], { cwd: f.cons });
   const r = run(f, ['team', 'pop', '--team', 't1']);
   assert.equal(r.status, 2, r.stdout + r.stderr); assert.match(r.stderr, /team pop needs a branch/);
-});
-
-test('an archived item whose file lost its front matter has missing null too', () => {
-  const f = fixture();
-  const s = make(f, 'archived item'); ok(f, ['archive', s.split('-')[0], '--force']);
-  const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
-  const file = walk(join(f.folder, 'archive')).find(x => x.endsWith(`${s}.md`));
-  assert.ok(file, 'the archived file'); writeFileSync(file, 'no front matter\n');
-  assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, null);
 });

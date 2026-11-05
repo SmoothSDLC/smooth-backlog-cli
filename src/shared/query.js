@@ -167,7 +167,7 @@ async function query(argv) {
   let folder;
   try { folder = store.folder(home, repo); } catch (e) { return die(e.message); } // TEAM_REPOSITORY=../x passes the owner/name pattern; the folder must stay inside the home
   if (a.changed) return changedReport(home, folder, repo, a); // what changed since the calling agent's last use
-  if (!existsSync(join(folder, 'backlog.db'))) {
+  if (!existsSync(folder)) {
     say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet`);
     return 0;
   }
@@ -175,7 +175,7 @@ async function query(argv) {
   const plain = a.phase || a.events !== undefined || a['by-branch'] || a.critical;
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
-  await assertInside(home, join(folder, 'backlog.db')); // no symlink between the home and the db (db.connect checks only below the owner)
+  await assertInside(home, folder); // no symlink between the home and the folder (db.connect checks only below the owner)
   const con = db.connect(folder);
   try {
     const all = (sql, ...p) => con.prepare(sql).all(...p).map(r => ({ ...r }));

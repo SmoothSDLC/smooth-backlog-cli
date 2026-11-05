@@ -120,58 +120,6 @@ test('two CLI writers creating different items in separate clones: both succeed 
   }
 });
 
-test('review P1: a backlog.db conflict that takes upstream\'s copy keeps the local archive: row archived at its archive path, with its archived event', async t => {
-  const [a, b, { bare }] = writers(t);
-  // gamma stays in phases/: if the archive moved every file of the folder, git would carry a's new file along into archive/ (directory rename detection)
-  for (const name of ['alpha job', 'gamma job']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0); // b has pulled both
-  const hold = holdFirstPush(b);
-  const second = cliAsync(['archive', '1', '--force'], { cwd: b.cons, tmp: b.tmp });
-  await hold.held(); // b has moved the file to archive/, marked the row archived and committed
-  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // a pushes a backlog.db without that
-  hold.release();
-  const r = await second.done;
-  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
-
-  const verify = mkdtempSync(join(tmpdir(), 'dbconf-v-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
-  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
-  const dir = join(verify, 'c', 'acme', 'demo');
-  assert.ok(existsSync(join(dir, 'archive', 'phases', '001-alpha-job.md')));
-  const con = db.connect(dir);
-  try {
-    assert.deepEqual(con.prepare('SELECT slug, status, path FROM phase ORDER BY seq').all().map(x => ({ ...x })), [
-      { slug: '001-alpha-job', status: 'archived', path: 'archive/phases/001-alpha-job.md' },
-      { slug: '002-gamma-job', status: 'pending', path: 'phases/002-gamma-job.md' },
-      { slug: '003-beta-job', status: 'pending', path: 'phases/003-beta-job.md' },
-    ]);
-    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='archived' AND note LIKE '001-alpha-job%'").get().n, 1);
-    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
-  } finally { con.close(); }
-  assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
-});
-
-test('review P1: a backlog.db conflict that takes upstream\'s copy keeps the local events (a note), once, on its item', async t => {
-  const [a, b, { bare }] = writers(t);
-  assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
-  const hold = holdFirstPush(b);
-  const second = cliAsync(['update', '1', '--note', 'UNIQUE_DELIVERY_EVIDENCE'], { cwd: b.cons, tmp: b.tmp });
-  await hold.held();
-  assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  hold.release();
-  const r = await second.done;
-  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
-
-  const verify = mkdtempSync(join(tmpdir(), 'dbconf-e-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
-  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
-  const con = db.connect(join(verify, 'c', 'acme', 'demo'));
-  try {
-    const rows = con.prepare("SELECT p.slug, e.event FROM event e JOIN phase p ON p.id = e.phase_id WHERE e.note LIKE '%UNIQUE_DELIVERY_EVIDENCE%'").all().map(x => ({ ...x }));
-    assert.equal(rows.length, 1, JSON.stringify(rows));
-    assert.equal(rows[0].slug, '001-alpha-job');
-  } finally { con.close(); }
-});
-
 test('review P2: retrying a rolled-back creation takes the upstream number into account without ghost mirror rows', t => {
   const [a, b] = writers(t);
   const hook = join(b.home, '.git', 'hooks', 'pre-push');
@@ -188,32 +136,6 @@ test('review P2: retrying a rolled-back creation takes the upstream number into 
   try {
     assert.deepEqual(con.prepare('SELECT slug, seq FROM phase ORDER BY seq').all().map(x => ({ ...x })), [{ slug: '001-alpha-job', seq: 1 }, { slug: '002-beta-job', seq: 2 }]);
     assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
-  } finally { con.close(); }
-});
-
-test('review P1: a backlog.db conflict does not resurrect the source row of an item moved out to another repository', async t => {
-  const [a, b, { bare }] = writers(t);
-  for (const name of ['alpha job', 'gamma job']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
-  const hold = holdFirstPush(b);
-  const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
-  await hold.held(); // b has moved the item out and committed both folders
-  const beta = cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }); // a pushes a backlog.db that still has the row
-  hold.release(); // first: a failed assertion must not leave b's push waiting
-  assert.equal(beta.status, 0, beta.stdout + beta.stderr);
-  const r = await second.done;
-  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
-
-  const verify = mkdtempSync(join(tmpdir(), 'dbconf-m-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
-  gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
-  const dir = join(verify, 'c', 'acme', 'demo');
-  const con = db.connect(dir);
-  try {
-    const rows = con.prepare('SELECT slug, path FROM phase ORDER BY seq').all().map(x => ({ ...x }));
-    assert.ok(!rows.some(x => x.slug === '001-alpha-job'), JSON.stringify(rows));
-    for (const x of rows) assert.ok(existsSync(join(dir, x.path)), `${x.slug} has its file`);
-    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
-    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='moved_out'").get().n, 1);
   } finally { con.close(); }
 });
 
@@ -417,15 +339,12 @@ test('review P2: failed create, note and archive each roll back; successful retr
     const retried = cli(args, { cwd: b.cons, tmp: b.tmp });
     assert.equal(retried.status, 0, retried.stdout + retried.stderr);
   }
-  const con = db.connect(join(clone(t, bare), 'acme', 'demo'));
-  try {
-    const row = con.prepare("SELECT * FROM phase WHERE name='local job'").get();
-    assert.equal(row.slug, '002-local-job'); assert.equal(row.status, 'archived');
-    assert.equal(row.path, 'archive/phases/002-local-job.md');
-    assert.equal(con.prepare("SELECT count(*) AS n FROM event WHERE phase_id=? AND event='archived'").get(row.id).n, 1);
-    assert.equal(con.prepare("SELECT count(*) AS n FROM event WHERE phase_id=? AND note LIKE '%LOCAL_ARCHIVE_EVIDENCE%'").get(row.id).n, 1);
-    assert.equal(con.prepare("SELECT count(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
-  } finally { con.close(); }
+  const row = store.load(join(clone(t, bare), 'acme', 'demo')).find(i => i.fm.name === 'local job');
+  assert.equal(row.fm.phase, '002-local-job'); assert.equal(row.fm.status, 'archived');
+  assert.equal(row.path, 'archive/phases/002-local-job.md');
+  const events = row.fm.events.map(store.parseEvent);
+  assert.equal(events.filter(e => e.event === 'archived').length, 1);
+  assert.equal(events.filter(e => e.note.includes('LOCAL_ARCHIVE_EVIDENCE')).length, 1);
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
 });
 
@@ -439,35 +358,6 @@ test('audit t2: the same item changed by two clones: the second is refused (exit
   assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
   const again = cli(['update', '1', '--summary', 'from b again'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(again.status, 0, again.stdout + again.stderr); // every later pull works
-});
-
-test('review P1: origin/main never holds a commit whose backlog.db mirror disagrees with its item files, also while a mirror conflict is recovered', async t => {
-  const [a, b, { bare }] = writers(t);
-  const hold = holdFirstPush(b);
-  const second = cliAsync(NEW('beta job'), { cwd: b.cons, tmp: b.tmp });
-  await hold.held();
-  assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  hold.release();
-  const r = await second.done;
-  assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
-
-  const tmp = mkdtempSync(join(tmpdir(), 'dbconf-h-')); t.after(() => rmSync(tmp, { recursive: true, force: true }));
-  const commits = gitIn(bare, 'rev-list', 'main').split('\n');
-  let checked = 0;
-  for (const c of commits) {
-    const files = gitIn(bare, 'ls-tree', '-r', '--name-only', c).split('\n');
-    if (!files.includes('acme/demo/backlog.db')) continue;
-    const dbFile = join(tmp, `${c}.db`);
-    writeFileSync(dbFile, execFileSync('git', ['show', `${c}:acme/demo/backlog.db`], { cwd: bare, maxBuffer: 1 << 26 }));
-    const con = new (await import('node:sqlite')).DatabaseSync(dbFile, { readOnly: true });
-    try {
-      const rows = con.prepare("SELECT slug FROM phase WHERE status != 'archived' ORDER BY slug").all().map(x => x.slug);
-      const names = files.filter(f => /^acme\/demo\/phases\/.+\.md$/.test(f)).map(f => f.replace(/^.*\/|\.md$/g, '')).sort();
-      assert.deepEqual(rows, names, `commit ${c.slice(0, 7)} on origin/main: mirror rows differ from item files`);
-      checked++;
-    } finally { con.close(); }
-  }
-  assert.ok(checked >= 2);
 });
 
 test('review (merge risk): a failed push is rolled back; a later command never publishes the failed note', async t => {
@@ -551,12 +441,11 @@ test('publication: legacy two-commit move with destination-only conflict is refu
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const src = 'acme/demo/phases/001-one.md'; const dst = 'new/place/phases/001-one.md';
   mkdirSync(join(b.home, 'new', 'place', 'phases'), { recursive: true }); gitIn(b.home, 'mv', src, dst);
-  let con = db.connect(join(b.home, 'new', 'place')); db.scan(con, join(b.home, 'new', 'place')); con.close();
   gitIn(b.home, 'add', '-A'); gitIn(b.home, 'commit', '-qm', 'legacy cross-repository move');
-  con = db.connect(join(b.home, 'new', 'place')); db.logEvent(con, 'note', { note: 'second legacy commit' }); con.close();
+  store.addEvent(join(b.home, 'new', 'place'), 'phases/001-one.md', { event: 'note', note: 'second legacy commit' });
   gitIn(b.home, 'add', '-A'); gitIn(b.home, 'commit', '-qm', 'second legacy commit');
   const hashes = gitIn(b.home, 'log', '--format=%h', 'origin/main..HEAD').split('\n');
-  con = db.connect(join(a.home, 'new', 'place')); db.logEvent(con, 'note', { note: 'destination-only conflict' }); con.close();
+  mkdirSync(join(a.home, 'new', 'place'), { recursive: true }); writeFileSync(join(a.home, 'new', 'place', 'upstream.txt'), 'destination-only change\n');
   gitIn(a.home, 'add', 'new/place'); gitIn(a.home, 'commit', '-qm', 'destination only'); gitIn(a.home, 'push', '-q');
   writeFileSync(join(b.home, 'private.txt'), 'do not publish'); gitIn(b.home, 'add', 'private.txt');
   const before = state(b.home); const remote = gitIn(bare, 'rev-parse', 'main');
@@ -573,7 +462,7 @@ test('publication: legacy two-commit move with destination-only conflict is refu
   const move = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
   await hold.held();
   try {
-    con = db.connect(join(a.home, 'new', 'place')); db.logEvent(con, 'note', { note: 'destination changes again' }); con.close();
+    writeFileSync(join(a.home, 'new', 'place', 'upstream.txt'), 'destination changes again\n');
     gitIn(a.home, 'add', 'new/place'); gitIn(a.home, 'commit', '-qm', 'destination race'); gitIn(a.home, 'push', '-q');
   } finally { hold.release(); }
   const r = await move.done; assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -803,17 +692,6 @@ test('publication identity: an upstream archived sequence colliding with an exis
     store.write({ path: join(a.folder, 'archive', '005-other.md'), fm: { phase: '005-other', seq: 5, status: 'archived' }, body: '\narchived\n' }, a.folder);
   });
   rejectedPublication(t, b, bare, result, /seq.*5.*005-other/);
-});
-
-test('publication identity: an upstream mirror-only sequence reservation is not overwritten', async t => {
-  const { b, bare, result } = await fileRace(t, [NEW('alpha')], ['update', '1', '--seq', '5'], a => {
-    const con = db.connect(a.folder);
-    try {
-      con.prepare('INSERT INTO phase(handoff_id,slug,seq,status,path) VALUES(?,?,?,?,?)')
-        .run(db.ensureAnchor(con), '005-ghost', 5, 'pending', 'phases/005-ghost.md');
-    } finally { con.close(); }
-  });
-  rejectedPublication(t, b, bare, result, /seq.*5.*005-ghost/);
 });
 
 test('publication safety: upstream conflict markers abort an otherwise disjoint write', async t => {

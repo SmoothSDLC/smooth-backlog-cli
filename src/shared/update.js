@@ -105,13 +105,12 @@ async function update(argv) {
   try { repo = teamScope().repo || store.repoId(process.cwd()); folder = store.folder(home, repo); } catch (e) { return die(e.message); } //
   return store.cloneLocked(home, async () => { // the run lock: from the pull to the push
     await sync.pull(home); // every script works on origin/main as it is now
-    const forget = db.freshDb(folder);
     const con = db.connect(folder); // refuses a link at the owner or the repository folder
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
     let code;
-    try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); forget(); throw e; } finally { close(); }
-    if (code || a['dry-run']) { forget(); return code; }
+    try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); throw e; } finally { close(); }
+    if (code || a['dry-run']) return code;
     // the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
     // the agent a command names goes into the commit subject (session names with colons are audit data too);
     // the actor the step acts as (a.by ?? a.claim ?? a.release), whatever the order of the options

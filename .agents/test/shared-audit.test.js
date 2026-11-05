@@ -30,7 +30,7 @@ function finish(s, file) {
 }
 const out = r => `${r.stdout}${r.stderr}`;
 
-test('audit t1/t9: a refused or dry-run command leaves no untracked backlog.db that would block the next pull', t => {
+test('audit t1/t9: a refused or dry-run command leaves nothing untracked that would block the next pull, and no backlog.db is ever created', t => {
   const s = solo(t);
   for (const args of [['update', '9', '--summary', 'x'], ['update', '9', '--summary', 'x', '--dry-run'], ['archive', '9'], ['archive', '9', '--dry-run'],
     ['move', '9', '--to-repository', 'other/proj'], NEW('x', '--depends-on', '99'), NEW('x', '--dry-run')]) {
@@ -38,10 +38,9 @@ test('audit t1/t9: a refused or dry-run command leaves no untracked backlog.db t
     assert.equal(existsSync(join(s.folder, 'backlog.db')), false, `${args.join(' ')} left a backlog.db`);
     assert.equal(gitIn(s.home, 'status', '--porcelain'), '', `${args.join(' ')} left untracked files`);
   }
-  assert.equal(s.run(NEW('real one')).status, 0); // the db is created and committed by a command that records something
-  assert.equal(existsSync(join(s.folder, 'backlog.db')), true);
-  assert.equal(s.run(['update', '9', '--summary', 'x']).status, 1); // an existing db stays
-  assert.equal(existsSync(join(s.folder, 'backlog.db')), true);
+  assert.equal(s.run(NEW('real one')).status, 0);
+  assert.equal(existsSync(join(s.folder, 'backlog.db')), false);
+  assert.equal(gitIn(s.home, 'status', '--porcelain'), '');
 });
 
 test('audit t4: a done item can be neither claimed nor released back into the queue (it stays done)', t => {
@@ -102,8 +101,8 @@ test('audit t3: a bound session moves nothing into another repository or branch 
 test('audit t7: query --all and --by-branch survive an item whose status is empty (shown as None)', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
-  const con = db.connect(s.folder);
-  try { con.prepare('UPDATE phase SET status=NULL').run(); } finally { con.close(); } // a mirror row without a status (a hand-edited or older database)
+  const file = join(s.folder, 'phases', '001-alpha-job.md');
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^status: .*$/m, 'status: null')); // a hand-edited item without a status
   for (const args of [['query', '--all'], ['query', '--by-branch', 'main']]) {
     const r = s.run(args);
     assert.equal(r.status, 0, out(r)); assert.match(r.stdout, /001-alpha-job/); assert.match(r.stdout, /None/);

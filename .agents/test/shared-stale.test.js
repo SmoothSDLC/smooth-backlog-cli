@@ -503,48 +503,6 @@ for (const [name, args, target] of [
   assert.equal(existsSync(viewCache(f.home, 'amy')), false);
 });
 
-for (const cached of [false, true]) test(`reconciliation ${cached ? 'refuses a stale cached view' : 'adds newly discovered incidental writes to the next publication guard'}`, () => {
-  const f = seed();
-  const cache = viewCache(f.home, 'amy');
-  if (cached) assert.equal(run(f, f.home, ['query', '--phase', '003-gamma', '--agent', 'amy']).status, 0);
-  const expected = cached ? readFileSync(cache, 'utf8') : null;
-  const script = join(f.t, 'bob-reconcile.mjs');
-  writeFileSync(script, `import { readFileSync } from 'node:fs';
-import * as store from ${JSON.stringify(join(process.cwd(), 'src/shared/store.js'))};
-import * as db from ${JSON.stringify(join(process.cwd(), 'src/shared/db.js'))};
-import { parse } from ${JSON.stringify(join(process.cwd(), 'src/shared/frontmatter.js'))};
-import { setActor } from ${JSON.stringify(join(process.cwd(), 'src/shared/seen.js'))};
-setActor('bob');
-const path = ${JSON.stringify(join(f.folder2, 'phases', '003-gamma.md'))};
-const doc = parse(readFileSync(path, 'utf8'));
-store.write({ path, fm: store.stamp({ ...doc.fm, priority: 4 }), body: doc.body + '\\nBob first edit\\n' }, ${JSON.stringify(f.folder2)});
-const con = db.connect(${JSON.stringify(f.folder2)}); db.scan(con, ${JSON.stringify(f.folder2)}); con.close();
-`);
-  const hook = join(f.home, '.git', 'hooks', 'pre-push'); const flag = join(f.t, 'first-push'); const second = join(f.t, 'second-push');
-  writeFileSync(hook, `#!/bin/sh
-unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
-if [ ! -f '${flag}' ]; then
-  touch '${flag}'
-  '${process.execPath}' '${script}' && git -C '${f.home2}' add -A && git -C '${f.home2}' commit -qm 'Bob changes the queue' && git -C '${f.home2}' push -q
-elif [ ! -f '${second}' ]; then
-  touch '${second}'
-  cd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 3 --append 'Bob second edit' --by bob
-fi
-exit 0
-`);
-  chmodSync(hook, 0o755);
-  const amy = run(f, f.home, ['update', '1', '--append', 'Amy refused', '--by', 'amy']);
-  assert.equal(amy.status, 5, amy.stderr + amy.stdout);
-  assert.match(amy.stderr, /item 003-gamma was changed by bob/);
-  assert.equal(existsSync(second), !cached, 'cached staleness refuses before a second push; otherwise the next push is guarded');
-  assert.match(onOrigin(f, 'acme/demo/phases/003-gamma.md'), cached ? /Bob first edit/ : /Bob second edit/);
-  assert.ok(!onOrigin(f, 'acme/demo/phases/001-alpha.md').includes('Amy refused'));
-  assert.equal(git(f.home, 'status', '--porcelain'), '');
-  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
-  if (cached) assert.equal(readFileSync(cache, 'utf8'), expected);
-  else assert.equal(existsSync(cache), false);
-});
-
 test('review P2: exact agent names keep independent views despite slash, space and Unicode collisions', async () => {
   const f = seed(['alpha']);
   const seen = await import('../../src/shared/seen.js');

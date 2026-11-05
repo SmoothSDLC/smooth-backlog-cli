@@ -77,7 +77,7 @@ function itemFm(folder, row) {
   return file.startsWith(realpathSync(folder) + sep) ? parse(readFileSync(file, 'utf8')).fm : {};
 }
 
-// All rows of the folder's backlog.db, in id order (connect writes nothing to an up-to-date db).
+// All rows of the folder's cache (rebuilt from its item files by connect), in id order.
 export function mirrorRows(folder) {
   const con = connect(folder);
   try { return con.prepare('SELECT * FROM phase ORDER BY id').all().map(r => ({ ...r })); } finally { con.close(); }

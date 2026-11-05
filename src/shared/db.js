@@ -1,14 +1,11 @@
-// backlog.db mirror for the shared backlog repository mode. The item files are
-// the source of truth; <folder>/backlog.db mirrors them so the Python scripts ( takes
-// its next number from MAX(seq) here) see what Node wrote. Oracle: SCHEMA/connect/
-// _migrate, ensure_handoff_anchor, ingest_phase, scan_stack, log_event and archive.py:89-93.
-// Synchronous like store.js. The caller closes the handle.
+// The per-clone SQLite cache of the item files (store.cacheFile). The item files are the only data: connect rebuilds the cache
+// from them, so it never disagrees with them and nothing of it is committed. Synchronous like store.js. The caller closes the handle.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { operation } from '../errors.js';
 import { hasFrontMatter, parse } from './frontmatter.js';
-import { assertFolder, assertNoSymlinks, beginJournal, endJournal, journalled, addEvent, load, note, now, reflow } from './store.js';
+import { assertFolder, assertNoSymlinks, beginJournal, cacheFile, endJournal, journalled, addEvent, load, note, now, reflow } from './store.js';
 import { commit } from './sync.js';
 
 // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr (as store.nextSeq does).
@@ -58,34 +55,18 @@ function loadPhases(folder) {
   }).filter(i => hasFrontMatter(i.text)).map(({ text, ...item }) => item); // a README or note is no item: same rule as store.load
 }
 
-// connect + _migrate; the busy timeout is Python's 30 s. Opening an up-to-date db writes nothing.
-// readOnly (a dry run): no folder, file or migration is created; an absent backlog.db reads as an empty mirror (in memory).
-// A run that leaves nothing to commit (refused, dry-run, failed) must not leave the backlog.db it created: untracked, it blocks every later pull.
-// Call before connect; call the result when the run did not end in a commit.
-export function freshDb(folder) {
-  const file = join(folder, 'backlog.db');
-  const had = existsSync(file);
-  return () => { if (!had) for (const s of ['', '-journal', '-wal', '-shm']) rmSync(file + s, { force: true }); };
-}
-
+// The database is a per-clone cache of the item files (store.cacheFile), rebuilt at every connect, so it can never disagree with them.
+// readOnly (a dry run): the cache is rebuilt in memory and no folder or file is created. The busy timeout is 30 s.
+// shortcut: a full rebuild per command; fine up to a few thousand items, switch to a tree-hash stamp if a command gets slow.
 export function connect(folder, { readOnly = false } = {}) {
   assertFolder(folder); // <home>/<owner>/<name>: no link at the owner or the name
-  assertNoSymlinks(folder, join(folder, 'backlog.db'));
-  if (readOnly) {
-    const file = join(folder, 'backlog.db');
-    const mem = !existsSync(file);
-    const ro = new (sqlite().DatabaseSync)(mem ? ':memory:' : file, { readOnly: !mem });
-    if (mem) ro.exec(SCHEMA);
-    ro.folder = folder;
-    return ro;
-  }
-  mkdirSync(folder, { recursive: true });
-  const db = new (sqlite().DatabaseSync)(join(folder, 'backlog.db'), { timeout: 30000 });
+  let file = ':memory:';
+  if (!readOnly) { file = cacheFile(folder); mkdirSync(dirname(file), { recursive: true }); }
+  const db = new (sqlite().DatabaseSync)(file, { timeout: 30000 });
   db.exec(SCHEMA);
-  const have = new Set(db.prepare('PRAGMA table_info(phase)').all().map(r => r.name));
-  if (!have.has('severity')) db.exec("ALTER TABLE phase ADD COLUMN severity TEXT DEFAULT 'normal'");
-  if (!have.has('repository')) db.exec("ALTER TABLE phase ADD COLUMN repository TEXT DEFAULT ''");
+  db.exec('DELETE FROM event; DELETE FROM phase;'); // scan opens its own transaction: the two steps are not one
   db.folder = folder;
+  scan(db, folder, [], { includeArchived: true });
   return db;
 }
 

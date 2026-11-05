@@ -95,7 +95,7 @@ test('a bare number is the item number, never the database row id', t => {
   assert.equal(fm(f, '001-alpha.md').fm.priority, 1);
 });
 
-test('order of work: pull first, then change, write, scan the db, log the event, commit and push', () => {
+test('order of work: pull first, then change, write, log the event, commit and push', () => {
   const f = seed();
   const other = join(f.t, 'other');
   git(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), other);
@@ -110,15 +110,12 @@ test('order of work: pull first, then change, write, scan the db, log the event,
   assert.equal(log, 'acme/demo: update 4 --status');
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
-  const con = db.connect(f.folder);
-  const p = con.prepare("SELECT status FROM phase WHERE slug='004-delta'").get();
-  const e = con.prepare("SELECT event, note FROM event ORDER BY id DESC LIMIT 2").all().map(x => ({ ...x }));
-  con.close();
-  assert.equal(p.status, 'in_progress');
-  assert.deepEqual(e.map(x => x.event), ['reingested', 'state_change']);
-  assert.equal(e[1].note, 'go');
+  const item = fm(f, '004-delta.md').fm;
+  assert.equal(item.status, 'in_progress');
+  const e = store.parseEvent(item.events.at(-1));
+  assert.deepEqual([e.event, e.note], ['state_change', 'go']);
   const head = git(f.home, 'show', '--stat', '--format=', 'HEAD');
-  assert.match(head, /acme\/demo\/backlog\.db/);
+  assert.doesNotMatch(head, /backlog\.db/);
   assert.match(head, /acme\/demo\/phases\/004-delta\.md/);
 });
 
@@ -243,19 +240,16 @@ test('review P2: update on an archived item is refused for every flag that goes 
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
-test('review P1: update whose rescan throws (another item with size_score: []) restores the file and the db, and commits nothing', () => {
+test('review P1: update whose rescan throws (another item with size_score: []) restores the file, and commits nothing', () => {
   const f = seed();
   const bad = join(f.folder, 'phases', '001-alpha.md');
   writeFileSync(bad, readFileSync(bad, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n'));
   const target = join(f.folder, 'phases', '002-beta.md');
   const text = readFileSync(target, 'utf8');
-  const rows = () => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM phase ORDER BY id').all().concat(c.prepare('SELECT * FROM event ORDER BY id').all())); } finally { c.close(); } };
-  const before = rows();
   const head = git(f.home, 'rev-parse', 'HEAD');
   const r = run(f, ['2', '--summary', 'REFUSED_EDIT']);
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
   assert.equal(readFileSync(target, 'utf8'), text);
-  assert.equal(rows(), before);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 

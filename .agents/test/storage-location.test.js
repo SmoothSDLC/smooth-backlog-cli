@@ -34,6 +34,7 @@ test('without a configured backlog repository the items live in <repo>/.backlog,
   assert.ok(git(repo, 'ls-files').includes('.backlog/local/repository/phases/001-x.md'));
   assert.ok(!git(repo, 'ls-files').includes('.state/'), 'the lock, views and journal are not committed with the repository');
   assert.equal(git(repo, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'pushed');
+  assert.ok(!git(repo, 'ls-files').includes('.db'), 'no database is committed');
   assert.match(git(repo, 'log', '-1', '--format=%s'), /^backlog: /);
 });
 

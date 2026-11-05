@@ -339,7 +339,7 @@ async function popCommand(argv) {
   try { await sync.pull(home); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
   let folder;
   try { folder = store.folder(home, repo); } catch (e) { return die(e.message); }
-  if (!existsSync(join(folder, 'backlog.db'))) {
+  if (!existsSync(folder)) {
     say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet`);
     return 0;
   }
@@ -353,7 +353,7 @@ async function popCommand(argv) {
   const plain = a.phase || a.events !== undefined || a['by-branch'];
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
-  await assertInside(home, join(folder, 'backlog.db'));
+  await assertInside(home, folder);
   const con = db.connect(folder);
   try {
     const all = (sql, ...p) => con.prepare(sql).all(...p).map(r => ({ ...r }));

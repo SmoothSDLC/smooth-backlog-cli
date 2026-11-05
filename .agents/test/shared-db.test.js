@@ -47,24 +47,27 @@ const scanned = (folder, fn) => { const con = db.connect(folder); try { const s 
 
 // ---------------------------------------------------------------- connect / migrate / anchor
 
-test('connect: opening an existing database writes nothing (the tracked file stays byte-identical)', t => {
-  const d = inHome(t);
-  db.connect(d).close();
-  const before = readFileSync(join(d, 'backlog.db'));
-  db.connect(d).close();
-  assert.ok(before.equals(readFileSync(join(d, 'backlog.db'))));
+test('connect opens a per-clone cache under the state folder and rebuilds it from the files', t => {
+  const folder = inHome(t);
+  const home = dirname(dirname(folder));
+  putItem(folder, 1, 'a');
+  putItem(folder, 2, 'b');
+  const con = db.connect(folder);
+  try { assert.deepEqual(rows(con, 'SELECT seq FROM phase ORDER BY seq').map(r => r.seq), [1, 2]); } finally { con.close(); }
+  assert.ok(existsSync(join(store.stateDir(home), 'cache', 'acme--demo.db')));
+  assert.ok(!existsSync(join(folder, 'backlog.db')), 'nothing is written into the item folder');
+  rmSync(join(folder, 'phases', '002-b.md'));
+  const again = db.connect(folder);
+  try { assert.deepEqual(rows(again, 'SELECT seq FROM phase').map(r => r.seq), [1], 'a deleted file is gone from the cache: no ghost rows'); } finally { again.close(); }
 });
 
-test('connect: migrates a committed database that lacks severity and repository', t => {
-  const d = scratch(t);
-  const raw = db.connect(join(d, 'old'));
-  raw.exec('DROP TABLE phase; CREATE TABLE phase (id INTEGER PRIMARY KEY, handoff_id INTEGER, slug TEXT NOT NULL, seq INTEGER, status TEXT DEFAULT \'pending\')');
-  raw.close();
-  const con = db.connect(join(d, 'old'));
-  const cols = rows(con, 'PRAGMA table_info(phase)').map(r => r.name);
-  assert.ok(cols.includes('severity') && cols.includes('repository'));
-  assert.equal(rows(con, 'PRAGMA table_info(phase)').find(r => r.name === 'severity').dflt_value, "'normal'");
-  con.close();
+test('a read-only connect rebuilds in memory and creates no cache file', t => {
+  const folder = inHome(t);
+  const home = dirname(dirname(folder));
+  putItem(folder, 1, 'a');
+  const con = db.connect(folder, { readOnly: true });
+  try { assert.equal(rows(con, 'SELECT COUNT(*) AS n FROM phase')[0].n, 1); } finally { con.close(); }
+  assert.ok(!existsSync(join(store.stateDir(home), 'cache')));
 });
 
 test('ensureAnchor: one synthetic BACKLOG row, created once, id returned each time', t => {
@@ -115,31 +118,16 @@ test('ingest: missing keys take the defaults (seq 0, status pending, priority 50
   con.close();
 });
 
-test('scan: ingests phases/*.md only (archive/ is not scanned), reports the summary, is idempotent', t => {
+test('connect ingests phases/ and archive/; a later scan of the active items changes nothing', t => {
   const d = inHome(t);
   putItem(d, 1, 'a'); putItem(d, 2, 'b');
   putItem(d, 3, 'old', { status: 'archived' }, 'archive/phases/003-old.md');
   scanned(d, (con, s) => {
-    assert.deepEqual(s, { handoff: 0, phases: 2, changed: 2, missing: 0 });
-    assert.deepEqual(rows(con, 'SELECT slug FROM phase ORDER BY id').map(r => r.slug), ['001-a', '002-b']);
+    assert.deepEqual(s, { handoff: 0, phases: 2, changed: 0, missing: 0 });
+    assert.deepEqual(rows(con, 'SELECT slug FROM phase ORDER BY id').map(r => r.slug), ['001-a', '002-b', '003-old']);
     assert.deepEqual(db.scan(con, d), { handoff: 0, phases: 2, changed: 0, missing: 0 });
-    assert.equal(rows(con, 'SELECT * FROM event').length, 2);
+    assert.equal(rows(con, 'SELECT * FROM event').length, 3);
   });
-});
-
-test('scan: a row whose file is gone logs file_missing on every scan; an archived row does not', t => {
-  const d = inHome(t);
-  putItem(d, 1, 'a'); putItem(d, 2, 'b');
-  scanned(d);
-  rmSync(join(d, 'phases', '001-a.md'));
-  renameSync(join(d, 'phases', '002-b.md'), join(d, 'moved.md'));
-  const con = db.connect(d);
-  db.markArchived(con, '002-b', 'archive/phases/002-b.md');
-  assert.equal(db.scan(con, d).missing, 1);
-  assert.equal(db.scan(con, d).missing, 1);
-  const ev = rows(con, "SELECT note FROM event WHERE event='file_missing'");
-  assert.deepEqual(ev.map(e => e.note), ['phase 001-a row present but file absent', 'phase 001-a row present but file absent']);
-  con.close();
 });
 
 test('markArchived: status archived, new path, updated_at, an "archived" event; an unknown slug changes nothing', t => {
@@ -167,50 +155,14 @@ test('node:sqlite prints no ExperimentalWarning to stderr', () => {
 
 // ---------------------------------------------------------------- stale rows after sync.commit renumbers
 
-test('scan(db, folder, renumbered): rows of renumbered items are replaced by the rescan and the fixed db is pushed', async t => {
-  const dir = scratch(t);
-  const home = sharedBacklog(dir);
-  const bare = join(dir, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
-  const home2 = join(dir, 'home2');
-  git(dir, 'clone', '-q', bare, home2);
-  const folder = join(home, 'acme', 'demo'); const folder2 = join(home2, 'acme', 'demo');
-  putItem(folder2, 1, 'alpha');                       // the other clone takes number 1 first (files only)
-  await sync.commit(home2, folder2, 'new --name alpha');
-  putItem(folder, 1, 'beta');                         // this clone also took number 1 and mirrors it
-  scanned(folder);
-  const renumbered = await sync.commit(home, folder, 'new --name beta');
-  assert.deepEqual(renumbered, [[1, 2]]);
-  assert.ok(existsSync(join(folder, 'phases', '002-beta.md')));
-  let con = db.connect(folder);
-  assert.deepEqual(rows(con, 'SELECT slug, seq FROM phase').map(r => [r.slug, r.seq]), [['001-beta', 1]], 'stale before the rescan');
-  const s = db.scan(con, folder, renumbered);
-  assert.equal(s.changed, 2);
-  assert.deepEqual(rows(con, 'SELECT slug, seq, path FROM phase ORDER BY seq').map(r => [r.slug, r.seq, r.path]),
-    [['001-alpha', 1, 'phases/001-alpha.md'], ['002-beta', 2, 'phases/002-beta.md']]);
-  assert.equal(rows(con, "SELECT note FROM event WHERE event='file_missing'").length, 0);
-  assert.equal(rows(con, "SELECT event FROM event WHERE event='renumbered'").length, 1);
-  assert.equal(store.nextSeq(folder), 3);
-  con.close();
-  assert.deepEqual(await sync.commit(home, folder, 'rescan'), []);
-  git(home2, 'pull', '-q', '--rebase');
-  con = db.connect(folder2);
-  assert.deepEqual(rows(con, 'SELECT slug FROM phase ORDER BY seq').map(r => r.slug), ['001-alpha', '002-beta']);
-  con.close();
-});
-
 // ---------------------------------------------------------------- review fixes (job 9)
 
-test('connect: refuses a symlinked folder and a symlinked backlog.db, and writes nothing through them', t => {
+test('connect: refuses a symlinked folder and writes nothing through it', t => {
   const d = scratch(t);
   mkdirSync(join(d, 'outside'));
   symlinkSync(join(d, 'outside'), join(d, 'linked'));
   assert.throws(() => db.connect(join(d, 'linked')), /Symlink destination is unsupported/);
-  assert.equal(existsSync(join(d, 'outside', 'backlog.db')), false);
-  mkdirSync(join(d, 'real'));
-  writeFileSync(join(d, 'elsewhere.db'), '');
-  symlinkSync(join(d, 'elsewhere.db'), join(d, 'real', 'backlog.db'));
-  assert.throws(() => db.connect(join(d, 'real')), /Symlink destination is unsupported/);
-  assert.equal(readFileSync(join(d, 'elsewhere.db')).length, 0);
+  assert.deepEqual(readdirSync(join(d, 'outside')), []);
 });
 
 test('markArchived: refuses an absolute or ..-crossing location and leaves the row alone', t => {
@@ -224,43 +176,6 @@ test('markArchived: refuses an absolute or ..-crossing location and leaves the r
   assert.deepEqual(rows(con, 'SELECT status, path FROM phase'), [{ status: 'pending', path: 'phases/001-a.md' }]);
   assert.equal(rows(con, "SELECT * FROM event WHERE event='archived'").length, 0);
   con.close();
-});
-
-test('scan(db, folder, renumbered): the renumbered row keeps its id and its earlier events; no other item inherits them', async t => {
-  const dir = scratch(t);
-  const home = sharedBacklog(dir);
-  const bare = join(dir, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
-  const home2 = join(dir, 'home2');
-  git(dir, 'clone', '-q', bare, home2);
-  const folder = join(home, 'acme', 'demo'); const folder2 = join(home2, 'acme', 'demo');
-  putItem(folder2, 1, 'alpha');
-  await sync.commit(home2, folder2, 'new --name alpha');
-  putItem(folder, 1, 'beta');
-  let con = db.connect(folder);
-  db.scan(con, folder);
-  const betaId = rows(con, "SELECT id FROM phase WHERE slug='001-beta'")[0].id;
-  con.close();
-  const renumbered = await sync.commit(home, folder, 'new --name beta');
-  con = db.connect(folder); // the rebase replaced the tracked db file
-  db.scan(con, folder, renumbered);
-  assert.deepEqual(rows(con, "SELECT id, seq, path FROM phase WHERE slug='002-beta'"), [{ id: betaId, seq: 2, path: 'phases/002-beta.md' }]);
-  const alphaId = rows(con, "SELECT id FROM phase WHERE slug='001-alpha'")[0].id;
-  assert.notEqual(alphaId, betaId);
-  const evOf = id => rows(con, 'SELECT event FROM event WHERE phase_id=? ORDER BY id', id).map(e => e.event);
-  assert.deepEqual(evOf(alphaId), ['ingested']);
-  assert.deepEqual(evOf(betaId), ['ingested', 'renumbered', 'reingested']);
-  con.close();
-});
-
-test('scan: unsupported archive front matter cannot block the scan of the active items', t => {
-  const d = inHome(t);
-  putItem(d, 1, 'a');
-  mkdirSync(join(d, 'archive', 'phases'), { recursive: true });
-  writeFileSync(join(d, 'archive', 'phases', '002-bad.md'), '---\nphase: 002-bad\nnested:\n  key: 1\n---\nbody\n');
-  scanned(d, (con, s) => {
-    assert.deepEqual(s, { handoff: 0, phases: 1, changed: 1, missing: 0 });
-    assert.deepEqual(rows(con, 'SELECT slug FROM phase').map(r => r.slug), ['001-a']);
-  });
 });
 
 test('review P2: reconciliation rebuilds missing archive rows and refreshes archive file hashes', t => {
@@ -298,14 +213,12 @@ test('review P2: recovery renumbers an archived mirror row in place, retaining i
   } finally { con.close(); }
 });
 
-test('scan: an active item that is a symlink is still refused', t => {
+test('connect: an item that is a symlink is refused', t => {
   const d = inHome(t);
   mkdirSync(join(d, 'phases'), { recursive: true });
   writeFileSync(join(d, 'outside.md'), '---\nphase: x\n---\n');
   symlinkSync(join(d, 'outside.md'), join(d, 'phases', '001-x.md'));
-  const con = db.connect(d);
-  assert.throws(() => db.scan(con, d), /Symlink destination is unsupported/);
-  con.close();
+  assert.throws(() => db.connect(d), /Symlink destination is unsupported/);
 });
 
 test('node:sqlite warning filter drops only an ExperimentalWarning that mentions SQLite; other warnings stay visible', () => {
@@ -355,33 +268,4 @@ test('undoOnThrow puts back only what the command wrote: a file that appears mea
   assert.equal(existsSync(mine), false, 'the file it created is removed');
   assert.match(readFileSync(edited, 'utf8'), /old/, 'the file it changed is restored');
   assert.equal(readFileSync(pulled, 'utf8'), 'pulled by someone else\n', 'a file it did not write stays');
-});
-
-test('review P2: replay resolves reused row ids in their own database snapshots', t => {
-  const folder = inHome(t);
-  const snapshots = join(scratch(t), 'snapshots'); mkdirSync(snapshots);
-  const base = join(snapshots, 'base.db'); const local = join(snapshots, 'local.db');
-  putItem(folder, 1, 'departed');
-  let con = db.connect(folder); db.scan(con, folder);
-  const oldId = con.prepare("SELECT id FROM phase WHERE slug='001-departed'").get().id;
-  db.logEvent(con, 'note', { phaseId: oldId, note: 'BASE_HISTORY' });
-  con.close(); cpSync(join(folder, 'backlog.db'), base);
-  con = db.connect(folder); con.prepare('DELETE FROM phase WHERE id=?').run(oldId); con.close();
-  renameSync(join(folder, 'phases', '001-departed.md'), join(snapshots, 'departed.md'));
-  putItem(folder, 2, 'replacement');
-  con = db.connect(folder); db.scan(con, folder);
-  const newId = con.prepare("SELECT id FROM phase WHERE slug='002-replacement'").get().id;
-  assert.equal(newId, oldId, 'SQLite reuses the deleted maximum row id');
-  db.logEvent(con, 'note', { phaseId: newId, note: 'LOCAL_REPLACEMENT_HISTORY' });
-  con.close(); cpSync(join(folder, 'backlog.db'), local);
-  cpSync(base, join(folder, 'backlog.db')); // upstream still has the departed item
-  db.reconcileFolders([folder], Object.assign([], { localDbs: [{ folder, local, base }] }));
-  con = db.connect(folder);
-  try {
-    const events = rows(con, "SELECT p.slug, e.note FROM event e LEFT JOIN phase p ON p.id=e.phase_id WHERE e.event='note' ORDER BY e.note");
-    assert.deepEqual(events, [
-      { slug: null, note: 'BASE_HISTORY' },
-      { slug: '002-replacement', note: 'LOCAL_REPLACEMENT_HISTORY' },
-    ]);
-  } finally { con.close(); }
 });

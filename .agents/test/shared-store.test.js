@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -148,22 +147,18 @@ test('addEvent appends an event line to the item file and keeps every other key'
 
 // ---------------------------------------------------------------- nextSeq
 
-test('nextSeq: 1 on an empty folder; 1 + max of the file seqs (phases and archive) and of backlog.db; stderr stays clean', t => {
+test('nextSeq: 1 on an empty folder; 1 + max of the file seqs (phases and archive); stderr stays clean', t => {
   const d = scratch(t);
   const folder = join(d, 'acme', 'demo');
   assert.equal(store.nextSeq(folder), 1);
   putItem(folder, item(1));
   putItem(folder, item(2, { status: 'archived' }), 'archive/phases/002-i2.md');
   assert.equal(store.nextSeq(folder), 3, 'archive counts');
-  const db = new DatabaseSync(join(folder, 'backlog.db'));
-  db.exec('CREATE TABLE phase (id INTEGER PRIMARY KEY, seq INTEGER); INSERT INTO phase (seq) VALUES (5)');
-  db.close();
-  assert.equal(store.nextSeq(folder), 6, 'MAX(seq) of backlog.db wins when higher');
   const r = spawnSync(process.execPath, ['-e', 'const s = await import(process.argv[1]); process.stdout.write(String(s.nextSeq(process.argv[2])));', STORE, folder],
     { encoding: 'utf8' });
   assert.equal(r.status, 0);
   assert.equal(r.stderr, '', 'node:sqlite prints no ExperimentalWarning to stderr');
-  assert.equal(r.stdout, '6');
+  assert.equal(r.stdout, '3');
 });
 
 // ---------------------------------------------------------------- reflow / reorder
@@ -277,34 +272,6 @@ test('review P1: only a missing folder reads as empty; any other listing failure
   assert.equal(store.nextSeq(folder), 1);
 });
 
-function mirrorDb(folder, rows) {
-  mkdirSync(folder, { recursive: true });
-  const db = new DatabaseSync(join(folder, 'backlog.db'));
-  db.exec('CREATE TABLE phase (id INTEGER PRIMARY KEY, slug TEXT, seq INTEGER, status TEXT, path TEXT, repository TEXT, branch TEXT)');
-  const ins = db.prepare('INSERT INTO phase (slug, seq, status, path, repository, branch) VALUES (?, ?, ?, ?, ?, ?)');
-  for (const r of rows) ins.run(r.slug, r.seq, r.status, r.path, 'acme/demo', 'main');
-  db.close();
-}
-
-test('review P2: findings reports ghost rows (a non-archived mirror row whose file is gone) without modifying the database', t => {
-  const d = scratch(t);
-  const folder = join(d, 'acme', 'demo');
-  putItem(folder, item(1));
-  mirrorDb(folder, [
-    { slug: '001-i1', seq: 1, status: 'pending', path: 'phases/001-i1.md' },
-    { slug: '002-gone', seq: 2, status: 'in_progress', path: 'phases/002-gone.md' },
-    { slug: '003-gone-archived', seq: 3, status: 'archived', path: 'archive/phases/003-gone-archived.md' },
-    { slug: '004-null-status', seq: 4, status: null, path: 'phases/004-null-status.md' },
-  ]);
-  const dbBefore = sha256File(join(folder, 'backlog.db'));
-  const files = readdirSync(folder).sort();
-  assert.deepEqual(store.findings(folder).ghost.map(r => r.slug), ['002-gone']);
-  assert.equal(store.findings(folder).ghost[0].path, 'phases/002-gone.md');
-  assert.equal(sha256File(join(folder, 'backlog.db')), dbBefore, 'the database is read-only here');
-  assert.deepEqual(readdirSync(folder).sort(), files, 'no journal or other file appears');
-  assert.deepEqual(store.findings(join(d, 'acme', 'none')).ghost, [], 'no database, no ghosts');
-});
-
 test('review P2: an explicit status: null is kept (not defaulted to pending): the item is neither ranked, rewritten nor flagged', t => {
   const d = scratch(t);
   const folder = join(d, 'acme', 'demo');
@@ -375,14 +342,6 @@ function threeItems(f) {
   assert.equal(files.length, 3);
   return { files, slugs: files.map(x => x.replace(/\.md$/, '')) };
 }
-function archivedOutside(t) {
-  const f = fixturePair(t);
-  const s = threeItems(f);
-  mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
-  renameSync(join(f.folder, 'phases', s.files[1]), join(f.folder, 'archive', 'phases', s.files[1]));
-  return { f, s };
-}
-
 test('075: archive reflows the queue: archiving the last item is a no-op; archiving a middle one re-densifies and rewrites', t => {
   // no-op: archive the last item (003); the survivors (001 at P0, 002 at P1) are already dense, so no file is rewritten
   const a = fixturePair(t);
@@ -428,46 +387,6 @@ test('075: replan: slugs and item numbers lead, the rest keeps its order, unknow
   assert.equal(r.stderr, '');
   assert.equal(r.stdout, `📋 PLANNING EVENT — backlog re-prioritized (P0 = next):\n   P0  ${slugs[2]}\n   P1  ${slugs[1]}\n   P2  ${slugs[0]}\n`);
   assert.match(readItem(f.folder, `phases/${slugs[0]}.md`), /^priority: 2$/m);
-});
-
-test('review P2: reflow keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
-  const x = archivedOutside(t);
-  const { f, s } = x;
-  const live = sha256File(join(f.folder, 'phases', s.files[2]));
-  assert.deepEqual(store.reflow(f.folder), s.slugs.map((n, i) => [n, i]), 'the archived item still holds P1: the last item stays P2');
-  assert.equal(sha256File(join(f.folder, 'phases', s.files[2])), live, 'no live file is rewritten');
-});
-
-test('075: reflow: a row whose file was moved to archive/ outside the CLI keeps its rank: the item after it stays P2 when the CLI archives the last item', t => {
-  const f = fixturePair(t);
-  const s = threeItems(f);
-  const four = cli(['new', '--name', 'four', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });
-  assert.equal(four.status, 0, four.stdout + four.stderr);
-  mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
-  renameSync(join(f.folder, 'phases', s.files[1]), join(f.folder, 'archive', 'phases', s.files[1])); // 002-two leaves phases/ outside the CLI
-  const one = sha256File(join(f.folder, 'phases', s.files[0]));
-  const three = sha256File(join(f.folder, 'phases', s.files[2]));
-  const r = cli(['archive', '4', '--force'], { cwd: f.cons, tmp: f.t });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(r.stderr, '');
-  assert.equal(r.stdout, '📦 004-four archived\n   rescan: 0 (re)ingested, 1 missing\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n');
-  assert.match(readItem(f.folder, 'phases/001-one.md'), /^priority: 0$/m, 'the survivor keeps its rank');
-  assert.match(readItem(f.folder, 'phases/003-three.md'), /^priority: 2$/m, 'the item after the missing row stays P2: the missing row held P1');
-  assert.equal(sha256File(join(f.folder, 'phases', s.files[0])), one, 'no live file is rewritten');
-  assert.equal(sha256File(join(f.folder, 'phases', s.files[2])), three, 'no live file is rewritten');
-  assert.ok(!existsSync(join(f.folder, 'phases', '004-four.md')), '004 left phases/');
-  assert.ok(existsSync(join(f.folder, 'archive', 'phases', s.files[1])), 'the outside-CLI move is left as it was');
-  assert.ok(existsSync(join(f.folder, 'archive', 'phases', '004-four.md')), '004 is in archive/');
-});
-
-test('075: replan keeps the rank of a row whose file was moved to archive/ outside the CLI', t => {
-  const x = archivedOutside(t);
-  const { f, s } = x;
-  const r = cli(['update', '--replan', s.slugs[2]], { cwd: f.cons, tmp: f.t });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(r.stderr, '');
-  assert.equal(r.stdout, `📋 PLANNING EVENT — backlog re-prioritized (P0 = next):\n   P0  ${s.slugs[2]}\n   P1  ${s.slugs[0]}\n   P2  ${s.slugs[1]}\n`);
-  assert.match(readItem(f.folder, `phases/${s.files[0]}`), /^priority: 1$/m);
 });
 
 test('075: nextSeq: an archived item keeps its number: after archiving 2, the next new takes 4', t => {

@@ -129,27 +129,6 @@ test('review P2: a name with --- in it does not hide the closing front-matter de
   try { assert.equal(con.prepare('SELECT status FROM phase WHERE slug=?').get(slug).status, 'archived'); } finally { con.close(); }
 });
 
-test('review P2: a new item does not inherit the events of the moved-away item whose row id it reuses', () => {
-  const t = mkdtempSync(join(tmpdir(), 'move-reuse-'));
-  dirs.push(t);
-  sharedBacklog(t);
-  const f = { t, cons: consumer(t, 'acme', 'demo', 'main') };
-  mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  const mk = name => {
-    const r = run(f, 'new', ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
-    assert.equal(r.status, 0, r.stderr);
-    return r.stdout.split('created phase ')[1].split(' ')[0];
-  };
-  const old = mk('first one');
-  assert.equal(run(f, 'move', [old, '--to-repository', 'other/proj']).status, 0);
-  const fresh = mk('second one'); // the only row is gone: its INTEGER PRIMARY KEY comes round again
-  const ev = run(f, 'query', ['--events', fresh]);
-  assert.equal(ev.status, 0, ev.stderr);
-  assert.ok(!ev.stdout.includes('first') && !ev.stdout.includes('moved_out'), `no event of the moved item:\n${ev.stdout}`);
-  const con = db.connect(join(t, 'home', 'acme', 'demo'));
-  try { assert.equal(con.prepare('SELECT COUNT(*) n FROM event WHERE note LIKE ?').get('%first-one%').n > 0, true, 'its history is kept, detached'); } finally { con.close(); }
-});
-
 // --- move --to-branch
 
 test('a branch missing on the origin of the consuming repository is refused, nothing changes', () => {
@@ -222,37 +201,6 @@ test('review P1: a symlink at archive/ or archive/phases/ refuses the archive be
   }
 });
 
-test('review P2: a target backlog.db that is a symlink to a valid database refuses the move before the target item is written', t => {
-  const f = seed();
-  const real = join(f.t, 'real.db');
-  renameSync(join(f.other, 'backlog.db'), real);
-  try { symlinkSync(real, join(f.other, 'backlog.db')); } catch (e) { t.skip(`cannot create a symlink here: ${e.code}`); return; }
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'linked target db'); git(f.home, 'push', '-q');
-  const sha = p => createHash('sha256').update(readFileSync(p)).digest('hex');
-  const [src, dbSha, target, status] = [snapshotFolder(f.folder), sha(real), names(f.other, 'phases'), git(f.home, 'status', '--porcelain')];
-  const r = run(f, 'move', ['7', '--to-repository']);
-  assert.notEqual(r.status, 0, r.stdout);
-  assert.match(r.stdout + r.stderr, /Symlink destination is unsupported/);
-  assert.deepEqual(names(f.other, 'phases'), target, 'no item was created in the target');
-  assert.deepEqual(snapshotFolder(f.folder), src, 'the source folder is unchanged');
-  assert.equal(sha(real), dbSha, 'the linked database is unchanged');
-  assert.equal(git(f.home, 'status', '--porcelain'), status, 'no uncommitted file is left behind');
-});
-
-test('review P1: a database slug that leaves phases/ ("007-../../001-first") is refused before the target is written', () => {
-  const f = seed();
-  const con = db.connect(f.folder); con.exec("UPDATE phase SET slug='007-../../001-first' WHERE seq=7"); con.close();
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'evil slug'); git(f.home, 'push', '-q');
-  const victim = join(f.other, 'phases', '001-first.md');
-  const before = readFileSync(victim, 'utf8');
-  const r = run(f, 'move', ['7', '--to-repository']);
-  assert.notEqual(r.status, 0, r.stdout);
-  assert.match(r.stdout + r.stderr, /plain item name/);
-  assert.equal(readFileSync(victim, 'utf8'), before, 'the existing item of the target is unchanged');
-  assert.deepEqual(names(f.other, 'phases'), ['001-first.md']);
-  assert.ok(existsSync(join(f.folder, 'phases', '007-eta.md')), 'the source item stays');
-});
-
 test('review P1: archive and move hold the per-repository run lock from the pull to the push', async () => {
   const f = seed();
   const a = await waitsForRunLock(f, ['archive', '5'], () => existsSync(join(f.folder, 'phases', '005-epsilon.md')));
@@ -309,7 +257,7 @@ test('review P1: move --to-repository whose target scan throws removes the targe
   writeFileSync(first, readFileSync(first, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n'));
   const head = git(f.home, 'rev-parse', 'HEAD');
   const src = readFileSync(join(f.folder, 'phases', '003-gamma.md'));
-  const rows = () => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM phase ORDER BY id').all().concat(c.prepare('SELECT * FROM event ORDER BY id').all())); } finally { c.close(); } };
+  const rows = () => mirror(f);
   const before = rows();
   const target = names(f.other, 'phases');
   const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
@@ -339,7 +287,7 @@ test('review P2: move --to-repository refuses an item other items depend on, by 
   assert.equal(run(f, 'move', ['3', '--to-repository', 'other/proj']).status, 0);
 });
 
-const mirror = f => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM phase ORDER BY id').all().concat(c.prepare('SELECT * FROM event ORDER BY id').all())); } finally { c.close(); } };
+const mirror = f => JSON.stringify(['phases', 'archive'].flatMap(sub => names(f.folder, sub).map(n => readFileSync(join(f.folder, sub, n), 'utf8')))); // the item files are the whole state
 const breakItem = (f, rel) => { const p = join(f.folder, rel); writeFileSync(p, readFileSync(p, 'utf8').replace('\nseq: 1\n', '\nseq: 1\nsize_score: []\n')); };
 
 for (const eol of ['\n', '\r\n', '\r']) {
@@ -375,7 +323,7 @@ test('review P2: archive stamps status: archived into an item saved with CRLF li
   assert.match(readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8'), /status: "archived"\r\n/);
 });
 
-test('review P1: archive and move --to-branch whose rescan throws put the files and the db back and commit nothing', () => {
+test('review P1: archive and move --to-branch whose rescan throws put the files back and commit nothing', () => {
   for (const args of [['archive', ['5']], ['move', ['2', '--to-branch', 'release']]]) {
     const f = seed();
     breakItem(f, 'phases/001-alpha.md');
@@ -503,19 +451,6 @@ test('review P2: move and the reflow add the keys they set (branch, repository, 
   assert.equal(typeof moved.priority, 'number');
 });
 
-test('075: archive with a ghost row (a pending mirror row whose file is gone) is still ranked: exact output, empty stderr, one commit', () => {
-  const ghost = f => { git(f.home, 'rm', '-q', 'acme/demo/phases/001-alpha.md'); git(f.home, 'commit', '-q', '-m', 'file gone'); git(f.home, 'push', '-q'); };
-  const f = seed(); ghost(f);
-  const r = run(f, 'archive', ['5']);
-  assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, '📦 005-epsilon archived\n   rescan: 0 (re)ingested, 1 missing\n   📋 planning event: backlog re-densified to 5 item(s) (P0..P4)\n');
-  assert.equal(r.stderr, '');
-  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.priority, 1, 'the ghost still holds P0');
-  assert.deepEqual(['003-gamma', '004-delta', '007-eta'].map(n => fm(f.folder, `phases/${n}.md`).fm.priority), [2, 3, 4]);
-  assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['archive 5']);
-  assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'), 'published');
-});
-
 test('075: archive of a done item: git mv, status stamp, reflow, one commit', () => {
   const f = seed();
   const r = run(f, 'archive', ['5']);
@@ -611,14 +546,9 @@ test('075: move --to-repository: new number in the target, source file gone, one
   assert.ok(existsSync(join(f.other, 'phases/002-eta.md')));
   assert.ok(!existsSync(join(f.folder, 'phases/007-eta.md')));
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['move 7 --to-repository']);
-  const trow = { ...db.connect(f.other).prepare("SELECT slug, seq, status, repository FROM phase WHERE slug='002-eta'").get() };
-  db.connect(f.other).close();
-  assert.deepEqual(trow, { slug: '002-eta', seq: 2, status: 'pending', repository: 'other/proj' });
-  const con = db.connect(f.folder);
-  const srow = con.prepare("SELECT slug FROM phase WHERE slug='007-eta'").get();
-  con.close();
-  assert.equal(srow, undefined, 'the source row is gone');
-  assert.deepEqual(git(f.home, 'show', '--format=', '--name-only', 'HEAD').split('\n').map(p => p.split('/').slice(0, 2).join('/')).filter((p, i, a) => a.indexOf(p) === i).sort(), ['acme/demo', 'other/proj']);
+  const moved = fm(f.other, 'phases/002-eta.md').fm;
+  assert.deepEqual([moved.phase, moved.seq, moved.status, moved.repository], ['002-eta', 2, 'pending', 'other/proj']);
+  assert.deepEqual(git(f.home, 'show', '--format=', '--name-only', '--no-renames', 'HEAD').split('\n').map(p => p.split('/').slice(0, 2).join('/')).filter((p, i, a) => a.indexOf(p) === i).sort(), ['acme/demo', 'other/proj']);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
 });
 
@@ -685,18 +615,6 @@ test('075: move to the item own repository: exit 1, the exact refusal, nothing w
   const r = run(f, 'move', ['2', '--to-repository', 'acme/demo']);
   assert.equal(r.status, 1);
   assert.equal(r.stdout, '❌ 002-beta already belongs to acme/demo; name the target repository\n');
-  assert.equal(r.stderr, '');
-  assert.deepEqual(snapshot(f), before);
-});
-
-test('075: move of an item whose slug is not a plain name: exit 1, the exact refusal, nothing written or committed', () => {
-  const f = seed();
-  const con = db.connect(f.folder); con.exec("UPDATE phase SET slug='007-eta two' WHERE seq=7"); con.close();
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'a non-plain slug'); git(f.home, 'push', '-q');
-  const before = snapshot(f);
-  const r = run(f, 'move', ['7', '--to-repository', 'other/proj']);
-  assert.equal(r.status, 1);
-  assert.equal(r.stdout, "❌ '007-eta two' is not a plain item name (letters, digits, . _ -); the target item is named from it\n");
   assert.equal(r.stderr, '');
   assert.deepEqual(snapshot(f), before);
 });

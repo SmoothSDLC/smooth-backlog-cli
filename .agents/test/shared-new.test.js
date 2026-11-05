@@ -128,7 +128,7 @@ test('new: the planning event of a creation is recorded on the new item', t => {
   assert.match(ev.stdout, /planning_event branch= commit= added 001-alpha-job at rank end; backlog re-densified to 1 item\(s\)/);
 });
 
-test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name Alpha job" and pushes', t => {
+test('new: writes the item, records its history, commits as "acme/demo: new --name Alpha job" and pushes', t => {
   const f = fixture(t);
   const commits = () => Number(git(f.bare, 'rev-list', '--count', 'main'));
   const before = commits();
@@ -148,8 +148,7 @@ test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name 
   assert.equal(subject(f), SUBJECT.newName('Alpha job'));
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
-  assert.deepEqual(rows(f, 'SELECT slug, seq, priority, status FROM phase'), [{ slug: '001-alpha-job', seq: 1, priority: 0, status: 'pending' }]);
-  assert.deepEqual(rows(f, 'SELECT event FROM event ORDER BY id').map(r => r.event), ['ingested', 'planning_event', 'reingested']);
+  assert.deepEqual(item.fm.events.map(e => store.parseEvent(e).event), ['planning_event']);
   assert.equal(git(f.cons, 'status', '--porcelain'), '', 'a backlog repository: nothing is written into the consuming repository');
   assert.ok(!existsSync(join(f.cons, '.backlog')));
 });
@@ -166,15 +165,6 @@ test('review P2: new --dry-run in a repository without a backlog writes nothing 
   assert.equal(dep.status, 1);
   assert.match(dep.stdout, /no item '1'/);
   assert.equal(existsSync(f.folder), false);
-});
-
-test('--split-from takes the body from inside the folder only: a mirror row that points outside is refused', t => {
-  const f = fixture(t);
-  assert.equal(node(f, NONE).status, 0);
-  const con = db.connect(f.folder); con.exec("UPDATE phase SET path='../../../etc/hostname'"); con.close();
-  const r = node(f, ['--split-from', '1', '--depends-on', 'none']);
-  assert.equal(r.status, 1); assert.match(r.stderr, /^❌ backlog: Unsafe path/);
-  assert.equal(items(f).length, 1);
 });
 
 test('hasDefinitionOfDone: a heading or a line with checkable content; the placeholder and an empty section do not count', () => {
@@ -267,23 +257,23 @@ test('review P1: new whose rescan throws (an existing phase with size_score: [])
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
-test('review P1: new --split-from whose rescan throws leaves the mirror rows and events as they were (no stray split event)', t => {
+test('review P1: new --split-from whose rescan throws leaves the item files as they were (no stray split event)', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0);
   assert.equal(node(f, NONE).status, 0);
   const bad = join(f.folder, 'phases', '002-alpha-job.md');
   writeFileSync(bad, readFileSync(bad, 'utf8').replace('\nseq: 2\n', '\nseq: 2\nsize_score: []\n'));
-  const rows = () => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM phase ORDER BY id').all().concat(c.prepare('SELECT * FROM event ORDER BY id').all())); } finally { c.close(); } };
-  const before = rows();
+  const files = () => readdirSync(join(f.folder, 'phases')).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8'));
+  const before = files();
   const r = node(f, [...NONE, '--split-from', '1']);
   assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.equal(rows(), before);
+  assert.deepEqual(files(), before, 'no stray split event');
 });
 
 test('review P1: new --split-from an item of another team (TEAM_BRANCH differs) is refused and logs nothing', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0); // 001-alpha-job on acme/demo, branch main
-  const rows = () => { const c = db.connect(f.folder); try { return JSON.stringify(c.prepare('SELECT * FROM event ORDER BY id').all()); } finally { c.close(); } };
+  const rows = () => readFileSync(join(f.folder, 'phases', '001-alpha-job.md'), 'utf8'); // the item carries its history
   const before = rows();
   const r = node(f, [...NONE, '--split-from', '1', '--body', '## Definition of done\n- [ ] x'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
@@ -336,7 +326,8 @@ test('075: --split-from copies the objective, summary and body of the source and
   assert.deepEqual(child.fm.depends_on, [1]);
   assert.equal(child.body, '\n# Phase 002 — 1-cont\n\n**Objective:** parent objective\n\n\n## Split from `001-parent`. Inherited context:\n\n# Phase 001 — Parent\n\n**Objective:** parent objective\n\n\nParent body with ünï\n\n## Definition of done\n- [ ] a\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
   assert.equal(subject(a), SUBJECT.newSplitFrom('1'));
-  assert.deepEqual(rows(a, "SELECT event, note FROM event WHERE event = 'split'"), [{ event: 'split', note: 'spawned sibling 002-1-cont' }]);
+  const [parent] = items(a);
+  assert.deepEqual(parent.fm.events.map(store.parseEvent).filter(e => e.event === 'split').map(e => e.note), ['spawned sibling 002-1-cont']);
 });
 
 const SCENARIOS = {
@@ -426,7 +417,7 @@ test('075: --split-from a long parent: the inherited context is trimmed to 800 c
   const r = node(f, ['--split-from', '001-long', '--depends-on', 'none']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stdout, '✅ created phase 002-001-long-cont (seq 2) — appended, now at P1\n'
-    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 1 (re)ingested\n');
+    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 2 (re)ingested\n');
   assert.equal(subject(f), SUBJECT.newSplitFrom('001-long'));
   const [, child] = items(f);
   const parent = store.load(f.folder).find(i => i.path === 'phases/001-long.md');
@@ -450,16 +441,6 @@ test('057: new --dry-run names the slug, no path', t => {
   const r = node(f, [...NONE, '--dry-run']);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'ℹ️  [dry-run] would create phase 001-alpha-job (seq 1)\n');
-  assert.doesNotMatch(r.stdout + r.stderr, BACKLOG_PATH);
-});
-
-test('057: new --split-from with a missing file names no path', t => {
-  const f = fixture(t);
-  assert.equal(node(f, NONE).status, 0);
-  git(f.home, 'rm', '-q', 'acme/demo/phases/001-alpha-job.md'); git(f.home, 'commit', '-q', '-m', 'file gone'); git(f.home, 'push', '-q');
-  const r = node(f, ['--split-from', '1', '--depends-on', 'none']);
-  assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.equal(r.stdout, "❌ --split-from: the contents of '001-alpha-job' are missing from the backlog repository\n");
   assert.doesNotMatch(r.stdout + r.stderr, BACKLOG_PATH);
 });
 

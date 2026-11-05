@@ -130,7 +130,7 @@ async function move(a, con, ctx) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.slug)) return refuse(`${pyStr(r.slug)} is not a plain item name (letters, digits, . _ -); the target item is named from it`); // mirror data: no path in it
 
   // move.py:32-64
-  await assertInside(home, join(tdir, 'backlog.db')); // no symlink between the home and the target db: db.connect checks only below the owner, after the item is written
+  await assertInside(home, tdir); // no symlink between the home and the target folder: db.connect checks only below the owner, after the item is written
   const src = join(folder, r.path);
   await assertInside(folder, src);
   const { fm, body } = parseDoc(readFileSync(src, 'utf8'));
@@ -151,9 +151,7 @@ async function move(a, con, ctx) {
   store.stamp(Object.assign(fm, { phase: slug, seq, repository: target }));
   fm.events = [...asList(fm.events), store.eventLine({ ts: store.now(), event: 'moved_in', branch: fm.branch, note: `from ${repo} as ${r.slug}` })]; // the history travels in the file
   const copy = join(tdir, 'phases', `${slug}.md`);
-  const forget = db.freshDb(tdir);
   const tcon = db.connect(tdir);
-  let failed = false;
   try {
     // all or nothing: a throw anywhere below, in the target scan or in the source rescan, restores both backlogs (files and mirror rows)
     await db.undoOnThrow(tcon, tdir, async () => {
@@ -170,7 +168,7 @@ async function move(a, con, ctx) {
       });
       db.scan(con, folder);
     });
-  } catch (e) { failed = true; throw e; } finally { tcon.close(); if (failed) forget(); }
+  } finally { tcon.close(); }
   close();
   ctx.wrote.push({ slug, path: `phases/${slug}.md`, folder: tdir, repo: target }); // the mover has seen the copy it made
   folders.push(tdir); // ONE commit and push covers the source and the target: never one pushed without the other

@@ -61,7 +61,6 @@ export async function withBacklog(fn, tail) {
   return store.cloneLocked(home, async () => {
     await sync.pull(home); // every script works on origin/main as it is now
     const folder = store.folder(home, repo);
-    const forget = db.freshDb(folder);
     const con = db.connect(folder); // refuses a link at the owner or the repository folder
     let open = true;
     const close = () => { if (open) { open = false; con.close(); } };
@@ -72,10 +71,9 @@ export async function withBacklog(fn, tail) {
       code = await db.undoOnThrow(con, folder, () => fn(con, { home, repo, folder, close, folders, guard, wrote }));
     } catch (e) {
       await git(['reset', '-q', '--', '.'], folder); // undoOnThrow put the files back; a staged git mv would still be in the index
-      close(); forget();
+      close();
       throw e;
     } finally { close(); }
-    if (code !== 0 || !tail) forget();
     if (code === 0 && tail) {
       const pairs = await db.commitSettled(home, folders, tail, guard);
       seen.recordWrites(folder, repo, seen.actor(), wrote, pairs);

@@ -5,6 +5,7 @@
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
+import { connect } from './db.js';
 import { missingFields, stageOf } from './lifecycle.js';
 import { assertInside, redact } from './safety.js';
 import * as store from './store.js';
@@ -52,14 +53,13 @@ export async function teamRows({ open, scope, cap, every, excluded, repo, branch
     out.push({ r, fm, undone: team.undoneDependencies(folder, fm, mirror), f: repo });
   }
   if (scope !== 'all' || ref !== 'all' || every) return out;
-  const { DatabaseSync } = process.getBuiltinModule('node:sqlite'); // loaded (and its warning kept off stderr) by db.connect
   for (const owner of dirs(home)) {
     for (const name of dirs(join(home, owner))) {
       const f = `${owner}/${name}`; const dir = join(home, owner, name);
-      if (f === repo || !existsSync(join(dir, 'backlog.db'))) continue;
+      if (f === repo || !existsSync(join(dir, 'phases'))) continue;
       try { // another repository's backlog: read, never write; nothing on the way from the home may be a link
-        await assertInside(home, join(dir, 'backlog.db'));
-        const con = new DatabaseSync(join(dir, 'backlog.db'), { readOnly: true });
+        await assertInside(home, dir);
+        const con = connect(dir, { readOnly: true });
         let rows; let theirRows;
         try {
           rows = con.prepare(OPEN).all(con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null).map(x => ({ ...x }));

@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { input } from '../errors.js';
-import { commitSettled, connect, ensureAnchor, freshDb, logEvent, scan, undoOnThrow } from './db.js';
+import { commitSettled, connect, ensureAnchor, logEvent, scan, undoOnThrow } from './db.js';
 import { parse } from './frontmatter.js';
 import { actor, check, recordWrites } from './seen.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
@@ -105,7 +105,6 @@ async function create(argv, { home, folder, repo, team }) {
     return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
   }
 
-  const forget = freshDb(folder);
   const db = connect(folder, { readOnly: Boolean(a.dryRun) }); // a dry run only looks: nothing is created in the backlog clone
   let written = false;
   let seq; let slug; let rel; let order; let rank; let summary; let where;
@@ -177,17 +176,17 @@ async function create(argv, { home, folder, repo, team }) {
       let hid;
       order = reflow(folder, priority === undefined ? null : { slug, target: priority }, () => {
         // The mandatory ranking guard runs before any mirror or event changes.
-        if (src) logEvent(db, 'split', { handoffId: src.handoff_id, phaseId: src.id, note: `spawned sibling ${slug}` });
         scan(db, folder);
         hid = ensureAnchor(db);
       });
       rank = Object.fromEntries(order)[slug];
+      if (src) logEvent(db, 'split', { handoffId: src.handoff_id, phaseId: src.id, note: `spawned sibling ${slug}` }); // after the reflow: it rewrites the parent from what it read before
       logEvent(db, 'planning_event', { handoffId: hid, phaseId: db.prepare('SELECT id FROM phase WHERE slug=?').get(slug)?.id, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
       summary = scan(db, folder);
       where = priority === undefined ? 'appended' : `inserted at P${priority}`;
     });
     written = true;
-  } finally { db.close(); if (!written) forget(); }
+  } finally { db.close(); }
 
   // every change is committed and pushed at once; a file renumbered on the way is scanned and committed again
   const message = ['new', ...argv.slice(0, 2)].join(' ');

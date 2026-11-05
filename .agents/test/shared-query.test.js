@@ -3,11 +3,10 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 
 const git = (cwd, ...args) => {
@@ -43,7 +42,7 @@ const commitAll = home => { git(home, 'add', '-A'); git(home, 'commit', '-q', '-
 
 // Shared home + consumer acme/demo on main, built with the CLI:
 // open items on main (one critical, one in progress), a done item, an item of branch "feature" that is not on the
-// origin (a gone-branch item), and hand-made foreign, untagged and ghost findings. Mode is set to shared.
+// origin (a gone-branch item), and hand-made foreign and untagged findings. Mode is set to shared.
 function build(withFindings) {
   const t = mkdtempSync(join(tmpdir(), 'query-test-'));
   dirs.push(t);
@@ -62,7 +61,6 @@ function build(withFindings) {
   newItem(f, 'Feat');
   git(cons, 'checkout', '-q', 'main');
   if (withFindings) {
-    newItem(f, 'Ghost');
     const item = (seq, name, extra) => store.write({
       path: join(f.folder, `phases/${String(seq).padStart(3, '0')}-${name}.md`),
       fm: { phase: `${String(seq).padStart(3, '0')}-${name}`, seq, name, objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, repository: 'acme/demo', branch: 'main', commit: 'abc1234', location: '', ...extra },
@@ -70,10 +68,6 @@ function build(withFindings) {
     });
     item(store.nextSeq(f.folder), 'foreign', { repository: 'other/thing' });
     item(store.nextSeq(f.folder), 'untagged', { branch: '' });
-    const con = db.connect(f.folder);
-    db.scan(con, f.folder);
-    con.close();
-    rmSync(join(f.folder, 'phases', '006-ghost.md'));
     commitAll(home);
   }
   return f;
@@ -94,9 +88,8 @@ const norm = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS')
   .replace(/sha drift [0-9a-f]+->[0-9a-f]+/g, 'sha drift SHA->SHA');
 const normJson = s => JSON.parse(s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(/"updated_by": "[^"]*"/g, '"updated_by": "UPD"'),
   (k, v) => (typeof v === 'string' && /^[0-9a-f]{7,}$/.test(v) ? 'SHA' : v));
-const STATUS_FINDINGS = '⚠️  CRITICAL: phases/007-foreign.md says repository other/thing but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 007-foreign --to-repository\n'
-  + '⚠️  CRITICAL: item 006-ghost has a database row but its file phases/006-ghost.md is gone (deleted outside the scripts); it is out of the queue. Restore the file from git\n'
-  + '⚠️  item 008-untagged records no repository or branch; it is out of the queue until its repository and branch are filled in\n'
+const STATUS_FINDINGS = '⚠️  CRITICAL: phases/006-foreign.md says repository other/thing but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 006-foreign --to-repository\n'
+  + '⚠️  item 007-untagged records no repository or branch; it is out of the queue until its repository and branch are filled in\n'
   + '⚠️ ========================================================================\n'
   + '⚠️  1 CRITICAL ITEM(S) ON THE BACKLOG — SURFACE THESE FIRST, DO NOT BURY:\n'
   + '⚠️    P0   [  2] 002-beta — Beta\n'
@@ -255,17 +248,17 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
   "findings": {
     "foreign": [
       {
-        "id": 7,
+        "id": 6,
         "handoff_id": 1,
-        "slug": "007-foreign",
-        "seq": 7,
+        "slug": "006-foreign",
+        "seq": 6,
         "name": "foreign",
         "objective": "o",
         "summary": "s",
         "status": "pending",
         "severity": "normal",
         "priority": 9,
-        "path": "phases/007-foreign.md",
+        "path": "phases/006-foreign.md",
         "sha": "SHA",
         "branch": "main",
         "commit_sha": "SHA",
@@ -281,17 +274,17 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
     ],
     "untagged": [
       {
-        "id": 8,
+        "id": 7,
         "handoff_id": 1,
-        "slug": "008-untagged",
-        "seq": 8,
+        "slug": "007-untagged",
+        "seq": 7,
         "name": "untagged",
         "objective": "o",
         "summary": "s",
         "status": "pending",
         "severity": "normal",
         "priority": 9,
-        "path": "phases/008-untagged.md",
+        "path": "phases/007-untagged.md",
         "sha": "SHA",
         "branch": "",
         "commit_sha": "SHA",
@@ -305,32 +298,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
         "review_state": ""
       }
     ],
-    "ghost": [
-      {
-        "id": 6,
-        "handoff_id": 1,
-        "slug": "006-ghost",
-        "seq": 6,
-        "name": "Ghost",
-        "objective": "Caf\u00e9 \u2615 Ghost",
-        "summary": "sum Ghost",
-        "status": "pending",
-        "severity": "normal",
-        "priority": 4,
-        "path": "phases/006-ghost.md",
-        "sha": "SHA",
-        "branch": "main",
-        "commit_sha": "SHA",
-        "location": "",
-        "repository": "acme/demo",
-        "size_score": 0,
-        "created_at": "TS",
-        "updated_at": "TS",
-        "completed_at": null,
-        "claimed_by": "",
-        "review_state": ""
-      }
-    ]
+    "ghost": []
   }
 }
 `);
@@ -395,9 +363,9 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
     }],
     gone_branch_items: [],
     findings: {
-      foreign: [{ id: 7, handoff_id: 1, slug: '007-foreign', seq: 7, name: 'foreign', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/007-foreign.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'other/thing', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
-      untagged: [{ id: 8, handoff_id: 1, slug: '008-untagged', seq: 8, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/008-untagged.md', sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
-      ghost: [{ id: 6, handoff_id: 1, slug: '006-ghost', seq: 6, name: 'Ghost', objective: 'Caf\u00e9 \u2615 Ghost', summary: 'sum Ghost', status: 'pending', severity: 'normal', priority: 4, path: 'phases/006-ghost.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }]
+      foreign: [{ id: 6, handoff_id: 1, slug: '006-foreign', seq: 6, name: 'foreign', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/006-foreign.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'other/thing', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
+      untagged: [{ id: 7, handoff_id: 1, slug: '007-untagged', seq: 7, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/007-untagged.md', sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
+      ghost: []
     }
   });
 });
@@ -423,7 +391,7 @@ test('`backlog next` is --next', () => {
 test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
   const f = fx();
   const text = view(f, ['--next', '--branch', 'nowhere']).stdout; // the fixture's findings banners come first
-  assert.match(text, /^⚠️  CRITICAL: phases\/007-foreign\.md says repository other\/thing/);
+  assert.match(text, /^⚠️  CRITICAL: phases\/006-foreign\.md says repository other\/thing/);
   assert.ok(text.endsWith('\nℹ️  no actionable item for acme/demo, branch nowhere; --all shows every branch\n'), text);
   assert.equal(view(f, ['--next', '--branch', 'nowhere', '--json']).stdout.trim(), '{}');
 });
@@ -516,8 +484,7 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     + '  [  2] 002-beta                     pending      commit=SHA \n'
     + '  [  3] 003-gamma                    in_progress  commit=SHA \n'
     + '  [  4] 004-delta                    done         commit=SHA \n'
-    + '  [  6] 006-ghost                    pending      commit=SHA \n'
-    + '  [  7] 007-foreign                  pending      commit=SHA \n');
+    + '  [  6] 006-foreign                  pending      commit=SHA \n');
   assert.equal(norm(view(f, ['--by-branch', 'feature']).stdout), '  [  5] 005-feat                     pending      commit=SHA \n');
 });
 
@@ -594,42 +561,19 @@ test('an unknown flag is exit 2', () => {
 });
 
 // --- review fixes (job 12) ---
-for (const link of ['repo', 'db', 'owner']) test(`review P1: a symlink at ${{ repo: '<home>/<owner>/<repo>', db: 'backlog.db', owner: '<home>/<owner>' }[link]} is refused and the outside database is not touched`, () => {
+for (const link of ['repo', 'owner']) test(`review P1: a symlink at ${{ repo: '<home>/<owner>/<repo>', owner: '<home>/<owner>' }[link]} is refused and nothing outside is touched`, () => {
   {
     const f = build(false);
     const outside = join(f.t, 'outside');
-    const target = link === 'owner' ? join(f.home, 'acme') : link === 'repo' ? f.folder : join(f.folder, 'backlog.db');
+    const target = link === 'owner' ? join(f.home, 'acme') : f.folder;
     cpSync(target, outside, { recursive: true });
     rmSync(target, { recursive: true, force: true });
     symlinkSync(outside, target);
-    const dbFile = link === 'db' ? outside : join(outside, ...(link === 'owner' ? ['demo'] : []), 'backlog.db');
-    const before = readFileSync(dbFile);
+    const before = readdirSync(outside, { recursive: true }).sort();
     const n = cli(['query', '--status', '--json'], { cwd: f.cons, tmp: f.t });
     assert.notEqual(n.status, 0, link);
     assert.match(n.stdout + n.stderr, /Symlink destination is unsupported|Unsafe path/, link);
-    assert.deepEqual(readFileSync(dbFile), before, link);
-  }
-});
-
-// Points the 001-alpha row (queue head) at `path` and returns the Node view of --next --json / --status --json.
-function withRowPath(f, path) {
-  const con = db.connect(f.folder);
-  con.prepare("UPDATE phase SET path=?, priority=-1 WHERE slug='001-alpha'").run(path);
-  con.close();
-  return {
-    next: JSON.parse(cli(['query', '--next', '--json'], { cwd: f.cons, tmp: f.t }).stdout),
-    status: JSON.parse(cli(['query', '--status', '--json'], { cwd: f.cons, tmp: f.t }).stdout),
-  };
-}
-
-test('review P2: a row path that leaves the folder (.. or absolute) is a ghost, not an existing file', () => {
-  const f = build(false);
-  const secret = join(f.t, 'secret.md');
-  writeFileSync(secret, 'outside\n');
-  for (const path of ['../../../secret.md', secret, '../../../../../../../../../etc/passwd']) {
-    const r = withRowPath(f, path);
-    assert.notEqual(r.next.slug, '001-alpha', path);
-    assert.deepEqual(r.status.findings.ghost.map(x => x.slug), ['001-alpha'], path);
+    assert.deepEqual(readdirSync(outside, { recursive: true }).sort(), before, link);
   }
 });
 
@@ -637,15 +581,10 @@ test('review P2: a symlink in the item folder is refused, and the file outside i
   const f = build(false);
   writeFileSync(join(f.t, 'secret.md'), 'outside\n');
   symlinkSync(join(f.t, 'secret.md'), join(f.folder, 'phases', 'link.md'));
-  const con = db.connect(f.folder);
-  con.prepare("UPDATE phase SET path=?, priority=-1 WHERE slug='001-alpha'").run('phases/link.md');
-  con.close();
-  const status = cli(['query', '--status', '--json'], { cwd: f.cons, tmp: f.t });
-  assert.deepEqual(JSON.parse(status.stdout).findings.ghost.map(x => x.slug), ['001-alpha'], 'the row whose path leaves the folder is a ghost');
   const next = cli(['query', '--next', '--json'], { cwd: f.cons, tmp: f.t }); // reads the item files: the symlink itself is refused
   assert.equal(next.status, 1, next.stdout + next.stderr);
   assert.match(next.stderr, /Symlink destination is unsupported/);
-  assert.doesNotMatch(status.stdout + next.stdout + next.stderr, /outside/);
+  assert.doesNotMatch(next.stdout + next.stderr, /outside/);
 });
 
 test('review P2: input echoed in a diagnostic is redacted (flags, missing items)', () => {
@@ -661,9 +600,8 @@ test('review P2: input echoed in a diagnostic is redacted (flags, missing items)
 
 test('review P3: --json escapes U+007F and non-ASCII as \\u escapes', () => {
   const f = build(false);
-  const con = db.connect(f.folder);
-  con.prepare("UPDATE phase SET name=? WHERE slug='001-alpha'").run('a\x7fb \x80 é');
-  con.close();
+  const item = store.load(f.folder).find(i => i.fm.phase === '001-alpha');
+  store.write({ path: join(f.folder, item.path), fm: { ...item.fm, name: 'a\x7fb \x80 é' }, body: item.body }, f.folder);
   assert.match(view(f, ['--phase', '1', '--json']).stdout, /"name": "a\\u007fb \\u0080 \\u00e9"/);
 });
 

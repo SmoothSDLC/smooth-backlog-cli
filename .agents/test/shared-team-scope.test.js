@@ -3,7 +3,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
@@ -120,17 +120,15 @@ function otherChunk() {
   return { f, chunk, all };
 }
 
-test('--scope all does not open another repository\'s backlog.db through a symlink', () => {
+test('--scope all does not read another repository\'s backlog through a symlink', () => {
   const { f, chunk, all } = otherChunk();
-  const db = join(f.home, 'other', 'thing', 'backlog.db');
+  const dir = join(f.home, 'other', 'thing');
   mkdirSync(join(f.t, 'outside'));
-  copyFileSync(db, join(f.t, 'outside', 'backlog.db')); // a database outside the home that holds the chunk item
-  rmSync(db);
-  symlinkSync(join(f.t, 'outside', 'backlog.db'), db);
+  renameSync(dir, join(f.t, 'outside', 'thing')); // a folder outside the home that holds the chunk item
+  symlinkSync(join(f.t, 'outside', 'thing'), dir);
   const r = all();
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.ok(!r.stdout.includes(chunk), r.stdout);
-  assert.match(r.stderr, /ℹ️  other\/thing: backlog not read \(Symlink destination is unsupported/);
 });
 
 test('the refinement cap file backlog.scope is not followed through a symlink', () => {
@@ -149,7 +147,8 @@ test('the diagnostic of an unreadable backlog of another repository does not pri
   const { f } = otherChunk();
   const odd = join(f.home, 'user:review_dummy@host', 'thing');
   mkdirSync(odd, { recursive: true });
-  writeFileSync(join(odd, 'backlog.db'), 'this is not a database'.repeat(100));
+  mkdirSync(join(odd, 'phases'));
+  writeFileSync(join(odd, 'phases', '001-x.md'), '---\nthis is not a pair\n---\n'); // an item file that cannot be read
   const r = cli(['query', '--claimable', '--scope', 'all'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stderr, /backlog not read/); // the diagnostic is still there

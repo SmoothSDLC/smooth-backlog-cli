@@ -12,7 +12,7 @@ import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
 import { parse } from './frontmatter.js';
 import { actor, publicationGuard, staleError, staleViews } from './seen.js';
-import { connect, scan } from './db.js';
+import { connect } from './db.js';
 import * as store from './store.js';
 import { asList, foreignCycle, foreignItem, heldBy, isForeign } from './team.js';
 import { wipRefusal } from './wip.js';
@@ -158,13 +158,13 @@ const changedBy = async (home, range) => (await g(home, ['diff', '-z', '--no-ren
 
 // Files the unpushed commits added to any <owner>/<name>/phases or archive folder, renumbered when their
 // seq is already held by another file of the folder: git mv, phase/seq keys, body heading, amend.
-async function renumber(home, stream, mirror = false) {
+async function renumber(home, stream) {
   const added = (await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=A', 'origin/main', 'HEAD']))
     .stdout.split('\0').filter(f => /^[^/]+\/[^/]+\/(phases|archive)\/.+\.md$/.test(f));
   // Working edits (restored by the autostash) stay out of the repair, which stages and amends: stash them, pop them afterwards.
   const stashed = added.length > 0 && (await g(home, ['status', '--porcelain', '--untracked-files=no'])).stdout.trim() !== '';
   if (stashed) await must(home, ['stash', 'push', '-q'], 'set your working edits aside');
-  try { return await renumberFiles(home, stream, added, mirror); } finally {
+  try { return await renumberFiles(home, stream, added); } finally {
     if (stashed) {
       const r = await g(home, ['stash', 'pop', '-q']);
       if (r.code) throw new BacklogError('SYNC_FAILED', `could not restore your working edits in ${home} (${r.stderr.slice(0, 300)}); they are kept in 'git -C ${home} stash'`, 3);
@@ -172,7 +172,7 @@ async function renumber(home, stream, mirror = false) {
   }
 }
 
-async function renumberFiles(home, stream, added, mirror) {
+async function renumberFiles(home, stream, added) {
   const out = []; const moves = [];
   for (const file of added) {
     const [owner, repo, ...rest] = file.split('/'); const name = `${owner}/${repo}`; const path = rest.join('/');
@@ -185,12 +185,6 @@ async function renumberFiles(home, stream, added, mirror) {
     await must(home, ['mv', `${name}/${path}`, `${name}/${target}`], `move ${path} to ${target}`);
     store.write({ path: join(folder, target), ...retagged(mine, next) });
     await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
-    if (mirror) { // a pull has no caller that rescans (commit's callers do): the commit's backlog.db still holds the row under the old
-      // number, so rename it in place now; no later scan then reads the old file as missing and the new one as a second item
-      const con = connect(folder);
-      try { scan(con, folder, [[old, next]], { includeArchived: true }); } finally { con.close(); }
-      await must(home, ['add', '--', lit(`${name}/backlog.db`)], `stage ${name}/backlog.db`);
-    }
     const r = await commitOnly(home, [lit(name)], ['--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
@@ -201,13 +195,6 @@ async function renumberFiles(home, stream, added, mirror) {
   if (moves.length) { // the local dependents of the renumbered items follow them
     const touched = await remapLocal(home, moves, await changedBy(home, ['origin/main', 'HEAD']), 'origin/main', new Set());
     if (touched.length) {
-      if (mirror) {
-        for (const name of new Set(touched.map(f => f.split('/').slice(0, 2).join('/')))) {
-          const con = connect(join(home, name));
-          try { scan(con, join(home, name), [], { includeArchived: true }); } finally { con.close(); }
-          await must(home, ['add', '--', lit(`${name}/backlog.db`)], `stage ${name}/backlog.db`);
-        }
-      }
       const lits = [...new Set(touched.map(f => f.split('/').slice(0, 2).join('/')))].map(lit);
       const r = await commitOnly(home, lits, ['--amend', '--no-edit']);
       if (r.code) throw new BacklogError('SYNC_FAILED', `could not update the references to renumbered items in ${home} (${r.stderr.slice(0, 300)})`, 3);

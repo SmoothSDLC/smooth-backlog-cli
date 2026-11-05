@@ -132,22 +132,6 @@ test('--reviewable needs --agent; the text view lists the item with its dependen
   assert.deepEqual(waiting, [{ id: String(Number(a.split('-')[0])), slug: a, status: 'pending', claimed_by: '' }]);
 });
 
-test('a completed dependency whose file is gone does not hold the dependent item back (the row decides)', () => {
-  const f = fixture();
-  const dep = make(f, 'ghost dependency');
-  const job = make(f, 'waits for the ghost', ['--depends-on', dep.split('-')[0]]);
-  assert.ok(q(f, '--blocked').includes(job) && !q(f, '--claimable').includes(job));
-  ok(f, dep, '--claim', 'ann');
-  run(f, 'query', ['--phase', dep, '--agent', 'ann']); // ann holds the item; it re-reads and finishes it as the same explicit actor
-  handoff(f, dep, job, 'ann');
-  run(f, 'query', ['--phase', dep, '--agent', 'ann']);
-  ok(f, dep, '--status', 'done', '--by', 'ann');
-  rmSync(join(f.folder, 'phases', `${dep}.md`)); // the row stays done; only the file is missing
-  assert.ok(!q(f, '--blocked').includes(job), 'blocked by a done dependency');
-  assert.ok(q(f, '--claimable').includes(job), 'not claimable although its dependency is done');
-  assert.deepEqual(JSON.parse(run(f, 'query', ['--blocked', '--json']).stdout).map(x => x.slug), []);
-});
-
 test('an item with old work_class and review_classes fields behaves exactly like one without them ', () => {
   const f = fixture();
   const plain = make(f, 'plain job');

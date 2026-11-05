@@ -2,7 +2,6 @@
 // Local bare repositories only (shared-fixtures.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,7 +9,6 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
-import * as db from '../../src/shared/db.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
 
@@ -362,16 +360,15 @@ test('review P2: commit takes only the repository folder: a file staged elsewher
 test('review P2: refusing a legacy stack preserves all commits and unrelated staging', async t => {
   const f = fixture(t);
   putItem(f.folder, 1, 'anchor');
-  let con = db.connect(f.folder); db.scan(con, f.folder); con.close();
   await sync.commit(f.home, f.folder, 'seed');
   await sync.pull(f.home2);
   for (const [seq, note] of [[2, 'local one'], [3, 'local two']]) {
     putItem(f.folder, seq, `local-${seq}`);
-    con = db.connect(f.folder); db.scan(con, f.folder); db.logEvent(con, 'note', { note }); con.close();
+    store.addEvent(f.folder, `phases/${String(seq).padStart(3, '0')}-local-${seq}.md`, { event: 'note', note });
     git(f.home, 'add', 'acme/demo'); git(f.home, 'commit', '-qm', note);
   }
   putItem(f.folder2, 4, 'remote');
-  con = db.connect(f.folder2); db.scan(con, f.folder2); db.logEvent(con, 'note', { note: 'remote' }); con.close();
+  store.addEvent(f.folder2, 'phases/004-remote.md', { event: 'note', note: 'remote' });
   await sync.commit(f.home2, f.folder2, 'remote');
   writeFileSync(join(f.home, 'stray.txt'), 'private staged work');
   git(f.home, 'add', 'stray.txt');
@@ -383,9 +380,7 @@ test('review P2: refusing a legacy stack preserves all commits and unrelated sta
   assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').includes('stray.txt'), false);
   assert.equal(git(f.home, 'ls-files', '--stage', '--', 'stray.txt'), staged);
   assert.equal(readFileSync(join(f.home, 'stray.txt'), 'utf8'), 'private staged work');
-  con = db.connect(f.folder);
-  try { assert.deepEqual(con.prepare("SELECT note FROM event WHERE event='note' ORDER BY note").all().map(e => e.note), ['local one', 'local two']); }
-  finally { con.close(); }
+  assert.deepEqual(store.load(f.folder).flatMap(i => (i.fm.events ?? []).map(store.parseEvent)).filter(e => e.event === 'note').map(e => e.note).sort(), ['local one', 'local two']);
 });
 
 test('pull: incoming commits preserve unrelated staged and unstaged versions separately', async t => {
@@ -417,15 +412,11 @@ function gate(f) {
     release() { writeFileSync(join(dir, 'release'), ''); },
   };
 }
-// A publication check after a publish step: the clone tree is clean, the local mirror database equals the published one, and the published phases match.
-const sha256 = p => createHash('sha256').update(readFileSync(p)).digest('hex');
+// A publication check after a publish step: the clone tree is clean, no database is published, and the published phases match.
 const assertPublish = (f, home, folder, files) => {
   assert.equal(git(home, 'status', '--porcelain', '--untracked-files=all'), '', 'the clone tree is clean after the publish');
-  const clone = mkdtempSync(join(f.dir, 'verify-'));
-  git(f.dir, 'clone', '-q', f.bare, clone);
-  assert.ok(sha256(join(folder, 'backlog.db')) === sha256(join(clone, 'acme', 'demo', 'backlog.db')), 'the local mirror database equals the published one');
+  assert.ok(!git(f.bare, 'ls-tree', '-r', '--name-only', 'main').includes('backlog.db'), 'no database is published');
   assert.deepEqual(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(x => x.includes('phases/')).sort(), files, 'the published phases');
-  rmSync(clone, { recursive: true, force: true });
 };
 
 // `backlog new` run as a separate process (a writer), on the given clone. stdout and stderr are kept separate.

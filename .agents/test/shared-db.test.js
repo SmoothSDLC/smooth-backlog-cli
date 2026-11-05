@@ -82,7 +82,7 @@ test('ensureAnchor: one synthetic BACKLOG row, created once, id returned each ti
 
 // ---------------------------------------------------------------- ingest / scan
 
-test('ingest: new file -> row (integers stay integers) and an "ingested" event; same sha -> nothing; changed sha -> "reingested"', t => {
+test('ingest: new file -> row (integers stay integers); same sha -> nothing; changed sha -> the row follows the file', t => {
   const d = inHome(t);
   const con = db.connect(d);
   putItem(d, 3, 'x', { size_score: 2, completed: '2026-10-23T01:00:00Z' });
@@ -95,15 +95,9 @@ test('ingest: new file -> row (integers stay integers) and an "ingested" event; 
     ['pending', 'normal', 2, 'phases/003-x.md', it.sha256, 'main', 'acme/demo', 'abc1234', '', 2, '2026-10-23T01:00:00Z']);
   assert.match(row.created_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.equal(db.ingest(con, it).changed, false);
-  assert.equal(rows(con, 'SELECT * FROM event').length, 1);
   putItem(d, 3, 'x', { status: 'in_progress' });
   const again = db.ingest(con, store.load(d)[0]);
   assert.deepEqual([again.id, again.changed], [first.id, true]);
-  const ev = rows(con, 'SELECT event, note, phase_id, branch, commit_sha FROM event ORDER BY id');
-  assert.deepEqual(ev.map(e => e.event), ['ingested', 'reingested']);
-  assert.equal(ev[0].note, 'new phase 003-x');
-  assert.match(ev[1].note, new RegExp(`^sha drift ${it.sha256.slice(0, 7)}->[0-9a-f]{7}$`));
-  assert.equal(ev[1].branch, 'main'); assert.equal(ev[1].commit_sha, 'abc1234');
   assert.equal(rows(con, 'SELECT status FROM phase')[0].status, 'in_progress');
   con.close();
 });
@@ -123,25 +117,23 @@ test('connect ingests phases/ and archive/; a later scan of the active items cha
   putItem(d, 1, 'a'); putItem(d, 2, 'b');
   putItem(d, 3, 'old', { status: 'archived' }, 'archive/phases/003-old.md');
   scanned(d, (con, s) => {
-    assert.deepEqual(s, { handoff: 0, phases: 2, changed: 0, missing: 0 });
+    assert.deepEqual(s, { handoff: 0, phases: 2, changed: 0 });
     assert.deepEqual(rows(con, 'SELECT slug FROM phase ORDER BY id').map(r => r.slug), ['001-a', '002-b', '003-old']);
-    assert.deepEqual(db.scan(con, d), { handoff: 0, phases: 2, changed: 0, missing: 0 });
-    assert.equal(rows(con, 'SELECT * FROM event').length, 3);
+    assert.deepEqual(db.scan(con, d), { handoff: 0, phases: 2, changed: 0 });
   });
 });
 
-test('markArchived: status archived, new path, updated_at, an "archived" event; an unknown slug changes nothing', t => {
+test('markArchived: status archived, new path, an "archived" line in the item; an unknown slug changes nothing', t => {
   const d = inHome(t);
   putItem(d, 1, 'a', { commit: 'c0ffee1' });
   const con = db.connect(d);
   db.scan(con, d);
   assert.equal(db.markArchived(con, 'nope', 'archive/phases/x.md'), null);
+  mkdirSync(join(d, 'archive', 'phases'), { recursive: true }); renameSync(join(d, 'phases', '001-a.md'), join(d, 'archive', 'phases', '001-a.md')); // the caller moves the file first
   assert.ok(db.markArchived(con, '001-a', 'archive/phases/001-a.md'));
   assert.deepEqual(rows(con, 'SELECT status, path FROM phase'), [{ status: 'archived', path: 'archive/phases/001-a.md' }]);
-  const ev = rows(con, "SELECT note, branch, commit_sha, phase_id, handoff_id FROM event WHERE event='archived'");
-  assert.deepEqual(ev.map(e => [e.note, e.branch, e.commit_sha]), [['001-a -> archive/phases/001-a.md', 'main', 'c0ffee1']]);
-  assert.ok(ev[0].phase_id && ev[0].handoff_id);
   con.close();
+  assert.ok(store.load(d).find(i => i.path === 'archive/phases/001-a.md').fm.events.some(l => / archived /.test(l) && l.includes('001-a -> archive/phases/001-a.md')));
 });
 
 test('node:sqlite prints no ExperimentalWarning to stderr', () => {
@@ -174,7 +166,7 @@ test('markArchived: refuses an absolute or ..-crossing location and leaves the r
     assert.throws(() => db.markArchived(con, '001-a', bad), /Unsafe path/, bad);
   }
   assert.deepEqual(rows(con, 'SELECT status, path FROM phase'), [{ status: 'pending', path: 'phases/001-a.md' }]);
-  assert.equal(rows(con, "SELECT * FROM event WHERE event='archived'").length, 0);
+  assert.equal(store.load(d)[0].fm.events, undefined, 'a refused archive records nothing');
   con.close();
 });
 
@@ -195,22 +187,6 @@ test('review P2: reconciliation rebuilds missing archive rows and refreshes arch
   putItem(d, 1, 'archived', { status: 'archived', summary: 'reconciled archive content' }, 'archive/phases/001-archived.md');
   db.reconcileFolders([d], []);
   check();
-});
-
-test('review P2: recovery renumbers an archived mirror row in place, retaining its event identity', t => {
-  const d = inHome(t);
-  putItem(d, 1, 'archived', { status: 'archived' }, 'archive/phases/001-archived.md');
-  db.reconcileFolders([d], []);
-  const con = db.connect(d);
-  try {
-    const id = con.prepare("SELECT id FROM phase WHERE slug='001-archived'").get().id;
-    db.logEvent(con, 'archived', { phaseId: id, handoffId: db.ensureAnchor(con), note: 'keep this identity' });
-    renameSync(join(d, 'archive/phases/001-archived.md'), join(d, 'archive/phases/002-archived.md'));
-    putItem(d, 2, 'archived', { status: 'archived' }, 'archive/phases/002-archived.md');
-    db.scan(con, d, [[1, 2]], { includeArchived: true });
-    assert.deepEqual(rows(con, 'SELECT id, slug, path FROM phase'), [{ id, slug: '002-archived', path: 'archive/phases/002-archived.md' }]);
-    assert.deepEqual(rows(con, "SELECT phase_id FROM event WHERE event='archived'"), [{ phase_id: id }]);
-  } finally { con.close(); }
 });
 
 test('connect: an item that is a symlink is refused', t => {
@@ -268,4 +244,16 @@ test('undoOnThrow puts back only what the command wrote: a file that appears mea
   assert.equal(existsSync(mine), false, 'the file it created is removed');
   assert.match(readFileSync(edited, 'utf8'), /old/, 'the file it changed is restored');
   assert.equal(readFileSync(pulled, 'utf8'), 'pulled by someone else\n', 'a file it did not write stays');
+});
+
+test('the database holds items only: no event table, logEvent writes the item file', t => {
+  const folder = inHome(t);
+  putItem(folder, 1, 'a');
+  const con = db.connect(folder);
+  try {
+    assert.equal(con.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='event'").get(), undefined);
+    const id = con.prepare("SELECT id FROM phase WHERE slug='001-a'").get().id;
+    db.logEvent(con, 'claimed', { phaseId: id, note: 'x' });
+  } finally { con.close(); }
+  assert.ok(store.load(folder).find(i => i.fm.phase === '001-a').fm.events.some(l => / claimed /.test(l)));
 });

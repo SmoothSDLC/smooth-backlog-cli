@@ -138,7 +138,7 @@ async function archive(a, con, { repo, folder, close, guard }) {
   // writes are needed before the whole ranking write set has passed its guard.
   const order = hid === null ? (recordArchive(), []) : store.reflow(folder, { exclude: [row.slug] }, recordArchive);
   if (order.length) {
-    db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `archived ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
+    db.logEvent(con, 'planning_event', { phaseId: row.id, note: `archived ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
     db.scan(con, folder);
   }
   close();

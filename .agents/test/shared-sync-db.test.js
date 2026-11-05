@@ -135,7 +135,6 @@ test('review P2: retrying a rolled-back creation takes the upstream number into 
   const con = db.connect(b.folder);
   try {
     assert.deepEqual(con.prepare('SELECT slug, seq FROM phase ORDER BY seq').all().map(x => ({ ...x })), [{ slug: '001-alpha-job', seq: 1 }, { slug: '002-beta-job', seq: 2 }]);
-    assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
   } finally { con.close(); }
 });
 
@@ -208,7 +207,6 @@ test('review P1: a number collision in the destination of a cross-repository mov
     try {
       const rows = con.prepare('SELECT slug, path FROM phase').all().map(x => ({ ...x }));
       for (const x of rows) assert.ok(existsSync(join(dir, x.path)), `${repo.join('/')}: row ${x.slug} has its file (${JSON.stringify(rows)})`);
-      assert.equal(con.prepare("SELECT COUNT(*) AS n FROM event WHERE event='file_missing'").get().n, 0);
     } finally { con.close(); }
   }
   const src = db.connect(join(verify, 'c', 'acme', 'demo'));

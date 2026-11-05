@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { input } from '../errors.js';
-import { commitSettled, connect, ensureAnchor, logEvent, scan, undoOnThrow } from './db.js';
+import { commitSettled, connect, logEvent, scan, undoOnThrow } from './db.js';
 import { parse } from './frontmatter.js';
 import { actor, check, recordWrites } from './seen.js';
 import { assertInside, checkRefs, git, itemSelector, redact, slugify } from './safety.js';
@@ -173,15 +173,13 @@ async function create(argv, { home, folder, repo, team }) {
     await undoOnThrow(db, folder, async () => {
       write({ path, fm, body: parts.join('\n') }, folder);
       // planning event: re-densify the backlog to 0..N-1, the new item at its insertion rank
-      let hid;
       order = reflow(folder, priority === undefined ? null : { slug, target: priority }, () => {
         // The mandatory ranking guard runs before any mirror or event changes.
         scan(db, folder);
-        hid = ensureAnchor(db);
       });
       rank = Object.fromEntries(order)[slug];
-      if (src) logEvent(db, 'split', { handoffId: src.handoff_id, phaseId: src.id, note: `spawned sibling ${slug}` }); // after the reflow: it rewrites the parent from what it read before
-      logEvent(db, 'planning_event', { handoffId: hid, phaseId: db.prepare('SELECT id FROM phase WHERE slug=?').get(slug)?.id, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
+      if (src) logEvent(db, 'split', { phaseId: src.id, note: `spawned sibling ${slug}` }); // after the reflow: it rewrites the parent from what it read before
+      logEvent(db, 'planning_event', { phaseId: db.prepare('SELECT id FROM phase WHERE slug=?').get(slug)?.id, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
       scan(db, folder);
       where = priority === undefined ? 'appended' : `inserted at P${priority}`;
     });

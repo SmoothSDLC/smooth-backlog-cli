@@ -117,7 +117,9 @@ test('renumber: the later pusher gets nextSeq in file name, phase, seq and headi
   assert.equal(out, 'renumbered 001 -> 002\n');
   assert.deepEqual(result, [[1, 2]]);
   const beta = store.load(f.folder2).find(i => i.fm.name === 'beta');
-  assert.deepEqual(beta.fm.events, [line], 'the history survives a renumbering');
+  assert.equal(beta.fm.events[0], line, 'the history survives a renumbering');
+  assert.match(beta.fm.events[1], / renumbered .*001 -> 002/);
+  assert.equal(beta.fm.events.length, 2);
   assert.equal(beta.path, 'phases/002-beta.md');
   assert.equal(beta.fm.phase, '002-beta'); assert.equal(beta.fm.seq, 2);
   assert.match(beta.body, /^\n# Phase 002 — beta\n/);
@@ -450,6 +452,8 @@ test('075: overlapping writers, the other writer first: a CLI commit held at its
     assert.equal(b.out, '✅ created phase 001-otheritem (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
     assert.equal(b.err, '');
     assertPublish(f, f.home2, f.folder2, ['acme/demo/phases/001-otheritem.md', 'acme/demo/phases/002-nodeitem.md']); // the last publisher's mirror equals the published database
+    const ev = cli(['query', '--events', '2'], { cwd: cons2, tmp: f.dir, env: { BACKLOG_HOME: f.home2 } });
+    assert.match(ev.stdout, /renumbered.*001 -> 002/, ev.stdout + ev.stderr); // the history line of the renumbering is in the item
     assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all'), '', "B's clone tree is clean too");
   } finally { g.release(); } // never leave the held push (and its hook) running
 });

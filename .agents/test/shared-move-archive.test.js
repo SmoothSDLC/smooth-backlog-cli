@@ -80,7 +80,6 @@ function snapshotFolder(dir) {
   const out = {
     files,
     phases: rows('SELECT id, handoff_id, slug, seq, name, objective, summary, status, severity, priority, path, branch, commit_sha, location, repository, size_score, completed_at FROM phase ORDER BY id'),
-    events: rows('SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event ORDER BY id'),
   };
   con.close();
   return out;
@@ -533,8 +532,6 @@ test('move --to-repository: the item brings its own history, once, with no prefi
   assert.deepEqual(events.filter(l => l.includes('carried note')), [line]);
   assert.ok(events.some(l => l.includes(' moved_in ')), 'the arrival is recorded in the item');
   assert.ok(events.every(l => !l.includes('[from ')), events.join('\n'));
-  const con = db.connect(f.other);
-  try { assert.equal(con.prepare("SELECT COUNT(*) n FROM event WHERE note LIKE '%carried note%'").get().n, 0, 'the database copy is gone'); } finally { con.close(); }
 });
 
 test('075: move --to-repository: new number in the target, source file gone, one published commit for both folders', () => {

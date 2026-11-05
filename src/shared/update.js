@@ -111,7 +111,6 @@ async function update(argv) {
     let code;
     try { code = await db.undoOnThrow(con, folder, () => change(a, con, folder, repo)); } catch (e) { close(); throw e; } finally { close(); }
     if (code || a['dry-run']) return code;
-    // the commit tail; a renumbered item (two clones picked one number) gets its db row renamed and committed
     // the agent a command names goes into the commit subject (session names with colons are audit data too);
     // the actor the step acts as (a.by ?? a.claim ?? a.release), whatever the order of the options
     const subjectParts = ['update', ...argv.slice(0, 2)];
@@ -145,8 +144,6 @@ function dependencyCycle(con, folder, id, deps) {
 }
 
 async function change(a, con, folder, repo) {
-  const one = (sql, ...p) => { const r = con.prepare(sql).get(...p); return r ? { ...r } : null; };
-  const hid = one("SELECT id FROM handoff WHERE status='active' LIMIT 1")?.id ?? null;
 
   // --- pure planning event: explicit replan of the whole backlog
   if (a.replan) {
@@ -299,7 +296,7 @@ async function change(a, con, folder, repo) {
   a.wrote = { slug: row.slug, path: row.path };
   const recordChange = () => {
     db.logEvent(con, event, {
-      handoffId: row.handoff_id, phaseId: row.id, branch: fm.branch || '', commitSha: fm.commit || '',
+      phaseId: row.id, branch: fm.branch || '', commitSha: fm.commit || '',
       note: a.note || `set ${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ')}`,
     });
     db.scan(con, folder); // rescan -> the db follows the file
@@ -310,15 +307,15 @@ async function change(a, con, folder, repo) {
   if (moveTarget !== null) {
     order = store.reflow(folder, { slug: row.slug, target: moveTarget }, recordChange);
     changes.priority = `P${new Map(order).get(row.slug) ?? 'None'}`;
-    db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
+    db.logEvent(con, 'planning_event', { phaseId: row.id, note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
   } else if (completing) {
     order = store.reflow(folder, null, recordChange); // the done item leaves the backlog; the rest re-densify
-    db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `completed ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
+    db.logEvent(con, 'planning_event', { phaseId: row.id, note: `completed ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
   } else if (['pending', 'in_progress'].includes(row.status) !== ['pending', 'in_progress'].includes(fm.status)) {
     // into or out of the queue by a status other than done (done -> pending keeps its old priority and collides; a status out leaves a gap):
     // rank the queue again (beyond python parity, which leaves the collision or the gap)
     order = store.reflow(folder, null, recordChange);
-    db.logEvent(con, 'planning_event', { handoffId: hid, phaseId: row.id, note: `${row.slug} is now ${fm.status}; backlog re-prioritized to ${order.length} item(s)` });
+    db.logEvent(con, 'planning_event', { phaseId: row.id, note: `${row.slug} is now ${fm.status}; backlog re-prioritized to ${order.length} item(s)` });
   }
   if (order) db.scan(con, folder); else recordChange();
 

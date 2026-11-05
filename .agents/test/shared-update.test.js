@@ -399,7 +399,6 @@ function snapshot(f) {
   const out = {
     files,
     phases: rows('SELECT id, handoff_id, slug, seq, name, objective, summary, status, severity, priority, path, branch, commit_sha, location, repository, size_score, completed_at FROM phase ORDER BY id'),
-    events: rows('SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event ORDER BY id'),
     log: git(f.home, 'log', '--format=%s').split('\n'),
   };
   con.close();

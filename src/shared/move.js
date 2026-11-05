@@ -84,7 +84,7 @@ async function toBranch(con, folder, r, branch, note, { repo, guard, wrote }) {
   store.write({ path, fm, body }, folder);
   wrote.push({ slug: r.slug, path: r.path });
   db.logEvent(con, 'moved_branch', {
-    handoffId: r.handoff_id, phaseId: r.id, branch,
+    phaseId: r.id, branch,
     note: `${r.slug}: branch '${old}' -> '${branch}'${note ? ` (${note})` : ''}`,
   });
 }
@@ -164,7 +164,7 @@ async function move(a, con, ctx) {
         store.reflow(tdir); // rank the copy among the destination's items
         db.scan(tcon, tdir);
         con.prepare('DELETE FROM phase WHERE id=?').run(r.id);
-        db.logEvent(con, 'moved_out', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
+        db.logEvent(con, 'moved_out', { phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
       });
       db.scan(con, folder);
     });

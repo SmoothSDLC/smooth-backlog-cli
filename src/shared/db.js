@@ -35,10 +35,6 @@ CREATE TABLE IF NOT EXISTS phase (
   created_at TEXT, updated_at TEXT, completed_at TEXT,
   UNIQUE(handoff_id, slug)
 );
-CREATE TABLE IF NOT EXISTS event (
-  id INTEGER PRIMARY KEY, ts TEXT, handoff_id INTEGER, phase_id INTEGER,
-  event TEXT, branch TEXT DEFAULT '', commit_sha TEXT DEFAULT '', note TEXT DEFAULT ''
-);
 `;
 
 // store.load over phases/ only: scan_stack never reads archive/, so archive content cannot block a scan.
@@ -64,9 +60,9 @@ export function connect(folder, { readOnly = false } = {}) {
   if (!readOnly) { file = cacheFile(folder); mkdirSync(dirname(file), { recursive: true }); }
   const db = new (sqlite().DatabaseSync)(file, { timeout: 30000 });
   db.exec(SCHEMA);
-  db.exec('DELETE FROM event; DELETE FROM phase;'); // scan opens its own transaction: the two steps are not one
+  db.exec('DELETE FROM phase;');
   db.folder = folder;
-  scan(db, folder, [], { includeArchived: true });
+  scan(db, folder, { includeArchived: true });
   return db;
 }
 
@@ -75,7 +71,7 @@ export function connect(folder, { readOnly = false } = {}) {
 // called by every writer) and every row of the mirror go back as they were. A file the command did not write is never touched.
 // Beyond python parity. shortcut: the files are held in memory; fine for a backlog folder.
 export async function undoOnThrow(db, folder, fn) {
-  const rowsOf = () => ['handoff', 'phase', 'event'].map(t => [t, db.prepare(`SELECT * FROM ${t}`).all().map(r => ({ ...r }))]);
+  const rowsOf = () => ['handoff', 'phase'].map(t => [t, db.prepare(`SELECT * FROM ${t}`).all().map(r => ({ ...r }))]);
   const tables = rowsOf();
   let touched;
   const opened = beginJournal(folder);
@@ -101,12 +97,9 @@ export async function undoOnThrow(db, folder, fn) {
   } finally { if (opened) endJournal(); }
 }
 
-// log_event
-export function logEvent(db, event, { handoffId = null, phaseId = null, branch = '', commitSha = '', note = '' } = {}) {
-  db.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)')
-    .run(now(), handoffId, phaseId, event, branch, commitSha, note);
-  // the item carries its history; the scan's own bookkeeping stays out of it
-  const row = phaseId && db.folder && !['ingested', 'reingested', 'file_missing'].includes(event) ? db.prepare('SELECT path FROM phase WHERE id=?').get(phaseId) : null;
+// log_event: the item carries its history, so the event is a line in the item file.
+export function logEvent(db, event, { phaseId = null, branch = '', commitSha = '', note = '' } = {}) {
+  const row = phaseId && db.folder ? db.prepare('SELECT path FROM phase WHERE id=?').get(phaseId) : null;
   if (row && existsSync(join(db.folder, row.path))) addEvent(db.folder, row.path, { event, branch, commitSha, note });
 }
 
@@ -131,55 +124,28 @@ export function ingest(db, item, hid = ensureAnchor(db)) {
     completed_at: v('completed', null),
   };
   const row = db.prepare('SELECT id, sha FROM phase WHERE handoff_id=? AND slug=?').get(hid, slug);
-  const ev = { handoffId: hid, branch: cols.branch, commitSha: cols.commit_sha };
   if (!row) {
     const names = ['handoff_id', 'slug', ...Object.keys(cols), 'created_at', 'updated_at'];
     const id = Number(db.prepare(`INSERT INTO phase(${names}) VALUES(${names.map(() => '?')})`).run(hid, slug, ...Object.values(cols), now(), now()).lastInsertRowid);
-    // Beyond the earlier scripts: phase.id is a bare INTEGER PRIMARY KEY, so after move.py deleted the row with the highest id the new row
-    // reuses it. Events still naming that id belong to the departed item (move.py keeps its history there): detach them, keep them.
-    db.prepare('UPDATE event SET phase_id=NULL WHERE phase_id=?').run(id);
-    logEvent(db, 'ingested', { ...ev, phaseId: id, note: `new phase ${slug}` });
     return { id, changed: true };
   }
   if (row.sha === item.sha256) return { id: Number(row.id), changed: false };
   db.prepare(`UPDATE phase SET ${[...Object.keys(cols), 'updated_at'].map(k => `${k}=?`)} WHERE id=?`).run(...Object.values(cols), now(), row.id);
-  logEvent(db, 'reingested', { ...ev, phaseId: Number(row.id), note: `sha drift ${String(row.sha ?? '').slice(0, 7)}->${item.sha256.slice(0, 7)}` });
   return { id: Number(row.id), changed: true };
 }
 
-// scan_stack over phases/*.md (reconciliation opts into archive/ too): ingest what is new or changed, log
-// file_missing for every non-archived row without a file. One transaction, so a failed scan leaves the db as it was.
-// renumbered = the [old, new] pairs sync.commit returned: a row of the old number whose file is gone is the stale
-// row of a renumbered item, and is renamed in place to the new number so it is not reported as a ghost.
-export function scan(db, folder, renumbered = [], { includeArchived = false } = {}) {
-  const summary = { handoff: 0, phases: 0, changed: 0, missing: 0 };
+// scan_stack over phases/*.md (reconciliation opts into archive/ too): ingest what is new or changed.
+// One transaction, so a failed scan leaves the db as it was.
+export function scan(db, folder, { includeArchived = false } = {}) {
+  const summary = { handoff: 0, phases: 0, changed: 0 };
   db.exec('BEGIN');
   try {
     const hid = ensureAnchor(db);
-    for (const [old, next] of renumbered) {
-      for (const r of db.prepare(`SELECT id, slug, path, branch, commit_sha FROM phase WHERE handoff_id=? AND seq=?${includeArchived ? '' : " AND status != 'archived'"}`).all(hid, Number(old))) {
-        if (existsSync(join(folder, r.path))) continue;
-        // in place, keeping the id: the row's events stay its own (a deleted id can be reused by another item).
-        // The ingest below then sees the sha drift and logs 'reingested'.
-        const num = String(next).padStart(3, '0');
-        const slug = num + r.slug.replace(/^\d+/, '');
-        if (db.prepare('SELECT 1 FROM phase WHERE handoff_id=? AND slug=?').get(hid, slug)) continue; // unique slug: leave it to file_missing
-        db.prepare('UPDATE phase SET slug=?, seq=?, path=? WHERE id=?').run(slug, next, r.path.replace(/[^/]*$/, f => num + f.replace(/^\d+/, '')), r.id);
-        logEvent(db, 'renumbered', { handoffId: hid, phaseId: Number(r.id), branch: r.branch, commitSha: r.commit_sha, note: `${r.slug} renumbered to ${String(next).padStart(3, '0')}` });
-      }
-    }
-    const seen = new Set();
     // Ordinary scans keep Python's active-only contract. Recovery must also derive the archive mirror from its files.
     const items = includeArchived ? load(folder).filter(i => hasFrontMatter(readFileSync(join(folder, i.path), 'utf8'))) : loadPhases(folder);
     for (const item of items) {
       summary.phases += 1;
       summary.changed += Number(ingest(db, item, hid).changed);
-      seen.add(item.fm.phase || basename(item.path, '.md'));
-    }
-    for (const r of db.prepare('SELECT id, slug, status FROM phase WHERE handoff_id=?').all(hid)) {
-      if (seen.has(r.slug) || r.status === 'archived') continue;
-      summary.missing += 1;
-      logEvent(db, 'file_missing', { handoffId: hid, phaseId: Number(r.id), note: `phase ${r.slug} row present but file absent` });
     }
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
@@ -192,7 +158,7 @@ export function markArchived(db, slug, location) {
   const r = db.prepare('SELECT * FROM phase WHERE slug=?').get(slug);
   if (!r) return null;
   db.prepare("UPDATE phase SET status='archived', path=?, updated_at=? WHERE id=?").run(location, now(), r.id);
-  logEvent(db, 'archived', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch, commitSha: r.commit_sha, note: `${r.slug} -> ${location}` });
+  logEvent(db, 'archived', { phaseId: r.id, branch: r.branch, commitSha: r.commit_sha, note: `${r.slug} -> ${location}` });
   return { id: Number(r.id), slug };
 }
 
@@ -232,7 +198,7 @@ function replayLocal(db, folder, { local: localFile, base: baseFile }, renumbere
       for (const b of was) if (!mineBy.has(b.slug)) db.prepare('DELETE FROM phase WHERE slug=?').run(rename(b.slug)); // the row is gone locally, and so is its file
       db.exec('COMMIT');
     } catch (e) { db.exec('ROLLBACK'); throw e; }
-    scan(db, folder, renumbered, { includeArchived: true });
+    scan(db, folder, { includeArchived: true });
 
     const key = (slug, e) => JSON.stringify([slug, e.ts, e.event, e.branch, e.commit_sha, e.note]);
     // Row ids are private to each snapshot: a deletion and insertion can reuse one even in the same clone.
@@ -271,9 +237,9 @@ export function reconcileFolders(list, pairs) {
           const own = pairs.filter(p => p.folder === undefined || p.folder === resolve(folder)); // the renumberings of this folder only
           const mine = (pairs.localDbs ?? []).filter(f => f.folder === folder);
           if (mine.length) for (const files of mine) replayLocal(again, folder, files, own);
-          else scan(again, folder, own, { includeArchived: true });
+          else scan(again, folder, { includeArchived: true });
           reflow(folder); // two writers each ranked their item against their own queue: ties are possible now that the queues are merged
-          scan(again, folder, [], { includeArchived: true });
+          scan(again, folder, { includeArchived: true });
         } finally { again.close(); }
       }
     } finally { for (const { local } of pairs.localDbs ?? []) rmSync(dirname(local), { recursive: true, force: true }); }

@@ -244,7 +244,6 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
     const out = {
       files,
       phases: rows('SELECT id, slug, seq, status, priority, branch, commit_sha, completed_at FROM phase ORDER BY id'),
-      events: rows("SELECT handoff_id, phase_id, event, branch, commit_sha, note FROM event WHERE event != 'ingested' AND event != 'reingested' ORDER BY id"),
     };
     con.close();
     return out;

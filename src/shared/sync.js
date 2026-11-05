@@ -184,6 +184,7 @@ async function renumberFiles(home, stream, added) {
     const target = targetOf(path, next);
     await must(home, ['mv', `${name}/${path}`, `${name}/${target}`], `move ${path} to ${target}`);
     store.write({ path: join(folder, target), ...retagged(mine, next) });
+    store.addEvent(folder, target, { event: 'renumbered', branch: mine.fm.branch || '', note: `${pad(old)} -> ${pad(next)}` });
     await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
     const r = await commitOnly(home, [lit(name)], ['--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
@@ -266,6 +267,7 @@ async function repairConflicts(home, folders, names, renumbered) {
         const rel = path.slice(name.length + 1);
         const old = Number(mine.fm.seq); const next = store.nextSeqFor(folder, posix.basename(rel).replace(/^\d+/, '')); const target = targetOf(rel, next);
         store.write({ path: join(folder, target), ...retagged(mine, next) });
+        store.addEvent(folder, target, { event: 'renumbered', branch: mine.fm.branch || '', note: `${pad(old)} -> ${pad(next)}` });
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
         process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
         renumbered.push(pairOf(old, next, folder));

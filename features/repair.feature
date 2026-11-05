@@ -20,6 +20,15 @@ Feature: Repair - an item that cannot be read is named with its field and can be
     And item 1 has status "pending"
     And the backlog repository has no uncommitted or unpushed change
 
+  Scenario: an unreadable item is restored to its previous version
+    Given I run `backlog update 1 --summary "the good summary"`
+    And the status of item 1 is damaged in the backlog repository
+    When I run `backlog update 1 --restore`
+    Then the command succeeds
+    And item 1 has summary "the good summary"
+    And item 1 has status "pending"
+    And the backlog repository has no uncommitted or unpushed change
+
   Scenario: every command of the backlog refuses while one item cannot be read
     Given an item "Fine" exists
     And the status of item 1 is damaged in the backlog repository

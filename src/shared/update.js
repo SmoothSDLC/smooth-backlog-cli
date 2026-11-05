@@ -20,7 +20,7 @@ import { asList, foreignCycle, foreignItem, heldBy, isForeign, teamLead, teamSco
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
-const BOOL = ['dry-run'];
+const BOOL = ['dry-run', 'restore'];
 // the hand-off flags of an earlier change (the record is the producer's, the accept and reject the team lead's).
 export const TEAM_VALUE = ['wip-override', 'claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason', 'reassign-review',
   'handoff', 'handoff-commit', 'handoff-contract', 'handoff-verification', 'handoff-outputs', 'handoff-pickup', 'handoff-risks', 'accept-handoff', 'reject-handoff', 'checks'];

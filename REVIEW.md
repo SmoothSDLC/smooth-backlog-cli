@@ -150,6 +150,8 @@ files would lose the history. Recommendation: a later change that writes the eve
 (one line per event) and then makes `backlog.db` an ignored cache; the conflict-repair code goes with it. Not done in
 this pull request (decision D, section 4).
 
+Events are in the item files since the item-history change (front-matter list `events`, read by `query --events`); the database is now derived, and a later change makes it an ignored cache.
+
 ### 2.6 Dead code, unused options, speculative abstractions — SIMPLIFY
 
 Per-export inventory (deterministic: every `export` of `src/**`, grep of its name in the other `src` files, `bin`,

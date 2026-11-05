@@ -189,7 +189,8 @@ Options:
       Append this text to the body of the item.
   --replan REPLAN
       The new leading order of the backlog, as comma-separated item numbers or slugs. It is a pure planning event
-      and renumbers the backlog to 0..M-1. No item argument is given with it.
+      and renumbers the backlog to 0..M-1; the order itself is the record, no event is written. No item argument is
+      given with it.
   --note NOTE
       The note for the event log. Without it the log records which fields were set.
   --claim AGENT
@@ -386,8 +387,8 @@ Options:
       gone or holds no item: no front matter, or an empty one; a file that cannot be read or parsed fails the
       command, as every read does).
   --events [EVENTS]
-      The event log. With an item (number or slug) it prints the events of that item, newest first; without one it
-      prints the latest 50 events of the backlog.
+      The history of the items, kept in the item files. With an item (number or slug) it prints the events of that
+      item, newest first; without one it prints the latest 50 events of the backlog, archived items included.
   --by-branch BY_BRANCH
       The items recorded on this branch.
   --changed

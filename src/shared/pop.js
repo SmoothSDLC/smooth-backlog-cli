@@ -1,6 +1,6 @@
 // Agent pop: `backlog pop` and the lead's plan view `backlog query --plan`.
 // (pop) in the earlier scripts order: pull, no-backlog check, branch, connect, findings, then the one next action of the agent,
-// continue > review > claim > refine > chunk > idle (exit 3), over the backlog.db mirror and the item files (views.js, team.js).
+// continue > review > claim > refine > chunk > idle (exit 3), over the rows of the items (index.rows) and the item files (views.js, team.js).
 // --claim-now claims through `backlog update --claim` as runs. Never writes an item itself.
 // shortcut: parse and the findings below repeat query.js (not exported there); fold them in when that file is free.
 import { spawnSync } from 'node:child_process';
@@ -8,14 +8,14 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BacklogError } from '../errors.js';
-import * as db from './db.js';
+import * as index from './index.js';
 import { REFINE_HOW, missingFields, reviewRefusal, stageOf as stageOfItem } from './lifecycle.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import * as team from './team.js';
-import { OPEN, SCOPES, refinementCap, reviewOffer, teamRows, waitingOn } from './views.js';
+import { SCOPES, refinementCap, reviewOffer, teamRows, waitingOn } from './views.js';
 import { wipRefusal } from './wip.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'plan', 'claim-now'];
@@ -49,7 +49,7 @@ function parse(argv) {
   return a;
 }
 
-// over the mirror rows: the ids of the rows that are out of every queue.
+// over the rows: the ids of the rows that are out of every queue.
 function excludedIds(rows, repo) {
   return new Set(rows.filter(r => r.status !== 'archived' && (!r.repository || !r.branch || r.repository !== repo)).map(r => r.id));
 }
@@ -68,12 +68,12 @@ function reviewSay(slug, fm, me) {
 }
 
 //. io-free: returns the exit code.
-async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
+async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
   const me = a.agent;
   const lead = me === team.teamLead(a.lead);
   // the lead never claims an execution item; a roster profile with review_only never claims either
   const noClaim = lead || Boolean(team.loadRoster(a.roster || process.env.TEAM_ROSTER || '')[me]?.review_only);
-  const open = all(OPEN, hid);
+  const open = index.open(all);
   const files = new Map(store.load(folder).map(i => [i.path, i]));
   const incomplete = new Map(); // members never claim, review or work an incomplete item of a team; an item without a team has no such fields
   for (const r of open) {
@@ -250,13 +250,13 @@ async function pop(a, { all, hid, excluded, repo, branch, folder, home }) {
 // stage ready are neither reviewed nor claimed.
 // an item that waits on a not-done item of another repository is offered to nobody here (pop names that first)
 const waitsAway = (folder, x) => (x.undone ?? team.undoneDependencies(folder, x.fm)).some(d => d.foreign && d.item?.status !== 'done');
-async function plan(a, { all, hid, excluded, repo, branch, folder, home }) {
+async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
   const roster = team.loadRoster(a.roster || process.env.TEAM_ROSTER || '');
   const want = new Set(a.agents ? team.asList(a.agents) : Object.keys(roster));
   const members = Object.keys(roster).filter(m => want.has(m)); // roster order
   const lead = team.teamLead(a.lead);
   const files = new Map(store.load(folder).map(i => [i.path, i]));
-  const every0 = await teamRows({ open: all(OPEN, hid), scope: 'branch', cap: 'off', every: false, excluded, repo, branch, folder, home });
+  const every0 = await teamRows({ open: index.open(all), scope: 'branch', cap: 'off', every: false, excluded, repo, branch, folder, home });
   const missing = new Map(every0.map(x => { const file = files.get(x.r.path); return [x.r.id, file ? missingFields(file.fm, file.body) : ['the item file']]; }));
   const every = every0.filter(x => team.inTeam(x.fm)); // only the caller's team's items (TEAM_NAME)
   const rows = every.filter(x => !missing.get(x.r.id).length // an incomplete item is never dispatched to a member
@@ -353,14 +353,12 @@ async function popCommand(argv) {
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
   await assertInside(home, folder);
-  const con = db.connect(folder);
   try {
-    const all = (sql, ...p) => con.prepare(sql).all(...p).map(r => ({ ...r }));
-    const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
-    const excluded = excludedIds(all("SELECT * FROM phase WHERE status NOT IN ('archived')"), repo);
-    return await (a.plan ? plan : pop)(a, { all, hid, excluded, repo, branch, folder, home });
+    const { rows } = index.rows(folder);
+    const excluded = excludedIds(rows.filter(r => r.status != null && r.status !== 'archived'), repo);
+    return await (a.plan ? plan : pop)(a, { rows, excluded, repo, branch, folder, home });
   } catch (e) {
     if (e instanceof BacklogError) return die(e.message, e.exitCode);
     throw e;
-  } finally { con.close(); }
+  }
 }

@@ -233,6 +233,14 @@ export function write(item, root, { frontMatterOnly = false } = {}) {
   atomicWrite(item.path, frontMatterOnly ? replaceFrontMatter(readFileSync(item.path, 'utf8'), item.fm) : dump(item.fm, item.body));
 }
 
+// A text file of the repository folder that is no item (the index): the same checks, journal and atomic write as an item.
+export function writeText(path, text, root) {
+  assertFolder(root);
+  assertNoSymlinks(root, path);
+  note(path);
+  atomicWrite(path, text);
+}
+
 // phases/*.md, then archive/**/*.md. path is folder-relative with '/'.
 // The phases/*.md files without a front matter block: left alone by every command, reported by query.
 export function bareFiles(dir) {

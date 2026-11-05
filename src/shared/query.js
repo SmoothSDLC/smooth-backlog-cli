@@ -1,13 +1,13 @@
 // Read views: `backlog query` and `backlog next`.
-// (--next --status --critical --phase --events --by-branch --all --branch --json) over the backlog.db mirror,
+// (--next --status --critical --phase --events --by-branch --all --branch --json) over the rows of the items (index.rows) and the committed index,
 // the earlier scripts order: pull, no-backlog check, branch, connect, findings. Output strings and --json match.
-// Never writes an item (the db is opened as lib_db.connect does). The team views are views.js, --plan is pop.js.
+// Never writes an item (the rows are built in memory). The team views are views.js, --plan is pop.js.
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { parse as parseItem } from './frontmatter.js';
-import * as db from './db.js';
-import { assertInside, git, itemSelector, redact } from './safety.js';
+import * as index from './index.js';
+import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
@@ -20,7 +20,7 @@ import { wipView } from './wip.js';
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip', 'changed'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
 const ACTIONABLE = ['pending', 'in_progress'];
-const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
+const CLOSED = ['done', 'archived'];
 
 // argparse. --events takes an optional value (const "*"); shortcut: no unique-prefix abbreviations.
 function parse(argv) {
@@ -47,7 +47,7 @@ const sha7 = r => String(r.commit_sha ?? '').slice(0, 7);
 const pad = (v, n) => String(v).padStart(n);
 const repr = s => redact(s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}'`);
 
-// over the mirror rows: the file of a row is looked up in the repository folder.
+// over the rows of the folder's items (index.rows).
 function findings(rows, repo) {
   const out = { foreign: [], untagged: [] };
   for (const r of rows) {
@@ -167,14 +167,11 @@ async function query(argv) {
   const plain = a.phase || a.events !== undefined || a['by-branch'] || a.critical;
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
-  await assertInside(home, folder); // no symlink between the home and the folder (db.connect checks only below the owner)
-  const con = db.connect(folder);
-  try {
-    const all = (sql, ...p) => con.prepare(sql).all(...p).map(r => ({ ...r }));
-    const one = (sql, ...p) => { const r = con.prepare(sql).get(...p); return r && { ...r }; };
-    const hid = one("SELECT id FROM handoff WHERE status='active' LIMIT 1")?.id ?? null;
-    const critical = () => (hid === null ? [] : all("SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') AND severity='critical' ORDER BY priority ASC, seq ASC", hid));
-    const bad = findings(all("SELECT * FROM phase WHERE status NOT IN ('archived')"), repo);
+  await assertInside(home, folder); // no symlink between the home and the folder
+  {
+    const { handoff: h, rows, items } = index.rows(folder);
+    const critical = () => index.open(rows).filter(r => r.severity === 'critical');
+    const bad = findings(rows.filter(r => r.status != null && r.status !== 'archived'), repo);
     const bare = store.bareFiles(folder);
     if (bare.length) bad.bare = bare; // only when there is one: the --json findings keep the earlier scripts three keys
     const excluded = new Set(Object.values(bad).flat().map(r => r.id));
@@ -188,17 +185,17 @@ async function query(argv) {
       return 0;
     }
 
-    if (a.claimable || a.reviewable || a.blocked || a.decisions) return teamView(a, { all, hid, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
+    if (a.claimable || a.reviewable || a.blocked || a.decisions) return teamView(a, { rows, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
 
     if (a.next) {
-      const items = new Map(store.load(folder).map(i => [i.path, i.fm]));
+      const fms = new Map(items.map(i => [i.path, i.fm]));
       // a done producer whose hand-off the lead has not accepted holds the dependent back like an
       // unfinished dependency: next skips it, the way pop, work, plan and --claimable already do, and names the
       // skipped edge (the design requires the edge state named, not a silent skip)
       let r = null; const skipped = [];
-      for (const x of all(OPEN, hid)) {
+      for (const x of index.open(rows)) {
         if (excluded.has(x.id) || !(a.all || ((x.repository || '') === repo && (x.branch || '') === branch))) continue;
-        const held = team.undoneDependencies(folder, items.get(x.path) ?? {}).filter(d => d.handoff);
+        const held = team.undoneDependencies(folder, fms.get(x.path) ?? {}, rows).filter(d => d.handoff);
         if (held.length) { skipped.push({ row: x, deps: held }); continue; }
         r = x; break;
       }
@@ -207,7 +204,7 @@ async function query(argv) {
         return 0;
       }
       // the next item may wait on another repository's item: that is named as the work to do first
-      const away = team.undoneDependencies(folder, items.get(r.path) ?? {}).filter(d => d.foreign && d.item && d.item.status !== 'done')
+      const away = team.undoneDependencies(folder, fms.get(r.path) ?? {}, rows).filter(d => d.foreign && d.item && d.item.status !== 'done')
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
       const skip = skipped.flatMap(s => s.deps.map(d => ({ item: s.row.slug, edge: d.id, handoff: d.handoff })));
       if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), ...(skip.length ? { skipped: skip } : {}) }); return 0; }
@@ -225,12 +222,9 @@ async function query(argv) {
     if (a.phase && String(a.phase).includes(',')) { // several items at once, one JSON object each, in an array
       const out = [];
       for (const id of String(a.phase).split(',').map(x => x.trim()).filter(Boolean)) {
-        const sel = itemSelector(id);
-        const r = sel && (sel.number !== undefined
-          ? one("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id", sel.number)
-          : one('SELECT * FROM phase WHERE slug=?', sel.slug));
+        const r = index.find(rows, id);
         if (!r) { say(`❌ no phase ${repr(id)}`); return 1; }
-        const file = store.load(folder).find(i => i.path === r.path);
+        const file = items.find(i => i.path === r.path);
         out.push({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
       }
       dump(out);
@@ -238,50 +232,42 @@ async function query(argv) {
       return 0;
     }
     if (a.phase) {
-      const sel = itemSelector(a.phase);
-      const r = sel && (sel.number !== undefined
-        ? one("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id", sel.number)
-        : one('SELECT * FROM phase WHERE slug=?', sel.slug));
+      const r = index.find(rows, a.phase);
       if (!r) { say(`❌ no phase ${repr(a.phase)}`); return 1; }
       // the earlier scripts row, then the whole item
-      const file = store.load(folder).find(i => i.path === r.path);
+      const file = items.find(i => i.path === r.path);
       dump({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
       seen.view(a.agent, folder, repo, r); // the agent now holds this version: its next write to the item is checked against it
       return 0;
     }
 
     if (a.events !== undefined) {
-      // the history is kept in the items themselves (archived ones included); the database is not read
+      // the history is kept in the items themselves (archived ones included)
       let path = null;
       if (a.events !== '*') {
         // The oracle crashes on an unknown item here; a refusal like --phase is the same exit status.
-        const sel = itemSelector(a.events);
-        const p = sel && (sel.number !== undefined
-          ? one("SELECT * FROM phase WHERE seq=? ORDER BY CASE status WHEN 'archived' THEN 1 ELSE 0 END, id", sel.number)
-          : one('SELECT * FROM phase WHERE slug=?', sel.slug));
+        const p = index.find(rows, a.events);
         if (!p) { say(`❌ no phase ${repr(a.events)}`); return 1; }
         path = p.path;
       }
       // newest first: the lines of one item are appended in time order, so reversing first keeps equal timestamps in that order
-      const rows = store.load(folder).filter(i => path === null || i.path === path)
+      const events = items.filter(i => path === null || i.path === path)
         .flatMap(i => team.asList(i.fm.events).map(store.parseEvent)).reverse().sort((x, y) => (x.ts < y.ts ? 1 : x.ts > y.ts ? -1 : 0));
-      if (path === null) rows.length = Math.min(rows.length, 50);
-      for (const e of rows) say(`  ${e.ts}  ${String(e.event).padEnd(14)} branch=${e.branch} commit=${sha7(e)} ${e.note}`);
+      if (path === null) events.length = Math.min(events.length, 50);
+      for (const e of events) say(`  ${e.ts}  ${String(e.event).padEnd(14)} branch=${e.branch} commit=${sha7(e)} ${e.note}`);
       return 0;
     }
 
     if (a['by-branch']) {
-      for (const r of all('SELECT * FROM phase WHERE branch=? ORDER BY seq', a['by-branch'])) {
+      for (const r of rows.filter(x => x.branch === a['by-branch']).sort((x, y) => x.seq - y.seq)) {
         say(`  [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} commit=${sha7(r)} ${r.location}`);
       }
       return 0;
     }
 
     // default / --status: the full stack
-    const h = one("SELECT * FROM handoff WHERE status='active' LIMIT 1");
-    if (!h) { say('ℹ️  backlog not initialized yet (backlog new creates the first item and the phase anchor)'); return 0; }
-    const every = all("SELECT * FROM phase WHERE handoff_id=? ORDER BY CASE WHEN status IN ('done','archived') THEN 1 ELSE 0 END, priority ASC, seq ASC", h.id);
-    const rows = every.filter(r => !excluded.has(r.id) && (a.all || ((r.repository || '') === repo && (r.branch || '') === branch)));
+    const every = [...rows].sort((x, y) => CLOSED.includes(x.status) - CLOSED.includes(y.status) || (x.priority ?? Infinity) - (y.priority ?? Infinity) || x.seq - y.seq);
+    const shown = every.filter(r => !excluded.has(r.id) && (a.all || ((r.repository || '') === repo && (r.branch || '') === branch)));
     // F6: open items of another branch that is no longer on the origin wait for a decision, in no queue
     const others = every.filter(r => !excluded.has(r.id) && ACTIONABLE.includes(r.status) && r.repository === repo && r.branch !== branch);
     let gone = []; let unreadable = false;
@@ -298,22 +284,22 @@ async function query(argv) {
       const fmOf = r => parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8')).fm;
       const teamFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
       const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(x => (x && typeof x === 'object' ? teamFields(x) : x)) : v])); // bare files stay paths
-      dump({ handoff: h, repository: repo, branch: redact(branch), phases: rows.map(teamFields), gone_branch_items: gone.map(teamFields), findings: each(bad) });
+      dump({ handoff: h, repository: repo, branch: redact(branch), phases: shown.map(teamFields), gone_branch_items: gone.map(teamFields), findings: each(bad) });
       return 0;
     }
     criticalBanner(critical());
     say(`📋 ${repo} — branch ${a.all ? '(all)' : redact(branch)}`);
     say(`   objective: ${h.objective}`);
-    say(`   phases (${rows.length}) — work queue order, P0 = next:`);
+    say(`   phases (${shown.length}) — work queue order, P0 = next:`);
     let byPath;
-    for (const r of rows) {
+    for (const r of shown) {
       const mark = { done: '✅', archived: '📦', in_progress: '🔄' }[r.status] ?? '•';
       const crit = (r.severity || 'normal') === 'critical' && ACTIONABLE.includes(r.status) ? ' ⚠️CRIT' : '';
       say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority, 3)}${crit}  ${r.name}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
       // a dependency on another repository's item is shown with its state
       { // every status: a done item still shows what it depended on
-        const deps = (byPath ??= new Map(store.load(folder).map(i => [i.path, i.fm]))).get(r.path)?.depends_on;
+        const deps = (byPath ??= new Map(items.map(i => [i.path, i.fm]))).get(r.path)?.depends_on;
         for (const d of team.asList(deps).filter(team.isForeign)) {
           const f = team.foreignItem(folder, d);
           say(`        ⛓ depends on ${d}${f ? ` ${f.slug} (status ${f.status})` : ' (no such item in the backlog repository)'}`);
@@ -326,5 +312,5 @@ async function query(argv) {
       for (const r of gone) say(`      - ${r.slug} (branch ${r.branch}) ${r.name}`);
     }
     return 0;
-  } finally { con.close(); }
+  }
 }

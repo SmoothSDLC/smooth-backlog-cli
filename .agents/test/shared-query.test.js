@@ -204,7 +204,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "summary": "sum Delta",
       "status": "done",
       "severity": "normal",
-      "priority": 3,
+      "priority": 4,
       "path": "phases/004-delta.md",
       "sha": "SHA",
       "branch": "main",
@@ -230,7 +230,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "summary": "sum Feat",
       "status": "pending",
       "severity": "normal",
-      "priority": 3,
+      "priority": 0,
       "path": "phases/005-feat.md",
       "sha": "SHA",
       "branch": "feature",
@@ -257,7 +257,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
         "summary": "s",
         "status": "pending",
         "severity": "normal",
-        "priority": 9,
+        "priority": 3,
         "path": "phases/006-foreign.md",
         "sha": "SHA",
         "branch": "main",
@@ -283,7 +283,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
         "summary": "s",
         "status": "pending",
         "severity": "normal",
-        "priority": 9,
+        "priority": 0,
         "path": "phases/007-untagged.md",
         "sha": "SHA",
         "branch": "",
@@ -329,7 +329,7 @@ test('075: --status text: the findings, the critical banner, the queue and the g
     + '        ↳ sum Alpha\n'
     + '   🔄 [  3] 003-gamma                    in_progress  P  2  Gamma\n'
     + '        ↳ sum Gamma\n'
-    + '   ✅ [  4] 004-delta                    done         P  3  Delta\n'
+    + '   ✅ [  4] 004-delta                    done         P  4  Delta\n'
     + '        ↳ sum Delta\n'
     + '   ⚠️  1 open item(s) belong to branches that no longer exist on the origin; they are in no queue. Decide for each: move to a branch (backlog move <item> --to-branch <name>), archive, or remove:\n'
     + '      - 005-feat (branch feature) Feat\n');
@@ -344,23 +344,23 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
     + '   phases (5) — work queue order, P0 = next:\n'
     + '   • [  2] 002-beta                     pending      P  0 ⚠️CRIT  Beta\n'
     + '        ↳ sum Beta\n'
+    + '   • [  5] 005-feat                     pending      P  0  Feat\n'
+    + '        ↳ sum Feat\n'
     + '   • [  1] 001-alpha                    pending      P  1  Alpha\n'
     + '        ↳ sum Alpha\n'
     + '   🔄 [  3] 003-gamma                    in_progress  P  2  Gamma\n'
     + '        ↳ sum Gamma\n'
-    + '   • [  5] 005-feat                     pending      P  3  Feat\n'
-    + '        ↳ sum Feat\n'
-    + '   ✅ [  4] 004-delta                    done         P  3  Delta\n'
+    + '   ✅ [  4] 004-delta                    done         P  4  Delta\n'
     + '        ↳ sum Delta\n');
   assert.equal(view(f, ['--status', '--branch', 'feature']).stdout,
     STATUS_FINDINGS
     + '📋 acme/demo — branch feature\n'
     + '   objective: phase anchor (no document)\n'
     + '   phases (1) — work queue order, P0 = next:\n'
-    + '   • [  5] 005-feat                     pending      P  3  Feat\n'
+    + '   • [  5] 005-feat                     pending      P  0  Feat\n'
     + '        ↳ sum Feat\n');
   const v = JSON.parse(view(f, ['--status', '--all', '--json']).stdout);
-  assert.deepEqual(v.phases.map(x => [x.slug, x.branch, x.priority]), [['002-beta', 'main', 0], ['001-alpha', 'main', 1], ['003-gamma', 'main', 2], ['005-feat', 'feature', 3], ['004-delta', 'main', 3]]);
+  assert.deepEqual(v.phases.map(x => [x.slug, x.branch, x.priority]), [['002-beta', 'main', 0], ['005-feat', 'feature', 0], ['001-alpha', 'main', 1], ['003-gamma', 'main', 2], ['004-delta', 'main', 4]]);
   assert.deepEqual(v.gone_branch_items, [], 'with --all the gone-branch item is in the queue');
   // the branch view's JSON, whole: the handoff, the branch, that branch's queue only, no gone-branch items, and the findings
   assert.deepEqual(normJson(view(f, ['--status', '--branch', 'feature', '--json']).stdout), {
@@ -369,14 +369,14 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
     branch: 'feature',
     phases: [{
       id: 5, handoff_id: 1, slug: '005-feat', seq: 5, name: 'Feat', objective: 'Caf\u00e9 \u2615 Feat', summary: 'sum Feat',
-      status: 'pending', severity: 'normal', priority: 3, path: 'phases/005-feat.md', sha: 'SHA', branch: 'feature', commit_sha: 'SHA',
+      status: 'pending', severity: 'normal', priority: 0, path: 'phases/005-feat.md', sha: 'SHA', branch: 'feature', commit_sha: 'SHA',
       location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
       claimed_by: '', review_state: 'none'
     }],
     gone_branch_items: [],
     findings: {
-      foreign: [{ id: 6, handoff_id: 1, slug: '006-foreign', seq: 6, name: 'foreign', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/006-foreign.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'other/thing', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
-      untagged: [{ id: 7, handoff_id: 1, slug: '007-untagged', seq: 7, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, path: 'phases/007-untagged.md', sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }]
+      foreign: [{ id: 6, handoff_id: 1, slug: '006-foreign', seq: 6, name: 'foreign', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 3, path: 'phases/006-foreign.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'other/thing', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
+      untagged: [{ id: 7, handoff_id: 1, slug: '007-untagged', seq: 7, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 0, path: 'phases/007-untagged.md', sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }]
     }
   });
 });

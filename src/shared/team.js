@@ -1,13 +1,13 @@
 // Team rules of the backlog: teams, their members and leads and their review rules come from the backlog configuration
-// (<home>/teams.json); identity and status come from the rows of the mirror database (backlog.db); the item files give the
+// (<home>/teams.json); identity and status come from the rows of the items (index.rows); the item files give the
 // metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
-import { connect } from './db.js';
 import { edgeState, satisfied } from './handoff.js';
+import * as index from './index.js';
 import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 import { load } from './store.js';
@@ -61,7 +61,7 @@ export function outsideTeam(fm) {
   return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them`;
 }
 
-// phase_by_ident over the mirror rows: by number (a live row before an archived one) or by slug.
+// phase_by_ident over the rows: by number (a live row before an archived one) or by slug.
 function byIdent(rows, ident) {
   const sel = itemSelector(ident);
   if (!sel) return null;
@@ -77,11 +77,8 @@ function itemFm(folder, row) {
   return file.startsWith(realpathSync(folder) + sep) ? parse(readFileSync(file, 'utf8')).fm : {};
 }
 
-// All rows of the folder's cache (rebuilt from its item files by connect), in id order.
-export function mirrorRows(folder) {
-  const con = connect(folder);
-  try { return con.prepare('SELECT * FROM phase ORDER BY id').all().map(r => ({ ...r })); } finally { con.close(); }
-}
+// All rows of the folder's items (index.rows), in file order.
+export const mirrorRows = folder => index.rows(folder).rows;
 
 // owner/name#seq names an item of another repository's backlog in the same backlog repository clone.
 const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // an owner or repository name is one path segment, never. or..
@@ -136,7 +133,7 @@ const edgeRefusal = (producerFm, dependentId) => {
 };
 
 // [{id as written, item: the row or null, fm}] for each depends_on entry that is not done or archived.
-// rows = the mirror rows of folder (the default), or those of another repository's backlog read by the caller. A foreign
+// rows = the rows of folder (the default), or those of another repository's backlog read by the caller. A foreign
 // entry is read from that repository's folder; its item carries the repository. a done producer
 // whose hand-off the lead has not accepted is an unfinished dependency too - the entry carries the edge state in
 // handoff (missing, unaccepted, stale or rejected); a satisfied edge (accepted, legacy) is no entry. The dependent
@@ -160,12 +157,7 @@ export function undoneDependencies(folder, fm, rows = mirrorRows(folder)) {
 // the open rows of the active handoff whose file says agent holds them, on every branch, by number.
 // state: awaiting-review, waiting:<what>, active.
 export function heldItems(folder, agent, { refining = false } = {}) {
-  const con = connect(folder);
-  let rows;
-  try {
-    const hid = con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null;
-    rows = con.prepare(`SELECT * FROM phase WHERE handoff_id=? AND status IN (${ACTIONABLE.map(() => '?')}) ORDER BY seq`).all(hid, ...ACTIONABLE).map(r => ({ ...r }));
-  } finally { con.close(); }
+  const rows = mirrorRows(folder).filter(r => ACTIONABLE.includes(r.status)).sort((x, y) => x.seq - y.seq);
   const refines = fm => refining && !fm.claimed_by && fm.refiner === agent && fm.stage === 'refining'; // a refinement in progress is active work too
   // heldBy also matches an earlier session of the same card - the continuation is the agent's own work
   return rows.map(r => ({ ...r, fm: itemFm(folder, r) })).filter(r => heldBy(r.fm.claimed_by, agent) || refines(r.fm))

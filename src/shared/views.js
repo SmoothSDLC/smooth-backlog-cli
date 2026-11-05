@@ -1,11 +1,11 @@
 // Team views: `backlog query --claimable | --reviewable | --blocked` with --agent,
 // --roster and --scope. a port of the earlier scripts(scopes, refinement cap, team_rows) and :330-372 (the views),
-// (review_offer) and :621-624 (job_fields). Rows and dependencies come from the backlog.db mirror as
+// (review_offer) and :621-624 (job_fields). Rows and dependencies come from index.rows as
 // in query.js (team.js); the item files of the repository folder give only the front matter the rows do not hold.
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
-import { connect } from './db.js';
+import * as index from './index.js';
 import { missingFields, stageOf } from './lifecycle.js';
 import { assertInside, redact } from './safety.js';
 import * as store from './store.js';
@@ -13,7 +13,6 @@ import * as team from './team.js';
 
 export const SCOPES = ['branch', 'repo', 'all'];
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
-export const OPEN = "SELECT * FROM phase WHERE handoff_id=? AND status IN ('pending','in_progress') ORDER BY priority ASC, seq ASC";
 const JSON_FIELDS = ['chunk', 'review_refs', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'estimate_min', 'complexity', 'layer'];
 
 const refinement = fm => team.isChunk(fm); // _refinement: chunk items, the only work another repository's agents may pick up (--scope all)
@@ -59,14 +58,9 @@ export async function teamRows({ open, scope, cap, every, excluded, repo, branch
       if (f === repo || !existsSync(join(dir, 'phases'))) continue;
       try { // another repository's backlog: read, never write; nothing on the way from the home may be a link
         await assertInside(home, dir);
-        const con = connect(dir, { readOnly: true });
-        let rows; let theirRows;
-        try {
-          rows = con.prepare(OPEN).all(con.prepare("SELECT id FROM handoff WHERE status='active' LIMIT 1").get()?.id ?? null).map(x => ({ ...x }));
-          theirRows = con.prepare('SELECT * FROM phase ORDER BY id').all().map(x => ({ ...x }));
-        } finally { con.close(); }
-        const theirs = rows.some(r => r.repository === f) ? files(dir) : new Map();
-        for (const r of rows) {
+        const theirRows = index.rows(dir).rows;
+        const theirs = theirRows.some(r => r.repository === f) ? files(dir) : new Map();
+        for (const r of index.open(theirRows)) {
           const fm = r.repository === f ? theirs.get(r.path)?.fm ?? {} : {};
           if (refinement(fm)) out.push({ r, fm, undone: team.undoneDependencies(dir, fm, theirRows), f });
         }
@@ -97,15 +91,15 @@ function decisionsView(found, { a, scope, repo, branch, own, say, dump }) {
   return 0;
 }
 
-//. io = {say, dump, die, repr} of query.js; hid = the active handoff of the mirror, all = its row reader.
-export async function teamView(a, { all, hid, excluded, repo, branch, folder, home, io }) {
+//. io = {say, dump, die, repr} of query.js; rows = the rows of the folder's items (index.rows).
+export async function teamView(a, { rows, excluded, repo, branch, folder, home, io }) {
   const { say, dump, die, repr } = io;
   try {
     if (a.reviewable && !a.agent) return die('--reviewable needs --agent <you> (the author never reviews its own item)');
     const scope = a.scope || 'branch';
     const inTeam = Boolean(team.teamScope().repo || a.agent);
     const own = files(folder);
-    const found = (await teamRows({ open: all(OPEN, hid), scope, cap: refinementCap(folder, repr), every: a.all, excluded, repo, branch, folder, home }))
+    const found = (await teamRows({ open: index.open(rows), scope, cap: refinementCap(folder, repr), every: a.all, excluded, repo, branch, folder, home }))
       .filter(({ r, fm, undone, f }) => {
         if (a.decisions) return f === repo && fm.stage === 'review-hitl' && team.inTeam(fm); // the owner decisions of the morning report
         if (inTeam && f === repo) { // an incomplete item is never claimed or reviewed in team mode

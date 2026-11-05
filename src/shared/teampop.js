@@ -5,9 +5,10 @@
 // (query, update --claim), so every rule of update applies unchanged. The item is shown by its contents, never by a file.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import * as index from './index.js';
 import { caller } from './lifecycle.js';
 import { redact } from './safety.js';
-import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
+import { folder as repoFolder, repoId, resolveHome } from './store.js';
 import { gitBranch, heldBy, strip, teamLead, teamName, teamScope } from './team.js';
 
 const BIN = process.env.BACKLOG_TEST_SELF || fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)); // the test seam: a wrapper that fails on cue
@@ -47,8 +48,11 @@ export async function run(argv) {
   const fail = r => { process.stderr.write(r.stderr); return die(`team pop stopped: ${last(r)}`, 1); };
   const fresh = self(['query', '--status', '--json']); // pulls the backlog clone
   if (fresh.status !== 0) return fail(fresh);
-  const order = (x, y) => (Number(x.fm.priority ?? 1e9) - Number(y.fm.priority ?? 1e9)) || (Number(x.fm.seq) - Number(y.fm.seq));
-  const work = load(repoFolder(resolveHome().home, own))
+  const folder = repoFolder(resolveHome().home, own);
+  const { rows, items } = index.rows(folder);
+  const priority = new Map(rows.map(r => [r.path, r.priority ?? 1e9]));
+  const order = (x, y) => (priority.get(x.path) - priority.get(y.path)) || (Number(x.fm.seq) - Number(y.fm.seq));
+  const work = items
     .filter(i => i.path.startsWith('phases/') && strip(i.fm.team || '') === a.team && !i.fm.stage && OPEN.includes(i.fm.status)
       && i.fm.repository === own && i.fm.branch === branch)
     .sort(order);

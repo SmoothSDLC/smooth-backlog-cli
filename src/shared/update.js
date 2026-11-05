@@ -160,7 +160,6 @@ async function change(a, con, folder, repo) {
     if (a['dry-run']) { say(`ℹ️  [dry-run] would replan backlog leading order: [${idents.map(pyStr).join(', ')}]`); return 0; }
     a.guard = [];
     const order = store.reorder(folder, idents);
-    db.logEvent(con, 'planning_event', { handoffId: hid, note: a.note || `replan -> ${order.map(([s]) => s).join(', ')}` });
     db.scan(con, folder);
     say('📋 PLANNING EVENT — backlog re-prioritized (P0 = next):');
     for (const [s, i] of order) say(`   P${i}  ${s}`);

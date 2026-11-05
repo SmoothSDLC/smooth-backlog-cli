@@ -465,6 +465,14 @@ test('--replan sets the leading order by slug or number, ignores unknown names, 
   step(f, ['--replan', '1', '1', '--status', 'done']); // replan wins over the item (ignored)
 });
 
+test('a replan leaves no event; the order itself is the record', () => {
+  const f = seed();
+  step(f, ['--replan', '3', '--note', 'because']);
+  const ev = cli(['query', '--events'], { cwd: f.cons, tmp: f.t });
+  assert.equal(ev.status, 0, ev.stderr);
+  assert.doesNotMatch(ev.stdout, /replan|because/);
+});
+
 test('--dry-run prints the plan and changes and commits nothing', () => {
   const f = seed();
   bothStages(f, '2');

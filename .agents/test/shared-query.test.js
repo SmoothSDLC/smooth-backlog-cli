@@ -434,16 +434,19 @@ test('075: --phase prints the full item (row, front matter, body, missing) by sl
     front_matter: { phase: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', updated: 'TS', updated_by: 'UPD', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' },
     body: '\n# Phase 002 — Beta\n\n**Objective:** Caf\u00e9 \u2615 Beta\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n',
     missing: ['review_refs', 'estimate_min', 'definition_of_done'] };
-  assert.deepEqual(normJson(view(f, ['--phase', '002-beta']).stdout), beta, 'by slug');
+  // the item carries its history (events) in its front matter: compared apart from the rest
+  const noEvents = j => { const { events, ...fm } = j.front_matter; return [{ ...j, front_matter: fm }, events]; };
+  const [bySlug, betaEvents] = noEvents(normJson(view(f, ['--phase', '002-beta']).stdout));
+  assert.deepEqual(bySlug, beta, 'by slug');
+  assert.match(betaEvents[0], /^TS planning_event - - added 002-beta at rank 0/);
   const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal', priority: 2, path: 'phases/003-gamma.md',
     front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal', priority: 2 } };
   gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
-  // the item carries its history (events) in its front matter: compared apart from the rest
-  const noEvents = j => { const { events, ...fm } = j.front_matter; return [{ ...j, front_matter: fm }, events]; };
   const [byNumber, events] = noEvents(normJson(view(f, ['--phase', '3']).stdout));
   assert.deepEqual(byNumber, gamma, 'by number');
-  assert.equal(events.length, 1);
-  assert.match(events[0], /^TS state_change main \S+ set status=in_progress$/);
+  assert.equal(events.length, 2);
+  assert.match(events[0], /^TS planning_event - - added 003-gamma/);
+  assert.match(events[1], /^TS state_change main \S+ set status=in_progress$/);
   assert.deepEqual(noEvents(normJson(view(f, ['--phase', '003']).stdout))[0], gamma, 'zero-padded numbers resolve to the same item');
   assert.match(view(f, ['--phase', 'nope'], 1).stdout, /no phase 'nope'/);
 });
@@ -466,7 +469,7 @@ test('query --events reads the item history from the items, newest first, archiv
   assert.ok(all.stdout.includes('second note') && all.stdout.includes('archived'), all.stdout);
   // the database is not the source: an event that exists only in a file is listed
   const file = join(f.folder, 'phases', '002-beta.md');
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^---\n/, '---\nevents:\n- "2020-01-01T00:00:00Z note - - only in the file"\n'));
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^events:\n/m, 'events:\n- "2020-01-01T00:00:00Z note - - only in the file"\n'));
   assert.match(run('query', '--events', '2').stdout, /only in the file/);
   assert.equal(run('query', '--events', '99').status, 1);
 });
@@ -491,6 +494,11 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
   // the history comes from the items; events logged within one second have no order between items, so the lines are compared as a set
   const sorted = out => norm(out).split('\n').filter(Boolean).sort();
   assert.deepEqual(sorted(view(f, ['--events']).stdout), [
+    '  TS  planning_event branch= commit= added 001-alpha at rank end; backlog re-densified to 1 item(s)',
+    '  TS  planning_event branch= commit= added 002-beta at rank 0; backlog re-densified to 2 item(s)',
+    '  TS  planning_event branch= commit= added 003-gamma at rank end; backlog re-densified to 3 item(s)',
+    '  TS  planning_event branch= commit= added 004-delta at rank end; backlog re-densified to 4 item(s)',
+    '  TS  planning_event branch= commit= added 005-feat at rank end; backlog re-densified to 4 item(s)',
     '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)',
     '  TS  review_requested branch=main commit=SHA n',
     '  TS  review_requested branch=main commit=SHA n',
@@ -502,7 +510,7 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     '  TS  state_change   branch=main commit=SHA set status=done, handoffs=none',
     '  TS  state_change   branch=main commit=SHA set status=in_progress',
   ]);
-  assert.equal(view(f, ['--events', '002-beta']).stdout, '', 'one item: only its own lines');
+  assert.match(view(f, ['--events', '002-beta']).stdout, /^ {2}\S+ {2}planning_event branch= commit= added 002-beta at rank 0.*\n$/, 'one item: only its own lines');
   assert.equal(norm(view(f, ['--by-branch', 'main']).stdout),
     '  [  1] 001-alpha                    pending      commit=SHA \n'
     + '  [  2] 002-beta                     pending      commit=SHA \n'

@@ -149,8 +149,8 @@ async function move(a, con, ctx) {
   const seq = store.nextSeqFor(tdir, `${tail}.md`); // never a number whose file name the target already holds
   const slug = `${String(seq).padStart(3, '0')}${tail}`;
   store.stamp(Object.assign(fm, { phase: slug, seq, repository: target }));
+  fm.events = [...asList(fm.events), store.eventLine({ ts: store.now(), event: 'moved_in', branch: fm.branch, note: `from ${repo} as ${r.slug}` })]; // the history travels in the file
   const copy = join(tdir, 'phases', `${slug}.md`);
-  const events = con.prepare('SELECT ts,event,branch,commit_sha,note FROM event WHERE phase_id=? ORDER BY id').all(r.id);
   const forget = db.freshDb(tdir);
   const tcon = db.connect(tdir);
   let failed = false;
@@ -165,12 +165,6 @@ async function move(a, con, ctx) {
       store.reflow(folder, { exclude: [r.slug] }, () => {
         store.reflow(tdir); // rank the copy among the destination's items
         db.scan(tcon, tdir);
-        const pid = tcon.prepare('SELECT id FROM phase WHERE slug=?').get(slug).id;
-        const add = tcon.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)');
-        tcon.exec('BEGIN');
-        for (const e of events) add.run(e.ts, null, pid, e.event, e.branch, e.commit_sha, `[from ${repo} ${r.slug}] ${e.note}`);
-        add.run(store.now(), null, pid, 'moved_in', fm.branch || '', '', `from ${repo} as ${r.slug}`);
-        tcon.exec('COMMIT');
         con.prepare('DELETE FROM phase WHERE id=?').run(r.id);
         db.logEvent(con, 'moved_out', { handoffId: r.handoff_id, phaseId: r.id, branch: r.branch || '', note: `${r.slug} -> ${target} as ${slug}` });
       });

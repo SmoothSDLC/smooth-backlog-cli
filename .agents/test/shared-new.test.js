@@ -32,8 +32,8 @@ const BASE = ['--name', 'Alpha job', '--objective', 'do alpha', '--summary', 'su
 const NONE = [...BASE, '--depends-on', 'none'];
 const items = f => store.load(f.folder).filter(i => i.path.startsWith('phases/'));
 // An item without what differs between two runs: the creation and update times and the creating commit.
-const bare = ({ fm: { created, updated, updated_by, commit, ...fm }, body, path }) => ({ path, keys: Object.keys(fm), fm, body }); // eslint-disable-line no-unused-vars
-const fmNorm = fm => ({ ...fm, commit: 0, created: 0, updated: 0, updated_by: 0 });
+const bare = ({ fm: { created, updated, updated_by, commit, events, ...fm }, body, path }) => ({ path, keys: Object.keys(fm), fm, body }); // eslint-disable-line no-unused-vars
+const fmNorm = ({ events, ...fm }) => ({ ...fm, commit: 0, created: 0, updated: 0, updated_by: 0 }); // the history has its own tests
 const subject = f => git(f.bare, 'log', '-1', '--format=%s', 'main');
 // 074 removes the python script names from the subjects: edit only the SUBJECT values, the assertions go through them.
 const SUBJECT = {
@@ -120,6 +120,14 @@ test('refusal: a diagnostic that echoes input carries no credential of a URL', t
 
 // ---------------------------------------------------------------- the item
 
+test('new: the planning event of a creation is recorded on the new item', t => {
+  const f = fixture(t);
+  assert.equal(node(f, NONE).status, 0);
+  const ev = cli(['query', '--events', '1'], { cwd: f.cons, tmp: f.dir });
+  assert.equal(ev.status, 0, ev.stderr);
+  assert.match(ev.stdout, /planning_event branch= commit= added 001-alpha-job at rank end; backlog re-densified to 1 item\(s\)/);
+});
+
 test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name Alpha job" and pushes', t => {
   const f = fixture(t);
   const commits = () => Number(git(f.bare, 'rev-list', '--count', 'main'));
@@ -131,10 +139,10 @@ test('new: writes the item, scans backlog.db, commits as "acme/demo: new --name 
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n   rescan: 1 phase(s) tracked, 1 (re)ingested\n');
   const [item] = items(f);
   assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'priority', 'repository', 'branch', 'commit',
-    'location', 'created', 'updated', 'updated_by', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer']);
-  assert.deepEqual({ ...item.fm, created: 0, updated: 0, updated_by: 0, commit: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
+    'location', 'created', 'updated', 'updated_by', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'events']);
+  assert.deepEqual({ ...item.fm, created: 0, updated: 0, updated_by: 0, commit: 0, events: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
     status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0, updated_by: 0,
-    depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
+    depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', events: 0 });
   assert.equal(item.fm.commit, git(f.cons, 'rev-parse', 'HEAD'));
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
   assert.equal(subject(f), SUBJECT.newName('Alpha job'));
@@ -322,7 +330,7 @@ test('075: --split-from copies the objective, summary and body of the source and
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout, '✅ created phase 002-1-cont (seq 2) — inserted at P0, now at P0\n'
-    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 1 (re)ingested\n');
+    + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n   rescan: 2 phase(s) tracked, 2 (re)ingested\n'); // the reflowed parent and the child, which gained its history after the first scan
   const [, child] = items(a);
   assert.equal(child.fm.name, '1-cont'); assert.equal(child.fm.objective, 'parent objective'); assert.equal(child.fm.summary, 'parent summary');
   assert.deepEqual(child.fm.depends_on, [1]);
@@ -362,8 +370,8 @@ for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
       ? (title === 'a rank beyond the end is clamped, a layer of process' ? 'inserted at P7, now at P1' : 'inserted at P0, now at P0')
       : 'appended, now at P0';
     const rescan = title === 'inserted at rank 0 before older work'
-      ? `   rescan: ${all.length} phase(s) tracked, ${setup.length} (re)ingested\n` // the reflowed setup items are re-ingested
-      : `   rescan: ${all.length} phase(s) tracked, 1 (re)ingested\n`;
+      ? `   rescan: ${all.length} phase(s) tracked, ${setup.length + 1} (re)ingested\n` // the reflowed setup items and the new item, which gained its history after the first scan
+      : `   rescan: ${all.length} phase(s) tracked, ${setup.length && !title.startsWith('a rank beyond') ? 2 : 1} (re)ingested\n`;
     const banner = title === 'critical, forced to P0 with the banner'
       ? `⚠️ ========================================================================\n⚠️  CRITICAL phase filed at P0 — ${slug}\n⚠️  SURFACE THIS TO THE USER NOW, in your FIRST line, with a ⚠️ marker. Do NOT bury it.\n⚠️ ========================================================================\n`
       : '';

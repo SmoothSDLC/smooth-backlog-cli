@@ -182,7 +182,7 @@ async function create(argv, { home, folder, repo, team }) {
         hid = ensureAnchor(db);
       });
       rank = Object.fromEntries(order)[slug];
-      logEvent(db, 'planning_event', { handoffId: hid, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
+      logEvent(db, 'planning_event', { handoffId: hid, phaseId: db.prepare('SELECT id FROM phase WHERE slug=?').get(slug)?.id, note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
       summary = scan(db, folder);
       where = priority === undefined ? 'appended' : `inserted at P${priority}`;
     });

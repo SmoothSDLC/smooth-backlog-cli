@@ -589,6 +589,19 @@ test('075: move has no --dry-run: argparse refuses it with exit 2 and nothing ch
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
+test('move --to-repository: the item brings its own history, once, with no prefix', () => {
+  const f = seed();
+  const line = store.addEvent(f.folder, 'phases/007-eta.md', { event: 'claimed', branch: 'main', note: 'carried note' });
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'a history'); git(f.home, 'push', '-q');
+  assert.equal(run(f, 'move', ['7', '--to-repository', 'other/proj']).status, 0);
+  const events = fm(f.other, 'phases/002-eta.md').fm.events;
+  assert.deepEqual(events.filter(l => l.includes('carried note')), [line]);
+  assert.ok(events.some(l => l.includes(' moved_in ')), 'the arrival is recorded in the item');
+  assert.ok(events.every(l => !l.includes('[from ')), events.join('\n'));
+  const con = db.connect(f.other);
+  try { assert.equal(con.prepare("SELECT COUNT(*) n FROM event WHERE note LIKE '%carried note%'").get().n, 0, 'the database copy is gone'); } finally { con.close(); }
+});
+
 test('075: move --to-repository: new number in the target, source file gone, one published commit for both folders', () => {
   const f = seed();
   const r = run(f, 'move', ['7', '--to-repository']); // default: the repository the item names

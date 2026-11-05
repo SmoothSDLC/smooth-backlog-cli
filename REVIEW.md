@@ -152,7 +152,9 @@ this pull request (decision D, section 4).
 
 Events are in the item files since the item-history change (front-matter list `events`, read by `query --events`); the database is now derived, and a later change makes it an ignored cache.
 
-Done in the cache change (ea1ed36): the cache lives under the state folder of each clone and is rebuilt from the item files at the start of every command; no `backlog.db` is created, committed or pushed any more. The conflict-repair code goes in the next change.
+Done in the cache change (ea1ed36): the cache lives under the state folder of each clone and is rebuilt from the item files at the start of every command; no `backlog.db` is created, committed or pushed any more. 
+
+Done in the changes after it (6b6b102, 0efb892, f857fef): the `event` table, the database branch of `repairConflicts`, `replayLocal`, the `localDbs` hand-over, the ghost findings and the database rollback of `undoOnThrow` are removed. The pull still renumbers two items of one number and still takes upstream's copy of an item both clones only re-ranked (`renumbered.reranked`, which asks for the reflow); a renumbered item records a `renumbered` line in its own history. Measured against the base of this pull request: `src` and `bin` lose 1140 lines net (885 added, 2025 removed); `src/shared/sync.js` is 476 lines and `src/shared/db.js` 170.
 
 ### 2.6 Dead code, unused options, speculative abstractions — SIMPLIFY
 

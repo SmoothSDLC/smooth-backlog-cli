@@ -12,7 +12,7 @@ import { asChild, locked } from '../storage.js';
 import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
 import { actor, created, guarded, guardReflow } from './seen.js';
-import { configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
+import { CONFIG, configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
 import { asList, outsideTeam, setTeamsHome } from './team.js';
 
 const ACTIONABLE = ['pending', 'in_progress'];
@@ -20,12 +20,13 @@ const ACTIONABLE = ['pending', 'in_progress'];
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //
 
-// The one storage setting: the folder that holds the items. Named by BACKLOG_HOME, by the repository's .smooth-backlog.json
-// (backlog_repository: a path relative to the repository; ".backlog" means inside it), or by the per-user record
-// $XDG_CONFIG_HOME/<name>/home (<name> from the clone-URL setting; without the setting, the only record there); with a clone URL
-// and nothing else, ~/git/<name>. Nothing named: the command is refused (exit 4) and told to run backlog setup — never a silent
-// default, so a repository is never given a backlog it did not configure. A folder inside the repository keeps the lock, views
-// and journal in its .state (ignored by git); a folder elsewhere must exist (a missing clone is returned tagged ask, never cloned here).
+// The one storage setting: the folder that holds the items. Named by BACKLOG_HOME, by the repository's configuration
+// (.backlog/config.json, backlog_repository: a path relative to the repository; ".backlog" means inside it; the root file of
+// earlier builds is still read), or by the per-user record $XDG_CONFIG_HOME/<name>/home (<name> from the clone-URL setting;
+// without the setting, the only record there); with a clone URL and nothing else, ~/git/<name>. Nothing named anywhere: the
+// backlog is .backlog inside the repository, created with its config on first use (the owner's intended default; environment
+// variables override the configuration). A folder inside the repository keeps the lock, views and journal in its .state
+// (ignored by git); a folder elsewhere must exist (a missing clone is returned tagged ask, never cloned here).
 export function resolveHome() {
   const setting = originSetting();
   const name = setting.name || NEUTRAL_NAME;
@@ -39,10 +40,12 @@ export function resolveHome() {
       return { home: null, remote: true, ask: { code: 4, text: `two backlog records (${records.join(', ')}) and no setting name one of them: run backlog setup in this repository, or set BACKLOG_HOME` } };
     }
   }
-  if (!home && !setting.url) {
+  if (!home && !setting.url) { // nothing configured anywhere: the backlog is .backlog inside the repository, created with its config
     const top = topOf(process.cwd());
     if (!top) return { home: null, remote: false, ask: { code: 2, text: 'run this from inside a git repository (the repository whose backlog you want)' } };
-    return { home: null, remote: false, ask: { code: 4, text: 'no backlog is configured for this repository: run backlog setup (it records the backlog folder in .smooth-backlog.json: a backlog repository when BACKLOG_ORIGIN_URL names one, else a folder inside this repository)' } };
+    home = join(top, '.backlog');
+    mkdirSync(join(home, '.state'), { recursive: true });
+    if (!existsSync(join(top, CONFIG))) writeFileSync(join(top, CONFIG), `${JSON.stringify({ backlog_repository: '.backlog' }, null, 2)}\n`);
   }
   if (home) { // a folder inside the repository: the items are committed with it
     const top = topOf(process.cwd());

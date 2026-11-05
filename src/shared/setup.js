@@ -1,7 +1,7 @@
 // `backlog setup [--ask]` chooses where a repository's backlog lives and deploys the CLI's skill. See HELP.setup.
-// The config is .smooth-backlog.json at the repository's top folder, committed: {"backlog_repository": P} with P relative
-// to that folder (portable), and optionally backlog_origin_url, the clone URL (the environment variable BACKLOG_ORIGIN_URL
-// wins). The agent folders: .agents, .claude, .github, .qwen.
+// The config is .backlog/config.json, committed: {"backlog_repository": P} with P relative to the repository (portable;
+// ".backlog" = inside it), and optionally backlog_origin_url, the clone URL (the environment variable BACKLOG_ORIGIN_URL
+// wins). The root file .smooth-backlog.json of earlier builds is still read. The agent folders: .agents, .claude, .github, .qwen.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -11,32 +11,37 @@ import { adapters, safeTree, templateRoot } from '../integrations.js';
 import { safePath } from '../storage.js';
 import { redact, repoIdFromUrl } from './safety.js';
 
-export const CONFIG = '.smooth-backlog.json';
+export const CONFIG = '.backlog/config.json'; // the repository's backlog configuration lives in its .backlog folder
+export const LEGACY_CONFIG = '.smooth-backlog.json'; // written at the repository root by earlier builds: still read
 export const ORIGIN_KEY = 'backlog_origin_url';
 export const NEUTRAL_NAME = 'backlog-repo';
-// the refusal for a command that needs the clone URL but finds it in neither source.
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 export const topOf = cwd => { const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
-// The backlog repository a repository's config names, or null (no config, or one that names no path).
+// The repository's backlog configuration: .backlog/config.json, else the root file of earlier builds; {} when there is none.
+export function readConfig(top) {
+  for (const file of [CONFIG, LEGACY_CONFIG]) {
+    try { const cfg = JSON.parse(readFileSync(join(top, file), 'utf8')); if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return cfg; } catch { /* next */ }
+  }
+  return {};
+}
+// The backlog folder a repository's config names, or null (no config, or one that names no path).
 export function configuredHome(cwd = process.cwd()) {
   const top = topOf(cwd);
   if (!top) return null;
-  let cfg;
-  try { cfg = JSON.parse(readFileSync(join(top, CONFIG), 'utf8')); } catch { return null; }
-  const p = cfg && typeof cfg.backlog_repository === 'string' ? cfg.backlog_repository.trim() : '';
+  const cfg = readConfig(top);
+  const p = typeof cfg.backlog_repository === 'string' ? cfg.backlog_repository.trim() : '';
   return p ? resolve(top, p) : null;
 }
 // The shared backlog repository's clone URL: the environment variable BACKLOG_ORIGIN_URL first, then the
-// backlog_origin_url key of the repository's.smooth-backlog.json; '' when neither is set (no built-in default).
+// backlog_origin_url key of the repository's configuration; '' when neither is set (no built-in default).
 export function originUrl(cwd = process.cwd()) {
   const v = (process.env.BACKLOG_ORIGIN_URL || '').trim();
   if (v) return v;
   const top = topOf(cwd);
   if (!top) return '';
-  let cfg;
-  try { cfg = JSON.parse(readFileSync(join(top, CONFIG), 'utf8')); } catch { return ''; }
-  return cfg && typeof cfg[ORIGIN_KEY] === 'string' ? cfg[ORIGIN_KEY].trim() : '';
+  const cfg = readConfig(top);
+  return typeof cfg[ORIGIN_KEY] === 'string' ? cfg[ORIGIN_KEY].trim() : '';
 }
 // The setting as {url, id, name}: id is the owner/name the setting names (repoIdFromUrl, the same parser the
 // origin check uses on existing clones' origins, so the two sides compare the same way); name is the name part
@@ -85,14 +90,14 @@ export async function run(argv) {
       say('✅ backlog repository cloned');
     } else { mkdirSync(home, { recursive: true }); say('✅ backlog folder created'); }
   } else say('ℹ️  backlog folder kept');
-  if (!kept || ask) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys
+  mkdirSync(join(top, '.backlog', '.state'), { recursive: true }); // the config lives in .backlog, created by setup whatever the location
+  if (!existsSync(join(top, '.backlog', '.gitignore'))) await atomicWrite(join(top, '.backlog', '.gitignore'), '.state/\n');
+  if (!kept || ask || !existsSync(join(top, CONFIG))) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys
     const value = relative(top, realpathSync(home)); // relative to the repository: portable (both real paths: macOS /var is /private/var)
-    let previous = null;
-    try { previous = JSON.parse(readFileSync(join(top, CONFIG), 'utf8')); } catch { /* no config */ }
-    const keptKeys = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {};
-    await atomicWrite(join(top, CONFIG), `${JSON.stringify({ ...keptKeys, backlog_repository: value || '.' }, null, 2)}\n`);
-    say(`✅ ${CONFIG} written (commit it, so every clone of this repository finds its backlog)`);
-  } else say(`ℹ️  ${CONFIG} kept`);
+    const previous = readConfig(top);
+    await atomicWrite(join(top, CONFIG), `${JSON.stringify({ ...previous, backlog_repository: value || '.' }, null, 2)}\n`);
+    say('✅ backlog configuration written');
+  } else say('ℹ️  backlog configuration kept');
   const deployed = [];
   for (const { target, destination } of targets) {
     rmSync(target, { recursive: true, force: true });
@@ -103,7 +108,7 @@ export async function run(argv) {
   say(deployed.length ? `✅ the backlog skill in ${deployed.join(', ')}` : 'ℹ️  no agent folder (.agents, .claude, .github, .qwen) here: no skill copy deployed');
   // setup is a change to the repository: committed on the current branch (the config and the skill copies only) and pushed
   const git = args => spawnSync('git', args, { cwd: top, encoding: 'utf8' });
-  const wrote = [CONFIG, ...deployed];
+  const wrote = ['.backlog/config.json', '.backlog/.gitignore', ...deployed];
   git(['add', '-A', '--', ...wrote]);
   if (git(['diff', '--cached', '--quiet', '--', ...wrote]).status) {
     const c = git(['commit', '-q', '--only', '-m', 'backlog: setup', '--', ...wrote]);

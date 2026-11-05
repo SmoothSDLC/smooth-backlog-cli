@@ -1,4 +1,4 @@
-// Item 043: backlog setup writes the repository's .smooth-backlog.json (a path relative to the repository), clones the
+// backlog setup writes the repository's .backlog/config.json (a path relative to the repository), clones the
 // backlog repository beside it when it is missing, deploys the template skill into every agent folder present and
 // --ask asks for the path. Local bare repos only; BACKLOG_HOME unset.
 import test, { after } from 'node:test';
@@ -24,7 +24,7 @@ function fixture() {
   const run = (cwd, args, input) => { const r = spawnSync(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, ...env }, input: input ?? '', encoding: 'utf8' }); return { status: r.status, stdout: r.stdout, stderr: r.stderr }; };
   return { t, app, run };
 }
-const cfg = app => JSON.parse(readFileSync(join(app, '.smooth-backlog.json'), 'utf8'));
+const cfg = app => JSON.parse(readFileSync(join(app, '.backlog', 'config.json'), 'utf8'));
 const head = dir => spawnSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
 
 test('043: setup clones beside the repository, writes a relative config, deploys the skill; the path survives a move', () => {
@@ -57,14 +57,14 @@ test('043: a second setup leaves the clone, replaces the skill copies and keeps 
   writeFileSync(join(clone, 'untracked.txt'), 'mine');
   const before = head(clone);
   writeFileSync(join(app, '.claude', 'skills', 'backlog', 'SKILL.md'), 'edited');
-  writeFileSync(join(app, '.smooth-backlog.json'), JSON.stringify({ backlog_repository: `../${BACKLOG_NAME}`, note: 'kept' }));
+  writeFileSync(join(app, '.backlog', 'config.json'), JSON.stringify({ backlog_repository: `../${BACKLOG_NAME}`, note: 'kept' }));
   const again = run(app, ['setup']);
   assert.equal(again.status, 0, again.stdout + again.stderr);
   assert.equal(head(clone), before);
   assert.equal(readFileSync(join(clone, 'untracked.txt'), 'utf8'), 'mine'); // not cloned again, left unchanged
   assert.notEqual(readFileSync(join(app, '.claude', 'skills', 'backlog', 'SKILL.md'), 'utf8'), 'edited'); // the release's copy
   assert.equal(cfg(app).note, 'kept');
-  writeFileSync(join(app, '.smooth-backlog.json'), JSON.stringify({ backlog_repository: '../nowhere' }));
+  writeFileSync(join(app, '.backlog', 'config.json'), JSON.stringify({ backlog_repository: '../nowhere' }));
   const missing = run(app, ['query', '--status']);
   assert.equal(missing.status, 4, missing.stdout + missing.stderr);
   assert.match(missing.stderr, /backlog setup.*backlog setup --ask/);

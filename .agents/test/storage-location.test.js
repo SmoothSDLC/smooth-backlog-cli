@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { GIT_IDENTITY, ORIGIN_URL, cli, consumer } from './shared-fixtures.js';
 
@@ -21,39 +21,50 @@ function world(t) {
 }
 const git = (cwd, ...a) => spawnSync('git', a, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } }).stdout.trim();
 
-test('a repository with no backlog configured is told to run setup; nothing is created, nothing is written', t => {
+test('nothing configured: the backlog is .backlog inside the repository, created with its config on first use', t => {
   const { repo, run } = world(t);
-  for (const args of [['query'], ['new', '--name', 'x', '--objective', 'o', '--summary', 's']]) {
-    const r = run(args);
-    assert.equal(r.status, 4, args.join(' ') + r.stdout + r.stderr);
-    assert.match(r.stderr, /no backlog is configured for this repository: run backlog setup/);
-  }
-  assert.ok(!existsSync(join(repo, '.backlog')), 'no folder was created');
-  assert.equal(git(repo, 'status', '--porcelain'), '');
-});
-
-test('setup without a backlog repository records .backlog inside the repository; the items then live there, whatever the origin', t => {
-  const { repo, run, setup } = world(t);
-  const s = setup();
-  assert.doesNotMatch(s.stdout, new RegExp(repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'setup names no folder path');
-  assert.deepEqual(JSON.parse(readFileSync(join(repo, '.smooth-backlog.json'), 'utf8')), { backlog_repository: '.backlog' });
-  assert.equal(git(repo, 'status', '--porcelain'), '', 'setup commits what it wrote');
-  assert.equal(git(repo, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'and pushes it');
-  assert.match(git(repo, 'log', '-1', '--format=%s'), /^backlog: setup/);
-  const r = run(['new', '--name', 'x', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
+  const r = run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(join(repo, '.backlog', 'config.json'), 'utf8')), { backlog_repository: '.backlog' }, 'the config lives in .backlog');
   assert.ok(existsSync(join(repo, '.backlog', 'local', 'repository', 'phases', '001-x.md')), 'the item file is inside the repository');
   assert.equal(readFileSync(join(repo, '.backlog', '.gitignore'), 'utf8').trim(), '.state/');
   const q = run(['query', '--phase', '1', '--json']);
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.equal(JSON.parse(q.stdout).name, 'x');
-  // the change is committed on the repository's branch, with the backlog's paths only, and pushed
+  // the change is committed on the repository's branch, with the backlog's paths only (config included), and pushed
   assert.equal(git(repo, 'status', '--porcelain', '--untracked-files=all'), '', 'nothing left uncommitted');
-  assert.ok(git(repo, 'ls-files').includes('.backlog/local/repository/phases/001-x.md'));
+  assert.ok(git(repo, 'ls-files').includes('.backlog/config.json'));
   assert.ok(!git(repo, 'ls-files').includes('.state/'), 'the lock, views and journal are not committed with the repository');
-  assert.equal(git(repo, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'pushed');
   assert.ok(!git(repo, 'ls-files').includes('.db'), 'no database is committed');
+  assert.equal(git(repo, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'pushed');
   assert.match(git(repo, 'log', '-1', '--format=%s'), /^backlog: /);
+});
+
+test('setup records the location in .backlog/config.json, deploys the skill, commits and pushes; it names no folder path', t => {
+  const { repo, run, setup } = world(t);
+  mkdirSync(join(repo, '.agents'));
+  const s = setup();
+  assert.doesNotMatch(s.stdout, new RegExp(repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'setup names no folder path');
+  assert.deepEqual(JSON.parse(readFileSync(join(repo, '.backlog', 'config.json'), 'utf8')), { backlog_repository: '.backlog' });
+  assert.ok(existsSync(join(repo, '.agents', 'skills', 'backlog', 'SKILL.md')));
+  assert.equal(git(repo, 'status', '--porcelain'), '', 'setup commits what it wrote');
+  assert.equal(git(repo, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'and pushes it');
+  assert.match(git(repo, 'log', '-1', '--format=%s'), /^backlog: setup/);
+  assert.equal(run(['query']).status, 0);
+});
+
+test('the root file .smooth-backlog.json of earlier builds is still read when .backlog has no config', t => {
+  const { tmp, repo, run } = world(t);
+  const clone = join(tmp, 'elsewhere'); mkdirSync(clone);
+  spawnSync('git', ['init', '-q', '-b', 'main', clone]);
+  spawnSync('git', ['commit', '-q', '--allow-empty', '-m', 'init'], { cwd: clone, env: { ...process.env, ...GIT_IDENTITY } });
+  spawnSync('git', ['init', '-q', '--bare', join(tmp, 'elsewhere.git')]);
+  spawnSync('git', ['remote', 'add', 'origin', join(tmp, 'elsewhere.git')], { cwd: clone });
+  spawnSync('git', ['push', '-q', '-u', 'origin', 'main'], { cwd: clone });
+  writeFileSync(join(repo, '.smooth-backlog.json'), JSON.stringify({ backlog_repository: relative(repo, clone) }));
+  assert.equal(run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']).status, 0);
+  assert.ok(existsSync(join(clone, 'acme', 'demo', 'phases', '001-x.md')), 'the items went to the configured folder');
+  assert.ok(!existsSync(join(repo, '.backlog', 'local')), 'nothing inside the repository');
 });
 
 test('work staged elsewhere in the repository is left staged, not committed with the backlog', t => {

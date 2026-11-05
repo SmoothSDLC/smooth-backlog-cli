@@ -14,8 +14,8 @@ Smooth Backlog CLI keeps **structured, version-controllable work records**: ever
 
 There is one backlog per repository and branch and one set of commands. Where the item files live is a setting of the repository, nothing more:
 
-- **inside the repository**: the folder `.backlog/` of the repository (what `backlog setup` records when no backlog repository is configured); every change is committed on the current branch (the backlog's paths only) and pushed to origin;
-- **in a backlog folder or repository you choose**: `backlog setup` records the path in `.smooth-backlog.json` (or `BACKLOG_HOME` names it); when that folder is a git repository, every command pulls it before it reads and pushes after it changes an item, so many repositories and many people share one backlog repository.
+- **inside the repository** (the default): the repository's `.backlog` folder holds the configuration (`.backlog/config.json`) and the items; every change is committed on the current branch (the backlog's paths only) and pushed to origin;
+- **in a backlog repository you choose**: `backlog setup` records its path in `.backlog/config.json` (environment variables `BACKLOG_ORIGIN_URL` / `BACKLOG_HOME` override the configuration); every command pulls it before it reads and pushes after it changes an item, so many repositories and many people share one backlog repository.
 
 The backlog is always a git repository and every change to it is committed and pushed before the command exits. Every command, option, output and help text is the same in both places.
 

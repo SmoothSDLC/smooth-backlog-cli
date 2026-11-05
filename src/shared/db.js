@@ -115,11 +115,12 @@ export function ingest(db, item, hid = ensureAnchor(db)) {
   const row = db.prepare('SELECT id, sha FROM phase WHERE handoff_id=? AND slug=?').get(hid, slug);
   if (!row) {
     const names = ['handoff_id', 'slug', ...Object.keys(cols), 'created_at', 'updated_at'];
-    const id = Number(db.prepare(`INSERT INTO phase(${names}) VALUES(${names.map(() => '?')})`).run(hid, slug, ...Object.values(cols), now(), now()).lastInsertRowid);
+    // the item's own stamps (an item without them, from before they existed, reads the rebuild time): the database is rebuilt for every command and must read the same each time
+    const id = Number(db.prepare(`INSERT INTO phase(${names}) VALUES(${names.map(() => '?')})`).run(hid, slug, ...Object.values(cols), v('created', now()), v('updated', now())).lastInsertRowid);
     return { id, changed: true };
   }
   if (row.sha === item.sha256) return { id: Number(row.id), changed: false };
-  db.prepare(`UPDATE phase SET ${[...Object.keys(cols), 'updated_at'].map(k => `${k}=?`)} WHERE id=?`).run(...Object.values(cols), now(), row.id);
+  db.prepare(`UPDATE phase SET ${[...Object.keys(cols), 'updated_at'].map(k => `${k}=?`)} WHERE id=?`).run(...Object.values(cols), v('updated', now()), row.id);
   return { id: Number(row.id), changed: true };
 }
 

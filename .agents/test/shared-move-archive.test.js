@@ -355,7 +355,9 @@ for (const eol of ['\n', '\r\n', '\r']) {
     const r = run(f, 'archive', ['2', '--force']);
     assert.equal(r.status, 0, r.stdout + r.stderr);
     const text = readFileSync(join(f.folder, 'archive/phases/002-beta.md'), 'utf8');
-    assert.deepEqual(parse(text), { fm: { ...before.fm, status: 'archived' }, body: before.body });
+    const { events, ...rest } = parse(text).fm;
+    assert.ok(events.some(l => l.includes(' archived ')), 'the archive is recorded in the item');
+    assert.deepEqual({ fm: rest, body: parse(text).body }, { fm: { ...before.fm, status: 'archived' }, body: before.body });
     assert.ok(text.startsWith(`\uFEFF---${eol}`), 'BOM and line endings survive');
     assert.equal(text.slice(text.indexOf(`${eol}---${eol}`) + (eol + '---' + eol).length), source.slice(source.indexOf(`${eol}---${eol}`) + (eol + '---' + eol).length), 'body bytes survive');
     const con = db.connect(f.folder);
@@ -485,7 +487,7 @@ test('review P2: archive inserts status: archived into an item whose front matte
     const text = readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8');
     assert.equal(parse(text).fm.status, 'archived', JSON.stringify(eol));
     assert.equal(text.split('status:').length, 2);
-    assert.ok(text.includes(`${eol}status: "archived"${eol}---${eol}`) || text.includes(`status: "archived"${eol}---`), JSON.stringify(eol));
+    assert.ok(text.includes(`${eol}status: "archived"${eol}`), JSON.stringify(eol));
   }
 });
 

@@ -132,6 +132,20 @@ test('write: atomic, mode 0o600, parent folders created, no temp file left, key 
   assert.equal(readFileSync(abs, 'utf8'), orig.replace(/^priority: .*$/m, 'priority: 4'));
 });
 
+test('addEvent appends an event line to the item file and keeps every other key', t => {
+  const folder = scratch(t);
+  putItem(folder, item(1, { phase: '001-a', name: 'a' }));
+  const line = store.addEvent(folder, 'phases/001-a.md', { event: 'claimed', branch: 'main', note: 'by  ann\nnow' });
+  const [it] = store.load(folder);
+  assert.deepEqual(it.fm.events, [line]);
+  assert.equal(it.fm.name, 'a');
+  assert.match(line, /^\d{4}-\d\d-\d\dT[\d:]+Z claimed main - by ann now$/);
+  assert.deepEqual(store.parseEvent(line), { ts: line.split(' ')[0], event: 'claimed', branch: 'main', commit_sha: '', note: 'by ann now' });
+  store.addEvent(folder, 'phases/001-a.md', { event: 'review', commitSha: 'abcdef1234' });
+  assert.equal(store.load(folder)[0].fm.events.length, 2);
+  assert.deepEqual(store.parseEvent('2026-01-01T00:00:00Z x - -'), { ts: '2026-01-01T00:00:00Z', event: 'x', branch: '', commit_sha: '', note: '' });
+});
+
 // ---------------------------------------------------------------- nextSeq
 
 test('nextSeq: 1 on an empty folder; 1 + max of the file seqs (phases and archive) and of backlog.db; stderr stays clean', t => {

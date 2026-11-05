@@ -37,7 +37,8 @@ function read(home, agent) { try { return JSON.parse(readFileSync(viewsFile(home
 // The file's hash is part of the view: `updated` has a resolution of one second, so two changes in one second differ only in content.
 // content is the hash without the fields a reflow rewrites (priority, updated, updated_by): a rank-only change
 // by another agent's planning move is no change of the item for this agent's next write
-const RANK_ONLY = ['priority', 'updated', 'updated_by'];
+// events: the history only grows (a split, an archive, a note adds a line); a line added by someone else is no change of the item either
+const RANK_ONLY = ['priority', 'updated', 'updated_by', 'events'];
 const contentOf = doc => { const fm = { ...doc.fm }; for (const k of RANK_ONLY) delete fm[k]; return createHash('sha256').update(JSON.stringify([Object.keys(fm).sort().map(k => [k, fm[k]]), doc.body])).digest('hex'); };
 const textView = text => { const doc = parse(text); return { fm: doc.fm, sha: createHash('sha256').update(text).digest('hex'), content: contentOf(doc) }; };
 const fileView = (folder, path) => textView(readFileSync(join(folder, path), 'utf8'));

@@ -13,7 +13,7 @@ import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.j
 import { repoIdFromUrl } from './safety.js';
 import { actor, created, guarded, guardReflow } from './seen.js';
 import { configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
-import { outsideTeam, setTeamsHome } from './team.js';
+import { asList, outsideTeam, setTeamsHome } from './team.js';
 
 const ACTIONABLE = ['pending', 'in_progress'];
 
@@ -365,6 +365,21 @@ export function findings(dir) {
 
 //
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+// One event of an item's history is one front-matter line: "<ts> <event> <branch|-> <commit|-> <note>".
+export const eventLine = ({ ts, event, branch, commitSha, note }) => [ts, event, branch || '-', commitSha || '-', String(note ?? '').replace(/\s+/g, ' ').trim()].filter((x, i) => i < 4 || x).join(' ');
+export function parseEvent(line) {
+  const [, ts, event, branch, commit, note] = /^(\S+) (\S+) (\S+) (\S+)(?: (.*))?$/.exec(line) ?? [];
+  return { ts, event, branch: branch === '-' ? '' : branch, commit_sha: commit === '-' ? '' : commit, note: note ?? '' };
+}
+// Appends one event line to the item file's `events` list. The file is re-read first (the command may have written it a moment ago).
+export function addEvent(folder, path, { event, branch = '', commitSha = '', note = '' }) {
+  const abs = join(folder, path);
+  const { fm, body } = parse(readFileSync(abs, 'utf8'));
+  const line = eventLine({ ts: now(), event, branch, commitSha, note });
+  fm.events = [...asList(fm.events), line];
+  write({ path: abs, fm, body }, folder, { frontMatterOnly: true }); // keeps the body, BOM and line endings as they are
+  return line;
+}
 // the one way an item write marks itself: when, and by whom (see seen.js)
 export function stamp(fm) {
   const had = Object.hasOwn(fm, 'updated_by');

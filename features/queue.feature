@@ -60,8 +60,13 @@ Feature: Queue - priorities, dependencies, branches
     When I run `backlog query --all`
     Then the output contains "002-b"
 
-  Scenario: the events of an item are kept
-    When I run `backlog update 1 --note "started"`
-    And I run `backlog query --events 1`
+  Scenario: the events of an item are kept with the item
+    When I run `backlog update 1 --status in_progress --note "started"`
+    Then the command succeeds
+    And item 1 has status "in_progress"
+    When I run `backlog query --events 1`
     Then the command succeeds
     And the output contains "started"
+    And the output contains "branch="
+    When I run `backlog query --phase 1 --json`
+    Then the JSON field front_matter.events has 1 or more entries

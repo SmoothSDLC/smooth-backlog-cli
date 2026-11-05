@@ -47,6 +47,10 @@ step(/^the output contains "((?:[^"\\]|\\.)*)"$/, (w, text) => assert.ok(output(
 step(/^the output does not contain the backlog folder path$/, w => assert.ok(!output(w.last).includes(w.home()), `the backlog folder path is in the output:\n${output(w.last)}`));
 step(/^the output does not contain "((?:[^"\\]|\\.)*)"$/, (w, text) => assert.ok(!output(w.last).includes(text.replace(/\\"/g, '"')), `in the output: ${text}\n${output(w.last)}`));
 step(/^the output matches \/(.+)\/$/, (w, re) => assert.match(output(w.last), new RegExp(re), output(w.last)));
+step(/^the JSON field (\S+) has (\d+) or more entries$/, (w, dotted, n) => {
+  const v = dotted.split('.').reduce((o, k) => (o ?? {})[k], JSON.parse(w.last.stdout));
+  assert.ok(Array.isArray(v) && v.length >= Number(n), `${dotted}: ${JSON.stringify(v)}`);
+});
 step(/^the JSON output has (\d+) items?$/, (w, n) => { const v = JSON.parse(w.last.stdout); const items = Array.isArray(v) ? v : v.phases ?? []; assert.equal(items.length, Number(n), w.last.stdout); });
 
 // item facts, read back through the CLI

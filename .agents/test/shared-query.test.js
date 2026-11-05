@@ -438,8 +438,13 @@ test('075: --phase prints the full item (row, front matter, body, missing) by sl
   const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal', priority: 2, path: 'phases/003-gamma.md',
     front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal', priority: 2 } };
   gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
-  assert.deepEqual(normJson(view(f, ['--phase', '3']).stdout), gamma, 'by number');
-  assert.deepEqual(normJson(view(f, ['--phase', '003']).stdout), gamma, 'zero-padded numbers resolve to the same item');
+  // the item carries its history (events) in its front matter: compared apart from the rest
+  const noEvents = j => { const { events, ...fm } = j.front_matter; return [{ ...j, front_matter: fm }, events]; };
+  const [byNumber, events] = noEvents(normJson(view(f, ['--phase', '3']).stdout));
+  assert.deepEqual(byNumber, gamma, 'by number');
+  assert.equal(events.length, 1);
+  assert.match(events[0], /^TS state_change main \S+ set status=in_progress$/);
+  assert.deepEqual(noEvents(normJson(view(f, ['--phase', '003']).stdout))[0], gamma, 'zero-padded numbers resolve to the same item');
   assert.match(view(f, ['--phase', 'nope'], 1).stdout, /no phase 'nope'/);
 });
 
@@ -469,6 +474,7 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     + '  TS  reingested     branch=feature commit=SHA sha drift SHA->SHA\n'
     + '  TS  planning_event branch= commit= added 005-feat at rank end; backlog re-densified to 4 item(s)\n'
     + '  TS  ingested       branch=feature commit=SHA new phase 005-feat\n'
+    + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     + '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)\n'
     + '  TS  reingested     branch=main commit=SHA sha drift SHA->SHA\n'
     + '  TS  state_change   branch=main commit=SHA set status=done, handoffs=none\n'

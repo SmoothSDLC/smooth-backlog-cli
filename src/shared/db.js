@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { operation } from '../errors.js';
 import { hasFrontMatter, parse } from './frontmatter.js';
-import { assertFolder, assertNoSymlinks, beginJournal, endJournal, journalled, load, note, now, reflow } from './store.js';
+import { assertFolder, assertNoSymlinks, beginJournal, endJournal, journalled, addEvent, load, note, now, reflow } from './store.js';
 import { commit } from './sync.js';
 
 // node:sqlite prints an ExperimentalWarning on some Node 24 builds: keep it off stderr (as store.nextSeq does).
@@ -76,6 +76,7 @@ export function connect(folder, { readOnly = false } = {}) {
     const mem = !existsSync(file);
     const ro = new (sqlite().DatabaseSync)(mem ? ':memory:' : file, { readOnly: !mem });
     if (mem) ro.exec(SCHEMA);
+    ro.folder = folder;
     return ro;
   }
   mkdirSync(folder, { recursive: true });
@@ -84,6 +85,7 @@ export function connect(folder, { readOnly = false } = {}) {
   const have = new Set(db.prepare('PRAGMA table_info(phase)').all().map(r => r.name));
   if (!have.has('severity')) db.exec("ALTER TABLE phase ADD COLUMN severity TEXT DEFAULT 'normal'");
   if (!have.has('repository')) db.exec("ALTER TABLE phase ADD COLUMN repository TEXT DEFAULT ''");
+  db.folder = folder;
   return db;
 }
 
@@ -122,6 +124,9 @@ export async function undoOnThrow(db, folder, fn) {
 export function logEvent(db, event, { handoffId = null, phaseId = null, branch = '', commitSha = '', note = '' } = {}) {
   db.prepare('INSERT INTO event(ts,handoff_id,phase_id,event,branch,commit_sha,note) VALUES(?,?,?,?,?,?,?)')
     .run(now(), handoffId, phaseId, event, branch, commitSha, note);
+  // the item carries its history; the scan's own bookkeeping stays out of it
+  const row = phaseId && db.folder && !['ingested', 'reingested', 'file_missing'].includes(event) ? db.prepare('SELECT path FROM phase WHERE id=?').get(phaseId) : null;
+  if (row && existsSync(join(db.folder, row.path))) addEvent(db.folder, row.path, { event, branch, commitSha, note });
 }
 
 // ensure_handoff_anchor: the single synthetic row the phases point at.

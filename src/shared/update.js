@@ -8,6 +8,7 @@ import { basename, join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { find as findItem, rows as itemRows } from './index.js';
+import { repairUnreadable } from './repair.js';
 import { teamRefusal } from './archive.js';
 import { caller, closeNow, headline, missingFields, reviewRefusal, runCloseGate, shutdown, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
@@ -131,6 +132,11 @@ function dependencyCycle(rows, folder, id, deps) {
 }
 
 async function change(a, folder, repo) {
+  const bad = store.unreadable(folder); // an item that cannot be read: only its own repair goes on, every other command refuses
+  if (bad) {
+    const done = await repairUnreadable(a, folder, bad);
+    if (done !== undefined) return done;
+  }
   const { rows } = itemRows(folder);
   // --- pure planning event: explicit replan of the whole backlog
   if (a.replan) {

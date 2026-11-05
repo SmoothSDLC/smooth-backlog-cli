@@ -217,7 +217,7 @@ test('059.1: dependentsOf propagates a load error of a sibling repository folder
   item(home, 'acme', 'app', { seq: 6, phase: '006-dep', status: 'pending', depends_on: [5] });
   mkdirSync(join(home, 'acme', 'lib', 'phases'), { recursive: true });
   writeFileSync(join(home, 'acme', 'lib', 'phases', '004-broken.md'), '---\nnot a pair\n---\nbody\n');
-  assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), /front matter line 1 is not a 'key: value' pair/, 'a folder that cannot be loaded propagates, so its dependents cannot be missed');
+  assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), /item 004-broken: the item has no readable header \(line 1 is not a 'key: value' pair/, 'a folder that cannot be loaded propagates, so its dependents cannot be missed');
 });
 
 test('059.1: the zero-padded foreign spelling resolves through the item 042 pattern (team.js foreignItem)', () => {

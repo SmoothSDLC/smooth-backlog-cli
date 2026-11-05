@@ -7,7 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, writeSync, realpathSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { operation } from '../errors.js';
+import { BacklogError, operation } from '../errors.js';
 import { asChild, locked } from '../storage.js';
 import { dump, hasFrontMatter, parse, replaceFrontMatter } from './frontmatter.js';
 import { repoIdFromUrl } from './safety.js';
@@ -245,6 +245,28 @@ export function bareFiles(dir) {
   return names.filter(n => !hasFrontMatter(readFileSync(join(dir, 'phases', n), 'utf8'))).map(n => `phases/${n}`);
 }
 
+// The fields `backlog update <item> --<field> <value>` can set again when an item cannot be read.
+export const REPAIRABLE = ['status', 'commit', 'location', 'summary', 'name', 'objective', 'seq', 'size_score'];
+
+// An item whose front matter cannot be read, after the latest version was pulled: the refusal every command of the folder gives (exit 2) names the
+// item (never its path), the field the codec could not read, and the two ways out.
+function readItem(path, text) {
+  try { return parse(text); } catch (e) {
+    const slug = basename(path, '.md');
+    const reason = String(e.message).replace(/^front matter /, '');
+    const restore = `restore the item's previous version with backlog update ${slug} --restore`;
+    const message = e.field === undefined
+      ? `item ${slug}: the item has no readable header (${reason}). ${restore[0].toUpperCase()}${restore.slice(1)}`
+      : `item ${slug}: the field ${e.field} cannot be read (${reason}). ${REPAIRABLE.includes(e.field) ? `Fix it with backlog update ${slug} --${e.field} <value>, or ${restore}` : `${restore[0].toUpperCase()}${restore.slice(1)}`}`;
+    throw Object.assign(new BacklogError('UNREADABLE_ITEM', message, 2), { unreadable: { slug, path, key: e.field } });
+  }
+}
+
+// The refusal of the first item of the folder that cannot be read, or null when every item can.
+export function unreadable(dir) {
+  try { load(dir); return null; } catch (e) { if (e.unreadable) return e; throw e; }
+}
+
 export function load(dir) {
   assertFolder(dir);
   const items = [];
@@ -260,7 +282,7 @@ export function load(dir) {
         const text = readFileSync(join(dir, path), 'utf8');
         const sha256 = createHash('sha256').update(text).digest('hex'); //
         if (rel === 'phases' && !hasFrontMatter(text)) continue; // a README or a stray note in phases/ is not an item: ranking it would rewrite it as an empty one (see bareFiles)
-        items.push({ path, ...parse(text), sha256, sha: sha256 });
+        items.push({ path, ...readItem(path, text), sha256, sha: sha256 });
       }
     }
   };

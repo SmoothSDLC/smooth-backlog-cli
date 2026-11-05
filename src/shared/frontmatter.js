@@ -36,40 +36,45 @@ function parseFm(block) {
   const lines = block.split('\n');
   const fm = {};
   let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (trim(line) === '') { i += 1; continue; }
-    const m = KEY_LINE.exec(line);
-    if (!m) throw err(`front matter line ${i + 1} is not a 'key: value' pair: ${line}`);
-    const key = trim(m[1]);
-    if (!IDENT.test(key)) throw err(`front matter key ${JSON.stringify(key)} is not a plain identifier`);
-    const inline = trim(m[2] ?? '');
-    if (inline === '') {
-      const next = lines[i + 1];
-      if (next !== undefined && /^- /.test(next)) {
-        const items = [];
-        let j = i + 1;
-        while (j < lines.length && /^- /.test(lines[j])) {
-          const end = continuation(lines, j + 1); // PyYAML wraps long items over indented lines
-          const chunk = [trim(lines[j].slice(2)), ...lines.slice(j + 1, end).map(trim)];
-          items.push(decodeValue(`a list item of '${key}'`, chunk, true));
-          j = end;
+  let field; // the key being read: an error inside its value names it (error.field); an error before the key is known names none
+  try {
+    while (i < lines.length) {
+      field = undefined;
+      const line = lines[i];
+      if (trim(line) === '') { i += 1; continue; }
+      const m = KEY_LINE.exec(line);
+      if (!m) throw err(`front matter line ${i + 1} is not a 'key: value' pair: ${line}`);
+      const key = trim(m[1]);
+      if (!IDENT.test(key)) throw err(`front matter key ${JSON.stringify(key)} is not a plain identifier`);
+      field = key;
+      const inline = trim(m[2] ?? '');
+      if (inline === '') {
+        const next = lines[i + 1];
+        if (next !== undefined && /^- /.test(next)) {
+          const items = [];
+          let j = i + 1;
+          while (j < lines.length && /^- /.test(lines[j])) {
+            const end = continuation(lines, j + 1); // PyYAML wraps long items over indented lines
+            const chunk = [trim(lines[j].slice(2)), ...lines.slice(j + 1, end).map(trim)];
+            items.push(decodeValue(`a list item of '${key}'`, chunk, true));
+            j = end;
+          }
+          fm[key] = items;
+          i = j;
+        } else if (next !== undefined && /^[ \t]/.test(next)) {
+          throw err(`front matter key '${key}' has a nested block, which the front matter subset does not support`);
+        } else {
+          fm[key] = null;
+          i += 1;
         }
-        fm[key] = items;
-        i = j;
-      } else if (next !== undefined && /^[ \t]/.test(next)) {
-        throw err(`front matter key '${key}' has a nested block, which the front matter subset does not support`);
       } else {
-        fm[key] = null;
-        i += 1;
+        const j = continuation(lines, i + 1);
+        const chunk = [inline, ...lines.slice(i + 1, j).map(trim)];
+        fm[key] = decodeValue(`the value of '${key}'`, chunk, false);
+        i = j;
       }
-    } else {
-      const j = continuation(lines, i + 1);
-      const chunk = [inline, ...lines.slice(i + 1, j).map(trim)];
-      fm[key] = decodeValue(`the value of '${key}'`, chunk, false);
-      i = j;
     }
-  }
+  } catch (e) { if (field !== undefined) e.field = field; throw e; }
   return fm;
 }
 

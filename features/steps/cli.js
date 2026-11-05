@@ -109,5 +109,14 @@ step(/^the order is kept in the items, as an earlier release did$/, w => {
   const repo = w.backlogRepo();
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'earlier release'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
 });
+// An item damaged by a hand edit or a bad merge, committed and pushed to the repository that holds the items: its status line is cut open.
+step(/^the status of item (\d+) is damaged in the backlog repository$/, (w, n) => {
+  const dir = w.folder();
+  const name = readdirSync(join(dir, 'phases')).find(f => f.startsWith(String(n).padStart(3, '0')));
+  const p = join(dir, 'phases', name);
+  writeFileSync(p, readFileSync(p, 'utf8').replace(/^status: .*$/m, 'status: "pend'));
+  const repo = w.backlogRepo();
+  w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'damaged'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
+});
 step(/^the backlog has an index$/, w => assert.ok(existsSync(join(w.folder(), 'index.json')), 'no index file in the backlog folder'));
 step(/^the queue is empty$/, w => { const r = w.run(['query', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r)); assert.deepEqual((JSON.parse(r.stdout).phases ?? []).filter(p => ['pending', 'in_progress'].includes(p.status)), [], r.stdout); });

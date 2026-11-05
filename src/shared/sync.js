@@ -352,12 +352,12 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
       }
       if (status === 'A') continue; // a new item has no incoming identity to preserve
       const before = await must(home, ['show', `${t.cmp}:${file}`], `read the prior identity of ${file}`);
-      const { fm } = parse(before.stdout);
+      let fm = {}; try { ({ fm } = parse(before.stdout)); } catch { /* the version on the origin cannot be read: this change is its repair */ }
       const priorSlug = fm.phase || basename(file, '.md'); // an item without a phase field is named by its file
       for (const d of [priorSlug, fm.seq]) if (d !== undefined && !resolves(d)) lost.add(key(d));
       // update --seq refuses incoming slug references as well as numeric ones, even though
       // a slug still resolves after a sequence-only change. Keep that pre-write rule after rebase.
-      if (item && Number(item.fm.seq) !== Number(fm.seq)) {
+      if (item && fm.seq !== undefined && Number(item.fm.seq) !== Number(fm.seq)) {
         for (const other of items) for (const d of asList(other.fm.depends_on)) {
           if (other !== item && (d === priorSlug || (/^\d+$/.test(d) && Number(d) === Number(fm.seq)))) {
             reject(`${names[n]}: ${slug(other)} depends on ${d}; clear or repoint incoming dependencies before changing its target's sequence`);

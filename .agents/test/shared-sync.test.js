@@ -506,3 +506,25 @@ test('075: overlapping writers, the same clone: a commit held at its push keeps 
     assert.deepEqual(seqs(f.bare, f.dir), [{ file: '001-nodeitem.md', seq: 1 }, { file: '002-otheritem.md', seq: 2 }]); // the held commit kept 1; item 2 was published on top of it
   } finally { g.release(); } // never leave the held push (and its hook) running
 });
+
+test('two clones share the items through git alone: no database travels', t => {
+  const f = fixture(t);
+  const cons = consumer(f.dir, 'acme', 'demo', 'main');
+  mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
+  const run = (args, home) => cli(args, { cwd: cons, tmp: f.dir, env: { BACKLOG_HOME: home } });
+  const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
+  const names = r => JSON.parse(r.stdout).phases.map(p => p.name).sort();
+  assert.equal(run(NEW('From A'), f.home).status, 0);
+  const qb = run(['query', '--json'], f.home2);
+  assert.equal(qb.status, 0, qb.stdout + qb.stderr);
+  assert.deepEqual(names(qb), ['From A'], 'the second clone pulled and rebuilt its cache');
+  assert.equal(run(NEW('From B'), f.home2).status, 0);
+  const qa = run(['query', '--json'], f.home);
+  assert.deepEqual(names(qa), ['From A', 'From B']);
+  assert.ok(!git(f.home, 'ls-files').includes('.db'), 'no database is tracked');
+  // a database left over from before is ignored and never deleted by the CLI
+  const stale = join(f.folder, 'backlog.db');
+  writeFileSync(stale, 'stale');
+  assert.equal(run(['query'], f.home).status, 0);
+  assert.equal(readFileSync(stale, 'utf8'), 'stale');
+});

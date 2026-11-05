@@ -10,11 +10,13 @@ One backlog, one CLI. Compared with 1.0.1:
 - **The CLI keeps a private cache of the items per clone;** no database is stored in the backlog (older backlogs may still
   hold one; it is ignored). The cache is rebuilt from the item files at the start of every command, and a file deleted outside the CLI is simply an absent item.
 - **The history of an item is part of the item** (`backlog query --events`); a replan records no event of its own.
-- **Where the items live is a setting, not a mode.** The backlog is always a git repository and every change to it is
-  committed and pushed before the command exits. By default the items live in `.backlog/` inside the repository
-  (committed on the current branch, the backlog's paths only, pushed to origin); `backlog setup` (or `BACKLOG_HOME`)
-  names a backlog repository instead, pulled before every command, so many repositories and people share one. Every
-  command, option, output and help text is the same in both places. The 1.x mode switches are gone.
+- **Where the items live is configuration, not a mode.** The backlog is always a git repository and every change to it
+  is committed and pushed before the command exits. `backlog setup` records the storage location in the repository's
+  `.smooth-backlog.json` and commits it: a folder inside the repository (`.backlog`, committed on the current branch,
+  the backlog's paths only, pushed to origin), or a clone of a backlog repository shared by many repositories and
+  people (`BACKLOG_ORIGIN_URL` names it). A repository with no configuration is told to run `backlog setup`; the CLI
+  never picks a storage location on its own. Every command, option, output and help text is the same in both places.
+  The 1.x mode switches are gone. `setup` reports what it did without naming any folder path.
 - **The command set:** `new`, `update`, `query` (`list` is the same), `next`, `pop`, `work`, `team pop`, `move`,
   `archive`, `setup`. `backlog update` changes an item (fields, body, status, priority, claim, release, review, close,
   the team steps); `--replan` sets the order of the queue. Removed: `init` (now `setup`), `set`, `add`, `priority`,

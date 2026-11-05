@@ -20,28 +20,40 @@ const ACTIONABLE = ['pending', 'in_progress'];
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //
 
-// The one storage setting. A backlog repository is named somewhere (BACKLOG_ORIGIN_URL or the.smooth-backlog.json origin key,
-// BACKLOG_HOME, the repository's.smooth-backlog.json path, or the per-user record): the items live in its clone, found in
-// that order, else at ~/git/<name>; a configured but missing clone is returned tagged (ask), never cloned here. Nothing named:
-// the items live inside the repository, in <repo>/.backlog, with the lock, views and journal in <repo>/.backlog/.state
-// (ignored by git).
+// The one storage setting: the folder that holds the items. Named by BACKLOG_HOME, by the repository's .smooth-backlog.json
+// (backlog_repository: a path relative to the repository; ".backlog" means inside it), or by the per-user record
+// $XDG_CONFIG_HOME/<name>/home (<name> from the clone-URL setting; without the setting, the only record there); with a clone URL
+// and nothing else, ~/git/<name>. Nothing named: the command is refused (exit 4) and told to run backlog setup — never a silent
+// default, so a repository is never given a backlog it did not configure. A folder inside the repository keeps the lock, views
+// and journal in its .state (ignored by git); a folder elsewhere must exist (a missing clone is returned tagged ask, never cloned here).
 export function resolveHome() {
   const setting = originSetting();
   const name = setting.name || NEUTRAL_NAME;
   let home = process.env.BACKLOG_HOME;
-  if (!home) home = configuredHome() ?? undefined; // the repository's.smooth-backlog.json comes before the per-user record
+  if (!home) home = configuredHome() ?? undefined; // the repository's .smooth-backlog.json comes before the per-user record
   if (!home) {
-    try { home = readFileSync(join(configDir(), name, 'home'), 'utf8').trim(); } catch { /* no record */ }
+    const records = (() => { try { return readdirSync(configDir()).filter(d => existsSync(join(configDir(), d, 'home'))); } catch { return []; } })();
+    const chosen = setting.name ? (records.includes(name) ? name : null) : (records.length === 1 ? records[0] : null);
+    if (chosen) { try { home = readFileSync(join(configDir(), chosen, 'home'), 'utf8').trim(); } catch { /* unreadable record */ } }
+    else if (!setting.url && records.length > 1) {
+      return { home: null, remote: true, ask: { code: 4, text: `two backlog records (${records.join(', ')}) and no setting name one of them: run backlog setup in this repository, or set BACKLOG_HOME` } };
+    }
   }
-  if (!setting.url && !home) { // no backlog repository named anywhere: the items live inside the repository
+  if (!home && !setting.url) {
     const top = topOf(process.cwd());
     if (!top) return { home: null, remote: false, ask: { code: 2, text: 'run this from inside a git repository (the repository whose backlog you want)' } };
-    const inside = join(top, '.backlog');
-    insideRepo = true;
-    mkdirSync(join(inside, '.state'), { recursive: true });
-    if (!existsSync(join(inside, '.gitignore'))) writeFileSync(join(inside, '.gitignore'), '.state/\n');
-    setTeamsHome(inside);
-    return { home: inside, remote: false, ask: null };
+    return { home: null, remote: false, ask: { code: 4, text: 'no backlog is configured for this repository: run backlog setup (it records the backlog folder in .smooth-backlog.json: a backlog repository when BACKLOG_ORIGIN_URL names one, else a folder inside this repository)' } };
+  }
+  if (home) { // a folder inside the repository: the items are committed with it
+    const top = topOf(process.cwd());
+    const abs = resolve(expand(home));
+    if (top && !relative(top, abs).startsWith('..') && !isAbsolute(relative(top, abs))) {
+      insideRepo = true;
+      mkdirSync(join(abs, '.state'), { recursive: true });
+      if (!existsSync(join(abs, '.gitignore'))) writeFileSync(join(abs, '.gitignore'), '.state/\n');
+      setTeamsHome(abs);
+      return { home: abs, remote: false, ask: null };
+    }
   }
   home = resolve(expand(home || join('~/git', name)));
   // Symlinks above the home (macOS /var, a linked ~) are resolved once here; a link AT the home is kept for validateHome to refuse.

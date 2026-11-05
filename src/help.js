@@ -32,10 +32,10 @@ An item is its number (1) or its slug (001-fix-the-login-redirect). Priorities a
 without gaps and is renumbered when work is added, moved or finished.
 
 The backlog is always a git repository, and every change to it is committed and pushed before the command exits. Where
-the items live is a setting of the repository and changes no command: by default the folder .backlog/ inside the
-repository itself (committed on its current branch and pushed to origin); with a backlog repository configured by
-backlog setup (.smooth-backlog.json) or BACKLOG_HOME, a clone of it - every command pulls it first, so many repositories
-and people share one backlog repository.
+the items live is configuration, recorded by backlog setup in the repository's .smooth-backlog.json, and changes no
+command: a folder inside the repository itself (.backlog, committed on the current branch and pushed to origin), or a
+clone of a backlog repository shared by many repositories and people (BACKLOG_ORIGIN_URL names it; BACKLOG_HOME may
+point at the clone). A repository with no configuration is told to run backlog setup; nothing is created on its own.
 
 Who: BACKLOG_AGENT names the agent running the command (--by, --claim and --agent name one explicitly); every change
 records who made it and when. A write to an item that someone else changed since this agent last read it is refused
@@ -734,16 +734,18 @@ Run inside the git repository to set up. The command:
   2. clones the backlog repository there with git when the path does not exist and a clone URL is set (a clone that
      cannot be made is refused: exit 3, nothing changed); creates the folder when no URL is set; leaves an existing
      folder exactly as it is;
-  3. writes .smooth-backlog.json {"backlog_repository": "<path relative to the repository>"} when the folder is not
-     .backlog inside the repository and there is no config yet, or with --ask; otherwise keeps it. A write keeps the
-     file's other keys. Commit the file, so every clone of the repository finds the backlog folder, also after the
-     repository and the folder move together;
+  3. writes .smooth-backlog.json {"backlog_repository": "<path relative to the repository>"} (".backlog" for the
+     folder inside it) when there is no config yet, or with --ask; otherwise keeps it. A write keeps the file's other
+     keys. The file is committed and pushed with the skill copies, so every clone of the repository finds the backlog
+     folder, also after the repository and the folder move together;
   4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's.
 
-Every command finds the backlog folder in this order: BACKLOG_HOME, .smooth-backlog.json, the per-user file
-<name>/home under the config folder ($XDG_CONFIG_HOME, else ~/.config), ~/git/<name>; when none of them names one,
-the items live in .backlog inside the repository. A configured folder that is missing is refused (exit 4) naming
-backlog setup. A backlog repository is pulled before every command and pushed after every change; nothing is written
+Every command finds the backlog folder in this order: BACKLOG_HOME, .smooth-backlog.json (backlog_repository: a
+path relative to the repository; .backlog means inside it), the per-user file <name>/home under the config folder
+($XDG_CONFIG_HOME, else ~/.config; without the clone-URL setting, the only such file there), ~/git/<name> when a clone
+URL is set. When none of them names one the command is refused (exit 4) and told to run backlog setup; no folder is
+ever created on its own. A configured folder that is missing is refused the same way. setup commits and pushes what it
+wrote (.smooth-backlog.json and the skill copies) on the current branch. A backlog repository is pulled before every command and pushed after every change; nothing is written
 into the repository being set up. Inside the repository, every change is committed on the current branch, with the
 backlog's paths only, and pushed to origin under the same branch name.
 

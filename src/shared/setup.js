@@ -82,16 +82,16 @@ export async function run(argv) {
     if (setting.url) {
       const c = spawnSync('git', ['clone', '-q', setting.url, home], { encoding: 'utf8' });
       if (c.status !== 0) return die(`could not clone ${setting.url} to ${home} (${(c.stderr || '').trim().slice(0, 300)}); nothing changed`, 3);
-      say(`✅ cloned the backlog repository to ${home}`);
-    } else { mkdirSync(home, { recursive: true }); say(`✅ created the backlog folder ${home}`); }
-  } else say(`ℹ️  the backlog folder is at ${home} (left unchanged)`);
-  if (home !== join(top, '.backlog') && (!kept || ask)) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys
+      say('✅ backlog repository cloned');
+    } else { mkdirSync(home, { recursive: true }); say('✅ backlog folder created'); }
+  } else say('ℹ️  backlog folder kept');
+  if (!kept || ask) { // a second setup keeps the config unless --ask; a rewrite keeps the file's other keys
     const value = relative(top, realpathSync(home)); // relative to the repository: portable (both real paths: macOS /var is /private/var)
     let previous = null;
     try { previous = JSON.parse(readFileSync(join(top, CONFIG), 'utf8')); } catch { /* no config */ }
     const keptKeys = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {};
     await atomicWrite(join(top, CONFIG), `${JSON.stringify({ ...keptKeys, backlog_repository: value || '.' }, null, 2)}\n`);
-    say(`✅ ${CONFIG}: backlog_repository ${value} (commit it, so every clone of this repository finds the backlog repository)`);
+    say(`✅ ${CONFIG} written (commit it, so every clone of this repository finds its backlog)`);
   } else say(`ℹ️  ${CONFIG} kept`);
   const deployed = [];
   for (const { target, destination } of targets) {
@@ -101,5 +101,16 @@ export async function run(argv) {
     deployed.push(destination);
   }
   say(deployed.length ? `✅ the backlog skill in ${deployed.join(', ')}` : 'ℹ️  no agent folder (.agents, .claude, .github, .qwen) here: no skill copy deployed');
+  // setup is a change to the repository: committed on the current branch (the config and the skill copies only) and pushed
+  const git = args => spawnSync('git', args, { cwd: top, encoding: 'utf8' });
+  const wrote = [CONFIG, ...deployed];
+  git(['add', '-A', '--', ...wrote]);
+  if (git(['diff', '--cached', '--quiet', '--', ...wrote]).status) {
+    const c = git(['commit', '-q', '--only', '-m', 'backlog: setup', '--', ...wrote]);
+    if (c.status !== 0) return die(`could not commit the setup in this repository (${(c.stderr || '').trim().slice(0, 300)})`, 3);
+    const p = git(['push', '-q', 'origin', 'HEAD']);
+    if (p.status !== 0) return die(`the setup is committed on this branch but not published (push failed: ${(p.stderr || '').trim().slice(0, 300)}); push the branch`, 3);
+    say('✅ setup committed and pushed');
+  }
   return 0;
 }

@@ -18,6 +18,10 @@ export function makeWorld(location) {
   const env = { ...GIT_IDENTITY, XDG_CONFIG_HOME: config, HOME: join(tmp, 'userhome'), BACKLOG_ORIGIN_URL: '', BACKLOG_HOME: '' };
   mkdirSync(env.HOME, { recursive: true });
   if (location === 'remote') { env.BACKLOG_ORIGIN_URL = ORIGIN_URL; env.BACKLOG_HOME = sharedBacklog(tmp); }
+  else { // the storage location is configuration: setup records .backlog inside the repository (and commits it)
+    const r = runCli(['setup'], { cwd: repo, env: { ...env, BACKLOG_AGENT: 'setup' } });
+    if (r.status !== 0) throw new Error(`setup of the local location failed: ${r.stdout}${r.stderr}`);
+  }
   const world = {
     location, tmp, repo, env, agentEnv: {}, agent: 0, last: null,
     // every command runs from inside the consuming repository, as a user or agent would

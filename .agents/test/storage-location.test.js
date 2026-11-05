@@ -12,16 +12,34 @@ function world(t) {
   const tmp = mkdtempSync(join(tmpdir(), 'backlog-location-'));
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
   const repo = consumer(tmp, 'acme', 'demo', 'main');
-  // no BACKLOG_HOME, no BACKLOG_ORIGIN_URL, no .smooth-backlog.json: the items live inside the repository
+  // no BACKLOG_HOME, no BACKLOG_ORIGIN_URL: `backlog setup` records .backlog inside the repository as the storage location
   const env = { ...GIT_IDENTITY, XDG_CONFIG_HOME: join(tmp, 'config'), HOME: join(tmp, 'userhome'), BACKLOG_ORIGIN_URL: '', BACKLOG_HOME: '' };
   mkdirSync(env.HOME, { recursive: true });
   const run = (args, extra = {}) => cli(args, { cwd: extra.cwd ?? repo, env: { ...env, ...extra.env } });
-  return { tmp, repo, env, run };
+  const setup = (cwd = repo) => { const r = run(['setup'], { cwd }); if (r.status !== 0) throw new Error(r.stdout + r.stderr); return r; };
+  return { tmp, repo, env, run, setup };
 }
 const git = (cwd, ...a) => spawnSync('git', a, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } }).stdout.trim();
 
-test('without a configured backlog repository the items live in <repo>/.backlog, whatever the origin', t => {
+test('a repository with no backlog configured is told to run setup; nothing is created, nothing is written', t => {
   const { repo, run } = world(t);
+  for (const args of [['query'], ['new', '--name', 'x', '--objective', 'o', '--summary', 's']]) {
+    const r = run(args);
+    assert.equal(r.status, 4, args.join(' ') + r.stdout + r.stderr);
+    assert.match(r.stderr, /no backlog is configured for this repository: run backlog setup/);
+  }
+  assert.ok(!existsSync(join(repo, '.backlog')), 'no folder was created');
+  assert.equal(git(repo, 'status', '--porcelain'), '');
+});
+
+test('setup without a backlog repository records .backlog inside the repository; the items then live there, whatever the origin', t => {
+  const { repo, run, setup } = world(t);
+  const s = setup();
+  assert.doesNotMatch(s.stdout, new RegExp(repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'setup names no folder path');
+  assert.deepEqual(JSON.parse(readFileSync(join(repo, '.smooth-backlog.json'), 'utf8')), { backlog_repository: '.backlog' });
+  assert.equal(git(repo, 'status', '--porcelain'), '', 'setup commits what it wrote');
+  assert.equal(git(repo, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'and pushes it');
+  assert.match(git(repo, 'log', '-1', '--format=%s'), /^backlog: setup/);
   const r = run(['new', '--name', 'x', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.ok(existsSync(join(repo, '.backlog', 'local', 'repository', 'phases', '001-x.md')), 'the item file is inside the repository');
@@ -39,7 +57,7 @@ test('without a configured backlog repository the items live in <repo>/.backlog,
 });
 
 test('work staged elsewhere in the repository is left staged, not committed with the backlog', t => {
-  const { repo, run } = world(t);
+  const { repo, run, setup } = world(t); setup();
   writeFileSync(join(repo, 'other.txt'), 'mine\n');
   git(repo, 'add', 'other.txt');
   assert.equal(run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']).status, 0);
@@ -48,7 +66,7 @@ test('work staged elsewhere in the repository is left staged, not committed with
 });
 
 test('a read in a repository with no backlog creates no item folder', t => {
-  const { repo, run } = world(t);
+  const { repo, run, setup } = world(t); setup();
   const q = run(['query']);
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.match(q.stdout, /no backlog yet/);
@@ -61,6 +79,7 @@ test('inside the repository the items survive a renamed folder and a changed ori
   mkdirSync(alone);
   spawnSync('git', ['init', '-q', '-b', 'main', alone]);
   spawnSync('git', ['commit', '-q', '--allow-empty', '-m', 'init'], { cwd: alone, env: { ...process.env, ...GIT_IDENTITY } });
+  run(['setup'], { cwd: alone });
   // no origin: the change is committed but cannot be pushed - refused with exit 3, the commit kept
   const r = run(['new', '--name', 'x', '--objective', 'o', '--summary', 's'], { cwd: alone });
   assert.equal(r.status, 3, r.stdout + r.stderr);
@@ -97,4 +116,24 @@ test('a configured backlog repository that is not cloned is an error naming back
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /backlog setup/);
   assert.ok(!existsSync(join(repo, '.backlog')), 'nothing was created inside the repository');
+});
+
+test('the per-user record is found without the origin setting when it is the only one', t => {
+  const { tmp, repo, run } = world(t);
+  const clone = join(tmp, 'backlog-clone'); mkdirSync(clone);
+  spawnSync('git', ['init', '-q', '-b', 'main', clone]);
+  spawnSync('git', ['commit', '-q', '--allow-empty', '-m', 'init'], { cwd: clone, env: { ...process.env, ...GIT_IDENTITY } });
+  spawnSync('git', ['init', '-q', '--bare', join(tmp, 'backlog-origin.git')]);
+  spawnSync('git', ['remote', 'add', 'origin', join(tmp, 'backlog-origin.git')], { cwd: clone });
+  spawnSync('git', ['push', '-q', '-u', 'origin', 'main'], { cwd: clone });
+  mkdirSync(join(tmp, 'config', 'some-backlog'), { recursive: true });
+  writeFileSync(join(tmp, 'config', 'some-backlog', 'home'), `${clone}\n`);
+  const r = run(['query']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!existsSync(join(repo, '.backlog')), 'the record wins over any in-repository default');
+  mkdirSync(join(tmp, 'config', 'other-backlog'), { recursive: true });
+  writeFileSync(join(tmp, 'config', 'other-backlog', 'home'), `${clone}\n`);
+  const two = run(['query']);
+  assert.equal(two.status, 4, 'two records and no setting: the CLI does not guess');
+  assert.match(two.stderr, /two backlog records|run backlog setup/);
 });

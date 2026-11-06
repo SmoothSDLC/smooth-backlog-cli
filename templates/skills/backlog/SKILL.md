@@ -26,7 +26,7 @@ repository: it installs or updates the CLI and runs `backlog setup`.
 
 ## Working alone (a person or one agent)
 
-- Read: `backlog query` (the queue), `backlog query --phase <item> --json` (one item, whole), `backlog next`.
+- Read: `backlog query` (the queue), `backlog fields` (the item template: every field and what it is for), `backlog query --phase <item> --json` (one item, whole), `backlog next`.
 - Create: `backlog new --name "<name>" --objective "<one line>" --summary "<what it is about>"`; `--priority 0` makes it
   next; `--depends-on <items>` when other items must finish first; `--split-from <item>` makes a sibling with its context.
 - Change: `backlog update <item> --name|--objective|--summary|--status|--location|--priority <value>`, `--append "<text>"`

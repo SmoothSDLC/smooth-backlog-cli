@@ -17,7 +17,7 @@ const pad = n => String(n).padStart(3, '0');
 
 //. 's' = text, 'i' = integer, an array = choices, true = a switch. argparse also takes a unique prefix.
 const OPTIONS = {
-  name: 's', objective: 's', summary: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
+  name: 's', title: 's', objective: 's', summary: 's', description: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
   'review-refs': 's', 'depends-on': 's', estimate: 'i', team: 's', chunk: true,
   complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], force: true, 'dry-run': true,
 };
@@ -41,10 +41,14 @@ function parseArgs(argv) {
     if (kind === 'i') { input(/^\s*[+-]?\d+\s*$/.test(value), `argument ${flag}: invalid int value: '${value}'`); out[camel(key)] = Number(value); }
     else {
       if (kind !== 's') input(kind.includes(value), `argument ${flag}: invalid choice: '${value}' (choose from ${kind.map(c => `'${c}'`).join(', ')})`);
-      out[camel(key)] = value;
+      out[camel(key)] = key === 'summary' && out.summary !== undefined ? `${out.summary}\n${value}` : value; // --summary may repeat: the sentences join
     }
   }
   input(!extra.length, `unrecognized arguments: ${extra.join(' ')}`);
+  for (const [name, synonym] of [['name', 'title'], ['body', 'description']]) { // the owner's words are synonyms of the earlier flags
+    input(out[name] === undefined || out[synonym] === undefined, `--${synonym} and --${name} are the same option: give one`);
+    if (out[synonym] !== undefined) { out[name] = out[synonym]; delete out[synonym]; }
+  }
   return out;
 }
 

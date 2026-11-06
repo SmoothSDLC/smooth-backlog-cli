@@ -18,7 +18,7 @@ sharedBacklog(t);
 const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
-const COMMANDS = ['new', 'update', 'query', 'next', 'pop', 'work', 'team', 'move', 'archive'];
+const COMMANDS = ['new', 'update', 'query', 'next', 'fields', 'pop', 'work', 'team', 'move', 'archive'];
 // Flags this build refuses (query.js TEAM and pop.js); --db is no flag of the CLI (item 058: not in its help).
 const REFUSED = {
   update: [],

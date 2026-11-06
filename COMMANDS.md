@@ -71,13 +71,13 @@ reports each run to an optional run recorder hook: the hook spawns a child proce
 BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
 
 Options:
-  --name NAME
-      The name of the item, in human-readable words. Required, unless --split-from is given.
+  --title TITLE, --name NAME
+      The title of the item, in human-readable words. Required, unless --split-from is given. --name is the same option under its earlier word.
   --objective OBJECTIVE
       The objective of the item, in one line. A split item inherits the objective of its parent when this is omitted.
   --summary SUMMARY
-      A semantic summary of what is in the item. It is used to route new work to the right item, so say in it what
-      the item is about.
+      A semantic summary of what is in the item, several sentences. It is used to route new work to the right item, so say in it what
+      the item is about. The option may be given several times (the sentences are joined, one per line) and may hold newlines.
   --context CONTEXT
       The context carried over from the original request. It is written into the item body.
   --priority PRIORITY
@@ -92,8 +92,8 @@ Options:
       Create a sibling item that inherits the context of this item (a number or a slug). The command refuses when
       the item does not exist. In a team session the sibling starts in stage refining and takes its refinement review
       before it may be claimed; outside a team it is a plain item.
-  --body BODY
-      The initial body of the item, the hand-over content for whoever does it. When the body has no "Definition of
+  --description DESCRIPTION, --body BODY
+      The description of the item (--body is the same option under its earlier word): the initial body of the item, the hand-over content for whoever does it. When the body has no "Definition of
       done" heading or line with checkable lines, a placeholder checklist is added. With --review-refs, or in a team
       session, the body must hold a real definition of done.
   --review-refs REVIEW_REFS
@@ -123,6 +123,35 @@ Options:
 
 On success the command prints a line that starts "created phase" with the item's slug, the item number and the rank
 the item now has, and a line about the renumbered backlog. A critical item is announced in a banner first.
+
+The item template (backlog fields prints the same table):
+
+key           shown as          meaning                                                                                                      set by                                                    required
+phase         slug              The slug: the number and the title                                                                           the CLI                                                   always
+seq           number            The item's number in this repository, never reused                                                           the CLI                                                   always
+name          title             A short title of the item                                                                                    the creator (new --title)                                 always
+objective     objective         The result the item delivers, one line                                                                       the creator (new --objective)                             always
+summary       summary           Several sentences about what the item is for; it routes new work to the right item                           the creator (new --summary, may repeat or hold newlines)  always
+body          description       The item's text below the front matter, with its definition of done                                          the creator (new --description), then every append        a team item needs a definition of done
+status        status            Where the item is: a team's order, or a free word outside a team (closed, done and archived finish an item)  the CLI and update                                        always
+severity      severity          normal or critical; a critical item jumps the queue                                                          the creator (new --severity)                              always
+repository    repository        The repository the item belongs to                                                                           the CLI                                                   always
+branch        branch            The branch the item belongs to                                                                               the CLI (update --branch moves it)                        always
+commit        commit            The commit the work has reached                                                                              the CLI and update --commit                               always
+location      location          Free text: where the work is                                                                                 update --location                                         no
+created       created           When the item was created                                                                                    the CLI                                                   always
+updated       last updated      When the item last changed                                                                                   the CLI                                                   always
+updated_by    last updated by   Who changed it last: the agent named, else the user of .backlog/config.json                                  the CLI                                                   always
+owner         owner             The user an item outside a team belongs to (the user of .backlog/config.json)                                the CLI (new)                                             no
+team          team              The team that owns the item                                                                                  new --team, update --set-team                             for team work
+claimed_by    holder            The agent that holds the item                                                                                team update --claim                                       no
+claimed_at    held since        When the holder took it                                                                                      the CLI                                                   no
+depends_on    depends on        The items that must be finished first                                                                        new --depends-on, update --set-depends-on                 always (none is a value)
+review_refs   review documents  The documents that define a good result                                                                      new --review-refs, update --set-review-refs               for team work
+estimate_min  estimate          Minutes of work, a whole number                                                                              new --estimate, update --set-estimate                     for team work
+complexity    complexity        low, medium or high                                                                                          new --complexity, update --set-complexity                 for team work
+layer         layer             1 to 5 or process                                                                                            new --layer, update --set-layer                           no
+chunk         chunk             Small pieces of work any member does between items                                                           new --chunk, update --set-chunk                           no
 
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
@@ -776,6 +805,51 @@ Exit codes:
 
 Example:
   backlog team pop --team cli-1 --json
+```
+
+### backlog fields
+
+```text
+backlog fields — show the item template: every field of an item and what it is for
+
+Usage:
+  backlog fields [--json]
+
+Prints one line per field of an item, with five columns: the key the item file carries, the name the field is shown under, what it
+means, who sets it, and when it is required. It reads nothing and changes nothing.
+
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
+
+Options:
+  --json
+      Print the table as a list of objects, one per field.
+  --help
+      Print this text and exit. Nothing is read or changed.
+
+Exit codes:
+  0  The command succeeded. Read views and --dry-run also exit 0.
+  1  The command refused: it printed a line that starts with a cross mark on standard output.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
+  4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
+
+Example:
+  backlog fields
 ```
 
 ### backlog move

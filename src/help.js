@@ -1,3 +1,4 @@
+import { table as fieldsTable } from './shared/fields.js';
 // Help text: USAGE is what `backlog --help` prints; HELP[command] is what `backlog <command> --help` prints
 // (src/shared/router.js) and what COMMANDS.md repeats. The text is written in plain, complete sentences so that the
 // skill instructions can be rewritten around it.
@@ -28,6 +29,7 @@ Usage:
   backlog team workflow --file <flow.json>         Register a flow definition; --show <name> prints one
   backlog move <item> --to-branch <name>           Move an item to another branch (or --to-repository)
   backlog archive <item> [--force] [--dry-run]     Archive a finished item
+  backlog fields [--json]                          The item template: every field, what it is for, who sets it
   backlog setup [--ask]                            Point this repository at its backlog folder and deploy the backlog skill
   backlog <command> --help                         Every option of the command, what it does, and an example
   backlog --version
@@ -106,13 +108,13 @@ branch instead, and then --body must hold a definition of done.
 ${SHARED}
 
 Options:
-  --name NAME
-      The name of the item, in human-readable words. Required, unless --split-from is given.
+  --title TITLE, --name NAME
+      The title of the item, in human-readable words. Required, unless --split-from is given. --name is the same option under its earlier word.
   --objective OBJECTIVE
       The objective of the item, in one line. A split item inherits the objective of its parent when this is omitted.
   --summary SUMMARY
-      A semantic summary of what is in the item. It is used to route new work to the right item, so say in it what
-      the item is about.
+      A semantic summary of what is in the item, several sentences. It is used to route new work to the right item, so say in it what
+      the item is about. The option may be given several times (the sentences are joined, one per line) and may hold newlines.
   --context CONTEXT
       The context carried over from the original request. It is written into the item body.
   --priority PRIORITY
@@ -127,8 +129,8 @@ Options:
       Create a sibling item that inherits the context of this item (a number or a slug). The command refuses when
       the item does not exist. In a team session the sibling starts in stage refining and takes its refinement review
       before it may be claimed; outside a team it is a plain item.
-  --body BODY
-      The initial body of the item, the hand-over content for whoever does it. When the body has no "Definition of
+  --description DESCRIPTION, --body BODY
+      The description of the item (--body is the same option under its earlier word): the initial body of the item, the hand-over content for whoever does it. When the body has no "Definition of
       done" heading or line with checkable lines, a placeholder checklist is added. With --review-refs, or in a team
       session, the body must hold a real definition of done.
   --review-refs REVIEW_REFS
@@ -157,6 +159,10 @@ ${HELP_FLAG}
 
 On success the command prints a line that starts "created phase" with the item's slug, the item number and the rank
 the item now has, and a line about the renumbered backlog. A critical item is announced in a banner first.
+
+The item template (backlog fields prints the same table):
+
+${fieldsTable()}
 
 ${EXIT}
 
@@ -706,6 +712,27 @@ Exit codes:
 Example:
   backlog team pop --team cli-1 --json
 `,
+  fields: `backlog fields — show the item template: every field of an item and what it is for
+
+Usage:
+  backlog fields [--json]
+
+Prints one line per field of an item, with five columns: the key the item file carries, the name the field is shown under, what it
+means, who sets it, and when it is required. It reads nothing and changes nothing.
+
+${SHARED}
+
+Options:
+  --json
+      Print the table as a list of objects, one per field.
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog fields
+`,
+
   move: `backlog move — move an item to another branch, or to another repository's folder, keeping its history
 
 Usage:

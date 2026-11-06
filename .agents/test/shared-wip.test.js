@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
@@ -91,7 +91,7 @@ test('034: query --wip prints the counts and the stale items; a renumbering leav
   const [a, b, c] = ['one', 'two', 'three'].map(n => f.make('demo', n));
   f.run('demo', ['update', a, '--claim', 'amy']);
   const file = join(f.home, 'acme', 'demo', 'phases', `${a}.md`);
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^updated: .*$/m, 'updated: "2026-01-01T00:00:00Z"')); // old: stale
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^last_updated: .*$/m, 'last_updated: "2026-01-01T00:00:00Z"')); // old: stale
   const text = f.run('demo', ['team', 'query', '--team', 't1', '--wip']).stdout;
   assert.match(text, /repository +acme\/demo +1 \/ 5/);
   assert.match(text, /stale \(no change of their own for more than 1 h\): 1/);

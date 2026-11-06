@@ -29,7 +29,7 @@ test('backlog fields prints one line per field with the five columns; --json lis
   assert.equal(lines.length, FIELDS.length + 1);
   assert.match(lines[0], /^key\s+shown as\s+meaning\s+set by\s+required$/);
   for (const [i, field] of FIELDS.entries()) for (const cell of field) assert.ok(lines[i + 1].includes(cell), `${field[0]}: ${cell}`);
-  assert.ok(lines.some(l => /^name\s+title\s/.test(l)) && lines.some(l => /^summary\s+summary\s/.test(l)) && lines.some(l => /^body\s+description\s/.test(l)));
+  assert.ok(lines.some(l => /^title\s+title\s/.test(l)) && lines.some(l => /^summary\s+summary\s/.test(l)) && lines.some(l => /^body\s+description\s/.test(l)));
   const json = JSON.parse(run(f, ['fields', '--json']).stdout);
   assert.deepEqual(json.map(x => x.key), FIELDS.map(x => x[0]));
   assert.equal(run(f, ['fields', 'x']).status, 2);
@@ -48,11 +48,11 @@ test('new takes --title and --description as the owner\'s words for --name and -
   const s = createdSlug(run(f, ['new', '--title', 'Parser fix', '--objective', 'o', '--summary', 'First sentence.', '--summary', 'Second sentence.', '--depends-on', 'none',
     '--description', '## Definition of done\n\n- [ ] the parser reads the sample']).stdout);
   assert.equal(s, '001-parser-fix');
-  assert.equal(fm(f, s).name, 'Parser fix');
+  assert.equal(fm(f, s).title, 'Parser fix');
   assert.equal(fm(f, s).summary, 'First sentence.\nSecond sentence.');
   assert.ok(readFileSync(join(f.folder, 'phases', `${s}.md`), 'utf8').includes('the parser reads the sample'));
   const both = run(f, ['new', '--title', 'a', '--name', 'b', '--depends-on', 'none']);
   assert.equal(both.status, 2); assert.match(both.stderr, /--title and --name are the same option/);
   const old = createdSlug(run(f, ['new', '--name', 'Old words', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', 'text']).stdout);
-  assert.equal(fm(f, old).name, 'Old words');
+  assert.equal(fm(f, old).title, 'Old words');
 });

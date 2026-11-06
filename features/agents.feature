@@ -16,7 +16,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     When I act as agent "alice"
     And I run `backlog update 1 --claim alice`
     Then the command succeeds
-    And item 1 has claimed_by "alice"
+    And item 1 has owner "alice"
     And item 1 has status "in progress"
 
   Scenario: another agent cannot take a claimed item
@@ -32,7 +32,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     And I run `backlog update 1 --claim alice`
     When I run `backlog update 1 --release alice`
     Then the command succeeds
-    And item 1 has claimed_by ""
+    And item 1 has owner ""
     And item 1 has status "pending"
 
   Scenario: a stale view is refused - the agent reads the item again first

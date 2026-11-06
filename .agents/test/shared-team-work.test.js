@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse, storedFm } from '../../src/shared/frontmatter.js';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
@@ -53,8 +53,8 @@ test('query --phase shows the whole item: the row, every front matter field and 
   const s = make(f, 'whole item');
   const j = JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout);
   assert.equal(j.slug, s);
-  assert.deepEqual(j.front_matter, fm(f, s));
-  for (const k of ['review_refs', 'depends_on', 'estimate_min', 'complexity', 'claimed_by']) assert.ok(k in j.front_matter, k);
+  assert.deepEqual(j.front_matter, storedFm(fm(f, s)));
+  for (const k of ['review_refs', 'depends_on', 'estimate_min', 'complexity', 'owner']) assert.ok(k in j.front_matter, k);
   assert.ok(j.body.includes('Body of whole item.') && j.body.includes("- [ ] the test's check holds"), j.body);
   assert.deepEqual(JSON.parse(ok(f, ['query', '--phase', s]).stdout), j); // the text view is the same object
 });
@@ -64,7 +64,7 @@ test('backlog work: the next action marked as the agent\'s (claim, refinement st
   const job = inT1(f, make(f, 'plain job'));
   let w = work(f, 'bob');
   assert.deepEqual([w.action, w.item, w.marked, fm(f, job).claimed_by], ['claim', job, 'claimed for bob', 'bob']);
-  assert.ok(w.body.includes('Body of plain job.') && w.front_matter.claimed_by === 'bob', JSON.stringify(w));
+  assert.ok(w.body.includes('Body of plain job.') && w.front_matter.owner === 'bob', JSON.stringify(w));
   w = work(f, 'bob');
   assert.deepEqual([w.action, w.item, w.marked], ['continue', job, null]); // its own item: nothing to mark
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']);

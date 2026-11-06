@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BACKLOG_NAME, ORIGIN_URL, cli, consumer, env, sharedBacklog } from './shared-fixtures.js';
-import { dump, parse } from '../../src/shared/frontmatter.js';
+import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 

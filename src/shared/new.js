@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { input } from '../errors.js';
-import { parse } from './frontmatter.js';
+import { parseItem as parse } from './frontmatter.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { actor, check, recordWrites } from './seen.js';
 import { configUser } from './setup.js';

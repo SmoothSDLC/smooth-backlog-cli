@@ -5,6 +5,7 @@
 // and the whole item is printed. Every step is a run of this CLI, so every rule of `team update` applies unchanged.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { storedFm } from './frontmatter.js';
 import * as index from './index.js';
 import { caller, isSplitSlice, missingFields } from './lifecycle.js';
 import { redact } from './safety.js';
@@ -13,6 +14,8 @@ import { gitBranch, heldBy, strip, teamLead, teamScope, teamStep, undoneDependen
 import { isOpen } from './workflow.js';
 
 const clean = v => (typeof v === 'string' ? redact(v) : Array.isArray(v) ? v.map(clean) : v !== null && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)])) : v); // redacted before it is serialized
+// The holder of an item as its front matter shows it (the stored form: owner while owned_since is set).
+const holderOf = f => strip(String(f.claimed_by ?? (f.owned_since ? f.owner : '') ?? ''));
 const BIN = () => process.env.BACKLOG_TEST_SELF || fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)); // the test seam: a wrapper that fails on cue
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const say = text => process.stdout.write(`${redact(text)}\n`);
@@ -99,13 +102,13 @@ export async function run({ team, agent }, rest) {
   } else if (!item && p.item) { // chunk work of another repository: its item file in that repository's folder of the backlog repository
     const file = load(repoFolder(resolveHome().home, p.repository)).find(i => i.fm.phase === p.item || i.path.endsWith(`/${p.item}.md`));
     if (!file) return die(`${p.item}: no such item in the backlog of ${p.repository}`, 1);
-    item = { front_matter: file.fm, body: file.body };
+    item = { front_matter: storedFm(file.fm), body: file.body };
   }
   const fmNow = item?.front_matter ?? {};
-  const holds = { claim: fmNow.claimed_by, review: fmNow.reviewer, refine: fmNow.refiner }[p.action];
+  const holds = { claim: holderOf(fmNow), review: fmNow.reviewer, refine: fmNow.refiner }[p.action];
   // heldBy matches an earlier session of the same card - the item is not handed on when the card keeps it in a new session
   if (marked && item && !shown && !heldBy(holds ?? '', agent)) { // handed on between the mark and the read
-    return die(`${p.item} was handed on before team pop could read it (claimed by ${fmNow.claimed_by || 'nobody'}); run backlog team pop again`, 1);
+    return die(`${p.item} was handed on before team pop could read it (claimed by ${holderOf(fmNow) || 'nobody'}); run backlog team pop again`, 1);
   }
   const { front_matter: _f, body: _b, marked: _m, skipped: _s, team: _t, ...base } = p; // the keys, in the order of the documentation
   const { action, item: slug, seq, ...others } = base;
@@ -172,7 +175,7 @@ async function workItem({ team, agent, repo, branch, engine: e }) {
     let f = {};
     try { f = JSON.parse(r.stdout).front_matter || {}; } catch { return fail(r); }
     // changed since the selection: not the team's any more, or taken. The claim is checked against this read
-    if (!ours(f) || strip(f.claimed_by || '')) { skipped.push({ item: i.fm.phase, reason: 'changed since it was listed (team, stage, status, branch or holder)' }); continue; }
+    if (!ours(f) || holderOf(f)) { skipped.push({ item: i.fm.phase, reason: 'changed since it was listed (team, stage, status, branch or holder)' }); continue; }
     const c = claim(i.fm.phase);
     if (c.status === 0) { action = 'claim'; item = i.fm.phase; if (c.stderr) process.stderr.write(c.stderr); break; }
     if (!refused(c)) return fail(c);
@@ -186,8 +189,8 @@ async function workItem({ team, agent, repo, branch, engine: e }) {
   const f = shown.front_matter || {};
   // the final read must find the session this command answers for still holding the item, on every path: a hand-back or a
   // reassignment to another session of the same card between the selection and this read is a change, never a reported success
-  if (strip(f.claimed_by || '') !== agent || !ours(f)) {
-    return { fail: die(`${item} changed before team pop could show it (claimed by ${f.claimed_by || 'nobody'}, status ${f.status}); run backlog team pop again`, 1) };
+  if (holderOf(f) !== agent || !ours(f)) {
+    return { fail: die(`${item} changed before team pop could show it (claimed by ${holderOf(f) || 'nobody'}, status ${f.status}); run backlog team pop again`, 1) };
   }
   const instruction = `you hold ${item}, the work item of team ${team}: refine it, and split it only when it is too big for one member `
     + `(backlog new --split-from ${item} --depends-on <ids|none> --estimate <minutes> per item; they start in stage refining `

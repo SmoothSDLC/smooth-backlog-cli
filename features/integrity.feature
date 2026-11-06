@@ -37,7 +37,7 @@ Feature: Integrity - every interaction updates from the origin first, publishes 
     And I run `backlog update 1 --claim ann`
     Then the command fails with exit code 1
     And the output contains "bob"
-    And item 1 has claimed_by "bob"
+    And item 1 has owner "bob"
 
   Scenario: the loser of a push race retries and publishes
     Given the origin will receive another checkout's change just before my push

@@ -37,7 +37,7 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
     When I act as agent "alice"
     And I run `backlog update 1 --claim alice`
     Then the command succeeds
-    And item 1 has claimed_by "alice"
+    And item 1 has owner "alice"
     When I run `backlog update 1 --close --summary "delivered"`
     Then the command succeeds
     And item 1 has status "closed"

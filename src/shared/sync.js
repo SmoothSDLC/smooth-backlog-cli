@@ -9,7 +9,7 @@ import { basename, dirname, join, posix, relative, resolve, sep } from 'node:pat
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
-import { parse } from './frontmatter.js';
+import { parseItem as parse } from './frontmatter.js';
 import * as index from './index.js';
 import { actor, primarySlug, publicationGuard, staleError, staleViews } from './seen.js';
 import * as store from './store.js';

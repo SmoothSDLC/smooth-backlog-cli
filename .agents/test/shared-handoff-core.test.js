@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as handoff from '../../src/shared/handoff.js';
 import * as team from '../../src/shared/team.js';
-import { dump, parse } from '../../src/shared/frontmatter.js';
+import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));

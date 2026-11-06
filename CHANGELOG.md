@@ -34,6 +34,12 @@ One backlog, one CLI. Compared with 1.0.1:
   with the best priority whole (front matter and body) and skips nothing for team reasons.
 - **The configuration has a user and a team.** `backlog setup` writes `user` (the git `user.name`, else the login name) and
   an empty `team`; an item outside a team records its `owner`, and the writer with no agent named is the user.
+- **The item keys carry the owner's words.** An item file stores `title`, `last_updated`, `last_updated_by`, `owner` and `owned_since`
+  (the owner is the agent working on the item, else the user it belongs to; `owned_since` is set while an agent holds it). A file
+  with the earlier keys (`name`, `updated`, `updated_by`, `claimed_by`, `claimed_at`) is read as before and rewritten with the
+  new keys at its next write. `backlog fields` lists them.
+- **The team entry is the roster.** A team definition takes an optional `review_only` list (members who review and never claim);
+  `--roster` and `TEAM_ROSTER` are gone. The engine's instructions name `backlog team update <item> --team <team> --agent <name>`.
 - **Teams and flows are defined from JSON.** `backlog team define --file <team.json>` checks the definition (lead, members,
   reviewers, stages of the flow) and adds the entry to `teams.json` beside the others, committed and pushed;
   `backlog team workflow --file <flow.json>` registers a flow in `workflows.json`. A team with open items is not replaced.

@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { parse as parseDoc } from './frontmatter.js';
+import { parseItem as parseDoc } from './frontmatter.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { repairUnreadable } from './repair.js';
 import { isOpen, normalise } from './workflow.js';

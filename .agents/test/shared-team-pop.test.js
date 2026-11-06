@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 import { HELP } from '../../src/help.js';
 import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
@@ -144,7 +144,7 @@ test('075: the pop of an idle lead and of a claimable item prints its text and i
   assert.equal(claimJson.status, 0, claimJson.stdout + claimJson.stderr);
   assert.equal(claimJson.stderr, '');
   const claim = JSON.parse(claimJson.stdout);
-  assert.deepEqual([claim.action, claim.item, claim.seq, claim.claimed, claim.marked, claim.front_matter.claimed_by, claim.skipped], ['claim', job2, 4, true, 'claimed for cy', 'cy', []]);
+  assert.deepEqual([claim.action, claim.item, claim.seq, claim.claimed, claim.marked, claim.front_matter.owner, claim.skipped], ['claim', job2, 4, true, 'claimed for cy', 'cy', []]);
   assert.equal(item(f, job2).fm.claimed_by, 'cy');
 });
 

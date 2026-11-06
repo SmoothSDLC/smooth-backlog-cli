@@ -57,7 +57,7 @@ export async function repairUnreadable(a, folder, bad) {
     const value = INTEGERS.includes(key) ? (/^\s*[+-]?\d+\s*$/.test(a[key]) ? Number(a[key]) : null) : a[key];
     if (value === null) return refuse(`--${key} ${a[key]}: a whole number is needed`);
     if (key === 'status' && !normalise(value)) return refuse('--status needs a word');
-    text = setField(text, key, key === 'status' ? normalise(value) : value);
+    text = setField(text, key === 'name' && !/^name:/m.test(text) ? 'title' : key, key === 'status' ? normalise(value) : value); // an earlier file keeps its name key until it is written
   }
   store.writeText(abs, text, folder);
   const still = store.unreadable(folder);

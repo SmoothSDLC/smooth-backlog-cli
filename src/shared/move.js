@@ -9,7 +9,7 @@ import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { die, pyStr, refuse, say, teamRefusal, usage, valueLike, withBacklog } from './archive.js';
-import { parse as parseDoc } from './frontmatter.js';
+import { parseItem as parseDoc } from './frontmatter.js';
 import { find } from './index.js';
 import { isOpen } from './workflow.js';
 import { assertInside, git, redact } from './safety.js';

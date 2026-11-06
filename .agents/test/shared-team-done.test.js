@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
-import { dump, parse } from '../../src/shared/frontmatter.js';
+import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));

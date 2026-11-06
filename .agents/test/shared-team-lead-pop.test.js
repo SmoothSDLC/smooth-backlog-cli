@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
@@ -38,7 +38,7 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   let p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.status, fm(f, early).claimed_by], ['claim', early, 0, 'lead']);
   assert.deepEqual(Object.keys(p), ['action', 'item', 'seq', 'team', 'repository', 'branch', 'instruction', 'claimed', 'blocked', 'held', 'marked', 'skipped', 'front_matter', 'body', 'status']); // status: added by pop() here
-  assert.ok(p.body.includes('Body of early work item.') && p.front_matter.claimed_by === 'lead', JSON.stringify(p));
+  assert.ok(p.body.includes('Body of early work item.') && p.front_matter.owner === 'lead', JSON.stringify(p));
   assert.match(p.instruction, /refine it, and split it only when it is too big for one member/);
   assert.match(p.instruction, new RegExp(`backlog new --split-from ${early}`));
   p = pop(f, {}, '--team', 't1');
@@ -149,7 +149,7 @@ test('query --status --json rows carry claimed_by and review_state', () => {
   assert.deepEqual(rows[free], ['', 'none']);
   ok(f, ['query', '--phase', reviewed, '--agent', 'zed']); ok(f, ['update', reviewed, '--start-review', '--by', 'zed']);
   const file = join(f.folder, 'phases', `${free}.md`); // a front matter without the two keys: '' (written by hand here, never by the CLI)
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^claimed_by:.*\n/m, '').replace(/^review_state:.*\n/m, ''));
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^owner:.*\n/m, '').replace(/^owned_since:.*\n/m, '').replace(/^review_state:.*\n/m, ''));
   const again = Object.fromEntries(JSON.parse(ok(f, ['query', '--status', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
   assert.deepEqual([again[reviewed], again[free]], [['bob', 'in_review'], ['', '']]);
 });

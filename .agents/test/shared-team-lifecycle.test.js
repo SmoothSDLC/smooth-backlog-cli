@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
-import { parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 import * as team from '../../src/shared/team.js';
 import { shutdown } from '../../src/shared/lifecycle.js';
@@ -220,7 +220,7 @@ test('a holder whose item file has malformed front matter still blocks a second 
   const b = make(f, 'second job', []);
   assert.equal(update(f, [a, '--claim', 'ann']).status, 0);
   const held = join(f.folder, 'phases', `${a}.md`);
-  writeFileSync(held, readFileSync(held, 'utf8').replace(/^claimed_by:/m, 'not a pair\nclaimed_by:'));
+  writeFileSync(held, readFileSync(held, 'utf8').replace(/^owner:/m, 'not a pair\nowner:'));
   assert.throws(() => team.heldItems(f.folder, 'ann'), /not a 'key: value' pair/);
   const files = () => readdirSync(join(f.folder, 'phases')).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8'));
   const before = files();

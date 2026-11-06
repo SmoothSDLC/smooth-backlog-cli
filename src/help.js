@@ -447,7 +447,7 @@ Options:
       the reference (its commit and time, stated in every result, also when it is empty), never a global
       timestamp, so a change made while you are idle still appears in your next report; your own reads
       (query --phase, team pop) do not move it. The first --changed prints "no earlier use: reference set now"
-      and sets the reference. The items you hold (your name in claimed_by, reviewer or refiner) are listed
+      and sets the reference. The items you hold (your name as owner, reviewer or refiner) are listed
       in a "held" section; every other changed item goes to "others"; a file moved inside the folder (an
       archive, a renumbering) is one "D" entry for its old name. When the comparison fails (your reference
       commit is no longer in the clone, for example after a history rewrite), the command reports the
@@ -542,7 +542,7 @@ In addition the lead gets the team's work item: an item of this repository and b
 A refined work item (its stage set, its refinement review passed) is an ordinary item any member may claim; team pop offers a work
 item only while its stage is unset, and the lead still refines it and splits it only when it is too big for one member. When the lead
 holds an open work item that has no other item of the team, the answer is continue with that item. When an earlier session of the
-lead's card holds it, the command records the continuation claim first - the new session name as claimed_by and in session_authors -
+lead's card holds it, the command records the continuation claim first - the new session name as the owner and in session_authors -
 and then answers continue; a refused continuation claim is no success: the earlier session keeps holding and the command stops (exit
 1, the reason on standard error). The final read requires the lead's own session still holding the item: a hand-back or a reassignment
 to another session of the same card between the selection and the final read is no success (exit 1, the item changed before it

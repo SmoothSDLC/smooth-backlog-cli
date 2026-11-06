@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as store from '../../src/shared/store.js';
 import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';

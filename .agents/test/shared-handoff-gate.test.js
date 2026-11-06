@@ -11,7 +11,7 @@ import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from 'nod
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { dump, parse } from '../../src/shared/frontmatter.js';
+import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as handoff from '../../src/shared/handoff.js';
 import { GIT_IDENTITY, cli, consumer, intoTeam, sharedBacklog, teamMembers } from './shared-fixtures.js';
 
@@ -119,7 +119,7 @@ function gate(f, state, p, d, h, { depId = p, blockedOn = p } = {}) {
   const work = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json'], 3).stdout);
   assert.deepEqual([work.action, work.item], ['claim', nextItem], `work's offer for a ${state} edge: ${JSON.stringify(work)}`);
   assert.equal(work.claimed, true, 'work claims the item it offers');
-  assert.equal(work.front_matter?.claimed_by, 'ada');
+  assert.equal(work.front_matter?.owner, 'ada');
 }
 
 for (const state of ['missing', 'unaccepted', 'stale', 'rejected']) {

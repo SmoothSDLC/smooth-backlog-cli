@@ -152,32 +152,31 @@ the item now has, and a line about the renumbered backlog. A critical item is an
 
 The item template (backlog fields prints the same table):
 
-key           shown as          meaning                                                                                                      set by                                                    required
-phase         slug              The slug: the number and the title                                                                           the CLI                                                   always
-seq           number            The item's number in this repository, never reused                                                           the CLI                                                   always
-name          title             A short title of the item                                                                                    the creator (new --title)                                 always
-objective     objective         The result the item delivers, one line                                                                       the creator (new --objective)                             always
-summary       summary           Several sentences about what the item is for; it routes new work to the right item                           the creator (new --summary, may repeat or hold newlines)  always
-body          description       The item's text below the front matter, with its definition of done                                          the creator (new --description), then every append        a team item needs a definition of done
-status        status            Where the item is: a team's order, or a free word outside a team (closed, done and archived finish an item)  the CLI and update                                        always
-severity      severity          normal or critical; a critical item jumps the queue                                                          the creator (new --severity)                              always
-repository    repository        The repository the item belongs to                                                                           the CLI                                                   always
-branch        branch            The branch the item belongs to                                                                               the CLI (update --branch moves it)                        always
-commit        commit            The commit the work has reached                                                                              the CLI and update --commit                               always
-location      location          Free text: where the work is                                                                                 update --location                                         no
-created       created           When the item was created                                                                                    the CLI                                                   always
-updated       last updated      When the item last changed                                                                                   the CLI                                                   always
-updated_by    last updated by   Who changed it last: the agent named, else the user of .backlog/config.json                                  the CLI                                                   always
-owner         owner             The user an item outside a team belongs to (the user of .backlog/config.json)                                the CLI (new)                                             no
-team          team              The team that owns the item                                                                                  new --team, update --set-team                             for team work
-claimed_by    holder            The agent that holds the item                                                                                team update --claim                                       no
-claimed_at    held since        When the holder took it                                                                                      the CLI                                                   no
-depends_on    depends on        The items that must be finished first                                                                        new --depends-on, update --set-depends-on                 always (none is a value)
-review_refs   review documents  The documents that define a good result                                                                      new --review-refs, update --set-review-refs               for team work
-estimate_min  estimate          Minutes of work, a whole number                                                                              new --estimate, update --set-estimate                     for team work
-complexity    complexity        low, medium or high                                                                                          new --complexity, update --set-complexity                 for team work
-layer         layer             1 to 5 or process                                                                                            new --layer, update --set-layer                           no
-chunk         chunk             Small pieces of work any member does between items                                                           new --chunk, update --set-chunk                           no
+key              shown as          meaning                                                                                                         set by                                                    required
+phase            slug              The slug: the number and the title                                                                              the CLI                                                   always
+seq              number            The item's number in this repository, never reused                                                              the CLI                                                   always
+title            title             A short title of the item                                                                                       the creator (new --title)                                 always
+objective        objective         The result the item delivers, one line                                                                          the creator (new --objective)                             always
+summary          summary           Several sentences about what the item is for; it routes new work to the right item                              the creator (new --summary, may repeat or hold newlines)  always
+body             description       The item's text below the front matter, with its definition of done                                             the creator (new --description), then every append        a team item needs a definition of done
+status           status            Where the item is: a team's order, or a free word outside a team (closed, done and archived finish an item)     the CLI and update                                        always
+severity         severity          normal or critical; a critical item jumps the queue                                                             the creator (new --severity)                              always
+repository       repository        The repository the item belongs to                                                                              the CLI                                                   always
+branch           branch            The branch the item belongs to                                                                                  the CLI (update --branch moves it)                        always
+commit           commit            The commit the work has reached                                                                                 the CLI and update --commit                               always
+location         location          Free text: where the work is                                                                                    update --location                                         no
+created          created           When the item was created                                                                                       the CLI                                                   always
+last_updated     last updated      When the item last changed                                                                                      the CLI                                                   always
+last_updated_by  last updated by   Who changed it last: the agent named, else the user of .backlog/config.json                                     the CLI                                                   always
+team             team              The team that owns the item                                                                                     new --team, update --set-team                             for team work
+owner            owner             The agent working on the item; outside a team, the user the item belongs to (the user of .backlog/config.json)  the CLI (new; team update --claim and --release)          no
+owned_since      owned since       When the agent took the item; empty while nobody holds it                                                       the CLI                                                   no
+depends_on       depends on        The items that must be finished first                                                                           new --depends-on, update --set-depends-on                 always (none is a value)
+review_refs      review documents  The documents that define a good result                                                                         new --review-refs, update --set-review-refs               for team work
+estimate_min     estimate          Minutes of work, a whole number                                                                                 new --estimate, update --set-estimate                     for team work
+complexity       complexity        low, medium or high                                                                                             new --complexity, update --set-complexity                 for team work
+layer            layer             1 to 5 or process                                                                                               new --layer, update --set-layer                           no
+chunk            chunk             Small pieces of work any member does between items                                                              new --chunk, update --set-chunk                           no
 
 Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.
@@ -504,7 +503,7 @@ Options:
       the reference (its commit and time, stated in every result, also when it is empty), never a global
       timestamp, so a change made while you are idle still appears in your next report; your own reads
       (query --phase, team pop) do not move it. The first --changed prints "no earlier use: reference set now"
-      and sets the reference. The items you hold (your name in claimed_by, reviewer or refiner) are listed
+      and sets the reference. The items you hold (your name as owner, reviewer or refiner) are listed
       in a "held" section; every other changed item goes to "others"; a file moved inside the folder (an
       archive, a renumbering) is one "D" entry for its old name. When the comparison fails (your reference
       commit is no longer in the clone, for example after a history rewrite), the command reports the
@@ -643,7 +642,7 @@ In addition the lead gets the team's work item: an item of this repository and b
 A refined work item (its stage set, its refinement review passed) is an ordinary item any member may claim; team pop offers a work
 item only while its stage is unset, and the lead still refines it and splits it only when it is too big for one member. When the lead
 holds an open work item that has no other item of the team, the answer is continue with that item. When an earlier session of the
-lead's card holds it, the command records the continuation claim first - the new session name as claimed_by and in session_authors -
+lead's card holds it, the command records the continuation claim first - the new session name as the owner and in session_authors -
 and then answers continue; a refused continuation claim is no success: the earlier session keeps holding and the command stops (exit
 1, the reason on standard error). The final read requires the lead's own session still holding the item: a hand-back or a reassignment
 to another session of the same card between the selection and the final read is no success (exit 1, the item changed before it

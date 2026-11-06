@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
-import { dump, parse } from '../../src/shared/frontmatter.js';
+import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
 const git = (cwd, ...args) => {

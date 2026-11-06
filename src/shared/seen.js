@@ -8,7 +8,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { parse } from './frontmatter.js';
+import { parseItem as parse, storedFm } from './frontmatter.js';
 import { configUser } from './setup.js';
 import { now, originRef, repoId, stateDir } from './store.js'; // a cycle (store.js imports this file): used only at run time
 
@@ -209,7 +209,7 @@ export function reportStale(e, die, code) {
   const text = e?.code === 'STALE_ITEM' && e.stale?.text;
   if (!text) return die(e.message, code);
   const { fm, body } = parse(text);
-  if (process.argv.includes('--json')) { process.stdout.write(`${JSON.stringify({ error: { code: e.code, message: e.message }, item: { front_matter: fm, body } })}\n`); return code; }
+  if (process.argv.includes('--json')) { process.stdout.write(`${JSON.stringify({ error: { code: e.code, message: e.message }, item: { front_matter: storedFm(fm), body } })}\n`); return code; }
   const out = die(e.message, code);
   const value = v => (typeof v === 'string' ? v : JSON.stringify(v));
   process.stdout.write(`--- current ${e.stale.slug} ---\n${Object.entries(fm).map(([k, v]) => `${k}: ${value(v)}`).join('\n')}\n\n${body.replace(/\n+$/, '')}\n`);

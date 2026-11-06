@@ -255,3 +255,44 @@ function encodeScalar(value) {
   if (typeof value === 'string') return JSON.stringify(value).replace(/[\x7f-\x9f\u2028\u2029\ufffe\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
   throw err(`unsupported front matter value type: ${typeof value}`);
 }
+
+// ---- the stored keys of an item
+// The codec above is generic. An item file carries the owner's words: title, last_updated, last_updated_by, owner and owned_since. An
+// earlier file carries name, updated, updated_by, claimed_by and claimed_at, read forever. In memory a loaded item keeps the earlier
+// names (the code asks for them); parseItem and dumpItem are the two doors, so a file is always written with the new keys. The holder
+// of an item is its owner while owned_since is set; an owner without owned_since is the user the item belongs to (outside a team).
+const STORED = { name: 'title', updated: 'last_updated', updated_by: 'last_updated_by', claimed_at: 'owned_since' };
+const LOADED = Object.fromEntries(Object.entries(STORED).map(([a, b]) => [b, a]));
+
+// The front matter as the file holds it, from the loaded form (the new keys, each in the place of the earlier one).
+export function storedFm(fm) {
+  const out = {};
+  for (const [k, v] of Object.entries(fm)) {
+    if (k === 'claimed_by') out.owner = v || fm.owner || ''; // the holder; none: the user the item belongs to
+    else if (k === 'claimed_at') out.owned_since = v || (fm.claimed_by ? fm.updated || fm.created || '1970-01-01T00:00:00Z' : v); // a holder is told apart by owned_since
+    else if (k === 'owner') { if (!('claimed_by' in fm)) out.owner = v; }
+    else if (k in STORED) { if (!(STORED[k] in fm)) out[STORED[k]] = v; }
+    else out[k] = v;
+  }
+  if (fm.claimed_by && !('claimed_at' in fm)) out.owned_since = fm.updated || fm.created || '1970-01-01T00:00:00Z'; // the holder is told apart by owned_since
+  return out;
+}
+
+// The front matter as the code reads it, from the stored form (an earlier file passes as it is; its new key, when it has both, wins).
+export function loadedFm(fm) {
+  const out = {};
+  for (const [k, v] of Object.entries(fm)) {
+    if (k === 'owner' && !('claimed_by' in fm)) { // the holder while owned_since is set, else the user the item belongs to
+      out.claimed_by = fm.owned_since ? v : '';
+      if (!fm.owned_since) out.owner = v;
+    }
+    else if (k in LOADED) out[LOADED[k]] = v;
+    else if (k in STORED && STORED[k] in fm) continue;
+    else out[k] = v;
+  }
+  return out;
+}
+
+export function parseItem(text) { const doc = parse(text); return { ...doc, fm: loadedFm(doc.fm) }; }
+export const dumpItem = (fm, body) => dump(storedFm(fm), body);
+export const replaceItemFrontMatter = (text, fm) => replaceFrontMatter(text, storedFm(fm));

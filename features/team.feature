@@ -19,7 +19,7 @@ Feature: Team - a team lead splits a work item, members refine it, a reviewed re
   Scenario: the lead takes its team's work item with team pop
     When I run `backlog team pop --team t1 --agent lead`
     Then the command succeeds
-    And item 1 has claimed_by "lead"
+    And item 1 has owner "lead"
 
   Scenario: a split item starts in stage refining and belongs to the team
     When I run `backlog new --name "Parser child" --split-from 1`
@@ -61,7 +61,7 @@ Feature: Team - a team lead splits a work item, members refine it, a reviewed re
     And I have read item 2
     And I run `backlog update 2 --claim bob`
     Then the command succeeds
-    And item 2 has claimed_by "bob"
+    And item 2 has owner "bob"
 
   Scenario: the review rules of the team decide when a worked item closes
     Given I run `backlog new --name "Parser child" --split-from 1`

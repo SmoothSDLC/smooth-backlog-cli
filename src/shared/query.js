@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { parse as parseItem } from './frontmatter.js';
+import { parseItem, storedFm } from './frontmatter.js';
 import * as index from './index.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
@@ -215,7 +215,7 @@ async function query(argv, fromTeam) {
       const away = team.undoneDependencies(folder, fms.get(r.path) ?? {}, rows).filter(d => d.foreign && d.item && d.item.status !== 'closed')
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
       const file = items.find(i => i.path === r.path); // the whole item: front matter and body
-      if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), front_matter: file ? file.fm : null, body: file ? file.body : null }); return 0; }
+      if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null }); return 0; }
       criticalBanner(critical());
       say(`➡️  NEXT: P${r.priority} (rank 0 = next) — [${pad(r.seq, 3)}] ${r.slug}  (${r.status})${(r.severity || 'normal') === 'critical' ? '  ⚠️ CRITICAL' : ''}`);
       say(`    ${r.name}`);
@@ -226,7 +226,7 @@ async function query(argv, fromTeam) {
       if (file) {
         say('');
         say('--- front matter ---');
-        for (const [k, v] of Object.entries(file.fm || {})) say(`${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`);
+        for (const [k, v] of Object.entries(storedFm(file.fm || {}))) say(`${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`);
         say('--- body ---');
         say(String(file.body || '').replace(/^\n+/, '').replace(/\n$/, ''));
       }
@@ -239,7 +239,7 @@ async function query(argv, fromTeam) {
         const r = index.find(rows, id);
         if (!r) { say(`❌ no phase ${repr(id)}`); return 1; }
         const file = items.find(i => i.path === r.path);
-        out.push({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
+        out.push({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
       }
       dump(out);
       for (const r of out) seen.view(a.agent, folder, repo, r); // read only once all of them are shown
@@ -250,7 +250,7 @@ async function query(argv, fromTeam) {
       if (!r) { say(`❌ no phase ${repr(a.phase)}`); return 1; }
       // the earlier scripts row, then the whole item
       const file = items.find(i => i.path === r.path);
-      dump({ ...r, front_matter: file ? file.fm : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
+      dump({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
       seen.view(a.agent, folder, repo, r); // the agent now holds this version: its next write to the item is checked against it
       return 0;
     }

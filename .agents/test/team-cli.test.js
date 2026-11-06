@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import { spawnSync } from 'node:child_process';
 import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
 
@@ -177,7 +177,7 @@ test('team pop: the lead claims the work item and sees it whole, then a member h
   assert.equal(lead.status, 0, lead.stdout + lead.stderr);
   const out = JSON.parse(lead.stdout);
   assert.deepEqual([out.action, out.item, out.team, out.claimed, out.marked], ['claim', w, 't1', true, 'claimed for lead']);
-  assert.ok(out.body.includes('Definition of done') && out.front_matter.claimed_by === 'lead');
+  assert.ok(out.body.includes('Definition of done') && out.front_matter.owner === 'lead');
   assert.equal(fm(f, w).claimed_by, 'lead');
   const member = pop(f, 'ann');
   assert.equal(member.status, 0, member.stdout + member.stderr); // the lead holds the only work item: a member with nothing to take does chunk work

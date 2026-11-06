@@ -7,7 +7,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
 import { edgeState, satisfied } from './handoff.js';
 import * as index from './index.js';
-import { parse } from './frontmatter.js';
+import { parseItem as parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 import { load } from './store.js';
 import { SOLO, isFinished, isOpen as isOpenWord, lift, loadWorkflow } from './workflow.js';

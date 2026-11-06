@@ -53,7 +53,7 @@ test('audit t4: a done item can be neither claimed nor released back into the qu
     assert.match(out(r), /finished item cannot be (claimed|released)/);
   }
   const file = readFileSync(join(s.folder, 'phases', '001-alpha-job.md'), 'utf8');
-  assert.match(file, /^status: done$/m); assert.doesNotMatch(file, /claimed_by: amy/);
+  assert.match(file, /^status: done$/m); assert.doesNotMatch(file, /owner: amy/);
 });
 
 test('audit: update --status refuses archived (backlog archive moves a finished item), takes any other word of a plain item', t => {
@@ -119,7 +119,7 @@ test('audit t6: a BOM file keeps its front matter; a phases/ file without front 
   assert.equal(r.status, 0, out(r));
   assert.equal(readFileSync(readme, 'utf8'), note, 'the stray file is not rewritten');
   const fixed = readFileSync(alpha, 'utf8');
-  assert.match(fixed, /^name: "alpha job"$/m); assert.match(fixed, /^seq: 1$/m); // fields kept, number not reused
+  assert.match(fixed, /^title: "alpha job"$/m); assert.match(fixed, /^seq: 1$/m); // fields kept, number not reused
   assert.ok(existsSync(join(s.folder, 'phases', '002-beta-job.md')));
   const q = s.run(['query', '--all']);
   assert.equal(q.status, 0, out(q)); assert.match(q.stdout, /phases\/README\.md has no front matter/);

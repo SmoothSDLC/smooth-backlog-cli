@@ -7,7 +7,7 @@ import { join, relative, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { find, rows as itemRows } from './index.js';
 import { assertInside, git, redact } from './safety.js';
-import { parse as parseDoc } from './frontmatter.js';
+import { parseItem as parseDoc } from './frontmatter.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';

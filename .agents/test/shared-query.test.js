@@ -87,7 +87,7 @@ function view(f, args, status = 0, cwd = f.cons) {
 const norm = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS')
   .replace(/commit=[0-9a-f]+/g, 'commit=SHA')
   .replace(/sha drift [0-9a-f]+->[0-9a-f]+/g, 'sha drift SHA->SHA');
-const normJson = s => JSON.parse(s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(/"updated_by": "[^"]*"/g, '"updated_by": "UPD"'),
+const normJson = s => JSON.parse(s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(/"last_updated_by": "[^"]*"/g, '"last_updated_by": "UPD"'),
   (k, v) => (typeof v === 'string' && /^[0-9a-f]{7,}$/.test(v) ? 'SHA' : v));
 const STATUS_FINDINGS = '⚠️  CRITICAL: phases/006-foreign.md says repository other/thing but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 006-foreign --to-repository\n'
   + '⚠️  item 007-untagged records no repository or branch; it is out of the queue until its repository and branch are filled in\n'
@@ -416,7 +416,7 @@ test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
 test('075: --phase prints the full item (row, front matter, body, missing) by slug and by number; not found is exit 1 on stdout', () => {
   const f = fx();
   const beta = { id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
-    front_matter: { phase: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', updated: 'TS', updated_by: 'UPD', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', owner: defaultUser(f.cons) },
+    front_matter: { phase: '002-beta', seq: 2, title: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', last_updated: 'TS', last_updated_by: 'UPD', depends_on: [], owner: defaultUser(f.cons), owned_since: '', review_state: 'none', reviewer: '' },
     body: '\n# Phase 002 — Beta\n\n**Objective:** Caf\u00e9 \u2615 Beta\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n',
     missing: ['review_refs', 'estimate_min', 'definition_of_done'] };
   // the item carries its history (events) in its front matter: compared apart from the rest
@@ -425,7 +425,7 @@ test('075: --phase prints the full item (row, front matter, body, missing) by sl
   assert.deepEqual(bySlug, beta, 'by slug');
   assert.match(betaEvents[0], /^TS planning_event - - added 002-beta at rank 0/);
   const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal', priority: 2, path: 'phases/003-gamma.md',
-    front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal' } };
+    front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, title: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal' } };
   gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
   const [byNumber, events] = noEvents(normJson(view(f, ['--phase', '3']).stdout));
   assert.deepEqual(byNumber, gamma, 'by number');

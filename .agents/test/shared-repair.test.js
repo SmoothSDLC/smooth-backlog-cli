@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
-import { parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import { setField } from '../../src/shared/repair.js';
 import * as store from '../../src/shared/store.js';
 

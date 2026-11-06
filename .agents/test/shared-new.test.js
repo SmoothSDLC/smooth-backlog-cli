@@ -137,7 +137,7 @@ test('new: writes the item, records its history, commits as "acme/demo: new --na
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   const [item] = items(f);
   assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'repository', 'branch', 'commit',
-    'location', 'created', 'updated', 'updated_by', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'owner', 'events']);
+    'location', 'created', 'updated', 'updated_by', 'depends_on', 'claimed_by', 'owner', 'claimed_at', 'review_state', 'reviewer', 'events']); // the holder and the user the item belongs to are one stored key, owner
   assert.deepEqual({ ...item.fm, created: 0, updated: 0, updated_by: 0, commit: 0, events: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
     status: 'pending', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0, updated_by: 0,
     depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', owner: defaultUser(f.cons), events: 0 });

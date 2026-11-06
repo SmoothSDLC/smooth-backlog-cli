@@ -6,7 +6,8 @@ import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
-import { HELP } from '../../src/help.js';
+import { HELP, USAGE } from '../../src/help.js';
+import { ALIASES } from '../../src/shared/aliases.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -142,7 +143,7 @@ test('backlog --help names every command and the storage setting, and is the sam
   for (const command of [...COMMANDS, 'list', 'setup']) assert.match(r.stdout, new RegExp(`^ {2}backlog ${command}( |$)`, 'm'), `${command} is missing`);
   assert.match(r.stdout, /backlog <command> --help/, 'how to get the help of one command');
   assert.match(r.stdout, /committed and pushed before the command exits/);
-  assert.doesNotMatch(r.stdout, /mode|--use-backlog-repo|--use-local-repo|backlog init/);
+  assert.doesNotMatch(r.stdout.replace(/\nAliases \([\s\S]*?\n\nExit codes/, '\nExit codes'), /mode|--use-backlog-repo|--use-local-repo|backlog init/); // the alias lines name init on purpose
   const inside = cli(['--help'], { cwd: cons, tmp: t, env: { BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: '', XDG_CONFIG_HOME: join(t, 'other-config') } });
   assert.equal(inside.stdout, r.stdout);
 });
@@ -182,4 +183,21 @@ test('059.V2: the --close and --status help blocks name the hand-off close rule,
 
 test('query, next and team help: no headless option, no query --pop', () => {
   for (const command of ['query', 'next', 'team']) assert.doesNotMatch(HELP[command], /--pop\b|--headless|BACKLOG_HEADLESS|next --agent/, command);
+});
+
+test('every alias row is in backlog --help, in COMMANDS.md and in the skill reference', () => {
+  const docs = [USAGE, readFileSync(new URL('../../COMMANDS.md', import.meta.url), 'utf8'), readFileSync(new URL('../../templates/skills/backlog/references/commands.md', import.meta.url), 'utf8'), readFileSync(new URL('../../README.md', import.meta.url), 'utf8')];
+  for (const doc of docs) for (const row of ALIASES) { assert.ok(doc.includes(row.form), row.form); assert.ok(doc.includes(row.runs), row.runs); }
+});
+
+test('<alias> --help prints the alias line and then the help of the command it runs', () => {
+  const done = backlog('done', '--help').stdout;
+  assert.ok(done.startsWith('backlog done <item> runs backlog update <item> --status done\n'), done);
+  assert.ok(done.includes(HELP.update));
+  assert.ok(backlog('list', 'open', '--help').stdout.startsWith('backlog list open runs backlog query --only open\n'));
+  assert.ok(backlog('3', 'set', '--help').stdout.includes(HELP.update));
+  const init = backlog('init', '--help').stdout;
+  assert.ok(init.startsWith('backlog init [name] runs backlog setup\n') && init.includes(HELP.setup));
+  assert.ok(backlog('init', 'clean', '--help').stdout.startsWith('backlog init clean [name] runs '));
+  assert.equal(backlog('list', '--help').stdout.trimEnd(), HELP.query.trimEnd()); // a bare list is the query command itself
 });

@@ -1,3 +1,4 @@
+import { ALIASES } from './shared/aliases.js';
 import { table as fieldsTable } from './shared/fields.js';
 // Help text: USAGE is what `backlog --help` prints; HELP[command] is what `backlog <command> --help` prints
 // (src/shared/router.js) and what COMMANDS.md repeats. The text is written in plain, complete sentences so that the
@@ -63,6 +64,9 @@ work-in-progress limits (wip-limits.json). Teams, their leads and members and th
 the backlog folder (teams.json); a team session is bound by TEAM_NAME, TEAM_REPOSITORY and TEAM_BRANCH. An item
 without a team is not bound by them.
 
+Aliases (the command names of the first release still work; backlog <alias> --help shows what each runs):
+${ALIASES.map(a => `  backlog ${a.form}\n      runs ${a.runs}`).join('\n')}
+
 Exit codes: 0 success; 1 refused (the reason on standard output, ❌ ...); 2 invalid input or a failure; 3 idle (team pop:
 nothing to do now); 4 the configured backlog repository is not cloned (run backlog setup); 5 stale view.
 `;
@@ -119,6 +123,9 @@ Options:
       The insertion rank, an integer. 0 makes the item the next thing to do. When it is omitted the item is
       appended to the end of the backlog. The backlog is renumbered to 0..N-1 around the item, because adding
       work is a planning event.
+  --status STATUS
+      The status the item starts in, as free text (done means closed); the default is pending. Not with --team: a team
+      item starts in its own first status.
   --severity {normal,critical}
       The default is normal. Critical means a finding about repository corruption, data loss, the source of truth
       or security. It puts the item at priority 0 (unless --priority is given) and makes backlog query print it in
@@ -396,6 +403,7 @@ Usage:
   backlog query [--status] [--all] [--branch <name>] [--json]
   backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
   backlog query --changed [--agent <name>] [--json]
+  backlog query --only {new,open,done,archive} | --branches [--json]
 
 Reads the backlog and never changes it, except that --changed advances
 the agent's own last-use reference (its record of its own use, not an item). Without a view option it prints the full stack of the branch: the open
@@ -427,6 +435,13 @@ Options:
       item, newest first; without one it prints the latest 50 events of the backlog, archived items included.
   --by-branch BY_BRANCH
       The items recorded on this branch.
+  --only {new,open,done,archive}
+      The full stack filtered to one kind of item: new (not started), open (every item not finished), done (finished,
+      not archived) or archive (archived). The listing is the same one, in queue order. Same as backlog list new,
+      list open, list done, list archive.
+  --branches
+      One line per branch of this repository: the branch, its open items and its done items (with --json, a list of
+      {branch, open, done}). Same as backlog branch and backlog list branch.
   --changed
       Which items of this repository changed since your last use: your own write or your own --changed is
       the reference (its commit and time, stated in every result, also when it is empty), never a global

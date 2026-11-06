@@ -133,6 +133,30 @@ The same five rules hold wherever the items live:
 
 `backlog <command> --help` is the contract of each command; [COMMANDS.md](COMMANDS.md) holds the same text.
 
+### Aliases
+
+The command names of the first release still work; each runs the command set above (`backlog <alias> --help` prints the alias line and then the help of the command it runs):
+
+- `init [name]` runs `backlog setup`
+- `init clean [name]` runs `a typed yes, then every item of this repository's backlog is removed as one published change, then backlog setup`
+- `list new` runs `backlog query --only new`
+- `list open` runs `backlog query --only open`
+- `list done` runs `backlog query --only done`
+- `list archive` runs `backlog query --only archive`
+- `list branch` runs `backlog query --branches`
+- `branch` runs `backlog query --branches`
+- `new <name> [--description D] [--state S] [--priority P]` runs `backlog new --name <name> --objective D --status S --priority P (--summary is the name unless given; state new = new, open = in progress, done = closed)`
+- `set <item> name|description|state|summary|priority|branch|commit|location <value>` runs `backlog update <item> --name|--objective|--status|--summary|--priority|--branch|--commit|--location <value>`
+- `priority <item> <position>` runs `backlog update <item> --priority <position>`
+- `priority <item>` runs `backlog query --phase <item>`
+- `done <item>` runs `backlog update <item> --status done`
+- `<item> done` runs `backlog update <item> --status done`
+- `move <item> <branch>` runs `backlog move <item> --to-branch <branch>`
+- `<item> set|priority|move …` runs `the same command with the item first (backlog 3 done)`
+- `<command> --ask | --headless (or BACKLOG_HEADLESS=1)` runs `the command without the switch: it is accepted and ignored (--ask still asks for the folder in setup and init)`
+- `query --pop, next --agent` runs `nothing: it is refused with a pointer to backlog team pop --team <team> --agent <name> (--dry-run only answers)`
+
+
 ## Development and verification
 
 ```sh

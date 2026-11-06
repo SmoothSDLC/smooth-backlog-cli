@@ -1,19 +1,25 @@
 // The command names of the first release, as aliases of the one command set. `translate` is pure: it answers
 // { command, argv } (what to run), { error } (a spelling that is refused with a pointer) or null (not an alias, route as today).
+// form: the first-release spelling; runs: what it runs; heads: the spellings whose --help shows this row; help: the command whose help follows it.
 export const ALIASES = [
-  { form: 'init [name]', runs: 'setup' },
-  { form: 'init clean [name]', runs: 'a confirmation, then every item of this repository\'s backlog is removed as one published change' },
-  { form: 'list new | open | done | archive', runs: 'query --only new | open | done | archive' },
-  { form: 'list branch, branch', runs: 'query --branches' },
-  { form: 'new <name> [--description D] [--state S] [--priority P]', runs: 'new --name <name> --objective D --status S --priority P (--summary defaults to the name; state: new, open = in progress, done = closed)' },
-  { form: 'set <item> name | description | state | summary | priority | branch | commit | location <value>', runs: 'update <item> --name | --objective | --status | --summary | --priority | --branch | --commit | --location <value>' },
-  { form: 'priority <item> <position>', runs: 'update <item> --priority <position>' },
-  { form: 'priority <item>', runs: 'query --phase <item>' },
-  { form: 'done <item>, <item> done', runs: 'update <item> --status done' },
-  { form: 'move <item> <branch>', runs: 'move <item> --to-branch <branch>' },
-  { form: '<item> set | priority | move …', runs: 'the same command with the item first (backlog 3 done)' },
-  { form: '--ask, --headless, BACKLOG_HEADLESS', runs: 'accepted and ignored' },
-  { form: 'query --pop, next --agent', runs: 'refused: backlog team pop --team <team> --agent <name> is the team command' },
+  { form: 'init [name]', runs: 'backlog setup', heads: ['init'], help: 'setup' },
+  { form: 'init clean [name]', runs: 'a typed yes, then every item of this repository\'s backlog is removed as one published change, then backlog setup', heads: ['init clean'] },
+  { form: 'list new', runs: 'backlog query --only new', heads: ['list new'], help: 'query' },
+  { form: 'list open', runs: 'backlog query --only open', heads: ['list open'], help: 'query' },
+  { form: 'list done', runs: 'backlog query --only done', heads: ['list done'], help: 'query' },
+  { form: 'list archive', runs: 'backlog query --only archive', heads: ['list archive'], help: 'query' },
+  { form: 'list branch', runs: 'backlog query --branches', heads: ['list branch'], help: 'query' },
+  { form: 'branch', runs: 'backlog query --branches', heads: ['branch'], help: 'query' },
+  { form: 'new <name> [--description D] [--state S] [--priority P]', runs: 'backlog new --name <name> --objective D --status S --priority P (--summary is the name unless given; state new = new, open = in progress, done = closed)' },
+  { form: 'set <item> name|description|state|summary|priority|branch|commit|location <value>', runs: 'backlog update <item> --name|--objective|--status|--summary|--priority|--branch|--commit|--location <value>', heads: ['set'], help: 'update' },
+  { form: 'priority <item> <position>', runs: 'backlog update <item> --priority <position>', heads: ['priority'], help: 'update' },
+  { form: 'priority <item>', runs: 'backlog query --phase <item>' },
+  { form: 'done <item>', runs: 'backlog update <item> --status done', heads: ['done'], help: 'update' },
+  { form: '<item> done', runs: 'backlog update <item> --status done' },
+  { form: 'move <item> <branch>', runs: 'backlog move <item> --to-branch <branch>' },
+  { form: '<item> set|priority|move …', runs: 'the same command with the item first (backlog 3 done)' },
+  { form: '<command> --ask | --headless (or BACKLOG_HEADLESS=1)', runs: 'the command without the switch: it is accepted and ignored (--ask still asks for the folder in setup and init)' },
+  { form: 'query --pop, next --agent', runs: 'nothing: it is refused with a pointer to backlog team pop --team <team> --agent <name> (--dry-run only answers)' },
 ];
 
 const ITEM = /^\d+(-[\w.-]*)?$/;
@@ -69,4 +75,13 @@ export function translate(argv) {
   if (found) return { command: found.command, argv: [...lead, ...found.argv] };
   if (!dropped) return null;
   return rest[0] === undefined || rest[0].startsWith('-') ? to('next', [...lead, ...rest]) : to(rest[0], [...lead, ...rest.slice(1)]);
+}
+
+// The alias row a --help belongs to: the two-word spelling first (init clean, list open), then the first word; the head may follow its item.
+export function aliasOf(argv) {
+  const rest = argv.filter(x => x !== '--json' && x !== '--help');
+  const at = ITEM.test(rest[0] ?? '') && ITEM_FIRST.has(rest[1]) ? 1 : 0;
+  const words = [`${rest[at]} ${rest[at + 1]}`, rest[at]];
+  for (const word of words) { const row = ALIASES.find(r => r.heads?.includes(word)); if (row) return row; }
+  return null;
 }

@@ -51,9 +51,7 @@ One backlog, one CLI. Compared with 1.0.1:
   naming any folder path.
 - **The command set:** `new`, `update`, `query` (`list` is the same), `next`, `pop`, `work`, `team pop`, `move`,
   `archive`, `setup`. `backlog update` changes an item (fields, body, status, priority, claim, release, review, close,
-  the team steps); `--replan` sets the order of the queue. Removed: `init` (now `setup`), `set`, `add`, `priority`,
-  `import`, `init backup|clean`, the self-update commands (`update auto|check|disable|off`), `--ask`, `--description`,
-  `--ac`; `--json` prints the data itself, not an `{"ok","data"}` envelope.
+  the team steps); `--replan` sets the order of the queue. Every first-release command name still works as an alias (see Aliases in COMMANDS.md); `--json` prints the data itself, not an `{"ok","data"}` envelope.
 - **Many writers.** Every write records who made it (`BACKLOG_AGENT`, `--by`, `--claim`, `--agent`) and when. A
   write to an item that someone else changed since this agent last read it is refused (exit 5) until the agent reads
   it again. A named agent claims an item; a review is requested and recorded on the item.

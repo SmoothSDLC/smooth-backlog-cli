@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { BacklogError } from './errors.js';
-import { translate } from './shared/aliases.js';
+import { aliasOf, translate } from './shared/aliases.js';
 import { redact } from './shared/safety.js';
 const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 // One command set, wherever the item files live: setup here, everything else through the router. No arguments means next.
@@ -9,6 +9,10 @@ export async function run() {
   try {
     if (argv[0] === '--version' || argv[0] === 'version') { process.stdout.write(`${packageInfo.version}\n`); return; }
     if (argv[0] === '--help' || argv[0] === 'help' || argv[0] === '-h') { process.stdout.write((await import('./help.js')).USAGE); return; }
+    if (argv.includes('--help')) { // an alias prints its own line, then the help of the command it runs
+      const row = aliasOf(argv); const { HELP } = await import('./help.js');
+      if (row) { process.stdout.write(`backlog ${row.form} runs ${row.runs}\n${row.help ? `\n${HELP[row.help]}\n` : ''}`); return; }
+    }
     const alias = translate(argv); // the command names of the first release run the command set
     if (alias?.error) throw new BacklogError('INVALID_INPUT', alias.error);
     if (alias) argv = [alias.command, ...alias.argv];

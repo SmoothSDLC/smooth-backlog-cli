@@ -44,6 +44,29 @@ not bound by them.
 do now) or a change that was not published; 4 the configured backlog repository is not cloned (run `backlog setup`);
 5 stale view.
 
+## Aliases
+
+The command names of the first release still work; each runs the command set below. `backlog <alias> --help` prints the alias line and then the help of the command it runs.
+
+- `init [name]` runs `backlog setup`
+- `init clean [name]` runs `a typed yes, then every item of this repository's backlog is removed as one published change, then backlog setup`
+- `list new` runs `backlog query --only new`
+- `list open` runs `backlog query --only open`
+- `list done` runs `backlog query --only done`
+- `list archive` runs `backlog query --only archive`
+- `list branch` runs `backlog query --branches`
+- `branch` runs `backlog query --branches`
+- `new <name> [--description D] [--state S] [--priority P]` runs `backlog new --name <name> --objective D --status S --priority P (--summary is the name unless given; state new = new, open = in progress, done = closed)`
+- `set <item> name|description|state|summary|priority|branch|commit|location <value>` runs `backlog update <item> --name|--objective|--status|--summary|--priority|--branch|--commit|--location <value>`
+- `priority <item> <position>` runs `backlog update <item> --priority <position>`
+- `priority <item>` runs `backlog query --phase <item>`
+- `done <item>` runs `backlog update <item> --status done`
+- `<item> done` runs `backlog update <item> --status done`
+- `move <item> <branch>` runs `backlog move <item> --to-branch <branch>`
+- `<item> set|priority|move …` runs `the same command with the item first (backlog 3 done)`
+- `<command> --ask | --headless (or BACKLOG_HEADLESS=1)` runs `the command without the switch: it is accepted and ignored (--ask still asks for the folder in setup and init)`
+- `query --pop, next --agent` runs `nothing: it is refused with a pointer to backlog team pop --team <team> --agent <name> (--dry-run only answers)`
+
 ## Commands
 
 The text of each command below is what `backlog <command> --help` prints. `backlog list` is `backlog query`.
@@ -84,6 +107,9 @@ Options:
       The insertion rank, an integer. 0 makes the item the next thing to do. When it is omitted the item is
       appended to the end of the backlog. The backlog is renumbered to 0..N-1 around the item, because adding
       work is a planning event.
+  --status STATUS
+      The status the item starts in, as free text (done means closed); the default is pending. Not with --team: a team
+      item starts in its own first status.
   --severity {normal,critical}
       The default is normal. Critical means a finding about repository corruption, data loss, the source of truth
       or security. It puts the item at priority 0 (unless --priority is given) and makes backlog query print it in
@@ -430,6 +456,7 @@ Usage:
   backlog query [--status] [--all] [--branch <name>] [--json]
   backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
   backlog query --changed [--agent <name>] [--json]
+  backlog query --only {new,open,done,archive} | --branches [--json]
 
 Reads the backlog and never changes it, except that --changed advances
 the agent's own last-use reference (its record of its own use, not an item). Without a view option it prints the full stack of the branch: the open
@@ -465,6 +492,13 @@ Options:
       item, newest first; without one it prints the latest 50 events of the backlog, archived items included.
   --by-branch BY_BRANCH
       The items recorded on this branch.
+  --only {new,open,done,archive}
+      The full stack filtered to one kind of item: new (not started), open (every item not finished), done (finished,
+      not archived) or archive (archived). The listing is the same one, in queue order. Same as backlog list new,
+      list open, list done, list archive.
+  --branches
+      One line per branch of this repository: the branch, its open items and its done items (with --json, a list of
+      {branch, open, done}). Same as backlog branch and backlog list branch.
   --changed
       Which items of this repository changed since your last use: your own write or your own --changed is
       the reference (its commit and time, stated in every result, also when it is empty), never a global

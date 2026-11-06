@@ -3,6 +3,7 @@
 //   node .agents/scripts/sync-commands-md.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
 const { HELP } = await import(new URL('../../src/help.js', import.meta.url));
+const { ALIASES } = await import(new URL('../../src/shared/aliases.js', import.meta.url));
 const file = new URL('../../COMMANDS.md', import.meta.url);
 let doc = readFileSync(file, 'utf8'); let changed = 0;
 for (const [cmd, text] of Object.entries(HELP)) {
@@ -14,4 +15,9 @@ for (const [cmd, text] of Object.entries(HELP)) {
   const block = `\`\`\`text\n${text.trimEnd()}`;
   if (doc.slice(open, close) !== block) { doc = doc.slice(0, open) + block + doc.slice(close); changed++; }
 }
+// the Aliases section, from the table the CLI itself uses
+const section = `## Aliases\n\nThe command names of the first release still work; each runs the command set below. \`backlog <alias> --help\` prints the alias line and then the help of the command it runs.\n\n${ALIASES.map(a => `- \`${a.form}\` runs \`${a.runs}\``).join('\n')}\n\n`;
+const from = doc.indexOf('## Aliases\n');
+if (from >= 0) doc = doc.slice(0, from) + section + doc.slice(doc.indexOf('## Commands\n'));
+else doc = doc.replace('## Commands\n', `${section}## Commands\n`);
 writeFileSync(file, doc); console.log(`COMMANDS.md: ${changed} block(s) rewritten`);

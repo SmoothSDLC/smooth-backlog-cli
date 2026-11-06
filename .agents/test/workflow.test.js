@@ -33,7 +33,7 @@ test('stage list follows the team entry', () => {
 test('the shipped definition carries no name of an internal team or agent', () => {
   const text = JSON.stringify(SHIPPED);
   assert.equal(SHIPPED.workflow, 'team');
-  assert.ok(!/cody|codex|claude|k03|k08|k0c|k10/i.test(text));
+  assert.ok(!/cody|codex|claude/i.test(text)); // the private-details guard checks the shipped files against the deny list; this pins the generic names
 });
 
 test('an unknown workflow is refused with the way to register one', () => {

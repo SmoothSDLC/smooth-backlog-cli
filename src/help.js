@@ -20,7 +20,7 @@ Usage:
   backlog query [options] [--json]                 The queue; --phase <item> one item; --events, --by-branch, --all
   backlog list [options] [--json]                  The same as backlog query
   backlog next [--all] [--branch <name>] [--json]  The next item of this repository and branch
-  backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs, with the whole item
+  backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs (--dry-run: only answered), with the whole item
   backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
   backlog team update <item> --team <team> --agent <name> <step>   One team step: claim, release, request-review, review, close, ...
   backlog team define --file <team.json>           Register a team (lead, members, reviewers, review stages) in the backlog configuration
@@ -496,7 +496,7 @@ Example:
   team: `backlog team — the commands that know a team: pop, update, query, define, workflow
 
 Usage:
-  backlog team pop --team <name> --agent <name> [--json]
+  backlog team pop --team <name> --agent <name> [--dry-run] [--json]
   backlog team update <item> --team <name> --agent <name> <step> [options]
   backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--roster <file>] [--scope branch|repo|all] [--json]
   backlog team define --file <team.json> [--json]
@@ -539,6 +539,8 @@ The step the answer offers is marked in one locked write: the claim, the start o
 is the action and the item, what was marked, the one instruction, one line per blocked item, the work items not taken with the
 reason, and the whole item: its front matter and its body. With --json it prints one object: action, item, seq, team, repository,
 branch, instruction, claimed, blocked, held, marked, skipped ({item, reason} of each work item not taken), front_matter and body.
+With --dry-run the command only answers: it writes no claim and no mark (marked is null, claimed false) and does not take the
+lead's work item; the exit codes are the same. A hook that looks before the agent acts uses it; the agent then takes the step itself.
 
 backlog team query reads the backlog through the team's views; the plain query has none of them (backlog query --claimable and the others answer "use backlog team query"). The view is one of the options below; --agent is the agent that asks (given, it switches to the team rules: an incomplete item is not offered and the agent never reviews its own work). A team without an entry is refused.
 

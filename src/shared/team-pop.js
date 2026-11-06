@@ -19,7 +19,7 @@ const say = text => process.stdout.write(`${redact(text)}\n`);
 const self = (args, env = {}) => spawnSync(process.execPath, [BIN(), ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
 const last = r => redact(`${r.stdout}${r.stderr}`.trim().split('\n').filter(Boolean).pop() || `exit ${r.status}`);
 const VALUE = ['lead', 'roster', 'scope', 'branch'];
-const BOOL = ['json', 'all'];
+const BOOL = ['json', 'all', 'dry-run']; // --dry-run: the answer only, nothing claimed or marked (a hook that looks before the agent acts)
 
 export function parse(rest) {
   const a = { pass: [] };
@@ -61,20 +61,22 @@ export async function run({ team, agent }, rest) {
   if (fresh.status === 2) { process.stderr.write(fresh.stderr); return 2; } // invalid input or place (a detached HEAD)
   if (fresh.status !== 0) { process.stderr.write(fresh.stderr); return die(`team pop stopped: ${last(fresh)}`, 1); }
   const markWith = (item, flag) => ['team', 'update', item, '--team', team, '--agent', agent, flag];
+  const dry = Boolean(a['dry-run']);
   let p; let status; let marked = null; let step = null; let shown = null; let skipped = [];
   for (let attempt = 1; ; attempt++) { // the pop and the mark are two commands: a step another agent took meanwhile is asked again
-    const pop = await engine(['--agent', agent, '--claim-now', '--json', ...a.pass]); // a claim is marked by the engine itself
+    const pop = await engine(['--agent', agent, ...(dry ? [] : ['--claim-now']), '--json', ...a.pass]); // a claim is marked by the engine itself
     try { p = JSON.parse(pop.out); } catch { process.stdout.write(pop.out); return pop.code ?? 1; }
     if (![0, 3].includes(pop.code) || !p.action) { process.stdout.write(pop.out); return pop.code ?? 1; }
     status = pop.code;
     marked = p.action === 'claim' && p.claimed ? `claimed for ${agent}` : null;
-    if (lead) { // the lead's own work item: continued, or the team's first open unclaimed one claimed
+    if (lead && !dry) { // the lead's own work item: continued, or the team's first open unclaimed one claimed
       const w = await workItem({ team, agent, repo: ownRepo, branch, engine: p });
       if (w.fail) return w.fail;
       if (w.out) { p = w.out; status = 0; marked = w.out.marked; skipped = w.out.skipped; shown = { front_matter: w.out.front_matter, body: w.out.body }; step = null; break; }
       skipped = w.skipped;
     }
     step = null;
+    if (dry) break;
     if (p.action === 'review' && !p.instruction.startsWith('continue your review')) step = markWith(p.item, '--start-review');
     else if (p.action === 'refine' && p.instruction.startsWith('refine it before anyone works on it')) step = markWith(p.item, '--refine-start');
     if (!step) break;

@@ -205,6 +205,18 @@ test('team pop: a member whose item waits for its review is idle; the next membe
   assert.deepEqual([fm(f, s).status, fm(f, s).reviewer], ['reviewing', 'bob']);
 });
 
+test('team pop --dry-run answers without claiming or marking: the item stays unheld, and the same pop without it claims', () => {
+  const f = fixture();
+  const s = ready(f);
+  const look = pop(f, 'ann', '--dry-run');
+  assert.equal(look.status, 0, look.stdout + look.stderr);
+  const out = JSON.parse(look.stdout);
+  assert.deepEqual([out.action, out.item, out.claimed, out.marked], ['claim', s, false, null]);
+  assert.equal(fm(f, s).claimed_by, '');
+  const take = JSON.parse(pop(f, 'ann').stdout);
+  assert.deepEqual([take.action, take.claimed, take.marked, fm(f, s).claimed_by], ['claim', true, 'claimed for ann', 'ann']);
+});
+
 test('team pop and team update reach only the items of --team: an item of no team is not offered, and its claim is refused', () => {
   const f = fixture();
   const plain = createdSlug(run(f, ['new', ...NEW('plain item')]).stdout); // no team

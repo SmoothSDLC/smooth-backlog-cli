@@ -296,7 +296,7 @@ async function query(argv) {
     for (const r of shown) {
       const mark = { done: '✅', archived: '📦', in_progress: '🔄' }[r.status] ?? '•';
       const crit = (r.severity || 'normal') === 'critical' && ACTIONABLE.includes(r.status) ? ' ⚠️CRIT' : '';
-      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority, 3)}${crit}  ${r.name}`);
+      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority ?? '-', 3)}${crit}  ${r.name}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
       // a dependency on another repository's item is shown with its state
       { // every status: a done item still shows what it depended on

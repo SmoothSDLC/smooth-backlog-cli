@@ -49,20 +49,20 @@ test('write: the same content gives the same bytes and is not rewritten', t => {
   assert.equal(index.text(index.read(dir)), index.text(idx));
 });
 
-test('rank, place, add, remove and stamp change the entries of one branch and write the file', t => {
+test('rank: the position of a live item in its branch, -1 when not listed', t => {
   const dir = folder(t);
   put(dir, 1); put(dir, 2); put(dir, 3);
   index.write(dir, index.fromItems(store.load(dir)));
   assert.equal(index.rank(dir, 'main', '002-i2'), 1);
-  index.place(dir, 'main', '003-i3', 0);
-  assert.deepEqual(slugs(dir), ['003-i3', '001-i1', '002-i2']);
-  index.remove(dir, 'main', '001-i1');
-  assert.deepEqual(slugs(dir), ['003-i3', '002-i2']);
-  index.add(dir, 'main', { seq: 1, slug: '001-i1', name: 'I1', status: 'pending' }, 1);
-  assert.deepEqual(slugs(dir), ['003-i3', '001-i1', '002-i2']);
-  index.stamp(dir, 'main', '002-i2', { name: 'Renamed', status: 'in_progress' });
-  assert.deepEqual(index.read(dir).branches.main[2], { seq: 2, slug: '002-i2', name: 'Renamed', status: 'in_progress' });
   assert.equal(index.rank(dir, 'main', 'nope'), -1);
+});
+
+test('read: an index that is not JSON, or has no list of items per branch, is refused with exit 1 and points at the repository history', t => {
+  const dir = folder(t);
+  for (const bad of ['{not json', '{"branches": []}', '{"branches": {"main": [{"seq": 1}]}}']) {
+    writeFileSync(index.file(dir), bad);
+    assert.throws(() => index.read(dir), e => e.exitCode === 1 && /the backlog index cannot be read .*restore it from the repository history/.test(e.message), bad);
+  }
 });
 
 test('reconcile: items without an entry are appended, entries without an item leave, name and status follow the file, open entries come first', () => {

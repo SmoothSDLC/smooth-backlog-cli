@@ -398,6 +398,8 @@ test('075: archive reflows the queue: archiving the last item is a no-op; archiv
   assert.equal(index.rank(b.folder, 'main', '003-three'), 1, '003 is re-densified from P2 to P1');
   assert.ok(!existsSync(join(b.folder, 'phases', '002-two.md')), '002 left phases/');
   assert.ok(existsSync(join(b.folder, 'archive', 'phases', '002-two.md')), '002 is in archive/');
+  const q = cli(['query', '--all'], { cwd: b.cons, tmp: b.t });
+  assert.match(q.stdout, /📦 \[  2\] 002-two\s+archived\s+P  -\s/, 'an archived item has no rank: the view shows no number');
 });
 
 test('075: replan: slugs and item numbers lead, the rest keeps its order, unknown idents are skipped', t => {

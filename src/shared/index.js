@@ -29,7 +29,7 @@ export function read(folder) {
   try { raw = readFileSync(file(folder), 'utf8'); } catch (e) { if (e.code === 'ENOENT') return { branches: {} }; throw e; }
   let idx;
   try { idx = JSON.parse(raw); } catch (e) { throw new BacklogError('STORAGE_ERROR', `the backlog index cannot be read (${e.message}); restore it from the repository history`, 1); }
-  operation(idx?.branches && typeof idx.branches === 'object' && Object.values(idx.branches).every(l => Array.isArray(l) && l.every(e => e && typeof e.slug === 'string')),
+  operation(idx?.branches && typeof idx.branches === 'object' && !Array.isArray(idx.branches) && Object.values(idx.branches).every(l => Array.isArray(l) && l.every(e => e && typeof e.slug === 'string')),
     'the backlog index cannot be read (no list of items per branch); restore it from the repository history');
   return idx;
 }
@@ -182,27 +182,8 @@ export async function ensure(home, folder) {
   try { await sync.commitSettled(home, folder, 'index'); } catch (e) { if (!(e instanceof BacklogError)) throw e; }
 }
 
-// ---- the folder-level operations (each reads the index, changes it, and writes it)
-
-function edit(folder, change) {
-  const idx = current(folder, store.load(folder));
-  change(idx.branches);
-  write(folder, idx);
-}
+// The rank of a live item in its branch (-1 when not listed).
 export const rank = (folder, branch, slug) => (read(folder).branches[branch] ?? []).findIndex(e => e.slug === slug);
-export const remove = (folder, branch, slug) => edit(folder, b => { if (b[branch]) b[branch] = b[branch].filter(e => e.slug !== slug); });
-export const add = (folder, branch, entry, position = Infinity) => edit(folder, b => {
-  const l = (b[branch] ??= []).filter(e => e.slug !== entry.slug);
-  l.splice(Math.min(position, l.length), 0, entry);
-  b[branch] = l;
-});
-export const place = (folder, branch, slug, position) => edit(folder, b => {
-  const e = b[branch]?.find(x => x.slug === slug);
-  if (!e) return;
-  b[branch] = b[branch].filter(x => x !== e);
-  b[branch].splice(Math.min(position, b[branch].length), 0, e);
-});
-export const stamp = (folder, branch, slug, fields) => edit(folder, b => { const e = b[branch]?.find(x => x.slug === slug); if (e) Object.assign(e, fields); });
 
 // ---- the rows the views read
 

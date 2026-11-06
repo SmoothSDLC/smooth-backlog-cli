@@ -22,7 +22,7 @@ function fixture() {
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD];
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, notices: true, env: { TEAM_LEAD: 'lead', ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, notices: true, env: { TEAM_LEAD: 'lead', BACKLOG_AGENT: '', ...env } }); // every command here names its agent; a session agent (BACKLOG_AGENT) would have to be the same one
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 // a refined, ready item of team t1
 function ready(f) {
@@ -180,8 +180,8 @@ test('team pop: the lead claims the work item and sees it whole, then a member h
   assert.ok(out.body.includes('Definition of done') && out.front_matter.claimed_by === 'lead');
   assert.equal(fm(f, w).claimed_by, 'lead');
   const member = pop(f, 'ann');
-  assert.equal(member.status, 3, member.stdout + member.stderr); // the lead holds the only work item and nothing else is open
-  assert.equal(JSON.parse(member.stdout).action, 'idle');
+  assert.equal(member.status, 0, member.stdout + member.stderr); // the lead holds the only work item: a member with nothing to take does chunk work
+  assert.deepEqual([JSON.parse(member.stdout).action, JSON.parse(member.stdout).item], ['chunk', null]);
   for (const gone of ['pop', 'work']) {
     const r = run(f, [gone, '--agent', 'ann']);
     assert.equal(r.status, 2); assert.match(r.stderr, /is not a backlog command \(new, update, query, list, team, next, fields, move, archive, setup\)/);
@@ -197,11 +197,24 @@ test('team pop: a member whose item waits for its review is idle; the next membe
   run(f, ['query', '--phase', s, '--agent', 'zed']);
   assert.equal(run(f, ['team', 'update', s, '--team', 't1', '--agent', 'zed', '--request-review', 'any', '--note', 'commit abc']).status, 0);
   const idle = pop(f, 'zed');
-  assert.equal(idle.status, 3, idle.stdout + idle.stderr); // a review request ends its work on the item
+  assert.equal(idle.status, 0, idle.stdout + idle.stderr); // a review request ends its work on the item: chunk work is left
+  assert.equal(JSON.parse(idle.stdout).action, 'chunk');
   const review = JSON.parse(pop(f, 'bob').stdout);
   assert.deepEqual([review.action, review.item], ['review', s]);
   assert.match(review.marked, /--start-review --agent bob/);
   assert.deepEqual([fm(f, s).status, fm(f, s).reviewer], ['reviewing', 'bob']);
+});
+
+test('team pop and team update reach only the items of --team: an item of no team is not offered, and its claim is refused', () => {
+  const f = fixture();
+  const plain = createdSlug(run(f, ['new', ...NEW('plain item')]).stdout); // no team
+  const idle = pop(f, 'ann');
+  assert.equal(idle.status, 0, idle.stdout + idle.stderr);
+  assert.deepEqual([JSON.parse(idle.stdout).action, JSON.parse(idle.stdout).item, fm(f, plain).claimed_by], ['chunk', null, '']);
+  run(f, ['query', '--phase', plain, '--agent', 'ann']);
+  const r = run(f, ['team', 'update', plain, '--team', 't1', '--agent', 'ann', '--claim'], { TEAM_NAME: '' });
+  assert.equal(r.status, 1); assert.match(r.stdout, /belongs to no team; this session's team t1 claims only its own team's items/);
+  assert.equal(fm(f, plain).claimed_by, '');
 });
 
 test('team pop: a team without an entry is refused, and a refused flag is refused before anything runs', () => {

@@ -23,6 +23,7 @@ function fixture() {
   const t = mkdtempSync(join(tmpdir(), 'team-pop-'));
   dirs.push(t);
   const home = sharedBacklog(t);
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] } })); // t1 asks one peer review of its work, as the items here were reviewed before
   const cons = consumer(t, 'acme', 'demo', 'main');
   const other = consumer(t, 'other', 'thing', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
@@ -39,7 +40,10 @@ function make(f, cwd, name, extra = []) {
   args.push('--body', DOD, ...extra);
   const r = cli(['new', ...args], { cwd, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  return r.stdout.split('created phase ')[1].split(' ')[0];
+  const slug = r.stdout.split('created phase ')[1].split(' ')[0];
+  const t = cli(['update', slug, '--set-team', 't1', '--status', 'ready'], { cwd, tmp: f.t, env: { BACKLOG_AGENT: '' } }); // team pop acts as its --team: only the items of t1 are in reach (set after creation: no refinement stage, status ready)
+  assert.equal(t.status, 0, t.stdout + t.stderr);
+  return slug;
 }
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const ok = (f, slug, ...args) => {
@@ -52,6 +56,8 @@ const ok = (f, slug, ...args) => {
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r;
 };
+// a release puts a team item back to new, where no claim reaches it: it is taken out of the team and made ready again, as `make` does
+const handOver = (f, slug, to) => { ok(f, slug, '--release', 'ann'); ok(f, slug, '--set-team', '', '--by', 'ann'); ok(f, slug, '--status', 'ready', '--set-team', 't1', '--by', 'ann'); ok(f, slug, '--claim', to); };
 const refuse = (f, slug, ...args) => cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
 // ann is a plain member here; popLead asks as the team lead, who does no chunk work.
 const LEAD = { TEAM_LEAD: 'lead' };
@@ -82,8 +88,8 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   const text = popCli(f, [], { env: { TEAM_LEAD: 'ann' } });
   assert.equal(text.status, 3, text.stdout + text.stderr);
   assert.equal(text.stderr, '');
-  assert.equal(text.stdout, `idle\n   nothing for ann: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in progress, claimed by bob)\n`);
-  assert.equal(pop(f).action, 'idle'); // outside a team a member with nothing else is idle: no small-chunk work
+  assert.equal(text.stdout, `idle\n   your team works on 2 item(s) (1, 2): end your turn now with a text-only reply and no tool call; do not poll, the dispatcher wakes you\n   blocked ${blocked}: waits on ${dep} (status in progress, claimed by bob)\n`);
+  assert.equal(pop(f).action, 'chunk'); // a team member with nothing else does small chunk work; only the lead is idle
   const chunk = make(f, f.cons, 'pop chunk', ['--chunk']);
   p = pop(f); // (d) the chunk item is named
   assert.deepEqual([p.action, p.item], ['chunk', chunk]);
@@ -117,7 +123,7 @@ test('075: the pop of an idle lead and of a claimable item prints its text and i
   const idleText = popCli(f, [], { env: { TEAM_LEAD: 'ann' } });
   assert.equal(idleText.status, 3, idleText.stdout + idleText.stderr);
   assert.equal(idleText.stderr, '');
-  assert.equal(idleText.stdout, `idle\n   nothing for ann: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in progress, claimed by bob)\n`);
+  assert.equal(idleText.stdout, `idle\n   your team works on 2 item(s) (1, 2): end your turn now with a text-only reply and no tool call; do not poll, the dispatcher wakes you\n   blocked ${blocked}: waits on ${dep} (status in progress, claimed by bob)\n`);
   // the same state as JSON: the keys of the document and the blocked entry
   const idleJson = popCli(f, ['--json'], { env: { TEAM_LEAD: 'ann' } });
   assert.equal(idleJson.status, 3, idleJson.stdout + idleJson.stderr);
@@ -151,7 +157,7 @@ test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_clo
   const other = make(f, f.cons, 'wait other', []);
   let p = pop(f); // awaiting a verdict: falls through to claim
   assert.deepEqual([p.action, p.item], ['claim', other]);
-  ok(f, other, '--release', 'ann'); ok(f, other, '--claim', 'bob'); // team pop claimed it for ann: bob takes it over
+  handOver(f, other, 'bob'); // team pop claimed it for ann: bob takes it over
   p = popLead(f); // nothing else for the lead: idle, the wait is reported
   const seq = item(f, job).fm.seq;
   assert.equal(p.action, 'idle');
@@ -186,13 +192,13 @@ test('test_claim_only_when_every_held_item_waits', () => {
   ok(f, two, '--request-review', 'any', '--note', 'commit abc'); // two awaits review, one waits
   p = pop(f);
   assert.deepEqual([p.action, p.item], ['claim', three]);
-  ok(f, three, '--release', 'ann'); ok(f, three, '--claim', 'bob'); // team pop claimed it for ann: bob takes it over
+  handOver(f, three, 'bob'); // team pop claimed it for ann: bob takes it over
   p = popLead(f);
   assert.equal(p.action, 'idle');
   assert.ok(p.blocked.some(b => b.item === one && b.waiting_on[0] === 'waiting: run 397 deploy'));
-  ok(f, one, '--append', 'CHUNK 10:00 test x ok'); // an append does not end the wait
+  ok(f, one, '--append', 'CHUNK 10:00 test x ok', '--by', 'ann'); // an append does not end the wait
   assert.equal(item(f, one).fm.wait_on, 'run 397 deploy');
-  ok(f, one, '--note', 'run 397 green'); // the next --note ends it: active again
+  ok(f, one, '--note', 'run 397 green', '--by', 'ann'); // the next --note ends it: active again
   assert.ok(!item(f, one).fm.wait_on);
   ok(f, two, '--review', 'changes', '--by', 'bob', '--comments', 'fix y per references/review/tests.md');
   const four = make(f, f.cons, 'rule four', []);
@@ -214,8 +220,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
     'references/review/contract.example.md,references/patterns/x.md']);
   let r = cli(['team', 'pop', '--team', 't1', '--agent', 'bob', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.ok(JSON.parse(r.stdout).instruction.includes('definition of done: references/review/contract.example.md, references/patterns/x.md'), r.stdout + r.stderr);
-  ok(f, job, '--claim', 'bob');
-  ok(f, job, '--request-review', 'any', '--note', 'commit abc');
+  ok(f, job, '--request-review', 'any', '--note', 'commit abc'); // the pop above claimed it for bob
   const roster = join(f.t, 'team.json');
   writeFileSync(roster, JSON.stringify({ ann: { work_classes: ['app-code'], review_classes: ['code'] }, bob: {} })); // old class profiles mean nothing
   assert.equal(pop(f).action, 'review'); // any member but the author
@@ -229,8 +234,8 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   assert.ok(r.status === 1 && r.stdout.includes('must cite'), r.stdout);
   r = ok(f, job, '--review', 'pass', '--by', 'ann', '--comments', 'per references/patterns/x.md: fine');
   assert.ok(r.stdout.includes('CLOSE NOW: bob closes it') && r.stdout.includes('if the claimer has not, the team lead closes it') && !r.stdout.includes('ann closes it')); // never the reviewer
-  ok(f, job, '--set-review-refs', 'references/review/contract.md');
-  ok(f, job, '--close', '--summary', 'done');
+  ok(f, job, '--set-review-refs', 'references/review/contract.md', '--by', 'bob');
+  ok(f, job, '--close', '--summary', 'done', '--by', 'bob');
   // the agent's own work goes before another member's review request, however old (spec section 5)
   const mine = make(f, f.cons, 'own job', []);
   const other = make(f, f.cons, 'other job', ['--review-refs', 'references/review/code.md']);
@@ -278,7 +283,7 @@ test('test_no_new_flags_unchanged', () => {
     assert.ok(!plain.stdout.includes(other));
   }
   const c = q('--claimable').stdout;
-  assert.ok(c.includes(`   P0   ${s} (pending) — compat job\n        review_refs=references/review/code.md claimed_by=- review=none`), c);
+  assert.ok(c.includes(`   P0   ${s} (ready) — compat job\n        review_refs=references/review/code.md claimed_by=- review=none`), c);
   assert.ok(q('--claimable', '--all').stdout.includes(other)); // --all as before
   const n = q('--next');
   assert.ok(n.status === 0 && n.stdout.includes(`NEXT: P0 (rank 0 = next) — [${String(Number(s.split('-')[0])).padStart(3)}] ${s}`), n.stdout);
@@ -319,11 +324,12 @@ test('credentials in a wait are redacted in the text and the JSON of the pop (bl
   git(f.cons, 'checkout', '-q', '-b', 'pop-secret');
   const held = make(f, f.cons, 'pop waits on a url', []);
   ok(f, held, '--claim', 'ann');
+  ok(f, make(f, f.cons, 'pop team work', []), '--claim', 'bob'); // the team is at work: the lead has nothing to continue
   const { fm, body } = item(f, held);
   store.write({ path: join(f.folder, 'phases', `${held}.md`), fm: { ...fm, wait_on: 'https://user:hunter2secret@host/run' }, body }, f.folder);
   for (const args of [[], ['--json']]) {
     for (const cmd of [['team', 'pop', '--team', 't1']]) {
-      const r = cli([...cmd, '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t });
+      const r = cli([...cmd, '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'ann' } }); // the lead, while its team works: idle, the wait reported
       assert.equal(r.status, 3, r.stdout + r.stderr); // idle: it only waits
       assert.ok(r.stdout.includes('https://host/run'), r.stdout); // the wait is still named
       assert.ok(!(r.stdout + r.stderr).includes('hunter2secret'), `${cmd.join(' ')} ${args}: ${r.stdout}${r.stderr}`);
@@ -331,17 +337,17 @@ test('credentials in a wait are redacted in the text and the JSON of the pop (bl
   }
 });
 
-// A preload that makes the `update` subprocess of --claim-now fail (the pop itself is argv[2] pop or query).
+// A preload that makes the `update` subprocess of --claim-now fail (a `team update` child of the pop: argv[3]; the pop itself is `team pop`).
 function claimOutcome(kind) {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', `pop-${kind}`);
   const job = make(f, f.cons, 'pop claim fails', []);
   const hook = join(f.t, 'hook.cjs');
   writeFileSync(hook, kind === 'killed'
-    ? "if (process.argv[2] === 'update') process.kill(process.pid, 'SIGTERM');\n"
+    ? "if (process.argv[3] === 'update') process.kill(process.pid, 'SIGTERM');\n"
     : kind === 'late' // the claim is saved in the item file; the process is stopped before its commit
-    ? "const cp = require('node:child_process'); const run = cp.execFile;\ncp.execFile = function (file, args) { if (process.argv[2] === 'update' && file === 'git' && args.includes('commit')) process.kill(process.pid, 'SIGTERM'); return run.apply(this, arguments); };\n"
-    : "if (process.argv[2] === 'update') { process.stderr.write('fatal: https://user:hunter2secret@host/x\\n'); process.exit(1); }\n");
+    ? "const cp = require('node:child_process'); const run = cp.execFile;\ncp.execFile = function (file, args) { if (process.argv[3] === 'update' && file === 'git' && args.includes('commit')) process.kill(process.pid, 'SIGTERM'); return run.apply(this, arguments); };\n"
+    : "if (process.argv[3] === 'update') { process.stderr.write('fatal: https://user:hunter2secret@host/x\\n'); process.exit(1); }\n");
   const env = { ...LEAD, NODE_OPTIONS: `--require=${hook}` }; // ann a member: the lead never claims
   const r = cli(['team', 'pop', '--team', 't1', '--agent', 'ann', '--json'], { cwd: f.cons, tmp: f.t, env });
   return { f, job, r };

@@ -506,6 +506,8 @@ for (const dependency of ['1', '001-alpha']) test(`review P1: publication refuse
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'both files and databases match the winning upstream clone');
   assert.ok(existsSync(join(b.folder, 'phases', '001-alpha.md')));
   assert.ok(!existsSync(join(b.home, 'acme', 'dst', 'phases', '001-alpha.md')));
+  const set = cli(['update', '002-dependent', '--set-team', 't1'], { cwd: b.cons, tmp: b.tmp }); // the team views reach only the items of their team
+  assert.equal(set.status, 0, set.stdout + set.stderr);
   for (const w of [a, b]) {
     writeFileSync(join(w.home, 'teams.json'), '{"t1": {}}'); // the team views need the team in the configuration
     const q = cli(['team', 'query', '--team', 't1', '--blocked', '--json'], { cwd: w.cons, tmp: w.tmp });

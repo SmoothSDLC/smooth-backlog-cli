@@ -74,7 +74,7 @@ test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimabl
   const T1 = { TEAM_NAME: 't1' }; const T2 = { TEAM_NAME: 't2' };
   assert.deepEqual(slugs(f, ['--claimable'], T1), [mine]);
   assert.deepEqual(slugs(f, ['--claimable'], T2), [theirs]);
-  assert.deepEqual(slugs(f, ['--claimable']), [mine, theirs, none]); // without TEAM_NAME every item
+  assert.deepEqual(slugs(f, ['--claimable']), [mine]); // --team t1 alone scopes the view the same: never t2's item or the item of no team
   ok(f, ['update', mine, '--claim', 'bob']);
   ok(f, ['update', mine, '--request-review', 'any', '--note', 'commit abc']);
   assert.deepEqual(slugs(f, ['--reviewable', '--agent', 'zed'], T1), [mine]);
@@ -110,7 +110,7 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
   const free = newIn('chunk of no team there'); // another repository's chunk work without a team stays open to every team
   assert.equal(popAll(T1).item, free);
   assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all'], T1), [free]);
-  assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all']), [theirs, far, free]); // without TEAM_NAME every chunk item
+  assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all']), [free]); // --team t1 alone scopes the view the same: not t2's chunk items
 });
 
 test('the lead refines only an incomplete item of its own team', () => {
@@ -123,7 +123,7 @@ test('the lead refines only an incomplete item of its own team', () => {
   const lead = env => pop(f, 'lead', { ...env, TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' });
   assert.deepEqual([lead({ TEAM_NAME: 't1' }).action, lead({ TEAM_NAME: 't1' }).item], ['refine', mine]);
   assert.deepEqual([lead({ TEAM_NAME: 't2' }).action, lead({ TEAM_NAME: 't2' }).item], ['refine', theirs]);
-  assert.equal(lead({}).item, theirs); // without TEAM_NAME the first incomplete item
+  assert.equal(lead({}).item, mine); // --team t1 alone scopes the pop the same: never t2's item
 });
 
 test('--set-team, --team and a split child of a team item: every step succeeds', () => {

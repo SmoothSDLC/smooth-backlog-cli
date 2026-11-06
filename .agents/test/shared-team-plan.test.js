@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -14,6 +14,7 @@ function fixture(prefix = 'team-plan-') {
   const t = mkdtempSync(join(tmpdir(), prefix));
   dirs.push(t);
   const home = sharedBacklog(t);
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] } })); // t1 asks one peer review of its work
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const roster = join(t, 'team.json');
@@ -30,7 +31,8 @@ const run = (f, args, env = {}) => {
   return cli(args, o);
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
-const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
+const raw = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout); // an item as created: no team
+const make = (f, name, ...extra) => intoTeam(raw(f, name, ...extra), { cwd: f.cons, tmp: f.t, env: { BACKLOG_SESSION: '', HOME: f.user } }); // the plan reaches only the items of t1
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 const plan = (f, env, agents = 'ann,bob,zed,lead') => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', agents, '--roster', f.roster, '--json'], env).stdout);
 const rows = p => p.map(e => [e.member, e.action, e.item]);
@@ -99,7 +101,7 @@ test('the lead and a review_only member get no claim; the lead refines an incomp
   writeFileSync(f.roster, JSON.stringify({ ann: {}, bob: { review_only: true }, zed: {}, lead: {} }));
   const [a, b] = ['first claim job', 'second claim job'].map(n => make(f, n));
   assert.deepEqual(plan(f).map(e => [e.member, e.action]), [['ann', 'claim'], ['zed', 'claim']]); // bob reviews only, the lead never claims
-  const bare = createdSlug(ok(f, ['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout);
+  const bare = intoTeam(createdSlug(ok(f, ['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout), { cwd: f.cons, tmp: f.t, env: { BACKLOG_SESSION: '', HOME: f.user } }, 't1', ''); // an incomplete item of t1
   const r = plan(f).find(e => e.member === 'lead');
   assert.deepEqual([r.action, r.item], ['refine', bare]);
   assert.ok(r.reason.startsWith('incomplete: review_refs,estimate_min,definition_of_done') && r.instruction.includes('never action it'), JSON.stringify(r));
@@ -109,12 +111,12 @@ test('the lead and a review_only member get no claim; the lead refines an incomp
 
 test("with TEAM_NAME another team's item is never planned, and nothing before stage ready is claimed or reviewed", () => {
   const f = fixture();
-  const w = make(f, 'work item');
+  const w = raw(f, 'work item');
   ok(f, ['update', w, '--set-team', 't1']);
-  const c = make(f, 'child', '--split-from', w); // refining
+  const c = raw(f, 'child', '--split-from', w); // refining
   // an unrefined team item is never planned for a claim; refined (member, lead, reviewer), the work item is
   for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']]) ok(f, ['update', w, ...a]);
-  const theirs = make(f, "t2's item");
+  const theirs = raw(f, "t2's item");
   ok(f, ['update', theirs, '--set-team', 't2']);
   const p = plan(f, { TEAM_NAME: 't1' });
   assert.deepEqual(rows(p), [['ann', 'claim', w]]); // not c (refining), not t2's item
@@ -130,9 +132,9 @@ test('test_plan_gives_a_review_to_the_first_idle_member_but_the_author; a member
   assert.deepEqual(reviewers(), [['bob', 'any member but the author']]);
   ok(f, ['update', make(f, 'bob busy job'), '--claim', 'bob']); // bob is not idle
   assert.deepEqual(reviewers(), [['zed', 'any member but the author']]);
-  const w = make(f, 'team work item');
+  const w = raw(f, 'team work item');
   ok(f, ['update', w, '--set-team', 't1']);
-  const c = make(f, 'child', '--split-from', w);
+  const c = raw(f, 'child', '--split-from', w);
   ok(f, ['update', c, '--refine-start', '--by', 'zed']); // zed refines: active work too
   assert.deepEqual(reviewers(), []);
 });
@@ -151,9 +153,9 @@ test('a member refining an item gets no respond or close in the plan', () => {
   const x = make(f, 'reviewed job');
   ok(f, ['update', x, '--claim', 'zed']);
   ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'zed']);
-  const w = make(f, 'team work item');
+  const w = raw(f, 'team work item');
   ok(f, ['update', w, '--set-team', 't1']);
-  const c = make(f, 'child', '--split-from', w);
+  const c = raw(f, 'child', '--split-from', w);
   ok(f, ['update', c, '--refine-start', '--by', 'zed']);
   ok(f, ['update', x, '--review', 'pass', '--by', 'ann', '--comments', 'ok per references/review/code.md']);
   assert.ok(!plan(f).some(e => e.member === 'zed' && ['respond', 'close'].includes(e.action)), JSON.stringify(plan(f)));
@@ -182,7 +184,7 @@ test('the plan through claims, a review, a changes verdict, a close and the lead
       const out = step('team', ['query', '--team', 't1', '--plan', '--agents', agents, '--roster', f.roster, '--json']);
       assert.equal(TS(out), `${dumps(expected)}\n`);
     };
-    for (const n of ['first', 'second', 'third']) step('new', NEW(n));
+    for (const [i, n] of ['first', 'second', 'third'].entries()) { step('new', NEW(n)); step('update', [`00${i + 1}-${n}`, '--set-team', 't1', '--status', 'ready']); }
     plan('ann,bob,zed', [claim('ann', '001-first', 1), claim('bob', '002-second', 2), claim('zed', '003-third', 3)]);
     step('update', ['1', '--claim', 'zed']); step('update', ['1', '--request-review', 'any', '--note', 'x', '--by', 'zed']);
     plan('ann,bob,zed', [
@@ -211,6 +213,7 @@ test('the plan through claims, a review, a changes verdict, a close and the lead
     ]);
     writeFileSync(f.roster, JSON.stringify({ ann: {}, bob: {}, zed: {}, lead: {} })); // the lead plans its refinement
     step('new', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']); // incomplete
+    step('update', ['004-bare', '--set-team', 't1']);
     plan('lead', [
       { member: 'lead', action: 'refine', item: '004-bare', seq: 4,
         instruction: "refine 4, never action it: set review_refs, estimate_min, definition_of_done (backlog update 004-bare --set-review-refs <review document>,.. / --set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / --append '## Definition of done\\n- [ ] <checkable line>'); once complete, record the gap in the item",

@@ -90,10 +90,10 @@ test('pop offers an unrefined team item as refine, never as claim; query --claim
   assert.deepEqual(plan(f), []);
 });
 
-test('an item without a team and without the split marker stays claimable: no stage is solo work, ready', () => {
+test('an item without a team and without the split marker stays claimable: no stage is solo work, ready; no team view lists it', () => {
   const f = fixture();
   const s = make(f, 'solo item');
-  assert.deepEqual(claimable(f, {}), [s]);
+  assert.deepEqual(claimable(f, {}), []); // team t1 reaches only its own items
   ok(f, ['update', s, '--claim', 'amy']);
   assert.equal(fm(f, s).claimed_by, 'amy');
 });

@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dump, parse } from '../../src/shared/frontmatter.js';
 import * as handoff from '../../src/shared/handoff.js';
-import { GIT_IDENTITY, cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { GIT_IDENTITY, cli, consumer, intoTeam, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -30,7 +30,8 @@ const run = (f, args, env = {}, cwd = f.cons) => cli(args, { cwd, tmp: f.t, env:
 const ok = (f, args, cwd = f.cons) => { const r = run(f, args, {}, cwd); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const NEW = (name, deps, extra = []) => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', deps,
   '--body', '## Definition of done\n\n- [ ] it holds', ...extra];
-const make = (f, name, deps, extra = []) => ok(f, NEW(name, deps, extra)).stdout.split('created phase ')[1].split(' ')[0];
+// a complete item (the offers' work) belongs to t1: team pop and the team views reach only the items of their team; a producer stays outside
+const make = (f, name, deps, extra = []) => { const slug = ok(f, NEW(name, deps, extra)).stdout.split('created phase ')[1].split(' ')[0]; return extra.length ? intoTeam(slug, { cwd: f.cons, tmp: f.t, env: LEAD }) : slug; };
 // A member item the offers accept: review documents and an estimate, or the views and the claim leave it out.
 const COMPLETE = ['--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low'];
 // The hand-off front matter as another writer would store it: lists of encode(...) strings, committed and pushed
@@ -99,7 +100,7 @@ function gate(f, state, p, d, h, { depId = p, blockedOn = p } = {}) {
       assert.match(claim.stdout, /does not match its own fields/);
     }
     const blockedView = run(f, ['team', 'query', '--team', 't1', '--blocked']).stdout; // the view names the held-back item and the edge state
-    assert.match(blockedView, new RegExp(`${d} \\(pending\\)`));
+    assert.match(blockedView, new RegExp(`${d} \\(ready\\)`));
     assert.match(blockedView, new RegExp(`waits on ${blockedOn} \\(done, hand-off ${state}:`));
   } else {
     assert.ok(!run(f, ['team', 'query', '--team', 't1', '--blocked']).stdout.includes(d), 'the satisfied dependent is in no blocked view');

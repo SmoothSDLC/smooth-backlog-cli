@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, intoTeam, sharedBacklog } from './shared-fixtures.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
@@ -16,6 +16,7 @@ function fixture() {
   const t = mkdtempSync(join(tmpdir(), 'team-compat-'));
   dirs.push(t);
   const home = sharedBacklog(t);
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] } })); // t1 asks one peer review of its work
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
@@ -50,6 +51,7 @@ function make(f, name, extra = []) {
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r.stdout.split('created phase ')[1].split(' ')[0];
 }
+const makeTeam = (f, name, extra = []) => intoTeam(make(f, name, extra), { cwd: f.cons, tmp: f.t }); // the team views reach only the items of their team
 
 test('test_new_item_refusals: refusals at creation, the class options are gone, release only by the holder', () => {
   const f = fixture();
@@ -65,16 +67,16 @@ test('test_new_item_refusals: refusals at creation, the class options are gone, 
   p = run(f, 'new', [...base, '--depends-on', 'no-such-item']);
   assert.ok(p.status === 1 && p.stdout.includes("no item 'no-such-item'"), p.stdout + p.stderr);
   assert.equal(count(), before);
-  const s = make(f, 'released only by its holder', ['--depends-on', 'none']);
+  const s = makeTeam(f, 'released only by its holder', ['--depends-on', 'none']);
   assert.ok(run(f, 'team', ['query', '--team', 't1', '--reviewable']).stderr.includes('--reviewable needs --agent'));
   // after the first item: a refused creation leaves no backlog (and no empty db) behind, and query needs one
   ok(f, s, '--claim', 'bob');
   assert.ok(refused(f, s, '--release', 'ann').includes('claimed by bob, not by ann'));
   ok(f, s, '--release', 'bob');
-  assert.ok(q(f, '--claimable').includes(s));
+  assert.equal(item(f, s).fm.claimed_by, ''); // the release cleared the claim
 });
 
-test('test_item_without_team_fields_keeps_working: an item written before team work stays visible and claimable', () => {
+test('test_item_without_team_fields_keeps_working: an item written before team work stays visible, and in no team view', () => {
   const f = fixture();
   const s = make(f, 'written before team work', ['--no-review-refs']); // outside a team, --status done finishes it
   const path = join(f.folder, 'phases', `${s}.md`);
@@ -87,9 +89,9 @@ test('test_item_without_team_fields_keeps_working: an item written before team w
   assert.equal(JSON.parse(run(f, 'query', ['--phase', s]).stdout).slug, s);
   ok(f, s, '--append', 'a note added the old way');
   ok(f, s, '--status', 'in_progress');
-  assert.ok(!q(f, '--blocked').includes(s) && !q(f, '--claimable').includes(s)); // in progress
+  assert.ok(!q(f, '--blocked').includes(s) && !q(f, '--claimable').includes(s)); // in progress, and of no team
   ok(f, s, '--status', 'pending');
-  assert.ok(q(f, '--claimable').includes(s)); // no dependencies
+  assert.ok(!q(f, '--claimable').includes(s)); // an item of no team is in no team's view
   const text = readFileSync(path, 'utf8');
   assert.ok(text.includes('a note added the old way') && !OLD.some(k => text.includes(`\n${k}:`)));
   run(f, 'query', ['--phase', s, '--agent', 'smooth']); // the actor re-reads
@@ -98,11 +100,11 @@ test('test_item_without_team_fields_keeps_working: an item written before team w
 
 test('test_claim_review_close_lifecycle: the query views along the lifecycle (the part job 15 left out)', () => {
   const f = fixture();
-  const first = make(f, 'dependency first', []);
+  const first = makeTeam(f, 'dependency first', []);
   const seq = first.split('-')[0];
-  const job = make(f, 'the job', ['--review-refs', 'docs/review/code.md', '--depends-on', seq]);
+  const job = makeTeam(f, 'the job', ['--review-refs', 'docs/review/code.md', '--depends-on', seq]);
   assert.ok(q(f, '--blocked').includes(job) && !q(f, '--claimable').includes(job));
-  assert.ok(refused(f, job, '--claim', 'bob').includes(`${first} (status pending`)); // dependency not done
+  assert.ok(refused(f, job, '--claim', 'bob').includes(`${first} (status ready`)); // dependency not done
   ok(f, first, '--claim', 'ann');
   run(f, 'query', ['--phase', first, '--agent', 'ann']); // the claimer re-reads; the claimer closes, as the same explicit actor
   handoff(f, first, job, 'ann');
@@ -118,24 +120,24 @@ test('test_claim_review_close_lifecycle: the query views along the lifecycle (th
 
 test('--reviewable needs --agent; the text view lists the item with its dependencies', () => {
   const f = fixture();
-  const a = make(f, 'first', []);
-  const b = make(f, 'second', ['--depends-on', a.split('-')[0]]);
+  const a = makeTeam(f, 'first', []);
+  const b = makeTeam(f, 'second', ['--depends-on', a.split('-')[0]]);
   const r = run(f, 'team', ['query', '--team', 't1', '--reviewable']);
   assert.equal(r.status, 2);
   assert.equal(r.stderr, '❌ backlog: --reviewable needs --agent <you> (the author never reviews its own item)\n');
   const text = run(f, 'team', ['query', '--team', 't1', '--blocked']);
   assert.equal(text.status, 0, text.stderr);
-  assert.equal(text.stdout, `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P1   ${b} (pending) — second\n`
+  assert.equal(text.stdout, `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P1   ${b} (ready) — second\n`
     + `        review_refs=docs/review/code.md claimed_by=- review=none estimate=5m complexity=low\n`
-    + `        waits on ${a} (status pending, claimed by nobody)\n`);
+    + `        waits on ${a} (status ready, claimed by nobody)\n`);
   const waiting = JSON.parse(run(f, 'team', ['query', '--team', 't1', '--blocked', '--json']).stdout)[0].waiting_on;
-  assert.deepEqual(waiting, [{ id: String(Number(a.split('-')[0])), slug: a, status: 'pending', claimed_by: '' }]);
+  assert.deepEqual(waiting, [{ id: String(Number(a.split('-')[0])), slug: a, status: 'ready', claimed_by: '' }]);
 });
 
 test('an item with old work_class and review_classes fields behaves exactly like one without them ', () => {
   const f = fixture();
-  const plain = make(f, 'plain job');
-  const old = make(f, 'old job');
+  const plain = makeTeam(f, 'plain job');
+  const old = makeTeam(f, 'old job');
   const path = join(f.folder, 'phases', `${old}.md`);
   // as a class-era item looks: the keys are written straight into the file (store.write drops them)
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^---\n/, '---\nwork_class:\n- chunk\n- docs\nreview_classes:\n- security\n'));

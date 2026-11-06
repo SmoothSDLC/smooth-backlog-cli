@@ -10,7 +10,7 @@ import { redact } from './safety.js';
 import { cloneLocked, resolveHome } from './store.js';
 import * as sync from './sync.js';
 import { parse as parsePop } from './team-pop.js';
-import { forgetTeamsConfig, openItemsOf, strip, teamEntry, teamsConfig, validateTeam } from './team.js';
+import { forgetTeamsConfig, openItemsOf, setSessionTeam, strip, teamEntry, teamsConfig, validateTeam } from './team.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
@@ -73,12 +73,13 @@ export async function run(argv) {
 
 async function dispatch(argv) {
   const sub = argv[0];
-  if (!SUBS.includes(sub)) return die(`team needs a subcommand (${SUBS.join(', ')}): backlog team ${SUBS.includes(sub) ? sub : 'update'} <item> --team <name> --agent <name> ...`);
+  if (!SUBS.includes(sub)) return die(`team needs a subcommand (${SUBS.join(', ')}): backlog team update <item> --team <name> --agent <name> ...`);
   resolveHome(); // reads the team configuration of the backlog
   if (sub === 'define') return define(argv.slice(1));
   if (sub === 'workflow') return workflow(argv.slice(1));
   let split_; let who;
   try { split_ = split(argv.slice(1)); who = resolve(split_.got, { agentOptional: sub === 'query' }); } catch (e) { return die(e.message); } // the views read: a named agent switches them to the team rules, none is needed
+  setSessionTeam(who.team); // the command's team is the session's: its items are the only ones in reach
   if (sub === 'update') return update(split_.rest, who);
   if (sub === 'query') return query(split_.rest, who, split_.got);
   if (sub === 'pop') {

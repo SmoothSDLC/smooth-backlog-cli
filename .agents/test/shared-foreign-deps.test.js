@@ -21,7 +21,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const run = (cwd, args, want = 0, env = {}) => {
-    const r = cli(args, { cwd, tmp: t, env: { ...env, BACKLOG_AGENT: env.BACKLOG_AGENT ?? 'tester', TEAM_LEAD: 'lead', BACKLOG_SESSION: '' } });
+    const r = cli(args, { cwd, tmp: t, env: { ...env, BACKLOG_AGENT: env.BACKLOG_AGENT ?? (args[0] === 'team' ? '' : 'tester'), TEAM_LEAD: 'lead', BACKLOG_SESSION: '' } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
@@ -30,6 +30,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.match(run(here, NEW('needs a lost one', 'acme/nowhere#1'), 1).stdout, /no item 'acme\/nowhere#1' in the backlog repository/);
   assert.match(run(here, NEW('needs a missing item', 'acme/lib#9'), 1).stdout, /no item 'acme\/lib#9' in the backlog repository/);
   run(here, NEW('app change', 'acme/lib#1'));
+  run(here, ['update', '1', '--set-team', 't1', '--status', 'ready']); // team pop and the team views reach only the items of t1
   assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status pending\)/);
   const moved = run(there, ['move', '1', '--to-repository', 'acme/third'], 1); // a move would leave it dangling
   assert.equal(moved.stdout, '❌ acme/app#1 of other repositories depends on acme/lib#1 (001-library-change), which would leave them pointing at nothing; clear them first in their repositories: update <dependent> --set-depends-on ...\n');
@@ -63,8 +64,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status closed\)/);
   const offered = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json']).stdout); // done: next-work offers the item
   assert.deepEqual([offered.action, offered.item, offered.first], ['claim', '001-app-change', undefined]);
-  run(here, ['query', '--phase', '1', '--agent', 'ada']);
-  run(here, ['update', '1', '--claim', 'ada']); // and the claim goes through
+  assert.deepEqual([offered.claimed, offered.front_matter.claimed_by], [true, 'ada']); // and the claim went through
   run(here, ['query', '--phase', '1', '--agent', 'tester']);
   assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/lib#7', '--by', 'tester'], 1).stdout, /no item 'acme\/lib#7' in the backlog repository/);
   run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester']);

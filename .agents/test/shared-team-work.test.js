@@ -43,6 +43,8 @@ const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`
 const work = (f, agent, env, ...args) => { const r = run(f, ['team', 'pop', '--team', env?.TEAM_NAME || 't1', '--agent', agent, '--json', ...args], env?.TEAM_NAME ? { BACKLOG_AGENT: agent, ...env } : env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
 const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => ok(f, ['update', slug, ...a]));
+// an item of team t1, refined: the team pop reaches only the items of its team
+const inT1 = (f, slug) => { ok(f, ['update', slug, '--set-team', 't1']); refined(f, slug); return slug; };
 const TM = agent => ({ TEAM_NAME: 't1', BACKLOG_AGENT: agent }); // a team session of the agent
 const STOP = /🛑 (\S+): END THE SESSION NOW\. Reply with text only and make no further tool call/;
 
@@ -59,7 +61,7 @@ test('query --phase shows the whole item: the row, every front matter field and 
 
 test('backlog work: the next action marked as the agent\'s (claim, refinement start, review start) with the whole item', () => {
   const f = fixture();
-  const job = make(f, 'plain job');
+  const job = inT1(f, make(f, 'plain job'));
   let w = work(f, 'bob');
   assert.deepEqual([w.action, w.item, w.marked, fm(f, job).claimed_by], ['claim', job, 'claimed for bob', 'bob']);
   assert.ok(w.body.includes('Body of plain job.') && w.front_matter.claimed_by === 'bob', JSON.stringify(w));
@@ -144,7 +146,7 @@ test('in a team session a member acts only as itself; only the lead reassigns or
 
 test('a member never takes over another agent\'s stale review; the lead hands it on with a reason', () => {
   const f = fixture();
-  const job = make(f, 'reviewed job');
+  const job = inT1(f, make(f, 'reviewed job'));
   ok(f, ['update', job, '--claim', 'bob']);
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']);
   ok(f, ['update', job, '--start-review', '--by', 'zed']);

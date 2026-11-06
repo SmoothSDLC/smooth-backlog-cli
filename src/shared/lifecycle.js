@@ -77,8 +77,8 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   // a team session (TEAM_NAME) claims only what pop offers it: an item of its own team in its repository (any
   // item without another team elsewhere). Checked inside the locked write, so team pop's scope is the claim's precondition.
   if (teamName() && !offeredTo(fm, fm.repository, repo)) {
-    reject(fm.team ? `the item belongs to team ${fm.team}, not to this session's team ${teamName()} (TEAM_NAME)`
-      : `the item belongs to no team; this session's team ${teamName()} (TEAM_NAME) claims only its own team's items here`);
+    reject(fm.team ? `the item belongs to team ${fm.team}, not to this session's team ${teamName()}`
+      : `the item belongs to no team; this session's team ${teamName()} claims only its own team's items here`);
   }
   if (agent === teamLead() && fm.team && fm.stage) reject(`the team lead (${agent}) never claims an item of its team's split; a member claims it`);
   // the team lead's claim of its team's work item (backlog team pop, to split it) is the one claim from the status new

@@ -238,7 +238,9 @@ test('review: a scalar comma depends_on ("1,2") counts as two references in move
 
 test('review: after the author released her claim, pop and query --reviewable still do not offer her the review of her own work', t => {
   const s = solo(t);
+  writeFileSync(join(s.home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] } })); // t1 asks one peer review of its work
   assert.equal(s.run(FULL('alpha job')).status, 0);
+  assert.equal(s.run(['update', '1', '--set-team', 't1', '--status', 'ready']).status, 0); // the team views and team pop reach only the items of t1
   for (const args of [['update', '1', '--claim', 'alice'], ['update', '1', '--request-review', 'bob', '--note', 'look'], ['update', '1', '--release', 'alice']]) assert.equal(s.run(args).status, 0);
   const rev = who => s.run(['team', 'query', '--team', 't1', '--reviewable', '--agent', who]);
   assert.doesNotMatch(rev('alice').stdout, /001-alpha-job/);

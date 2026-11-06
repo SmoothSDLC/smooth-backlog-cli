@@ -9,7 +9,7 @@ import * as index from './index.js';
 import { caller, isSplitSlice, missingFields } from './lifecycle.js';
 import { redact } from './safety.js';
 import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
-import { gitBranch, heldBy, setSessionTeam, strip, teamLead, teamScope, undoneDependencies } from './team.js';
+import { gitBranch, heldBy, strip, teamLead, teamScope, undoneDependencies } from './team.js';
 import { isOpen } from './workflow.js';
 
 const clean = v => (typeof v === 'string' ? redact(v) : Array.isArray(v) ? v.map(clean) : v !== null && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)])) : v); // redacted before it is serialized
@@ -50,7 +50,6 @@ export async function run({ team, agent }, rest) {
   try { a = parse(rest); } catch (e) { return die(e.message); }
   const own = strip(process.env.TEAM_NAME || '');
   if (own && own !== team) return die(`this session is team ${own} (TEAM_NAME), not ${team}`);
-  setSessionTeam(team); // the engine reads the team as the session's
   const me = caller(); // the team session's agent (BACKLOG_AGENT in a team session)
   if (me && me !== agent) return die(`you are ${me} (BACKLOG_AGENT): team pop answers only for yourself, not for ${agent}`);
   if (a.lead && strip(a.lead) !== teamLead()) return die(`--lead ${a.lead} is not the team lead of this session (${teamLead()}; TEAM_LEAD): team pop acts as the lead the updates know`);

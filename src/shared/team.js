@@ -18,7 +18,7 @@ import { SOLO, isFinished, isOpen as isOpenWord, lift, loadWorkflow } from './wo
 // which the runner claims for the lead) or its refinement review passed. The items the lead splits off start in stage refining.
 export const isReady = fm => [undefined, null, '', 'ready'].includes(fm.stage);
 // The team lead: TEAM_LEAD, else the lead of the session's team in the backlog configuration (teams.json); no built-in name.
-export const teamLead = name => strip(name || process.env.TEAM_LEAD || teamsConfig()[teamName() || sessionTeam]?.lead || '');
+export const teamLead = name => strip(name || process.env.TEAM_LEAD || teamsConfig()[teamName()]?.lead || '');
 
 // Python str.strip/rstrip whitespace (not JS's: \x1c-\x1f and \x85 count, a BOM does not).
 const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
@@ -34,12 +34,11 @@ export const isChunk = fm => ['true', 'yes', '1'].includes(String(fm.chunk).toLo
 // lib_db.needs_review: an item with review documents closes only after a passing review.
 export const needsReview = fm => asList(fm.review_refs).length > 0;
 
-// lib_db.team_name / in_team: the caller's team (env TEAM_NAME, set by the team runner); with it set, a member works only
-// that team's items.
-// `backlog team pop --team <name>` names the team whose lead it looks up; which items a session may touch is still bound by TEAM_NAME.
+// lib_db.team_name / in_team: the caller's team: TEAM_NAME (set by the team runner, an override), else the --team of the running
+// `backlog team` command; with a team named, the session works only that team's items.
 let sessionTeam = '';
 export const setSessionTeam = name => { sessionTeam = strip(name || ''); };
-export const teamName = () => strip(process.env.TEAM_NAME || '');
+export const teamName = () => strip(process.env.TEAM_NAME || '') || sessionTeam;
 export const inTeam = fm => !teamName() || fm.team === teamName();
 // Beyond the earlier scripts: an item of another repository, offered only as chunk
 // work, is held back when it names a team other than the caller's.

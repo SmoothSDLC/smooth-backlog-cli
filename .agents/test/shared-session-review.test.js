@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, intoTeam, sharedBacklog } from './shared-fixtures.js';
 import { mkdirSync } from 'node:fs';
 import * as store from '../../src/shared/store.js';
 
@@ -29,6 +29,7 @@ function fixture() {
   const t = mkdtempSync(join(tmpdir(), 'session-review-'));
   dirs.push(t);
   const home = sharedBacklog(t);
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] } })); // t1 asks one peer review of its work
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
@@ -47,10 +48,11 @@ const run = (f, args, env = {}) => {
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text) => { const r = run(f, args); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
-const make = f => { const slug = ok(f, ['new', ...NEW('review session')]).stdout.split('created phase ')[1].split(' ')[0]; return slug; };
+// team: the item belongs to t1, which team pop and the team views need to reach it
+const make = (f, team = false) => { const slug = ok(f, ['new', ...NEW('review session')]).stdout.split('created phase ')[1].split(' ')[0]; return team ? intoTeam(slug, { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', BACKLOG_SESSION: '' } }) : slug; };
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
 // the setup of every test: the building session claims and asks for the review
-const setup = f => { const s = make(f); ok(f, ['update', s, '--claim', A1]); ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]); return s; };
+const setup = (f, team = false) => { const s = make(f, team); ok(f, ['update', s, '--claim', A1]); ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]); return s; };
 
 test('082: 082aa:01 claims and asks for a review; 082aa:02 starts and passes it', () => {
   const f = fixture();
@@ -74,7 +76,7 @@ test('082: 082aa:01 is refused --start-review and --review with the same-session
 
 test('082: pop, work and query --reviewable offer the review to 082aa:02 and 082bb:01, never to 082aa:01', () => {
   const f = fixture();
-  const s = setup(f);
+  const s = setup(f, true);
   const reviewable = (agent) => run(f, ['team', 'query', '--team', 't1', '--reviewable', '--agent', agent]).stdout;
   assert.ok(reviewable(A2).includes(s), 'offered to the new session of the card');
   assert.ok(reviewable(B1).includes(s), 'offered to the other card');
@@ -140,7 +142,7 @@ test('082: a pass by a session-named reviewer is recorded with the work commit',
 
 test('082: query --plan offers the requested review to the new session of the card, never to the asking session', () => {
   const f = fixture();
-  const s = setup(f); // A1 claims and asks
+  const s = setup(f, true); // A1 claims and asks
   const roster = join(f.t, 'roster.json');
   writeFileSync(roster, JSON.stringify({ [A2]: {}, [B1]: {}, [A1]: {} }));
   const out = run(f, ['team', 'query', '--team', 't1', '--plan', '--roster', roster]).stdout;

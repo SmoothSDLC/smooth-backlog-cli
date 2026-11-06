@@ -104,8 +104,8 @@ export function cli(args = [], opts = {}) {
   const bin = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'));
   const p = spawnSync(process.execPath, [bin, ...args], {
     cwd: opts.cwd,
-    // a command without a named agent is a different writer each time (BACKLOG_AGENT, else USER, would make every call one agent with one stale view)
-    env: { ...process.env, BACKLOG_AGENT: `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
+    // a team command names its agent with --agent, which a session agent would have to equal; any other command without a named agent is a different writer each time (BACKLOG_AGENT, else USER, would make every call one agent with one stale view)
+    env: { ...process.env, BACKLOG_AGENT: args[0] === 'team' ? '' : `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
     stdin: 'ignore',
     encoding: 'utf8',
     timeout: opts.timeout ?? 60000,
@@ -121,3 +121,11 @@ export const createdSlug = stdout => {
   return m ? m[1] : undefined;
 };
 
+
+// Puts a created item into team `team`, ready to be claimed: `backlog new --team` starts in refinement, and the
+// team views and `backlog team pop` reach only the items of their team.
+export function intoTeam(slug, opts, team = 't1', status = 'ready') { // status '': the team only, the item stays unrefined and incomplete
+  const r = cli(['update', slug, '--set-team', team, ...(status ? ['--status', status] : [])], { ...opts, env: { ...opts.env, BACKLOG_AGENT: '' } }); // opts.env: the caller's own session, so its view of the item stays current
+  if (r.status !== 0) throw new Error(`intoTeam ${slug}: ${r.stdout}${r.stderr}`);
+  return slug;
+}

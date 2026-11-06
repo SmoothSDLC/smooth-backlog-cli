@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, intoTeam, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -22,6 +22,7 @@ function fixture() {
   const t = mkdtempSync(join(tmpdir(), 'team-scope-'));
   dirs.push(t);
   const home = sharedBacklog(t);
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] } })); // t1 asks one peer review of its work
   const cons = consumer(t, 'acme', 'demo', 'main');
   const other = consumer(t, 'other', 'thing', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
@@ -39,7 +40,7 @@ function make(f, cwd, name, extra = []) {
   args.push('--body', DOD, ...extra);
   const r = cli(['new', ...args], { cwd, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  return r.stdout.split('created phase ')[1].split(' ')[0];
+  return intoTeam(r.stdout.split('created phase ')[1].split(' ')[0], { cwd, tmp: f.t }); // the team views reach only the items of their team
 }
 const slugs = (f, args, code = 0) => {
   const r = cli(['team', 'query', '--team', 't1', ...args, '--json'], { cwd: f.cons, tmp: f.t });
@@ -193,7 +194,7 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
-    `📋 1 claimable item(s) — acme/demo, branch main, P0 = next:\n   P0   ${here} (pending) — scope here\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n`);
+    `📋 1 claimable item(s) — acme/demo, branch main, P0 = next:\n   P0   ${here} (ready) — scope here\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n`);
   r = cli(['team', 'query', '--team', 't1', '--reviewable', '--agent', 'amy'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
@@ -203,7 +204,7 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
-    `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P2   ${blocked} (pending) — scope blocked job\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n        waits on ${held} (status ready for review, claimed by ada)\n`);
+    `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P2   ${blocked} (ready) — scope blocked job\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n        waits on ${held} (status ready for review, claimed by ada)\n`);
   r = cli(['team', 'query', '--team', 't1', '--blocked', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
@@ -220,7 +221,7 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
     "name": "scope blocked job",
     "objective": "o",
     "summary": "s",
-    "status": "pending",
+    "status": "ready",
     "severity": "normal",
     "priority": 2,
     "path": "phases/${blocked}.md",

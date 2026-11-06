@@ -36,8 +36,8 @@ const record = (dependent, contract = 'the exported functions') => handoff.makeR
 const receipt = (dependent, digest, result = 'accepted') => handoff.makeReceipt({ dependent, digest, result, by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' });
 // The next commands the refusal must name (item 059's design): missing and rejected edges need (a new) hand-off
 // record from the producer; unaccepted and stale edges need the lead's acceptance of the record that is there.
-const handoffCommand = (dependent) => `backlog update ${SLUG} --handoff ${dependent} --handoff-commit <sha> --handoff-contract ... --handoff-verification ... --by <claimer>`;
-const acceptCommand = (dependent) => `backlog update ${SLUG} --accept-handoff ${dependent} --checks ... --by <lead>`;
+const handoffCommand = (dependent) => `backlog team update ${SLUG} --team <team> --agent <claimer> --handoff ${dependent} --handoff-commit <sha> --handoff-contract ... --handoff-verification ...`;
+const acceptCommand = (dependent) => `backlog team update ${SLUG} --team <team> --agent <lead> --accept-handoff ${dependent} --checks ...`;
 const NONE = { fm: { handoffs: 'none' }, text: 'DEPENDENCY_HANDOFF: NONE (no dependent items; checked by the CLI at close)' };
 
 test('059.3: closeGate refuses a missing edge, naming the dependent, the state and the --handoff command', () => {

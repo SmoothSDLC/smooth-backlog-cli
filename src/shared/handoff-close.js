@@ -2,12 +2,13 @@
 // is accepted; without dependents the CLI records NONE itself. the module only - the integration slice
 // calls it from closeItem and the --status done path; the edge rules it builds on live in./handoff.js.
 import { dependentsOf, openEdges } from './handoff.js';
+import { teamStep } from './team.js';
 
 // The next command for an open edge: a missing or a rejected edge needs (a new) hand-off record from the producer;
 // an unaccepted or a stale edge needs the team lead's acceptance of the record that is there.
 const command = (slug, e) => e.state === 'unaccepted' || e.state === 'stale'
-  ? `backlog update ${slug} --accept-handoff ${e.dependent} --checks ... --by <lead>`
-  : `backlog update ${slug} --handoff ${e.dependent} --handoff-commit <sha> --handoff-contract ... --handoff-verification ... --by <claimer>`;
+  ? teamStep(slug, '<lead>', `--accept-handoff ${e.dependent} --checks ...`)
+  : teamStep(slug, '<claimer>', `--handoff ${e.dependent} --handoff-commit <sha> --handoff-contract ... --handoff-verification ...`);
 
 // The close gate's decision for the producer (fm: its front matter, the stored form; folder: its folder
 // <home>/<owner>/<name>; repo: its repoId <owner>/<name>; slug: how the CLI names the item). {refuse:...} while a

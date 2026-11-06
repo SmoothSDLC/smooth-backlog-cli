@@ -105,7 +105,7 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   ok(f, dep, '--request-review', 'any', '--note', 'tests in commit abc');
   const z = JSON.parse(cli(['team', 'pop', '--team', 't1', '--agent', 'zed', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD }).stdout);
   assert.deepEqual([z.action, z.item], ['review', dep]); // (b) review beats claim; any member but the author
-  assert.ok(z.instruction.includes('--review pass|changes --by zed') && spare);
+  assert.ok(z.instruction.includes('--agent zed --review pass|changes') && spare);
   p = pop(f); // (a) continue beats review
   assert.deepEqual([p.action, p.item], ['continue', job]);
   const n = cli(['team', 'pop', '--team', 't1', '--agent', 'ann'], { cwd: f.cons, tmp: f.t, env: LEAD });

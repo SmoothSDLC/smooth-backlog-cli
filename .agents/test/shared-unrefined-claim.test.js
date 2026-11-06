@@ -51,7 +51,7 @@ test('a member cannot claim a team item without a stage: the refusal names --ref
   const f = fixture();
   const s = teamItem(f);
   const r = no(f, ['update', s, '--claim', 'amy'], 'claim needs ready or in progress');
-  assert.ok(r.stdout.includes('--refine-start --by <you>') && r.stdout.includes('refine it first'), r.stdout);
+  assert.ok(r.stdout.includes('--agent <you> --refine-start') && r.stdout.includes('refine it first'), r.stdout);
   no(f, ['update', s, '--claim', 'amy', '--force'], '--refine-start'); // --force does not pass the stages
   assert.deepEqual([fm(f, s).claimed_by, fm(f, s).stage], ['', undefined]);
 });

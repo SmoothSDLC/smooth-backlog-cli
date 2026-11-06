@@ -63,7 +63,7 @@ test('test_the_team_workflow_from_work_item_to_ready_work: split, member refinem
   assert.equal(pop(f, 'bob', T1).item, b); // a is ann's to refine
   p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['refine', a]); // ann continues its refinement
-  assert.ok(p.instruction.startsWith(`you are refining ${fm(f, a).seq}`) && p.instruction.includes('--refine-done --by ann'), p.instruction);
+  assert.ok(p.instruction.startsWith(`you are refining ${fm(f, a).seq}`) && p.instruction.includes('--agent ann --refine-done'), p.instruction);
   no(f, ['update', a, '--refine-done', '--by', 'bob', '--note', 'x'], 'refiner is ann'); // not the refiner
   up(f, a, '--refine-done', '--by', 'ann', '--note', 'estimate and definition of done checked');
   assert.equal(fm(f, a).status, 'refined');

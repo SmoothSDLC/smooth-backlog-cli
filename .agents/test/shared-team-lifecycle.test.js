@@ -159,7 +159,7 @@ test('an incomplete item is only refined: no claim, no note', () => {
   assert.equal(update(f, [slug, '--set-team', 't1'], T).status, 0);
   const out = update(f, [slug, '--claim', 'ann'], T);
   assert.equal(out.status, 1);
-  assert.match(out.stdout, new RegExp(`^❌ ${slug}: incomplete item, missing review_refs, estimate_min, definition_of_done: in a team nobody claims, reviews or works it \\(--claim refused\\); the team lead refines it only: backlog update <item> --set-review-refs <review document>,\\.\\.`));
+  assert.match(out.stdout, new RegExp(`^❌ ${slug}: incomplete item, missing review_refs, estimate_min, definition_of_done: in a team nobody claims, reviews or works it \\(--claim refused\\); the team lead refines it only: backlog team update ${slug} --team t1 --agent lead --set-review-refs <review document>,\\.\\.`));
   assert.equal(update(f, [slug, '--release', 'ann'], T).status, 1); // a release is not work: only its own refusal
   assert.match(update(f, [slug, '--release', 'ann'], T).stdout, /claimed by nobody, not by ann/);
   assert.equal(update(f, [slug, '--set-estimate', '5'], T).status, 0); // refining is allowed
@@ -209,7 +209,7 @@ test('team.js: held items, the claim rule, undone dependencies on a folder', () 
   put(5, 'e', { status: 'in_progress', claimed_by: 'bob' });
   put(6, 'f', { depends_on: [1, '004-d', 'nothing', 5] });
   assert.deepEqual(team.heldItems(f.folder, 'ann').map(h => [h.slug, h.state]), [['001-a', 'active'], ['002-b', 'awaiting-review'], ['003-c', 'waiting:run 5']]);
-  assert.equal(team.claimRefusal(f.folder, 'ann'), 'ann holds 1 active item(s): 001-a; pull new work only when every item you hold waits (review requested, or backlog update <item> --waiting "<what>" --by ann); --force overrides');
+  assert.equal(team.claimRefusal(f.folder, 'ann'), 'ann holds 1 active item(s): 001-a; pull new work only when every item you hold waits (review requested, or backlog team update <item> --team <team> --agent ann --waiting "<what>"); --force overrides');
   assert.equal(team.claimRefusal(f.folder, 'nobody'), null);
   const undone = team.undoneDependencies(f.folder, { depends_on: [1, '004-d', 'nothing', 5] });
   assert.deepEqual(undone.map(d => team.describeDependency(d)), ['001-a (status in progress, claimed by ann)', 'nothing (no such item in this backlog)', '005-e (status in progress, claimed by bob)']);
@@ -311,7 +311,7 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   held = snapshot(n);
   const stale = update(n, [C, '--start-review', '--by', 'rex'], { BACKLOG_AGENT: '', BACKLOG_SESSION: '', TEAM_LEAD: 'lead', BACKLOG_REVIEW_STALE_SECONDS: '-1' });
   assert.equal(stale.status, 1, stale.stdout + stale.stderr);
-  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by zed since \\S+; review another item \\(the review is stale: the team lead hands it on with backlog update <item> --reassign-review <agent> --by lead --reason "<why>"\\)\\n$`));
+  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by zed since \\S+; review another item \\(the review is stale: the team lead hands it on with backlog team update <item> --team <team> --agent lead --reassign-review <agent> --reason "<why>"\\)\\n$`));
   assert.deepEqual(snapshot(n), held); // refused: nothing changed
   // the class options are gone: unrecognized, exit 2
   const gone = update(n, [C, '--claim', 'ann', '--set-work-class', 'docs']);
@@ -328,7 +328,7 @@ test('075: the successful lifecycle steps print exactly what they record', t => 
   step([job, '--request-review', 'any', '--note', 'ready'], `✅ ${job} updated (review_requested=Review requested by ann at TS (reviewer: any))\n${STOP('ann')}`);
   step([job, '--start-review', '--by', 'amy'], `✅ ${job} updated (review_started=Review started by amy at TS)\n`);
   step([job, '--review', 'pass', '--by', 'amy', '--comments', 'ok per references/review/code.md'],
-    `✅ ${job} updated (reviewed=Review by amy: COMPLETE (TS))\n   ➡️  CLOSE NOW: ann closes it (backlog update ${job} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...)\n`);
+    `✅ ${job} updated (reviewed=Review by amy: COMPLETE (TS))\n   ➡️  CLOSE NOW: ann closes it (backlog team update ${job} --team <team> --agent ann --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (backlog team update ${job} --team <team> --agent <lead> --close --summary ...)\n`);
   step([job, '--close', '--summary', 'delivered with tests'],
     `✅ ${job} updated (summary=delivered with tests, closed=Closed by ann at TS)\n   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).\n      backlog now empty — no actionable phase remains.\n      the team lead re-evaluates the order (backlog update --replan, --priority); not you\n${STOP('ann')}`);
   const w = make(f, 'lifecycle waiting job', []);

@@ -39,6 +39,8 @@ export const needsReview = fm => asList(fm.review_refs).length > 0;
 let sessionTeam = '';
 export const setSessionTeam = name => { sessionTeam = strip(name || ''); };
 export const teamName = () => strip(process.env.TEAM_NAME || '') || sessionTeam;
+// One team step as the engine tells an agent to run it: backlog team update <item> --team <team> --agent <agent> <flags>.
+export const teamStep = (item, agent, flags, team = teamName()) => `backlog team update ${item} --team ${team || '<team>'} --agent ${agent} ${flags}`;
 export const inTeam = fm => !teamName() || fm.team === teamName();
 // Beyond the earlier scripts: an item of another repository, offered only as chunk
 // work, is held back when it names a team other than the caller's.
@@ -169,7 +171,7 @@ export function heldItems(folder, agent, { refining = false } = {}) {
 export function claimRefusal(folder, agent) {
   const active = heldItems(folder, agent, { refining: true }).filter(h => h.state === 'active').map(h => h.slug);
   if (!active.length) return null;
-  return `${agent} holds ${active.length} active item(s): ${active.join(', ')}; pull new work only when every item you hold waits (review requested, or backlog update <item> --waiting "<what>" --by ${agent}); --force overrides`;
+  return `${agent} holds ${active.length} active item(s): ${active.join(', ')}; pull new work only when every item you hold waits (review requested, or ${teamStep('<item>', agent, '--waiting "<what>"')}); --force overrides`;
 }
 
 // lib_db.load_roster: {agent: profile} from a team roster {agent: {...}} (the team's members, in order); {} without one.
@@ -241,7 +243,7 @@ export const staleReview = fm => fm.review_state === 'in_review' && age(fm.revie
 
 // agent may start or continue the review: requested, in review by agent itself, or stale.
 // Beyond the earlier scripts: a stale review is handed on by the lead
-// (backlog update <item> --reassign-review <agent> --by <lead> --reason), never taken over by another member.
+// (backlog team update <item> --team <team> --agent <lead> --reassign-review <agent> --reason), never taken over by another member.
 export const reviewOpenTo = (fm, agent) => fm.review_state === 'requested' || (fm.review_state === 'in_review' && fm.reviewer === agent);
 
 // what the team still owes before the dependent may be offered or claimed, per unsatisfied edge state.

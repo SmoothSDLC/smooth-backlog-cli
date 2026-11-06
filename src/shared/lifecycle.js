@@ -14,7 +14,7 @@ import { closeGate } from './handoff-close.js';
 import {
   entryOf, offeredTo, teamName, isTeamMember, refinementReviewRules,
   asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, outsideTeam, reviewOpenTo, strip,
-  staleReview, teamLead, teamScope, undoneDependencies,
+  staleReview, teamLead, teamScope, teamStep, undoneDependencies,
 } from './team.js';
 
 export class Rejected extends Error {}
@@ -33,9 +33,9 @@ const withSession = (list, name) => (name ? [...asList(list).filter(n => n !== n
 // existed has no list yet) and adds the session this write names, so the self-review block of each earlier
 // session survives the transition.
 const seededAuthors = (fm, name) => withSession(withSession(withSession(fm.session_authors, fm.claimed_by), fm.review_author), name);
-export const REFINE_HOW = 'backlog update <item> --set-review-refs <review document>,.. / '
+export const refineHow = (item = '<item>', agent = '<you>') => teamStep(item, agent, '--set-review-refs <review document>,.. / '
   + '--set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / '
-  + "--append '## Definition of done\\n- [ ] <checkable line>'";
+  + "--append '## Definition of done\\n- [ ] <checkable line>'");
 
 // the first line of a text as a splitlines would give it.
 export const headline = text => text.replace(/^[# ]+/, '').split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/)[0];
@@ -84,8 +84,8 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   // the team lead's claim of its team's work item (backlog team pop, to split it) is the one claim from the status new
   const leadsWork = agent === teamLead() && fm.team && !fm.stage && !isSplitSlice(body);
   if (!leadsWork) {
-    gate('claim', fm, agent, undefined, fm.status === 'awaiting decision' ? `; nobody claims it, --force included (backlog update ${fm.phase || '<item>'} --decision "<answer>" first)`
-      : ['new', 'refining'].includes(fm.status) && !fm.refiner ? `; refine it first: backlog update ${fm.phase || '<item>'} --refine-start --by <you>` : '');
+    gate('claim', fm, agent, undefined, fm.status === 'awaiting decision' ? `; nobody claims it, --force included (${teamStep(fm.phase || '<item>', '<you>', '--decision "<answer>"', fm.team)} first)`
+      : ['new', 'refining'].includes(fm.status) && !fm.refiner ? `; refine it first: ${teamStep(fm.phase || '<item>', '<you>', '--refine-start', fm.team)}` : '');
   }
   // beyond the earlier scripts, --force does not pass the stages.
   // a split slice is in stage refining with or without a team field, so the gate covers it too; a slice
@@ -93,7 +93,7 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   // the team lead's own claim of its team's work item (backlog team pop, to split it) is the one claim of an unrefined item; a split slice is never it
   const stage = leadsWork ? undefined : stageOf(fm, body);
   if (!isReady({ stage })) reject(`team ${fm.team || 'none'} item in stage ${stage || 'none'}${fm.stage ? '' : ' (not refined yet)'}: it is claimed only when its refinement review passed (stage ready)`
-    + (stage === 'refining' && !fm.refiner ? `; refine it first: backlog update ${fm.phase || '<item>'} --refine-start --by <you>` : ''));
+    + (stage === 'refining' && !fm.refiner ? `; refine it first: ${teamStep(fm.phase || '<item>', '<you>', '--refine-start', fm.team)}` : ''));
   // a new session of the same card continues the item (no takeover, no lead reassignment): the
   // holder check and the "already holding" checks treat the earlier session's item as the agent's own
   const cont = heldBy(who, agent);
@@ -221,7 +221,7 @@ export function reassign({ fm }, agent, { by, reason } = {}) {
   if (!strip(reason || '')) reject('--reassign needs --reason "<why>"');
   if (isFinished(fm.status)) reject(`status is ${fm.status}; a finished item is not reassigned`);
   const from = fm.claimed_by || '';
-  if (!from) reject('nobody holds the item: the agent claims it (backlog update <item> --claim <agent>)');
+  if (!from) reject(`nobody holds the item: the agent claims it (${teamStep('<item>', '<agent>', '--claim')})`);
   if (from === agent) reject(`${agent} holds it already`);
   const t = now();
   // a reassignment is a hand-off of the work: the former holder and the review requester stay in
@@ -334,7 +334,7 @@ export function startReview({ fm }, by) {
   const st = fm.review_state; const rv = fm.reviewer;
   if (!['requested', 'in_review'].includes(st)) reject(`no review is requested (review_state ${st || 'none'})`);
   if (!reviewOpenTo(fm, by)) {
-    reject(`in review by ${rv} since ${fm.review_started}; review another item${staleReview(fm) ? ` (the review is stale: the team lead hands it on with backlog update <item> --reassign-review <agent> --by ${teamLead()} --reason "<why>")` : ''}`);
+    reject(`in review by ${rv} since ${fm.review_started}; review another item${staleReview(fm) ? ` (the review is stale: the team lead hands it on with ${teamStep('<item>', teamLead(), '--reassign-review <agent> --reason "<why>"')})` : ''}`);
   }
   const stage = stageOfStatus(fm.status) ?? 'peer';
   gate('start-review', fm, by, stage);
@@ -459,7 +459,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   }
   if (me && actions.length && me !== teamLead()) {
     const as = (ACTS_AS[actions[0]] ?? (x => x.by))(a, fm);
-    if (as && as !== me) return { refuse: `${slug}: you are ${me} (BACKLOG_AGENT): a member acts only as itself, not as ${as}; only the team lead (${teamLead()}) takes or gives another agent's work (backlog update <item> --reassign <agent> --by <lead> --reason "<why>")` };
+    if (as && as !== me) return { refuse: `${slug}: you are ${me} (BACKLOG_AGENT): a member acts only as itself, not as ${as}; only the team lead (${teamLead()}) takes or gives another agent's work (${teamStep('<item>', '<lead>', '--reassign <agent> --reason "<why>"')})` };
   }
   const note = a.note ?? '';
   // Beyond the earlier scripts: a field, --set-* or body edit is a change too.
@@ -480,7 +480,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   // before any stage (a team item in its refinement stages included) and past the incomplete-item refusal.
   const ownerClose = actions.length === 1 && actions[0] === 'close' && a.by === 'owner';
   if (a['refine-done'] && missingFields(fm, body).length) { // a refined item is complete
-    return { refuse: `${slug}: still missing ${missingFields(fm, body).join(', ')}: complete it before --refine-done (${REFINE_HOW})` };
+    return { refuse: `${slug}: still missing ${missingFields(fm, body).join(', ')}: complete it before --refine-done (${refineHow(slug)})` };
   }
   // Being refined (or waiting for its decision), an incomplete item takes its refinement steps, notes, its text fields
   // and appended team fields or definition of done, and nothing else. Beyond the earlier scripts ( lets every step
@@ -513,7 +513,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
       // the owner's close of an incomplete item carries its --summary (the decision needs no refinement)
       ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k)) && !(ownerClose && k === 'summary')).map(k => `--${k}`),
       ...(a.append && !/^(?:[ \t]*ESTIMATE:[^\n]*(?:\n|$))+$/.test(a.append.trim()) && !hasDefinitionOfDone(a.append) ? ['--append'] : [])]; // only ESTIMATE lines pass as such
-    if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${REFINE_HOW}` };
+    if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${refineHow(slug, teamLead())}` };
   }
   if (!actions.length) return { event: 'state_change' };
   const item = { fm, folder, repo, body };
@@ -567,6 +567,6 @@ export const closeNow = (fm, slug) => {
   const refusal = reviewRefusal(fm);
   if (refusal) return `   ➡️  NEXT: ${refusal}`;
   return !fm.claimed_by
-    ? `   ➡️  CLOSE NOW: nobody holds it: the team lead closes it (backlog update ${slug} --close --by <lead> --summary "<outcome>")`
-    : `   ➡️  CLOSE NOW: ${fm.claimed_by} closes it (backlog update ${slug} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...)`;
+    ? `   ➡️  CLOSE NOW: nobody holds it: the team lead closes it (${teamStep(slug, '<lead>', '--close --summary "<outcome>"', fm.team)})`
+    : `   ➡️  CLOSE NOW: ${fm.claimed_by} closes it (${teamStep(slug, fm.claimed_by, '--close --summary "<outcome>"', fm.team)}); if the claimer has not, the team lead closes it when available (${teamStep(slug, '<lead>', '--close --summary ...', fm.team)})`;
 };

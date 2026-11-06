@@ -5,12 +5,12 @@
 // "team": 3 | {"default": 3, "t1": 4},
 // "agent": 2 | {"default": 2, "an agent": 1}, "stale_hours": 48}
 // Only the owner edits the file. The team lead lifts the team and agent limits for one item with a recorded reason
-// (backlog update <item> --wip-override "<reason>" --by <lead>). Work in progress: an item with status in_progress, or
+// (backlog team update <item> --team <team> --agent <lead> --wip-override "<reason>"). Work in progress: an item with status in_progress, or
 // one a member is refining (stage refining, a refiner, no claimer).
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { load } from './store.js';
-import { heldBy } from './team.js';
+import { heldBy, teamStep } from './team.js';
 
 const LEVELS = ['overall', 'repository', 'branch', 'team', 'agent'];
 const warned = new Set();
@@ -77,7 +77,7 @@ export function wipRefusal(folder, repo, fm, agent, slug, extra = [], self = { r
     if (max === null) continue;
     const held = now.filter(s[level].of);
     if (held.length >= max) {
-      return `the ${level} work-in-progress limit${key && level !== 'overall' ? ` of ${level === 'branch' ? `${repo} branch ${fm.branch}` : key}` : ''} is ${max} and ${held.length} item(s) are in progress (${held.slice(0, 8).map(x => `${x.repository}#${x.fm.seq ?? x.slug}`).join(', ')}${held.length > 8 ? ', ...' : ''}); finish one first${level === 'team' || level === 'agent' ? ', or the team lead lifts the limit for this item: backlog update <item> --wip-override "<reason>" --by <lead>' : ''}`;
+      return `the ${level} work-in-progress limit${key && level !== 'overall' ? ` of ${level === 'branch' ? `${repo} branch ${fm.branch}` : key}` : ''} is ${max} and ${held.length} item(s) are in progress (${held.slice(0, 8).map(x => `${x.repository}#${x.fm.seq ?? x.slug}`).join(', ')}${held.length > 8 ? ', ...' : ''}); finish one first${level === 'team' || level === 'agent' ? `, or the team lead lifts the limit for this item: ${teamStep('<item>', '<lead>', '--wip-override "<reason>"')}` : ''}`;
     }
   }
   return null;

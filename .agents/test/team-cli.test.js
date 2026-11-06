@@ -236,3 +236,13 @@ test('team pop: a team without an entry is refused, and a refused flag is refuse
   const bad = run(f, ['team', 'pop', '--team', 'ghost', '--agent', 'ann', '--db', 'x']);
   assert.equal(bad.status, 2); assert.match(bad.stderr, /unrecognized arguments: --db/);
 });
+
+test('no instruction of the engine tells an agent to run a team step through the plain update', async () => {
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const { TEAM_BOOL, TEAM_VALUE } = await import('../../src/shared/update.js');
+  const dir = new URL('../../src/shared/', import.meta.url);
+  const step = new RegExp(`backlog update [^\`'"\\n]*--(?:${[...TEAM_BOOL, ...TEAM_VALUE].filter(f => f !== 'by').join('|')})(?![\\w-])`);
+  for (const name of readdirSync(dir).filter(n => n.endsWith('.js') && n !== 'aliases.js')) {
+    for (const line of readFileSync(new URL(name, dir), 'utf8').split('\n')) if (!line.trimStart().startsWith('//')) assert.doesNotMatch(line, step, name);
+  }
+});

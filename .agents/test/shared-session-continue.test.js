@@ -123,7 +123,7 @@ test('082: query --plan offers the rework to the new session of the card while t
   const respond = out.split('\n').find(l => l.includes(`respond ${s}`));
   assert.ok(respond, `the plan offers the rework to the new session: ${out}`);
   assert.ok(respond.startsWith(`${A2}: respond ${s}`), respond);
-  assert.ok(respond.includes(`--claim ${A2}`), `the rework starts with the continuation claim: ${respond}`);
+  assert.ok(respond.includes(`--agent ${A2} --claim`), `the rework starts with the continuation claim: ${respond}`);
 });
 
 test('082: query --plan offers the close to the new session of the card while the earlier session still holds the item', () => {
@@ -139,7 +139,7 @@ test('082: query --plan offers the close to the new session of the card while th
   const close = out.split('\n').find(l => l.includes(`close ${s}`));
   assert.ok(close, `the plan offers the close to the new session: ${out}`);
   assert.ok(close.startsWith(`${A2}: close ${s}`), close);
-  assert.ok(close.includes(`--claim ${A2}`), `the close is preceded by the continuation claim: ${close}`);
+  assert.ok(close.includes(`--agent ${A2} --claim`), `the close is preceded by the continuation claim: ${close}`);
 });
 
 test('082: a fresh session of the card is told to claim the item before it reworks it', () => {
@@ -148,7 +148,7 @@ test('082: a fresh session of the card is told to claim the item before it rewor
   reworked(f, s); // A1 claims and asks; A2 gives the changes verdict
   const w = JSON.parse(run(f, ['team', 'pop', '--team', TEAM, '--agent', A2, '--json']).stdout);
   assert.equal(w.action, 'continue', w.instruction);
-  assert.ok(w.instruction.includes(`--claim ${A2}`), `the rework instruction starts with the continuation claim: ${w.instruction}`);
+  assert.ok(w.instruction.includes(`--agent ${A2} --claim`), `the rework instruction starts with the continuation claim: ${w.instruction}`);
   assert.ok(w.instruction.includes('--append'), `the rework steps stay after it: ${w.instruction}`);
 });
 
@@ -161,7 +161,7 @@ test('082: a fresh session of the card is told to claim the item before it close
   ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
   const w = JSON.parse(run(f, ['team', 'pop', '--team', TEAM, '--agent', A2, '--json']).stdout);
   assert.equal(w.action, 'continue', w.instruction);
-  assert.ok(w.instruction.includes(`--claim ${A2}`), `the close instruction starts with the continuation claim: ${w.instruction}`);
+  assert.ok(w.instruction.includes(`--agent ${A2} --claim`), `the close instruction starts with the continuation claim: ${w.instruction}`);
   assert.ok(w.instruction.includes('--close --summary'), `and ends with the close: ${w.instruction}`);
 });
 
@@ -179,5 +179,5 @@ test('082: the lead\'s completed-team review-and-close starts with the continuat
   const w = JSON.parse(run(f, ['team', 'pop', '--team', TEAM, '--agent', A2, '--json'], { TEAM_LEAD: A2 }).stdout);
   assert.equal(w.action, 'continue', w.instruction);
   assert.ok(w.instruction.includes(`every item of team ${TEAM} is done`), `the completed-team steps: ${w.instruction}`);
-  assert.ok(w.instruction.includes(`--claim ${A2}`), `the completed-team steps start with the continuation claim: ${w.instruction}`);
+  assert.ok(w.instruction.includes(`--agent ${A2} --claim`), `the completed-team steps start with the continuation claim: ${w.instruction}`);
 });

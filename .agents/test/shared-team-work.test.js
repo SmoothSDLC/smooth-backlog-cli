@@ -184,7 +184,7 @@ test('only the claimer closes its item, else the team lead; the close-now line n
   ok(f, ['update', job, '--claim', 'bob']);
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']);
   const r = ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
-  assert.ok(r.stdout.includes('CLOSE NOW: bob closes it') && r.stdout.includes('if the claimer has not, the team lead closes it when available (--close --by <lead>')
+  assert.ok(r.stdout.includes('CLOSE NOW: bob closes it') && r.stdout.includes('if the claimer has not, the team lead closes it when available (backlog team update')
     && !r.stdout.includes('zed closes it'), r.stdout);
   no(f, ['update', job, '--close', '--summary', 'x', '--by', 'zed'], 'only the claimer (bob) closes it, else the team lead (lead); not zed');
   ok(f, ['update', job, '--close', '--summary', 'done', '--by', 'lead']);

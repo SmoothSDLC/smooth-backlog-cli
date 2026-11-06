@@ -9,7 +9,7 @@ import * as index from './index.js';
 import { caller, isSplitSlice, missingFields } from './lifecycle.js';
 import { redact } from './safety.js';
 import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
-import { gitBranch, heldBy, strip, teamLead, teamScope, undoneDependencies } from './team.js';
+import { gitBranch, heldBy, strip, teamLead, teamScope, teamStep, undoneDependencies } from './team.js';
 import { isOpen } from './workflow.js';
 
 const clean = v => (typeof v === 'string' ? redact(v) : Array.isArray(v) ? v.map(clean) : v !== null && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)])) : v); // redacted before it is serialized
@@ -88,8 +88,8 @@ export async function run({ team, agent }, rest) {
     marked = `${step.at(-1)} --agent ${agent}`; // what was marked: the step
     // the instruction after the mark: what is left to do, not the start just done
     p.instruction = p.action === 'review'
-      ? p.instruction.replace(`start the review: backlog update ${p.item} --start-review --by ${agent}; then `, 'you started the review: ')
-      : p.instruction.replace(`refine it before anyone works on it: backlog update ${p.item} --refine-start --by ${agent}, `, 'you started refining it: ');
+      ? p.instruction.replace(`start the review: ${teamStep(p.item, agent, '--start-review')}; then `, 'you started the review: ')
+      : p.instruction.replace(`refine it before anyone works on it: ${teamStep(p.item, agent, '--refine-start')}, `, 'you started refining it: ');
   }
   let item = shown;
   if (!item && p.item && p.repository === ownRepo) {

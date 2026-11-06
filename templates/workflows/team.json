@@ -1,0 +1,134 @@
+{
+  "workflow": "team",
+  "version": 1,
+  "description": "The team workflow the backlog CLI enforces for teams of this type. A team's entry in the backlog configuration names this workflow and supplies the names: lead, members, external_reviewers, wip. Only `backlog team` commands read it.",
+  "team_entry_example": {
+    "lead": "lead-1",
+    "members": ["member-1", "member-2", "member-3"],
+    "external_reviewers": ["reviewer-1", "reviewer-2"],
+    "workflow": "team",
+    "wip": { "agent": 1, "team": 4 }
+  },
+  "statuses": [
+    "new",
+    "refining",
+    "refined",
+    "refinement review",
+    "ready",
+    "in progress",
+    "ready for review",
+    "reviewing",
+    "ready for external review",
+    "external review",
+    "review complete",
+    "closed",
+    "archived"
+  ],
+  "side_statuses": {
+    "awaiting decision": {
+      "enter": "request-decision",
+      "leave": "decision",
+      "returns_to": "previous",
+      "blocks": ["claim", "refine-start", "start-review"],
+      "blocks_dependents": true
+    }
+  },
+  "finished": ["closed", "archived"],
+  "actors": {
+    "lead": "the team entry's lead",
+    "member": "any name in the team entry's members",
+    "external": "any name in the team entry's external_reviewers",
+    "owner": "the item's owner field (the claimer)",
+    "refiner": "the item's refiner field",
+    "reviewer": "the item's reviewer field",
+    "author": "the owner and every session recorded on the item as its author"
+  },
+  "steps": {
+    "refine-start": { "from": ["new", "refining"], "to": "refining", "by": ["member"], "not_by": ["lead"], "sets": { "refiner": "actor" }, "requires": { "refiner_empty_or_actor": true, "wip": true } },
+    "refine-done": { "from": ["refining"], "to": "refined", "by": ["refiner"], "requires": { "fields_complete": ["review_refs", "depends_on", "estimate_min", "complexity", "layer"], "note": true } },
+    "request-refinement-review": { "from": ["refined"], "to": "refinement review", "by": ["lead"] },
+    "refinement-review": {
+      "from": ["refinement review"], "by": ["external"], "requires": { "comments": true },
+      "verdicts": { "complete": { "to": "ready", "clears": ["refiner"] }, "reject": { "to": "refining", "records": "finding" } },
+      "max_rounds": 3, "after_max_rounds": "request-decision"
+    },
+    "claim": { "from": ["ready", "in progress"], "to": "in progress", "by": ["member"], "not_by": ["lead"], "sets": { "owner": "actor", "claimed_at": "now" }, "requires": { "owner_empty_or_same_card": true, "dependencies_closed": true, "handoffs_accepted": true, "wip": true, "no_other_active_item": true } },
+    "release": { "from": ["in progress"], "to": "ready", "by": ["owner", "lead"], "clears": ["owner", "claimed_at"], "requires_reason_when": ["lead"] },
+    "waiting": { "from": ["in progress"], "to": "in progress", "by": ["owner"], "sets": { "wait_on": "text" } },
+    "waiting-done": { "from": ["in progress"], "to": "in progress", "by": ["owner"], "clears": ["wait_on"] },
+    "handoff": { "from": ["in progress"], "to": "in progress", "by": ["owner"], "requires": { "dependent_exists": true, "handoff_commit": true, "handoff_contract": true, "handoff_verification": true } },
+    "request-review": { "from": ["in progress"], "to": "ready for review", "by": ["owner"], "sets": { "work_commit": "head" }, "requires": { "note": true, "handoff_recorded_for_every_dependent": true }, "instruction": "end the turn: REVIEW-REQUESTED <item>" },
+    "start-review": {
+      "stages": {
+        "peer": { "from": ["ready for review", "reviewing"], "to": "reviewing", "by": ["member"], "not_by": ["author"], "requires": { "reviewer_empty_or_actor_or_stale": true } },
+        "external": { "from": ["ready for external review", "external review"], "to": "external review", "by": ["external"], "requires": { "reviewer_empty_or_actor_or_stale": true } }
+      },
+      "sets": { "reviewer": "actor", "review_started": "now" },
+      "stale_after_seconds": 1200
+    },
+    "review": {
+      "by": ["reviewer"], "requires": { "comments": true, "work_commit_unchanged": true, "not_author_session": true },
+      "stages": {
+        "peer": { "from": ["reviewing"], "verdicts": { "complete": { "to": "ready for external review" }, "reject": { "to": "in progress" } } },
+        "external": { "from": ["external review"], "verdicts": { "complete": { "to": "review complete" }, "reject": { "to": "in progress" } }, "max_rounds": 3, "after_max_rounds": "lead reviews" }
+      },
+      "on_reject": { "clears": ["reviewer", "review_started"], "records": "finding", "instruction_to_owner": "rework: the findings are in the item" },
+      "on_complete": { "records": "pass <reviewer> <work_commit>", "clears": ["reviewer", "review_started"] },
+      "instruction": "end the turn: REVIEWED <item>"
+    },
+    "reassign": { "from": ["in progress", "refining"], "to": "same", "by": ["lead"], "sets": { "owner_or_refiner": "target" }, "requires": { "reason": true } },
+    "reassign-review": { "from": ["reviewing", "external review"], "to": "same", "by": ["lead"], "sets": { "reviewer": "target" }, "requires": { "reason": true } },
+    "accept-handoff": { "from": ["review complete"], "to": "review complete", "by": ["lead"], "requires": { "checks": true } },
+    "reject-handoff": { "from": ["review complete"], "to": "in progress", "by": ["lead"], "requires": { "reason": true } },
+    "close": { "from": ["review complete"], "to": "closed", "by": ["owner", "lead"], "requires": { "summary": true, "every_handoff_accepted": true, "reason_when_lead": true }, "instruction": "end the turn: CLOSED <item>" },
+    "request-decision": { "from": ["*"], "to": "awaiting decision", "by": ["lead", "member", "external"], "requires": { "question_two_sentences_options_two_each": true } },
+    "decision": { "from": ["awaiting decision"], "to": "previous", "by": ["lead", "owner-of-the-backlog"], "requires": { "answer": true } },
+    "wip-override": { "from": ["*"], "to": "same", "by": ["lead"], "requires": { "reason": true } }
+  },
+  "review_stages_order": ["peer", "external"],
+  "skipped_stage_rule": "a stage absent from the team entry's review list is skipped: its from-status moves straight to the next stage's from-status",
+  "team_entry_review_default": [
+    { "stage": "peer", "reviewers": "members", "count": 1 },
+    { "stage": "external", "reviewers": "external_reviewers", "count": 1 }
+  ],
+  "pop": {
+    "lead": [
+      { "action": "continue", "when": "an item the lead owns that is not waiting" },
+      { "action": "refinement-review", "when": "status refined", "marks": "request-refinement-review" },
+      { "action": "external-review", "when": "status ready for external review", "marks": null },
+      { "action": "reassign-review", "when": "a review stale for stale_after_seconds" },
+      { "action": "claim", "when": "the team's first work item with status new that has no children, in priority order", "marks": "claim-for-lead" },
+      { "action": "idle", "exit": 3 }
+    ],
+    "member": [
+      { "action": "continue", "when": "a review the member started, else its item in progress not waiting, else its refinement" },
+      { "action": "close", "when": "its item in review complete with every hand-off accepted" },
+      { "action": "rework", "when": "its item returned to in progress by a reject" },
+      { "action": "review", "when": "an item in ready for review the member did not author; one older than 5 minutes first", "marks": "start-review" },
+      { "action": "refine", "when": "the first new slice of the team nobody refines", "marks": "refine-start" },
+      { "action": "claim", "when": "the first ready slice in priority order whose dependencies are closed and hand-offs accepted, within wip", "marks": "claim" },
+      { "action": "idle", "exit": 3 }
+    ],
+    "offers_only": "items whose team field equals --team, on the repository and branch of the working directory",
+    "after_handoff_steps": ["request-review", "review", "close", "refine-done"],
+    "after_handoff_instruction": "end the turn, no other command: a fresh session takes the next action"
+  },
+  "plain_commands_on_team_items": {
+    "update --status": "refused: use backlog team update",
+    "update --priority|--name|--summary|--note|--append|--set-*": "allowed",
+    "new --split-from": "allowed; the slice gets the parent's team and status new",
+    "archive": "allowed only from closed"
+  },
+  "plain_commands_outside_teams": {
+    "update --status": "free text; closed, done and archived mean finished, any other word means open",
+    "owner_default": ".backlog/config.json user",
+    "team_default": ".backlog/config.json team (empty: no team)"
+  },
+  "refusals": {
+    "team_not_configured": "team <team> is not configured in the backlog configuration",
+    "wrong_status": "<item> is <status>; <step> needs <from>",
+    "wrong_actor": "<step> on <item> is for <who>, not <actor>",
+    "missing_argument": "<step> needs --<argument>",
+    "handoff_missing": "<item> has dependents without an accepted hand-off: <list>; the producer records --handoff <dependent>, the lead --accept-handoff <dependent>"
+  }
+}

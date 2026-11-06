@@ -2,7 +2,7 @@
 // Tests run against local bare repositories only: origins under <tmp>/origins,
 // clones under <tmp>, with BACKLOG_HOME and XDG_CONFIG_HOME inside the test's
 // temp dir - never the real backlog repository or ~/.config.
-import { existsSync, mkdirSync, renameSync, rmSync, symlinkSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -64,6 +64,9 @@ export function sharedBacklog(tmp) {
   const dest = join(tmp, 'home');
   if (!existsSync(dest)) {
     git(tmp, 'clone', '-q', bare, dest);
+    // a team step needs the team's entry in the backlog's configuration; these entries ask for no review (a test that tests a review writes its own)
+    appendFileSync(join(dest, '.git', 'info', 'exclude'), 'teams.json\n'); // local configuration, not part of the published backlog
+    writeFileSync(join(dest, 'teams.json'), JSON.stringify({ t1: { review: [] }, t2: { review: [] }, t3: { review: [] }, t9: { review: [] } }));
   }
   return dest;
 }

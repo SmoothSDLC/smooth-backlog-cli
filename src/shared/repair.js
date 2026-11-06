@@ -6,6 +6,7 @@ import { say, refuse } from './archive.js';
 import { dump, parse, splitBom } from './frontmatter.js';
 import { git, itemSelector } from './safety.js';
 import * as store from './store.js';
+import { normalise } from './workflow.js';
 
 const INTEGERS = ['seq', 'size_score'];
 
@@ -55,8 +56,8 @@ export async function repairUnreadable(a, folder, bad) {
   for (const key of fields) {
     const value = INTEGERS.includes(key) ? (/^\s*[+-]?\d+\s*$/.test(a[key]) ? Number(a[key]) : null) : a[key];
     if (value === null) return refuse(`--${key} ${a[key]}: a whole number is needed`);
-    if (key === 'status' && !['pending', 'in_progress', 'done'].includes(value)) return refuse(`--status '${value}': use pending, in_progress or done`);
-    text = setField(text, key, value);
+    if (key === 'status' && !normalise(value)) return refuse('--status needs a word');
+    text = setField(text, key, key === 'status' ? normalise(value) : value);
   }
   store.writeText(abs, text, folder);
   const still = store.unreadable(folder);

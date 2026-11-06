@@ -559,7 +559,7 @@ test('075: archive of a not-done item without --force: exit 1, the exact refusal
   const before = snapshot(f);
   const r = run(f, 'archive', ['2']);
   assert.equal(r.status, 1);
-  assert.equal(r.stdout, "❌ 002-beta is 'pending', not 'done' — finish it or pass --force\n");
+  assert.equal(r.stdout, "❌ 002-beta is 'pending', not 'closed' — finish it or pass --force\n");
   assert.equal(r.stderr, '');
   assert.deepEqual(snapshot(f), before);
 });

@@ -1,7 +1,7 @@
 // The order of the backlog: one committed text file per repository folder, <folder>/index.json. The array order of each branch IS the
 // priority (P0 first); every live (non-archived) item of the branch is listed once as { seq, slug, name, status }, one entry per line so
 // git merges changes to different lines. The item files hold everything else: name and status here are copies that every read checks
-// against the item (the file is the truth for the item, the index for the order). Open (pending, in_progress) items come first.
+// against the item (the file is the truth for the item, the index for the order). Open (not finished) items come first.
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
@@ -9,8 +9,8 @@ import { hasFrontMatter } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
+import { isOpen as workflowOpen } from './workflow.js';
 
-export const ACTIONABLE = ['pending', 'in_progress'];
 export const file = folder => join(folder, 'index.json');
 export const exists = folder => existsSync(file(folder));
 
@@ -18,7 +18,7 @@ const slugOf = i => i.fm.phase || basename(i.path, '.md');
 const statusOf = i => (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending');
 const branchOf = i => String(i.fm.branch || '');
 const live = items => items.filter(i => i.path.startsWith('phases/'));
-const isOpen = e => ACTIONABLE.includes(e.status);
+const isOpen = e => workflowOpen(e.status);
 const entryOf = i => ({ seq: i.fm.seq ?? 0, slug: slugOf(i), name: i.fm.name ?? '', status: statusOf(i) });
 const bySeq = (a, b) => Number(a.fm.seq ?? 0) - Number(b.fm.seq ?? 0);
 
@@ -55,7 +55,7 @@ export function write(folder, idx) {
 export function fromItems(items) {
   const priority = i => { const n = Number(i.fm.priority ?? 50); return Number.isFinite(n) ? n : 50; };
   const by = {};
-  const sorted = live(items).sort((a, b) => ACTIONABLE.includes(statusOf(b)) - ACTIONABLE.includes(statusOf(a)) || priority(a) - priority(b) || bySeq(a, b));
+  const sorted = live(items).sort((a, b) => workflowOpen(statusOf(b)) - workflowOpen(statusOf(a)) || priority(a) - priority(b) || bySeq(a, b));
   for (const i of sorted) (by[branchOf(i)] ??= []).push(entryOf(i));
   return { branches: by };
 }
@@ -211,7 +211,7 @@ export function rows(folder, items = store.load(folder)) {
 }
 
 // The open rows in the order of the queue: priority, then number.
-export const open = list => list.filter(r => ACTIONABLE.includes(r.status)).sort((a, b) => a.priority - b.priority || a.seq - b.seq);
+export const open = list => list.filter(r => workflowOpen(r.status)).sort((a, b) => a.priority - b.priority || a.seq - b.seq);
 
 // By number (a live item before an archived one) or by slug; undefined when there is none.
 export function find(list, ident) {

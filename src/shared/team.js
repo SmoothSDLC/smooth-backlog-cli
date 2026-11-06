@@ -11,6 +11,7 @@ import * as index from './index.js';
 import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 import { load } from './store.js';
+import { SOLO, isFinished, lift } from './workflow.js';
 
 // An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true.
 // The refinement stages of a team's item; an item may be claimed when it has no stage (no team, or the team's work item,
@@ -18,8 +19,6 @@ import { load } from './store.js';
 export const isReady = fm => [undefined, null, '', 'ready'].includes(fm.stage);
 // The team lead: TEAM_LEAD, else the lead of the session's team in the backlog configuration (teams.json); no built-in name.
 export const teamLead = name => strip(name || process.env.TEAM_LEAD || teamsConfig()[teamName()]?.lead || '');
-const DONE_STATES = ['done', 'archived'];
-const ACTIONABLE = ['pending', 'in_progress'];
 
 // Python str.strip/rstrip whitespace (not JS's: \x1c-\x1f and \x85 count, a BOM does not).
 const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
@@ -74,7 +73,7 @@ function byIdent(rows, ident) {
 function itemFm(folder, row) {
   let file;
   try { file = realpathSync(resolve(folder, String(row.path))); } catch (e) { if (e.code === 'ENOENT') return {}; throw e; } // only a missing file is {}
-  return file.startsWith(realpathSync(folder) + sep) ? parse(readFileSync(file, 'utf8')).fm : {};
+  return file.startsWith(realpathSync(folder) + sep) ? lifted(parse(readFileSync(file, 'utf8'))).fm : {};
 }
 
 // All rows of the folder's items (index.rows), in file order.
@@ -144,20 +143,20 @@ export function undoneDependencies(folder, fm, rows = folderRows(folder)) {
     const f = foreignItem(folder, id);
     if (f !== undefined) {
       const dependentId = f && f.repository === (fm.repository || undefined) ? String(fm.seq) : `${fm.repository}#${fm.seq}`;
-      const handoff = f && f.status === 'done' ? edgeRefusal(f.fm, dependentId) : null;
+      const handoff = f && f.status === 'closed' ? edgeRefusal(f.fm, dependentId) : null;
       return { id, item: f && { slug: f.slug, seq: f.seq, status: f.status, repository: f.repository }, fm: f ? f.fm : {}, foreign: true, ...(handoff ? { handoff } : {}) };
     }
     const item = byIdent(rows, id);
     const producer = item ? itemFm(folder, item) : {};
-    const handoff = item && item.status === 'done' ? edgeRefusal({ ...producer, status: item.status }, String(fm.seq)) : null;
+    const handoff = item && item.status === 'closed' ? edgeRefusal({ ...producer, status: item.status }, String(fm.seq)) : null;
     return { id, item, fm: producer, ...(handoff ? { handoff } : {}) };
-  }).filter(d => !d.item || !DONE_STATES.includes(d.item.status) || d.handoff);
+  }).filter(d => !d.item || !isFinished(d.item.status) || d.handoff);
 }
 
 // the open rows of the active handoff whose file says agent holds them, on every branch, by number.
 // state: awaiting-review, waiting:<what>, active.
 export function heldItems(folder, agent, { refining = false } = {}) {
-  const rows = folderRows(folder).filter(r => ACTIONABLE.includes(r.status)).sort((x, y) => x.seq - y.seq);
+  const rows = folderRows(folder).filter(r => !isFinished(r.status)).sort((x, y) => x.seq - y.seq);
   const refines = fm => refining && !fm.claimed_by && fm.refiner === agent && fm.stage === 'refining'; // a refinement in progress is active work too
   // heldBy also matches an earlier session of the same card - the continuation is the agent's own work
   return rows.map(r => ({ ...r, fm: itemFm(folder, r) })).filter(r => heldBy(r.fm.claimed_by, agent) || refines(r.fm))
@@ -200,7 +199,6 @@ export function teamMembership(name, agent) {
   if (!team) return 'unknown';
   return isTeamMember(name, agent) ? 'member' : 'absent';
 }
-export const reviewRules = team => (Array.isArray(teamsConfig()[team]?.review) ? teamsConfig()[team].review : []).filter(r => r && typeof r === 'object' && r.team);
 export const refinementReviewRules = team => (Array.isArray(teamsConfig()[team]?.refinement_review) ? teamsConfig()[team].refinement_review : []).filter(r => r && typeof r === 'object' && r.team);
 const warned = new Set();
 const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
@@ -266,3 +264,8 @@ export function describeDependency({ id, item, fm, foreign, handoff }) {
 
 export const STOP_TEXT = 'your session is being replaced by a fresh one for your next task (you handed your item to review or '
   + 'closed it): end your turn now with a text-only reply and no other tool call';
+
+// The team entry that governs an item (its team's entry in the configuration; the solo rule for an item outside a team) and an item
+// read from its file as the word it carries (status) with the two fields the pop still asks (stage, review_state).
+export const entryOf = fm => (fm.team ? teamsConfig()[strip(String(fm.team))] : SOLO);
+export const lifted = doc => lift(doc, entryOf(doc.fm));

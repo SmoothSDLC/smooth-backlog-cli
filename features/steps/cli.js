@@ -97,7 +97,7 @@ step(/^item (\S+) body contains "([^"]*)"$/, (w, item, text) => { const v = read
 step(/^item (\S+) does not exist$/, (w, item) => { const r = w.run(['query', '--phase', item, '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.notEqual(r.status, 0, `item ${item} exists: ${r.stdout}`); });
 step(/^the queue is (\d+(?:, \d+)*)$/, (w, list) => {
   const r = w.run(['query', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r));
-  const open = (JSON.parse(r.stdout).phases ?? []).filter(p => ['pending', 'in_progress'].includes(p.status)).sort((a, b) => a.priority - b.priority).map(p => String(p.seq));
+  const open = (JSON.parse(r.stdout).phases ?? []).filter(p => !['closed', 'done', 'archived'].includes(p.status)).sort((a, b) => a.priority - b.priority).map(p => String(p.seq));
   assert.deepEqual(open, list.split(', '), r.stdout);
 });
 // The folder as an earlier release left it: the order in a priority field of each item (the last item first), no index file.
@@ -119,4 +119,4 @@ step(/^the status of item (\d+) is damaged in the backlog repository$/, (w, n) =
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'damaged'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
 });
 step(/^the backlog has an index$/, w => assert.ok(existsSync(join(w.folder(), 'index.json')), 'no index file in the backlog folder'));
-step(/^the queue is empty$/, w => { const r = w.run(['query', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r)); assert.deepEqual((JSON.parse(r.stdout).phases ?? []).filter(p => ['pending', 'in_progress'].includes(p.status)), [], r.stdout); });
+step(/^the queue is empty$/, w => { const r = w.run(['query', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r)); assert.deepEqual((JSON.parse(r.stdout).phases ?? []).filter(p => !['closed', 'done', 'archived'].includes(p.status)), [], r.stdout); });

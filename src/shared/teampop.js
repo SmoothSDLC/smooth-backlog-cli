@@ -10,9 +10,9 @@ import { caller } from './lifecycle.js';
 import { redact } from './safety.js';
 import { folder as repoFolder, repoId, resolveHome } from './store.js';
 import { gitBranch, heldBy, strip, teamLead, teamName, teamScope } from './team.js';
+import { isOpen } from './workflow.js';
 
 const BIN = process.env.BACKLOG_TEST_SELF || fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)); // the test seam: a wrapper that fails on cue
-const OPEN = ['pending', 'in_progress'];
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const self = (args, env = {}) => spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
@@ -53,12 +53,12 @@ export async function run(argv) {
   const priority = new Map(rows.map(r => [r.path, r.priority ?? 1e9]));
   const order = (x, y) => (priority.get(x.path) - priority.get(y.path)) || (Number(x.fm.seq) - Number(y.fm.seq));
   const work = items
-    .filter(i => i.path.startsWith('phases/') && strip(i.fm.team || '') === a.team && !i.fm.stage && OPEN.includes(i.fm.status)
+    .filter(i => i.path.startsWith('phases/') && strip(i.fm.team || '') === a.team && !i.fm.stage && isOpen(i.fm.status)
       && i.fm.repository === own && i.fm.branch === branch)
     .sort(order);
   const read = slug => self(['query', '--phase', slug, '--agent', agent]); // the agent's view of the item for its write
   // a work item of the team in scope, unclaimed (or the lead's): checked on the selection and again on the read before the claim
-  const ours = f => strip(f.team || '') === a.team && !f.stage && OPEN.includes(f.status) && f.repository === own && f.branch === branch;
+  const ours = f => strip(f.team || '') === a.team && !f.stage && isOpen(f.status) && f.repository === own && f.branch === branch;
   const skipped = [];
   let action = 'idle'; let item = null;
   // a refused claim is update's refusal (exit 1, '❌ <item>: <why>' on stdout); any other failure ends the command

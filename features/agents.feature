@@ -17,7 +17,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     And I run `backlog update 1 --claim alice`
     Then the command succeeds
     And item 1 has claimed_by "alice"
-    And item 1 has status "in_progress"
+    And item 1 has status "in progress"
 
   Scenario: another agent cannot take a claimed item
     Given I act as agent "alice"
@@ -86,7 +86,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     And I have read item 1
     And I run `backlog update 1 --close --summary "delivered"`
     Then the command succeeds
-    And item 1 has status "done"
+    And item 1 has status "closed"
 
   Scenario: the holder records what it waits on
     Given I act as agent "alice"

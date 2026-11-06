@@ -98,7 +98,7 @@ Feature: Team - a team lead splits a work item, members refine it, a reviewed re
     And I have read item 2
     And I run `backlog update 2 --close --summary "delivered"`
     Then the command succeeds
-    And item 2 has status "done"
+    And item 2 has status "closed"
 
   Scenario: a member acts only as itself
     Given I run `backlog new --name "Parser child" --split-from 1`

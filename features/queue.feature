@@ -63,7 +63,7 @@ Feature: Queue - priorities, dependencies, branches
   Scenario: the events of an item are kept with the item
     When I run `backlog update 1 --status in_progress --note "started"`
     Then the command succeeds
-    And item 1 has status "in_progress"
+    And item 1 has status "in progress"
     When I run `backlog query --events 1`
     Then the command succeeds
     And the output contains "started"

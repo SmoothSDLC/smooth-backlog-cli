@@ -44,7 +44,7 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item, fm(f, late).claimed_by], ['continue', early, '']);
   const child = make(f, 'child', '--split-from', early); // a split item carries a stage: the members' work, never the lead's
-  assert.equal(fm(f, child).stage, 'refining');
+  assert.equal(fm(f, child).status, 'new');
   ok(f, ['query', '--phase', early, '--agent', 'lead']); ok(f, ['update', early, '--release', 'lead']); ok(f, ['update', early, '--set-team', '']); // no longer the team's
   p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item], ['claim', late]);
@@ -155,9 +155,9 @@ test('query --status --json rows carry claimed_by and review_state', () => {
 
 test('team pop: an unclaimed in-progress work item is taken; no output names a file of the backlog', () => {
   const f = fixture();
-  const s = make(f, 'started work item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', 'lead']); ok(f, ['update', s, '--status', 'in_progress']);
-  assert.deepEqual([fm(f, s).status, fm(f, s).claimed_by], ['in_progress', '']);
+  const s = make(f, 'started work item'); ok(f, ['update', s, '--status', 'in_progress']); ok(f, ['update', s, '--set-team', 't1']);
+  ok(f, ['query', '--phase', s, '--agent', 'lead']);
+  assert.deepEqual([fm(f, s).status, fm(f, s).claimed_by], ['in progress', '']);
   const j = run(f, ['team', 'pop', '--team', 't1', '--json']); const text = run(f, ['team', 'pop', '--team', 't1']);
   assert.equal(JSON.parse(j.stdout).action, 'claim'); assert.equal(text.status, 0, text.stderr);
   for (const out of [j.stdout, j.stderr, text.stdout, text.stderr]) assert.ok(!out.includes('phases/') && !out.includes(f.home), out);

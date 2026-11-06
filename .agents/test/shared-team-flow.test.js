@@ -49,12 +49,12 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     c1 = slugOf(as('lead', ['new', '--name', 'parser child', '--split-from', w, '--depends-on', 'none']));
     c2 = slugOf(as('lead', ['new', '--name', 'printer child', '--split-from', w, '--depends-on', 'none', '--review-refs', 'docs/review/code.md',
       '--estimate', '20', '--complexity', 'low', '--body', '## Definition of done\n\n- [ ] the printer prints the sample'])); // complete at creation, still refined
-    assert.deepEqual([fm(c1).team, fm(c1).stage], ['t1', 'refining']);
+    assert.deepEqual([fm(c1).team, fm(c1).status], ['t1', 'new']);
   });
   await step('S05 --set-depends-on (the DAG)', () => { as('lead', ['update', c2, '--set-depends-on', c1]); assert.deepEqual(fm(c2).depends_on.map(String), [c1]); });
-  await step('S06 an owner question: --request-decision holds the item in review-hitl', () => {
+  await step('S06 an owner question: --request-decision holds the item awaiting a decision', () => {
     as('lead', ['update', c2, '--request-decision', 'Which printer format? Options: A, B. Recommendation: A.', '--by', 'lead']);
-    assert.equal(fm(c2).stage, 'review-hitl');
+    assert.equal(fm(c2).status, 'awaiting decision');
   });
   await step('S07 pop: a member refines first; the lead waits', () => {
     assert.deepEqual([json('ann', ['pop', '--agent', 'ann', '--json']).action], ['refine']);
@@ -65,9 +65,9 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     as('ann', ['update', c1, '--set-review-refs', 'docs/review/code.md,docs/review/tests.md', '--set-estimate', '30', '--set-complexity', 'low', '--by', 'ann']);
     as('ann', ['update', c1, '--append', '## Definition of done\n\n- [ ] the parser reads the sample', '--by', 'ann']);
   });
-  await step('S10 --refine-done', () => { as('ann', ['update', c1, '--refine-done', '--by', 'ann', '--note', 'fields and DoD set']); assert.equal(fm(c1).stage, 'refined'); });
-  await step('S11 lead: --request-refinement-review', () => { as('lead', ['update', c1, '--request-refinement-review', '--by', 'lead']); assert.equal(fm(c1).stage, 'refinement-review'); });
-  await step('S12 lead records the reviewer: --refinement-review pass --by rex', () => { as('lead', ['update', c1, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'checkable']); assert.equal(fm(c1).stage, 'ready'); });
+  await step('S10 --refine-done', () => { as('ann', ['update', c1, '--refine-done', '--by', 'ann', '--note', 'fields and DoD set']); assert.equal(fm(c1).status, 'refined'); });
+  await step('S11 lead: --request-refinement-review', () => { as('lead', ['update', c1, '--request-refinement-review', '--by', 'lead']); assert.equal(fm(c1).status, 'refinement review'); });
+  await step('S12 lead records the reviewer: --refinement-review pass --by rex', () => { as('lead', ['update', c1, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'checkable']); assert.equal(fm(c1).status, 'ready'); });
   await step('S13 query --plan gives the ready item to one member', () => {
     const p = json('lead', ['query', '--plan', '--roster', roster, '--json']);
     assert.deepEqual(p.filter(e => e.item === c1).map(e => e.action), ['claim']);
@@ -99,7 +99,6 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     as('zed', ['update', c1, '--request-review', 'any', '--note', 'commit def: empty input; hand-off recorded in the consumer item', '--by', 'zed']);
     as('ann', ['update', c1, '--start-review', '--by', 'ann']);
     as('ann', ['update', c1, '--review', 'pass', '--by', 'ann', '--comments', 'ok per docs/review/code.md']);
-    as('zed', ['update', c1, '--request-review', 'rex', '--note', 'commit def, reviewers pass', '--by', 'zed']);
     as('rex', ['update', c1, '--start-review', '--by', 'rex']);
     const r = as('rex', ['update', c1, '--review', 'pass', '--by', 'rex', '--comments', 'ok per docs/review/code.md']);
     assert.match(r.stdout, /CLOSE NOW: zed closes it/);
@@ -120,12 +119,12 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     // zed wrote c2 in S20, the lead after it: the close re-ranks c2 too, so zed reads c2 again first (stale-view guard)
     as('zed', ['query', '--phase', c2, '--agent', 'zed']);
     as('zed', ['update', c1, '--close', '--summary', 'parser done', '--by', 'zed']);
-    assert.equal(fm(c1).status, 'done');
+    assert.equal(fm(c1).status, 'closed');
   });
   await step('S22 query --decisions lists the question; --decision returns the item to the lead', () => {
     assert.ok(json('lead', ['query', '--decisions', '--json']).some(d => d.slug === c2));
     as('lead', ['update', c2, '--decision', 'A']);
-    assert.deepEqual([fm(c2).stage, fm(c2).refiner], ['refining', 'lead']);
+    assert.deepEqual([fm(c2).status, fm(c2).refiner], ['refining', 'lead']);
   });
   await step('S23 the lead re-refines with the decision, the review passes, a member works it', () => {
     as('lead', ['update', c2, '--set-review-refs', 'docs/review/code.md', '--set-estimate', '20', '--set-complexity', 'low', '--by', 'lead']);
@@ -137,7 +136,6 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     as('ann', ['update', c2, '--request-review', 'any', '--note', 'commit ghi', '--by', 'ann']);
     as('bob', ['update', c2, '--start-review', '--by', 'bob']);
     as('bob', ['update', c2, '--review', 'pass', '--by', 'bob', '--comments', 'ok per docs/review/code.md']);
-    as('ann', ['update', c2, '--request-review', 'rex', '--note', 'commit ghi, reviewers pass', '--by', 'ann']);
     as('rex', ['update', c2, '--start-review', '--by', 'rex']);
     as('rex', ['update', c2, '--review', 'pass', '--by', 'rex', '--comments', 'ok per docs/review/code.md']);
     as('ann', ['update', c2, '--close', '--summary', 'printer done', '--by', 'ann']);
@@ -148,11 +146,10 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     as('lead', ['update', w, '--request-review', 'any', '--note', 'children and their evidence', '--by', 'lead']);
     as('bob', ['update', w, '--start-review', '--by', 'bob']);
     as('bob', ['update', w, '--review', 'pass', '--by', 'bob', '--comments', 'ok per docs/review/code.md']);
-    as('lead', ['update', w, '--request-review', 'rex', '--note', 'children, reviewers pass', '--by', 'lead']);
     as('rex', ['update', w, '--start-review', '--by', 'rex']);
     as('rex', ['update', w, '--review', 'pass', '--by', 'rex', '--comments', 'ok per docs/review/code.md']);
     as('lead', ['update', w, '--close', '--summary', 'parser and printer done', '--by', 'lead']);
-    assert.equal(fm(w).status, 'done');
+    assert.equal(fm(w).status, 'closed');
   });
   assert.equal(steps.length, 25);
 });

@@ -177,7 +177,7 @@ test('059.V2: the --close and --status help blocks name the hand-off close rule,
     const flat = text.replace(/\s+/g, ' ');
     assert.match(flat, /each dependent's hand-off is recorded and accepted/, name);
     assert.match(flat, /records handoffs: none/, name);
-    assert.match(flat, /already done is not checked again/, name);
+    assert.match(flat, /already (done|closed) is not checked again/, name);
   }
 });
 

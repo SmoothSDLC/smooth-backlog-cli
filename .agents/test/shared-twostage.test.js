@@ -59,7 +59,7 @@ test('the close waits for every review rule of the team on the same work commit'
   pass(f, 'rex'); // a member of reviewers
   assert.equal(item(f).reviews.length, 2);
   assert.equal(close(f).status, 0);
-  assert.equal(item(f).status, 'done');
+  assert.equal(item(f).status, 'closed');
 });
 
 test('a changes verdict clears the passes: the rules run again', () => {

@@ -115,7 +115,7 @@ test('a bare number is the item number, never the database row id', t => {
   const r = run(f, ['2', '--status', 'in_progress']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^✅ 002-beta updated/);
-  assert.equal(fm(f, '002-beta.md').fm.status, 'in_progress');
+  assert.equal(fm(f, '002-beta.md').fm.status, 'in progress');
   assert.equal(fm(f, '001-alpha.md').fm.status, 'pending'); // row id 2 is item 1: it must not be touched
   assert.equal(fm(f, '003-gamma.md').fm.updated, '2026-10-01T00:00:00Z');
   const p = run(f, ['3', '--priority', '0']);
@@ -140,7 +140,7 @@ test('order of work: pull first, then change, write, log the event, commit and p
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   const item = fm(f, '004-delta.md').fm;
-  assert.equal(item.status, 'in_progress');
+  assert.equal(item.status, 'in progress');
   const e = store.parseEvent(item.events.at(-1));
   assert.deepEqual([e.event, e.note], ['state_change', 'go']);
   const head = git(f.home, 'show', '--stat', '--format=', 'HEAD');
@@ -438,7 +438,7 @@ test('field updates (status, location, commit, summary, name, objective, note)',
   const f = seed();
   const r = step(f, ['2', '--status', 'in_progress', '--location', 'src/a.js', '--commit', 'abc1234', '--summary', 'Neue Zusammenfassung ☕',
     '--name', 'Beta 2', '--objective', 'Obj: "quoted" it\'s', '--note', 'working on it']);
-  assert.match(r.stdout, /^✅ 002-beta updated \(status=in_progress, commit=abc1234, location=src\/a\.js, summary=/);
+  assert.match(r.stdout, /^✅ 002-beta updated \(status=in progress, commit=abc1234, location=src\/a\.js, summary=/);
   step(f, ['002-beta', '--seq', '77', '--size_score', '5']);
   step(f, ['1', '--note', 'only a note']);
   step(f, ['--size_score=3', '1']);
@@ -471,6 +471,48 @@ test('--status done completes, stamps completed, re-prioritizes and prints the p
   step(f, ['6', '--status', 'done']); // already done: completed stays
 });
 
+test('--status takes any word on an item outside a team: a free word keeps it in the queue, closed (or done) takes it out', () => {
+  const f = seed();
+  const queue = () => index.open(index.rows(f.folder).rows).map(r => r.slug);
+  assert.ok(queue().includes('001-alpha'));
+  assert.equal(step(f, ['1', '--status', 'blocked on vendor']).status, 0);
+  assert.equal(fm(f, '001-alpha.md').fm.status, 'blocked on vendor');
+  assert.ok(queue().includes('001-alpha'), 'a free-text word is open');
+  assert.equal(step(f, ['1', '--status', 'in-progress']).status, 0); // typed with a hyphen, stored as the word
+  assert.equal(fm(f, '001-alpha.md').fm.status, 'in progress');
+  bothStages(f, '2');
+  assert.equal(step(f, ['2', '--status', 'closed']).status, 0);
+  assert.ok(!queue().includes('002-beta'));
+  bothStages(f, '1');
+  assert.equal(step(f, ['1', '--status', 'done']).status, 0); // done is closed
+  assert.equal(fm(f, '001-alpha.md').fm.status, 'closed');
+  assert.ok(!queue().includes('001-alpha'));
+});
+
+test('--status on an item of a team is refused: its status moves by the team steps, and nothing is written', () => {
+  const f = seed();
+  assert.equal(step(f, ['1', '--set-team', 't1']).status, 0);
+  const before = readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8');
+  const r = step(f, ['1', '--status', 'closed']);
+  assert.equal(r.status, 1, r.stdout);
+  assert.match(r.stdout, /use backlog team update: a team item's status moves by its team steps/);
+  assert.equal(readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8'), before);
+});
+
+test('an item written with the earlier fields reads as the new word, and its first write drops stage and review_state', () => {
+  const f = seed();
+  const file = join(f.folder, 'phases', '003-gamma.md'); // status in_progress
+  const { fm: old, body } = parse(readFileSync(file, 'utf8'));
+  store.write({ path: file, fm: { ...old, review_state: 'requested' }, body }, f.folder);
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an item of an earlier build'); git(f.home, 'push', '-q');
+  const read = cli(['query', '--phase', '3', '--json'], { cwd: f.cons, tmp: f.t });
+  assert.equal(JSON.parse(read.stdout).status, 'ready for review');
+  assert.equal(step(f, ['3', '--note', 'x']).status, 0);
+  const after = fm(f, '003-gamma.md').fm;
+  assert.equal(after.status, 'ready for review');
+  assert.ok(!('stage' in after) && !('review_state' in after), JSON.stringify(after));
+});
+
 test('--replan sets the leading order by slug or number, ignores unknown names, and prints the order', () => {
   const f = seed();
   const r = step(f, ['--replan', '4,002-beta, zzz ,4']);
@@ -493,7 +535,7 @@ test('--dry-run prints the plan and changes and commits nothing', () => {
   bothStages(f, '2');
   const before = snapshot(f);
   const r = step(f, ['2', '--status', 'done', '--dry-run']);
-  assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'done', 'handoffs': 'none'\}; COMPLETE -> re-prioritize backlog\n$/);
+  assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'closed', 'handoffs': 'none'\}; COMPLETE -> re-prioritize backlog\n$/);
   step(f, ['3', '--priority', '1', '--name', "It's \"x\"", '--seq', '9', '--dry-run']);
   step(f, ['3', '--append', 'x', '--dry-run']);
   step(f, ['--replan', '3,1', '--dry-run']);

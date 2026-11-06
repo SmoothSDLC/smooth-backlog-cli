@@ -19,6 +19,7 @@ function fixture(repos = ['demo']) {
   const home = sharedBacklog(t);
   const cons = Object.fromEntries(repos.map(r => [r, consumer(t, 'acme', r, 'main')]));
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(home, 'teams.json'), JSON.stringify(Object.fromEntries(['t1', 't2'].map(n => [n, { review: [{ stage: 'peer' }] }])))); // a team is configured before its steps run
   const run = (repo, args, want = 0, env = {}) => {
     const by = args[args.indexOf('--by') + 1] || args[args.indexOf('--claim') + 1];
     if (args[0] === 'update' && (args.includes('--by') || args.includes('--claim'))) cli(['query', '--phase', args[1], '--agent', by], { cwd: cons[repo], tmp: t, env: { TEAM_LEAD: 'lead', ...env } });
@@ -148,7 +149,7 @@ test('034: an owner decision past a limit is recorded; the item then waits in re
   f.limits({ overall: 0 });
   f.run('demo', ['update', q, '--decision', 'this way']);
   const held = parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${q}.md`), 'utf8')).fm;
-  assert.deepEqual([held.stage, held.refiner], ['refining', '']);
+  assert.deepEqual([held.status, held.refiner], ['refining', '']);
   rmSync(join(f.home, 'wip-limits.json'));
   f.run('demo', ['update', r, '--decision', 'that way']);
   assert.equal(parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${r}.md`), 'utf8')).fm.refiner, 'lead'); // no limit: the lead re-refines it

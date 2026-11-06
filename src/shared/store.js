@@ -14,7 +14,8 @@ import { repoIdFromUrl } from './safety.js';
 import * as index from './index.js';
 import { actor, created, guarded } from './seen.js';
 import { CONFIG, configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
-import { asList, outsideTeam, setTeamsHome } from './team.js';
+import { asList, lifted, outsideTeam, setTeamsHome } from './team.js';
+import { derivedKeys, dropsLegacy, isOpen } from './workflow.js';
 
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //
@@ -215,9 +216,10 @@ export function recoverJournal(home) {
 // every write drops the two retired classification keys and the rank an earlier build kept in the item (the order is the index now). The
 // names are built from parts because the 049 contract greps src for the literal words; this is the one place that has to name them.
 const RETIRED_KEYS = [['work', 'class'].join('_'), ['review', 'classes'].join('_'), 'priority'];
+const LEGACY_KEYS = ['stage', 'review_state']; // the word in status says what these said; an item that carries a word does not write them
 
 export function write(item, root, { frontMatterOnly = false } = {}) {
-  item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k))) };
+  item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k) && !(LEGACY_KEYS.includes(k) && (dropsLegacy(item.fm) || derivedKeys(item.fm).has(k))))) };
   const inferred = /^(.*?)[/\\](?:phases|archive)[/\\]/.exec(item.path)?.[1];
   const base = root ?? (inferred || dirname(item.path));
   assertFolder(base);
@@ -282,7 +284,7 @@ export function load(dir) {
         const text = readFileSync(join(dir, path), 'utf8');
         const sha256 = createHash('sha256').update(text).digest('hex'); //
         if (rel === 'phases' && !hasFrontMatter(text)) continue; // a README or a stray note in phases/ is not an item: ranking it would rewrite it as an empty one (see bareFiles)
-        items.push({ path, ...readItem(path, text), sha256, sha: sha256 });
+        items.push({ path, ...lifted(readItem(path, text)), sha256, sha: sha256 });
       }
     }
   };
@@ -329,7 +331,7 @@ export function reflow(dir, move = {}) {
 // idents (slugs or item numbers, never row ids) lead their branch; the rest keeps its order. Resolves the open order of the branches they name.
 export function reorder(dir, idents) {
   const items = load(dir);
-  const open = items.filter(i => i.path.startsWith('phases/') && index.ACTIONABLE.includes(statusOf(i)) && inScope(i));
+  const open = items.filter(i => i.path.startsWith('phases/') && isOpen(statusOf(i)) && inScope(i));
   const bySlug = new Map(open.map(i => [slugOf(i), i]));
   const bySeq = new Map(open.map(i => [String(i.fm.seq), i]));
   const lead = [];

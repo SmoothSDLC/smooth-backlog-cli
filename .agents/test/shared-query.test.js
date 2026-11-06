@@ -178,7 +178,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "name": "Gamma",
       "objective": "Caf\u00e9 \u2615 Gamma",
       "summary": "sum Gamma",
-      "status": "in_progress",
+      "status": "in progress",
       "severity": "normal",
       "priority": 2,
       "path": "phases/003-gamma.md",
@@ -202,7 +202,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "name": "Delta",
       "objective": "Caf\u00e9 \u2615 Delta",
       "summary": "sum Delta",
-      "status": "done",
+      "status": "closed",
       "severity": "normal",
       "priority": 4,
       "path": "phases/004-delta.md",
@@ -327,9 +327,9 @@ test('075: --status text: the findings, the critical banner, the queue and the g
     + '        ↳ sum Beta\n'
     + '   • [  1] 001-alpha                    pending      P  1  Alpha\n'
     + '        ↳ sum Alpha\n'
-    + '   🔄 [  3] 003-gamma                    in_progress  P  2  Gamma\n'
+    + '   🔄 [  3] 003-gamma                    in progress  P  2  Gamma\n'
     + '        ↳ sum Gamma\n'
-    + '   ✅ [  4] 004-delta                    done         P  4  Delta\n'
+    + '   ✅ [  4] 004-delta                    closed       P  4  Delta\n'
     + '        ↳ sum Delta\n'
     + '   ⚠️  1 open item(s) belong to branches that no longer exist on the origin; they are in no queue. Decide for each: move to a branch (backlog move <item> --to-branch <name>), archive, or remove:\n'
     + '      - 005-feat (branch feature) Feat\n');
@@ -348,9 +348,9 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
     + '        ↳ sum Feat\n'
     + '   • [  1] 001-alpha                    pending      P  1  Alpha\n'
     + '        ↳ sum Alpha\n'
-    + '   🔄 [  3] 003-gamma                    in_progress  P  2  Gamma\n'
+    + '   🔄 [  3] 003-gamma                    in progress  P  2  Gamma\n'
     + '        ↳ sum Gamma\n'
-    + '   ✅ [  4] 004-delta                    done         P  4  Delta\n'
+    + '   ✅ [  4] 004-delta                    closed       P  4  Delta\n'
     + '        ↳ sum Delta\n');
   assert.equal(view(f, ['--status', '--branch', 'feature']).stdout,
     STATUS_FINDINGS
@@ -418,14 +418,14 @@ test('075: --phase prints the full item (row, front matter, body, missing) by sl
   const [bySlug, betaEvents] = noEvents(normJson(view(f, ['--phase', '002-beta']).stdout));
   assert.deepEqual(bySlug, beta, 'by slug');
   assert.match(betaEvents[0], /^TS planning_event - - added 002-beta at rank 0/);
-  const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal', priority: 2, path: 'phases/003-gamma.md',
-    front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in_progress', severity: 'normal' } };
+  const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal', priority: 2, path: 'phases/003-gamma.md',
+    front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal' } };
   gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
   const [byNumber, events] = noEvents(normJson(view(f, ['--phase', '3']).stdout));
   assert.deepEqual(byNumber, gamma, 'by number');
   assert.equal(events.length, 2);
   assert.match(events[0], /^TS planning_event - - added 003-gamma/);
-  assert.match(events[1], /^TS state_change main \S+ set status=in_progress$/);
+  assert.match(events[1], /^TS state_change main \S+ set status=in progress$/);
   assert.deepEqual(noEvents(normJson(view(f, ['--phase', '003']).stdout))[0], gamma, 'zero-padded numbers resolve to the same item');
   assert.match(view(f, ['--phase', 'nope'], 1).stdout, /no phase 'nope'/);
 });
@@ -483,18 +483,18 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     '  TS  review_requested branch=main commit=SHA n',
     '  TS  review_started branch=main commit=SHA set review_started=Review started by amy-a at TS',
     '  TS  review_started branch=main commit=SHA set review_started=Review started by rex at TS',
-    '  TS  reviewed       branch=main commit=SHA set reviewed=Review by amy-a: PASS (TS)',
-    '  TS  reviewed       branch=main commit=SHA set reviewed=Review by rex: PASS (TS)',
+    '  TS  reviewed       branch=main commit=SHA set reviewed=Review by amy-a: COMPLETE (TS)',
+    '  TS  reviewed       branch=main commit=SHA set reviewed=Review by rex: COMPLETE (TS)',
     '  TS  state_change   branch=main commit=SHA set estimate_min=5, review_refs=references/review/code.md',
-    '  TS  state_change   branch=main commit=SHA set status=done, handoffs=none',
-    '  TS  state_change   branch=main commit=SHA set status=in_progress',
+    '  TS  state_change   branch=main commit=SHA set status=closed, handoffs=none',
+    '  TS  state_change   branch=main commit=SHA set status=in progress',
   ]);
   assert.match(view(f, ['--events', '002-beta']).stdout, /^ {2}\S+ {2}planning_event branch= commit= added 002-beta at rank 0.*\n$/, 'one item: only its own lines');
   assert.equal(norm(view(f, ['--by-branch', 'main']).stdout),
     '  [  1] 001-alpha                    pending      commit=SHA \n'
     + '  [  2] 002-beta                     pending      commit=SHA \n'
-    + '  [  3] 003-gamma                    in_progress  commit=SHA \n'
-    + '  [  4] 004-delta                    done         commit=SHA \n'
+    + '  [  3] 003-gamma                    in progress  commit=SHA \n'
+    + '  [  4] 004-delta                    closed       commit=SHA \n'
     + '  [  6] 006-foreign                  pending      commit=SHA \n');
   assert.equal(norm(view(f, ['--by-branch', 'feature']).stdout), '  [  5] 005-feat                     pending      commit=SHA \n');
 });

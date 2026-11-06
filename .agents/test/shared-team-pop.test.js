@@ -78,11 +78,11 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
 
   let p = popLead(f); // (e) nothing for the lead: idle, with blockers
   assert.ok(p.action === 'idle' && p.item === null);
-  assert.deepEqual(p.blocked, [{ item: blocked, waiting_on: [{ id: String(Number(dep.split('-')[0])), slug: dep, status: 'in_progress', claimed_by: 'bob' }] }]);
+  assert.deepEqual(p.blocked, [{ item: blocked, waiting_on: [{ id: String(Number(dep.split('-')[0])), slug: dep, status: 'in progress', claimed_by: 'bob' }] }]);
   const text = popCli(f, [], { env: { TEAM_LEAD: 'ann' } });
   assert.equal(text.status, 3, text.stdout + text.stderr);
   assert.equal(text.stderr, '');
-  assert.equal(text.stdout, `idle\n   nothing for ann: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in_progress, claimed by bob)\n`);
+  assert.equal(text.stdout, `idle\n   nothing for ann: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in progress, claimed by bob)\n`);
   assert.equal(pop(f).action, 'idle'); // outside a team a member with nothing else is idle: no small-chunk work
   const chunk = make(f, f.cons, 'pop chunk', ['--chunk']);
   p = pop(f); // (d) the chunk item is named
@@ -120,13 +120,13 @@ test('075: the pop of an idle lead and of a claimable item prints its text and i
   const idleText = popCli(f, [], { env: { TEAM_LEAD: 'ann' } });
   assert.equal(idleText.status, 3, idleText.stdout + idleText.stderr);
   assert.equal(idleText.stderr, '');
-  assert.equal(idleText.stdout, `idle\n   nothing for ann: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in_progress, claimed by bob)\n`);
+  assert.equal(idleText.stdout, `idle\n   nothing for ann: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in progress, claimed by bob)\n`);
   // the same state as the JSON of pop: the whole document, word for word (the CLI's Python-style separators)
   const idleJson = popCli(f, ['--json'], { env: { TEAM_LEAD: 'ann' } });
   assert.equal(idleJson.status, 3, idleJson.stdout + idleJson.stderr);
   assert.equal(idleJson.stderr, '');
   assert.equal(idleJson.stdout,
-    `{"action": "idle", "item": null, "seq": null, "repository": "acme/demo", "branch": "main", "instruction": "nothing for ann: message the agents holding the blockers below, or the coordinator", "claimed": false, "blocked": [{"item": "${blocked}", "waiting_on": [{"id": "1", "slug": "${dep}", "status": "in_progress", "claimed_by": "bob"}]}], "held": []}\n`);
+    `{"action": "idle", "item": null, "seq": null, "repository": "acme/demo", "branch": "main", "instruction": "nothing for ann: message the agents holding the blockers below, or the coordinator", "claimed": false, "blocked": [{"item": "${blocked}", "waiting_on": [{"id": "1", "slug": "${dep}", "status": "in progress", "claimed_by": "bob"}]}], "held": []}\n`);
   // the claim the member gets instead: its text and JSON, exit 0
   const job = make(f, f.cons, '075 pop job', []);
   const claimText = popCli(f, [], { env: LEAD });

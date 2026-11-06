@@ -198,12 +198,12 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
-    `📋 1 reviewable item(s) — acme/demo, branch main, P0 = next:\n   P1   ${held} (in_progress) — scope held job\n        review_refs=references/review/code.md claimed_by=ada review=requested reviewer=any estimate=5m complexity=low\n`);
+    `📋 1 reviewable item(s) — acme/demo, branch main, P0 = next:\n   P1   ${held} (ready for review) — scope held job\n        review_refs=references/review/code.md claimed_by=ada review=requested reviewer=any estimate=5m complexity=low\n`);
   r = cli(['query', '--blocked'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
-    `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P2   ${blocked} (pending) — scope blocked job\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n        waits on ${held} (status in_progress, claimed by ada)\n`);
+    `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P2   ${blocked} (pending) — scope blocked job\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n        waits on ${held} (status ready for review, claimed by ada)\n`);
   r = cli(['query', '--blocked', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
@@ -251,7 +251,7 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
       {
         "id": "${Number(held.split('-')[0])}",
         "slug": "${held}",
-        "status": "in_progress",
+        "status": "ready for review",
         "claimed_by": "ada"
       }
     ]

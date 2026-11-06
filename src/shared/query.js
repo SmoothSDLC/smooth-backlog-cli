@@ -12,15 +12,14 @@ import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import * as team from './team.js';
-import { teamScope } from './team.js';
+import { lifted, teamScope } from './team.js';
 import { missingFields } from './lifecycle.js';
 import { SCOPES, teamView } from './views.js';
 import { wipView } from './wip.js';
+import { isFinished, isOpen } from './workflow.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip', 'changed'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
-const ACTIONABLE = ['pending', 'in_progress'];
-const CLOSED = ['done', 'archived'];
 
 // argparse. --events takes an optional value (const "*"); shortcut: no unique-prefix abbreviations.
 function parse(argv) {
@@ -205,7 +204,7 @@ async function query(argv) {
         return 0;
       }
       // the next item may wait on another repository's item: that is named as the work to do first
-      const away = team.undoneDependencies(folder, fms.get(r.path) ?? {}, rows).filter(d => d.foreign && d.item && d.item.status !== 'done')
+      const away = team.undoneDependencies(folder, fms.get(r.path) ?? {}, rows).filter(d => d.foreign && d.item && d.item.status !== 'closed')
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
       const skip = skipped.flatMap(s => s.deps.map(d => ({ item: s.row.slug, edge: d.id, handoff: d.handoff })));
       if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), ...(skip.length ? { skipped: skip } : {}) }); return 0; }
@@ -267,10 +266,10 @@ async function query(argv) {
     }
 
     // default / --status: the full stack
-    const every = [...rows].sort((x, y) => CLOSED.includes(x.status) - CLOSED.includes(y.status) || (x.priority ?? Infinity) - (y.priority ?? Infinity) || x.seq - y.seq);
+    const every = [...rows].sort((x, y) => isFinished(x.status) - isFinished(y.status) || (x.priority ?? Infinity) - (y.priority ?? Infinity) || x.seq - y.seq);
     const shown = every.filter(r => !excluded.has(r.id) && (a.all || ((r.repository || '') === repo && (r.branch || '') === branch)));
     // F6: open items of another branch that is no longer on the origin wait for a decision, in no queue
-    const others = every.filter(r => !excluded.has(r.id) && ACTIONABLE.includes(r.status) && r.repository === repo && r.branch !== branch);
+    const others = every.filter(r => !excluded.has(r.id) && isOpen(r.status) && r.repository === repo && r.branch !== branch);
     let gone = []; let unreadable = false;
     if (others.length && !a.all) {
       const ls = await git(['ls-remote', '--heads', 'origin'], cwd);
@@ -282,7 +281,7 @@ async function query(argv) {
     }
     if (a.json) {
       // who holds each item and whether it is in review, so no caller reads the item files for them
-      const fmOf = r => parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8')).fm;
+      const fmOf = r => lifted(parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8'))).fm;
       const teamFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
       const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(x => (x && typeof x === 'object' ? teamFields(x) : x)) : v])); // bare files stay paths
       dump({ handoff: h, repository: repo, branch: redact(branch), phases: shown.map(teamFields), gone_branch_items: gone.map(teamFields), findings: each(bad) });
@@ -294,8 +293,8 @@ async function query(argv) {
     say(`   phases (${shown.length}) — work queue order, P0 = next:`);
     let byPath;
     for (const r of shown) {
-      const mark = { done: '✅', archived: '📦', in_progress: '🔄' }[r.status] ?? '•';
-      const crit = (r.severity || 'normal') === 'critical' && ACTIONABLE.includes(r.status) ? ' ⚠️CRIT' : '';
+      const mark = { closed: '✅', done: '✅', archived: '📦', 'in progress': '🔄' }[r.status] ?? '•';
+      const crit = (r.severity || 'normal') === 'critical' && isOpen(r.status) ? ' ⚠️CRIT' : '';
       say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority ?? '-', 3)}${crit}  ${r.name}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
       // a dependency on another repository's item is shown with its state

@@ -42,7 +42,7 @@ export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry 
     let commands = 0;
     const cli = async (...args) => { const { stdout } = await exec(process.execPath, [bin, ...args], options); commands++; return stdout; };
     const json = async (...args) => JSON.parse(await cli(...args, '--json'));
-    const queue = async (...args) => (await json('query', ...args)).phases.filter(p => !['done', 'archived'].includes(p.status)).map(p => p.seq); // the open items; query lists finished ones last
+    const queue = async (...args) => (await json('query', ...args)).phases.filter(p => !['closed', 'done', 'archived'].includes(p.status)).map(p => p.seq); // the open items; query lists finished ones last
     const fail = async (code, ...args) => {
       try { await exec(process.execPath, [bin, ...args], options); assert.fail(`Expected backlog ${args.join(' ')} to be refused`); }
       catch (error) { assert.equal(error.code, code, `backlog ${args.join(' ')}: exit ${error.code}\n${error.stdout}${error.stderr}`); commands++; }
@@ -65,7 +65,7 @@ export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry 
     assert.match((await json('query', '--phase', '1')).body, /the installed commands work/);
     await fail(1, 'archive', '1');
     await cli('update', '1', '--status', 'done');
-    assert.equal((await json('query', '--phase', '1')).status, 'done');
+    assert.equal((await json('query', '--phase', '1')).status, 'closed');
     assert.match(await cli('archive', '1'), /archived/);
     assert.equal((await json('query', '--phase', '1')).status, 'archived');
     await git(['switch', '-c', 'feature']);

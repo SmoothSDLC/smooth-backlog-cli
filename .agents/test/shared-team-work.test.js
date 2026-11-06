@@ -51,7 +51,7 @@ test('query --phase shows the whole item: the row, every front matter field and 
   const j = JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout);
   assert.equal(j.slug, s);
   assert.deepEqual(j.front_matter, fm(f, s));
-  for (const k of ['review_refs', 'depends_on', 'estimate_min', 'complexity', 'claimed_by', 'review_state']) assert.ok(k in j.front_matter, k);
+  for (const k of ['review_refs', 'depends_on', 'estimate_min', 'complexity', 'claimed_by']) assert.ok(k in j.front_matter, k);
   assert.ok(j.body.includes('Body of whole item.') && j.body.includes("- [ ] the test's check holds"), j.body);
   assert.deepEqual(JSON.parse(ok(f, ['query', '--phase', s]).stdout), j); // the text view is the same object
 });
@@ -66,7 +66,7 @@ test('backlog work: the next action marked as the agent\'s (claim, refinement st
   assert.deepEqual([w.action, w.item, w.marked], ['continue', job, null]); // its own item: nothing to mark
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']);
   w = work(f, 'zed');
-  assert.deepEqual([w.action, w.item, w.marked, fm(f, job).review_state, fm(f, job).reviewer], ['review', job, `--start-review --by zed`, 'in_review', 'zed']);
+  assert.deepEqual([w.action, w.item, w.marked, fm(f, job).status, fm(f, job).reviewer], ['review', job, `--start-review --by zed`, 'reviewing', 'zed']);
   assert.ok(w.instruction.startsWith('you started the review: review the work of bob') && !w.instruction.includes('--start-review'), w.instruction);
   const parent = make(f, 'team work item');
   ok(f, ['update', parent, '--set-team', 't1']);
@@ -99,9 +99,6 @@ test('the hand-off to review, a changes verdict and a close end the agent\'s ses
   ok(f, ['update', a, '--request-review', 'any', '--note', 'commit def', '--by', 'bob']);
   r = ok(f, ['update', a, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
   assert.doesNotMatch(r.stdout, STOP); // a pass leads to the close, which ends the session
-  ok(f, ['update', a, '--request-review', 'rex', '--note', 'commit def, external stage', '--by', 'bob']);
-  ok(f, ['update', a, '--start-review', '--by', 'rex']);
-  r = ok(f, ['update', a, '--review', 'pass', '--by', 'rex', '--comments', 'fine per references/review/code.md']);
   r = ok(f, ['update', a, '--close', '--summary', 'done', '--by', 'bob']);
   assert.equal(STOP.exec(r.stdout)?.[1], 'bob');
   assert.match(r.stdout.trimEnd().split('\n').pop(), STOP); // the last line: nothing after it asks for more work
@@ -158,7 +155,7 @@ test('a member never takes over another agent\'s stale review; the lead hands it
   no(f, ['update', job, '--reassign-review', 'ann', '--by', 'bob', '--reason', 'x'], '--reassign-review --by <the team lead>');
   no(f, ['update', job, '--reassign-review', 'bob', '--by', 'lead', '--reason', 'x'], 'cannot review its own work');
   ok(f, ['update', job, '--reassign-review', 'ann', '--by', 'lead', '--reason', 'zed is stopped'], STALE);
-  assert.deepEqual([fm(f, job).review_state, fm(f, job).reviewer], ['in_review', 'ann']);
+  assert.deepEqual([fm(f, job).status, fm(f, job).reviewer], ['reviewing', 'ann']);
   assert.ok(readFileSync(join(f.folder, 'phases', `${job}.md`), 'utf8').includes('## Review reassigned by lead from zed to ann at'));
   ok(f, ['update', job, '--review', 'pass', '--by', 'ann', '--comments', 'fine per references/review/code.md']);
 });
@@ -183,15 +180,12 @@ test('only the claimer closes its item, else the team lead; the close-now line n
   const job = make(f, 'close job');
   ok(f, ['update', job, '--claim', 'bob']);
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']);
-  ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
-  ok(f, ['update', job, '--request-review', 'rex', '--note', 'commit abc, reviewers pass', '--by', 'bob']);
-  ok(f, ['update', job, '--start-review', '--by', 'rex']);
-  const r = ok(f, ['update', job, '--review', 'pass', '--by', 'rex', '--comments', 'fine per references/review/code.md']);
+  const r = ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
   assert.ok(r.stdout.includes('CLOSE NOW: bob closes it') && r.stdout.includes('if the claimer has not, the team lead closes it when available (--close --by <lead>')
     && !r.stdout.includes('zed closes it'), r.stdout);
   no(f, ['update', job, '--close', '--summary', 'x', '--by', 'zed'], 'only the claimer (bob) closes it, else the team lead (lead); not zed');
   ok(f, ['update', job, '--close', '--summary', 'done', '--by', 'lead']);
-  assert.equal(fm(f, job).status, 'done');
+  assert.equal(fm(f, job).status, 'closed');
 });
 
 test("the lead never claims, waits without polling while its team works, keeps its close and rework, and closes the work item when every item is done", () => {
@@ -211,7 +205,6 @@ test("the lead never claims, waits without polling while its team works, keeps i
   assert.equal(pl().action, 'idle');
   ok(f, ['update', kid, '--request-review', 'any', '--note', 'x', '--by', 'bob']);
   ok(f, ['update', kid, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
-  ok(f, ['update', kid, '--request-review', 'rex', '--note', 'x, reviewers pass', '--by', 'bob']);
   ok(f, ['update', kid, '--start-review', '--by', 'rex']);
   ok(f, ['update', kid, '--review', 'pass', '--by', 'rex', '--comments', 'ok per references/review/code.md']);
   ok(f, ['update', kid, '--close', '--summary', 'kid done', '--by', 'bob']);
@@ -247,9 +240,6 @@ test('the claimer never reviews its own item; a reviewed item finishes only thro
   no(f, ['update', job, '--review', 'pass', '--by', 'bob', '--comments', 'fine per references/review/code.md'], 'cannot review its own work');
   no(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine'], 'must cite at least one of the item');
   ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
-  ok(f, ['update', job, '--request-review', 'rex', '--note', 'x, reviewers pass', '--by', 'bob']);
-  ok(f, ['update', job, '--start-review', '--by', 'rex']);
-  ok(f, ['update', job, '--review', 'pass', '--by', 'rex', '--comments', 'fine per references/review/code.md']);
   ok(f, ['update', job, '--close', '--summary', 'done', '--by', 'bob']);
   const t = make(f, 'team job');
   ok(f, ['update', t, '--set-team', 't1']);
@@ -257,7 +247,6 @@ test('the claimer never reviews its own item; a reviewed item finishes only thro
   ok(f, ['update', t, '--claim', 'bob']);
   ok(f, ['update', t, '--request-review', 'any', '--note', 'x', '--by', 'bob']);
   ok(f, ['update', t, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
-  ok(f, ['update', t, '--request-review', 'rex', '--note', 'x, reviewers pass', '--by', 'bob']);
   ok(f, ['update', t, '--start-review', '--by', 'rex']);
   ok(f, ['update', t, '--review', 'pass', '--by', 'rex', '--comments', 'ok per references/review/code.md']);
   ok(f, ['update', t, '--release', 'bob']);
@@ -273,7 +262,6 @@ test("the lead's close and rework are never hidden by its team's refinement revi
   ok(f, ['update', w, '--claim', 'lead']);
   ok(f, ['update', w, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
   ok(f, ['update', w, '--review', 'pass', '--by', 'zed', '--comments', 'ok per references/review/code.md']);
-  ok(f, ['update', w, '--request-review', 'rex', '--note', 'x, reviewers pass', '--by', 'lead']);
   ok(f, ['update', w, '--start-review', '--by', 'rex']);
   ok(f, ['update', w, '--review', 'pass', '--by', 'rex', '--comments', 'ok per references/review/code.md']);
   const c = make(f, 'child', '--split-from', w);
@@ -370,7 +358,7 @@ test('a review in progress is not requested again by its holder', () => {
   ok(f, ['update', x, '--request-review', 'any', '--note', 'n', '--by', 'bob']);
   ok(f, ['update', x, '--start-review', '--by', 'zed']);
   no(f, ['update', x, '--request-review', 'any', '--note', 'again', '--by', 'bob'], 'zed is reviewing it since');
-  assert.deepEqual([fm(f, x).review_state, fm(f, x).reviewer], ['in_review', 'zed']);
+  assert.deepEqual([fm(f, x).status, fm(f, x).reviewer], ['reviewing', 'zed']);
 });
 
 test('backlog work answers only for the team caller itself', () => {

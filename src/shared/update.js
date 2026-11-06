@@ -9,6 +9,7 @@ import { BacklogError } from '../errors.js';
 import { parse as parseDoc } from './frontmatter.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { repairUnreadable } from './repair.js';
+import { isOpen, normalise } from './workflow.js';
 import { teamRefusal } from './archive.js';
 import { caller, closeNow, headline, missingFields, reviewRefusal, runCloseGate, shutdown, step } from './lifecycle.js';
 import { assertInside, checkRefs, itemSelector, redact } from './safety.js';
@@ -16,7 +17,7 @@ import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { inProgress, wipRefusal } from './wip.js';
-import { asList, foreignCycle, foreignItem, heldBy, isForeign, teamLead, teamScope } from './team.js';
+import { asList, foreignCycle, foreignItem, heldBy, isForeign, lifted, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
@@ -25,7 +26,9 @@ const BOOL = ['dry-run', 'restore'];
 export const TEAM_VALUE = ['wip-override', 'claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason', 'reassign-review',
   'handoff', 'handoff-commit', 'handoff-contract', 'handoff-verification', 'handoff-outputs', 'handoff-pickup', 'handoff-risks', 'accept-handoff', 'reject-handoff', 'checks'];
 export const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'close', 'refine-start', 'refine-done', 'request-refinement-review'];
-const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['pass', 'changes'], 'set-chunk': ['yes', 'no'], severity: ['normal', 'critical'], 'refinement-review': ['pass', 'changes', 'limit'] };
+const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], review: ['complete', 'reject'], 'set-chunk': ['yes', 'no'], severity: ['normal', 'critical'], 'refinement-review': ['complete', 'reject', 'limit'] };
+// the earlier words of a verdict are synonyms of the two words
+const VERDICT = { pass: 'complete', changes: 'reject' };
 
 // Python str.strip/rstrip whitespace (not JS's: \x1c-\x1f and \x85 count, ﻿ does not).
 const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
@@ -74,8 +77,9 @@ function parse(argv) {
       const v = eq ?? (valueLike(argv[i + 1]) ? argv[++i] : undefined);
       if (v === undefined) throw usage(`argument --${flag}: expected one argument`);
       if (flag === 'set-estimate' && pyInt(v) === null) throw usage(`argument --${flag}: invalid int value: ${pyStr(v)}`);
-      if (CHOICES[flag] && !CHOICES[flag].includes(v)) throw usage(`argument --${flag}: invalid choice: ${pyStr(v)} (choose from ${CHOICES[flag].join(', ')})`);
-      a[flag] = v;
+      const word = ['review', 'refinement-review'].includes(flag) ? VERDICT[v] ?? v : v;
+      if (CHOICES[flag] && !CHOICES[flag].includes(word)) throw usage(`argument --${flag}: invalid choice: ${pyStr(v)} (choose from ${CHOICES[flag].join(', ')})`);
+      a[flag] = word;
     } else throw usage(`unrecognized arguments: ${tok}`);
   }
   return a;
@@ -161,7 +165,7 @@ async function change(a, folder, repo) {
 
   const path = join(folder, row.path);
   await assertInside(folder, path); // no symlink between the folder and the item file
-  const { fm, body: text } = parseDoc(readFileSync(path, 'utf8'));
+  const { fm, body: text } = lifted(parseDoc(readFileSync(path, 'utf8')));
   const statusBefore = fm.status; // the close gate (059.3) runs on the pre-transition status
   // The step's effective actor, not the environment actor: only the holder asks for a review of its work, and the
   // hand-off record acts as the claimer (an earlier change, review r2: a --handoff without --by records as the claimer,
@@ -171,9 +175,14 @@ async function change(a, folder, repo) {
   a.guard = [{ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` }];
   // a new session of the same card reclaims the in-progress item (the continuation, no new work to
   // start); the active-item limit of the other items of the card still applies, checked against heldBy below
-  a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: heldBy(fm.claimed_by, a.claim) && fm.status === 'in_progress' }] : [];
+  a.claims = a.claim ? [{ folder, path: row.path, agent: a.claim, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: heldBy(fm.claimed_by, a.claim) && fm.status === 'in progress' }] : [];
   let body = text;
   const changes = {};
+  if (a.status !== undefined) {
+    if (fm.team) return refuse("use backlog team update: a team item's status moves by its team steps");
+    a.status = normalise(a.status);
+    if (a.status === 'archived') return refuse("--status 'archived': backlog archive moves a finished item to archive/");
+  }
   let moveTarget = null; // --priority is a move-to-rank, applied via reflow (stays dense)
   for (const k of SETTABLE) {
     const v = a[k];
@@ -182,8 +191,7 @@ async function change(a, folder, repo) {
     if (k === 'commit' && !strip(v)) return refuse('--commit cannot be cleared');
     let n;
     if (['priority', 'seq', 'size_score'].includes(k) && (n = pyInt(v)) === null) throw new BacklogError('INVALID_INPUT', `invalid literal for int() with base 10: ${pyStr(v)}`, 1);
-    if (k === 'status' && !['pending', 'in_progress', 'done'].includes(v)) return refuse(`--status ${pyStr(v)}: use pending, in_progress or done (backlog archive moves a finished item to archive/)`);
-    if (k === 'status' && v === 'in_progress' && fm.status !== 'in_progress') { // starting work by status is starting work
+    if (k === 'status' && v === 'in progress' && fm.status !== 'in progress') { // starting work by status is starting work
       const wip = wipRefusal(folder, repo, { ...fm, team: a['set-team'] !== undefined ? strip(a['set-team']) : fm.team }, fm.claimed_by || a.by || caller(), row.slug);
       if (wip) return refuse(`${row.slug}: ${wip}`);
     }
@@ -257,8 +265,8 @@ async function change(a, folder, repo) {
     fm.wait_on = '';
     body = `${rstrip(body)}\n\nWAIT DONE ${store.now()} (next step on the item)\n`;
   }
-  if (a.status === 'done' && event !== 'closed') {
-    // --status done is a close: the review rules of the item's team must be met for the current work commit (as --close);
+  if (a.status === 'closed' && event !== 'closed') {
+    // --status closed is a close: the review rules of the item's team must be met for the current work commit (as --close);
     // the refusal names the unmet rule. The owner's decision closes with --close --by owner --reason.
     const refusal = reviewRefusal(fm);
     if (refusal) return refuse(`${row.slug}: ${refusal}`);
@@ -273,7 +281,7 @@ async function change(a, folder, repo) {
     }
     if (gate.text) body = `${rstrip(body)}\n\n${gate.text}\n`;
   }
-  const completing = a.status === 'done' || event === 'closed';
+  const completing = a.status === 'closed' || event === 'closed';
   if (completing && !fm.completed) fm.completed = store.now();
   store.stamp(fm);
   if (a.append) body = `${rstrip(body)}\n\n${a.append}\n`;
@@ -295,7 +303,7 @@ async function change(a, folder, repo) {
   // file in every case: reflow makes the index right against the files, and writes only the index.
   const branches = [String(fm.branch || '')];
   const order = store.reflow(folder, moveTarget !== null ? { slug: row.slug, target: moveTarget, branches } : { branches });
-  const inQueue = s => ['pending', 'in_progress'].includes(s);
+  const inQueue = isOpen;
   if (moveTarget !== null) {
     changes.priority = `P${new Map(order).get(row.slug) ?? 'None'}`;
     store.addEvent(folder, row.path, { event: 'planning_event', note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
@@ -306,9 +314,9 @@ async function change(a, folder, repo) {
   }
 
   say(`✅ ${row.slug} updated (${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ') || 'body only'})`);
-  if (event === 'reviewed' && a.review === 'pass') say(closeNow(fm, row.slug));
+  if (event === 'reviewed' && a.review === 'complete') say(fm.status === 'review complete' ? closeNow(fm, row.slug) : `   ➡️  NEXT: the item is now ${fm.status}`);
   // the hand-off to review, a changes verdict and a close end the agent's session
-  const ender = event === 'review_requested' ? a.by || caller() || holder : event === 'reviewed' && a.review === 'changes' ? a.by : event === 'closed' ? a.by || holder : '';
+  const ender = event === 'review_requested' ? a.by || caller() || holder : event === 'reviewed' && a.review === 'reject' ? a.by : event === 'closed' ? a.by || holder : '';
   const ends = ender && ender !== teamLead(); // the design: these three end the agent's session (the lead is no member)
   if (completing) {
     say('   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).');

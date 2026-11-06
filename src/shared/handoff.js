@@ -9,6 +9,7 @@ import { readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { asList, strip } from './team.js';
 import { load } from './store.js';
+import { normalise } from './workflow.js';
 
 const HEX40 = /^[0-9a-f]{40}$/i; // git commit ids are hex, any case
 const empty = v => !v || !String(v).trim();
@@ -58,7 +59,7 @@ export function edgeState(producerFm, dependentId) {
   const records = decodeList(producerFm.handoffs);
   if (records === null) {
     // the codec gives null for a missing key and for a present key with no value; only the missing key is the legacy mark
-    return Object.hasOwn(producerFm, 'handoffs') ? 'missing' : producerFm.status === 'done' ? 'legacy' : 'missing';
+    return Object.hasOwn(producerFm, 'handoffs') ? 'missing' : normalise(producerFm.status) === 'closed' ? 'legacy' : 'missing';
   }
   if (!records.length) return 'missing'; // handoffs: none, or a list without a record for the dependent
   const record = records.filter(r => r && r.dependent === dependentId).at(-1);

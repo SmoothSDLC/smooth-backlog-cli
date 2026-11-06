@@ -10,7 +10,8 @@ import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { die, pyStr, refuse, say, teamRefusal, usage, valueLike, withBacklog } from './archive.js';
 import { parse as parseDoc } from './frontmatter.js';
-import { ACTIONABLE, find } from './index.js';
+import { find } from './index.js';
+import { isOpen } from './workflow.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -93,7 +94,7 @@ async function move(a, rows, ctx) {
     if (!a['to-branch']) throw usage('--all-open-of-branch needs --to-branch');
     const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
-    const open = rows.filter(r => r.branch === from && r.repository === repo && ACTIONABLE.includes(r.status));
+    const open = rows.filter(r => r.branch === from && r.repository === repo && isOpen(r.status));
     const outside = open.map(teamRefusal).find(Boolean); // before the first file is written
     if (outside) return refuse(outside);
     for (const r of open) await toBranch(folder, r, a['to-branch'], a.note || `all open items of ${from}`, ctx);

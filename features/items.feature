@@ -51,14 +51,14 @@ Feature: Items - a person creates, reads, changes and finishes backlog items
     Given an item "Progress" exists
     When I run `backlog update 1 --status in_progress --location src/login.js`
     Then the command succeeds
-    And item 1 has status "in_progress"
+    And item 1 has status "in progress"
     And item 1 has location "src/login.js"
 
   Scenario: an unfinished item is not archived without force
     Given an item "Still open" exists
     When I run `backlog archive 1`
     Then the command fails
-    And the output contains "not 'done'"
+    And the output contains "not 'closed'"
     When I run `backlog archive 1 --force`
     Then the command succeeds
     And item 1 has status "archived"

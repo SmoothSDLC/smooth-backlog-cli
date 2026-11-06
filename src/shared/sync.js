@@ -15,6 +15,7 @@ import { actor, primarySlug, publicationGuard, staleError, staleViews } from './
 import * as store from './store.js';
 import { asList, foreignCycle, foreignItem, heldBy, isForeign } from './team.js';
 import { wipRefusal } from './wip.js';
+import { isFinished, isOpen } from './workflow.js';
 
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'; // what a branch the origin does not have yet is compared with: every file is new
 const OFFLINE = '⚠️  origin offline, local backlog updates may be behind and need manual remediation later';
@@ -383,14 +384,14 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
       if (!item) reject(`${names[n]}: claimed item ${path} disappeared`);
       for (const d of asList(item.fm.depends_on)) {
         const target = isForeign(d) ? foreignItem(folders[n], d) : find(d);
-        if (!target || !['done', 'archived'].includes(isForeign(d) ? target.status : target.fm.status)) reject(`${names[n]}: ${slug(item)} dependencies not done: ${d}`);
+        if (!target || !isFinished(isForeign(d) ? target.status : target.fm.status)) reject(`${names[n]}: ${slug(item)} dependencies not done: ${d}`);
       }
       const wip = claim.reclaim ? null : wipRefusal(folders[n], names[n], item.fm, claim.agent, slug(item)); // a concurrent start elsewhere counts
       if (wip) reject(`${names[n]}: ${slug(item)}: ${wip}`);
       if (!claim.skipActiveLimit) {
         // items held by an earlier session of the same card count (the continuation keeps the
         // one-active-item rule across the card's sessions)
-        const held = items.filter(i => i !== item && i.path.startsWith('phases/') && ['pending', 'in_progress'].includes(i.fm.status ?? 'pending')
+        const held = items.filter(i => i !== item && i.path.startsWith('phases/') && isOpen(i.fm.status ?? 'pending')
           && heldBy(i.fm.claimed_by, claim.agent) && !['requested', 'in_review'].includes(i.fm.review_state) && !i.fm.wait_on);
         if (held.length) reject(`${names[n]}: ${claim.agent} holds ${held.length} active item(s): ${held.map(slug).join(', ')}; pull new work only when every item you hold waits; --force overrides`);
       }

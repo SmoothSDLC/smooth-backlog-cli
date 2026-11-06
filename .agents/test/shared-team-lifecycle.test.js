@@ -94,19 +94,20 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
   ok(job, '--request-review', 'any', '--note', 'commit abc1234, deployed evidence in run 13');
   assert.ok(refused(job, '--review', 'pass', '--by', 'ann', '--comments', 'fine').includes('cannot review its own work'));
   ok(job, '--review', 'changes', '--by', 'bob', '--comments', 'missing a test for the empty input (references/review/code.md)');
-  assert.equal(item(f, job).fm.review_state, 'changes-requested');
+  assert.equal(item(f, job).fm.status, 'in progress');
+  assert.match(item(f, job).fm.review_history.at(-1), / peer reject bob .*: missing a test for the empty input/);
   ok(job, '--request-review', 'amy', '--note', 'commit def5678 adds the test', '--by', 'ann');
   ok(job, '--review', 'pass', '--by', 'amy', '--comments', 'test present, all green (references/review/code.md)');
   ok(job, '--close', '--summary', 'feature delivered with tests');
 
   const text = readFileSync(join(f.folder, 'phases', `${job}.md`), 'utf8');
   ({ fm } = item(f, job));
-  assert.equal(fm.status, 'done');
+  assert.equal(fm.status, 'closed');
   assert.equal(fm.summary, 'feature delivered with tests');
-  assert.equal(fm.review_state, 'passed');
+  assert.ok(!('review_state' in fm) && !('stage' in fm)); // the word says it; the two earlier fields are not written
   for (const line of ['Claimed by ann at', '## Review requested by ann at', '(reviewer: any)', 'commit abc1234',
-    '## Review by bob: CHANGES REQUESTED', 'missing a test for the empty input (references/review/code.md)',
-    '## Review by amy: PASS', '## Closed by ann at']) assert.ok(text.includes(line), line);
+    '## Review by bob: REJECT', 'missing a test for the empty input (references/review/code.md)',
+    '## Review by amy: COMPLETE', '## Closed by ann at']) assert.ok(text.includes(line), line);
   const ev = query(f, ['--events', job]).stdout;
   for (const e of ['claimed', 'review_requested', 'reviewed', 'closed']) assert.ok(ev.includes(` ${e} `), `${e}: ${ev}`);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
@@ -211,7 +212,7 @@ test('team.js: held items, the claim rule, undone dependencies on a folder', () 
   assert.equal(team.claimRefusal(f.folder, 'ann'), 'ann holds 1 active item(s): 001-a; pull new work only when every item you hold waits (review requested, or backlog update <item> --waiting "<what>" --by ann); --force overrides');
   assert.equal(team.claimRefusal(f.folder, 'nobody'), null);
   const undone = team.undoneDependencies(f.folder, { depends_on: [1, '004-d', 'nothing', 5] });
-  assert.deepEqual(undone.map(d => team.describeDependency(d)), ['001-a (status in_progress, claimed by ann)', 'nothing (no such item in this backlog)', '005-e (status in_progress, claimed by bob)']);
+  assert.deepEqual(undone.map(d => team.describeDependency(d)), ['001-a (status in progress, claimed by ann)', 'nothing (no such item in this backlog)', '005-e (status in progress, claimed by bob)']);
 });
 
 test('a holder whose item file has malformed front matter still blocks a second claim: the error propagates and nothing is written', () => {
@@ -327,7 +328,7 @@ test('075: the successful lifecycle steps print exactly what they record', t => 
   step([job, '--request-review', 'any', '--note', 'ready'], `✅ ${job} updated (review_requested=Review requested by ann at TS (reviewer: any))\n${STOP('ann')}`);
   step([job, '--start-review', '--by', 'amy'], `✅ ${job} updated (review_started=Review started by amy at TS)\n`);
   step([job, '--review', 'pass', '--by', 'amy', '--comments', 'ok per references/review/code.md'],
-    `✅ ${job} updated (reviewed=Review by amy: PASS (TS))\n   ➡️  CLOSE NOW: ann closes it (backlog update ${job} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...)\n`);
+    `✅ ${job} updated (reviewed=Review by amy: COMPLETE (TS))\n   ➡️  CLOSE NOW: ann closes it (backlog update ${job} --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (--close --by <lead> --summary ...)\n`);
   step([job, '--close', '--summary', 'delivered with tests'],
     `✅ ${job} updated (summary=delivered with tests, closed=Closed by ann at TS)\n   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).\n      backlog now empty — no actionable phase remains.\n      the team lead re-evaluates the order (backlog update --replan, --priority); not you\n${STOP('ann')}`);
   const w = make(f, 'lifecycle waiting job', []);

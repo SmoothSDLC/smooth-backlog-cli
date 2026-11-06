@@ -283,7 +283,7 @@ test('059.V2: a producer with a dependent is refused --close when the edge is mi
   assert.match(r.stdout, new RegExp(`--handoff ${seq(d)} --handoff-commit`));
   assert.match(r.stdout, /A hand-off is required/);
   assert.match(r.stdout, /backlog update --help/);
-  assert.equal(fm(f, p).status, 'in_progress'); // the item is still open
+  assert.equal(fm(f, p).status, 'review complete'); // the item is still open
   assert.equal(handoffs(f, p).length, 0); // the refusal records nothing
 });
 
@@ -295,7 +295,7 @@ test('059.V2: a producer with a dependent is refused --close when the edge is un
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /edge unaccepted/);
   assert.match(r.stdout, new RegExp(`--accept-handoff ${seq(d)} --checks`));
-  assert.equal(fm(f, p).status, 'in_progress');
+  assert.equal(fm(f, p).status, 'review complete');
   assert.equal(receipts(f, p).length, 0);
 });
 
@@ -315,7 +315,7 @@ test('059.V2: a producer with a dependent is refused --close when it is stale af
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /edge stale/);
   assert.match(r.stdout, new RegExp(`--accept-handoff ${seq(d)} --checks`));
-  assert.equal(fm(f, p).status, 'in_progress');
+  assert.equal(fm(f, p).status, 'review complete');
 });
 
 test('059.V2: a producer with a dependent is refused --close when it is rejected', () => {
@@ -330,7 +330,7 @@ test('059.V2: a producer with a dependent is refused --close when it is rejected
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /edge rejected/);
   assert.match(r.stdout, new RegExp(`--handoff ${seq(d)} --handoff-commit`));
-  assert.equal(fm(f, p).status, 'in_progress');
+  assert.equal(fm(f, p).status, 'review complete');
 });
 
 test('059.V2: a producer with a dependent is refused --status done when the edge is missing', () => {
@@ -345,7 +345,7 @@ test('059.V2: a producer with a dependent is refused --status done when the edge
   assert.match(r.stdout, new RegExp(`--handoff ${seq(d)} --handoff-commit`));
   assert.match(r.stdout, /A hand-off is required/);
   assert.match(r.stdout, /backlog update --help/);
-  assert.equal(fm(f, p).status, 'in_progress'); // the item is still open
+  assert.equal(fm(f, p).status, 'review complete'); // the item is still open
   assert.equal(handoffs(f, p).length, 0);
 });
 
@@ -357,7 +357,7 @@ test('059.V2: a producer with a dependent is refused --status done when the edge
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /edge unaccepted/);
   assert.match(r.stdout, new RegExp(`--accept-handoff ${seq(d)} --checks`));
-  assert.equal(fm(f, p).status, 'in_progress');
+  assert.equal(fm(f, p).status, 'review complete');
 });
 
 test('059.V2: a producer with a dependent is refused --status done when it is stale after a re-recorded hand-off', () => {
@@ -374,7 +374,7 @@ test('059.V2: a producer with a dependent is refused --status done when it is st
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /edge stale/);
   assert.match(r.stdout, new RegExp(`--accept-handoff ${seq(d)} --checks`));
-  assert.equal(fm(f, p).status, 'in_progress');
+  assert.equal(fm(f, p).status, 'review complete');
 });
 
 test('059.V2: a producer with a dependent is refused --status done when it is rejected', () => {
@@ -389,7 +389,7 @@ test('059.V2: a producer with a dependent is refused --status done when it is re
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /edge rejected/);
   assert.match(r.stdout, new RegExp(`--handoff ${seq(d)} --handoff-commit`));
-  assert.equal(fm(f, p).status, 'in_progress');
+  assert.equal(fm(f, p).status, 'review complete');
 });
 
 test('059.V2: after the lead accepts the hand-off the producer closes', () => {
@@ -403,7 +403,7 @@ test('059.V2: after the lead accepts the hand-off the producer closes', () => {
   ok(f, ['query', '--phase', p, '--agent', 'producer']);
   const close = ok(f, ['update', p, '--close', '--summary', 'the close gate wiring', '--by', 'producer']);
   assert.match(close.stdout, /updated/);
-  assert.equal(fm(f, p).status, 'done');
+  assert.equal(fm(f, p).status, 'closed');
   const rs = receipts(f, p);
   assert.equal(rs.length, 1); // the lead's acceptance is the receipt that let the close through
   assert.equal(rs[0].result, 'accepted');
@@ -429,7 +429,7 @@ test('059.V2: a producer closed before this rule (no handoffs key) is not re-che
   reviewPass(f, p);
   ok(f, ['query', '--phase', p, '--agent', 'producer']);
   ok(f, ['update', p, '--close', '--summary', 'closed while the rule did not exist', '--by', 'producer']);
-  assert.equal(fm(f, p).status, 'done');
+  assert.equal(fm(f, p).status, 'closed');
   // a producer closed before the rule has no handoffs key: remove the one this rule records, to stand in for it
   const path = itemFile(f, p);
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^handoffs:.*\n/m, ''));
@@ -438,7 +438,7 @@ test('059.V2: a producer closed before this rule (no handoffs key) is not re-che
   ok(f, ['query', '--phase', p, '--agent', 'producer']);
   const r = ok(f, ['update', p, '--close', '--summary', 're-checked after the rule existed', '--by', 'producer']);
   assert.match(r.stdout, /updated/); // the done producer is not re-checked by the close gate
-  assert.equal(fm(f, p).status, 'done');
+  assert.equal(fm(f, p).status, 'closed');
   assert.ok(!('handoffs' in fm(f, p))); // still no key: the gate added nothing
 });
 
@@ -453,12 +453,12 @@ test('059.V2: an open producer with a dependent and no handoffs key is refused n
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /edge missing/);
   assert.doesNotMatch(r.stdout, /edge legacy/);
-  assert.equal(fm(f, p).status, 'in_progress');
+  assert.equal(fm(f, p).status, 'review complete');
   // the same call with both flags: --close is gated too, on the pre-transition status
   r = run(f, ['update', p, '--status', 'done', '--close', '--summary', 'the close gate wiring', '--by', 'producer']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /edge missing/);
   assert.doesNotMatch(r.stdout, /edge legacy/);
-  assert.equal(fm(f, p).status, 'in_progress');
+  assert.equal(fm(f, p).status, 'review complete');
   assert.equal(handoffs(f, p).length, 0);
 });

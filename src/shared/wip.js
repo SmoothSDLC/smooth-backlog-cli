@@ -30,7 +30,7 @@ function limitOf(cfg, level, key) {
   if (v && typeof v === 'object') return num(v[key] ?? v.default);
   return num(v);
 }
-export const inProgress = fm => fm.status === 'in_progress' || (fm.stage === 'refining' && fm.refiner && !fm.claimed_by && (fm.status ?? 'pending') === 'pending');
+export const inProgress = fm => fm.status === 'in progress' || (fm.status === 'refining' && fm.refiner && !fm.claimed_by);
 const holderOf = fm => fm.claimed_by || (fm.stage === 'refining' ? fm.refiner : '') || ''; // a finished refinement holds nothing
 // [{repository, slug, fm, path}] of every item in progress in the backlog home
 export function progressItems(home) {

@@ -37,7 +37,10 @@ const STAGE_OF = Object.fromEntries(ORDER.flatMap(s => TEAM.steps['start-review'
 
 // closed, done and archived are finished; every other word (a free-text word outside a team included) is open.
 export const isFinished = word => FINISHED.has(word);
-export const isOpen = word => !FINISHED.has(word);
+export const isOpen = word => word != null && !FINISHED.has(word); // an explicit null status is neither open nor finished
+const STARTED = new Set(STATUSES.slice(STATUSES.indexOf('in progress'))); // in progress and every word after it
+// Open and not yet started: what a claim or a plan may take (a refinement or review word is held back by the stage the readers derive).
+export const isUnstarted = word => isOpen(word) && !STARTED.has(word);
 // The review stage a status belongs to ('peer' or 'external'), undefined for any other status.
 export const stageOfStatus = word => STAGE_OF[word];
 
@@ -63,12 +66,13 @@ export function stageRules(entry) {
 }
 // The stages that apply to a team's entry, in the definition's order.
 export const stageList = entry => stageRules(entry).map(r => r.stage);
-const need = rule => (Number(rule.count) > 0 ? Number(rule.count) : 1);
+export const need = rule => (Number(rule.count) > 0 ? Number(rule.count) : 1);
 
 // May this reviewer pass the stage? Anyone for a solo item; the rule's team when it names one; else the entry's members (and lead) for the
 // peer stage and its external reviewers for the external one.
 const eligible = (rule, entry, by) => (rule.anyone ? Boolean(by) : rule.team ? isTeamMember(rule.team, by)
-  : rule.stage === 'peer' ? [...asList(entry?.members), entry?.lead].includes(by) : asList(entry?.external_reviewers).includes(by));
+  : rule.stage === 'peer' ? (asList(entry?.members).length ? [...asList(entry.members), entry.lead].includes(by) : Boolean(by)) // a team that lists no members lets anyone pass
+    : asList(entry?.external_reviewers).includes(by));
 
 // The distinct eligible reviewers whose pass is recorded on the item's work commit (reviews: "<reviewer> <commit>").
 export function passCount(fm, entry, rule) {
@@ -104,11 +108,13 @@ export function statusOf(fm, entry) {
 }
 
 // The two fields the readers of the pop and the views ask (stage, review_state) as a function of the word: they are never stored.
-export function legacyFields(fm) {
+function legacyFields(fm) {
   const word = fm.status;
   const last = asList(fm.review_history).at(-1) ?? '';
-  const stage = { new: Object.hasOwn(fm, 'refiner') ? 'refining' : undefined, refining: 'refining', refined: 'refined', 'refinement review': 'refinement-review', ready: 'ready', 'awaiting decision': 'review-hitl' }[word];
-  const review_state = { 'ready for review': 'requested', 'ready for external review': 'requested', reviewing: 'in_review', 'external review': 'in_review', 'review complete': 'passed' }[word]
+  const sliced = Object.hasOwn(fm, 'refiner'); // a slice carries a refiner (empty until someone refines it); a team's work item never does
+  const stage = { new: sliced ? 'refining' : undefined, refining: 'refining', refined: 'refined', 'refinement review': 'refinement-review', ready: 'ready', 'awaiting decision': 'review-hitl' }[word]
+    ?? (sliced && !FINISHED.has(word) ? 'ready' : undefined);
+  const review_state = { 'ready for review': 'requested', 'ready for external review': 'requested', reviewing: 'in_review', 'external review': 'in_review', 'review complete': 'passed', closed: asList(fm.reviews).length ? 'passed' : 'none' }[word]
     ?? (word === 'in progress' && / reject /.test(last) ? 'changes-requested' : 'none');
   return { stage, review_state };
 }
@@ -118,15 +124,28 @@ export function legacyFields(fm) {
 // the rework from it). Returns the item.
 export function lift(doc, entry) {
   const fm = doc.fm;
+  if (fm.status == null) return doc; // no status (or an explicit null): nothing to translate, the readers' own default applies
+  if (fm.stage && !Object.hasOwn(fm, 'refiner')) fm.refiner = ''; // an earlier slice: the refiner key is what marks it from here on
   fm.status = statusOf(fm, entry);
   if (!WORDS.has(fm.status)) return doc;
   if (fm.review_state === 'changes-requested' && fm.status === 'in progress' && !asList(fm.review_history).length) {
     fm.review_history = [`${fm.reviewed_at ?? ''} peer reject ${fm.reviewer ?? ''} ${fm.work_commit ?? ''}: changes requested before the history was kept`];
   }
-  const { stage, review_state } = legacyFields(fm);
-  if (stage === undefined) delete fm.stage; else fm.stage = stage;
-  fm.review_state = review_state;
+  derive(fm);
   return doc;
+}
+// The two fields follow the word.
+const ADDED = new WeakMap(); // the keys derive put on an item that did not carry them: they are never written back
+export const derivedKeys = fm => ADDED.get(fm) ?? new Set();
+function derive(fm) {
+  const { stage, review_state } = legacyFields(fm);
+  const added = ADDED.get(fm) ?? ADDED.set(fm, new Set()).get(fm);
+  for (const [k, v] of [['stage', stage], ['review_state', review_state]]) {
+    if (v === undefined) { delete fm[k]; continue; }
+    if (!Object.hasOwn(fm, k)) added.add(k);
+    fm[k] = v;
+  }
+  return fm;
 }
 // The two fields are never written once the item carries a word of the order.
 export const dropsLegacy = fm => WORDS.has(fm.status);
@@ -145,7 +164,8 @@ export function canStep(step, fm, actor, entry, stage) {
   if (fm.team && !entry) return { refuse: refusal('team_not_configured', { team: fm.team }) };
   if (!fm.team) return { ok: true };
   const leg = def.stages ? def.stages[stage] : def;
-  const from = leg?.from ?? [];
+  // a review may be recorded straight from the stage's ready word (the review then starts and ends in one call)
+  const from = step === 'review' ? [...(leg?.from ?? []), ...(TEAM.steps['start-review'].stages[stage]?.from ?? [])] : leg?.from ?? [];
   if (!from.includes('*') && !from.includes(fm.status)) return { refuse: refusal('wrong_status', { item, status: fm.status, step, from: from.join(' or ') }) };
   const external = asList(entry?.external_reviewers);
   if (stage === 'external' && external.length && !external.includes(actor)) return { refuse: refusal('wrong_actor', { step, item, who: 'an external reviewer', actor: actor || 'nobody' }) };

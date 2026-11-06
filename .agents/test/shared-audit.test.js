@@ -56,15 +56,14 @@ test('audit t4: a done item can be neither claimed nor released back into the qu
   assert.match(file, /^status: done$/m); assert.doesNotMatch(file, /claimed_by: amy/);
 });
 
-test('audit: update --status takes only pending, in_progress or done (archived and unknown words are refused, the file is unchanged)', t => {
+test('audit: update --status refuses archived (backlog archive moves a finished item), takes any other word of a plain item', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
   const file = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(file, 'utf8');
-  for (const word of ['archived', 'bogus']) {
-    const r = s.run(['update', '1', '--status', word]);
-    assert.equal(r.status, 1, out(r)); assert.match(out(r), /use pending, in_progress or done/);
-    assert.equal(readFileSync(file, 'utf8'), before); assert.equal(existsSync(join(s.folder, 'archive', '001-alpha-job.md')), false);
-  }
+  const r = s.run(['update', '1', '--status', 'archived']);
+  assert.equal(r.status, 1, out(r)); assert.match(out(r), /backlog archive moves a finished item to archive\//);
+  assert.equal(readFileSync(file, 'utf8'), before); assert.equal(existsSync(join(s.folder, 'archive', '001-alpha-job.md')), false);
+  assert.equal(s.run(['update', '1', '--status', 'bogus']).status, 0);
   assert.equal(s.run(['update', '1', '--status', 'in_progress']).status, 0);
 });
 

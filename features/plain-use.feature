@@ -15,14 +15,14 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
     Given an item "Finish me" exists
     When I run `backlog update 1 --status done`
     Then the command succeeds
-    And item 1 has status "done"
+    And item 1 has status "closed"
     And the queue is empty
 
   Scenario: a person closes their own item with a summary
     Given an item "Close me" exists
     When I run `backlog update 1 --close --summary "delivered the redirect"`
     Then the command succeeds
-    And item 1 has status "done"
+    And item 1 has status "closed"
     And item 1 body contains "delivered the redirect"
 
   Scenario: archive a finished item
@@ -40,7 +40,7 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
     And item 1 has claimed_by "alice"
     When I run `backlog update 1 --close --summary "delivered"`
     Then the command succeeds
-    And item 1 has status "done"
+    And item 1 has status "closed"
 
   Scenario: finishing a plain item closes the gap in the queue
     Given an item "A" exists

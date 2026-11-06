@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { STATUSES, SIDE, isFinished, loadWorkflow, normalise, stageList, validateWorkflow } from '../../src/shared/workflow.js';
+import { STATUSES, SIDE, isFinished, isOpen, isUnstarted, loadWorkflow, normalise, stageList, statusOf, validateWorkflow } from '../../src/shared/workflow.js';
 
 const SHIPPED = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'templates', 'workflows', 'team.json'), 'utf8'));
 const copy = () => structuredClone(SHIPPED);
@@ -67,3 +67,34 @@ broken('a side status names its steps', d => { d.side_statuses['awaiting decisio
 broken('the review stage order lists the stages the review steps use', d => { d.review_stages_order = ['peer']; }, /review_stages_order/);
 broken('every open status reaches closed', d => { d.steps.close.from = ['closed']; }, /no chain of steps leads from/);
 broken('the refusals have the five keys', d => { delete d.refusals.wrong_actor; }, /refusals must have wrong_actor/);
+
+// ---- the word of an item written before the status order (one row per line of the translation table)
+const TEAM_ENTRY = { members: ['m1', 'm2'], external_reviewers: ['x1'], review: [{ stage: 'peer', count: 1 }, { stage: 'external', count: 1 }] };
+const ROWS = [
+  ['archived', { status: 'archived', stage: 'ready' }, 'archived'],
+  ['done', { status: 'done', review_state: 'passed' }, 'closed'],
+  ['pending team item with no stage', { status: 'pending', team: 't' }, 'new'],
+  ['pending, refining, no refiner', { status: 'pending', stage: 'refining', refiner: '' }, 'new'],
+  ['pending, refining, a refiner', { status: 'pending', stage: 'refining', refiner: 'm1' }, 'refining'],
+  ['pending, refined', { status: 'pending', stage: 'refined' }, 'refined'],
+  ['pending, refinement-review', { status: 'pending', stage: 'refinement-review' }, 'refinement review'],
+  ['pending, ready', { status: 'pending', stage: 'ready' }, 'ready'],
+  ['waiting for an owner decision', { status: 'pending', stage: 'review-hitl' }, 'awaiting decision'],
+  ['in_progress, no review', { status: 'in_progress', review_state: 'none' }, 'in progress'],
+  ['in_progress, review requested', { status: 'in_progress', review_state: 'requested' }, 'ready for review'],
+  ['in_progress, in review by a member', { status: 'in_progress', review_state: 'in_review', reviewer: 'm2' }, 'reviewing'],
+  ['in_progress, in review by an external reviewer', { status: 'in_progress', review_state: 'in_review', reviewer: 'x1' }, 'external review'],
+  ['in_progress, changes requested', { status: 'in_progress', review_state: 'changes-requested' }, 'in progress'],
+  ['in_progress, passed, a stage still lacks its pass', { status: 'in_progress', review_state: 'passed', reviews: ['m1 abc'], work_commit: 'abc' }, 'ready for external review'],
+  ['in_progress, passed, every stage has its pass', { status: 'in_progress', review_state: 'passed', reviews: ['m1 abc', 'x1 abc'], work_commit: 'abc' }, 'review complete'],
+  ['pending, no team: free text as stored', { status: 'pending' }, 'pending'],
+];
+for (const [name, fm, word] of ROWS) test(`statusOf: ${name} reads as ${word}`, () => assert.equal(statusOf({ ...fm }, TEAM_ENTRY), word));
+test('statusOf: an item that already carries a word of the order is never translated again', () => {
+  for (const w of [...STATUSES, ...Object.keys(SIDE)]) assert.equal(statusOf({ status: w, stage: 'ready', review_state: 'passed' }, TEAM_ENTRY), w);
+});
+test('statusOf: a free-text word outside the order is kept as written', () => assert.equal(statusOf({ status: 'blocked on vendor' }, null), 'blocked on vendor'));
+test('open and unstarted: only closed, done and archived are finished; a started word is not unstarted', () => {
+  assert.ok(isOpen('blocked on vendor') && !isOpen('closed') && !isOpen('done') && !isOpen(null));
+  assert.ok(isUnstarted('ready') && isUnstarted('new') && isUnstarted('pending') && !isUnstarted('in progress') && !isUnstarted('review complete') && !isUnstarted('closed'));
+});

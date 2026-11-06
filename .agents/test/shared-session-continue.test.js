@@ -26,6 +26,7 @@ function fixture() {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ [TEAM]: { review: [{ stage: 'peer' }] } })); // a team is configured before its steps run
   const user = join(t, 'user');
   return { t, home, cons, user, folder: join(home, 'acme', 'demo') };
 }

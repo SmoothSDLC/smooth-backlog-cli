@@ -50,7 +50,7 @@ const plan = f => JSON.parse(ok(f, ['query', '--plan', '--agents', 'amy,ada,zed'
 test('a member cannot claim a team item without a stage: the refusal names --refine-start, and nothing is written', () => {
   const f = fixture();
   const s = teamItem(f);
-  const r = no(f, ['update', s, '--claim', 'amy'], 'not refined yet');
+  const r = no(f, ['update', s, '--claim', 'amy'], 'claim needs ready or in progress');
   assert.ok(r.stdout.includes('--refine-start --by <you>') && r.stdout.includes('refine it first'), r.stdout);
   no(f, ['update', s, '--claim', 'amy', '--force'], '--refine-start'); // --force does not pass the stages
   assert.deepEqual([fm(f, s).claimed_by, fm(f, s).stage], ['', undefined]);
@@ -75,7 +75,7 @@ test('--refine-start accepts a team item without a stage', () => {
   const f = fixture();
   const s = teamItem(f);
   ok(f, ['update', s, '--refine-start', '--by', 'amy']);
-  assert.deepEqual([fm(f, s).stage, fm(f, s).refiner], ['refining', 'amy']);
+  assert.deepEqual([fm(f, s).status, fm(f, s).refiner], ['refining', 'amy']);
 });
 
 test('pop offers an unrefined team item as refine, never as claim; query --claimable and --plan do not offer it', () => {

@@ -10,6 +10,7 @@ import { missingFields, stageOf } from './lifecycle.js';
 import { assertInside, redact } from './safety.js';
 import * as store from './store.js';
 import * as team from './team.js';
+import { isUnstarted } from './workflow.js';
 
 export const SCOPES = ['branch', 'repo', 'all'];
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
@@ -107,8 +108,8 @@ export async function teamView(a, { rows, excluded, repo, branch, folder, home, 
           if (!file || missingFields(file.fm, file.body).length) return false;
         }
         if (!team.offeredTo(fm, f, repo)) return false; // another team's item (TEAM_NAME)
-        if (a.claimable) return r.status === 'pending' && !fm.claimed_by && !undone.length && team.isReady({ stage: stageOf(fm, f === repo ? own.get(r.path)?.body : '') }) && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
-        return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) && !undone.some(d => d.foreign && d.item?.status !== 'done') : undone.length > 0; // never a review of an item before ready , nor of one waiting on another repository 
+        if (a.claimable) return isUnstarted(r.status) && !fm.claimed_by && !undone.length && team.isReady({ stage: stageOf(fm, f === repo ? own.get(r.path)?.body : '') }) && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
+        return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) && !undone.some(d => d.foreign && d.item?.status !== 'closed') : undone.length > 0; // never a review of an item before ready , nor of one waiting on another repository 
       });
     if (a.decisions) return decisionsView(found, { a, scope, repo, branch, own, say, dump });
     if (a.json) {

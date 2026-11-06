@@ -693,7 +693,7 @@ test('publication safety: upstream conflict markers abort an otherwise disjoint 
 
 for (const [name, args, change] of [
   ['required fields', ['update', '1', '--claim', 'amy'], fm => { fm.estimate_min = 0; }],
-  ['review state', ['update', '1', '--close', '--by', 'amy', '--summary', 'delivered'], fm => { fm.review_state = 'changes-requested'; }],
+  ['review state', ['update', '1', '--close', '--by', 'amy', '--summary', 'delivered'], fm => { fm.status = 'in progress'; }],
   ['claim ownership', ['update', '1', '--claim', 'amy'], fm => { fm.claimed_by = 'bob'; }],
   ['team scope of a split parent', [...COMPLETE('child'), '--split-from', '1'], fm => { fm.branch = 'other'; }],
 ]) test(`publication read set: concurrent ${name} changes cannot pass earlier validation`, async t => {

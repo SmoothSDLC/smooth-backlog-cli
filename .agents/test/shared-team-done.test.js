@@ -34,7 +34,7 @@ const status = f => parse(readFileSync(f.file, 'utf8')).fm.status;
 const TEAM = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
 const asTeam = (f, agent, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { ...TEAM, BACKLOG_AGENT: agent, BACKLOG_SESSION: '' } });
 
-test('--status done is refused on a team item until the review rules of its team are met', () => {
+test('--status done is refused on a team item: its status moves by the team steps', () => {
   const f = fixture('reviewed job', ['--review-refs', 'docs/review/code.md']);
   writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { lead: 'lead', members: ['ann'], review: [{ team: 'reviewers', count: 1 }] }, reviewers: { lead: 'rex', members: ['rex', 'ria'] } }));
   const set = asTeam(f, 'lead', [f.slug, '--set-team', 't1']);
@@ -43,8 +43,8 @@ test('--status done is refused on a team item until the review rules of its team
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
   const r = asTeam(f, 'lead', [f.slug, '--status', 'done']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.ok(r.stdout.includes('reviewers'), r.stdout);
-  assert.equal(status(f), 'in_progress');
+  assert.ok(r.stdout.includes("use backlog team update: a team item's status moves by its team steps"), r.stdout);
+  assert.equal(status(f), 'in progress');
 });
 
 test('--status done on an old teamless item without review_refs closes it without a review', () => {
@@ -54,5 +54,5 @@ test('--status done on an old teamless item without review_refs closes it withou
   writeFileSync(f.file, dump(fm, body));
   const r = update(f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(status(f), 'done');
+  assert.equal(status(f), 'closed');
 });

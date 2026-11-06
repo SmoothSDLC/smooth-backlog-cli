@@ -47,17 +47,17 @@ test('the runner sets the team on the work item and claims it for the lead; --se
   assert.equal(fm(f, w).team, '');
 });
 
-test('backlog new --team writes the team and starts the item in stage refining; --split-from inherits the team', () => {
+test('backlog new --team writes the team and starts the item as new; --split-from inherits the team', () => {
   const f = fixture();
   const w = make(f, 'team work item');
   ok(f, ['update', w, '--set-team', 't1']);
   const a = make(f, 'child a', '--split-from', w);
-  assert.deepEqual([fm(f, a).team, fm(f, a).stage, fm(f, a).refiner], ['t1', 'refining', '']); // inherited
+  assert.deepEqual([fm(f, a).team, fm(f, a).status, fm(f, a).refiner], ['t1', 'new', '']); // inherited
   assert.notEqual(pop(f, 'lead', { TEAM_NAME: 't1' }).action, 'claim'); // the lead never claims a split item
   const b = make(f, 'child of another team', '--split-from', w, '--team', 't2');
   assert.equal(fm(f, b).team, 't2'); // --team wins over the inherited team
   const c = make(f, 'other team item', '--team', 't2');
-  assert.deepEqual([fm(f, c).team, fm(f, c).stage], ['t2', 'refining']);
+  assert.deepEqual([fm(f, c).team, fm(f, c).status], ['t2', 'new']);
   const plain = make(f, 'no team');
   assert.ok(!('team' in fm(f, plain)) && !('stage' in fm(f, plain)));
   const s = make(f, 'split of an item without team', '--split-from', plain);
@@ -66,6 +66,7 @@ test('backlog new --team writes the team and starts the item in stage refining; 
 
 test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimable, --reviewable and --blocked', () => {
   const f = fixture();
+  writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] }, t2: { review: [{ stage: 'peer' }] } })); // a review is asked for in both teams
   const [mine, theirs, none] = ['t1 job', 't2 job', 'job without team'].map(n => make(f, n));
   ok(f, ['update', mine, '--set-team', 't1']);
   ok(f, ['update', theirs, '--set-team', 't2']);

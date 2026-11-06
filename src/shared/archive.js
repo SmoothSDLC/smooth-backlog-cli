@@ -96,7 +96,7 @@ async function archive(a, rows, { repo, folder, guard }) {
   const outside = teamRefusal(row);
   if (outside) return refuse(outside);
   if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived`); return 0; }
-  if (row.status !== 'done' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'done' — finish it or pass --force`);
+  if (row.status !== 'closed' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'closed' — finish it or pass --force`);
 
   const src = join(folder, row.path);
   await assertInside(folder, src); // the file is inside the folder, no symlink on the way

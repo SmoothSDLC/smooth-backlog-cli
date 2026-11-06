@@ -18,7 +18,7 @@ Feature: Integrity - every interaction updates from the origin first, publishes 
     When I run `backlog update 1 --status in_progress`
     Then the command succeeds
     And the backlog repository has no uncommitted or unpushed change
-    And another checkout sees item 1 with status "in_progress"
+    And another checkout sees item 1 with status "in progress"
 
   Scenario: a write on a stale view is rejected and the current content is shown
     Given I act as agent "ann"

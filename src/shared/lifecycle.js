@@ -6,18 +6,24 @@ import { spawnSync } from 'node:child_process';
 import { hasDefinitionOfDone } from './new.js';
 import { actor } from './seen.js';
 import { wipRefusal } from './wip.js';
+import { canStep, isFinished, need, next, passCount, stageOfStatus, stageRules, stageSatisfied } from './workflow.js';
 import { now } from './store.js';
 import { acceptHandoff, recordHandoff, rejectHandoff } from './handoff-commands.js';
 import { openEdges } from './handoff.js';
 import { closeGate } from './handoff-close.js';
 import {
-  offeredTo, teamName, isTeamMember, refinementReviewRules, reviewRules,
+  entryOf, offeredTo, teamName, isTeamMember, refinementReviewRules,
   asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, outsideTeam, reviewOpenTo, strip,
   staleReview, teamLead, teamScope, undoneDependencies,
 } from './team.js';
 
 export class Rejected extends Error {}
-const reject = message => { throw new Rejected(message); };
+const reject = (message, whole = false) => { throw Object.assign(new Rejected(message), { whole }); }; // whole: the text already names the item
+// The workflow's gate of a step: the team needs its entry and the item a status the step starts from. The refusal is the whole message.
+const gate = (step, fm, who, stage, hint = '') => { const c = canStep(step, fm, who, entryOf(fm), stage); if (c.refuse) reject(c.refuse + hint, true); };
+const oneLine = text => String(text ?? '').replace(/\s+/g, ' ').trim();
+// The item's record of a review: "<ts> <stage> <verdict> <by> <commit>: <comments>".
+const historyLine = (fm, t, stage, verdict, by, commit, comments) => [...asList(fm.review_history), `${t} ${stage} ${verdict} ${by} ${commit}: ${oneLine(comments)}`];
 // The rule is per session (the agent name is the session name); a new session of the same worker is a new name.
 const NO_SELF_REVIEW = by => `${by}: the same session cannot review its own work; a new session may`;
 // The item's list of every session name that claimed it or asked for its review; append, no duplicates.
@@ -62,7 +68,7 @@ export const stageOf = (fm, body) => fm.stage || (fm.team || (isSplitSlice(body)
 
 export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   const who = fm.claimed_by || ''; const t = now();
-  if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); //
+  if (isFinished(fm.status)) reject(`status is ${fm.status}; a finished item cannot be claimed`); //
   // a split slice with no team is claimed by the team that refined it - the dispatch offers the slice's refinement to the
   // team's members, and the claim joins the slice to the claiming session's team, so the slice belongs to that team from on.
   // A plain teamless item (no split marker) stays outside the session's team.
@@ -75,12 +81,17 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
       : `the item belongs to no team; this session's team ${teamName()} (TEAM_NAME) claims only its own team's items here`);
   }
   if (agent === teamLead() && fm.team && fm.stage) reject(`the team lead (${agent}) never claims an item of its team's split; a member claims it`);
-  if (fm.stage === 'review-hitl') reject('the item waits in stage review-hitl for an owner decision; nobody claims it, --force included (backlog update <item> --decision "<answer>" first)');
+  // the team lead's claim of its team's work item (backlog team pop, to split it) is the one claim from the status new
+  const leadsWork = agent === teamLead() && fm.team && !fm.stage && !isSplitSlice(body);
+  if (!leadsWork) {
+    gate('claim', fm, agent, undefined, fm.status === 'awaiting decision' ? `; nobody claims it, --force included (backlog update ${fm.phase || '<item>'} --decision "<answer>" first)`
+      : ['new', 'refining'].includes(fm.status) && !fm.refiner ? `; refine it first: backlog update ${fm.phase || '<item>'} --refine-start --by <you>` : '');
+  }
   // beyond the earlier scripts, --force does not pass the stages.
   // a split slice is in stage refining with or without a team field, so the gate covers it too; a slice
   // created before the stage field existed has no stage, and the body's split marker names it as refining.
   // the team lead's own claim of its team's work item (backlog team pop, to split it) is the one claim of an unrefined item; a split slice is never it
-  const stage = agent === teamLead() && fm.team && !fm.stage && !isSplitSlice(body) ? undefined : stageOf(fm, body);
+  const stage = leadsWork ? undefined : stageOf(fm, body);
   if (!isReady({ stage })) reject(`team ${fm.team || 'none'} item in stage ${stage || 'none'}${fm.stage ? '' : ' (not refined yet)'}: it is claimed only when its refinement review passed (stage ready)`
     + (stage === 'refining' && !fm.refiner ? `; refine it first: backlog update ${fm.phase || '<item>'} --refine-start --by <you>` : ''));
   // a new session of the same card continues the item (no takeover, no lead reassignment): the
@@ -91,14 +102,14 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   if (undone.length) reject(`dependencies not done: ${undone.map(describeDependency).join('; ')}`);
   const refusal = cont ? null : claimRefusal(folder, agent);
   if (refusal && !force) reject(refusal);
-  const wip = cont && fm.status === 'in_progress' ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // --force never passes a limit; a reclaim of a pending item is a start
+  const wip = cont && fm.status === 'in progress' ? null : wipRefusal(folder, repo, fm, agent, fm.phase); // --force never passes a limit; a reclaim of a pending item is a start
   if (wip) reject(wip);
   // the claiming session joins the list; the write seeds it from the current holder and the review
   // requester, so an item without session_authors (written before the list existed) keeps the self-review block
   // of its earlier authors when the new session takes over claimed_by (a continuation keeps the earlier holder).
   // the claim's session becomes the author session - an agent review by that same session is refused (the
   // same card reviews only in a fresh session).
-  Object.assign(fm, { status: 'in_progress', claimed_by: agent, claimed_at: t, session_authors: seededAuthors(fm, agent), author_session: callerSession() });
+  Object.assign(fm, { status: next('claim', fm, entryOf(fm)), claimed_by: agent, claimed_at: t, session_authors: seededAuthors(fm, agent), author_session: callerSession() });
   return { event: 'claimed', text: `Claimed by ${agent} at ${t} repository=${repo} branch=${gitBranch(process.cwd()) || '(detached)'} cwd=${process.cwd()}${refusal ? ` (--force past the claim rule: ${refusal.split(';')[0]})` : ''}` };
 }
 
@@ -122,24 +133,27 @@ export function refineStart({ fm, folder, repo, body = '' }, by, { force } = {})
   if (busy && !force) reject(busy);
   const wip = fm.refiner === by ? null : wipRefusal(folder, repo, fm, by, fm.phase);
   if (wip) reject(wip);
+  gate('refine-start', fm, by);
   const t = now();
-  Object.assign(fm, { stage: 'refining', refiner: by, refine_started: t }); // the stage: a slice without one (created before it existed) gets it here
+  Object.assign(fm, { status: next('refine-start', fm, entryOf(fm)), refiner: by, refine_started: t });
   return { event: 'refine_started', text: `Refinement started by ${by} at ${t}` };
 }
 
 export function refineDone({ fm }, by, note) {
   if (!by || fm.refiner !== by || fm.stage !== 'refining') reject(`--refine-done --by <the refiner>: refiner is ${fm.refiner || 'nobody'}, stage ${fm.stage || 'none'}`);
+  gate('refine-done', fm, by);
   if (!strip(note || '')) reject('--refine-done needs --note "<what you refined>"');
   const t = now();
-  Object.assign(fm, { stage: 'refined', refined_at: t });
+  Object.assign(fm, { status: next('refine-done', fm, entryOf(fm)), refined_at: t });
   return { event: 'refined', text: `## Refined by ${by} at ${t}\n\n${note}` };
 }
 
 export function requestRefinementReview({ fm }, by) {
   if (!by || by !== teamLead()) reject(`--request-refinement-review --by <the team lead>: the lead (${teamLead() || 'none configured'}; TEAM_LEAD) sends a refined item to the refinement review (got ${by || 'none'})`);
   if (fm.stage !== 'refined') reject(`only a refined item goes to the refinement review (stage ${fm.stage || 'none'})`);
+  gate('request-refinement-review', fm, by);
   const t = now();
-  Object.assign(fm, { stage: 'refinement-review', refinement_review_requested_at: t });
+  Object.assign(fm, { status: next('request-refinement-review', fm, entryOf(fm)), refinement_review_requested_at: t });
   return { event: 'refinement_review_requested', text: `Refinement review requested by ${by} at ${t}` };
 }
 
@@ -151,10 +165,12 @@ export function refinementReview({ fm }, verdict, { by, comments } = {}) {
   if (rules.length && !rules.some(r => isTeamMember(r.team, by))) reject(`--refinement-review --by ${by}: the refinement of team ${fm.team} is reviewed by a member of ${rules.map(r => r.team).join(' or ')} (teams.json)`);
   if (fm.stage !== 'refinement-review') reject(`no refinement review is requested (stage ${fm.stage || 'none'})`);
   if (!strip(comments || '')) reject('--refinement-review needs --comments "<the reviewer\'s findings, and its thread or session id>"');
+  gate('refinement-review', fm, by);
   const t = now();
-  const passed = verdict === 'pass';
-  Object.assign(fm, { stage: passed ? 'ready' : 'refining', refiner: passed ? fm.refiner || '' : '', refinement_reviewed_by: by, refinement_reviewed_at: t });
-  return { event: 'refinement_reviewed', text: `## Refinement review by ${by}: ${passed ? 'PASS: ready' : 'CHANGES: back to refining'} (${t})\n\n${comments}` };
+  const passed = verdict === 'complete';
+  Object.assign(fm, { status: next('refinement-review', fm, entryOf(fm), passed ? 'complete' : 'reject'), refiner: passed ? fm.refiner || '' : '', refinement_reviewed_by: by, refinement_reviewed_at: t,
+    ...(passed ? {} : { refinement_reviews: [...asList(fm.refinement_reviews), `${t} reject ${by}: ${oneLine(comments)}`] }) });
+  return { event: 'refinement_reviewed', text: `## Refinement review by ${by}: ${passed ? 'COMPLETE: ready' : 'REJECT: back to refining'} (${t})\n\n${comments}` };
 }
 
 // Beyond the earlier scripts: an item whose refinement needs an owner decision waits in stage
@@ -164,8 +180,9 @@ export function requestDecision({ fm }, by, question) {
   if (!by) reject('--request-decision needs --by <agent>');
   if (!fm.team || !BEFORE_READY.includes(fm.stage)) reject(`only a team item before ready waits for an owner decision (${inStage(fm)})`);
   if (!strip(question || '')) reject('--request-decision needs the question: what, why, how it came up, the options and a recommendation');
+  gate('request-decision', fm, by);
   const t = now();
-  Object.assign(fm, { stage: 'review-hitl', decision_requested_by: by, decision_requested_at: t, decision_question: question, refiner: '' }); // the question in the front matter: --decisions lists it whole
+  Object.assign(fm, { status: next('request-decision', fm, entryOf(fm)), decision_from: fm.status, decision_requested_by: by, decision_requested_at: t, decision_question: question, refiner: '' }); // the question in the front matter: --decisions lists it whole
   return { event: 'decision_requested', text: `## Owner decision needed (asked by ${by} at ${t})\n\n${question}` };
 }
 
@@ -176,19 +193,25 @@ export function decision({ fm, folder, repo }, answer) {
   // the design: the lead re-refines it with the decision; past a work-in-progress limit  the answer is recorded
   // all the same and the item waits in refining for whoever may start it (the owner's answer is never refused)
   const full = folder ? wipRefusal(folder, repo, { ...fm, stage: 'refining', refiner: '' }, teamLead(), fm.phase) : null;
-  Object.assign(fm, { stage: 'refining', refiner: full ? '' : teamLead(), refine_started: full ? '' : t, decided_at: t, decision_question: '' });
+  gate('decision', fm, teamLead());
+  delete fm.decision_from; // the lead re-refines it, whatever the status was before the question
+  Object.assign(fm, { status: 'refining', refiner: full ? '' : teamLead(), refine_started: full ? '' : t, decided_at: t, decision_question: '' });
   return { event: 'decided', text: `DECISION ${t.slice(0, 10)}: ${answer}${full ? `\n(no refiner yet: ${full})` : ''}` };
 }
 
 export function release({ fm }, agent, { by, reason } = {}) {
   const who = fm.claimed_by || '';
-  if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item cannot be released into the queue`);
+  if (isFinished(fm.status)) reject(`status is ${fm.status}; a finished item cannot be released into the queue`);
   if (who !== agent) reject(`claimed by ${who || 'nobody'}, not by ${agent}`);
+  // an item in a review keeps its review word when its holder lets go (the lead closes a reviewed item nobody holds)
+  const inReview = Boolean(stageOfStatus(fm.status)) || fm.status === 'review complete';
+  gate('release', inReview ? { ...fm, status: 'in progress' } : fm, by || agent);
+  // a team's work item (it has no refiner: it is split, not refined) goes back as it was claimed, unrefined
   // only the team lead gives back another agent's item, and says why
   if (by && by !== agent && (by !== teamLead() || !strip(reason || ''))) reject(`${by} cannot release ${agent}'s item: only the team lead (${teamLead()}) does, with --reason "<why>"`);
   // the release clears claimed_by but keeps the holder in session_authors (seeded for an item written
   // before the list existed), so the holder's self-review block stands after the release.
-  Object.assign(fm, { status: 'pending', claimed_by: '', claimed_at: '', session_authors: seededAuthors(fm, ''), ...(fm.wait_on ? { wait_on: '' } : {}) }); // beyond parity: a wait belongs to the holder; left behind it hides the item from pop's continue AND offers it as a claim
+  Object.assign(fm, { status: inReview ? fm.status : fm.team ? (Object.hasOwn(fm, 'refiner') ? next('release', fm, entryOf(fm)) : 'new') : 'pending', claimed_by: '', claimed_at: '', session_authors: seededAuthors(fm, ''), ...(fm.wait_on ? { wait_on: '' } : {}) }); // beyond parity: a wait belongs to the holder; left behind it hides the item from pop's continue AND offers it as a claim
   return { event: 'released', text: by && by !== agent ? `Released by ${by} for ${agent} at ${now()}: ${reason}` : `Released by ${agent} at ${now()}` };
 }
 
@@ -196,7 +219,7 @@ export function release({ fm }, agent, { by, reason } = {}) {
 export function reassign({ fm }, agent, { by, reason } = {}) {
   if (!by || by !== teamLead()) reject(`--reassign --by <the team lead>: only the lead (${teamLead()}; TEAM_LEAD) gives one agent's item to another (got ${by || 'none'})`);
   if (!strip(reason || '')) reject('--reassign needs --reason "<why>"');
-  if (['done', 'archived'].includes(fm.status)) reject(`status is ${fm.status}; a finished item is not reassigned`);
+  if (isFinished(fm.status)) reject(`status is ${fm.status}; a finished item is not reassigned`);
   const from = fm.claimed_by || '';
   if (!from) reject('nobody holds the item: the agent claims it (backlog update <item> --claim <agent>)');
   if (from === agent) reject(`${agent} holds it already`);
@@ -216,7 +239,7 @@ export function reassignReview({ fm }, agent, { by, reason } = {}) {
   if (isReviewAuthor(fm, agent)) reject(NO_SELF_REVIEW(agent));
   const from = fm.review_state === 'in_review' ? fm.reviewer || '' : '';
   const t = now();
-  Object.assign(fm, { review_state: 'in_review', reviewer: agent, review_started: t });
+  Object.assign(fm, { status: stageOfStatus(fm.status) === 'external' ? 'external review' : 'reviewing', reviewer: agent, review_started: t });
   return { event: 'review_reassigned', text: `## Review reassigned by ${by} from ${from || 'nobody'} to ${agent} at ${t}\n\n${reason}` };
 }
 
@@ -265,18 +288,17 @@ const passes = fm => asList(fm.reviews).map(x => { const [by, commit] = String(x
 // <team> on the item's current work commit. '' when every rule is met, or when the item has no team or its team no rule;
 // else the refusal naming the first unmet rule. New work of the item after its review request fails the check.
 export const reviewRefusal = (fm, cwd) => {
-  const rules = reviewRules(fm.team);
+  const entry = fm.team ? entryOf(fm) : null;
+  const rules = stageRules(entry);
   if (!rules.length) return '';
   const head = fm.work_commit || workCommit(cwd);
   if (!head) return `team ${fm.team}: the review rules need a work commit; request the review from the repository (--request-review)`;
   const look = laterOwnWork(fm, cwd);
   if (look.reason) return `team ${fm.team}: the commit lookup failed (${look.reason}); fail closed: request the review again`;
   if (look.later) return `team ${fm.team}: the item has new work after its last review request; request the review again`;
-  const done = passes(fm).filter(p => p.commit === head);
   for (const r of rules) {
-    const need = Number(r.count) > 0 ? Number(r.count) : 1;
-    const have = new Set(done.filter(p => isTeamMember(r.team, p.by)).map(p => p.by)).size;
-    if (have < need) return `team ${fm.team}: review rule not met - ${need} pass(es) by members of team ${r.team} on the current work commit needed, ${have} recorded (teams.json)`;
+    const have = passCount({ ...fm, work_commit: head }, entry, r);
+    if (have < need(r)) return `team ${fm.team}: review rule not met - ${need(r)} pass(es) by ${r.team ? `members of team ${r.team}` : r.stage === 'peer' ? 'members of the team' : 'its external reviewers'} on the current work commit needed, ${have} recorded (teams.json)`;
   }
   return '';
 };
@@ -284,6 +306,10 @@ export const reviewRefusal = (fm, cwd) => {
 export function requestReview({ fm }, reviewer, note, by = '') {
   if (!strip(note || '')) reject('--request-review needs --note "<what to review: commits, deployed evidence>"');
   if (fm.review_state === 'in_review') reject(`${fm.reviewer} is reviewing it since ${fm.review_started}: wait for the verdict; the team lead hands a stale review on (--reassign-review)`);
+  // an unclaimed team item (its review asked for with --by) is held by nobody: its status is no obstacle; a review asked for again after
+  // a pass or a request (naming the next reviewer) is the same step as before, and an item waiting for its external review keeps that word
+  const asking = ['ready for review', 'ready for external review', 'review complete'].includes(fm.status);
+  gate('request-review', fm.claimed_by && !asking ? fm : { ...fm, status: 'in progress' }, by || fm.claimed_by);
   // the one who asks never reviews it and ends its session, so an unclaimed team item names it
   if (fm.team && !fm.claimed_by && !by) reject('--request-review of an unclaimed team item needs --by <agent>, the one who asks');
   if (fm.claimed_by && by && by !== fm.claimed_by && by !== teamLead()) reject(`${fm.claimed_by} holds it: only the holder, or the team lead, asks for its review (not ${by})`);
@@ -299,7 +325,7 @@ export function requestReview({ fm }, reviewer, note, by = '') {
   // nothing); the item's own new work after its review request moves it, and the review runs again.
   const head = workCommit();
   if (head && (!passes(fm).some(p => p.commit === fm.work_commit) || laterOwnWork(fm).later)) fm.work_commit = head;
-  Object.assign(fm, { review_state: 'requested', reviewer, review_requested_at: t, review_started: '', review_author: asked, session_authors: seededAuthors(fm, asked) });
+  Object.assign(fm, { status: fm.status === 'ready for external review' ? fm.status : next('request-review', fm, entryOf(fm)), reviewer, review_requested_at: t, review_started: '', review_author: asked, session_authors: seededAuthors(fm, asked) });
   return { event: 'review_requested', text: `## Review requested by ${by || fm.claimed_by || 'unknown'} at ${t} (reviewer: ${reviewer})\n\n${note}` };
 }
 
@@ -311,12 +337,15 @@ export function startReview({ fm }, by) {
   if (!reviewOpenTo(fm, by)) {
     reject(`in review by ${rv} since ${fm.review_started}; review another item${staleReview(fm) ? ` (the review is stale: the team lead hands it on with backlog update <item> --reassign-review <agent> --by ${teamLead()} --reason "<why>")` : ''}`);
   }
+  const stage = stageOfStatus(fm.status) ?? 'peer';
+  gate('start-review', fm, by, stage);
   const t = now();
-  Object.assign(fm, { review_state: 'in_review', reviewer: by, review_started: t });
+  Object.assign(fm, { status: next('start-review', fm, entryOf(fm), null, stage), reviewer: by, review_started: t });
   return { event: 'review_started', text: `Review started by ${by} at ${t}` };
 }
 
 export function review({ fm }, verdict, { by, comments } = {}) {
+  const reject_ = verdict === 'reject';
   if (!by || !strip(comments || '')) reject('--review needs --by <agent> and --comments "<findings>"');
   if (isReviewAuthor(fm, by)) reject(NO_SELF_REVIEW(by));
   const refs = asList(fm.review_refs);
@@ -332,15 +361,19 @@ export function review({ fm }, verdict, { by, comments } = {}) {
     const session = callerSession();
     if (session && session === fm.author_session) reject(`${by} reviews in the author session: a review runs in a fresh session`);
   }
+  const stage = stageOfStatus(fm.status) ?? 'peer';
+  gate('review', fm, by, stage);
   const t = now();
-  // a pass is recorded against the item's work commit (set by the review request to the requester's HEAD); the review rules
-  // count the passes on the current work commit. A changes verdict sends the item back to work and clears every pass.
+  // a complete verdict is recorded against the item's work commit (set by the review request to the requester's HEAD); the review rules
+  // count the passes on the current work commit. A reject sends the item back to work and clears every pass of both stages; the finding
+  // stays in the review history.
   const head = fm.work_commit || workCommit();
+  fm.reviews = reject_ ? [] : [...asList(fm.reviews), `${by} ${head}`];
   Object.assign(fm, {
-    review_state: verdict === 'pass' ? 'passed' : 'changes-requested', reviewer: by, review_started: '', reviewed_at: t,
-    reviews: verdict === 'pass' ? [...asList(fm.reviews), `${by} ${head}`] : [],
+    status: next('review', fm, entryOf(fm), verdict, stage, { satisfied: stageSatisfied(fm, entryOf(fm), stage) }), reviewer: by, review_started: '', reviewed_at: t,
+    review_history: historyLine(fm, t, stage, verdict, by, head, comments),
   });
-  return { event: 'reviewed', text: `## Review by ${by}: ${verdict === 'pass' ? 'PASS' : 'CHANGES REQUESTED'} (${t})\n\n${comments}` };
+  return { event: 'reviewed', text: `## Review by ${by}: ${reject_ ? 'REJECT' : 'COMPLETE'} (${t})\n\n${comments}` };
 }
 
 export function waiting({ fm }, by, what) {
@@ -370,8 +403,9 @@ export function closeItem({ fm }, by, summary, reason) {
   if (!owner) {
     const refusal = reviewRefusal(fm);
     if (refusal) reject(refusal);
+    gate('close', fm, closer);
   }
-  fm.status = 'done';
+  fm.status = next('close', fm, entryOf(fm));
   return { event: 'closed', text: owner
     ? `## Closed by owner at ${now()} (owner decision: ${strip(reason)})\n\n${summary}`
     : `## Closed by ${closer} at ${now()}\n\n${summary}` };
@@ -403,7 +437,7 @@ const handoffStep = (slug, item, r) => {
 // refusal lists every open dependent edge, its state and the next command; a missing hand-off says the hand-off
 // is required and where the hand-off command's help is.
 export function runCloseGate({ fm, statusBefore, folder, repo, slug }) {
-  if (statusBefore === 'done') return {};
+  if (statusBefore === 'closed') return {};
   const gateFm = { ...fm, status: statusBefore };
   const gate = closeGate({ fm: gateFm, folder, repo, slug });
   if (!gate.refuse) return gate;
@@ -521,7 +555,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
       }
     }
   } catch (e) {
-    if (e instanceof Rejected) return { refuse: `${slug}: ${e.message}` };
+    if (e instanceof Rejected) return { refuse: e.whole ? e.message : `${slug}: ${e.message}` };
     throw e;
   }
 }

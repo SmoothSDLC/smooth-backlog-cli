@@ -144,12 +144,12 @@ async function create(argv, { home, folder, repo, team }) {
 
     const objective = a.objective || inherited.objective || name;
     const fm = {
-      phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: 'pending', severity,
+      phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: a.team || intoRefining ? 'new' : 'pending', severity,
       repository: repo, branch: team.branch || callerBranch(process.cwd()),
       commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(), updated_by: actor(),
     };
-    if (a.team) Object.assign(fm, { team: strip(a.team), stage: 'refining', refiner: '' });
-    else if (intoRefining) Object.assign(fm, { stage: 'refining', refiner: '' }); // a slice split in a team session needs its refinement review too
+    if (a.team) Object.assign(fm, { team: strip(a.team), refiner: '' });
+    else if (intoRefining) Object.assign(fm, { refiner: '' }); // a slice split in a team session needs its refinement review too
     if (a.chunk) fm.chunk = true;
     if (refs.length) fm.review_refs = refs;
     for (const [k, v] of [['estimate_min', a.estimate], ['complexity', a.complexity], ['layer', a.layer]]) if (v !== undefined) fm[k] = v;

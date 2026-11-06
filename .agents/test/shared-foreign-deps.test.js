@@ -60,7 +60,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
   run(there, ['query', '--phase', '1', '--agent', 'tester']);
   run(there, ['update', '1', '--status', 'done', '--by', 'tester']);
-  assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status done\)/);
+  assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status closed\)/);
   const offered = JSON.parse(run(here, ['pop', '--agent', 'ada', '--json']).stdout); // done: next-work offers the item
   assert.deepEqual([offered.action, offered.item, offered.first], ['claim', '001-app-change', undefined]);
   run(here, ['query', '--phase', '1', '--agent', 'ada']);

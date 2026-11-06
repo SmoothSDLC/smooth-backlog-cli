@@ -257,3 +257,8 @@ Not changed by this pull request unless approved:
 6. The hand-off record options of `update` (`--handoff*`, `--accept-handoff`, `--reject-handoff`, `--checks`) as a
    separate concern from the team workflow — not recommended for removal now; recorded as the largest optional
    surface (290 lines, 9 options).
+- **One status word per item.** Items carry one word of an ordered list; the team steps ask the
+  shipped workflow definition (`src/shared/workflow.js`, `templates/workflows/team.json`) who may run a step and which
+  word follows. An earlier item is translated on load and drops `stage` and `review_state` at its first write. The
+  readers of the pop and the views still ask for `stage` and `review_state`; they are derived from the word in memory,
+  never stored. Verdicts are `complete` and `reject`; `pass` and `changes` are synonyms.

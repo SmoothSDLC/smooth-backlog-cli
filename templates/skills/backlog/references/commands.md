@@ -158,7 +158,7 @@ Usage:
 
 Changes the item named by its number or slug. The item file is the source of truth: the command writes the file,
 records an event in the history of the item. Setting --status to
-done completes the item (its completion time is set) and renumbers the rest of its branch's queue; so does --priority.
+closed completes the item (its completion time is set) and renumbers the rest of its branch's queue; so does --priority.
 Both are planning events, so look at the order again afterwards. The order is kept in the index of the folder, so a
 change of the order rewrites no other item. The item may be left out only together with --replan.
 The two retired classification keys of older items have no effect. An item that still carries them shows them until the CLI next writes that item; every write drops them.
@@ -171,12 +171,16 @@ BACKLOG_RUN_HOOK names an executable, and no child process when the variable is 
 
 Options:
   --status STATUS
-      The new status of the item. Open items are pending or in_progress, a finished item is done. Setting done
+      The new status of an item outside a team: any word. The team's order is new, refining, refined, refinement review,
+      ready, in progress, ready for review, reviewing, ready for external review, external review, review complete,
+      closed, archived (hyphens and underscores stand for spaces: in_progress); any other word is free text and keeps the
+      item open. closed (or done) finishes the item; archived is refused (backlog archive moves a finished item). An item
+      of a team is refused here: its status moves by the team steps (backlog team update). Setting closed
       completes the item and is a close: for a team's item it is refused until the review rules of the team
       (teams.json) are met for the item's current work commit, and the refusal names the unmet rule. The owner closes
       without a review with --close --by owner.
-      The hand-off rule of --close applies too: done is refused until each dependent's hand-off is recorded and
-      accepted; an item without dependents records handoffs: none; an item already done is not checked again.
+      The hand-off rule of --close applies too: closed is refused until each dependent's hand-off is recorded and
+      accepted; an item without dependents records handoffs: none; an item already closed is not checked again.
   --branch BRANCH
       Refused by design: the branch of an item is not changed here. Use backlog move --to-branch instead.
   --commit COMMIT
@@ -267,9 +271,9 @@ Options:
       the definition of done is missing.
   --request-refinement-review
       The team lead sends a refined item to the refinement review (--by <lead>): stage refinement-review.
-  --refinement-review {pass,changes}
-      Record the refinement verdict, --by <reviewer> with --comments "<findings; thread or session id>": pass makes the
-      item ready, changes sends it back to refining. The reviewer is a member of a team the refinement_review rule of
+  --refinement-review {complete,reject}
+      Record the refinement verdict, --by <reviewer> with --comments "<findings; thread or session id>": complete makes the
+      item ready, reject sends it back to refining (pass and changes are accepted for complete and reject). The reviewer is a member of a team the refinement_review rule of
       the item's team names (teams.json); without such a rule, anyone.
   --request-decision QUESTION
       The item needs an owner decision (--by <agent>): stage review-hitl, the question is written in the item (what, why,
@@ -294,8 +298,8 @@ Options:
       list existed), so the holder's self-review block stands.
   --request-review AGENT|any
       Ask an agent, or any agent, for a review; --note says what to review (team session). The output ends with the
-      instruction to end the session now, printed after the change is published: a review request, a changes verdict
-      (--review changes) and a close each end the agent's session, so its next task starts in a fresh one (not for the
+      instruction to end the session now, printed after the change is published: a review request, a reject verdict
+      (--review reject) and a close each end the agent's session, so its next task starts in a fresh one (not for the
       team lead).
   --start-review
       Record that the agent named by --by starts the requested review (review_state in_review, reviewer and review_started are
@@ -305,14 +309,14 @@ Options:
       session, with a new name, may start the review (team session). Every claim, reassign, release and review request
       seeds the list from the item's current holder and review requester, so an item written before the list existed
       keeps the self-review block of its earlier sessions.
-  --review {pass,changes}
-      Record a review verdict; it needs --by and --comments. A pass is recorded against the item's work commit
+  --review {complete,reject}
+      Record a review verdict (pass and changes are accepted for complete and reject); it needs --by and --comments. A complete is recorded against the item's work commit
       (work_commit) - the requester's HEAD at its review request (--request-review records it; a later request after a
       pass keeps it) - so the reviewer's checkout and other items' commits on the branch move nothing; the item's own
       new work (a later commit whose subject names the item as a producer at the start - the item number alone, or
       joined with another item's number by "and") moves the work commit, so the review runs again; a close or
-      --status done whose commit lookup fails is refused fail closed, and the refusal records the reason. A changes
-      verdict clears every recorded pass and sends the item back to work. A team's item closes when the review rules
+      --status closed whose commit lookup fails is refused fail closed, and the refusal records the reason. A reject
+      verdict clears every recorded pass, keeps the finding in the item's review history and sends the item back to work. A team's item closes when the review rules
       of its team (teams.json: each rule names a team and how many of its members must pass) are met for the current
       work commit; a reviewer never reviews in the author's session; an item without a team needs no rule.
   --handoff DEPENDENT
@@ -417,7 +421,8 @@ Options:
       command says so (with --json it prints {}). Open items of a branch that no longer exists on the origin
       are in no queue.
   --status
-      The full stack of the branch (this is the default view). With --json each row also carries claimed_by and
+      The full stack of the branch (this is the default view). Each row shows the item's status word (a team's order,
+      or the free text of an item outside a team; closed, done and archived are finished, every other word is open). With --json each row also carries claimed_by and
       review_state, from the item's front matter ('' when unset).
   --critical
       Only the open items with severity critical.
@@ -812,7 +817,7 @@ Archives an item given by number or slug: the item leaves the work queue, is kep
 repository and its status becomes archived; the output names it by its slug. The command records an event and
 renumbers the remaining backlog to 0..M-1, because archiving takes the item off the backlog. Archiving an item
 that is already archived does nothing and says so. The command refuses when the item does not exist, or when its
-status is not done and --force was not given.
+status is not closed and --force was not given.
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
@@ -826,7 +831,7 @@ Argument:
 
 Options:
   --force
-      Archive the item even if its status is not done.
+      Archive the item even if its status is not closed.
   --dry-run
       Say which item would be archived and change nothing: nothing is moved and nothing is committed.
   --help

@@ -20,6 +20,8 @@ step(/^team "([^"]+)" work needs (\d+) pass(?:es)? by "([^"]+)"(?: and (\d+) pas
   const review = [{ team: t1, count: Number(n1) }]; if (t2) review.push({ team: t2, count: Number(n2) });
   w.configureTeam(team, { review });
 });
+step(/^team "([^"]+)" reviews in the stages "([^"]*)"$/, (w, team, stages) => w.configureTeam(team, { review: stages.split(',').map(x => x.trim()).filter(Boolean).map(stage => ({ stage, count: 1 })) }));
+step(/^team "([^"]+)" has the external reviewers "([^"]+)"$/, (w, team, who) => w.configureTeam(team, { external_reviewers: who.split(',').map(x => x.trim()).filter(Boolean) }));
 step(/^team "([^"]+)" refinements are reviewed by "([^"]+)"$/, (w, team, by) => w.configureTeam(team, { refinement_review: [{ team: by, count: 1 }] }));
 // the repository that holds the items: the backlog repository clone, or the repository itself when the items live inside it
 step(/^the backlog repository has no uncommitted or unpushed change$/, w => {

@@ -41,9 +41,9 @@ backlog setup                                   # deploy the backlog skill to th
 backlog new --name "Fix the login redirect" --objective "Users land on their page after login" --summary "login redirect"
 backlog query                                   # the queue, P0 = next
 backlog next                                    # the next item
-backlog update 1 --status in_progress --location src/login.js
+backlog update 1 --status "in progress" --location src/login.js
 backlog update 1 --append "## Findings\n- the redirect used the stale cookie"
-backlog update 1 --status done                  # or: --close --summary "what was delivered"
+backlog update 1 --status closed                # or: --close --summary "what was delivered"
 backlog archive 1
 ```
 
@@ -53,9 +53,26 @@ Items are selected by their number (`1`) or slug (`001-fix-the-login-redirect`).
 
 - **Branch isolation:** every item belongs to the branch that was checked out when it was created; `backlog query` shows the queue of the current branch, `--all` every branch the backlog carries (inside the repository the items are committed on their branch, so a branch sees the items it carries), `backlog move <item> --to-branch <name>` moves an item.
 - **Many hands:** a named agent (`BACKLOG_AGENT=<name>`, or `--claim <name>`) claims an item; another agent cannot take it; a write to an item that someone else changed since the agent last read it is refused (exit 5) until the agent reads it again (`backlog query --phase <item>`).
-- **Reviews:** the holder asks for a review (`--request-review <agent|any> --note "<commits, evidence>"`); another agent records the verdict (`--review pass|changes --by <reviewer> --comments "<findings>"`); the author never reviews its own work.
+- **Reviews:** the holder asks for a review (`--request-review <agent|any> --note "<commits, evidence>"`); another agent records the verdict (`--review complete|reject --by <reviewer> --comments "<findings>"`); the author never reviews its own work.
 - **Teams:** the team rules — refinement before work, review rules before the close, work-in-progress limits — apply to items that belong to a team. Teams, their leads and members and their review rules are configuration in the backlog folder (`teams.json`): for example "an item of team A closes when one member of team A and one member of team B passed the current commit". Nothing about a particular team or agent is built into the CLI. See `backlog update --help`, `backlog work --help` and `backlog team pop --help`.
 - **Skill for agents:** `backlog setup` deploys the built-in backlog skill (`templates/skills/backlog`) into every agent folder present in the repository (`.agents`, `.claude`, `.github`, `.qwen`), so coding agents learn the commands from the repository itself.
+
+## Statuses
+
+An item carries one status word. An item outside a team has free text: `closed`, `done` and `archived` finish it, every
+other word (`pending`, `in progress`, `blocked on vendor`) keeps it in the queue, and `backlog update <item> --status
+<word>` sets it (hyphens and underscores stand for spaces: `in_progress`). The items of a team follow one order,
+`new`, `refining`, `refined`, `refinement review`, `ready`, `in progress`, `ready for review`, `reviewing`, `ready for
+external review`, `external review`, `review complete`, `closed`, `archived`, plus the wait `awaiting decision` for an
+owner question; the team steps (`--refine-start`, `--claim`, `--request-review`, `--review`, `--close` and the others)
+move the item along it, and `--status` on such an item is refused. The order and the rules of each step are a
+definition file the CLI ships (`templates/workflows/team.json`). Which review stages apply, and how many passes each
+needs, comes from the team's entry in `teams.json` (`review`: a list of `{ "stage": "peer" | "external", "count": n }`;
+without the key both stages apply, an empty list means no review); a team step for a team with no entry is refused. A
+review verdict is `complete` or `reject` (`pass` and `changes` are accepted as the same words): a reject returns the
+item to work, clears the recorded passes and keeps the finding in the item's review history. Items written by earlier
+builds are read as the new words and are not rewritten; their old `stage` and `review_state` fields are dropped when
+the item is next written.
 
 ## Where the data lives
 

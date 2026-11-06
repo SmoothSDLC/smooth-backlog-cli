@@ -2,7 +2,7 @@
 // (<home>/teams.json); identity and status come from the rows of the items (index.rows); the item files give the
 // metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
@@ -11,7 +11,7 @@ import * as index from './index.js';
 import { parse } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 import { load } from './store.js';
-import { SOLO, isFinished, lift } from './workflow.js';
+import { SOLO, isFinished, isOpen as isOpenWord, lift, loadWorkflow } from './workflow.js';
 
 // An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true.
 // The refinement stages of a team's item; an item may be claimed when it has no stage (no team, or the team's work item,
@@ -269,3 +269,66 @@ export const STOP_TEXT = 'your session is being replaced by a fresh one for your
 // read from its file as the word it carries (status) with the two fields the pop still asks (stage, review_state).
 export const entryOf = fm => (fm.team ? teamsConfig()[strip(String(fm.team))] : SOLO);
 export const lifted = doc => lift(doc, entryOf(doc.fm));
+
+// ---- team definitions (backlog team define)
+
+const TEAM_KEYS = ['name', 'lead', 'members', 'external_reviewers', 'workflow', 'review', 'wip'];
+const NAME = /^[a-z0-9][a-z0-9:_-]*$/;
+const names = v => Array.isArray(v) && v.every(x => typeof x === 'string' && x.trim() === x && x);
+// The problems of a team definition (the JSON file of backlog team define), one text each; [] when it is valid.
+export function validateTeam(def, home) {
+  if (!def || typeof def !== 'object' || Array.isArray(def)) return ['the definition must be a JSON object'];
+  const out = [];
+  for (const k of Object.keys(def)) if (!TEAM_KEYS.includes(k)) out.push(`${k}: not a field of a team definition (${TEAM_KEYS.join(', ')})`);
+  if (typeof def.name !== 'string' || !NAME.test(def.name)) out.push('name: must be text of lowercase letters, digits, - _ and :, starting with a letter or digit');
+  if (typeof def.lead !== 'string' || !def.lead.trim()) out.push('lead: must be the name of the lead');
+  if (!names(def.members) || !def.members.length) out.push('members: must be a non-empty list of names');
+  else {
+    if (new Set(def.members).size !== def.members.length) out.push('members: names must be distinct');
+    if (def.members.includes(def.lead)) out.push('lead: the lead is not one of the members');
+  }
+  if (def.external_reviewers !== undefined && !names(def.external_reviewers)) out.push('external_reviewers: must be a list of names');
+  if (def.workflow !== undefined && typeof def.workflow !== 'string') out.push('workflow: must be the name of a flow');
+  let flow = null;
+  try { flow = loadWorkflow(def.workflow ?? 'team', home); } catch (e) { out.push(`workflow: ${e.message}`); }
+  if (def.review !== undefined) {
+    if (!Array.isArray(def.review)) out.push('review: must be a list of { stage, reviewers, count }');
+    else def.review.forEach((r, i) => {
+      const at = `review[${i}]`;
+      if (!r || typeof r !== 'object' || Array.isArray(r)) return out.push(`${at}: must be { stage, reviewers, count }`);
+      if (flow && !flow.review_stages_order.includes(r.stage)) out.push(`${at}.stage: ${JSON.stringify(r.stage)} is no stage of the flow (${flow.review_stages_order.join(', ')})`);
+      if (!['members', 'external_reviewers'].includes(r.reviewers)) out.push(`${at}.reviewers: must be members or external_reviewers`);
+      else if (r.reviewers === 'external_reviewers' && !(Array.isArray(def.external_reviewers) && def.external_reviewers.length)) out.push(`${at}.reviewers: external_reviewers is empty, so the stage could never be passed`);
+      if (!Number.isInteger(r.count) || r.count < 1) out.push(`${at}.count: must be a whole number of at least 1`);
+    });
+    if (Array.isArray(def.review) && new Set(def.review.map(r => r?.stage)).size !== def.review.length) out.push('review: a stage is listed twice');
+  }
+  if (def.wip !== undefined) {
+    const w = def.wip;
+    if (!w || typeof w !== 'object' || Array.isArray(w) || Object.keys(w).some(k => !['agent', 'team'].includes(k)) || Object.values(w).some(n => !Number.isInteger(n) || n < 1)) out.push('wip: must be { agent, team } of whole numbers of at least 1');
+  }
+  return out;
+}
+
+// The entry teams.json keeps for a definition: the shape the engine reads ({ lead, members, external_reviewers, review }), plus the flow and limits when given.
+export function teamEntry(def, home) {
+  const flow = loadWorkflow(def.workflow ?? 'team', home);
+  const entry = { lead: def.lead, members: def.members, external_reviewers: def.external_reviewers ?? [],
+    review: (def.review ?? flow.team_entry_review_default).map(r => ({ stage: r.stage, count: r.count })) };
+  if (def.workflow) entry.workflow = def.workflow;
+  if (def.wip) entry.wip = def.wip;
+  return entry;
+}
+
+// How many open items of every repository folder of the backlog carry this team (test: a word that is not finished).
+export function openItemsOf(home, name) {
+  let n = 0;
+  for (const owner of readdirSync(home, { withFileTypes: true })) {
+    if (!owner.isDirectory() || owner.name.startsWith('.')) continue;
+    for (const repo of readdirSync(join(home, owner.name), { withFileTypes: true })) {
+      const dir = join(home, owner.name, repo.name);
+      if (repo.isDirectory() && existsSync(join(dir, 'phases'))) n += load(dir).filter(i => i.path.startsWith('phases/') && strip(String(i.fm.team ?? '')) === name && isOpenWord(i.fm.status ?? 'pending')).length;
+    }
+  }
+  return n;
+}

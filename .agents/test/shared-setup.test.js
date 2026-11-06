@@ -5,7 +5,7 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BACKLOG_NAME, BACKLOG_OWNER, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -96,4 +96,23 @@ test('043: setup removes nothing through a symbolic link in an agent folder', ()
   assert.match(r.stderr, /symbolic link on the way: nothing changed/);
   assert.equal(readFileSync(join(outside, 'backlog', 'keep.txt'), 'utf8'), 'keep');
   assert.ok(!existsSync(join(t, 'consumer', BACKLOG_NAME)) && !existsSync(join(app, '.smooth-backlog.json'))); // checked first: nothing changed
+});
+
+test('setup records the user (the git user name, else the login name) and an empty team; a second setup keeps what is there', () => {
+  const plain = fixture();
+  assert.equal(plain.run(plain.app, ['setup']).status, 0);
+  assert.equal(cfg(plain.app).user, userInfo().username); // this repository's git has no user.name
+  assert.equal(cfg(plain.app).team, '');
+  const named = fixture();
+  spawnSync('git', ['-C', named.app, 'config', 'user.name', 'Ada Lovelace']);
+  assert.equal(named.run(named.app, ['setup']).status, 0);
+  assert.equal(cfg(named.app).user, 'Ada Lovelace');
+  writeFileSync(join(named.app, '.backlog', 'config.json'), JSON.stringify({ ...cfg(named.app), user: 'Grace', team: 't1' }));
+  assert.equal(named.run(named.app, ['setup']).status, 0);
+  assert.deepEqual([cfg(named.app).user, cfg(named.app).team], ['Grace', 't1']);
+  // an item outside a team records its owner; with no agent named the user writes
+  const made = named.run(named.app, ['new', '--name', 'mine', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x']);
+  assert.equal(made.status, 0, made.stdout + made.stderr);
+  const file = readFileSync(join(named.t, 'consumer', BACKLOG_NAME, 'acme', 'app', 'phases', '001-mine.md'), 'utf8');
+  assert.match(file, /^owner: "?Grace"?$/m);
 });

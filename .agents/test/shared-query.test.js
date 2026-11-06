@@ -7,6 +7,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { defaultUser } from '../../src/shared/setup.js';
 import * as store from '../../src/shared/store.js';
 
 const git = (cwd, ...args) => {
@@ -410,7 +411,7 @@ test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
 test('075: --phase prints the full item (row, front matter, body, missing) by slug and by number; not found is exit 1 on stdout', () => {
   const f = fx();
   const beta = { id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
-    front_matter: { phase: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', updated: 'TS', updated_by: 'UPD', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' },
+    front_matter: { phase: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', updated: 'TS', updated_by: 'UPD', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', owner: defaultUser(f.cons) },
     body: '\n# Phase 002 — Beta\n\n**Objective:** Caf\u00e9 \u2615 Beta\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n',
     missing: ['review_refs', 'estimate_min', 'definition_of_done'] };
   // the item carries its history (events) in its front matter: compared apart from the rest

@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
+import { defaultUser } from '../../src/shared/setup.js';
 import * as store from '../../src/shared/store.js';
 
 const git = (cwd, ...args) => {
@@ -136,10 +137,10 @@ test('new: writes the item, records its history, commits as "acme/demo: new --na
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   const [item] = items(f);
   assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'repository', 'branch', 'commit',
-    'location', 'created', 'updated', 'updated_by', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'events']);
+    'location', 'created', 'updated', 'updated_by', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer', 'owner', 'events']);
   assert.deepEqual({ ...item.fm, created: 0, updated: 0, updated_by: 0, commit: 0, events: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
     status: 'pending', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0, updated_by: 0,
-    depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', events: 0 });
+    depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', owner: defaultUser(f.cons), events: 0 });
   assert.equal(item.fm.commit, git(f.cons, 'rev-parse', 'HEAD'));
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
   assert.equal(subject(f), SUBJECT.newName('Alpha job'));
@@ -378,7 +379,7 @@ test('075: new: every flag, appended: the item carries the carried context, the 
   assert.deepEqual(fmNorm(item.fm), { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
     status: 'pending', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '',
     created: 0, updated: 0, updated_by: 0, chunk: true, review_refs: ['references/review/code.md', 'references/review/tests.example.md'],
-    estimate_min: 30, complexity: 'medium', layer: '3', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
+    estimate_min: 30, complexity: 'medium', layer: '3', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', owner: defaultUser(f.cons) });
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Carried context (from the original ask)\n\nfrom the ask\n\n\nSome body\n\n## Definition of done\n- [ ] it works\n');
 });
 

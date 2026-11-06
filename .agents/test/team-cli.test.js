@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
+import { spawnSync } from 'node:child_process';
 import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
@@ -71,4 +72,78 @@ test('team update runs a step with the agent and no notice', () => {
   assert.equal(r.stderr, '');
   assert.equal(fm(f, s).status, 'refining');
   assert.equal(fm(f, s).refiner, 'ann');
+});
+
+// ---- backlog team define / workflow
+const sh = (cwd, ...args) => spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+// the configuration is published like in a real backlog: teams.json is a committed file at the root
+function published(f) {
+  sh(f.home, 'add', '-f', 'teams.json'); sh(f.home, 'commit', '-q', '-m', 'teams'); sh(f.home, 'push', '-q');
+}
+const defFile = (f, obj, name = 'def.json') => { const p = join(f.t, name); writeFileSync(p, JSON.stringify(obj)); return p; };
+const TEAM = { name: 'gold', lead: 'ann', members: ['bob', 'cy'], external_reviewers: ['xia'], review: [{ stage: 'peer', reviewers: 'members', count: 1 }, { stage: 'external', reviewers: 'external_reviewers', count: 1 }], wip: { agent: 1, team: 3 } };
+const teams = f => JSON.parse(readFileSync(join(f.home, 'teams.json'), 'utf8'));
+
+test('team define registers a team beside the others, commits it, and another checkout sees it after a pull', () => {
+  const f = fixture(); published(f);
+  const r = run(f, ['team', 'define', '--file', defFile(f, TEAM)]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /✅ team gold defined: lead ann, 2 members, flow team/);
+  assert.deepEqual(teams(f).t1, { lead: 'lead', members: ['ann', 'bob'], review: [] }); // the hand-written entry is kept as it was
+  assert.deepEqual(teams(f).gold, { lead: 'ann', members: ['bob', 'cy'], external_reviewers: ['xia'], review: [{ stage: 'peer', count: 1 }, { stage: 'external', count: 1 }], wip: { agent: 1, team: 3 } });
+  assert.match(sh(f.home, 'log', '-1', '--format=%s').stdout, /team gold defined/);
+  assert.equal(sh(f.home, 'status', '--porcelain', '--', 'teams.json').stdout, '');
+  const other = join(f.t, 'other'); sh(f.t, 'clone', '-q', join(f.t, 'origins', 'acme', 'backlog-repo.git'), other);
+  assert.equal(JSON.parse(readFileSync(join(other, 'teams.json'), 'utf8')).gold.lead, 'ann'); // pushed
+  const again = run(f, ['team', 'define', '--file', defFile(f, TEAM)]);
+  assert.equal(again.status, 0); assert.match(again.stdout, /team gold unchanged/);
+  assert.equal(sh(f.home, 'rev-list', '--count', 'HEAD').stdout, sh(other, 'rev-list', '--count', 'HEAD').stdout.replace(/\d+/, n => String(Number(n) + 0))); // no second commit
+});
+
+test('team define without review takes the flow default; a bad file is refused naming every field, nothing written', () => {
+  const f = fixture(); published(f);
+  const before = readFileSync(join(f.home, 'teams.json'), 'utf8');
+  const bad = [
+    [{ ...TEAM, lead: undefined }, /lead/], [{ ...TEAM, review: [{ stage: 'nonsense', reviewers: 'members', count: 1 }] }, /nonsense/],
+    [{ ...TEAM, members: [] }, /members/], [{ ...TEAM, members: ['ann', 'bob'] }, /lead: the lead is not one of the members/],
+    [{ ...TEAM, name: 'Bad Name' }, /name/], [{ ...TEAM, workflow: 'ghost' }, /workflow/], [{ ...TEAM, extra: 1 }, /extra/],
+    [{ ...TEAM, external_reviewers: [] }, /external_reviewers is empty/],
+  ];
+  for (const [def, text] of bad) {
+    const r = run(f, ['team', 'define', '--file', defFile(f, def)]);
+    assert.equal(r.status, 2, JSON.stringify(def) + r.stdout + r.stderr); assert.match(r.stderr, text);
+  }
+  assert.equal(run(f, ['team', 'define', '--file', defFile(f, [])]).status, 2); // an array is no definition
+  writeFileSync(join(f.t, 'junk.json'), 'not json');
+  assert.equal(run(f, ['team', 'define', '--file', join(f.t, 'junk.json')]).status, 2);
+  assert.equal(readFileSync(join(f.home, 'teams.json'), 'utf8'), before);
+  const { review, wip, ...lean } = TEAM;
+  assert.equal(run(f, ['team', 'define', '--file', defFile(f, lean)]).status, 0);
+  assert.deepEqual(teams(f).gold.review, [{ stage: 'peer', count: 1 }, { stage: 'external', count: 1 }]);
+});
+
+test('team define does not replace a team that has open items; it names the count', () => {
+  const f = fixture(); published(f);
+  const s = createdSlug(run(f, ['new', ...NEW('open')]).stdout);
+  assert.equal(run(f, ['update', s, '--set-team', 't1']).status, 0);
+  const r = run(f, ['team', 'define', '--file', defFile(f, { name: 't1', lead: 'zed', members: ['y'], review: [] })]);
+  assert.equal(r.status, 2); assert.match(r.stderr, /team t1 has 1 open items; register the new composition under another name/);
+  assert.equal(teams(f).t1.lead, 'lead');
+  assert.equal(run(f, ['team', 'define', '--file', defFile(f, { name: 't1b', lead: 'zed', members: ['y'], review: [] })]).status, 0);
+});
+
+test('team workflow registers a flow from JSON, shows it, and refuses a flow that traps items', () => {
+  const f = fixture(); published(f);
+  const flow = JSON.parse(readFileSync(join(process.cwd(), 'templates', 'workflows', 'team.json'), 'utf8'));
+  const two = defFile(f, { ...flow, workflow: 'team-2' }, 'flow.json');
+  const r = run(f, ['team', 'workflow', '--file', two]);
+  assert.equal(r.status, 0, r.stdout + r.stderr); assert.match(r.stdout, /workflow team-2 registered/);
+  assert.equal(JSON.parse(run(f, ['team', 'workflow', '--show', 'team-2']).stdout).workflow, 'team-2');
+  assert.equal(JSON.parse(run(f, ['team', 'workflow', '--show', 'team']).stdout).workflow, 'team'); // the shipped flow
+  assert.match(run(f, ['team', 'workflow', '--file', two]).stdout, /unchanged/);
+  assert.equal(run(f, ['team', 'define', '--file', defFile(f, { ...TEAM, name: 'silver', workflow: 'team-2' })]).status, 0);
+  const trap = { ...flow, workflow: 'trap', steps: { ...flow.steps, close: { ...flow.steps.close, from: ['closed'] } } };
+  const t = run(f, ['team', 'workflow', '--file', defFile(f, trap, 'trap.json')]);
+  assert.equal(t.status, 2); assert.match(t.stderr, /no chain of steps leads from/);
+  assert.equal(run(f, ['team', 'workflow', '--show', 'trap']).status, 2);
 });

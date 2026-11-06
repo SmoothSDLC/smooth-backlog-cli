@@ -23,6 +23,8 @@ Usage:
   backlog work --agent <name> [options]            A team member's next work, marked as theirs, with the whole item
   backlog team pop --team <team> --agent <lead>    The team lead takes its team's work item
   backlog team update <item> --team <team> --agent <name> <step>   One team step: claim, release, request-review, review, close, ...
+  backlog team define --file <team.json>           Register a team (lead, members, reviewers, review stages) in the backlog configuration
+  backlog team workflow --file <flow.json>         Register a flow definition; --show <name> prints one
   backlog move <item> --to-branch <name>           Move an item to another branch (or --to-repository)
   backlog archive <item> [--force] [--dry-run]     Archive a finished item
   backlog setup [--ask]                            Point this repository at its backlog folder and deploy the backlog skill
@@ -643,6 +645,17 @@ Example:
 Usage:
   backlog team pop --team <name> [--agent <lead>] [--json]
   backlog team update <item> --team <name> --agent <name> <step> [options]
+  backlog team define --file <team.json> [--json]
+  backlog team workflow --file <flow.json> [--json]
+  backlog team workflow --show <name>
+
+backlog team define registers one team from a JSON file { "name", "lead", "members": [..], "external_reviewers": [..], "workflow": "<flow,
+default team>", "review": [{ "stage", "reviewers": "members"|"external_reviewers", "count" }] (default: the flow's), "wip": { "agent", "team" } }.
+Every field is checked (the lead is not a member, the stages are stages of the flow, an external stage needs external reviewers) and each
+problem is printed, one per line, exit 2, with nothing written. The entry is added to teams.json at the root of the backlog beside the
+others, committed and pushed ("team <name> defined"); the same definition again changes nothing. A team that has open items is not replaced:
+register the new composition under another name. backlog team workflow registers a flow the same way into workflows.json after the
+checks of the flow (every open status can reach closed); --show prints a registered or the shipped flow.
 
 backlog team update runs one team step on an item: --claim, --release, --waiting, --waiting-done, --request-review, --start-review,
 --review, --close, --handoff, --accept-handoff, --reject-handoff, --reassign, --reassign-review, --refine-start, --refine-done,

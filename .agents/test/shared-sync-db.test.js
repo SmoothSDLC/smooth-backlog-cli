@@ -1,5 +1,6 @@
 // Review P1 of PR #3: two real CLI writers in separate clones. Whatever the rebase of the second writer meets (a number collision,
 // a move of the other clone), the change is repaired or refused and never half-published. Local bare repos only.
+import { configUser } from '../../src/shared/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -224,7 +225,7 @@ test('audit: a move that empties phases/ does not carry another clone\'s new fil
 
 test('review P2: a destination-renumbered move caches the moved item and refuses a subsequent stale summary overwrite', async t => {
   const [a, b, { bare }] = writers(t);
-  const mover = process.env.BACKLOG_AGENT || process.env.USER || 'unknown'; // cliAsync uses the inherited actor
+  const mover = process.env.BACKLOG_AGENT || configUser(a.cons); // cliAsync uses the inherited actor
   for (const name of ['alpha', 'gamma']) assert.equal(cli([...NEW(name), '--review-refs', 'references/review/code.md',
     '--estimate', '5', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
@@ -264,7 +265,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
 
 test('review P2: update records its published identity when an added item is renumbered during recovery', async t => {
   const [a, b, { bare }] = writers(t);
-  const agent = process.env.BACKLOG_AGENT || process.env.USER || 'unknown';
+  const agent = process.env.BACKLOG_AGENT || configUser(a.cons);
   assert.equal(cli(NEW('anchor'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const [anchor] = store.load(b.folder);

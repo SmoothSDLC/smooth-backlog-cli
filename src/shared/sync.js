@@ -412,6 +412,9 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
   const list = [].concat(folders);
   const names = [];
   for (const folder of list) names.push(t.prefix + (await assertInside(backlogHome, folder)).split(sep).join('/'));
+  // a configuration file of the backlog root (teams.json) is committed with the folders but holds no items to check
+  const isFile = f => existsSync(f) && lstatSync(f).isFile();
+  const dirs = list.filter(f => !isFile(f)); const dirNames = names.filter((_, i) => !isFile(list[i]));
   // the backlog repository: the item folders. The user's repository: the whole .backlog folder (its configuration is committed with the items), nothing else
   const lits = t.clone ? names.map(lit) : [lit(t.prefix.slice(0, -1))];
   const subject = t.clone ? `${names.join(', ')}: ${message}` : `backlog: ${message}`;
@@ -481,7 +484,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
         await staleCheck();
         let pr = t.exists ? await g(home, pullArgs(t)) : { code: 0 };
         if (pr.code && guard.length && await staleHit()) { await g(home, ['rebase', '--abort']); await staleCheck(); } // a guarded item arrived with the pull and conflicts: refuse, never park
-        if (pr.code && await repairConflicts(home, t, list, names, renumbered)) pr = { code: 0 };
+        if (pr.code && await repairConflicts(home, t, dirs, dirNames, renumbered)) pr = { code: 0 };
         if (pr.code) {
           await g(home, ['rebase', '--abort']);
           err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;
@@ -498,7 +501,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
             await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
             mine = await foldIn(home, t, lits, subject, mine) || mine;
           }
-          await validatePublication(home, t, list, names, claims, renumbered);
+          await validatePublication(home, t, dirs, dirNames, claims, renumbered);
           await restoreStaging(saved.staged.filter(p => !own(p)));
           if (t.push && t.remote === false && mine) { // the first release's behaviour is kept: the commit stays, the exit code says it was not published
             throw Object.assign(new BacklogError('SYNC_FAILED', `The change was not published from ${home} (no origin remote); it is committed on this branch: add the origin and push, then continue`, 3), { keep: true });

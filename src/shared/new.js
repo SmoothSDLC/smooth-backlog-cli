@@ -6,6 +6,7 @@ import { input } from '../errors.js';
 import { parse } from './frontmatter.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { actor, check, recordWrites } from './seen.js';
+import { configUser } from './setup.js';
 import { assertInside, checkRefs, git, redact, slugify } from './safety.js';
 import { addEvent, branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, undoOnThrow, write } from './store.js';
 import { commitSettled, pull } from './sync.js';
@@ -154,6 +155,7 @@ async function create(argv, { home, folder, repo, team }) {
     if (refs.length) fm.review_refs = refs;
     for (const [k, v] of [['estimate_min', a.estimate], ['complexity', a.complexity], ['layer', a.layer]]) if (v !== undefined) fm[k] = v;
     Object.assign(fm, { depends_on: deps, claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
+    if (!fm.team) fm.owner = configUser(); // an item outside a team belongs to the user of the configuration
     const parts = [`\n# Phase ${pad(seq)} — ${name}\n`, `**Objective:** ${objective}\n`];
     if (a.context) parts.push(`\n## Carried context (from the original ask)\n\n${a.context}\n`);
     if (inherited.context) parts.push(`\n## ${inherited.context}\n`);

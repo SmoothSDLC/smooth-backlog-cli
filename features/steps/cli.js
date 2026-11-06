@@ -23,6 +23,21 @@ step(/^team "([^"]+)" work needs (\d+) pass(?:es)? by "([^"]+)"(?: and (\d+) pas
 step(/^team "([^"]+)" reviews in the stages "([^"]*)"$/, (w, team, stages) => w.configureTeam(team, { review: stages.split(',').map(x => x.trim()).filter(Boolean).map(stage => ({ stage, count: 1 })) }));
 step(/^team "([^"]+)" has the external reviewers "([^"]+)"$/, (w, team, who) => w.configureTeam(team, { external_reviewers: who.split(',').map(x => x.trim()).filter(Boolean) }));
 step(/^team "([^"]+)" refinements are reviewed by "([^"]+)"$/, (w, team, by) => w.configureTeam(team, { refinement_review: [{ team: by, count: 1 }] }));
+// in the backlog repository the team configuration is a committed file at its root (the fixture keeps its own copy out of git)
+step(/^the team configuration is a committed file$/, w => {
+  if (!w.env.BACKLOG_HOME) return; // inside the repository it is created and committed by the command
+  w.gitIn(w.home(), 'add', '-f', 'teams.json'); w.gitIn(w.home(), 'commit', '-q', '-m', 'teams'); w.gitIn(w.home(), 'push', '-q');
+});
+// a team or flow definition given as JSON text goes through the command, from a file outside the repository
+step(/^I define the (team|workflow) from the JSON `(.+)`$/, (w, kind, json) => {
+  const file = join(w.tmp, `${kind}.json`); writeFileSync(file, json);
+  command(w, `backlog team ${kind === 'team' ? 'define' : 'workflow'} --file ${file}`);
+});
+step(/^another checkout sees team "([^"]+)" with lead "([^"]+)"$/, (w, team, lead) => {
+  const r = w.runOther(['query', '--json']); assert.equal(r.status, 0, output(r)); // the read pulls the published configuration
+  const file = join(w.other(), w.env.BACKLOG_HOME ? '' : '.backlog', 'teams.json');
+  assert.equal(JSON.parse(readFileSync(file, 'utf8'))[team]?.lead, lead, readFileSync(file, 'utf8'));
+});
 // the repository that holds the items: the backlog repository clone, or the repository itself when the items live inside it
 step(/^the backlog repository has no uncommitted or unpushed change$/, w => {
   const top = w.backlogRepo();

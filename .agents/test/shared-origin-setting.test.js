@@ -59,7 +59,9 @@ test('neither set: backlog setup records .backlog inside the repository in .back
   const r = cli(['setup'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: '' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.ok(!existsSync(join(f.d, 'user')), 'no clone or parent folder was created');
-  assert.deepEqual(JSON.parse(readFileSync(join(app, '.backlog', 'config.json'), 'utf8')), { backlog_repository: '.backlog' });
+  const written = JSON.parse(readFileSync(join(app, '.backlog', 'config.json'), 'utf8')); // setup also records the user and an empty team
+  assert.ok(typeof written.user === 'string' && written.user);
+  assert.deepEqual({ ...written, user: undefined }, { backlog_repository: '.backlog', user: undefined, team: '' });
   assert.ok(existsSync(join(app, '.claude', 'skills', 'backlog', 'SKILL.md')), 'the skill copy was deployed');
   assert.doesNotMatch(r.stdout, /\/tmp\//, 'setup names no folder path');
   assert.equal(spawnSync('git', ['status', '--porcelain'], { cwd: app, encoding: 'utf8' }).stdout, '', 'the config and the skill copy are committed');

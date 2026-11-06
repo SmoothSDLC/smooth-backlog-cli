@@ -45,7 +45,9 @@ test('setup records the location in .backlog/config.json, deploys the skill, com
   mkdirSync(join(repo, '.agents'));
   const s = setup();
   assert.doesNotMatch(s.stdout, new RegExp(repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'setup names no folder path');
-  assert.deepEqual(JSON.parse(readFileSync(join(repo, '.backlog', 'config.json'), 'utf8')), { backlog_repository: '.backlog' });
+  const written = JSON.parse(readFileSync(join(repo, '.backlog', 'config.json'), 'utf8')); // setup also records the user and an empty team
+  assert.ok(typeof written.user === 'string' && written.user);
+  assert.deepEqual({ ...written, user: undefined }, { backlog_repository: '.backlog', user: undefined, team: '' });
   assert.ok(existsSync(join(repo, '.agents', 'skills', 'backlog', 'SKILL.md')));
   assert.equal(git(repo, 'status', '--porcelain'), '', 'setup commits what it wrote');
   assert.equal(git(repo, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'and pushes it');

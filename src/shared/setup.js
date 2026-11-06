@@ -4,6 +4,7 @@
 // wins). The root file .smooth-backlog.json of earlier builds is still read. The agent folders: .agents, .claude, .github, .qwen.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { atomicWrite } from '../storage.js';
@@ -32,6 +33,17 @@ export function configuredHome(cwd = process.cwd()) {
   const cfg = readConfig(top);
   const p = typeof cfg.backlog_repository === 'string' ? cfg.backlog_repository.trim() : '';
   return p ? resolve(top, p) : null;
+}
+// The user of this repository: the git user.name, else the name the person is logged in with.
+export function defaultUser(cwd = process.cwd()) {
+  const r = spawnSync('git', ['config', 'user.name'], { cwd, encoding: 'utf8' });
+  return (r.status === 0 && r.stdout.trim()) || userInfo().username;
+}
+// The user the repository's configuration names (written by setup); the default user when it names none.
+export function configUser(cwd = process.cwd()) {
+  const top = topOf(cwd);
+  const u = top ? readConfig(top).user : undefined;
+  return typeof u === 'string' && u.trim() ? u.trim() : defaultUser(cwd);
 }
 // The shared backlog repository's clone URL: the environment variable BACKLOG_ORIGIN_URL first, then the
 // backlog_origin_url key of the repository's configuration; '' when neither is set (no built-in default).
@@ -97,10 +109,14 @@ export async function run(argv) {
   mkdirSync(join(top, '.backlog', '.state'), { recursive: true }); // the config lives in .backlog, created by setup whatever the location
   if (!existsSync(join(top, '.backlog', '.gitignore'))) await atomicWrite(join(top, '.backlog', '.gitignore'), '.state/\n');
   say(hadFolder ? 'ℹ️  .backlog folder kept' : '✅ .backlog folder created');
-  if (!kept || ask || fromEnv || setting.url || !existsSync(join(top, CONFIG))) { // a second setup keeps the config unless --ask or the environment names the location; a rewrite keeps the file's other keys
+  const had = readConfig(top);
+  const noUser = typeof had.user !== 'string' || !had.user.trim() || typeof had.team !== 'string'; // the user and the default team are written once
+  if (!kept || ask || fromEnv || setting.url || noUser || !existsSync(join(top, CONFIG))) { // a second setup keeps the config unless --ask or the environment names the location; a rewrite keeps the file's other keys
     const value = relative(top, realpathSync(home)); // relative to the repository: portable (both real paths: macOS /var is /private/var)
     const previous = readConfig(top);
     const next = { ...previous, backlog_repository: value || '.' };
+    if (typeof next.user !== 'string' || !next.user.trim()) next.user = defaultUser(top);
+    if (typeof next.team !== 'string') next.team = '';
     if (setting.url) next[ORIGIN_KEY] = setting.url; // the clone URL the setup ran with is recorded, so later runs need no variable
     await atomicWrite(join(top, CONFIG), `${JSON.stringify(next, null, 2)}\n`);
     say(`✅ configuration written: ${inside ? 'backlog inside this repository' : 'backlog repository'}${setting.url ? ', with its clone URL' : ''}`);

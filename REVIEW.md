@@ -247,8 +247,13 @@ assert one command set without a mode (2.1), and the legacy scenario (decision A
 Not changed by this pull request unless approved:
 
 1. The 1.x command set (`init`, `list`, `set`, `add`, `replace`, `remove`, `priority`, `<item> done`, `import`,
-   `branch`, `update <version>`, the JSON manifest) — decision A; `list` would stay as an alias of `query`.
+   `branch`, `update <version>`, the JSON manifest) — decision A; `list` would stay as an alias of `query`. Superseded by the
+   owner's decision that every first-release command name stays: the direct ones (`init`, `init clean`, `list new|open|done|archive|branch`,
+   `branch`, `new <name> --description --state`, `set`, `priority`, `done`, `<item> done`, `move <item> <branch>`) are aliases of
+   the one command set now (see Aliases in COMMANDS.md); `init backup` is not a command; the body-section, multi-item and
+   self-update forms are still to come.
 2. `query --pop`, `query --next --agent`, `--headless`, `BACKLOG_HEADLESS` — exact duplicates or dead. Done (Phase 1); the empty-backlog message no longer names the folder.
+   Restored as aliases: `--headless` and `BACKLOG_HEADLESS` are accepted and ignored; `query --pop` and `next --agent` are refused with a pointer to `backlog team pop`.
 3. The team-process gates on items that have no team (`--depends-on` required at creation, refinement fields
    required before any step, two review stages before any close, chunk work for plain agents) — decision B.
 4. The agent-product-specific names in flag values, environment variables, output and default values — decision C.

@@ -18,8 +18,9 @@ import { SCOPES, teamView } from './views.js';
 import { wipView } from './wip.js';
 import { isFinished, isOpen } from './workflow.js';
 
-const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip', 'changed'];
-const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
+const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip', 'changed', 'branches'];
+const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope', 'only'];
+const ONLY = { new: r => r.status === 'pending' || r.status === 'new', open: r => isOpen(r.status), done: r => isFinished(r.status) && r.status !== 'archived', archive: r => r.status === 'archived' };
 
 // argparse. --events takes an optional value (const "*"); shortcut: no unique-prefix abbreviations.
 function parse(argv) {
@@ -31,6 +32,7 @@ function parse(argv) {
       const v = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('-') ? undefined : argv[++i]);
       if (v === undefined) throw new BacklogError('INVALID_INPUT', `argument --${flag}: expected one argument`);
       if (flag === 'scope' && !SCOPES.includes(v)) throw new BacklogError('INVALID_INPUT', `argument --scope: invalid choice: ${repr(v)} (choose from ${SCOPES.map(repr).join(', ')})`);
+      if (flag === 'only' && !Object.hasOwn(ONLY, v)) throw new BacklogError('INVALID_INPUT', `argument --only: invalid choice: ${repr(v)} (choose from ${Object.keys(ONLY).map(repr).join(', ')})`);
       a[flag] = v;
     } else if (flag === 'events') a.events = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('-') ? '*' : argv[++i]);
     else throw new BacklogError('INVALID_INPUT', `unrecognized arguments: ${argv[i]}`);
@@ -166,7 +168,7 @@ async function query(argv, fromTeam) {
     return 0;
   }
   const branch = a.branch || teamScope().branch || (await git(['branch', '--show-current'], cwd)).stdout.trim(); // lib_db.git_branch: TEAM_BRANCH wins
-  const plain = a.phase || a.events !== undefined || a['by-branch'] || a.critical;
+  const plain = a.phase || a.events !== undefined || a['by-branch'] || a.critical || a.branches;
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
   await assertInside(home, folder); // no symlink between the home and the folder
@@ -189,6 +191,17 @@ async function query(argv, fromTeam) {
     }
 
     if (a.claimable || a.reviewable || a.blocked || a.decisions) return teamView(a, { rows, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
+
+    if (a.branches) { // one line per branch of this repository: its open and its finished (not archived) items
+      const by = {};
+      for (const r of rows.filter(x => !excluded.has(x.id) && x.repository === repo && x.branch && x.status !== 'archived')) {
+        const c = (by[r.branch] ??= { branch: r.branch, open: 0, done: 0 });
+        if (isOpen(r.status)) c.open++; else c.done++;
+      }
+      const list = Object.values(by);
+      if (a.json) dump(list); else for (const c of list) say(`${c.branch}  open ${c.open}  done ${c.done}`);
+      return 0;
+    }
 
     if (a.next) {
       const fms = new Map(items.map(i => [i.path, i.fm]));
@@ -268,7 +281,7 @@ async function query(argv, fromTeam) {
 
     // default / --status: the full stack
     const every = [...rows].sort((x, y) => isFinished(x.status) - isFinished(y.status) || (x.priority ?? Infinity) - (y.priority ?? Infinity) || x.seq - y.seq);
-    const shown = every.filter(r => !excluded.has(r.id) && (a.all || ((r.repository || '') === repo && (r.branch || '') === branch)));
+    const shown = every.filter(r => !excluded.has(r.id) && (a.all || ((r.repository || '') === repo && (r.branch || '') === branch)) && (!a.only || ONLY[a.only](r)));
     // F6: open items of another branch that is no longer on the origin wait for a decision, in no queue
     const others = every.filter(r => !excluded.has(r.id) && isOpen(r.status) && r.repository === repo && r.branch !== branch);
     let gone = []; let unreadable = false;

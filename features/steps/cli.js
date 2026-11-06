@@ -51,6 +51,7 @@ step(/^I commit a change to the repository$/, w => { w.git('commit', '-q', '--al
 step(/^a branch "([^"]+)" exists on the origin$/, (w, name) => { w.git('branch', name); w.git('push', '-q', 'origin', name); });
 
 step(/^I run `(.+)`$/, (w, text) => { command(w, text); });
+step(/^I run `(.+)` and answer "([^"]*)"$/, (w, text, typed) => { const args = split(text); assert.equal(args.shift(), 'backlog'); w.run(args, { input: `${typed}\n` }); });
 step(/^an item "([^"]+)" exists$/, (w, name) => {
   const r = command(w, `backlog new --name "${name}" --objective "do ${name}" --summary "${name}" --depends-on none`);
   assert.equal(r.status, 0, `could not create the item: ${output(r)}`);

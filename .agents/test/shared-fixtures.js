@@ -106,7 +106,7 @@ export function cli(args = [], opts = {}) {
     cwd: opts.cwd,
     // a team command names its agent with --agent, which a session agent would have to equal; any other command without a named agent is a different writer each time (BACKLOG_AGENT, else USER, would make every call one agent with one stale view)
     env: { ...process.env, BACKLOG_AGENT: args[0] === 'team' ? '' : `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
-    stdin: 'ignore',
+    input: opts.input ?? '', // standard input: nothing unless the test types an answer
     encoding: 'utf8',
     timeout: opts.timeout ?? 60000,
   });

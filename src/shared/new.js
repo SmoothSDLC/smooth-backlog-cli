@@ -10,6 +10,7 @@ import { configUser } from './setup.js';
 import { assertInside, checkRefs, git, redact, slugify } from './safety.js';
 import { addEvent, branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, undoOnThrow, write } from './store.js';
 import { commitSettled, pull } from './sync.js';
+import { normalise } from './workflow.js';
 import { foreignItem, isForeign, outsideTeam, strip, teamName, teamScope } from './team.js';
 
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; //
@@ -17,7 +18,7 @@ const pad = n => String(n).padStart(3, '0');
 
 //. 's' = text, 'i' = integer, an array = choices, true = a switch. argparse also takes a unique prefix.
 const OPTIONS = {
-  name: 's', title: 's', objective: 's', summary: 's', description: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
+  name: 's', title: 's', status: 's', objective: 's', summary: 's', description: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
   'review-refs': 's', 'depends-on': 's', estimate: 'i', team: 's', chunk: true,
   complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], force: true, 'dry-run': true,
 };
@@ -96,6 +97,7 @@ async function create(argv, { home, folder, repo, team }) {
   const severity = a.severity ?? 'normal';
   const priority = a.priority ?? (severity === 'critical' ? 0 : undefined); // a critical finding jumps the queue (:62)
   if (!a.name && !a.splitFrom) return refuse('--name is required (or --split-from <phase>)');
+  if (a.status !== undefined && (a.team || (a.splitFrom && teamName()))) return refuse('--status cannot be combined with --team: a team item starts in its own first status');
   const refs = asList(a.reviewRefs);
   checkRefs(refs); // before the folder is read
   // an item of a team (--team, or a split of a team's item) starts in stage refining, where a member writes it
@@ -149,7 +151,7 @@ async function create(argv, { home, folder, repo, team }) {
 
     const objective = a.objective || inherited.objective || name;
     const fm = {
-      phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: a.team || intoRefining ? 'new' : 'pending', severity,
+      phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: a.team || intoRefining ? 'new' : a.status !== undefined ? normalise(a.status) : 'pending', severity,
       repository: repo, branch: team.branch || callerBranch(process.cwd()),
       commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(), updated_by: actor(),
     };

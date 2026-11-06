@@ -62,8 +62,8 @@ test('the router: nine commands; argv after the command reaches the module unpar
 
 test('an unknown command is refused (exit 2) naming the commands', t => {
   const f = pair(t);
-  for (const c of ['init', 'constructor', 'nope', 'pop', 'work']) { // pop and work are team commands now: backlog team pop
-    const r = cli([c], { cwd: f.cons, tmp: f.tmp });
+  for (const c of ['init', 'constructor', 'nope', 'pop', 'work']) { // pop and work are team commands now: backlog team pop; init backup is no command
+    const r = cli(c === 'init' ? [c, 'backup'] : [c], { cwd: f.cons, tmp: f.tmp });
     assert.equal(r.status, 2, c);
     assert.match(r.stderr, new RegExp(`^❌ backlog: ${c} is not a backlog command \\(new, update, query, list, team, next, fields, move, archive, setup\\)`));
   }

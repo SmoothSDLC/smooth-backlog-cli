@@ -24,7 +24,7 @@ export function makeWorld(location) {
     // every command runs from inside the consuming repository, as a user or agent would
     run(args, extra = {}) {
       const agent = this.agentEnv.BACKLOG_AGENT ? {} : { BACKLOG_AGENT: `person-${++this.agent}` };
-      this.last = { args, ...runCli(args, { cwd: this.repo, env: { ...env, ...agent, ...this.agentEnv, ...extra.env } }) };
+      this.last = { args, ...runCli(args, { cwd: this.repo, env: { ...env, ...agent, ...this.agentEnv, ...extra.env }, input: extra.input }) };
       return this.last;
     },
     backlogRepo() { return env.BACKLOG_HOME || this.repo; },

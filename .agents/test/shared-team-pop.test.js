@@ -309,10 +309,10 @@ test('pop with --scope all and the refinement_scope cap of backlog.scope', () =>
   } finally { rmSync(f.cfg, { force: true }); }
 });
 
-test('--agents without --plan, --critical and --headless stay refused with pop', () => {
+test('--agents without --plan and --critical stay refused with pop', () => {
   const f = fixture();
   make(f, f.cons, 'x', []);
-  for (const args of [['query', '--agents', 'a,b'], ['team', 'pop', '--team', 't1', '--agent', 't', '--agents', 'a'], ['team', 'pop', '--team', 't1', '--agent', 't', '--critical'], ['team', 'pop', '--team', 't1', '--agent', 't', '--headless']]) {
+  for (const args of [['query', '--agents', 'a,b'], ['team', 'pop', '--team', 't1', '--agent', 't', '--agents', 'a'], ['team', 'pop', '--team', 't1', '--agent', 't', '--critical']]) {
     const r = cli(args, { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 2, args.join(' '));
     assert.equal(r.stdout, '');

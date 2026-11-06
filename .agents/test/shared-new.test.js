@@ -448,3 +448,21 @@ test('057: the help of new, archive and move names no folder or item file', t =>
     assert.deepEqual(bad, [], `${command} --help`);
   }
 });
+
+// ---------------------------------------------------------------- --status
+
+test('--status starts an item in that status (free text outside a team); the default stays pending', t => {
+  const f = fixture(t);
+  assert.equal(node(f, [...NONE, '--status', 'in progress']).status, 0);
+  assert.equal(node(f, ['--name', 'Beta job', '--objective', 'o', '--summary', 's', '--status', 'Done']).status, 0);
+  assert.equal(node(f, ['--name', 'Gamma job', '--objective', 'o', '--summary', 's']).status, 0);
+  assert.deepEqual(items(f).map(i => i.fm.status).sort(), ['closed', 'in progress', 'pending']);
+});
+
+test('--status with --team is refused: a team item starts in its own first status', t => {
+  const f = fixture(t);
+  const r = node(f, [...NONE, '--team', 't1', '--status', 'ready']);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /--status cannot be combined with --team/);
+  assert.equal(items(f).length, 0);
+});

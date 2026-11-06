@@ -133,10 +133,14 @@ function changedReport(home, folder, repo, a) {
 }
 
 //
-export const run = argv => store.cloneLocked(store.resolveHome().home, () => query(argv)); // a read that pulls waits for a writer of the clone
-async function query(argv) {
+const TEAM_VIEWS = ['claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip'];
+// `fromTeam`: the call of backlog team query, the only place of the team views
+export const run = (argv, { fromTeam = false } = {}) => store.cloneLocked(store.resolveHome().home, () => query(argv, fromTeam)); // a read that pulls waits for a writer of the clone
+async function query(argv, fromTeam) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
+  const view = TEAM_VIEWS.find(k => a[k]);
+  if (view && !fromTeam) return die(`--${view} is a team view: use backlog team query --team <team> --agent <name> --${view}`);
   if (a.next && a.agent) return die('--agent does not go with --next; the next action of an agent is backlog pop --agent <your name>');
   if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
   if (a.plan) return (await import('./pop.js')).run(argv); // pop.js repeats the preamble below for its own flags

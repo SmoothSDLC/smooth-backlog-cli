@@ -30,13 +30,13 @@ export function split(argv) {
 }
 
 // {team, agent}: the flag, else the environment, else the repository configuration; both are required.
-export function resolve(got) {
+export function resolve(got, { agentOptional = false } = {}) {
   const top = topOf(process.cwd());
   const cfg = top ? readConfig(top) : {};
   const team = got.team || strip(process.env.TEAM_NAME || '') || strip(String(cfg.team ?? ''));
   const agent = got.agent || strip(process.env.BACKLOG_AGENT || '') || strip(String(cfg.user ?? ''));
   if (!team) throw new Error('a team command needs --team <name> (or TEAM_NAME, or a team in .backlog/config.json)');
-  if (!agent) throw new Error('a team command needs --agent <name> (or BACKLOG_AGENT, or a user in .backlog/config.json)');
+  if (!agent && !agentOptional) throw new Error('a team command needs --agent <name> (or BACKLOG_AGENT, or a user in .backlog/config.json)');
   return { team, agent };
 }
 
@@ -50,8 +50,17 @@ function withAgent(rest, agent) {
   return out;
 }
 
+// a team without an entry in the configuration is refused with the text of the workflow
+const unconfigured = team => { process.stdout.write(`❌ ${loadWorkflow('team').refusals.team_not_configured.replace('<team>', team)}\n`); return 1; };
+
+// The team views of the plain query: the agent is passed on only when it was named, as the views behaved before.
+async function query(rest, { team }, got) {
+  if (!teamsConfig()[team]) return unconfigured(team);
+  return (await import('./query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])], { fromTeam: true });
+}
+
 async function update(rest, { team, agent }) {
-  if (!teamsConfig()[team]) { process.stdout.write(`❌ ${loadWorkflow('team').refusals.team_not_configured.replace('<team>', team)}\n`); return 1; }
+  if (!teamsConfig()[team]) return unconfigured(team);
   const args = withAgent(rest, agent);
   if (!args.some(x => x === '--by' || x.startsWith('--by=') || x === '--claim' || x === '--release')) args.push('--by', agent);
   return (await import('./update.js')).run(args, { team: true });
@@ -69,8 +78,9 @@ async function dispatch(argv) {
   if (sub === 'define') return define(argv.slice(1));
   if (sub === 'workflow') return workflow(argv.slice(1));
   let split_; let who;
-  try { split_ = split(argv.slice(1)); who = resolve(split_.got); } catch (e) { return die(e.message); }
+  try { split_ = split(argv.slice(1)); who = resolve(split_.got, { agentOptional: sub === 'query' }); } catch (e) { return die(e.message); } // the views read: a named agent switches them to the team rules, none is needed
   if (sub === 'update') return update(split_.rest, who);
+  if (sub === 'query') return query(split_.rest, who, split_.got);
   return die(`team ${sub} is not available yet`);
 }
 

@@ -75,7 +75,7 @@ test('082: 082aa:01 is refused --start-review and --review with the same-session
 test('082: pop, work and query --reviewable offer the review to 082aa:02 and 082bb:01, never to 082aa:01', () => {
   const f = fixture();
   const s = setup(f);
-  const reviewable = (agent) => run(f, ['query', '--reviewable', '--agent', agent]).stdout;
+  const reviewable = (agent) => run(f, ['team', 'query', '--team', 't1', '--reviewable', '--agent', agent]).stdout;
   assert.ok(reviewable(A2).includes(s), 'offered to the new session of the card');
   assert.ok(reviewable(B1).includes(s), 'offered to the other card');
   assert.ok(!reviewable(A1).includes(s), 'never offered to the asking session');
@@ -145,7 +145,7 @@ test('082: query --plan offers the requested review to the new session of the ca
   const s = setup(f); // A1 claims and asks
   const roster = join(f.t, 'roster.json');
   writeFileSync(roster, JSON.stringify({ [A2]: {}, [B1]: {}, [A1]: {} }));
-  const out = run(f, ['query', '--plan', '--roster', roster]).stdout;
+  const out = run(f, ['team', 'query', '--team', 't1', '--plan', '--roster', roster]).stdout;
   const line = out.split('\n').find(l => l.includes(`review ${s}`));
   assert.ok(line, `the plan offers the review: ${out}`);
   assert.ok(line.startsWith(`${A2}: review ${s}`), `offered to the first session that is not an authoring one: ${line}`);

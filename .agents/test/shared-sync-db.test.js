@@ -507,7 +507,8 @@ for (const dependency of ['1', '001-alpha']) test(`review P1: publication refuse
   assert.ok(existsSync(join(b.folder, 'phases', '001-alpha.md')));
   assert.ok(!existsSync(join(b.home, 'acme', 'dst', 'phases', '001-alpha.md')));
   for (const w of [a, b]) {
-    const q = cli(['query', '--blocked', '--json'], { cwd: w.cons, tmp: w.tmp });
+    writeFileSync(join(w.home, 'teams.json'), '{"t1": {}}'); // the team views need the team in the configuration
+    const q = cli(['team', 'query', '--team', 't1', '--blocked', '--json'], { cwd: w.cons, tmp: w.tmp });
     assert.equal(q.status, 0, q.stdout + q.stderr);
     assert.doesNotMatch(q.stdout, /missing/);
     assert.match(q.stdout, /001-alpha/);
@@ -558,7 +559,8 @@ for (const args of [
   assert.equal(result.status, 3, result.stdout + result.stderr);
   assert.match(result.stderr, /depends on missing item 2/);
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'the entire rejected write set is restored to upstream');
-  assert.equal(cli(['query', '--blocked', '--json'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  writeFileSync(join(b.home, 'teams.json'), '{"t1": {}}');
+  assert.equal(cli(['team', 'query', '--team', 't1', '--blocked', '--json'], { cwd: b.cons, tmp: b.tmp }).status, 0);
 });
 
 test('review P1: publication refuses a sequence change after an upstream clone adds an incoming dependency', async t => {

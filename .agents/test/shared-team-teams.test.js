@@ -33,7 +33,7 @@ const refined = (f, slug, cwd = f.cons) => [['--refine-start', '--by', 'rfn'], [
   const r = cli(['update', slug, ...a], { cwd, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 const pop = (f, agent, env) => JSON.parse(run(f, ['pop', '--agent', agent, '--json'], env).stdout);
-const slugs = (f, args, env) => JSON.parse(ok(f, ['query', ...args, '--json'], env).stdout).map(x => x.slug);
+const slugs = (f, args, env) => JSON.parse(ok(f, ['team', 'query', '--team', 't1', ...args, '--json'], env).stdout).map(x => x.slug);
 
 test('the runner sets the team on the work item and claims it for the lead; --set-team "" clears it', () => {
   const f = fixture();

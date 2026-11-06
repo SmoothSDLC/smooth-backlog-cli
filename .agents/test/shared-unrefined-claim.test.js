@@ -44,8 +44,8 @@ const make = (f, name) => createdSlug(ok(f, ['new', ...NEW(name)]).stdout);
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 const teamItem = f => { const s = make(f, 'unrefined team item'); ok(f, ['update', s, '--set-team', 't1']); return s; }; // team set, no stage
 const pop = (f, agent) => JSON.parse(run(f, ['pop', '--agent', agent, '--json'], T1).stdout);
-const claimable = (f, env) => JSON.parse(ok(f, ['query', '--claimable', '--json'], env).stdout).map(x => x.slug);
-const plan = f => JSON.parse(ok(f, ['query', '--plan', '--agents', 'amy,ada,zed', '--roster', f.roster, '--json'], T1).stdout);
+const claimable = (f, env) => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--json'], env).stdout).map(x => x.slug);
+const plan = f => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', 'amy,ada,zed', '--roster', f.roster, '--json'], T1).stdout);
 
 test('a member cannot claim a team item without a stage: the refusal names --refine-start, and nothing is written', () => {
   const f = fixture();

@@ -624,7 +624,7 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
   const f = build(false);
   const url = 'https://user:review_dummy@host/path';
   for (const args of [['query', '--next', '--branch', url], ['query', '--next', '--branch', url, '--json'], ['query', '--status', '--branch', url], ['query', '--status', '--branch', url, '--json'],
-    ['query', '--claimable', '--branch', url], ['query', '--reviewable', '--agent', 'amy', '--branch', url],
+    ['team', 'query', '--team', 't1', '--claimable', '--branch', url], ['team', 'query', '--team', 't1', '--reviewable', '--agent', 'amy', '--branch', url],
     ['pop', '--agent', 'x', '--branch', url], ['pop', '--agent', 'x', '--branch', url, '--json'], ['pop', '--agent', url], ['pop', '--agent', url, '--json']]) {
     const n = cli(args, { cwd: f.cons, tmp: f.t });
     assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));
@@ -639,6 +639,6 @@ test('query --pop and --headless are not options; query --plan still answers', (
     assert.equal(r.status, 2, args.join(' '));
     assert.match(r.stderr, /unrecognized arguments: --(pop|headless)/);
   }
-  const plan = cli(['query', '--plan', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_NAME: '', BACKLOG_AGENT: 'lead' } });
+  const plan = cli(['team', 'query', '--team', 't1', '--plan', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_NAME: '', BACKLOG_AGENT: 'lead' } });
   assert.ok([0, 3].includes(plan.status), plan.stdout + plan.stderr); // the plan view answers or is idle, it is not an unknown flag
 });

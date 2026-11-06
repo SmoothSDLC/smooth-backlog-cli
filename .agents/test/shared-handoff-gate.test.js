@@ -100,16 +100,16 @@ function gate(f, state, p, d, h, { depId = p, blockedOn = p } = {}) {
       assert.match(claim.stdout, /re-recorded it after the last receipt \(an acceptance or a rejection\)/);
       assert.match(claim.stdout, /does not match its own fields/);
     }
-    const blockedView = run(f, ['query', '--blocked']).stdout; // the view names the held-back item and the edge state
+    const blockedView = run(f, ['team', 'query', '--team', 't1', '--blocked']).stdout; // the view names the held-back item and the edge state
     assert.match(blockedView, new RegExp(`${d} \\(pending\\)`));
     assert.match(blockedView, new RegExp(`waits on ${blockedOn} \\(done, hand-off ${state}:`));
   } else {
-    assert.ok(!run(f, ['query', '--blocked']).stdout.includes(d), 'the satisfied dependent is in no blocked view');
+    assert.ok(!run(f, ['team', 'query', '--team', 't1', '--blocked']).stdout.includes(d), 'the satisfied dependent is in no blocked view');
   }
   const roster = join(f.t, 'roster.json'); writeFileSync(roster, JSON.stringify({ ada: {} }));
-  const plan = JSON.parse(run(f, ['query', '--plan', '--roster', roster, '--json']).stdout);
+  const plan = JSON.parse(run(f, ['team', 'query', '--team', 't1', '--plan', '--roster', roster, '--json']).stdout);
   assert.deepEqual(plan.map(e => e.item), [nextItem], `query --plan's offer for a ${state} edge: ${JSON.stringify(plan)}`);
-  const claimable = JSON.parse(run(f, ['query', '--claimable', '--agent', 'ada', '--json']).stdout);
+  const claimable = JSON.parse(run(f, ['team', 'query', '--team', 't1', '--claimable', '--agent', 'ada', '--json']).stdout);
   assert.equal(claimable.some(r => r.slug === d), satisfied, `query --claimable for a ${state} edge: ${JSON.stringify(claimable.map(r => r.slug))}`);
   const next = JSON.parse(run(f, ['next', '--json']).stdout);
   assert.equal(next.slug, nextItem, `next for a ${state} edge: ${JSON.stringify(next)}`);

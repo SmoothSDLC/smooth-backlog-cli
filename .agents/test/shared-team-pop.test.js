@@ -221,7 +221,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   assert.deepEqual([p.action, p.item], ['review', job]);
   assert.ok(!p.instruction.includes('you do not hold'));
   assert.ok(p.instruction.includes('load its review_refs first: references/review/contract.example.md'));
-  r = cli(['query', '--reviewable', '--agent', 'ann', '--roster', roster, '--json'], { cwd: f.cons, tmp: f.t });
+  r = cli(['team', 'query', '--team', 't1', '--reviewable', '--agent', 'ann', '--roster', roster, '--json'], { cwd: f.cons, tmp: f.t });
   assert.deepEqual(JSON.parse(r.stdout).map(x => x.slug), [job]);
   r = refuse(f, job, '--review', 'pass', '--by', 'ann', '--comments', 'looks fine'); // must cite a ref
   assert.ok(r.status === 1 && r.stdout.includes('must cite'), r.stdout);
@@ -267,7 +267,7 @@ test('test_no_new_flags_unchanged', () => {
   git(f.cons, 'checkout', '-q', '-b', 'compat-b');
   const other = make(f, f.cons, 'compat job of another branch', []);
   git(f.cons, 'checkout', '-q', 'compat-a');
-  const q = (...a) => cli(['query', ...a], { cwd: f.cons, tmp: f.t });
+  const q = (...a) => cli(['team', 'query', '--team', 't1', ...a], { cwd: f.cons, tmp: f.t });
   for (const mode of [['--claimable'], ['--reviewable', '--agent', 'ann'], ['--blocked']]) {
     const plain = q(...mode);
     assert.ok(plain.status === 0 && plain.stdout === q(...mode, '--scope', 'branch').stdout);

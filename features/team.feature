@@ -112,7 +112,7 @@ Feature: Team - a team lead splits a work item, members refine it, a reviewed re
     When I run `backlog update 2 --request-decision "Which format? Options A, B. Recommendation A." --by lead`
     Then the command succeeds
     And item 2 has stage "review-hitl"
-    When I run `backlog query --decisions`
+    When I run `backlog team query --team t1 --decisions`
     Then the output contains "Which format?"
     When I run `backlog update 2 --decision "A"`
     Then the command succeeds

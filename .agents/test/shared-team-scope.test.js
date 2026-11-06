@@ -42,7 +42,7 @@ function make(f, cwd, name, extra = []) {
   return r.stdout.split('created phase ')[1].split(' ')[0];
 }
 const slugs = (f, args, code = 0) => {
-  const r = cli(['query', ...args, '--json'], { cwd: f.cons, tmp: f.t });
+  const r = cli(['team', 'query', '--team', 't1', ...args, '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, code, r.stdout + r.stderr);
   return code ? r : JSON.parse(r.stdout).map(x => x.slug);
 };
@@ -86,7 +86,7 @@ test('test_scopes_and_refinement_cap: --scope and the refinement_scope cap of ba
     p = cli(['pop', '--agent', 't', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead' } });
     assert.ok(p.status === 3 && JSON.parse(p.stdout).action === 'idle', p.stdout + p.stderr);
     writeFileSync(f.cfg, 'refinement_scope: everywhere\n');
-    const bad = cli(['query', ...cl], { cwd: f.cons, tmp: f.t });
+    const bad = cli(['team', 'query', '--team', 't1', ...cl], { cwd: f.cons, tmp: f.t });
     assert.ok(bad.status === 2 && bad.stderr.includes("refinement_scope 'everywhere'"), bad.stderr);
   } finally { rmSync(f.cfg, { force: true }); }
 });
@@ -95,7 +95,7 @@ test('--agents goes with --plan only (the plan is shared-team-plan.test.js)', ()
   const f = fixture();
   make(f, f.cons, 'x', []);
   for (const args of [['--agents', 'a,b', '--claimable']]) {
-    const r = cli(['query', ...args], { cwd: f.cons, tmp: f.t });
+    const r = cli(['team', 'query', '--team', 't1', ...args], { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 2, args.join(' '));
     assert.equal(r.stdout, '');
   }
@@ -104,7 +104,7 @@ test('--agents goes with --plan only (the plan is shared-team-plan.test.js)', ()
 test('--scope takes branch, repo or all', () => {
   const f = fixture();
   make(f, f.cons, 'x', []);
-  const r = cli(['query', '--blocked', '--scope', 'galaxy'], { cwd: f.cons, tmp: f.t });
+  const r = cli(['team', 'query', '--team', 't1', '--blocked', '--scope', 'galaxy'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /--scope: invalid choice: 'galaxy' \(choose from 'branch', 'repo', 'all'\)/);
 });
@@ -115,7 +115,7 @@ function otherChunk() {
   const own = make(f, f.cons, 'scope own impl', []); // the folder of acme/demo exists
   const chunk = make(f, f.other, 'scope chunk other repository', ['--chunk']);
   writeFileSync(f.cfg, 'refinement_scope: all\n');
-  const all = () => cli(['query', '--claimable', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t });
+  const all = () => cli(['team', 'query', '--team', 't1', '--claimable', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t });
   assert.deepEqual(JSON.parse(all().stdout).map(x => x.slug), [own, chunk]); // visible when nothing is linked
   return { f, chunk, all };
 }
@@ -138,7 +138,7 @@ test('the refinement cap file backlog.scope is not followed through a symlink', 
   mkdirSync(join(f.t, 'outside'));
   writeFileSync(join(f.t, 'outside', 'scope'), 'refinement_scope: all\n'); // would widen the cap to all
   symlinkSync(join(f.t, 'outside', 'scope'), f.cfg);
-  const r = cli(['query', '--claimable', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t });
+  const r = cli(['team', 'query', '--team', 't1', '--claimable', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.ok(!r.stdout.includes(chunk) && r.stderr.includes('Symlink destination is unsupported'), r.stdout + r.stderr);
 });
@@ -149,7 +149,7 @@ test('the diagnostic of an unreadable backlog of another repository does not pri
   mkdirSync(odd, { recursive: true });
   mkdirSync(join(odd, 'phases'));
   writeFileSync(join(odd, 'phases', '001-x.md'), '---\nthis is not a pair\n---\n'); // an item file that cannot be read
-  const r = cli(['query', '--claimable', '--scope', 'all'], { cwd: f.cons, tmp: f.t });
+  const r = cli(['team', 'query', '--team', 't1', '--claimable', '--scope', 'all'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stderr, /backlog not read/); // the diagnostic is still there
   assert.ok(!(r.stdout + r.stderr).includes('review_dummy'), r.stdout + r.stderr);
@@ -163,7 +163,7 @@ test('any member but the author is offered the review at once; old class profile
   up('--request-review', 'any', '--note', 'ready');
   const roster = (members) => { const p = join(f.t, 'roster.json'); writeFileSync(p, JSON.stringify(members)); return p; };
   const view = (agent, r) => {
-    const o = cli(['query', '--reviewable', '--agent', agent, '--roster', r, '--json'], { cwd: f.cons, tmp: f.t });
+    const o = cli(['team', 'query', '--team', 't1', '--reviewable', '--agent', agent, '--roster', r, '--json'], { cwd: f.cons, tmp: f.t });
     assert.equal(o.status, 0, o.stdout + o.stderr);
     return JSON.parse(o.stdout).map(x => x.slug);
   };
@@ -176,7 +176,7 @@ test('any member but the author is offered the review at once; old class profile
 test('a team session whose repository id leaves the home (../x) is refused with exit 2', () => {
   const f = fixture();
   make(f, f.cons, 'scope bound', []);
-  const up = cli(['query', '--claimable'], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: '../x' } });
+  const up = cli(['team', 'query', '--team', 't1', '--claimable'], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: '../x' } });
   assert.equal(up.status, 2);
   assert.match(up.stderr, /^❌ backlog: not an owner\/name repository id: \.\.\/x/);
 });
@@ -189,22 +189,22 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
   const up = (...a) => { const r = cli(['update', held, ...a], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
   up('--claim', 'ada');
   up('--request-review', 'any', '--note', 'ready');
-  let r = cli(['query', '--claimable'], { cwd: f.cons, tmp: f.t });
+  let r = cli(['team', 'query', '--team', 't1', '--claimable'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
     `📋 1 claimable item(s) — acme/demo, branch main, P0 = next:\n   P0   ${here} (pending) — scope here\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n`);
-  r = cli(['query', '--reviewable', '--agent', 'amy'], { cwd: f.cons, tmp: f.t });
+  r = cli(['team', 'query', '--team', 't1', '--reviewable', '--agent', 'amy'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
     `📋 1 reviewable item(s) — acme/demo, branch main, P0 = next:\n   P1   ${held} (ready for review) — scope held job\n        review_refs=references/review/code.md claimed_by=ada review=requested reviewer=any estimate=5m complexity=low\n`);
-  r = cli(['query', '--blocked'], { cwd: f.cons, tmp: f.t });
+  r = cli(['team', 'query', '--team', 't1', '--blocked'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout,
     `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P2   ${blocked} (pending) — scope blocked job\n        review_refs=references/review/code.md claimed_by=- review=none estimate=5m complexity=low\n        waits on ${held} (status ready for review, claimed by ada)\n`);
-  r = cli(['query', '--blocked', '--json'], { cwd: f.cons, tmp: f.t });
+  r = cli(['team', 'query', '--team', 't1', '--blocked', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   // timestamps and content hashes differ between runs; the rest of the output is asserted word for word

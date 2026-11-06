@@ -16,12 +16,13 @@ Usage:
   backlog new --name <text> [options]              Add an item; --split-from <item> makes a sibling with its context
   backlog update <item> [options]                  Change an item: fields, body, status, priority; claim, release, review, close; team steps
   backlog update --replan "<id,id,...>"            Set the order of the queue
-  backlog query [options] [--json]                 The queue; --phase <item> one item; --events, --by-branch, --all; the team views
+  backlog query [options] [--json]                 The queue; --phase <item> one item; --events, --by-branch, --all
   backlog list [options] [--json]                  The same as backlog query
   backlog next [--all] [--branch <name>] [--json]  The next item of this repository and branch
   backlog pop --agent <name> [options]             What one agent does next
   backlog work --agent <name> [options]            A team member's next work, marked as theirs, with the whole item
   backlog team pop --team <team> --agent <lead>    The team lead takes its team's work item
+  backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
   backlog team update <item> --team <team> --agent <name> <step>   One team step: claim, release, request-review, review, close, ...
   backlog team define --file <team.json>           Register a team (lead, members, reviewers, review stages) in the backlog configuration
   backlog team workflow --file <flow.json>         Register a flow definition; --show <name> prints one
@@ -390,7 +391,6 @@ Example:
 Usage:
   backlog query [--status] [--all] [--branch <name>] [--json]
   backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
-  backlog query --claimable | --reviewable | --blocked | --decisions [--agent <name>] [--roster <file>] [--scope branch|repo|all] [--json]
   backlog query --changed [--agent <name>] [--json]
 
 Reads the backlog and never changes it, except that --changed advances
@@ -448,50 +448,11 @@ Options:
   --branch BRANCH
       The branch whose queue to show. The default is the branch that is checked out here; a detached HEAD needs
       this option or --all.
-  --claimable
-      Open, unclaimed items whose dependencies are all done, in priority order (a team item before stage ready, or without a stage, is not claimable: it is refined first); another repository's items only as chunk
-      work (chunk: true, with --scope all); with TEAM_NAME set, only that team's items of this repository (team session).
-  --reviewable
-      Items with a requested review that --agent may start or continue: a session that did not claim the item and did
-      not ask for the review (the sessions in session_authors) reviews; a new session of the same card may (team session).
-  --blocked
-      Open items that wait for dependencies that are not done, with the status and holder of each dependency (team session).
-  --decisions
-      The items that wait in stage review-hitl for an owner decision, each with its question, for the morning report; with
-      --all every branch. Answer one with backlog update <item> --decision "<answer>".
-  --wip
-      The work in progress of the whole backlog repository against its limits (wip-limits.json at its top folder:
-      overall, repository, branch, team, agent, each a number or {"default": n, "<key>": n} with the key owner/name, the
-      owner/name:branch, the team or the agent, and stale_hours), and the items in progress without a change of their own
-      for longer than stale_hours (default 48). A claim or a
-      refinement start past a limit is refused, naming the limit and the items holding it.
   --agent AGENT
-      The agent that asks. With --claimable or --reviewable it also switches to team rules: an incomplete item is not offered
-      and the agent never reviews its own work.
       With --phase the agent has read that item (or each of a comma-separated list, printed as a JSON array): its next
       write of it is checked against that version. A change of an item's rank alone (another agent's move or reflow)
       never makes the agent's view stale; a change of its content does, and the refusal names every such item of the
       write in one backlog query --phase <a>,<b> command.
-  --plan
-      The dispatch plan of the team for this branch: at most one action per member (respond, close, review, claim, and for
-      the team lead refine or reassign-review), each item to one member, with the reason and a dispatch key; the members
-      are the roster's (--roster, else TEAM_ROSTER). Entries come by action (respond and close, review, claim, refine), a
-      claim to the member holding the fewest items, then in roster order (team session). Read-only.
-  --lead LEAD
-      With --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default
-      is the environment variable TEAM_LEAD, else the lead of the session's team in teams.json (team session).
-  --agents AGENTS
-      With --plan: the team members present, comma-separated; the default is the whole roster (team session).
-  --roster ROSTER
-      With --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
-      file named by TEAM_ROSTER.
-      Any session may review an item except the sessions recorded on it (session_authors: the claimer and the one who
-      asked for the review, kept on release); a new session of the same card may review it. A member with "review_only":
-      true never claims (team session).
-  --scope {branch,repo,all}
-      With --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk items
-      of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
-      in the file backlog.scope of the folder of this repository (default branch).
 ${HELP_FLAG}
 
 ${EXIT}
@@ -645,6 +606,7 @@ Example:
 Usage:
   backlog team pop --team <name> [--agent <lead>] [--json]
   backlog team update <item> --team <name> --agent <name> <step> [options]
+  backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--roster <file>] [--scope branch|repo|all] [--json]
   backlog team define --file <team.json> [--json]
   backlog team workflow --file <flow.json> [--json]
   backlog team workflow --show <name>
@@ -656,6 +618,8 @@ problem is printed, one per line, exit 2, with nothing written. The entry is add
 others, committed and pushed ("team <name> defined"); the same definition again changes nothing. A team that has open items is not replaced:
 register the new composition under another name. backlog team workflow registers a flow the same way into workflows.json after the
 checks of the flow (every open status can reach closed); --show prints a registered or the shipped flow.
+
+backlog team query reads the backlog through the team's views; the plain query has none of them (backlog query --claimable and the others answer "use backlog team query"). The view is one of the options below; --agent is the agent that asks (given, it switches to the team rules: an incomplete item is not offered and the agent never reviews its own work). A team without an entry is refused.
 
 backlog team update runs one team step on an item: --claim, --release, --waiting, --waiting-done, --request-review, --start-review,
 --review, --close, --handoff, --accept-handoff, --reject-handoff, --reassign, --reassign-review, --refine-start, --refine-done,
@@ -691,6 +655,43 @@ Options:
   --json
       Print one object: action, item, team, repository, branch, instruction, skipped ({item, reason} of each item not
       taken), front_matter and body.
+  --claimable
+      Open, unclaimed items whose dependencies are all done, in priority order (a team item before stage ready, or without a stage, is not claimable: it is refined first); another repository's items only as chunk
+      work (chunk: true, with --scope all); with TEAM_NAME set, only that team's items of this repository .
+  --reviewable
+      Items with a requested review that --agent may start or continue: a session that did not claim the item and did
+      not ask for the review (the sessions in session_authors) reviews; a new session of the same card may .
+  --blocked
+      Open items that wait for dependencies that are not done, with the status and holder of each dependency .
+  --decisions
+      The items that wait in stage review-hitl for an owner decision, each with its question, for the morning report; with
+      --all every branch. Answer one with backlog update <item> --decision "<answer>".
+  --wip
+      The work in progress of the whole backlog repository against its limits (wip-limits.json at its top folder:
+      overall, repository, branch, team, agent, each a number or {"default": n, "<key>": n} with the key owner/name, the
+      owner/name:branch, the team or the agent, and stale_hours), and the items in progress without a change of their own
+      for longer than stale_hours (default 48). A claim or a
+      refinement start past a limit is refused, naming the limit and the items holding it.
+  --plan
+      The dispatch plan of the team for this branch: at most one action per member (respond, close, review, claim, and for
+      the team lead refine or reassign-review), each item to one member, with the reason and a dispatch key; the members
+      are the roster's (--roster, else TEAM_ROSTER). Entries come by action (respond and close, review, claim, refine), a
+      claim to the member holding the fewest items, then in roster order (team session). Read-only.
+  --lead LEAD
+      With --plan (and pop): the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default
+      is the environment variable TEAM_LEAD, else the lead of the session's team in teams.json (team session).
+  --agents AGENTS
+      With --plan: the team members present, comma-separated; the default is the whole roster (team session).
+  --roster ROSTER
+      With --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
+      file named by TEAM_ROSTER.
+      Any session may review an item except the sessions recorded on it (session_authors: the claimer and the one who
+      asked for the review, kept on release); a new session of the same card may review it. A member with "review_only":
+      true never claims (team session).
+  --scope {branch,repo,all}
+      With --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk items
+      of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
+      in the file backlog.scope of the folder of this repository (default branch).
 ${HELP_FLAG}
 
 Exit codes:

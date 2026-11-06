@@ -119,7 +119,7 @@ test('082: query --plan offers the rework to the new session of the card while t
   reworked(f, s); // A1 claims and asks; A2 gives the changes verdict
   const roster = join(f.t, 'roster.json');
   writeFileSync(roster, JSON.stringify({ [A2]: {} })); // only the new session is present
-  const out = run(f, ['query', '--plan', '--roster', roster]).stdout;
+  const out = run(f, ['team', 'query', '--team', TEAM, '--plan', '--roster', roster]).stdout;
   const respond = out.split('\n').find(l => l.includes(`respond ${s}`));
   assert.ok(respond, `the plan offers the rework to the new session: ${out}`);
   assert.ok(respond.startsWith(`${A2}: respond ${s}`), respond);
@@ -135,7 +135,7 @@ test('082: query --plan offers the close to the new session of the card while th
   ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
   const roster = join(f.t, 'roster.json');
   writeFileSync(roster, JSON.stringify({ [A2]: {} })); // only the new session is present
-  const out = run(f, ['query', '--plan', '--roster', roster]).stdout;
+  const out = run(f, ['team', 'query', '--team', TEAM, '--plan', '--roster', roster]).stdout;
   const close = out.split('\n').find(l => l.includes(`close ${s}`));
   assert.ok(close, `the plan offers the close to the new session: ${out}`);
   assert.ok(close.startsWith(`${A2}: close ${s}`), close);

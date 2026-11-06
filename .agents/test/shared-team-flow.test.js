@@ -69,7 +69,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
   await step('S11 lead: --request-refinement-review', () => { as('lead', ['update', c1, '--request-refinement-review', '--by', 'lead']); assert.equal(fm(c1).status, 'refinement review'); });
   await step('S12 lead records the reviewer: --refinement-review pass --by rex', () => { as('lead', ['update', c1, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'checkable']); assert.equal(fm(c1).status, 'ready'); });
   await step('S13 query --plan gives the ready item to one member', () => {
-    const p = json('lead', ['query', '--plan', '--roster', roster, '--json']);
+    const p = json('lead', ['team', 'query', '--team', 't1', '--plan', '--roster', roster, '--json']);
     assert.deepEqual(p.filter(e => e.item === c1).map(e => e.action), ['claim']);
   });
   await step('S14 pop --roster --claim-now claims the ready item', () => {
@@ -77,13 +77,13 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     assert.deepEqual([p.action, p.item, p.claimed, fm(c1).claimed_by], ['claim', c1, true, 'zed']);
   });
   await step('S15 --waiting and --waiting-done', () => { as('zed', ['update', c1, '--waiting', 'ci run 7', '--by', 'zed']); as('zed', ['update', c1, '--waiting-done', '--by', 'zed']); assert.ok(!fm(c1).wait_on); });
-  await step('S16 query --blocked names the dependency', () => { assert.ok(json('ann', ['query', '--blocked', '--json']).some(b => b.slug === c2)); });
+  await step('S16 query --blocked names the dependency', () => { assert.ok(json('ann', ['team', 'query', '--team', 't1', '--blocked', '--json']).some(b => b.slug === c2)); });
   await step('S17 --append evidence, --request-review: the session ends', () => {
     as('zed', ['update', c1, '--append', 'commit abc: parser and its test', '--by', 'zed']);
     const r = as('zed', ['update', c1, '--request-review', 'any', '--note', 'commit abc', '--by', 'zed']);
     assert.equal(STOP.exec(r.stdout.trim().split('\n').at(-1))?.[1], 'zed');
   });
-  await step('S18 query --reviewable for another member', () => { assert.ok(json('ann', ['query', '--reviewable', '--agent', 'ann', '--json']).some(r => r.slug === c1)); });
+  await step('S18 query --reviewable for another member', () => { assert.ok(json('ann', ['team', 'query', '--team', 't1', '--reviewable', '--agent', 'ann', '--json']).some(r => r.slug === c1)); });
   await step('S19 --start-review, --review changes citing a review_ref', () => {
     as('ann', ['update', c1, '--start-review', '--by', 'ann']);
     assert.match(as('ann', ['update', c1, '--review', 'changes', '--by', 'ann', '--comments', 'add a case'], 1).stdout, /must cite/); // a verdict cites a review_ref
@@ -122,7 +122,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     assert.equal(fm(c1).status, 'closed');
   });
   await step('S22 query --decisions lists the question; --decision returns the item to the lead', () => {
-    assert.ok(json('lead', ['query', '--decisions', '--json']).some(d => d.slug === c2));
+    assert.ok(json('lead', ['team', 'query', '--team', 't1', '--decisions', '--json']).some(d => d.slug === c2));
     as('lead', ['update', c2, '--decision', 'A']);
     assert.deepEqual([fm(c2).status, fm(c2).refiner], ['refining', 'lead']);
   });

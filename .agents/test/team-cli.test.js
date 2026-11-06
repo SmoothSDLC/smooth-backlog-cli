@@ -147,3 +147,21 @@ test('team workflow registers a flow from JSON, shows it, and refuses a flow tha
   assert.equal(t.status, 2); assert.match(t.stderr, /no chain of steps leads from/);
   assert.equal(run(f, ['team', 'workflow', '--show', 'trap']).status, 2);
 });
+
+// ---- backlog team query: the team views
+test('the team views run under team query; the plain query refuses them and points at it; a team without an entry is refused', () => {
+  const f = fixture();
+  ready(f);
+  for (const view of ['--claimable', '--reviewable', '--blocked', '--decisions', '--plan', '--wip']) {
+    const plain = run(f, ['query', view]);
+    assert.equal(plain.status, 2, `${view}: ${plain.stdout}${plain.stderr}`);
+    assert.match(plain.stderr, new RegExp(`^❌ backlog: ${view} is a team view: use backlog team query --team <team> --agent <name> ${view}`));
+    assert.equal(plain.stdout, '');
+  }
+  const viewed = run(f, ['team', 'query', '--team', 't1', '--claimable', '--json']);
+  assert.equal(viewed.status, 0, viewed.stdout + viewed.stderr);
+  assert.deepEqual(JSON.parse(viewed.stdout).map(x => x.name), ['item']);
+  assert.equal(run(f, ['team', 'query', '--team', 't1', '--agent', 'ann', '--claimable', '--json']).status, 0);
+  const ghost = run(f, ['team', 'query', '--team', 'ghost', '--claimable']);
+  assert.equal(ghost.status, 1); assert.match(ghost.stdout, /team ghost is not configured in the backlog configuration/);
+});

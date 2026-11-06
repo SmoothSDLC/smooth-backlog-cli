@@ -92,10 +92,10 @@ test('034: query --wip prints the counts and the stale items; a renumbering leav
   f.run('demo', ['update', a, '--claim', 'amy']);
   const file = join(f.home, 'acme', 'demo', 'phases', `${a}.md`);
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^updated: .*$/m, 'updated: "2026-01-01T00:00:00Z"')); // old: stale
-  const text = f.run('demo', ['query', '--wip']).stdout;
+  const text = f.run('demo', ['team', 'query', '--team', 't1', '--wip']).stdout;
   assert.match(text, /repository +acme\/demo +1 \/ 5/);
   assert.match(text, /stale \(no change of their own for more than 1 h\): 1/);
-  const j = JSON.parse(f.run('demo', ['query', '--wip', '--json']).stdout);
+  const j = JSON.parse(f.run('demo', ['team', 'query', '--team', 't1', '--wip', '--json']).stdout);
   assert.deepEqual(j.stale.map(x => x.slug), [a]);
   const upd = s => parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${s}.md`), 'utf8')).fm.updated;
   const before = [b, c].map(upd);
@@ -138,7 +138,7 @@ test('034: a branch limit is keyed owner/name:branch', () => {
   f.limits({ branch: { default: 9, 'acme/demo:main': 1 } });
   f.run('demo', ['update', a, '--claim', 'amy']);
   assert.match(f.run('demo', ['update', b, '--claim', 'bob'], 1).stdout, /the branch work-in-progress limit of acme\/demo branch main is 1/);
-  const v = JSON.parse(f.run('demo', ['query', '--wip', '--json']).stdout);
+  const v = JSON.parse(f.run('demo', ['team', 'query', '--team', 't1', '--wip', '--json']).stdout);
   assert.deepEqual(v.counts.find(c => c.level === 'branch'), { level: 'branch', key: 'acme/demo main', count: 1, limit: 1 });
 });
 

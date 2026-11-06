@@ -34,7 +34,7 @@ const handoff = (f, slug, job, claimer) => {
   assert.equal(r.status, 0, r.stdout + r.stderr);
 };
 const refused = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };
-const q = (f, ...args) => { const r = run(f, 'query', [...args, '--json']); assert.equal(r.status, 0, r.stdout + r.stderr); return JSON.parse(r.stdout).map(x => x.slug); };
+const q = (f, ...args) => { const r = run(f, 'team', ['query', '--team', 't1', ...args, '--json']); assert.equal(r.status, 0, r.stdout + r.stderr); return JSON.parse(r.stdout).map(x => x.slug); };
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 
 // conftest.Repos.new: a team item names its review refs, an estimate and a definition of done.
@@ -66,7 +66,7 @@ test('test_new_item_refusals: refusals at creation, the class options are gone, 
   assert.ok(p.status === 1 && p.stdout.includes("no item 'no-such-item'"), p.stdout + p.stderr);
   assert.equal(count(), before);
   const s = make(f, 'released only by its holder', ['--depends-on', 'none']);
-  assert.ok(run(f, 'query', ['--reviewable']).stderr.includes('--reviewable needs --agent'));
+  assert.ok(run(f, 'team', ['query', '--team', 't1', '--reviewable']).stderr.includes('--reviewable needs --agent'));
   // after the first item: a refused creation leaves no backlog (and no empty db) behind, and query needs one
   ok(f, s, '--claim', 'bob');
   assert.ok(refused(f, s, '--release', 'ann').includes('claimed by bob, not by ann'));
@@ -120,15 +120,15 @@ test('--reviewable needs --agent; the text view lists the item with its dependen
   const f = fixture();
   const a = make(f, 'first', []);
   const b = make(f, 'second', ['--depends-on', a.split('-')[0]]);
-  const r = run(f, 'query', ['--reviewable']);
+  const r = run(f, 'team', ['query', '--team', 't1', '--reviewable']);
   assert.equal(r.status, 2);
   assert.equal(r.stderr, '❌ backlog: --reviewable needs --agent <you> (the author never reviews its own item)\n');
-  const text = run(f, 'query', ['--blocked']);
+  const text = run(f, 'team', ['query', '--team', 't1', '--blocked']);
   assert.equal(text.status, 0, text.stderr);
   assert.equal(text.stdout, `📋 1 blocked item(s) — acme/demo, branch main, P0 = next:\n   P1   ${b} (pending) — second\n`
     + `        review_refs=docs/review/code.md claimed_by=- review=none estimate=5m complexity=low\n`
     + `        waits on ${a} (status pending, claimed by nobody)\n`);
-  const waiting = JSON.parse(run(f, 'query', ['--blocked', '--json']).stdout)[0].waiting_on;
+  const waiting = JSON.parse(run(f, 'team', ['query', '--team', 't1', '--blocked', '--json']).stdout)[0].waiting_on;
   assert.deepEqual(waiting, [{ id: String(Number(a.split('-')[0])), slug: a, status: 'pending', claimed_by: '' }]);
 });
 
@@ -144,7 +144,7 @@ test('an item with old work_class and review_classes fields behaves exactly like
   const pop = agent => JSON.parse(run(f, 'pop', ['--agent', agent, '--json']).stdout);
   // the team view of both items is the same but for identity, rank and time stamps
   const IDENTITY = ['id', 'slug', 'seq', 'name', 'objective', 'summary', 'priority', 'path', 'sha', 'created_at', 'updated_at'];
-  const rows = JSON.parse(run(f, 'query', ['--claimable', '--json']).stdout).map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !IDENTITY.includes(k))));
+  const rows = JSON.parse(run(f, 'team', ['query', '--team', 't1', '--claimable', '--json']).stdout).map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !IDENTITY.includes(k))));
   assert.equal(rows.length, 2);
   assert.deepEqual(rows[1], rows[0]);
   assert.deepEqual(q(f, '--claimable'), [plain, old]); // both complete and claimable: no class makes either chunk work

@@ -83,7 +83,7 @@ test('test_the_team_workflow_from_work_item_to_ready_work: split, member refinem
   p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['claim', a]); // then the ready item
   assert.notEqual(pop(f, 'zed', { TEAM_NAME: 't2' }).item, a); // nor offered to another team
-  assert.ok(!JSON.parse(ok(f, ['query', '--claimable', '--json'], T1).stdout).some(x => [b, other].includes(x.slug))); // refining: not claimable
+  assert.ok(!JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--json'], T1).stdout).some(x => [b, other].includes(x.slug))); // refining: not claimable
   up(f, w, '--claim', 'lead'); // the work item has no stage: the runner claims it for the lead (idempotent)
 });
 
@@ -140,16 +140,16 @@ test('the review-hitl stage: an owner decision holds the item and its dependents
     const p = pop(f, agent, T1);
     assert.ok(p.item !== c && p.item !== dep, `${agent}: ${JSON.stringify(p)}`); // never offered, nor what depends on it
   }
-  const list = JSON.parse(ok(f, ['query', '--decisions', '--json']).stdout);
+  const list = JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--decisions', '--json']).stdout);
   assert.deepEqual(list.map(x => [x.slug, x.team, x.decision_requested_by, x.question]), [[c, 't1', 'ann', Q]]);
-  const text = ok(f, ['query', '--decisions']).stdout;
+  const text = ok(f, ['team', 'query', '--team', 't1', '--decisions']).stdout;
   assert.ok(text.startsWith('📋 1 owner decision(s) waiting — acme/demo, branch main;') && text.includes(`${c} (team t1)`), text);
   for (const line of Q.split('\n')) assert.ok(text.includes(`        ${line}\n`), line);
-  assert.deepEqual(JSON.parse(ok(f, ['query', '--decisions', '--json'], { TEAM_NAME: 't2' }).stdout), []); // another team's decisions are not listed for t2
+  assert.deepEqual(JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--decisions', '--json'], { TEAM_NAME: 't2' }).stdout), []); // another team's decisions are not listed for t2
   up(f, c, '--decision', 'A: keep the old format');
   assert.deepEqual([fm(f, c).status, fm(f, c).refiner], ['refining', 'lead']); // the lead re-refines it with the decision
   assert.match(doc(f, c).body, /\nDECISION \d{4}-\d\d-\d\d: A: keep the old format\n/);
-  assert.deepEqual(JSON.parse(ok(f, ['query', '--decisions', '--json']).stdout), []);
+  assert.deepEqual(JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--decisions', '--json']).stdout), []);
   assert.notEqual(pop(f, 'bob', T1).item, c); // not a member's first-round refinement
   assert.deepEqual([pop(f, 'lead', T1).action, pop(f, 'lead', T1).item], ['refine', c]); // the lead re-refines it with the decision
 });
@@ -175,7 +175,7 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
     assert.match(no(f, ['update', slug, '--claim', 'bob'], 'incomplete item, missing ').stdout, new RegExp(`missing [^:]*\\b${field}\\b`));
     no(f, ['update', slug, '--note', 'working on it', '--append', 'x'], '--note', team);
   }
-  const cl = JSON.parse(ok(f, ['query', '--claimable', '--agent', 'bob', '--json']).stdout).map(x => x.slug);
+  const cl = JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--agent', 'bob', '--json']).stdout).map(x => x.slug);
   assert.ok(!Object.values(gaps).some(s => cl.includes(s)), cl.join(' '));
   const tn = { ...team, TEAM_NAME: 't1' }; // the team session
   let p = pop(f, 'bob', tn); // a member is never offered an incomplete item

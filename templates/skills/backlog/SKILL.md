@@ -48,9 +48,9 @@ A team's items follow the team rules configured in `teams.json` of the backlog f
 BACKLOG_AGENT and acts only as itself.
 
 - Lead: `backlog team pop --team <team> --agent <you>` takes the team's work item; split it only when it is too big for
-  one member (`backlog new --split-from <item>`); `backlog query --plan` is the dispatch plan; `--request-refinement-review
+  one member (`backlog new --split-from <item>`); `backlog team query --team <team> --plan` is the dispatch plan; `--request-refinement-review
   --by <you>` sends a refined item to its refinement review; `--request-decision "<question>" --by <you>` asks the owner
-  (`backlog query --decisions`; the owner answers with `--decision "<answer>"`); `--reassign <agent> --reason "<why>"
+  (`backlog team query --team <team> --decisions`; the owner answers with `--decision "<answer>"`); `--reassign <agent> --reason "<why>"
   --by <you>` hands an item on and `--reassign-review <agent> --reason "<why>" --by <you>` a stale review;
   `--wip-override "<reason>" --by <you>` lifts a work-in-progress limit for one item; `--set-team <team>` gives an item
   to a team and `--set-chunk yes` makes it chunk work any member does between items. Act only as yourself: another
@@ -65,7 +65,7 @@ BACKLOG_AGENT and acts only as itself.
 - Hand-offs: a producer records `--handoff <dependent> --handoff-commit <sha> --handoff-contract "<text>"
   --handoff-verification "<text>" [--handoff-outputs ... --handoff-pickup ... --handoff-risks ...] --by <you>`; the lead `--accept-handoff <dependent> --checks "<what>" --by <lead>` or
   `--reject-handoff <dependent> --reason "<why>" --by <lead>`; a producer closes when each dependent's hand-off is accepted.
-- Limits: `wip-limits.json` in the backlog folder; `backlog query --wip` shows the counts.
+- Limits: `wip-limits.json` in the backlog folder; `backlog team query --team <team> --wip` shows the counts.
 
 ## Gotchas
 

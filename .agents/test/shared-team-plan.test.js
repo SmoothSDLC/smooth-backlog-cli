@@ -32,7 +32,7 @@ const run = (f, args, env = {}) => {
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
-const plan = (f, env, agents = 'ann,bob,zed,lead') => JSON.parse(ok(f, ['query', '--plan', '--agents', agents, '--roster', f.roster, '--json'], env).stdout);
+const plan = (f, env, agents = 'ann,bob,zed,lead') => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', agents, '--roster', f.roster, '--json'], env).stdout);
 const rows = p => p.map(e => [e.member, e.action, e.item]);
 
 test('test_one_claimable_item_goes_to_exactly_one_member', () => {
@@ -46,7 +46,7 @@ test('test_one_claimable_item_goes_to_exactly_one_member', () => {
   ok(f, ['update', job, '--claim', 'ann']); // ann holds an active item: no claim for him
   p = plan(f);
   assert.deepEqual(p.map(e => [e.member, e.item, e.reason]), [['bob', other, 'free member']]);
-  const text = ok(f, ['query', '--plan', '--roster', f.roster]).stdout;
+  const text = ok(f, ['team', 'query', '--team', 't1', '--plan', '--roster', f.roster]).stdout;
   assert.equal(text, `bob: claim ${other} (free member) - ${p[0].instruction}\n`);
 });
 
@@ -179,7 +179,7 @@ test('the plan through claims, a review, a changes verdict, a close and the lead
       return r.stdout;
     };
     const plan = (agents, expected) => {
-      const out = step('query', ['--plan', '--agents', agents, '--roster', f.roster, '--json']);
+      const out = step('team', ['query', '--team', 't1', '--plan', '--agents', agents, '--roster', f.roster, '--json']);
       assert.equal(TS(out), `${dumps(expected)}\n`);
     };
     for (const n of ['first', 'second', 'third']) step('new', NEW(n));

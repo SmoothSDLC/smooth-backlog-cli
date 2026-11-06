@@ -75,7 +75,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.equal(held.action, 'idle', JSON.stringify(held));
   assert.equal(held.first[0].item, 'acme/lib#2');
   const roster = join(t, 'roster.json'); writeFileSync(roster, JSON.stringify({ ada: {} }));
-  const planned = JSON.parse(run(here, ['query', '--plan', '--roster', roster, '--json']).stdout);
+  const planned = JSON.parse(run(here, ['team', 'query', '--team', 't1', '--plan', '--roster', roster, '--json']).stdout);
   assert.ok(!planned.some(e => e.item === '001-app-change'), JSON.stringify(planned)); // the plan offers it no more than pop does
   // a requested review of an item that waits on another repository is not offered either: that item is named first
   run(here, NEW('reviewed app change', 'none'));
@@ -86,7 +86,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   run(here, ['update', '2', '--set-depends-on', 'acme/lib#2', '--by', 'tester']);
   const rev = JSON.parse(run(here, ['pop', '--agent', 'rev', '--json'], 3).stdout);
   assert.deepEqual([rev.action, rev.first?.[0]?.item], ['idle', 'acme/lib#2'], JSON.stringify(rev));
-  assert.deepEqual(JSON.parse(run(here, ['query', '--reviewable', '--agent', 'rev', '--json']).stdout), []); // nor listed as reviewable
+  assert.deepEqual(JSON.parse(run(here, ['team', 'query', '--team', 't1', '--reviewable', '--agent', 'rev', '--json']).stdout), []); // nor listed as reviewable
 });
 
 test('042: a lead whose team items wait only on another repository is told to start the team there, not to wait', () => {

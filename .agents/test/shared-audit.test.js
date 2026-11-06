@@ -240,7 +240,7 @@ test('review: after the author released her claim, pop and query --reviewable st
   const s = solo(t);
   assert.equal(s.run(FULL('alpha job')).status, 0);
   for (const args of [['update', '1', '--claim', 'alice'], ['update', '1', '--request-review', 'bob', '--note', 'look'], ['update', '1', '--release', 'alice']]) assert.equal(s.run(args).status, 0);
-  const rev = who => s.run(['query', '--reviewable', '--agent', who]);
+  const rev = who => s.run(['team', 'query', '--team', 't1', '--reviewable', '--agent', who]);
   assert.doesNotMatch(rev('alice').stdout, /001-alpha-job/);
   assert.match(rev('bob').stdout, /001-alpha-job/);
   const pop = who => s.run(['pop', '--json', '--agent', who]);

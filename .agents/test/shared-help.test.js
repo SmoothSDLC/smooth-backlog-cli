@@ -34,7 +34,7 @@ test('backlog update --claim keeps its refusal conditions, query --roster the sh
   assert.match(claim, /refuses when another agent holds the item/);
   assert.match(claim, /depends_on\s+is not done/);
   assert.match(claim, /in progress/);
-  for (const command of ['query', 'pop']) {
+  for (const command of ['team', 'pop']) {
     const roster = block(backlog(command, '--help').stdout, 'roster');
     assert.match(roster, /\{agent: \{\.\.\.\}\}, the team's members in order/, command);
     assert.match(roster, /TEAM_ROSTER/, command);

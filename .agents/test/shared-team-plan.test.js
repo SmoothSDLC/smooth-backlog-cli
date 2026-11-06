@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, createdSlug, intoTeam, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, sharedBacklog, teamMembers } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -14,12 +14,10 @@ function fixture(prefix = 'team-plan-') {
   const t = mkdtempSync(join(tmpdir(), prefix));
   dirs.push(t);
   const home = sharedBacklog(t);
-  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] } })); // t1 asks one peer review of its work
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }], members: ['ann', 'bob', 'zed'] } })); // t1 asks one peer review of its work; the lead (TEAM_LEAD below) is none of the members
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  const roster = join(t, 'team.json');
-  writeFileSync(roster, JSON.stringify({ ann: {}, bob: {}, zed: {} })); // the lead (TEAM_LEAD below) is none of them
-  return { t, home, cons, roster, user: join(t, 'user'), folder: join(home, 'acme', 'demo') };
+  return { t, home, cons, user: join(t, 'user'), folder: join(home, 'acme', 'demo') };
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
@@ -34,7 +32,7 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const raw = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout); // an item as created: no team
 const make = (f, name, ...extra) => intoTeam(raw(f, name, ...extra), { cwd: f.cons, tmp: f.t, env: { BACKLOG_SESSION: '', HOME: f.user } }); // the plan reaches only the items of t1
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
-const plan = (f, env, agents = 'ann,bob,zed,lead') => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', agents, '--roster', f.roster, '--json'], env).stdout);
+const plan = (f, env, agents = 'ann,bob,zed,lead') => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', agents, '--json'], env).stdout);
 const rows = p => p.map(e => [e.member, e.action, e.item]);
 
 test('test_one_claimable_item_goes_to_exactly_one_member', () => {
@@ -48,7 +46,7 @@ test('test_one_claimable_item_goes_to_exactly_one_member', () => {
   ok(f, ['update', job, '--claim', 'ann']); // ann holds an active item: no claim for him
   p = plan(f);
   assert.deepEqual(p.map(e => [e.member, e.item, e.reason]), [['bob', other, 'free member']]);
-  const text = ok(f, ['team', 'query', '--team', 't1', '--plan', '--roster', f.roster]).stdout;
+  const text = ok(f, ['team', 'query', '--team', 't1', '--plan']).stdout;
   assert.equal(text, `bob: claim ${other} (free member) - ${p[0].instruction}\n`);
 });
 
@@ -98,7 +96,7 @@ test('a review in progress is hidden from the plan; a stale one goes to the lead
 
 test('the lead and a review_only member get no claim; the lead refines an incomplete item', () => {
   const f = fixture();
-  writeFileSync(f.roster, JSON.stringify({ ann: {}, bob: { review_only: true }, zed: {}, lead: {} }));
+  writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }], members: ['ann', 'bob', 'zed', 'lead'], review_only: ['bob'] } })); // bob reviews only
   const [a, b] = ['first claim job', 'second claim job'].map(n => make(f, n));
   assert.deepEqual(plan(f).map(e => [e.member, e.action]), [['ann', 'claim'], ['zed', 'claim']]); // bob reviews only, the lead never claims
   const bare = intoTeam(createdSlug(ok(f, ['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout), { cwd: f.cons, tmp: f.t, env: { BACKLOG_SESSION: '', HOME: f.user } }, 't1', ''); // an incomplete item of t1
@@ -181,7 +179,7 @@ test('the plan through claims, a review, a changes verdict, a close and the lead
       return r.stdout;
     };
     const plan = (agents, expected) => {
-      const out = step('team', ['query', '--team', 't1', '--plan', '--agents', agents, '--roster', f.roster, '--json']);
+      const out = step('team', ['query', '--team', 't1', '--plan', '--agents', agents, '--json']);
       assert.equal(TS(out), `${dumps(expected)}\n`);
     };
     for (const [i, n] of ['first', 'second', 'third'].entries()) { step('new', NEW(n)); step('update', [`00${i + 1}-${n}`, '--set-team', 't1', '--status', 'ready']); }
@@ -211,7 +209,7 @@ test('the plan through claims, a review, a changes verdict, a close and the lead
       claim('ann', '002-second', 2),
       claim('bob', '003-third', 3),
     ]);
-    writeFileSync(f.roster, JSON.stringify({ ann: {}, bob: {}, zed: {}, lead: {} })); // the lead plans its refinement
+    teamMembers(f.home, 't1', ['ann', 'bob', 'zed', 'lead']); // the lead plans its refinement
     step('new', ['--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']); // incomplete
     step('update', ['004-bare', '--set-team', 't1']);
     plan('lead', [

@@ -3,7 +3,6 @@
 // metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { BacklogError, input } from '../errors.js';
 import { edgeState, satisfied } from './handoff.js';
@@ -174,7 +173,6 @@ export function claimRefusal(folder, agent) {
   return `${agent} holds ${active.length} active item(s): ${active.join(', ')}; pull new work only when every item you hold waits (review requested, or ${teamStep('<item>', agent, '--waiting "<what>"')}); --force overrides`;
 }
 
-// lib_db.load_roster: {agent: profile} from a team roster {agent: {...}} (the team's members, in order); {} without one.
 // The backlog configuration <home>/teams.json: { "<team>": { "lead": "<agent>", "members": ["<agent>",...],
 // "review": [{ "team": "<team>", "count": <n> },...], "refinement_review": [{ "team": "<team>", "count": <n> }] } }.
 // A team's work closes when each review rule is met: <count> distinct reviewers who are members (or the lead) of <team> passed
@@ -196,6 +194,8 @@ let teamsHomeValue = null;
 export const setTeamsHome = home => { teamsHomeValue = home; teamsCache = undefined; };
 const teamsHome = () => teamsHomeValue;
 export const teamMembers = team => asList(teamsConfig()[team]?.members);
+// the members the team's entry lists as reviewing only: such a member is never offered a claim
+export const reviewOnly = team => asList(teamsConfig()[team]?.review_only);
 export const isTeamMember = (team, agent) => Boolean(agent) && (teamMembers(team).includes(agent) || teamsConfig()[team]?.lead === agent);
 // 'member', 'absent' (the team is configured and the agent is not in it) or 'unknown' (no configuration for the team)
 export function teamMembership(name, agent) {
@@ -206,16 +206,6 @@ export function teamMembership(name, agent) {
 export const refinementReviewRules = team => (Array.isArray(teamsConfig()[team]?.refinement_review) ? teamsConfig()[team].refinement_review : []).filter(r => r && typeof r === 'object' && r.team);
 const warned = new Set();
 const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
-
-export function loadRoster(path) {
-  if (!path) return {};
-  const plain = v => v !== null && typeof v === 'object' && !Array.isArray(v);
-  try {
-    const data = JSON.parse(readFileSync(path === '~' || path.startsWith('~/') ? join(homedir(), path.slice(1)) : path, 'utf8'));
-    if (!plain(data)) throw new TypeError('the roster must be an object {agent: {...}}');
-    return Object.fromEntries(Object.entries(data).map(([a, p]) => [a, plain(p) ? p : {}]));
-  } catch (e) { throw new BacklogError('INVALID_INPUT', `roster ${path}: ${e.message}`); }
-}
 
 // Whether agent wrote the work under review: the current claimer, whoever asked for the review (review_author
 // survives a release), or a session that claimed or asked before a continuation took over claimed_by
@@ -276,7 +266,7 @@ export const lifted = doc => lift(doc, entryOf(doc.fm));
 
 // ---- team definitions (backlog team define)
 
-const TEAM_KEYS = ['name', 'lead', 'members', 'external_reviewers', 'workflow', 'review', 'wip'];
+const TEAM_KEYS = ['name', 'lead', 'members', 'review_only', 'external_reviewers', 'workflow', 'review', 'wip'];
 const NAME = /^[a-z0-9][a-z0-9:_-]*$/;
 const names = v => Array.isArray(v) && v.every(x => typeof x === 'string' && x.trim() === x && x);
 // The problems of a team definition (the JSON file of backlog team define), one text each; [] when it is valid.
@@ -291,6 +281,7 @@ export function validateTeam(def, home) {
     if (new Set(def.members).size !== def.members.length) out.push('members: names must be distinct');
     if (def.members.includes(def.lead)) out.push('lead: the lead is not one of the members');
   }
+  if (def.review_only !== undefined && !(names(def.review_only) && def.review_only.every(n => Array.isArray(def.members) && def.members.includes(n)))) out.push('review_only: must be a list of member names');
   if (def.external_reviewers !== undefined && !names(def.external_reviewers)) out.push('external_reviewers: must be a list of names');
   if (def.workflow !== undefined && typeof def.workflow !== 'string') out.push('workflow: must be the name of a flow');
   let flow = null;
@@ -319,6 +310,7 @@ export function teamEntry(def, home) {
   const flow = loadWorkflow(def.workflow ?? 'team', home);
   const entry = { lead: def.lead, members: def.members, external_reviewers: def.external_reviewers ?? [],
     review: (def.review ?? flow.team_entry_review_default).map(r => ({ stage: r.stage, count: r.count })) };
+  if (def.review_only?.length) entry.review_only = def.review_only;
   if (def.workflow) entry.workflow = def.workflow;
   if (def.wip) entry.wip = def.wip;
   return entry;

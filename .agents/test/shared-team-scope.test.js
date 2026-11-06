@@ -156,22 +156,19 @@ test('the diagnostic of an unreadable backlog of another repository does not pri
   assert.ok(!(r.stdout + r.stderr).includes('review_dummy'), r.stdout + r.stderr);
 });
 
-test('any member but the author is offered the review at once; old class profiles in the roster change nothing', () => {
+test('any member but the author is offered the review at once; the reviewable view needs no member list', () => {
   const f = fixture();
   const job = make(f, f.cons, 'reviewed by any member', ['--review-refs', 'references/review/code.md']);
   const up = (...a) => { const r = cli(['update', job, ...a], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
   up('--claim', 'amy');
   up('--request-review', 'any', '--note', 'ready');
-  const roster = (members) => { const p = join(f.t, 'roster.json'); writeFileSync(p, JSON.stringify(members)); return p; };
-  const view = (agent, r) => {
-    const o = cli(['team', 'query', '--team', 't1', '--reviewable', '--agent', agent, '--roster', r, '--json'], { cwd: f.cons, tmp: f.t });
+  const view = agent => {
+    const o = cli(['team', 'query', '--team', 't1', '--reviewable', '--agent', agent, '--json'], { cwd: f.cons, tmp: f.t });
     assert.equal(o.status, 0, o.stdout + o.stderr);
     return JSON.parse(o.stdout).map(x => x.slug);
   };
-  const old = roster({ amy: { review_classes: ['code'] }, dan: { review_classes: ['code'] }, eve: { review_classes: [] } });
-  for (const agent of ['eve', 'dan', 'ada']) assert.deepEqual(view(agent, old), [job], agent); // no holder window
-  assert.deepEqual(view('amy', old), []); // never the author
-  assert.deepEqual(view('eve', roster({ amy: {}, eve: {} })), [job]);
+  for (const agent of ['eve', 'dan', 'ada']) assert.deepEqual(view(agent), [job], agent); // no holder window
+  assert.deepEqual(view('amy'), []); // never the author
 });
 
 test('a team session whose repository id leaves the home (../x) is refused with exit 2', () => {

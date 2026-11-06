@@ -20,7 +20,7 @@ import { wipRefusal } from './wip.js';
 import { isUnstarted } from './workflow.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'plan', 'claim-now'];
-const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope'];
+const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'scope'];
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
 const narrower = (a, b) => (RANK[a] <= RANK[b] ? a : b);
 
@@ -72,8 +72,8 @@ function reviewSay(slug, fm, me) {
 async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
   const me = a.agent;
   const lead = me === team.teamLead(a.lead);
-  // the lead never claims an execution item; a roster profile with review_only never claims either
-  const noClaim = lead || Boolean(team.loadRoster(a.roster || process.env.TEAM_ROSTER || '')[me]?.review_only);
+  // the lead never claims an execution item; a member the team's entry lists as review_only never claims either
+  const noClaim = lead || team.reviewOnly(team.teamName()).includes(me);
   const open = index.open(all);
   const files = new Map(store.load(folder).map(i => [i.path, i]));
   const incomplete = new Map(); // members never claim, review or work an incomplete item of a team; an item without a team has no such fields
@@ -252,9 +252,9 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
 // an item that waits on a not-done item of another repository is offered to nobody here (pop names that first)
 const waitsAway = (folder, x) => (x.undone ?? team.undoneDependencies(folder, x.fm)).some(d => d.foreign && d.item?.status !== 'closed');
 async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
-  const roster = team.loadRoster(a.roster || process.env.TEAM_ROSTER || '');
-  const want = new Set(a.agents ? team.asList(a.agents) : Object.keys(roster));
-  const members = Object.keys(roster).filter(m => want.has(m)); // roster order
+  const roster = team.teamMembers(team.teamName()); // the members of the team's entry, in order
+  const want = new Set(a.agents ? team.asList(a.agents) : roster);
+  const members = roster.filter(m => want.has(m));
   const lead = team.teamLead(a.lead);
   const files = new Map(store.load(folder).map(i => [i.path, i]));
   const every0 = await teamRows({ open: index.open(all), scope: 'branch', cap: 'off', every: false, excluded, repo, branch, folder, home });
@@ -273,7 +273,7 @@ async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
   };
   for (const { r, fm } of rows) {
     const holder = fm.claimed_by || '';
-    // the holder's card may be in the roster as a new session - the exact holder first, then a
+    // the holder's card may be among the team's members as a new session - the exact holder first, then a
     // continuation; the new session claims the item before the close or the request-review can run as it
     const m = members.includes(holder) ? holder : (holder ? members.find(x => team.sameWorker(x, holder)) : '');
     if (!m || busy.has(m) || fm.wait_on || !team.isReady(fm)) continue; // nothing before stage ready 
@@ -298,7 +298,7 @@ async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
     const idle = members.filter(m => !team.isReviewAuthor(fm, m) && !busy.has(m) && !active[m]); // a member's own work goes first
     if (idle.length) give(idle[0], 'review', r, reviewSay(r.slug, fm, idle[0]), 'any member but the author');
   }
-  const canClaim = Object.fromEntries(members.map(m => [m, m !== lead && !roster[m]?.review_only && team.claimRefusal(folder, m) === null]));
+  const canClaim = Object.fromEntries(members.map(m => [m, m !== lead && !team.reviewOnly(team.teamName()).includes(m) && team.claimRefusal(folder, m) === null]));
   const planned = []; // the claims this plan gives out count against the limits of the next ones
   for (const { r, fm, undone } of rows) {
     // a slice written before the stage field existed has no stage; the body's split marker names it as

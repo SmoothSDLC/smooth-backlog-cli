@@ -25,8 +25,6 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     t1: { lead: 'lead', members: ['ann', 'bob', 'zed'], review: [{ team: 't1', count: 1 }, { team: 'reviewers', count: 1 }], refinement_review: [{ team: 'reviewers', count: 1 }] },
     reviewers: { lead: 'rex', members: ['rex', 'ria'] },
   }));
-  const roster = join(t, 'team.json');
-  writeFileSync(roster, JSON.stringify({ ann: {}, zed: {} }));
   const TEAM = { TEAM_NAME: 't1', TEAM_LEAD: 'lead', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const as = (agent, args, want = 0, envExtra = {}) => {
     const env = { ...TEAM, BACKLOG_AGENT: agent, BACKLOG_SESSION: '', ...envExtra };
@@ -69,11 +67,11 @@ test('the team workflow through the CLI only, step by step', async ctx => {
   await step('S11 lead: --request-refinement-review', () => { as('lead', ['update', c1, '--request-refinement-review', '--by', 'lead']); assert.equal(fm(c1).status, 'refinement review'); });
   await step('S12 lead records the reviewer: --refinement-review pass --by rex', () => { as('lead', ['update', c1, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'checkable']); assert.equal(fm(c1).status, 'ready'); });
   await step('S13 query --plan gives the ready item to one member', () => {
-    const p = json('lead', ['team', 'query', '--team', 't1', '--plan', '--roster', roster, '--json']);
+    const p = json('lead', ['team', 'query', '--team', 't1', '--plan', '--agents', 'ann,zed', '--json']);
     assert.deepEqual(p.filter(e => e.item === c1).map(e => e.action), ['claim']);
   });
-  await step('S14 pop --roster --claim-now claims the ready item', () => {
-    const p = json('zed', ['team', 'pop', '--team', 't1', '--agent', 'zed', '--roster', roster, '--json']);
+  await step('S14 team pop claims the ready item', () => {
+    const p = json('zed', ['team', 'pop', '--team', 't1', '--agent', 'zed', '--json']);
     assert.deepEqual([p.action, p.item, p.claimed, fm(c1).claimed_by], ['claim', c1, true, 'zed']);
   });
   await step('S15 --waiting and --waiting-done', () => { as('zed', ['update', c1, '--waiting', 'ci run 7', '--by', 'zed']); as('zed', ['update', c1, '--waiting-done', '--by', 'zed']); assert.ok(!fm(c1).wait_on); });

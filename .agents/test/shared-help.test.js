@@ -30,17 +30,19 @@ const flagsOf = text => [...new Set((text.match(/--[a-z][\w-]*/g) ?? []).filter(
 // The block of one flag: its header line `  --flag ...` and the lines indented by six spaces below it.
 const block = (text, flag) => new RegExp(`^  --${flag}(?: .*)?\\n((?:      .*\\n)*)`, 'm').exec(text)?.[0];
 
-test('backlog update --claim keeps its refusal conditions, query --roster the shape, default and reviewer rule', () => {
+test('backlog update --claim keeps its refusal conditions, query --plan the members, default and reviewer rule', () => {
   const claim = block(backlog('update', '--help').stdout, 'claim');
   assert.match(claim, /refuses when another agent holds the item/);
   assert.match(claim, /depends_on\s+is not done/);
   assert.match(claim, /in progress/);
   for (const command of ['team']) {
-    const roster = block(backlog(command, '--help').stdout, 'roster');
-    assert.match(roster, /\{agent: \{\.\.\.\}\}, the team's members in order/, command);
-    assert.match(roster, /TEAM_ROSTER/, command);
-    assert.match(roster, /Any session may review an item except the sessions recorded on it/, command);
-    assert.doesNotMatch(roster, /class|HOLDER/, command); // no class profiles, no holder window
+    const text = backlog(command, '--help').stdout;
+    const plan = block(text, 'plan');
+    assert.match(plan, /the\s+members\s+of\s+the\s+team's\s+entry\s+in\s+teams\.json/, command);
+    assert.match(plan, /Any\s+session\s+may\s+review\s+an\s+item\s+except\s+the\s+sessions\s+recorded\s+on\s+it/, command);
+    assert.match(plan, /review_only\s+never\s+claims/, command);
+    assert.doesNotMatch(plan, /class|HOLDER/, command); // no class profiles, no holder window
+    assert.doesNotMatch(text, /--roster|TEAM_ROSTER/, command); // the roster file is gone
   }
 });
 
@@ -66,7 +68,8 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
     [['update', '1', '--note', 'n', '--db', 'x.db'], unknown],
     [['archive', '1', '--force', '--dry-run', '--db', 'x.db'], unknown],
     [['query', '--status', '--db', 'x.db'], unknown],
-    [['query', '--agents', 'x', '--roster', roster], /^--agents goes with --plan/],
+    [['query', '--agents', 'x'], /^--agents goes with --plan/],
+    [['query', '--plan', '--roster', roster], /unrecognized arguments: --roster/],
     [['team', 'pop', '--team', 't1', '--agent', 'x', '--agents', 'x'], /^unrecognized arguments: --agents/],
     [['team', 'pop', '--team', 't1', '--agent', 'x', '--db', 'x.db'], unknown],
   ];

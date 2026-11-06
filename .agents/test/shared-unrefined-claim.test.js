@@ -13,7 +13,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, sharedBacklog, teamMembers } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -24,9 +24,8 @@ function fixture() {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  const roster = join(t, 'team.json');
-  writeFileSync(roster, JSON.stringify({ amy: {}, ada: {}, zed: {} })); // the lead (TEAM_LEAD below) is none of them
-  return { t, cons, roster, user: join(t, 'user'), folder: join(home, 'acme', 'demo') };
+  teamMembers(home, 't1', ['amy', 'ada', 'zed']); // the lead (TEAM_LEAD below) is none of them
+  return { t, cons, user: join(t, 'user'), folder: join(home, 'acme', 'demo') };
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
@@ -45,7 +44,7 @@ const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`
 const teamItem = f => { const s = make(f, 'unrefined team item'); ok(f, ['update', s, '--set-team', 't1']); return s; }; // team set, no stage
 const pop = (f, agent) => JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json'], T1).stdout);
 const claimable = (f, env) => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--json'], env).stdout).map(x => x.slug);
-const plan = f => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', 'amy,ada,zed', '--roster', f.roster, '--json'], T1).stdout);
+const plan = f => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', 'amy,ada,zed', '--json'], T1).stdout);
 
 test('a member cannot claim a team item without a stage: the refusal names --refine-start, and nothing is written', () => {
   const f = fixture();

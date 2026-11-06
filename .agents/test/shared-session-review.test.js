@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, intoTeam, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, GIT_IDENTITY, intoTeam, sharedBacklog, teamMembers } from './shared-fixtures.js';
 import { mkdirSync } from 'node:fs';
 import * as store from '../../src/shared/store.js';
 
@@ -143,9 +143,8 @@ test('082: a pass by a session-named reviewer is recorded with the work commit',
 test('082: query --plan offers the requested review to the new session of the card, never to the asking session', () => {
   const f = fixture();
   const s = setup(f, true); // A1 claims and asks
-  const roster = join(f.t, 'roster.json');
-  writeFileSync(roster, JSON.stringify({ [A2]: {}, [B1]: {}, [A1]: {} }));
-  const out = run(f, ['team', 'query', '--team', 't1', '--plan', '--roster', roster]).stdout;
+  teamMembers(f.home, 't1', [A2, B1, A1]);
+  const out = run(f, ['team', 'query', '--team', 't1', '--plan']).stdout;
   const line = out.split('\n').find(l => l.includes(`review ${s}`));
   assert.ok(line, `the plan offers the review: ${out}`);
   assert.ok(line.startsWith(`${A2}: review ${s}`), `offered to the first session that is not an authoring one: ${line}`);

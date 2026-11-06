@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog, teamMembers } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -16,7 +16,7 @@ after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 test('042: owner/name#seq across repositories: refused when unknown, blocks claim and next-work until done, shown and named first', () => {
   const t = mkdtempSync(join(tmpdir(), 'foreign-'));
   dirs.push(t);
-  sharedBacklog(t);
+  const home = sharedBacklog(t);
   const here = consumer(t, 'acme', 'app', 'main');
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
@@ -74,8 +74,8 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   const held = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json'], 3).stdout);
   assert.equal(held.action, 'idle', JSON.stringify(held));
   assert.equal(held.first[0].item, 'acme/lib#2');
-  const roster = join(t, 'roster.json'); writeFileSync(roster, JSON.stringify({ ada: {} }));
-  const planned = JSON.parse(run(here, ['team', 'query', '--team', 't1', '--plan', '--roster', roster, '--json']).stdout);
+  teamMembers(home, 't1', ['ada']);
+  const planned = JSON.parse(run(here, ['team', 'query', '--team', 't1', '--plan', '--json']).stdout);
   assert.ok(!planned.some(e => e.item === '001-app-change'), JSON.stringify(planned)); // the plan offers it no more than pop does
   // a requested review of an item that waits on another repository is not offered either: that item is named first
   run(here, NEW('reviewed app change', 'none'));

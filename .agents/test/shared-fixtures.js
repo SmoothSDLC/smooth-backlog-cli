@@ -2,7 +2,7 @@
 // Tests run against local bare repositories only: origins under <tmp>/origins,
 // clones under <tmp>, with BACKLOG_HOME and XDG_CONFIG_HOME inside the test's
 // temp dir - never the real backlog repository or ~/.config.
-import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -128,4 +128,11 @@ export function intoTeam(slug, opts, team = 't1', status = 'ready') { // status 
   const r = cli(['update', slug, '--set-team', team, ...(status ? ['--status', status] : [])], { ...opts, env: { ...opts.env, BACKLOG_AGENT: '' } }); // opts.env: the caller's own session, so its view of the item stays current
   if (r.status !== 0) throw new Error(`intoTeam ${slug}: ${r.stdout}${r.stderr}`);
   return slug;
+}
+
+// Names the members of a team in the backlog configuration (teams.json of the backlog folder), in order: the agents a plan dispatches to.
+export function teamMembers(home, team, members) {
+  const file = join(home, 'teams.json');
+  let all = {}; try { all = JSON.parse(readFileSync(file, 'utf8')); } catch { /* none yet */ }
+  writeFileSync(file, JSON.stringify({ ...all, [team]: { ...all[team], members } }));
 }

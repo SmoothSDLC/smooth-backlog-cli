@@ -221,14 +221,12 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   let r = cli(['team', 'pop', '--team', 't1', '--agent', 'bob', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.ok(JSON.parse(r.stdout).instruction.includes('definition of done: references/review/contract.example.md, references/patterns/x.md'), r.stdout + r.stderr);
   ok(f, job, '--request-review', 'any', '--note', 'commit abc'); // the pop above claimed it for bob
-  const roster = join(f.t, 'team.json');
-  writeFileSync(roster, JSON.stringify({ ann: { work_classes: ['app-code'], review_classes: ['code'] }, bob: {} })); // old class profiles mean nothing
   assert.equal(pop(f).action, 'review'); // any member but the author
-  let p = pop(f, '--roster', roster);
+  let p = pop(f);
   assert.deepEqual([p.action, p.item], ['review', job]);
   assert.ok(!p.instruction.includes('you do not hold'));
   assert.ok(p.instruction.includes('load its review_refs first: references/review/contract.example.md'));
-  r = cli(['team', 'query', '--team', 't1', '--reviewable', '--agent', 'ann', '--roster', roster, '--json'], { cwd: f.cons, tmp: f.t });
+  r = cli(['team', 'query', '--team', 't1', '--reviewable', '--agent', 'ann', '--json'], { cwd: f.cons, tmp: f.t });
   assert.deepEqual(JSON.parse(r.stdout).map(x => x.slug), [job]);
   r = refuse(f, job, '--review', 'pass', '--by', 'ann', '--comments', 'looks fine'); // must cite a ref
   assert.ok(r.status === 1 && r.stdout.includes('must cite'), r.stdout);
@@ -251,20 +249,20 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   assert.deepEqual([p.action, p.item], ['review', other]);
 });
 
-test('a roster member with review_only never claims; a missing roster is an error', () => {
+test('a member the team entry lists as review_only never claims; --roster is no option any more', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'pop-review-only');
   const job = make(f, f.cons, 'review only job', []);
-  const roster = join(f.t, 'team.json');
-  writeFileSync(roster, JSON.stringify({ rev: { review_only: true }, ann: {} }));
-  const as = (agent, ...args) => cli(['team', 'pop', '--team', 't1', '--agent', agent, '--roster', roster, '--json', ...args], { cwd: f.cons, tmp: f.t, env: LEAD });
+  writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }], members: ['rev', 'ann'], review_only: ['rev'] } }));
+  const as = (agent, ...args) => cli(['team', 'pop', '--team', 't1', '--agent', agent, '--json', ...args], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.equal(JSON.parse(as('rev').stdout).action, 'idle');
   assert.ok(!item(f, job).fm.claimed_by);
   const annPop = JSON.parse(as('ann').stdout);
   assert.deepEqual([annPop.action, annPop.item], ['claim', job]);
-  const gone = cli(['team', 'pop', '--team', 't1', '--agent', 'ann', '--roster', join(f.t, 'missing.json')], { cwd: f.cons, tmp: f.t, env: LEAD });
+  const gone = as('ann', '--roster', join(f.t, 'team.json'));
   assert.equal(gone.status, 2);
-  assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'missing.json')}: `), gone.stderr);
+  assert.match(gone.stderr, /unrecognized arguments: --roster/);
+  assert.equal(cli(['team', 'pop', '--team', 't1', '--agent', 'rev', '--json'], { cwd: f.cons, tmp: f.t, env: { ...LEAD, TEAM_ROSTER: join(f.t, 'missing.json') } }).status, 3); // idle, and the variable is not read: no error about a missing file
 });
 
 // Without the new flags every query prints what it printed before.
@@ -402,12 +400,14 @@ test('pop --scope with an unknown scope exits 2 and names the choices', () => {
   assert.ok(galaxy.status === 2 && galaxy.stderr.includes("argument --scope: invalid choice: 'galaxy' (choose from 'branch', 'repo', 'all')"), galaxy.stderr);
 });
 
-test('pop --roster with a missing roster file exits 2 and names the file', () => {
+test('--roster is refused by pop and by the plan: unrecognized arguments, exit 2', () => {
   const f = fixture();
   make(f, f.cons, 'roster job');
-  const gone = cli(['team', 'pop', '--team', 't1', '--agent', 'x', '--roster', join(f.t, 'nope.json')], { cwd: f.cons, tmp: f.t });
-  assert.equal(gone.status, 2);
-  assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'nope.json')}: `), gone.stderr);
+  for (const args of [['team', 'pop', '--team', 't1', '--agent', 'x', '--roster', join(f.t, 'nope.json')], ['team', 'query', '--team', 't1', '--plan', '--roster', join(f.t, 'nope.json')]]) {
+    const gone = cli(args, { cwd: f.cons, tmp: f.t });
+    assert.equal(gone.status, 2, args.join(' '));
+    assert.match(gone.stderr, /unrecognized arguments: --roster/);
+  }
 });
 
 test('--claim-now on an item the agent already holds continues it and does not claim it twice', () => {

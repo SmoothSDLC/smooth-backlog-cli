@@ -19,7 +19,7 @@ import { wipView } from './wip.js';
 import { isFinished, isOpen } from './workflow.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip', 'changed', 'branches'];
-const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'roster', 'scope', 'only'];
+const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'scope', 'only'];
 const ONLY = { new: r => r.status === 'pending' || r.status === 'new', open: r => isOpen(r.status), done: r => isFinished(r.status) && r.status !== 'archived', archive: r => r.status === 'archived' };
 
 // argparse. --events takes an optional value (const "*"); shortcut: no unique-prefix abbreviations.

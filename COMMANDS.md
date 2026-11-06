@@ -614,7 +614,7 @@ backlog team — the commands that know a team: pop, update, query, define, work
 Usage:
   backlog team pop --team <name> --agent <name> [--dry-run] [--json]
   backlog team update <item> --team <name> --agent <name> <step> [options]
-  backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--roster <file>] [--scope branch|repo|all] [--json]
+  backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--scope branch|repo|all] [--json]
   backlog team define --file <team.json> [--json]
   backlog team workflow --file <flow.json> [--json]
   backlog team workflow --show <name>
@@ -666,7 +666,7 @@ backlog team update runs one team step on an item: --claim, --release, --waiting
 (see backlog update --help). A bare --claim or --release takes the agent. The earlier spelling backlog update <item> --claim <agent>
 (and the other steps) still works and prints "moved: use backlog team update ..." on standard error.
 
-backlog team define registers one team from a JSON file { "name", "lead", "members": [..], "external_reviewers": [..], "workflow": "<flow,
+backlog team define registers one team from a JSON file { "name", "lead", "members": [..], "review_only": [..] (members who review and never claim), "external_reviewers": [..], "workflow": "<flow,
 default team>", "review": [{ "stage", "reviewers": "members"|"external_reviewers", "count" }] (default: the flow's), "wip": { "agent", "team" } }.
 Every field is checked (the lead is not a member, the stages are stages of the flow, an external stage needs external reviewers) and each
 problem is printed, one per line, exit 2, with nothing written. The entry is added to teams.json at the root of the backlog beside the
@@ -701,19 +701,16 @@ Options:
   --plan
       The dispatch plan of the team for this branch: at most one action per member (respond, close, review, claim, and for
       the team lead refine or reassign-review), each item to one member, with the reason and a dispatch key; the members
-      are the roster's (--roster, else TEAM_ROSTER). Entries come by action (respond and close, review, claim, refine), a
-      claim to the member holding the fewest items, then in roster order (team session). Read-only.
+      are the members of the team's entry in teams.json. Entries come by action (respond and close, review, claim, refine), a
+      claim to the member holding the fewest items, then in the order of the entry (team session). Any session may review
+      an item except the sessions recorded on it (session_authors: the claimer and the one who asked for the review, kept
+      on release); a new session of the same card may review it. A member the entry lists in review_only never claims.
+      Read-only.
   --lead LEAD
       pop and --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the
       environment variable TEAM_LEAD, else the lead of the team in teams.json.
   --agents AGENTS
-      With --plan: the team members present, comma-separated; the default is the whole roster.
-  --roster ROSTER
-      pop and --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
-      file named by TEAM_ROSTER.
-      Any session may review an item except the sessions recorded on it (session_authors: the claimer and the one who
-      asked for the review, kept on release); a new session of the same card may review it. A member with "review_only":
-      true never claims.
+      With --plan: the team members present, comma-separated; the default is all the members of the team's entry.
   --scope {branch,repo,all}
       pop and the views --claimable, --reviewable and --blocked: how far the agent looks: this branch (the default), every branch of this repository, or also the chunk items
       of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all

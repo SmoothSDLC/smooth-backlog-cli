@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog, GIT_IDENTITY, teamMembers } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 
 const TEAM = 't07:09:1a';
@@ -117,9 +117,8 @@ test('082: query --plan offers the rework to the new session of the card while t
   const f = fixture();
   const s = teamItem(f, 'plan rework for the new session');
   reworked(f, s); // A1 claims and asks; A2 gives the changes verdict
-  const roster = join(f.t, 'roster.json');
-  writeFileSync(roster, JSON.stringify({ [A2]: {} })); // only the new session is present
-  const out = run(f, ['team', 'query', '--team', TEAM, '--plan', '--roster', roster]).stdout;
+  teamMembers(f.home, TEAM, [A2]); // only the new session is present
+  const out = run(f, ['team', 'query', '--team', TEAM, '--plan']).stdout;
   const respond = out.split('\n').find(l => l.includes(`respond ${s}`));
   assert.ok(respond, `the plan offers the rework to the new session: ${out}`);
   assert.ok(respond.startsWith(`${A2}: respond ${s}`), respond);
@@ -133,9 +132,8 @@ test('082: query --plan offers the close to the new session of the card while th
   ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', B1]);
   ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
-  const roster = join(f.t, 'roster.json');
-  writeFileSync(roster, JSON.stringify({ [A2]: {} })); // only the new session is present
-  const out = run(f, ['team', 'query', '--team', TEAM, '--plan', '--roster', roster]).stdout;
+  teamMembers(f.home, TEAM, [A2, B1]); // the reviewer is a member; only the new session is present
+  const out = run(f, ['team', 'query', '--team', TEAM, '--plan', '--agents', A2]).stdout;
   const close = out.split('\n').find(l => l.includes(`close ${s}`));
   assert.ok(close, `the plan offers the close to the new session: ${out}`);
   assert.ok(close.startsWith(`${A2}: close ${s}`), close);

@@ -246,3 +246,15 @@ test('no instruction of the engine tells an agent to run a team step through the
     for (const line of readFileSync(new URL(name, dir), 'utf8').split('\n')) if (!line.trimStart().startsWith('//')) assert.doesNotMatch(line, step, name);
   }
 });
+
+test('team define keeps review_only, a list of names within the members, in the entry', () => {
+  const f = fixture(); published(f);
+  const def = extra => run(f, ['team', 'define', '--file', defFile(f, { ...TEAM, ...extra })]);
+  const bad = def({ review_only: ['stranger'] });
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /review_only: must be a list of member names/);
+  assert.equal(def({ review_only: 'bob' }).status, 2);
+  const good = def({ review_only: ['bob'] });
+  assert.equal(good.status, 0, good.stdout + good.stderr);
+  assert.deepEqual(teams(f)[TEAM.name].review_only, ['bob']);
+});

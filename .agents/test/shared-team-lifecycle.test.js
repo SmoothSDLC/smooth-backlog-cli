@@ -178,15 +178,14 @@ test('team.js: lists, chunk items, review documents', () => {
   for (const name of ['WORK_CLASSES', 'REVIEW_CLASSES', 'parseClasses', 'uncoveredReviewClasses', 'fallbackReview']) assert.ok(!(name in team), name);
 });
 
-test('team.js: the roster names the members in order; any profile fields are kept and none is a class', () => {
+test('team.js: the team entry names the members in order and the review-only ones; the roster file reader is gone', () => {
   const f = fixture();
-  assert.deepEqual(team.loadRoster(''), {});
-  const file = join(f.t, 'roster.json');
-  writeFileSync(file, JSON.stringify({ ann: { work_classes: 'app-code,tests', review_classes: ['code'] }, bob: [1] }));
-  assert.deepEqual(team.loadRoster(file), { ann: { work_classes: 'app-code,tests', review_classes: ['code'] }, bob: {} }); // lib_db.load_roster
-  assert.throws(() => team.loadRoster(join(f.t, 'missing.json')), e => e.exitCode === 2 && e.message.startsWith(`roster ${join(f.t, 'missing.json')}:`));
-  writeFileSync(file, '[1]');
-  assert.throws(() => team.loadRoster(file), e => e.exitCode === 2);
+  writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { members: ['ann', 'bob', 'cy'], review_only: ['bob'] }, t2: {} }));
+  team.setTeamsHome(f.home);
+  assert.deepEqual(team.teamMembers('t1'), ['ann', 'bob', 'cy']);
+  assert.deepEqual(team.reviewOnly('t1'), ['bob']);
+  assert.deepEqual([team.teamMembers('t2'), team.reviewOnly('t2'), team.reviewOnly('nope')], [[], [], []]);
+  assert.ok(!('loadRoster' in team));
 });
 
 // Item files of a folder (the rules read the rows built from them, the files only for metadata).

@@ -18,7 +18,7 @@ const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const self = (args, env = {}) => spawnSync(process.execPath, [BIN(), ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
 const last = r => redact(`${r.stdout}${r.stderr}`.trim().split('\n').filter(Boolean).pop() || `exit ${r.status}`);
-const VALUE = ['lead', 'roster', 'scope', 'branch'];
+const VALUE = ['lead', 'scope', 'branch'];
 const BOOL = ['json', 'all', 'dry-run']; // --dry-run: the answer only, nothing claimed or marked (a hook that looks before the agent acts)
 
 export function parse(rest) {

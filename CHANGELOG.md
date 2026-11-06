@@ -24,6 +24,22 @@ One backlog, one CLI. Compared with 1.0.1:
   `teams.json`; a team step for a team without an entry is refused. A review verdict is `complete` or `reject`
   (`pass` and `changes` stay accepted); a reject keeps the finding in the item's review history. Items written by
   earlier builds are read as the new words and drop `stage` and `review_state` when next written.
+- **Two kinds of commands.** The plain commands know nothing of teams. Everything that knows a team is under `backlog team`:
+  `pop` (the one next-action command by the agent's role in the team's entry; it marks the claim, the start of a refinement
+  or of a review in one locked write and prints the whole item, and replaces `backlog pop` and `backlog work`),
+  `update <item> --team <t> --agent <a> <step>` (the team steps; on `backlog update` the earlier spelling still works and
+  prints `moved: use backlog team update ...`), `query` (the claimable, reviewable, blocked, decisions, plan and wip
+  views; the plain `query` points at it), `define` and `workflow`. `--team` and `--agent` come from the flags, then
+  `TEAM_NAME` and `BACKLOG_AGENT`, then the `team` and `user` of `.backlog/config.json`. `backlog next` prints the open item
+  with the best priority whole (front matter and body) and skips nothing for team reasons.
+- **The configuration has a user and a team.** `backlog setup` writes `user` (the git `user.name`, else the login name) and
+  an empty `team`; an item outside a team records its `owner`, and the writer with no agent named is the user.
+- **Teams and flows are defined from JSON.** `backlog team define --file <team.json>` checks the definition (lead, members,
+  reviewers, stages of the flow) and adds the entry to `teams.json` beside the others, committed and pushed;
+  `backlog team workflow --file <flow.json>` registers a flow in `workflows.json`. A team with open items is not replaced.
+- **The item template is visible.** `backlog fields` prints every field, the name it is shown under, what it means, who sets it
+  and when it is required; `backlog new --help` carries the table, `new` takes `--title` and `--description` for `--name`
+  and `--body`, and `--summary` may repeat.
 - **The history of an item is part of the item** (`backlog query --events`); a replan records no event of its own.
 - **Where the items live is configuration, not a mode.** The backlog is always a git repository and every change to it
   is committed and pushed before the command exits. The repository's `.backlog` folder holds the configuration

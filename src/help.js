@@ -22,6 +22,7 @@ Usage:
   backlog pop --agent <name> [options]             What one agent does next
   backlog work --agent <name> [options]            A team member's next work, marked as theirs, with the whole item
   backlog team pop --team <team> --agent <lead>    The team lead takes its team's work item
+  backlog team update <item> --team <team> --agent <name> <step>   One team step: claim, release, request-review, review, close, ...
   backlog move <item> --to-branch <name>           Move an item to another branch (or --to-repository)
   backlog archive <item> [--force] [--dry-run]     Archive a finished item
   backlog setup [--ask]                            Point this repository at its backlog folder and deploy the backlog skill
@@ -641,6 +642,15 @@ Example:
 
 Usage:
   backlog team pop --team <name> [--agent <lead>] [--json]
+  backlog team update <item> --team <name> --agent <name> <step> [options]
+
+backlog team update runs one team step on an item: --claim, --release, --waiting, --waiting-done, --request-review, --start-review,
+--review, --close, --handoff, --accept-handoff, --reject-handoff, --reassign, --reassign-review, --refine-start, --refine-done,
+--request-refinement-review, --refinement-review, --request-decision, --decision, --wip-override, with the options of those steps
+(see backlog update --help). The team comes from --team (else TEAM_NAME, else the team of .backlog/config.json), the agent from
+--agent (else BACKLOG_AGENT, else the user of .backlog/config.json); a bare --claim or --release takes the agent. A team without an
+entry in teams.json is refused. The earlier spelling backlog update <item> --claim <agent> (and the other steps) still works and
+prints "moved: use backlog team update ..." on standard error.
 
 A work item of a team is an item of this repository and branch (in a team session the ones it is bound to,
 TEAM_REPOSITORY and TEAM_BRANCH, as for every command) whose front matter team is the team's name and that has

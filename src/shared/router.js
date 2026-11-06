@@ -5,7 +5,7 @@ import { resolveHome } from './store.js';
 
 // command -> [module relative to this file, ...arguments put in front of the user's argv]
 export const TABLE = {
-  new: ['./new.js'], update: ['./update.js'], query: ['./query.js'], list: ['./query.js'], pop: ['./pop.js'], work: ['./work.js'], team: ['./teampop.js'],
+  new: ['./new.js'], update: ['./update.js'], query: ['./query.js'], list: ['./query.js'], pop: ['./pop.js'], work: ['./work.js'], team: ['./team-cli.js'],
   next: ['./query.js', '--next'], move: ['./move.js'], archive: ['./archive.js'],
 };
 const HELP_OF = { list: 'query' }; // an alias prints the help of the command it stands for

@@ -125,7 +125,7 @@ test('team pop: only the lead, only its team, only itself', () => {
   const f = fixture();
   for (const [args, env, text] of [
     [['team', 'pop'], {}, /team pop needs --team/],
-    [['team'], {}, /subcommand pop/],
+    [['team'], {}, /needs a subcommand/],
     [['team', 'pop', '--team', 't1', '--agent', 'bob'], {}, /only the team lead \(lead; TEAM_LEAD\)/],
     [['team', 'pop', '--team', 't1'], { TEAM_NAME: 't2' }, /team t2 \(TEAM_NAME\), not t1/],
     [['team', 'pop', '--team', 't1'], { TEAM_NAME: 't1', BACKLOG_AGENT: 'bob' }, /you are bob/],
@@ -179,6 +179,7 @@ test('query --phase --json names the team fields an item lacks', () => {
 const WRAP = `import { spawnSync } from 'node:child_process'; import { existsSync, writeFileSync } from 'node:fs';
 const bin = ${JSON.stringify(resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'))};
 const args = process.argv.slice(2); const e = process.env;
+const isUpdate = args[0] === 'team' && args[1] === 'update'; // the claim of team pop is a team update
 if (e.FAIL_ON && args.join(' ').startsWith(e.FAIL_ON)) { process.stderr.write(e.FAIL_ERR + '\\n'); process.exit(Number(e.FAIL_RC)); }
 if (e.CLEAR_ON_READ && args[0] === 'query' && args.includes('--phase') && !existsSync(e.MOVE_MARK + '.cleared')) {
   writeFileSync(e.MOVE_MARK + '.cleared', '1'); // another agent takes the item out of the team just before the lead reads it
@@ -191,12 +192,12 @@ if (e.REASSIGN_ON_READ && args[0] === 'query' && args[args.indexOf('--phase') + 
 }
 const r = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: e });
 let out = r.stdout;
-if (e.HAND_BACK_AFTER_CLAIM && args[0] === 'update' && args.includes('--claim') && r.status === 0) {
-  const slug = args[1]; const to = e.HAND_BACK_TO; const from = args[args.indexOf('--claim') + 1];
+if (e.HAND_BACK_AFTER_CLAIM && isUpdate && args.includes('--claim') && r.status === 0) {
+  const slug = args[2]; const to = e.HAND_BACK_TO; const from = args[args.indexOf('--agent') + 1];
   spawnSync(process.execPath, [bin, 'query', '--phase', slug, '--agent', from], { env: e }); // a fresh view for the hand-back
   spawnSync(process.execPath, [bin, 'update', slug, '--reassign', to, '--by', from, '--reason', 'handed back'], { env: e }); // another writer hands the item back
 }
-if (args[0] === 'update' && args.includes('--claim') && r.status === 0 && e.MOVE_AFTER_CLAIM) writeFileSync(e.MOVE_MARK, '1');
+if (isUpdate && args.includes('--claim') && r.status === 0 && e.MOVE_AFTER_CLAIM) writeFileSync(e.MOVE_MARK, '1');
 if (args[0] === 'query' && args.includes('--phase') && e.MOVE_AFTER_CLAIM && existsSync(e.MOVE_MARK)) {
   const j = JSON.parse(out); j.front_matter.branch = e.MOVE_AFTER_CLAIM; out = JSON.stringify(j);
 }
@@ -209,7 +210,7 @@ test('team pop: an update error, a failed synchronisation and a scope change are
   const s = make(f, 'work item'); ok(f, ['update', s, '--set-team', 't1']);
   const seam = extra => ({ BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'moved'), ...extra });
   for (const [extra, text] of [
-    [{ FAIL_ON: `update ${s} --claim`, FAIL_RC: '1', FAIL_ERR: '❌ backlog: disk full' }, /team pop stopped: ❌ backlog: disk full/],
+    [{ FAIL_ON: `team update ${s} --team t1 --agent lead --claim`, FAIL_RC: '1', FAIL_ERR: '❌ backlog: disk full' }, /team pop stopped: ❌ backlog: disk full/],
     [{ FAIL_ON: 'query --status', FAIL_RC: '3', FAIL_ERR: 'could not synchronise the backlog clone' }, /team pop stopped: could not synchronise/],
   ]) {
     const r = run(f, ['team', 'pop', '--team', 't1', '--json'], seam(extra));

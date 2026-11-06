@@ -89,12 +89,16 @@ const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const refuse = message => { say(`❌ ${message}`); return 1; }; // 's refusals: stdout, exit 1
 
-export async function run(argv) {
-  try { return await update(argv); } catch (e) { return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); }
+export async function run(argv, { team = false } = {}) {
+  try { return await update(argv, team); } catch (e) { return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); }
 }
 
-async function update(argv) {
+async function update(argv, fromTeam) {
   const a = parse(argv);
+  const flags = [...TEAM_VALUE, ...TEAM_BOOL].filter(k => a[k] !== undefined);
+  const moved = flags.find(k => k !== 'by') ?? flags[0];
+  // the team steps live under backlog team update; the earlier spelling still works and says where it moved
+  if (moved && !fromTeam) process.stderr.write(`moved: use backlog team update <item> --team <t> --agent <a> --${moved}\n`);
   seen.setActor(a.by ?? a.claim ?? a.release);
   a.named = Boolean(a.by ?? a.claim ?? a.release);
   const { home } = store.resolveHome();

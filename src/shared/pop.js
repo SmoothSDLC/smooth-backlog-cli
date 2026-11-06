@@ -167,7 +167,8 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
   if (act?.r && act.f === repo) seen.view(me, folder, repo, act.r); // the pop just showed it: the claim below acts on this view
   if (act?.name === 'claim' && a['claim-now']) {
     const bin = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
-    const c = spawnSync(process.execPath, [bin, 'update', act.r.slug, '--claim', me], { encoding: 'utf8', env: { ...process.env, ...store.lockEnv(home) } });
+    const claimTeam = files.get(act.r.path)?.fm.team || team.teamName();
+    const c = spawnSync(process.execPath, [bin, ...(claimTeam ? ['team', 'update', act.r.slug, '--team', claimTeam, '--agent', me, '--claim'] : ['update', act.r.slug, '--claim', me])], { encoding: 'utf8', env: { ...process.env, ...store.lockEnv(home) } });
     if (c.status !== 0) { // a nonzero exit, a signal or a process that did not start is no claim
       process.stdout.write(redact((c.stdout ?? '') + (c.stderr ?? '')));
       return c.status ?? die(`claim of ${act.r.slug} failed: ${c.error ? c.error.message : `the claim process ended by ${c.signal}`}`, 1);

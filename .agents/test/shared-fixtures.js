@@ -110,7 +110,9 @@ export function cli(args = [], opts = {}) {
     encoding: 'utf8',
     timeout: opts.timeout ?? 60000,
   });
-  return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
+  // the one-line notice of a spelling that moved (`moved: use backlog team ...`) is not output the tests compare; opts.notices keeps it
+  const stderr = opts.notices ? (p.stderr ?? '') : (p.stderr ?? '').replace(/^moved: use backlog team .*\n/gm, '');
+  return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr };
 }
 
 // The slug a `new` output names: `created phase <slug> (seq N)`.

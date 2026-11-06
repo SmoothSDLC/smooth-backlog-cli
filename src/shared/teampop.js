@@ -72,7 +72,7 @@ export async function run(argv) {
     if (strip(held.fm.claimed_by || '') !== agent) {
       const q = read(item);
       if (q.status !== 0) return fail(q);
-      const c = self(['update', item, '--claim', agent], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, TEAM_BRANCH: branch });
+      const c = self(['team', 'update', item, '--team', a.team, '--agent', agent, '--claim'], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, TEAM_BRANCH: branch });
       if (c.status !== 0) {
         if (!refused(c)) return fail(c);
         return die(`the continuation claim of ${item} was not recorded: ${last(c)}`, 1);
@@ -89,7 +89,7 @@ export async function run(argv) {
     // it refuses the claim with exit 5), so what is claimed is what was checked here
     if (!ours(f) || strip(f.claimed_by || '')) { skipped.push({ item: i.fm.phase, reason: 'changed since it was listed (team, stage, status, branch or holder)' }); continue; }
     // the scope is the claim's precondition, checked inside its locked write: the team (TEAM_NAME), repository and branch
-    const c = self(['update', i.fm.phase, '--claim', agent], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, TEAM_BRANCH: branch });
+    const c = self(['team', 'update', i.fm.phase, '--team', a.team, '--agent', agent, '--claim'], { TEAM_NAME: a.team, TEAM_REPOSITORY: own, TEAM_BRANCH: branch });
     if (c.status === 0) { action = 'claim'; item = i.fm.phase; if (c.stderr) process.stderr.write(c.stderr); break; }
     if (!refused(c)) return fail(c);
     skipped.push({ item: i.fm.phase, reason: last(c) });

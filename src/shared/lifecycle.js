@@ -306,10 +306,9 @@ export const reviewRefusal = (fm, cwd) => {
 export function requestReview({ fm }, reviewer, note, by = '') {
   if (!strip(note || '')) reject('--request-review needs --note "<what to review: commits, deployed evidence>"');
   if (fm.review_state === 'in_review') reject(`${fm.reviewer} is reviewing it since ${fm.review_started}: wait for the verdict; the team lead hands a stale review on (--reassign-review)`);
-  // an unclaimed team item (its review asked for with --by) is held by nobody: its status is no obstacle; a review asked for again after
-  // a pass or a request (naming the next reviewer) is the same step as before, and an item waiting for its external review keeps that word
-  const asking = ['ready for review', 'ready for external review', 'review complete'].includes(fm.status);
-  gate('request-review', fm.claimed_by && !asking ? fm : { ...fm, status: 'in progress' }, by || fm.claimed_by);
+  // an unclaimed team item (its review asked for with --by) is held by nobody: its status is no obstacle. Asked for again after a pass or
+  // a request (naming the next reviewer) it is the same step, from the words the definition lists; an item waiting for its external review keeps that word
+  gate('request-review', fm.claimed_by ? fm : { ...fm, status: 'in progress' }, by || fm.claimed_by);
   // the one who asks never reviews it and ends its session, so an unclaimed team item names it
   if (fm.team && !fm.claimed_by && !by) reject('--request-review of an unclaimed team item needs --by <agent>, the one who asks');
   if (fm.claimed_by && by && by !== fm.claimed_by && by !== teamLead()) reject(`${fm.claimed_by} holds it: only the holder, or the team lead, asks for its review (not ${by})`);

@@ -57,7 +57,7 @@
     "waiting": { "from": ["in progress"], "to": "in progress", "by": ["owner"], "sets": { "wait_on": "text" } },
     "waiting-done": { "from": ["in progress"], "to": "in progress", "by": ["owner"], "clears": ["wait_on"] },
     "handoff": { "from": ["in progress"], "to": "in progress", "by": ["owner"], "requires": { "dependent_exists": true, "handoff_commit": true, "handoff_contract": true, "handoff_verification": true } },
-    "request-review": { "from": ["in progress"], "to": "ready for review", "by": ["owner"], "sets": { "work_commit": "head" }, "requires": { "note": true, "handoff_recorded_for_every_dependent": true }, "instruction": "end the turn: REVIEW-REQUESTED <item>" },
+    "request-review": { "from": ["in progress", "ready for review", "ready for external review", "review complete"], "to": "ready for review", "by": ["owner"], "sets": { "work_commit": "head" }, "requires": { "note": true, "handoff_recorded_for_every_dependent": true }, "instruction": "end the turn: REVIEW-REQUESTED <item>" },
     "start-review": {
       "stages": {
         "peer": { "from": ["ready for review", "reviewing"], "to": "reviewing", "by": ["member"], "not_by": ["author"], "requires": { "reviewer_empty_or_actor_or_stale": true } },

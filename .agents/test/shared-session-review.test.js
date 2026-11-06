@@ -79,12 +79,10 @@ test('082: pop, work and query --reviewable offer the review to 082aa:02 and 082
   assert.ok(reviewable(A2).includes(s), 'offered to the new session of the card');
   assert.ok(reviewable(B1).includes(s), 'offered to the other card');
   assert.ok(!reviewable(A1).includes(s), 'never offered to the asking session');
-  // pop offers it to both new sessions; 082aa:01 gets no review action
-  assert.equal(JSON.parse(run(f, ['pop', '--agent', A2, '--json']).stdout).action, 'review');
-  assert.equal(JSON.parse(run(f, ['pop', '--agent', B1, '--json']).stdout).action, 'review');
-  assert.notEqual(JSON.parse(run(f, ['pop', '--agent', A1, '--json']).stdout).action, 'review');
+  // team pop starts the review for the session that asks (so only one of the two new sessions can ask first); 082aa:01 gets no review action
+  assert.notEqual(JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', A1, '--json']).stdout).action, 'review');
   // work starts the review for the new session of the card
-  const w = JSON.parse(run(f, ['work', '--agent', A2, '--json']).stdout);
+  const w = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', A2, '--json']).stdout);
   assert.equal(w.action, 'review');
   assert.ok(w.marked, 'work marks the review start for the new session');
   assert.equal(itemFm(f, s).reviewer, A2);

@@ -80,7 +80,7 @@ test('034: with a team limit of three, pop offers no fourth item while three are
   for (const s of items) { f.run('demo', ['update', s, '--set-team', 't1']); f.refine('demo', s); }
   const T = m => ({ TEAM_NAME: 't1', BACKLOG_AGENT: m }); // a team session acts only as itself
   ['m1', 'm2', 'm3'].forEach((m, i) => f.run('demo', ['update', items[i], '--claim', m], 0, T(m)));
-  const p = JSON.parse(f.run('demo', ['pop', '--agent', 'm4', '--json'], [0, 3], T('m4')).stdout);
+  const p = JSON.parse(f.run('demo', ['team', 'pop', '--team', 't1', '--agent', 'm4', '--json'], [0, 3], T('m4')).stdout);
   assert.notEqual(p.action, 'claim', JSON.stringify(p));
   assert.match(f.run('demo', ['update', items[3], '--claim', 'm4'], 1, T('m4')).stdout, /team work-in-progress limit of t1 is 3 and 3/);
 });

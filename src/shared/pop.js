@@ -1,4 +1,4 @@
-// Agent pop: `backlog pop` and the lead's plan view `backlog query --plan`.
+// The pop engine: the member order behind `backlog team pop` (team-pop.js) and the lead's plan view `backlog query --plan`.
 // (pop) in the earlier scripts order: pull, no-backlog check, branch, connect, findings, then the one next action of the agent,
 // continue > review > claim > refine > chunk > idle (exit 3), over the rows of the items (index.rows) and the item files (views.js, team.js).
 // --claim-now claims through `backlog update --claim` as runs. Never writes an item itself.

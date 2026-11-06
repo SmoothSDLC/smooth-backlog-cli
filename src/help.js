@@ -20,9 +20,7 @@ Usage:
   backlog query [options] [--json]                 The queue; --phase <item> one item; --events, --by-branch, --all
   backlog list [options] [--json]                  The same as backlog query
   backlog next [--all] [--branch <name>] [--json]  The next item of this repository and branch
-  backlog pop --agent <name> [options]             What one agent does next
-  backlog work --agent <name> [options]            A team member's next work, marked as theirs, with the whole item
-  backlog team pop --team <team> --agent <lead>    The team lead takes its team's work item
+  backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs, with the whole item
   backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
   backlog team update <item> --team <team> --agent <name> <step>   One team step: claim, release, request-review, review, close, ...
   backlog team define --file <team.json>           Register a team (lead, members, reviewers, review stages) in the backlog configuration
@@ -65,8 +63,8 @@ work-in-progress limits (wip-limits.json). Teams, their leads and members and th
 the backlog folder (teams.json); a team session is bound by TEAM_NAME, TEAM_REPOSITORY and TEAM_BRANCH. An item
 without a team is not bound by them.
 
-Exit codes: 0 success; 1 refused (the reason on standard output, ❌ ...); 2 invalid input or a failure; 3 idle (pop,
-work, team pop: nothing to do now); 4 the configured backlog repository is not cloned (run backlog setup); 5 stale view.
+Exit codes: 0 success; 1 refused (the reason on standard output, ❌ ...); 2 invalid input or a failure; 3 idle (team pop:
+nothing to do now); 4 the configured backlog repository is not cloned (run backlog setup); 5 stale view.
 `;
 
 const EXIT = `Exit codes:
@@ -259,7 +257,7 @@ Options:
   --set-depends-on IDS
       Replace the depends_on of the item, as item numbers or slugs, owner/name#seq for an item of another repository, or
       the word none. The command refuses when a named item is not in this backlog, or not in the backlog repository. A
-      not-done item of another repository blocks the claim like one of this backlog, and pop and backlog work name it as
+      not-done item of another repository blocks the claim like one of this backlog, and backlog team pop names it as
       the work to do first in its repository.
   --set-estimate MINUTES
       Replace the estimate_min of the item, the estimated minutes of work. It must be greater than 0.
@@ -433,7 +431,7 @@ Options:
       Which items of this repository changed since your last use: your own write or your own --changed is
       the reference (its commit and time, stated in every result, also when it is empty), never a global
       timestamp, so a change made while you are idle still appears in your next report; your own reads
-      (query --phase, pop) do not move it. The first --changed prints "no earlier use: reference set now"
+      (query --phase, team pop) do not move it. The first --changed prints "no earlier use: reference set now"
       and sets the reference. The items you hold (your name in claimed_by, reviewer or refiner) are listed
       in a "held" section; every other changed item goes to "others"; a file moved inside the folder (an
       archive, a renumbering) is one "D" entry for its old name. When the comparison fails (your reference
@@ -472,9 +470,9 @@ Example:
 Usage:
   backlog next [--all] [--branch <name>] [--json]
 
-Prints the open item with the lowest priority on the branch that is checked out here, with its objective, summary,
-file and progress, followed by the instruction to hand the decision about the next step back to the user. It is
-the same as backlog query --next and reads the backlog without changing it. When the queue is empty it says so
+Prints the open item with the best priority on the branch that is checked out here, whole: its objective, summary and
+progress, then its front matter and its body. It skips nothing for team reasons (a team's hand-offs are a matter of
+backlog team pop). It is the same as backlog query --next and reads the backlog without changing it. When the queue is empty it says so
 (with --json it prints {}). Critical items are announced in a banner first. The other options of backlog query are described in backlog query --help.
 
 ${SHARED}
@@ -495,127 +493,60 @@ Example:
   backlog next --json
 `,
 
-  pop: `backlog pop — ask what one agent does next: the one next action, first match wins
+  team: `backlog team — the commands that know a team: pop, update, query, define, workflow
 
 Usage:
-  backlog pop --agent <name> [--lead <name>] [--roster <file>]
-              [--scope branch|repo|all] [--all] [--branch <name>] [--claim-now] [--json]
-
-Answers with exactly one action for the agent, the first that applies: continue (an item the agent holds and can work
-on; when its review passed, close it), review (an item another agent asks to have reviewed, or a review the agent
-started), refine (a member: the refinement it has started, or the first-round refinement of a team item in stage
-refining that nobody refines; the team lead: an incomplete item that lacks required fields), claim (the open item with the
-lowest priority whose dependencies are done, that is no chunk item, is in stage ready when it is a split item
-(with or without a team) or a team's item (a team item without a stage is unrefined: its refinement is offered, never a claim), and that nobody holds), refinement-review (the team lead: refined items to send to the
-refinement review), reassign-review (the team
-lead: a stale review of its team to hand on), stop (a member that handed its item off and waits for a fresh session: end
-the turn), chunk (a small piece
-of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or for a run is not
-continued, and the agent claims a new item only when every item it holds waits. Another agent's review request comes
-after the agent's own work, however old it is. Incomplete items are never claimed or
-reviewed. With TEAM_NAME set (the team runner sets it), only that team's items of this repository are continued, reviewed
-or claimed. The team lead never claims; while its team works the split items, its work item is no busy continue and its
-answer is idle with the instruction to end the turn without polling (a passed or changes-requested item of the lead's keeps
-its close or rework), and when every item of its team is done it is told to have the work item reviewed and close it.
-When nothing is left the action is idle, the blockers are named, and the command exits with 3 (see the exit codes below).
-
-Without --json the first line is the action and the item, the second line says what to do, and one line per blocked item
-follows. With --json the command prints one object with the keys action, item, seq, repository, branch, instruction,
-claimed, blocked and held (and missing when the action is refine).
-
-${SHARED}
-
-Options:
-  --agent AGENT
-      The agent that asks. Required.
-  --lead LEAD
-      The team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the environment
-      variable TEAM_LEAD, else the lead of the session's team in teams.json.
-  --roster ROSTER
-      The team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
-      file named by TEAM_ROSTER.
-      Any session may review an item except the sessions recorded on it (session_authors: the claimer and the one who
-      asked for the review, kept on release); a new session of the same card may review it. A member with "review_only":
-      true never claims.
-  --scope {branch,repo,all}
-      How far the agent looks: this branch (the default), every branch of this repository, or also the chunk items
-      of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
-      in the file backlog.scope of the folder of this repository (default branch).
-  --all
-      Look at every branch, not only the current one.
-  --branch BRANCH
-      The branch whose queue to use. The default is the branch that is checked out here. A team session bound by
-      TEAM_BRANCH can only use that branch.
-  --claim-now
-      When the action is claim, claim the item now (as backlog update <item> --claim <agent>). If that claim is refused,
-      the refusal is printed and its exit code is returned.
-  --json
-      Print one machine-readable object.
-${HELP_FLAG}
-
-Exit codes:
-  0  The command answered with an action.
-  3  The action is idle: nothing is left for the agent. The same code is used when the local clone of the backlog
-     repository could not be updated from its origin before the answer (nothing was read; the message is on standard error),
-     and when a --claim-now claim was not published and was rolled back. Fix the cause and retry the command.
-  1  A --claim-now claim was refused or could not be run (its process failed or was interrupted): its output, or the failure, is
-     shown. After an interruption the claim may already be saved, or even pushed: check the item before running pop again.
-  2  The arguments or the place were wrong: the message is on standard error.
-  4  The backlog repository is not set up; the printed question must be answered by the user.
-
-Example:
-  backlog pop --agent ada --json
-`,
-  work: `backlog work — the one next-work command of a team member: the next action, marked as yours, with the whole item
-
-Usage:
-  backlog work --agent <you> [--lead <name>] [--roster <file>] [--scope branch|repo|all] [--all] [--branch <name>] [--json]
-
-Applies the team workflow order of backlog pop (your current task, reviewed work, another member's review request, the
-first-round refinement of a team item, the next ready item of your team, a chunk, else idle), marks the item as yours for
-that step (a claim, a refinement start or a review start, each one locked write), and prints the action, the one
-instruction and the whole item: its front matter and its body. A team member reads and writes the backlog only with
-these commands. When the mark is refused because another agent took the item meanwhile, the refusal is printed: run
-backlog work again.
-
-Options:
-  --agent AGENT
-      Required: you, the agent asking.
-  --lead LEAD
-      The team lead. The default is the environment variable TEAM_LEAD, else the lead of the session's team in teams.json.
-  --roster ROSTER
-      The team roster as a JSON file {agent: {...}}; the default is the file named by TEAM_ROSTER.
-  --scope {branch,repo,all}
-      How far the agent looks, as backlog pop --scope.
-  --all
-      Look at every branch, not only the current one.
-  --branch BRANCH
-      The branch whose queue to use. The default is the branch that is checked out here.
-  --json
-      Print one object: the keys of backlog pop --json, marked (the step that marked the item, or null), front_matter and
-      body.
-${HELP_FLAG}
-
-Exit codes:
-  0  The command answered with an action, and the item is marked as yours where the step needs it.
-  3  The action is idle: nothing is left for you (the blockers are named).
-  1  The mark was refused (another agent took the item meanwhile) or could not be run: its output is shown.
-  2  The arguments or the place were wrong: the message is on standard error.
-  4  The backlog repository is not set up; the printed question must be answered by the user.
-
-Example:
-  backlog work --agent ada --json
-`,
-
-  team: `backlog team pop — the team lead takes its team's next work item, with the whole item
-
-Usage:
-  backlog team pop --team <name> [--agent <lead>] [--json]
+  backlog team pop --team <name> --agent <name> [--json]
   backlog team update <item> --team <name> --agent <name> <step> [options]
   backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--roster <file>] [--scope branch|repo|all] [--json]
   backlog team define --file <team.json> [--json]
   backlog team workflow --file <flow.json> [--json]
   backlog team workflow --show <name>
+
+Only these commands read the team's entry in the backlog configuration (teams.json at the root of the backlog: the lead, the members,
+the external reviewers and the review stages) and the flow it names. The plain commands know nothing of teams. --team and --agent
+are required on pop and update; TEAM_NAME and BACKLOG_AGENT stand in for them, then the team and user of .backlog/config.json. A team
+without an entry is refused: "team <team> is not configured in the backlog configuration".
+
+backlog team pop is the one next-action command. It answers by the agent's role in the team's entry, with exactly one action, the
+first that applies: continue (an item the agent holds and can work on; when its review passed, close it), review (an item another
+agent asks to have reviewed, or a review the agent started), refine (a member: the refinement it has started, or the first-round
+refinement of a team item that nobody refines; the team lead: an incomplete item that lacks required fields), claim (the open item
+with the lowest priority whose dependencies are done and whose hand-offs are accepted, that is no chunk item, is ready when it is a
+team's item, and that nobody holds), refinement-review (the team lead: refined items to send to the refinement review), reassign-review
+(the team lead: a stale review of its team to hand on), stop (a member that handed its item off and waits for a fresh session: end the
+turn), chunk (a small piece of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or
+for a run is not continued, and the agent claims a new item only when every item it holds waits. Another agent's review request
+comes after the agent's own work, however old it is. Incomplete items are never claimed or reviewed. Only the team's items of this
+repository are continued, reviewed or claimed. The lead never claims an execution item; while its team works the split items its
+answer is idle with the instruction to end the turn without polling (a passed or changes-requested item of the lead's keeps its close or
+rework), and when every item of its team is done it is told to have the work item reviewed and close it.
+
+In addition the lead gets the team's work item: an item of this repository and branch whose team is the team and that has no stage
+(backlog update <item> --set-team <name> gives an item to a team; the items split from it carry a stage and are the members' work).
+A refined work item (its stage set, its refinement review passed) is an ordinary item any member may claim; team pop offers a work
+item only while its stage is unset, and the lead still refines it and splits it only when it is too big for one member. When the lead
+holds an open work item that has no other item of the team, the answer is continue with that item. When an earlier session of the
+lead's card holds it, the command records the continuation claim first - the new session name as claimed_by and in session_authors -
+and then answers continue; a refused continuation claim is no success: the earlier session keeps holding and the command stops (exit
+1, the reason on standard error). The final read requires the lead's own session still holding the item: a hand-back or a reassignment
+to another session of the same card between the selection and the final read is no success (exit 1, the item changed before it
+could be shown). Otherwise, with nothing else to do, the command claims for the lead the team's first open, unclaimed work item in
+the work order (priority, then seq) whose claim is accepted (its dependencies are done, no work-in-progress limit is passed), and the
+answer is claim.
+
+The step the answer offers is marked in one locked write: the claim, the start of a refinement or the start of a review. The output
+is the action and the item, what was marked, the one instruction, one line per blocked item, the work items not taken with the
+reason, and the whole item: its front matter and its body. With --json it prints one object: action, item, seq, team, repository,
+branch, instruction, claimed, blocked, held, marked, skipped ({item, reason} of each work item not taken), front_matter and body.
+
+backlog team query reads the backlog through the team's views; the plain query has none of them (backlog query --claimable and the others answer "use backlog team query"). The view is one of the options below; --agent is the agent that asks (given, it switches to the team rules: an incomplete item is not offered and the agent never reviews its own work). A team without an entry is refused.
+
+backlog team update runs one team step on an item: --claim, --release, --waiting, --waiting-done, --request-review, --start-review,
+--review, --close, --handoff, --accept-handoff, --reject-handoff, --reassign, --reassign-review, --refine-start, --refine-done,
+--request-refinement-review, --refinement-review, --request-decision, --decision, --wip-override, with the options of those steps
+(see backlog update --help). A bare --claim or --release takes the agent. The earlier spelling backlog update <item> --claim <agent>
+(and the other steps) still works and prints "moved: use backlog team update ..." on standard error.
 
 backlog team define registers one team from a JSON file { "name", "lead", "members": [..], "external_reviewers": [..], "workflow": "<flow,
 default team>", "review": [{ "stage", "reviewers": "members"|"external_reviewers", "count" }] (default: the flow's), "wip": { "agent", "team" } }.
@@ -625,42 +556,13 @@ others, committed and pushed ("team <name> defined"); the same definition again 
 register the new composition under another name. backlog team workflow registers a flow the same way into workflows.json after the
 checks of the flow (every open status can reach closed); --show prints a registered or the shipped flow.
 
-backlog team query reads the backlog through the team's views; the plain query has none of them (backlog query --claimable and the others answer "use backlog team query"). The view is one of the options below; --agent is the agent that asks (given, it switches to the team rules: an incomplete item is not offered and the agent never reviews its own work). A team without an entry is refused.
-
-backlog team update runs one team step on an item: --claim, --release, --waiting, --waiting-done, --request-review, --start-review,
---review, --close, --handoff, --accept-handoff, --reject-handoff, --reassign, --reassign-review, --refine-start, --refine-done,
---request-refinement-review, --refinement-review, --request-decision, --decision, --wip-override, with the options of those steps
-(see backlog update --help). The team comes from --team (else TEAM_NAME, else the team of .backlog/config.json), the agent from
---agent (else BACKLOG_AGENT, else the user of .backlog/config.json); a bare --claim or --release takes the agent. A team without an
-entry in teams.json is refused. The earlier spelling backlog update <item> --claim <agent> (and the other steps) still works and
-prints "moved: use backlog team update ..." on standard error.
-
-A work item of a team is an item of this repository and branch (in a team session the ones it is bound to,
-TEAM_REPOSITORY and TEAM_BRANCH, as for every command) whose front matter team is the team's name and that has
-no stage (backlog update <item> --set-team <name> gives an item to a team; the items split from it carry a stage and are
-the members' work). A refined work item (its stage set, its refinement review passed) is an ordinary item any member
-may claim; team pop offers a work item only while its stage is unset, and the lead still refines it and splits it
-only when it is too big for one member. When the lead holds an open work item of the team, the answer is continue with that item. When an
-earlier session of the lead's card holds it, the command records the continuation claim first - the new session name as
-claimed_by and in session_authors - and then answers continue. A refused continuation claim is no success: the earlier
-session keeps holding, and the command stops (exit 1, the reason on standard error). The final read requires the lead's
-own session still holding the item, on every path: a hand-back or a reassignment to another session of the same card
-between the selection and the final read is no success - the command stops (exit 1, the item changed before it could be
-shown) and the other session keeps holding. Otherwise the command claims for
-the lead the team's
-first open, unclaimed work item in the work order (priority, then seq) whose claim backlog update --claim accepts (its
-dependencies are done, no work-in-progress limit is passed), and the answer is claim. The output is the action, the one instruction (refine the item, split it only when it is too big for one member), the items not taken
-with the reason, and the whole item: its front matter and its body. When there is no work item to take, the action is
-idle and the command exits with 3. Only the team lead runs it.
-
 Options:
   --team NAME
-      Required: the team whose work item to take. In a team session (TEAM_NAME set) it must be that team.
+      The team (pop, update). In a team session (TEAM_NAME set) it must be that team.
   --agent AGENT
-      The team lead. The default is the environment variable TEAM_LEAD, else the lead of the session's team in teams.json; any other agent is refused.
+      The agent the command answers for (pop, update). In a team session (BACKLOG_AGENT set) it must be that agent.
   --json
-      Print one object: action, item, team, repository, branch, instruction, skipped ({item, reason} of each item not
-      taken), front_matter and body.
+      Print the answer as JSON.
   --claimable
       Open, unclaimed items whose dependencies are all done, in priority order (a team item before stage ready, or without a stage, is not claimable: it is refined first); another repository's items only as chunk
       work (chunk: true, with --scope all); with TEAM_NAME set, only that team's items of this repository .
@@ -684,33 +586,40 @@ Options:
       are the roster's (--roster, else TEAM_ROSTER). Entries come by action (respond and close, review, claim, refine), a
       claim to the member holding the fewest items, then in roster order (team session). Read-only.
   --lead LEAD
-      With --plan (and pop): the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default
-      is the environment variable TEAM_LEAD, else the lead of the session's team in teams.json (team session).
+      pop and --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the
+      environment variable TEAM_LEAD, else the lead of the team in teams.json.
   --agents AGENTS
-      With --plan: the team members present, comma-separated; the default is the whole roster (team session).
+      With --plan: the team members present, comma-separated; the default is the whole roster.
   --roster ROSTER
-      With --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
+      pop and --plan: the team roster as a JSON file {agent: {...}}, the team's members in order; the default is the
       file named by TEAM_ROSTER.
       Any session may review an item except the sessions recorded on it (session_authors: the claimer and the one who
       asked for the review, kept on release); a new session of the same card may review it. A member with "review_only":
-      true never claims (team session).
+      true never claims.
   --scope {branch,repo,all}
-      With --claimable, --reviewable and --blocked, how far the view looks: this branch (the default), every branch of this repository, or also the chunk items
+      pop and the views --claimable, --reviewable and --blocked: how far the agent looks: this branch (the default), every branch of this repository, or also the chunk items
       of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
       in the file backlog.scope of the folder of this repository (default branch).
+  --all
+      pop only: look at every branch, not only the current one.
+  --branch BRANCH
+      pop only: the branch whose queue to use. The default is the branch that is checked out here. A team session bound by
+      TEAM_BRANCH can only use that branch.
 ${HELP_FLAG}
 
 Exit codes:
-  0  continue or claim: the lead holds the item.
-  1  The continuation claim was refused (the earlier session keeps holding), a command it ran failed for another reason
-     than a refused claim, a synchronisation failure included (the reason is printed), or the item changed before it
-     could be shown (a hand-back or a reassignment to another session of the same card included): run it again.
-  2  Invalid input: a missing --team, an agent other than the lead, another team than TEAM_NAME, or no branch (a
-     detached HEAD without TEAM_BRANCH).
-  3  idle: no work item of the team to take.
+  0  The answer names an item (continue, claim, review, refine, chunk, ...), the step was marked, define or workflow succeeded.
+  1  A claim was refused or could not be run (its process failed or was interrupted): its output, or the failure, is shown.
+     After an interruption the claim may already be saved, or even pushed: check the item before running team pop again.
+     Also: a command it ran failed for another reason, a synchronisation failure included (the reason is printed), the item
+     changed before it could be shown (run it again), or the team has no entry in the configuration.
+  2  Invalid input: a missing --team or --agent, another team than TEAM_NAME, an agent other than BACKLOG_AGENT, no branch (a
+     detached HEAD without TEAM_BRANCH), or a definition with problems.
+  3  idle: nothing to do now (pop). The same code is used when the local clone of the backlog repository could not be updated from
+     its origin before the answer.
 
 Example:
-  backlog team pop --team cli-1 --json
+  backlog team pop --team cli-1 --agent ann --json
 `,
   fields: `backlog fields — show the item template: every field of an item and what it is for
 

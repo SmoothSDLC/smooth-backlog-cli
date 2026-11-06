@@ -6,7 +6,7 @@ const { HELP } = await import(new URL('../../src/help.js', import.meta.url));
 const file = new URL('../../COMMANDS.md', import.meta.url);
 let doc = readFileSync(file, 'utf8'); let changed = 0;
 for (const [cmd, text] of Object.entries(HELP)) {
-  const heading = `### backlog ${cmd === 'team' ? 'team pop' : cmd}\n`;
+  const heading = `### backlog ${cmd}\n`;
   const at = doc.indexOf(heading);
   if (at < 0) { console.error(`COMMANDS.md has no heading "${heading.trim()}"`); process.exit(1); }
   const open = doc.indexOf('```text\n', at); const close = doc.indexOf('\n```', open + 8);

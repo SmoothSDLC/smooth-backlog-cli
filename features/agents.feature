@@ -6,9 +6,9 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     Given a repository with a backlog
     And an item "Agent work" exists
 
-  Scenario: pop tells an idle agent to claim the next item
+  Scenario: next shows an idle agent the item to claim
     When I act as agent "alice"
-    And I run `backlog pop --agent alice`
+    And I run `backlog next`
     Then the command succeeds
     And the output contains "001-agent-work"
 

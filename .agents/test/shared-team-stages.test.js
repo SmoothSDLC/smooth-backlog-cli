@@ -22,6 +22,7 @@ function fixture(prefix = 'team-stages-') {
   writeFileSync(join(home, 'teams.json'), JSON.stringify({
     t1: { lead: 'lead', members: ['ann', 'bob', 'zed'], refinement_review: [{ team: 'reviewers', count: 1 }] },
     reviewers: { lead: 'rex', members: ['rex', 'ria'] },
+    t2: { lead: 'lead2', members: ['zed', 'nobody'], review: [] }, // another team, for the tests that ask as one
   }));
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
@@ -43,7 +44,7 @@ const up = (f, slug, ...args) => ok(f, ['update', slug, ...args]);
 const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
 const doc = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const fm = (f, slug) => doc(f, slug).fm;
-const pop = (f, agent, env) => { const r = run(f, ['pop', '--agent', agent, '--json'], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
+const pop = (f, agent, env) => { const r = run(f, ['team', 'pop', '--team', env?.TEAM_NAME || 't1', '--agent', agent, '--json'], env?.TEAM_NAME ? { BACKLOG_AGENT: agent, ...env } : env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
 const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => up(f, slug, ...a));
 const work = (f, title = 'team work item') => { const w = make(f, title); up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); return w; }; // the runner, for the lead
@@ -56,9 +57,9 @@ test('test_the_team_workflow_from_work_item_to_ready_work: split, member refinem
   const other = make(f, "other team's item", '--team', 't2');
   let p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['refine', a]);
-  assert.ok(p.instruction.includes(`--refine-start --by ann`), p.instruction);
+  assert.ok(p.marked.includes('--refine-start --agent ann'), p.marked); // team pop starts the refinement it offers
   no(f, ['update', a, '--claim', 'ann'], 'claim needs ready or in progress');
-  up(f, a, '--refine-start', '--by', 'ann');
+  assert.equal(fm(f, a).refiner, 'ann');
   assert.equal(pop(f, 'bob', T1).item, b); // a is ann's to refine
   p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['refine', a]); // ann continues its refinement
@@ -77,11 +78,9 @@ test('test_the_team_workflow_from_work_item_to_ready_work: split, member refinem
   up(f, a, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'ready; session s-2');
   assert.equal(fm(f, a).status, 'ready');
   assert.ok(doc(f, a).body.includes('Refinement review by rex: COMPLETE'));
+  assert.equal(fm(f, b).refiner, 'bob'); // b was taken for its first-round refinement by bob's team pop above
   p = pop(f, 'ann', T1);
-  assert.deepEqual([p.action, p.item], ['refine', b]); // first-round refinement before new work
-  up(f, b, '--refine-start', '--by', 'zed');
-  p = pop(f, 'ann', T1);
-  assert.deepEqual([p.action, p.item], ['claim', a]); // then the ready item
+  assert.deepEqual([p.action, p.item, p.claimed], ['claim', a, true]); // then the ready item
   assert.notEqual(pop(f, 'zed', { TEAM_NAME: 't2' }).item, a); // nor offered to another team
   assert.ok(!JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--json'], T1).stdout).some(x => [b, other].includes(x.slug))); // refining: not claimable
   up(f, w, '--claim', 'lead'); // the work item has no stage: the runner claims it for the lead (idempotent)
@@ -178,8 +177,9 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
   const cl = JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--agent', 'bob', '--json']).stdout).map(x => x.slug);
   assert.ok(!Object.values(gaps).some(s => cl.includes(s)), cl.join(' '));
   const tn = { ...team, TEAM_NAME: 't1' }; // the team session
-  let p = pop(f, 'bob', tn); // a member is never offered an incomplete item
-  assert.ok(p.action !== 'claim' && !p.instruction.includes('never action it'), JSON.stringify(p)); // a member only refines it in the first round, it never claims or works it
+  const bobs = run(f, ['team', 'pop', '--team', 't1', '--agent', 'bob', '--json'], { ...tn, BACKLOG_AGENT: 'bob' }); // a member is never given an incomplete item to claim or work
+  assert.ok(!bobs.stdout.includes('"action": "claim"') && !bobs.stdout.includes('never action it'), bobs.stdout); // the first-round refinement it is offered is refused for an incomplete item: only the lead refines it
+  let p;
   p = pop(f, 'ann', { ...tn, TEAM_LEAD: 'ann' }); // the lead is told to refine one, with the gaps
   assert.ok(p.action === 'refine' && Object.values(gaps).includes(p.item) && p.missing.length && p.instruction.includes('never action it'), JSON.stringify(p));
   assert.equal(pop(f, 'bob', { ...tn, TEAM_LEAD: 'bob' }).action, 'refine'); // TEAM_LEAD names the lead
@@ -195,7 +195,7 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
 test('an incomplete item waiting in review-hitl is not offered to the lead for refinement', () => {
   const f = fixture();
   const w = make(f, 'team work item');
-  up(f, w, '--set-team', 't1'); // not held by the lead: nothing comes before the lead's refinement of incomplete items
+  up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // the lead holds its work item: nothing comes before the lead's refinement of incomplete items
   const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout); // incomplete
   up(f, c, '--request-decision', 'What: which parser? Options: A, B. Recommendation: A.', '--by', 'ann');
   const env = { ...T1, TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
@@ -282,10 +282,10 @@ test('backlog work --lead names only the lead the updates know; pop --lead keeps
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // an unclaimed work item is offered to a member for refinement; the lead holds it
   const c = make(f, 'child', '--split-from', w);
-  const r = run(f, ['work', '--agent', 'ann', '--lead', 'zed', '--json'], { TEAM_NAME: 't1', BACKLOG_AGENT: 'ann' });
+  const r = run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--lead', 'zed', '--json'], { TEAM_NAME: 't1', BACKLOG_AGENT: 'ann' });
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.match(r.stderr, /--lead zed is not the team lead of this session \(lead; TEAM_LEAD\)/);
-  const ok2 = run(f, ['work', '--agent', 'ann', '--lead', 'lead', '--json'], { ...T1, BACKLOG_AGENT: 'ann' });
+  const ok2 = run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--lead', 'lead', '--json'], { ...T1, BACKLOG_AGENT: 'ann' });
   assert.equal(ok2.status, 0, ok2.stdout + ok2.stderr);
   assert.deepEqual([JSON.parse(ok2.stdout).item, fm(f, c).refiner], [c, 'ann']);
 });

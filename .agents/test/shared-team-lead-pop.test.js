@@ -37,7 +37,7 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   ok(f, ['query', '--phase', early, '--agent', 'lead']); ok(f, ['update', early, '--priority', '0']);
   let p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.status, fm(f, early).claimed_by], ['claim', early, 0, 'lead']);
-  assert.deepEqual(Object.keys(p), ['action', 'item', 'team', 'repository', 'branch', 'instruction', 'skipped', 'front_matter', 'body', 'status']); // status: added by pop() here
+  assert.deepEqual(Object.keys(p), ['action', 'item', 'seq', 'team', 'repository', 'branch', 'instruction', 'claimed', 'blocked', 'held', 'marked', 'skipped', 'front_matter', 'body', 'status']); // status: added by pop() here
   assert.ok(p.body.includes('Body of early work item.') && p.front_matter.claimed_by === 'lead', JSON.stringify(p));
   assert.match(p.instruction, /refine it, and split it only when it is too big for one member/);
   assert.match(p.instruction, new RegExp(`backlog new --split-from ${early}`));
@@ -46,6 +46,7 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   const child = make(f, 'child', '--split-from', early); // a split item carries a stage: the members' work, never the lead's
   assert.equal(fm(f, child).status, 'new');
   ok(f, ['query', '--phase', early, '--agent', 'lead']); ok(f, ['update', early, '--release', 'lead']); ok(f, ['update', early, '--set-team', '']); // no longer the team's
+  ok(f, ['query', '--phase', child, '--agent', 'lead']); ok(f, ['update', child, '--set-team', 't2']); // nor is its slice: the next work item has none of its own yet
   p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item], ['claim', late]);
   const text = run(f, ['team', 'pop', '--team', 't1']);
@@ -118,17 +119,17 @@ test('team pop: an item whose claim is refused is named and skipped; nothing lef
   const free = make(f, 'free work item'); ok(f, ['update', free, '--set-team', 't1']);
   p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.skipped.map(s => s.item)], ['claim', free, [blocked]]);
-  assert.equal(pop(f, {}, '--team', 'nobody').status, 3);
+  const nobody = run(f, ['team', 'pop', '--team', 'nobody', '--json']); // a team without an entry in the configuration is refused
+  assert.equal(nobody.status, 1); assert.match(nobody.stdout, /team nobody is not configured in the backlog configuration/);
 });
 
 test('team pop: only the lead, only its team, only itself', () => {
   const f = fixture();
   for (const [args, env, text] of [
-    [['team', 'pop'], {}, /team pop needs --team/],
+    [['team', 'pop'], {}, /needs --team/],
     [['team'], {}, /needs a subcommand/],
-    [['team', 'pop', '--team', 't1', '--agent', 'bob'], {}, /only the team lead \(lead; TEAM_LEAD\)/],
     [['team', 'pop', '--team', 't1'], { TEAM_NAME: 't2' }, /team t2 \(TEAM_NAME\), not t1/],
-    [['team', 'pop', '--team', 't1'], { TEAM_NAME: 't1', BACKLOG_AGENT: 'bob' }, /you are bob/],
+    [['team', 'pop', '--team', 't1', '--agent', 'ann'], { TEAM_NAME: 't1', BACKLOG_AGENT: 'bob' }, /you are bob/],
     [['team', 'pop', '--team', 't1', '--bogus'], {}, /unrecognized arguments: --bogus/],
   ]) {
     const r = run(f, args, env);
@@ -255,5 +256,5 @@ test('team pop: an item taken out of the team before the read is skipped, never 
   assert.match(p.skipped[0].reason, /changed since it was listed/);
   spawnSync('git', ['checkout', '-q', '--detach'], { cwd: f.cons });
   const r = run(f, ['team', 'pop', '--team', 't1']);
-  assert.equal(r.status, 2, r.stdout + r.stderr); assert.match(r.stderr, /team pop needs a branch/);
+  assert.equal(r.status, 2, r.stdout + r.stderr); assert.match(r.stderr, /HEAD is detached/);
 });

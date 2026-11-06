@@ -31,7 +31,7 @@ repository: it installs or updates the CLI and runs `backlog setup`.
   next; `--depends-on <items>` when other items must finish first; `--split-from <item>` makes a sibling with its context.
 - Change: `backlog update <item> --name|--objective|--summary|--status|--location|--priority <value>`, `--append "<text>"`
   adds body text, `--note "<text>"` records an event, `--set-depends-on <items|none>`; `--replan "<id,id,...>"` orders the queue.
-- Claim and release (named agents): `backlog update <item> --claim <you>`, `--release <you>`; `backlog pop --agent <you>`
+- Claim and release (named agents): `backlog update <item> --claim <you>`, `--release <you>`; `backlog team pop --team <team> --agent <you>`
   says what to do next. Read an item (`query --phase <item>`) before you change it: a write after someone else changed
   the item since your read is refused (exit 5) until you read it again.
 - Review (optional): `--request-review <agent|any> --note "<commits, evidence>"`, then the reviewer's `--start-review --by
@@ -47,7 +47,7 @@ A team's items follow the team rules configured in `teams.json` of the backlog f
 `refinement_review` rules. A team session is bound by TEAM_NAME, TEAM_REPOSITORY and TEAM_BRANCH; the caller is
 BACKLOG_AGENT and acts only as itself.
 
-- Lead: `backlog team pop --team <team> --agent <you>` takes the team's work item; split it only when it is too big for
+- Lead: `backlog team pop --team <team> --agent <you>` takes the team's work item (and gives the lead its next action); split it only when it is too big for
   one member (`backlog new --split-from <item>`); `backlog team query --team <team> --plan` is the dispatch plan; `--request-refinement-review
   --by <you>` sends a refined item to its refinement review; `--request-decision "<question>" --by <you>` asks the owner
   (`backlog team query --team <team> --decisions`; the owner answers with `--decision "<answer>"`); `--reassign <agent> --reason "<why>"
@@ -55,7 +55,7 @@ BACKLOG_AGENT and acts only as itself.
   `--wip-override "<reason>" --by <you>` lifts a work-in-progress limit for one item; `--set-team <team>` gives an item
   to a team and `--set-chunk yes` makes it chunk work any member does between items. Act only as yourself: another
   agent's item or review is the lead's to hand on.
-- Member: `backlog work --agent <you> --json` gives the one next action and marks the item as yours. Refine an item in
+- Member: `backlog team pop --team <team> --agent <you> --json` gives the one next action and marks the item as yours. Refine an item in
   stage refining (`--refine-start --by <you>`, `--set-review-refs`, `--set-estimate`, `--set-complexity`,
   `--set-depends-on`, `--append` a definition of done, `--refine-done --by <you> --note "<what>"`); a refinement
   reviewer records `--refinement-review pass|changes --by <reviewer> --comments "<findings>"`; a ready item is claimed,
@@ -71,5 +71,5 @@ BACKLOG_AGENT and acts only as itself.
 
 - An item is its number (or slug); priorities are ranks that move when the queue changes.
 - Every command that changes an item records who (BACKLOG_AGENT, else `--by`/`--claim`, else the user) and when.
-- Exit codes: 0 success, 1 refused (the reason on standard output, ❌), 2 invalid input or a failure, 3 idle (pop, work,
-  team pop), 4 the configured backlog repository is not cloned (`backlog setup`), 5 stale view (read the item again).
+- Exit codes: 0 success, 1 refused (the reason on standard output, ❌), 2 invalid input or a failure, 3 idle (team
+  pop), 4 the configured backlog repository is not cloned (`backlog setup`), 5 stale view (read the item again).

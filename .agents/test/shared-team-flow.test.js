@@ -57,10 +57,10 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     assert.equal(fm(c2).status, 'awaiting decision');
   });
   await step('S07 pop: a member refines first; the lead waits', () => {
-    assert.deepEqual([json('ann', ['pop', '--agent', 'ann', '--json']).action], ['refine']);
-    assert.equal(json('lead', ['pop', '--agent', 'lead', '--json']).action, 'idle');
+    assert.deepEqual([json('ann', ['team', 'pop', '--team', 't1', '--agent', 'ann', '--json']).action], ['refine']);
+    assert.equal(json('lead', ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json']).action, 'idle');
   });
-  await step('S08 work marks --refine-start', () => { const p = json('ann', ['work', '--agent', 'ann', '--json']); assert.equal(p.item, c1); assert.equal(fm(c1).refiner, 'ann'); });
+  await step('S08 work marks --refine-start', () => { const p = json('ann', ['team', 'pop', '--team', 't1', '--agent', 'ann', '--json']); assert.equal(p.item, c1); assert.equal(fm(c1).refiner, 'ann'); });
   await step('S09 refine: --set-review-refs, --set-estimate, --set-complexity, --append the definition of done', () => {
     as('ann', ['update', c1, '--set-review-refs', 'docs/review/code.md,docs/review/tests.md', '--set-estimate', '30', '--set-complexity', 'low', '--by', 'ann']);
     as('ann', ['update', c1, '--append', '## Definition of done\n\n- [ ] the parser reads the sample', '--by', 'ann']);
@@ -73,7 +73,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     assert.deepEqual(p.filter(e => e.item === c1).map(e => e.action), ['claim']);
   });
   await step('S14 pop --roster --claim-now claims the ready item', () => {
-    const p = json('zed', ['pop', '--agent', 'zed', '--roster', roster, '--claim-now', '--json']);
+    const p = json('zed', ['team', 'pop', '--team', 't1', '--agent', 'zed', '--roster', roster, '--json']);
     assert.deepEqual([p.action, p.item, p.claimed, fm(c1).claimed_by], ['claim', c1, true, 'zed']);
   });
   await step('S15 --waiting and --waiting-done', () => { as('zed', ['update', c1, '--waiting', 'ci run 7', '--by', 'zed']); as('zed', ['update', c1, '--waiting-done', '--by', 'zed']); assert.ok(!fm(c1).wait_on); });
@@ -92,7 +92,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
   });
   const doc = slug => readFileSync(join(home, 'acme', 'demo', 'phases', `${slug}.md`), 'utf8');
   await step('S20 a fresh session: rework, the dependency hand-off before the final review, --request-review, --review pass', () => {
-    assert.equal(json('zed', ['pop', '--agent', 'zed', '--json']).item, c1);
+    assert.equal(json('zed', ['team', 'pop', '--team', 't1', '--agent', 'zed', '--json']).item, c1);
     // the producer records its hand-off in the consumer's item before the final review 
     as('zed', ['update', c2, '--append', `DEPENDENCY_HANDOFF v1 from ${c1} (revision 1): interface parse(text); commit def; tests parser.test (pass); pickup: import parse`, '--by', 'zed']);
     assert.match(doc(c2), /DEPENDENCY_HANDOFF v1 from .*\(revision 1\)/);
@@ -141,7 +141,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     as('ann', ['update', c2, '--close', '--summary', 'printer done', '--by', 'ann']);
   });
   await step('S24 every child done: the lead has its work item reviewed and closes it', () => {
-    const p = json('lead', ['pop', '--agent', 'lead', '--json']);
+    const p = json('lead', ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json']);
     assert.deepEqual([p.action, p.item], ['continue', w]);
     as('lead', ['update', w, '--request-review', 'any', '--note', 'children and their evidence', '--by', 'lead']);
     as('bob', ['update', w, '--start-review', '--by', 'bob']);

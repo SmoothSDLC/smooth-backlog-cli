@@ -43,7 +43,7 @@ const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r
 const make = (f, name) => createdSlug(ok(f, ['new', ...NEW(name)]).stdout);
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 const teamItem = f => { const s = make(f, 'unrefined team item'); ok(f, ['update', s, '--set-team', 't1']); return s; }; // team set, no stage
-const pop = (f, agent) => JSON.parse(run(f, ['pop', '--agent', agent, '--json'], T1).stdout);
+const pop = (f, agent) => JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json'], T1).stdout);
 const claimable = (f, env) => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--json'], env).stdout).map(x => x.slug);
 const plan = f => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', 'amy,ada,zed', '--roster', f.roster, '--json'], T1).stdout);
 
@@ -83,7 +83,8 @@ test('pop offers an unrefined team item as refine, never as claim; query --claim
   const s = teamItem(f);
   const p = pop(f, 'amy');
   assert.deepEqual([p.action, p.item], ['refine', s], JSON.stringify(p));
-  assert.ok(p.instruction.includes('--refine-start --by amy'), p.instruction);
+  assert.ok(p.marked.includes('--refine-start'), p.marked); // team pop starts the refinement it offers: never a claim
+  assert.deepEqual([fm(f, s).status, fm(f, s).refiner, fm(f, s).claimed_by], ['refining', 'amy', '']);
   assert.deepEqual(claimable(f, T1), []);
   assert.deepEqual(claimable(f, {}), []);
   assert.deepEqual(plan(f), []);

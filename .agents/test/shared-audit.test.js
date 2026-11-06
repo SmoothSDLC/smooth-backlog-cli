@@ -243,7 +243,7 @@ test('review: after the author released her claim, pop and query --reviewable st
   const rev = who => s.run(['team', 'query', '--team', 't1', '--reviewable', '--agent', who]);
   assert.doesNotMatch(rev('alice').stdout, /001-alpha-job/);
   assert.match(rev('bob').stdout, /001-alpha-job/);
-  const pop = who => s.run(['pop', '--json', '--agent', who]);
+  const pop = who => s.run(['team', 'pop', '--team', 't1', '--json', '--agent', who]);
   const mine = pop('alice'); assert.doesNotMatch(mine.stdout, /"action":\s*"review"/, mine.stdout);
   const theirs = pop('bob'); assert.match(theirs.stdout, /"action":\s*"review"/, theirs.stdout + theirs.stderr);
 });

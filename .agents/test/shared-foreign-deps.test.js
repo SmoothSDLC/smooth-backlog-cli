@@ -38,14 +38,14 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.match(run(here, ['next']).stdout, /⛓ waits on acme\/lib#1 \(001-library-change, status pending\): do that first in repository acme\/lib/);
   run(here, ['query', '--phase', '1', '--agent', 'ada']);
   assert.match(run(here, ['update', '1', '--claim', 'ada'], 1).stdout, /dependencies not done/);
-  const p = JSON.parse(run(here, ['pop', '--agent', 'ada', '--json'], 3).stdout);
+  const p = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json'], 3).stdout);
   assert.equal(p.action, 'idle');
   assert.deepEqual(p.first, [{ item: 'acme/lib#1', repository: 'acme/lib', seq: 1, slug: '001-library-change', status: 'pending' }]);
   assert.match(p.instruction, /the work here waits on acme\/lib#1 \(001-library-change, status pending\): do that first in repository acme\/lib/);
   assert.equal(p.blocked[0].waiting_on[0].repository, 'acme/lib');
-  const lead = run(here, ['pop', '--agent', 'lead'], 3).stdout;
+  const lead = run(here, ['team', 'pop', '--team', 't1', '--agent', 'lead'], 3).stdout;
   assert.match(lead, /do that first in repository acme\/lib: end the session here; the team is started in that repository/);
-  const w = JSON.parse(run(here, ['work', '--agent', 'ada', '--json'], 3).stdout);
+  const w = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json'], 3).stdout);
   assert.equal(w.first[0].item, 'acme/lib#1'); // the next-work command names it too
   // an item outside a team closes with --status done; the hand-off of the producer is accepted after its review passed
   run(there, ['update', '1', '--claim', 'tester']);
@@ -61,7 +61,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   run(there, ['query', '--phase', '1', '--agent', 'tester']);
   run(there, ['update', '1', '--status', 'done', '--by', 'tester']);
   assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status closed\)/);
-  const offered = JSON.parse(run(here, ['pop', '--agent', 'ada', '--json']).stdout); // done: next-work offers the item
+  const offered = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json']).stdout); // done: next-work offers the item
   assert.deepEqual([offered.action, offered.item, offered.first], ['claim', '001-app-change', undefined]);
   run(here, ['query', '--phase', '1', '--agent', 'ada']);
   run(here, ['update', '1', '--claim', 'ada']); // and the claim goes through
@@ -71,7 +71,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   // a dependency added after the claim: the holder is not told to go on, the other repository's item is named first
   run(there, ['new', '--name', 'library follow up', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds']);
   run(here, ['update', '1', '--set-depends-on', 'acme/lib#2', '--by', 'tester']);
-  const held = JSON.parse(run(here, ['pop', '--agent', 'ada', '--json'], 3).stdout);
+  const held = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json'], 3).stdout);
   assert.equal(held.action, 'idle', JSON.stringify(held));
   assert.equal(held.first[0].item, 'acme/lib#2');
   const roster = join(t, 'roster.json'); writeFileSync(roster, JSON.stringify({ ada: {} }));
@@ -84,7 +84,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   run(here, ['update', '2', '--request-review', 'any', '--note', 'n', '--by', 'zed']);
   run(here, ['query', '--phase', '2', '--agent', 'tester']);
   run(here, ['update', '2', '--set-depends-on', 'acme/lib#2', '--by', 'tester']);
-  const rev = JSON.parse(run(here, ['pop', '--agent', 'rev', '--json'], 3).stdout);
+  const rev = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'rev', '--json'], 3).stdout);
   assert.deepEqual([rev.action, rev.first?.[0]?.item], ['idle', 'acme/lib#2'], JSON.stringify(rev));
   assert.deepEqual(JSON.parse(run(here, ['team', 'query', '--team', 't1', '--reviewable', '--agent', 'rev', '--json']).stdout), []); // nor listed as reviewable
 });
@@ -108,14 +108,14 @@ test('042: a lead whose team items wait only on another repository is told to st
   run(here, ['update', '1', '--claim', 'lead']);
   run(here, ['new', '--name', 'team child', '--objective', 'o', '--summary', 's', '--depends-on', 'acme/lib#1', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]);
   run(here, ['update', '2', '--set-team', 't1']);
-  const p = JSON.parse(run(here, ['pop', '--agent', 'lead', '--json'], 3).stdout);
+  const p = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json'], 3).stdout);
   assert.deepEqual(p.first?.map(x => x.item), ['acme/lib#1'], JSON.stringify(p));
   assert.match(p.instruction, /end the session here; the team is started in that repository/);
   // a refined team item that waits on another repository is not sent to the refinement review first either
   run(here, ['new', '--name', 'refined child', '--objective', 'o', '--summary', 's', '--depends-on', 'acme/lib#1', '--team', 't1', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]);
   run(here, ['update', '3', '--refine-start', '--by', 'zed'], 0, { BACKLOG_AGENT: 'zed' });
   run(here, ['update', '3', '--refine-done', '--by', 'zed', '--note', 'refined'], 0, { BACKLOG_AGENT: 'zed' });
-  const q = JSON.parse(run(here, ['pop', '--agent', 'lead', '--json'], 3).stdout);
+  const q = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json'], 3).stdout);
   assert.deepEqual([q.action, q.first?.map(x => x.item)], ['idle', ['acme/lib#1']], JSON.stringify(q));
 });
 

@@ -32,7 +32,7 @@ const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`
 const refined = (f, slug, cwd = f.cons) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => {
   const r = cli(['update', slug, ...a], { cwd, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr);
 });
-const pop = (f, agent, env) => JSON.parse(run(f, ['pop', '--agent', agent, '--json'], env).stdout);
+const pop = (f, agent, env) => JSON.parse(run(f, ['team', 'pop', '--team', env?.TEAM_NAME || 't1', '--agent', agent, '--json'], env?.TEAM_NAME ? { BACKLOG_AGENT: agent, ...env } : env).stdout); // the team of the session, else t1
 const slugs = (f, args, env) => JSON.parse(ok(f, ['team', 'query', '--team', 't1', ...args, '--json'], env).stdout).map(x => x.slug);
 
 test('the runner sets the team on the work item and claims it for the lead; --set-team "" clears it', () => {
@@ -53,7 +53,7 @@ test('backlog new --team writes the team and starts the item as new; --split-fro
   ok(f, ['update', w, '--set-team', 't1']);
   const a = make(f, 'child a', '--split-from', w);
   assert.deepEqual([fm(f, a).team, fm(f, a).status, fm(f, a).refiner], ['t1', 'new', '']); // inherited
-  assert.notEqual(pop(f, 'lead', { TEAM_NAME: 't1' }).action, 'claim'); // the lead never claims a split item
+  assert.notEqual(pop(f, 'lead', { TEAM_NAME: 't1' }).item, a); // the lead never claims a split item (it is offered its work item)
   const b = make(f, 'child of another team', '--split-from', w, '--team', 't2');
   assert.equal(fm(f, b).team, 't2'); // --team wins over the inherited team
   const c = make(f, 'other team item', '--team', 't2');
@@ -75,14 +75,12 @@ test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimabl
   assert.deepEqual(slugs(f, ['--claimable'], T1), [mine]);
   assert.deepEqual(slugs(f, ['--claimable'], T2), [theirs]);
   assert.deepEqual(slugs(f, ['--claimable']), [mine, theirs, none]); // without TEAM_NAME every item
-  assert.deepEqual([pop(f, 'ann', T2).action, pop(f, 'ann', T2).item], ['claim', theirs]);
   ok(f, ['update', mine, '--claim', 'bob']);
   ok(f, ['update', mine, '--request-review', 'any', '--note', 'commit abc']);
   assert.deepEqual(slugs(f, ['--reviewable', '--agent', 'zed'], T1), [mine]);
   assert.deepEqual(slugs(f, ['--reviewable', '--agent', 'zed'], T2), []);
   const p = pop(f, 'zed', T2); // t2's member: the claim of its own item, never the review of t1's
-  assert.deepEqual([p.action, p.item], ['claim', theirs]);
-  ok(f, ['update', theirs, '--claim', 'ann']);
+  assert.deepEqual([p.action, p.item, p.claimed], ['claim', theirs, true]);
   const q = pop(f, 'zed', T2);
   assert.ok(q.item !== mine && q.item !== none, JSON.stringify(q)); // nothing of another team or of no team
   const dep = make(f, 't2 waits', '--depends-on', theirs.split('-')[0]);
@@ -99,7 +97,7 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
   refined(f, theirs);
   writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
   const T1 = { TEAM_NAME: 't1' };
-  const popAll = env => JSON.parse(run(f, ['pop', '--agent', 'ann', '--scope', 'all', '--json'], env).stdout);
+  const popAll = env => JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--scope', 'all', '--json'], { BACKLOG_AGENT: 'ann', ...env }).stdout);
   const p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['chunk', null]); // small-chunk work, but not t2's item
   const newIn = name => { const r = cli(['new', ...NEW(name), '--chunk'], { cwd: other, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr); return r.stdout.split('created phase ')[1].split(' ')[0]; };

@@ -45,7 +45,7 @@ const up = (f, slug, ...args) => ok(f, ['update', slug, ...args]);
 const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
 const doc = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const fm = (f, slug) => doc(f, slug).fm;
-const pop = (f, agent, env) => { const r = run(f, ['pop', '--agent', agent, '--json'], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
+const pop = (f, agent, env) => { const r = run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json'], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
 const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => up(f, slug, ...a));
 
@@ -108,7 +108,7 @@ test('the default entry reviews in both stages; a reject at the external stage r
   assert.equal(after.review_history.length, 2);
   assert.match(after.review_history[0], /^\S+ peer complete bob \S*: /);
   assert.match(after.review_history[1], /^\S+ external reject xia \S*: references\/review\/code.md: the edge case is missing$/);
-  assert.ok(pop(f, 'ann', T1).instruction.length > 0);
+  assert.ok(pop(f, 'ann', { ...T1, BACKLOG_AGENT: 'ann' }).instruction.length > 0); // in a team session team pop answers only for the agent itself
 });
 
 test('--review pass and changes are synonyms and the printed line says the canonical word; an unknown verdict is refused naming both words', () => {

@@ -18,12 +18,12 @@ sharedBacklog(t);
 const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
-const COMMANDS = ['new', 'update', 'query', 'next', 'fields', 'pop', 'work', 'team', 'move', 'archive'];
+const COMMANDS = ['new', 'update', 'query', 'next', 'fields', 'team', 'move', 'archive'];
 // Flags this build refuses (query.js TEAM and pop.js); --db is no flag of the CLI (item 058: not in its help).
 const REFUSED = {
   update: [],
   query: [],
-  new: [], move: [], archive: [], pop: [],
+  new: [], move: [], archive: [],
 };
 const flagsOf = text => [...new Set((text.match(/--[a-z][\w-]*/g) ?? []).filter(f => !f.endsWith('-')))];
 // The block of one flag: its header line `  --flag ...` and the lines indented by six spaces below it.
@@ -34,7 +34,7 @@ test('backlog update --claim keeps its refusal conditions, query --roster the sh
   assert.match(claim, /refuses when another agent holds the item/);
   assert.match(claim, /depends_on\s+is not done/);
   assert.match(claim, /in progress/);
-  for (const command of ['team', 'pop']) {
+  for (const command of ['team']) {
     const roster = block(backlog(command, '--help').stdout, 'roster');
     assert.match(roster, /\{agent: \{\.\.\.\}\}, the team's members in order/, command);
     assert.match(roster, /TEAM_ROSTER/, command);
@@ -66,8 +66,8 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
     [['archive', '1', '--force', '--dry-run', '--db', 'x.db'], unknown],
     [['query', '--status', '--db', 'x.db'], unknown],
     [['query', '--agents', 'x', '--roster', roster], /^--agents goes with --plan/],
-    [['pop', '--agent', 'x', '--agents', 'x'], /^--agents goes with --plan/],
-    [['pop', '--agent', 'x', '--db', 'x.db'], unknown],
+    [['team', 'pop', '--team', 't1', '--agent', 'x', '--agents', 'x'], /^unrecognized arguments: --agents/],
+    [['team', 'pop', '--team', 't1', '--agent', 'x', '--db', 'x.db'], unknown],
   ];
   for (const [args, diagnostic] of cases) {
     const r = backlog(...args);
@@ -102,15 +102,14 @@ test('exit code 3 is described for both cases: the update before the command fai
     assert.match(text, /change was not published.*rolled back/, command);
   }
   assert.match(backlog('move', '--help').stdout, /3 the update of the local clone failed before\nthe move \(nothing was changed\), or the move was not published and was rolled back/);
-  assert.match(backlog('pop', '--help').stdout, /^ {2}3 {2}The action is idle: nothing is left for the agent\. The same code is used when the local clone/m);
-  assert.match(backlog('pop', '--help').stdout, /--claim-now claim was not published and was rolled back/);
+  assert.match(backlog('team', '--help').stdout, /^ {2}3 {2}idle: nothing to do now \(pop\)\. The same code is used when the local clone/m);
   // the build does what the text says: a command that only reads answers from the local copy with the offline warning
   const broken = mkdtempSync(join(tmpdir(), 'help-exit3-'));
   dirs.push(broken);
   sharedBacklog(broken);
   const demo = consumer(broken, 'acme', 'demo', 'main');
   renameSync(join(broken, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), join(broken, 'origin-gone.git'));
-  for (const args of [['query', '--status'], ['pop', '--agent', 'x']]) {
+  for (const args of [['query', '--status'], ['team', 'pop', '--team', 't1', '--agent', 'x']]) {
     const r = cli(args, { cwd: demo, tmp: broken });
     assert.match(r.stderr, /origin offline, local backlog updates may be behind and need manual remediation later/, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
   }
@@ -181,6 +180,6 @@ test('059.V2: the --close and --status help blocks name the hand-off close rule,
   }
 });
 
-test('query and pop help: one pop command, no headless option', () => {
-  for (const command of ['query', 'next', 'pop']) assert.doesNotMatch(HELP[command], /--pop\b|--headless|BACKLOG_HEADLESS|next --agent/, command);
+test('query, next and team help: no headless option, no query --pop', () => {
+  for (const command of ['query', 'next', 'team']) assert.doesNotMatch(HELP[command], /--pop\b|--headless|BACKLOG_HEADLESS|next --agent/, command);
 });

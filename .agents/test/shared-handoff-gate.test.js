@@ -88,8 +88,6 @@ function gate(f, state, p, d, h, { depId = p, blockedOn = p } = {}) {
   ok(f, ['query', '--phase', d, '--agent', 'ada']); // the claimer reads its item first
   const satisfied = state === 'accepted' || state === 'legacy';
   const nextItem = satisfied ? d : h;
-  const pop = JSON.parse(run(f, ['pop', '--agent', 'ada', '--json'], 3).stdout);
-  assert.deepEqual([pop.action, pop.item], ['claim', nextItem], `pop's offer for a ${state} edge: ${JSON.stringify(pop)}`);
   if (!satisfied) {
     const claim = run(f, ['update', d, '--claim', 'ada']);
     assert.equal(claim.status, 1, claim.stdout + claim.stderr);
@@ -111,16 +109,13 @@ function gate(f, state, p, d, h, { depId = p, blockedOn = p } = {}) {
   assert.deepEqual(plan.map(e => e.item), [nextItem], `query --plan's offer for a ${state} edge: ${JSON.stringify(plan)}`);
   const claimable = JSON.parse(run(f, ['team', 'query', '--team', 't1', '--claimable', '--agent', 'ada', '--json']).stdout);
   assert.equal(claimable.some(r => r.slug === d), satisfied, `query --claimable for a ${state} edge: ${JSON.stringify(claimable.map(r => r.slug))}`);
+  // next skips nothing for team reasons: it prints the open item with the best priority, whole, even when its producer's hand-off is not accepted
   const next = JSON.parse(run(f, ['next', '--json']).stdout);
-  assert.equal(next.slug, nextItem, `next for a ${state} edge: ${JSON.stringify(next)}`);
-  if (satisfied) {
-    assert.ok(!('first' in next), 'next names no work to do first: the edge is satisfied');
-    assert.ok(!('skipped' in next), 'next names no skipped edge: the edge is satisfied');
-  } else { // next names the skipped edge: a silent skip is not "the edge state named" (rex round 2, finding 2)
-    assert.deepEqual(next.skipped, [{ item: d, edge: depId, handoff: state }], `next names the skipped edge: ${JSON.stringify(next)}`);
-    assert.match(run(f, ['next']).stdout, new RegExp(`${d} waits on ${blockedOn} \\(done, hand-off ${state}:`), 'the text next names the skipped edge');
-  }
-  const work = JSON.parse(run(f, ['work', '--agent', 'ada', '--json'], 3).stdout);
+  assert.equal(next.slug, d, `next for a ${state} edge: ${JSON.stringify(next)}`);
+  assert.ok(!('skipped' in next), 'next skips nothing');
+  assert.equal(next.front_matter.phase, d);
+  assert.ok(typeof next.body === 'string' && next.body.includes('Definition of done'), 'next prints the body');
+  const work = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json'], 3).stdout);
   assert.deepEqual([work.action, work.item], ['claim', nextItem], `work's offer for a ${state} edge: ${JSON.stringify(work)}`);
   assert.equal(work.claimed, true, 'work claims the item it offers');
   assert.equal(work.front_matter?.claimed_by, 'ada');

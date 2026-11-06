@@ -55,7 +55,7 @@ const ok = (f, slug, ...args) => {
 const refuse = (f, slug, ...args) => cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
 // ann is a plain member here; popLead asks as the team lead, who does no chunk work.
 const LEAD = { TEAM_LEAD: 'lead' };
-const popCli = (f, args, opts = {}) => cli(['pop', '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, ...opts, env: { ...LEAD, ...opts.env } });
+const popCli = (f, args, opts = {}) => cli(['team', 'pop', '--team', 't1', '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, ...opts, env: { ...LEAD, ...opts.env } });
 
 // The JSON of pop: exit 3 exactly when the action is idle.
 function pop(f, ...args) { return popAs(f, LEAD, ...args); }
@@ -69,7 +69,7 @@ function popAs(f, env, ...args) {
   return out;
 }
 
-test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idle, --claim-now claims', () => {
+test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idle, team pop claims', () => {
   const f = fixture();
   git(f.cons, 'checkout', '-q', '-b', 'pop-a'); // a queue of this test only
   const dep = make(f, f.cons, 'pop dependency', ['--review-refs', 'references/review/tests.md']);
@@ -89,26 +89,23 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   assert.deepEqual([p.action, p.item], ['chunk', chunk]);
   assert.ok(p.instruction.includes('CHUNK <time>'));
   const job = make(f, f.cons, 'pop job', []);
-  p = pop(f); // (c) claim beats chunk; not claimed yet
-  assert.deepEqual([p.action, p.item, p.claimed], ['claim', job, false]);
-  assert.ok(!item(f, job).fm.claimed_by);
   assert.notEqual(popLead(f).action, 'claim'); // the lead never claims
-  assert.notEqual(popLead(f, '--claim-now').action, 'claim');
+  assert.notEqual(popLead(f).action, 'claim');
   assert.ok(!item(f, job).fm.claimed_by);
-  p = pop(f, '--claim-now'); // --claim-now claims it
+  p = pop(f); // (c) claim beats chunk; team pop claims what it offers
   assert.deepEqual([p.action, p.item, p.claimed], ['claim', job, true]);
   assert.equal(item(f, job).fm.claimed_by, 'ann');
   const spare = make(f, f.cons, 'pop spare job', []);
   ok(f, dep, '--request-review', 'any', '--note', 'tests in commit abc');
-  const z = JSON.parse(cli(['pop', '--agent', 'zed', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD }).stdout);
+  const z = JSON.parse(cli(['team', 'pop', '--team', 't1', '--agent', 'zed', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD }).stdout);
   assert.deepEqual([z.action, z.item], ['review', dep]); // (b) review beats claim; any member but the author
   assert.ok(z.instruction.includes('--review pass|changes --by zed') && spare);
   p = pop(f); // (a) continue beats review
   assert.deepEqual([p.action, p.item], ['continue', job]);
-  const n = cli(['pop', '--agent', 'ann'], { cwd: f.cons, tmp: f.t, env: LEAD });
+  const n = cli(['team', 'pop', '--team', 't1', '--agent', 'ann'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.ok(n.status === 0 && n.stdout.startsWith(`continue ${job}\n`), n.stdout + n.stderr);
-  ok(f, dep, '--review', 'pass', '--by', 'ann', '--comments', 'fine per references/review/tests.md');
-  assert.ok(cli(['pop'], { cwd: f.cons, tmp: f.t }).stderr.includes('pop needs --agent'));
+  ok(f, dep, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/tests.md'); // zed's team pop started the review
+  assert.ok(cli(['team', 'pop', '--team', 't1'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '' } }).stderr.includes('needs --agent'));
 });
 
 test('075: the pop of an idle lead and of a claimable item prints its text and its JSON exactly, with empty stderr', () => {
@@ -121,23 +118,28 @@ test('075: the pop of an idle lead and of a claimable item prints its text and i
   assert.equal(idleText.status, 3, idleText.stdout + idleText.stderr);
   assert.equal(idleText.stderr, '');
   assert.equal(idleText.stdout, `idle\n   nothing for ann: message the agents holding the blockers below, or the coordinator\n   blocked ${blocked}: waits on ${dep} (status in progress, claimed by bob)\n`);
-  // the same state as the JSON of pop: the whole document, word for word (the CLI's Python-style separators)
+  // the same state as JSON: the keys of the document and the blocked entry
   const idleJson = popCli(f, ['--json'], { env: { TEAM_LEAD: 'ann' } });
   assert.equal(idleJson.status, 3, idleJson.stdout + idleJson.stderr);
   assert.equal(idleJson.stderr, '');
-  assert.equal(idleJson.stdout,
-    `{"action": "idle", "item": null, "seq": null, "repository": "acme/demo", "branch": "main", "instruction": "nothing for ann: message the agents holding the blockers below, or the coordinator", "claimed": false, "blocked": [{"item": "${blocked}", "waiting_on": [{"id": "1", "slug": "${dep}", "status": "in progress", "claimed_by": "bob"}]}], "held": []}\n`);
-  // the claim the member gets instead: its text and JSON, exit 0
+  const idle = JSON.parse(idleJson.stdout);
+  assert.deepEqual(Object.keys(idle), ['action', 'item', 'seq', 'team', 'repository', 'branch', 'instruction', 'claimed', 'blocked', 'held', 'marked', 'skipped', 'front_matter', 'body']);
+  assert.deepEqual([idle.action, idle.item, idle.seq, idle.team, idle.claimed, idle.marked, idle.front_matter, idle.body], ['idle', null, null, 't1', false, null, null, null]);
+  assert.deepEqual(idle.blocked, [{ item: blocked, waiting_on: [{ id: String(Number(dep.split('-')[0])), slug: dep, status: 'in progress', claimed_by: 'bob' }] }]);
+  // the claim the member gets instead: team pop claims it and prints it, text and JSON, exit 0
   const job = make(f, f.cons, '075 pop job', []);
   const claimText = popCli(f, [], { env: LEAD });
   assert.equal(claimText.status, 0, claimText.stdout + claimText.stderr);
   assert.equal(claimText.stderr, '');
-  assert.equal(claimText.stdout, `claim ${job}\n   claim it: backlog update ${job} --claim ann; definition of done: references/review/code.md (the review-documents repository: load them before working)\n`);
-  const claimJson = popCli(f, ['--json'], { env: LEAD });
+  assert.ok(claimText.stdout.startsWith(`claim ${job}\n   marked: claimed for ann\n   claimed for ann: start the work and record each step in the item; definition of done: references/review/code.md (the review-documents repository: load them before working)\n`), claimText.stdout);
+  assert.ok(claimText.stdout.includes(`--- item ${job}: front matter ---\n`) && claimText.stdout.includes(`--- item ${job}: body ---\n`), claimText.stdout);
+  const job2 = make(f, f.cons, '075 pop second job', []);
+  const claimJson = cli(['team', 'pop', '--team', 't1', '--agent', 'cy', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.equal(claimJson.status, 0, claimJson.stdout + claimJson.stderr);
   assert.equal(claimJson.stderr, '');
-  assert.equal(claimJson.stdout,
-    `{"action": "claim", "item": "${job}", "seq": 3, "repository": "acme/demo", "branch": "main", "instruction": "claim it: backlog update ${job} --claim ann; definition of done: references/review/code.md (the review-documents repository: load them before working)", "claimed": false, "blocked": [], "held": []}\n`);
+  const claim = JSON.parse(claimJson.stdout);
+  assert.deepEqual([claim.action, claim.item, claim.seq, claim.claimed, claim.marked, claim.front_matter.claimed_by, claim.skipped], ['claim', job2, 4, true, 'claimed for cy', 'cy', []]);
+  assert.equal(item(f, job2).fm.claimed_by, 'cy');
 });
 
 test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_closed', () => {
@@ -149,7 +151,7 @@ test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_clo
   const other = make(f, f.cons, 'wait other', []);
   let p = pop(f); // awaiting a verdict: falls through to claim
   assert.deepEqual([p.action, p.item], ['claim', other]);
-  ok(f, other, '--claim', 'bob');
+  ok(f, other, '--release', 'ann'); ok(f, other, '--claim', 'bob'); // team pop claimed it for ann: bob takes it over
   p = popLead(f); // nothing else for the lead: idle, the wait is reported
   const seq = item(f, job).fm.seq;
   assert.equal(p.action, 'idle');
@@ -178,13 +180,13 @@ test('test_claim_only_when_every_held_item_waits', () => {
   assert.deepEqual([p.action, p.item], ['continue', one]);
   assert.ok(p.held.some(h => h.item === one && h.seq === p.seq && h.state === 'active'));
   ok(f, one, '--waiting', 'run 397 deploy', '--by', 'ann'); // an async wait: claim allowed
-  p = pop(f, '--claim-now');
+  p = pop(f);
   assert.deepEqual([p.action, p.item, p.claimed], ['claim', two, true]);
   assert.ok(p.held.some(h => h.item === one && h.state === 'waiting:run 397 deploy'));
   ok(f, two, '--request-review', 'any', '--note', 'commit abc'); // two awaits review, one waits
   p = pop(f);
   assert.deepEqual([p.action, p.item], ['claim', three]);
-  ok(f, three, '--claim', 'bob');
+  ok(f, three, '--release', 'ann'); ok(f, three, '--claim', 'bob'); // team pop claimed it for ann: bob takes it over
   p = popLead(f);
   assert.equal(p.action, 'idle');
   assert.ok(p.blocked.some(b => b.item === one && b.waiting_on[0] === 'waiting: run 397 deploy'));
@@ -210,7 +212,7 @@ test('test_review_refs_any_reviewer_and_review_first', () => {
   git(f.cons, 'checkout', '-q', '-b', 'poprefs');
   const job = make(f, f.cons, 'refs job', ['--review-refs',
     'references/review/contract.example.md,references/patterns/x.md']);
-  let r = cli(['pop', '--agent', 'bob', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
+  let r = cli(['team', 'pop', '--team', 't1', '--agent', 'bob', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.ok(JSON.parse(r.stdout).instruction.includes('definition of done: references/review/contract.example.md, references/patterns/x.md'), r.stdout + r.stderr);
   ok(f, job, '--claim', 'bob');
   ok(f, job, '--request-review', 'any', '--note', 'commit abc');
@@ -250,11 +252,12 @@ test('a roster member with review_only never claims; a missing roster is an erro
   const job = make(f, f.cons, 'review only job', []);
   const roster = join(f.t, 'team.json');
   writeFileSync(roster, JSON.stringify({ rev: { review_only: true }, ann: {} }));
-  const as = (agent, ...args) => cli(['pop', '--agent', agent, '--roster', roster, '--json', ...args], { cwd: f.cons, tmp: f.t, env: LEAD });
-  for (const args of [[], ['--claim-now']]) assert.equal(JSON.parse(as('rev', ...args).stdout).action, 'idle', args.join(' '));
+  const as = (agent, ...args) => cli(['team', 'pop', '--team', 't1', '--agent', agent, '--roster', roster, '--json', ...args], { cwd: f.cons, tmp: f.t, env: LEAD });
+  assert.equal(JSON.parse(as('rev').stdout).action, 'idle');
   assert.ok(!item(f, job).fm.claimed_by);
-  assert.deepEqual([JSON.parse(as('ann').stdout).action, JSON.parse(as('ann').stdout).item], ['claim', job]);
-  const gone = cli(['pop', '--agent', 'ann', '--roster', join(f.t, 'missing.json')], { cwd: f.cons, tmp: f.t, env: LEAD });
+  const annPop = JSON.parse(as('ann').stdout);
+  assert.deepEqual([annPop.action, annPop.item], ['claim', job]);
+  const gone = cli(['team', 'pop', '--team', 't1', '--agent', 'ann', '--roster', join(f.t, 'missing.json')], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.equal(gone.status, 2);
   assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'missing.json')}: `), gone.stderr);
 });
@@ -288,7 +291,7 @@ test('pop with --scope all and the refinement_scope cap of backlog.scope', () =>
   make(f, f.other, 'scope chunk other repository', ['--chunk']);
   const here = make(f, f.cons, 'scope docs here', []);
   ok(f, here, '--claim', 'bob'); // nothing else claimable: the pop has only chunk work
-  const t = (...a) => cli(['pop', '--agent', 't', '--json', ...a], { cwd: f.cons, tmp: f.t, env: LEAD });
+  const t = (...a) => cli(['team', 'pop', '--team', 't1', '--agent', 't', '--json', ...a], { cwd: f.cons, tmp: f.t, env: LEAD });
   try {
     writeFileSync(f.cfg, 'refinement_scope: all\n');
     let p = t('--scope', 'all');
@@ -304,7 +307,7 @@ test('pop with --scope all and the refinement_scope cap of backlog.scope', () =>
 test('--agents without --plan, --critical and --headless stay refused with pop', () => {
   const f = fixture();
   make(f, f.cons, 'x', []);
-  for (const args of [['query', '--agents', 'a,b'], ['pop', '--agent', 't', '--agents', 'a'], ['pop', '--agent', 't', '--critical'], ['pop', '--agent', 't', '--headless']]) {
+  for (const args of [['query', '--agents', 'a,b'], ['team', 'pop', '--team', 't1', '--agent', 't', '--agents', 'a'], ['team', 'pop', '--team', 't1', '--agent', 't', '--critical'], ['team', 'pop', '--team', 't1', '--agent', 't', '--headless']]) {
     const r = cli(args, { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 2, args.join(' '));
     assert.equal(r.stdout, '');
@@ -319,7 +322,7 @@ test('credentials in a wait are redacted in the text and the JSON of the pop (bl
   const { fm, body } = item(f, held);
   store.write({ path: join(f.folder, 'phases', `${held}.md`), fm: { ...fm, wait_on: 'https://user:hunter2secret@host/run' }, body }, f.folder);
   for (const args of [[], ['--json']]) {
-    for (const cmd of [['pop']]) {
+    for (const cmd of [['team', 'pop', '--team', 't1']]) {
       const r = cli([...cmd, '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t });
       assert.equal(r.status, 3, r.stdout + r.stderr); // idle: it only waits
       assert.ok(r.stdout.includes('https://host/run'), r.stdout); // the wait is still named
@@ -340,7 +343,7 @@ function claimOutcome(kind) {
     ? "const cp = require('node:child_process'); const run = cp.execFile;\ncp.execFile = function (file, args) { if (process.argv[2] === 'update' && file === 'git' && args.includes('commit')) process.kill(process.pid, 'SIGTERM'); return run.apply(this, arguments); };\n"
     : "if (process.argv[2] === 'update') { process.stderr.write('fatal: https://user:hunter2secret@host/x\\n'); process.exit(1); }\n");
   const env = { ...LEAD, NODE_OPTIONS: `--require=${hook}` }; // ann a member: the lead never claims
-  const r = cli(['pop', '--agent', 'ann', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env });
+  const r = cli(['team', 'pop', '--team', 't1', '--agent', 'ann', '--json'], { cwd: f.cons, tmp: f.t, env });
   return { f, job, r };
 }
 
@@ -357,8 +360,8 @@ test('--claim-now: a claim interrupted after it was saved is reported as a failu
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /claim of .* failed/);
   assert.equal(item(f, job).fm.claimed_by, 'ann', 'the saved claim stays in the item file');
-  assert.doesNotMatch(HELP.pop, /nothing is claimed/);
-  assert.match(HELP.pop, /check the item/);
+  assert.doesNotMatch(HELP.team, /nothing is claimed/);
+  assert.match(HELP.team, /check the item/);
   assert.doesNotMatch(readFileSync(new URL('../../COMMANDS.md', import.meta.url), 'utf8'), /nothing is claimed/);
 });
 
@@ -369,8 +372,8 @@ test('--claim-now: the diagnostics of a failed claim are forwarded with its exit
   assert.ok(!(r.stdout + r.stderr).includes('hunter2secret'), r.stdout + r.stderr);
 });
 
-test('the exit codes of backlog pop are described: 3 is idle, 1 a claim that failed', () => {
-  assert.match(HELP.pop, /1 {2}A --claim-now claim was refused or could not be run/);
+test('the exit codes of backlog team pop are described: 3 is idle, 1 a claim that failed', () => {
+  assert.match(HELP.team, /1 {2}A claim was refused or could not be run/);
 });
 
 test('the JSON of the pop stays valid when a credential follows a non-ASCII character (redaction before serialization)', () => {
@@ -378,7 +381,7 @@ test('the JSON of the pop stays valid when a credential follows a non-ASCII char
   git(f.cons, 'checkout', '-q', '-b', 'pop-unicode');
   make(f, f.cons, 'pop unicode agent', []);
   const agent = 'https://\u00e9user:review_dummy@host/path';
-  for (const cmd of [['pop']]) {
+  for (const cmd of [['team', 'pop', '--team', 't1']]) {
     const r = cli([...cmd, '--agent', agent, '--json'], { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 0, r.stdout + r.stderr); // claim: the instruction names the agent
     const out = JSON.parse(r.stdout); // invalid JSON if the escape \u00e9 was cut
@@ -389,14 +392,14 @@ test('the JSON of the pop stays valid when a credential follows a non-ASCII char
 
 test('pop --scope with an unknown scope exits 2 and names the choices', () => {
   const f = fixture();
-  const galaxy = cli(['pop', '--agent', 'x', '--scope', 'galaxy'], { cwd: f.cons, tmp: f.t });
+  const galaxy = cli(['team', 'pop', '--team', 't1', '--agent', 'x', '--scope', 'galaxy'], { cwd: f.cons, tmp: f.t });
   assert.ok(galaxy.status === 2 && galaxy.stderr.includes("argument --scope: invalid choice: 'galaxy' (choose from 'branch', 'repo', 'all')"), galaxy.stderr);
 });
 
 test('pop --roster with a missing roster file exits 2 and names the file', () => {
   const f = fixture();
   make(f, f.cons, 'roster job');
-  const gone = cli(['pop', '--agent', 'x', '--roster', join(f.t, 'nope.json')], { cwd: f.cons, tmp: f.t });
+  const gone = cli(['team', 'pop', '--team', 't1', '--agent', 'x', '--roster', join(f.t, 'nope.json')], { cwd: f.cons, tmp: f.t });
   assert.equal(gone.status, 2);
   assert.ok(gone.stderr.startsWith(`❌ backlog: roster ${join(f.t, 'nope.json')}: `), gone.stderr);
 });
@@ -404,11 +407,11 @@ test('pop --roster with a missing roster file exits 2 and names the file', () =>
 test('--claim-now on an item the agent already holds continues it and does not claim it twice', () => {
   const f = fixture();
   const job = make(f, f.cons, 'claim now held', []);
-  const first = cli(['pop', '--agent', 'ann', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
+  const first = cli(['team', 'pop', '--team', 't1', '--agent', 'ann', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.equal(first.status, 0, first.stdout + first.stderr);
   assert.equal(JSON.parse(first.stdout).claimed, true);
   assert.equal(item(f, job).fm.claimed_by, 'ann');
-  const n = cli(['pop', '--agent', 'ann', '--claim-now', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
+  const n = cli(['team', 'pop', '--team', 't1', '--agent', 'ann', '--json'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.equal(JSON.parse(n.stdout).action, 'continue');
   assert.equal(JSON.parse(n.stdout).claimed, false);
 });

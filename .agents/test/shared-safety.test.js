@@ -295,7 +295,7 @@ test('no command prints the credential of an origin: the invalid-origin error of
 
   const cons = consumer(dir, 'acme', 'demo', 'main');
   assert.equal(spawnSync('git', ['remote', 'set-url', 'origin', `${CRED}/acme/demo.git`], { cwd: cons }).status, 0);
-  for (const args of [['query', '--all'], ['next'], ['pop', '--agent', 'amy'], ['update', '1', '--summary', 'x'], ['archive', '1'], ['move', '1', '--to-branch', 'x'], ['move', '1', '--to-repository', 'a/b'],
+  for (const args of [['query', '--all'], ['next'], ['team', 'pop', '--team', 't1', '--agent', 'amy'], ['update', '1', '--summary', 'x'], ['archive', '1'], ['move', '1', '--to-branch', 'x'], ['move', '1', '--to-repository', 'a/b'],
     ['new', '--name', 'n', '--objective', 'o', '--summary', 's', '--depends-on', 'none']]) {
     const o = cli(args, { cwd: cons, tmp: dir });
     assert.ok(!(o.stdout + o.stderr).includes('SUPERSECRET'), `${args[0]}: ${o.stdout}${o.stderr}`);

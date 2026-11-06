@@ -18,10 +18,10 @@ const NOT_TAUGHT = new Set(['force']);
 test('040: every team flag of backlog update and every team command is in the skill', () => {
   const missing = [...TEAM_VALUE, ...TEAM_BOOL].filter(f => !NOT_TAUGHT.has(f) && !new RegExp(`--${f}(?![\\w-])`).test(skill));
   assert.deepEqual(missing, [], `flags missing from SKILL.md: ${missing.join(', ')}`);
-  for (const c of ['backlog setup', 'backlog work --agent', 'backlog query --phase', 'backlog new --split-from <item>', 'backlog team query --team <team> --plan', 'backlog team query --team <team> --decisions', 'backlog team query --team <team> --wip']) assert.ok(skill.includes(c), c);
+  for (const c of ['backlog setup', 'backlog team pop --team <team> --agent', 'backlog query --phase', 'backlog new --split-from <item>', 'backlog team query --team <team> --plan', 'backlog team query --team <team> --decisions', 'backlog team query --team <team> --wip']) assert.ok(skill.includes(c), c);
   // every command of help.js and of COMMANDS.md, and every flag of the update help that a team session or the lead uses
   const shared = [...new Set([...Object.keys(HELP), ...[...readFileSync(fileURLToPath(new URL('../../COMMANDS.md', import.meta.url)), 'utf8').matchAll(/^### backlog (\S+)$/gm)].map(m => m[1])])];
-  assert.ok(shared.length >= 9, shared.join());
+  assert.ok(shared.length >= 8, shared.join());
   assert.deepEqual(shared.filter(c => !skill.includes(`\`${c}\``) && !skill.includes(`backlog ${c}`)), [], 'every shared-mode command is named');
   const teamFlags = HELP.update.split(/\n(?= {2}--)/).filter(b => /\bteam\b|lead|member/.test(b)).map(b => /^ {2}--([\w-]+)/.exec(b)?.[1]).filter(Boolean);
   assert.ok(teamFlags.length >= 15, teamFlags.join());

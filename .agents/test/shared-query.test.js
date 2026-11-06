@@ -384,11 +384,16 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
 
 test('075: --next --json prints the queue head; --next text prints the findings and the item', () => {
   const f = fx();
-  assert.deepEqual(normJson(view(f, ['--next', '--json']).stdout), {
+  const { front_matter: whole, body, ...row } = normJson(view(f, ['--next', '--json']).stdout); // the whole item: its front matter and its body come with the row
+  assert.equal(whole.phase, '002-beta');
+  assert.ok(body.includes('# Phase 002'), body);
+  assert.deepEqual(row, {
     id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta',
     status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA',
     location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null });
-  assert.equal(norm(view(f, ['--next']).stdout), STATUS_FINDINGS + NEXT_HEADER, 'the findings and the item');
+  const shown = norm(view(f, ['--next']).stdout);
+  assert.ok(shown.startsWith(STATUS_FINDINGS + NEXT_HEADER), 'the findings and the item');
+  assert.ok(shown.includes('--- front matter ---\nphase: 002-beta') && shown.includes('--- body ---\n# Phase 002'), shown);
   view(f, ['--next', '--all']);
   assert.equal(JSON.parse(view(f, ['--next', '--branch', 'feature', '--json']).stdout).slug, '005-feat');
 });
@@ -558,13 +563,12 @@ test('a failed pull does not stop a read: it answers from the local copy with th
   assert.match(w.stderr, /^❌ backlog: could not update .* from origin\/main .*nothing was read or changed/s);
 });
 
-test('--next with --agent is refused: the next action of an agent is backlog pop', () => {
+test('--next with --agent is accepted and prints the same item: the next action of an agent is backlog team pop', () => {
   const f = fx();
   for (const cmd of [['query', '--next'], ['next']]) {
     const n = cli([...cmd, '--agent', 'ann'], { cwd: f.cons, tmp: f.t });
-    assert.equal(n.status, 2, cmd.join(' '));
-    assert.equal(n.stdout, '');
-    assert.match(n.stderr, /backlog pop --agent/);
+    assert.equal(n.status, 0, cmd.join(' ') + n.stderr);
+    assert.equal(n.stdout, cli(cmd, { cwd: f.cons, tmp: f.t }).stdout);
   }
 });
 
@@ -625,7 +629,7 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
   const url = 'https://user:review_dummy@host/path';
   for (const args of [['query', '--next', '--branch', url], ['query', '--next', '--branch', url, '--json'], ['query', '--status', '--branch', url], ['query', '--status', '--branch', url, '--json'],
     ['team', 'query', '--team', 't1', '--claimable', '--branch', url], ['team', 'query', '--team', 't1', '--reviewable', '--agent', 'amy', '--branch', url],
-    ['pop', '--agent', 'x', '--branch', url], ['pop', '--agent', 'x', '--branch', url, '--json'], ['pop', '--agent', url], ['pop', '--agent', url, '--json']]) {
+    ['team', 'pop', '--team', 't1', '--agent', 'x', '--branch', url], ['team', 'pop', '--team', 't1', '--agent', 'x', '--branch', url, '--json'], ['team', 'pop', '--team', 't1', '--agent', url], ['team', 'pop', '--team', 't1', '--agent', url, '--json']]) {
     const n = cli(args, { cwd: f.cons, tmp: f.t });
     assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));
     assert.ok(n.stdout.length > 0, `${args.join(' ')} printed nothing (${n.stderr})`);
@@ -634,7 +638,7 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
 
 test('query --pop and --headless are not options; query --plan still answers', () => {
   const f = fx();
-  for (const args of [['query', '--pop', '--agent', 'x'], ['query', '--headless'], ['pop', '--headless', '--agent', 'x']]) {
+  for (const args of [['query', '--pop', '--agent', 'x'], ['query', '--headless'], ['team', 'pop', '--team', 't1', '--agent', 'x', '--headless']]) {
     const r = cli(args, { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 2, args.join(' '));
     assert.match(r.stderr, /unrecognized arguments: --(pop|headless)/);

@@ -146,7 +146,7 @@ test('082: a fresh session of the card is told to claim the item before it rewor
   const f = fixture();
   const s = teamItem(f, 'claim before the rework');
   reworked(f, s); // A1 claims and asks; A2 gives the changes verdict
-  const w = JSON.parse(run(f, ['pop', '--agent', A2, '--json']).stdout);
+  const w = JSON.parse(run(f, ['team', 'pop', '--team', TEAM, '--agent', A2, '--json']).stdout);
   assert.equal(w.action, 'continue', w.instruction);
   assert.ok(w.instruction.includes(`--claim ${A2}`), `the rework instruction starts with the continuation claim: ${w.instruction}`);
   assert.ok(w.instruction.includes('--append'), `the rework steps stay after it: ${w.instruction}`);
@@ -159,7 +159,7 @@ test('082: a fresh session of the card is told to claim the item before it close
   ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
   ok(f, ['update', s, '--start-review', '--by', B1]);
   ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
-  const w = JSON.parse(run(f, ['pop', '--agent', A2, '--json']).stdout);
+  const w = JSON.parse(run(f, ['team', 'pop', '--team', TEAM, '--agent', A2, '--json']).stdout);
   assert.equal(w.action, 'continue', w.instruction);
   assert.ok(w.instruction.includes(`--claim ${A2}`), `the close instruction starts with the continuation claim: ${w.instruction}`);
   assert.ok(w.instruction.includes('--close --summary'), `and ends with the close: ${w.instruction}`);
@@ -170,7 +170,13 @@ test('082: the lead\'s completed-team review-and-close starts with the continuat
   // item 098: the team's work item is unrefined; only the lead's own claim takes it (as the lead's earlier session A1)
   const s = make(f, 'lead continues a completed team'); ok(f, ['update', s, '--set-team', TEAM]);
   ok(f, ['update', s, '--claim', A1], { TEAM_LEAD: A1 }); // the lead's earlier session holds the team's work item
-  const w = JSON.parse(run(f, ['pop', '--agent', A2, '--json'], { TEAM_LEAD: A2 }).stdout);
+  const child = teamItem(f, 'the one slice, done'); // a slice of the work item, claimed, reviewed and closed by its member
+  ok(f, ['update', child, '--claim', 'ann']);
+  ok(f, ['update', child, '--request-review', 'any', '--note', 'n', '--by', 'ann']);
+  ok(f, ['update', child, '--start-review', '--by', B1]);
+  ok(f, ['update', child, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
+  ok(f, ['update', child, '--close', '--summary', 'done', '--by', 'ann']);
+  const w = JSON.parse(run(f, ['team', 'pop', '--team', TEAM, '--agent', A2, '--json'], { TEAM_LEAD: A2 }).stdout);
   assert.equal(w.action, 'continue', w.instruction);
   assert.ok(w.instruction.includes(`every item of team ${TEAM} is done`), `the completed-team steps: ${w.instruction}`);
   assert.ok(w.instruction.includes(`--claim ${A2}`), `the completed-team steps start with the continuation claim: ${w.instruction}`);

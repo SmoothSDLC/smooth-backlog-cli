@@ -165,3 +165,49 @@ test('the team views run under team query; the plain query refuses them and poin
   const ghost = run(f, ['team', 'query', '--team', 'ghost', '--claimable']);
   assert.equal(ghost.status, 1); assert.match(ghost.stdout, /team ghost is not configured in the backlog configuration/);
 });
+
+// ---- backlog team pop: one next-action command by role
+const pop = (f, agent, ...args) => run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json', ...args], { BACKLOG_AGENT: '' });
+
+test('team pop: the lead claims the work item and sees it whole, then a member has nothing to take; pop and work are not commands', () => {
+  const f = fixture();
+  const w = createdSlug(run(f, ['new', ...NEW('work item')]).stdout);
+  assert.equal(run(f, ['update', w, '--set-team', 't1']).status, 0);
+  const lead = pop(f, 'lead');
+  assert.equal(lead.status, 0, lead.stdout + lead.stderr);
+  const out = JSON.parse(lead.stdout);
+  assert.deepEqual([out.action, out.item, out.team, out.claimed, out.marked], ['claim', w, 't1', true, 'claimed for lead']);
+  assert.ok(out.body.includes('Definition of done') && out.front_matter.claimed_by === 'lead');
+  assert.equal(fm(f, w).claimed_by, 'lead');
+  const member = pop(f, 'ann');
+  assert.equal(member.status, 3, member.stdout + member.stderr); // the lead holds the only work item and nothing else is open
+  assert.equal(JSON.parse(member.stdout).action, 'idle');
+  for (const gone of ['pop', 'work']) {
+    const r = run(f, [gone, '--agent', 'ann']);
+    assert.equal(r.status, 2); assert.match(r.stderr, /is not a backlog command \(new, update, query, list, team, next, fields, move, archive, setup\)/);
+  }
+});
+
+test('team pop: a member whose item waits for its review is idle; the next member starts the review, marked reviewing', () => {
+  const f = fixture();
+  writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { lead: 'lead', members: ['ann', 'bob', 'zed'], review: [{ stage: 'peer', count: 1 }] } })); // one member must review
+  const s = ready(f);
+  const claimed = JSON.parse(pop(f, 'zed').stdout);
+  assert.deepEqual([claimed.action, claimed.item], ['claim', s]);
+  run(f, ['query', '--phase', s, '--agent', 'zed']);
+  assert.equal(run(f, ['team', 'update', s, '--team', 't1', '--agent', 'zed', '--request-review', 'any', '--note', 'commit abc']).status, 0);
+  const idle = pop(f, 'zed');
+  assert.equal(idle.status, 3, idle.stdout + idle.stderr); // a review request ends its work on the item
+  const review = JSON.parse(pop(f, 'bob').stdout);
+  assert.deepEqual([review.action, review.item], ['review', s]);
+  assert.match(review.marked, /--start-review --agent bob/);
+  assert.deepEqual([fm(f, s).status, fm(f, s).reviewer], ['reviewing', 'bob']);
+});
+
+test('team pop: a team without an entry is refused, and a refused flag is refused before anything runs', () => {
+  const f = fixture();
+  const r = run(f, ['team', 'pop', '--team', 'ghost', '--agent', 'ann']);
+  assert.equal(r.status, 1); assert.match(r.stdout, /team ghost is not configured in the backlog configuration/);
+  const bad = run(f, ['team', 'pop', '--team', 'ghost', '--agent', 'ann', '--db', 'x']);
+  assert.equal(bad.status, 2); assert.match(bad.stderr, /unrecognized arguments: --db/);
+});

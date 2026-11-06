@@ -141,7 +141,6 @@ async function query(argv, fromTeam) {
   try { a = parse(argv); } catch (e) { return die(e.message); }
   const view = TEAM_VIEWS.find(k => a[k]);
   if (view && !fromTeam) return die(`--${view} is a team view: use backlog team query --team <team> --agent <name> --${view}`);
-  if (a.next && a.agent) return die('--agent does not go with --next; the next action of an agent is backlog pop --agent <your name>');
   if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
   if (a.plan) return (await import('./pop.js')).run(argv); // pop.js repeats the preamble below for its own flags
 
@@ -193,16 +192,8 @@ async function query(argv, fromTeam) {
 
     if (a.next) {
       const fms = new Map(items.map(i => [i.path, i.fm]));
-      // a done producer whose hand-off the lead has not accepted holds the dependent back like an
-      // unfinished dependency: next skips it, the way pop, work, plan and --claimable already do, and names the
-      // skipped edge (the design requires the edge state named, not a silent skip)
-      let r = null; const skipped = [];
-      for (const x of index.open(rows)) {
-        if (excluded.has(x.id) || !(a.all || ((x.repository || '') === repo && (x.branch || '') === branch))) continue;
-        const held = team.undoneDependencies(folder, fms.get(x.path) ?? {}, rows).filter(d => d.handoff);
-        if (held.length) { skipped.push({ row: x, deps: held }); continue; }
-        r = x; break;
-      }
+      // the open item with the best priority, skipping nothing for team reasons (a hand-off that is not accepted is a matter of backlog team pop)
+      const r = index.open(rows).find(x => !excluded.has(x.id) && (a.all || ((x.repository || '') === repo && (x.branch || '') === branch))) ?? null;
       if (!r) {
         say(a.json ? '{}' : `ℹ️  no actionable item for ${repo}${a.all ? '' : `, branch ${redact(branch)}; --all shows every branch`}`);
         return 0;
@@ -210,8 +201,8 @@ async function query(argv, fromTeam) {
       // the next item may wait on another repository's item: that is named as the work to do first
       const away = team.undoneDependencies(folder, fms.get(r.path) ?? {}, rows).filter(d => d.foreign && d.item && d.item.status !== 'closed')
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
-      const skip = skipped.flatMap(s => s.deps.map(d => ({ item: s.row.slug, edge: d.id, handoff: d.handoff })));
-      if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), ...(skip.length ? { skipped: skip } : {}) }); return 0; }
+      const file = items.find(i => i.path === r.path); // the whole item: front matter and body
+      if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), front_matter: file ? file.fm : null, body: file ? file.body : null }); return 0; }
       criticalBanner(critical());
       say(`➡️  NEXT: P${r.priority} (rank 0 = next) — [${pad(r.seq, 3)}] ${r.slug}  (${r.status})${(r.severity || 'normal') === 'critical' ? '  ⚠️ CRITICAL' : ''}`);
       say(`    ${r.name}`);
@@ -219,7 +210,13 @@ async function query(argv, fromTeam) {
       say(`    summary:   ${r.summary}`);
       if (r.branch || r.commit_sha || r.location) say(`    progress:  branch=${r.branch} commit=${sha7(r)} loc=${r.location}`);
       for (const x of away) say(`    ⛓ waits on ${x.item} (${x.slug}, status ${x.status}): do that first in repository ${x.repository}`);
-      for (const s of skipped) for (const d of s.deps) say(`    ⛓ ${s.row.slug} waits on ${team.describeDependency(d)}: skipped until the edge is satisfied`);
+      if (file) {
+        say('');
+        say('--- front matter ---');
+        for (const [k, v] of Object.entries(file.fm || {})) say(`${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`);
+        say('--- body ---');
+        say(String(file.body || '').replace(/^\n+/, '').replace(/\n$/, ''));
+      }
       return 0;
     }
 

@@ -25,11 +25,7 @@ Feature: Storage - where the item files live changes nothing about the commands
     Then the command succeeds
     When I run `backlog next --help`
     Then the command succeeds
-    When I run `backlog pop --help`
-    Then the command succeeds
-    When I run `backlog work --help`
-    Then the command succeeds
-    When I run `backlog team pop --help`
+    When I run `backlog team --help`
     Then the command succeeds
     When I run `backlog move --help`
     Then the command succeeds
@@ -53,7 +49,7 @@ Feature: Storage - where the item files live changes nothing about the commands
     When I run `backlog query`
     Then the command succeeds
     And the output does not contain the backlog folder path
-    When I run `backlog pop --agent ada`
+    When I run `backlog next`
     Then the output does not contain the backlog folder path
     Given an item "Hidden file" exists
     When I run `backlog query`

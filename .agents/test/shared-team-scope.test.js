@@ -76,14 +76,14 @@ test('test_scopes_and_refinement_cap: --scope and the refinement_scope cap of ba
       const c = cli(['update', slug, '--claim', who], { cwd: f.cons, tmp: f.t });
       assert.equal(c.status, 0, c.stdout + c.stderr);
     }
-    let p = cli(['pop', '--agent', 't', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead' } });
+    let p = cli(['team', 'pop', '--team', 't1', '--agent', 't', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead' } });
     assert.ok(p.status === 0 && JSON.parse(p.stdout).action === 'chunk', p.stdout + p.stderr);
     writeFileSync(f.cfg, 'refinement_scope: repo\n');
     got = slugs(f, [...cl, '--scope', 'all']);
     assert.ok(!got.includes(chunk) && got.includes(chunkb));
     writeFileSync(f.cfg, 'refinement_scope: off\n');
     assert.ok(!slugs(f, [...cl, '--scope', 'repo']).includes(chunkb));
-    p = cli(['pop', '--agent', 't', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead' } });
+    p = cli(['team', 'pop', '--team', 't1', '--agent', 't', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead' } });
     assert.ok(p.status === 3 && JSON.parse(p.stdout).action === 'idle', p.stdout + p.stderr);
     writeFileSync(f.cfg, 'refinement_scope: everywhere\n');
     const bad = cli(['team', 'query', '--team', 't1', ...cl], { cwd: f.cons, tmp: f.t });

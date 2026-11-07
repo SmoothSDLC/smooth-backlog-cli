@@ -20,7 +20,7 @@ sharedBacklog(t);
 const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
-const TEAM = ['team', 'team pop', 'team update', 'team query', 'team define', 'team workflow']; // the help of the team code lives with it
+const TEAM = ['team', 'team pop', 'team new', 'team update', 'team query', 'team define', 'team workflow']; // the help of the team code lives with it
 const COMMANDS = ['new', 'update', 'query', 'next', 'fields', ...TEAM, 'move', 'archive'];
 const ALL = { ...HELP, ...teamHelp };
 const ROUTED = COMMANDS.filter(c => !c.startsWith('team ')); // the commands of the router
@@ -192,6 +192,7 @@ test('the plain help names no team option and ends with the pointer to the team 
     for (const flag of ['team', 'review-refs', 'refine-start', 'request-review', 'accept-handoff', 'claimable', 'set-team', 'set-review-refs']) assert.equal(block(text, flag), undefined, `${command}: --${flag}`);
   }
   assert.equal(backlog('update', '--help').stdout.trimEnd().split('\n').at(-1), 'Team items: backlog team update --help.');
+  assert.equal(backlog('new', '--help').stdout.trimEnd().split('\n').at(-1), 'Team items: backlog team new --help.');
   for (const command of TEAM.slice(1)) assert.match(backlog(...command.split(' '), '--help').stdout, new RegExp(`^backlog ${command} `), command);
 });
 
@@ -214,4 +215,13 @@ test('<alias> --help prints the alias line and then the help of the command it r
   assert.ok(init.startsWith('backlog init [name] runs backlog setup\n') && init.includes(HELP.setup));
   assert.ok(backlog('init', 'clean', '--help').stdout.startsWith('backlog init clean [all-branches] runs '));
   assert.equal(backlog('list', '--help').stdout.trimEnd(), HELP.query.trimEnd()); // a bare list is the query command itself
+});
+
+test('backlog team --help lists new, and backlog team new --help has the flags, the exit codes and one example', () => {
+  assert.match(backlog('team', '--help').stdout, /^ {2}backlog team new --team <name> --agent <name> --name <text> \[options\]$/m);
+  assert.match(backlog('--help').stdout, /^ {2}backlog team new --team <team> --agent <name>/m);
+  const text = backlog('team', 'new', '--help').stdout;
+  for (const flag of ['team', 'agent', 'review-refs', 'split-from', 'title', 'objective', 'summary', 'description', 'depends-on', 'estimate', 'complexity', 'layer', 'chunk', 'priority', 'severity', 'force', 'dry-run', 'status', 'help']) assert.ok(block(text, flag), `--${flag}`);
+  for (const code of ['0', '1', '2', '3', '5']) assert.match(text, new RegExp(`^ {2}${code} {2}`, 'm'), `exit code ${code}`);
+  assert.match(text, /^Example:\n {2}backlog team new /m);
 });

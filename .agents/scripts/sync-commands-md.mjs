@@ -3,13 +3,21 @@
 //   node .agents/scripts/sync-commands-md.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
 const { HELP } = await import(new URL('../../src/help.js', import.meta.url));
+const { teamHelp } = await import(new URL('../../src/team/help.js', import.meta.url));
 const { ALIASES } = await import(new URL('../../src/shared/aliases.js', import.meta.url));
 const file = new URL('../../COMMANDS.md', import.meta.url);
 let doc = readFileSync(file, 'utf8'); let changed = 0;
-for (const [cmd, text] of Object.entries(HELP)) {
+let before = null; // the team commands follow one another: a heading that is missing goes after the block of the one before it
+for (const [cmd, text] of Object.entries({ ...HELP, ...teamHelp })) {
   const heading = `### backlog ${cmd}\n`;
-  const at = doc.indexOf(heading);
+  let at = doc.indexOf(heading);
+  if (at < 0 && before) {
+    const end = doc.indexOf('\n```\n', doc.indexOf('```text\n', doc.indexOf(`### backlog ${before}\n`))) + 5;
+    doc = `${doc.slice(0, end)}\n${heading}\n\`\`\`text\n(new)\n\`\`\`\n${doc.slice(end)}`;
+    at = doc.indexOf(heading);
+  }
   if (at < 0) { console.error(`COMMANDS.md has no heading "${heading.trim()}"`); process.exit(1); }
+  before = cmd;
   const open = doc.indexOf('```text\n', at); const close = doc.indexOf('\n```', open + 8);
   if (open < 0 || close < 0) { console.error(`no text block after "${heading.trim()}"`); process.exit(1); }
   const block = `\`\`\`text\n${text.trimEnd()}`;

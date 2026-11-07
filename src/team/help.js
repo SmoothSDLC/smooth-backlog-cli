@@ -1,12 +1,13 @@
-// The help of backlog team and its subcommands: teamHelp['team'], ['team pop'], ['team update'], ['team query'], ['team define'], ['team workflow'].
+// The help of backlog team and its subcommands: teamHelp['team'], ['team pop'], ['team new'], ['team update'], ['team query'], ['team define'], ['team workflow'].
 // Only this file and the team code name the team environment and configuration; src/shared/router.js prints the entry of the subcommand named.
 import { SHARED, HELP_FLAG } from '../shared/help-parts.js';
 
 export const teamHelp = {
-  'team': `backlog team — the commands that know a team: pop, update, query, define, workflow
+  'team': `backlog team — the commands that know a team: pop, new, update, query, define, workflow
 
 Usage:
   backlog team pop --team <name> --agent <name> [--dry-run] [--json]
+  backlog team new --team <name> --agent <name> --name <text> [options]
   backlog team update <item> --team <name> --agent <name> <step> [options]
   backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--scope branch|repo|all] [--json]
   backlog team define --file <team.json> [--json]
@@ -15,7 +16,7 @@ Usage:
 
 Only these commands read the team's entry in the backlog configuration (teams.json at the root of the backlog: the lead, the members,
 the external reviewers and the review stages) and the flow it names. The plain commands know nothing of teams: they ignore the team environment and the team entries. --team and --agent
-are required on pop and update; TEAM_NAME and BACKLOG_AGENT stand in for them, then the team and user of .backlog/config.json. A team
+are required on pop, new and update; TEAM_NAME and BACKLOG_AGENT stand in for them, then the team and user of .backlog/config.json. A team
 without an entry is refused: "team <team> is not configured in the backlog configuration".
 
 Teams, their leads and members and their review rules are configuration in the backlog folder (teams.json); work-in-progress
@@ -28,9 +29,9 @@ ${SHARED}
 
 Options:
   --team NAME
-      The team (pop, update). In a team session (TEAM_NAME set) it must be that team.
+      The team (pop, new, update). In a team session (TEAM_NAME set) it must be that team.
   --agent AGENT
-      The agent the command answers for (pop, update). In a team session (BACKLOG_AGENT set) it must be that agent.
+      The agent the command answers for (pop, new, update). In a team session (BACKLOG_AGENT set) it must be that agent.
   --json
       Print the answer as JSON.
 ${HELP_FLAG}
@@ -69,7 +70,7 @@ answer is idle with the instruction to end the turn without polling (a passed or
 rework), and when every item of its team is done it is told to have the work item reviewed and close it.
 
 In addition the lead gets the team's work item: an item of this repository and branch whose team is the team and that has no stage
-(backlog update <item> --set-team <name> gives an item to a team; the items split from it carry a stage and are the members' work).
+(backlog team update <item> --team <name> --agent <you> --set-team <name> gives an item to a team, and backlog team new files a new one; the items split from it carry a stage and are the members' work).
 A refined work item (its stage set, its refinement review passed) is an ordinary item any member may claim; team pop offers a work
 item only while its stage is unset, and the lead still refines it and splits it only when it is too big for one member. When the lead
 holds an open work item that has no other item of the team, the answer is continue with that item. When an earlier session of the
@@ -128,6 +129,81 @@ Example:
   backlog team pop --team cli-1 --agent ann --json
 `,
 
+  'team new': `backlog team new — file an item of a team: it starts in stage refining, where a member writes it
+
+Usage:
+  backlog team new --team <name> --agent <name> --name <text> [options]
+  backlog team new --team <name> --agent <name> --split-from <item> [options]
+
+Adds an item that belongs to the team, to the backlog of this repository and branch (a session bound by TEAM_REPOSITORY and
+TEAM_BRANCH files it under that repository and branch). The item gets the next free item number, the team, the status new and the
+stage refining; a member refines it, and the team's review of the refinement passes before anyone claims it. A split of a team's
+item (--split-from) is made here too: a plain backlog new refuses it. Every option of backlog new works here (backlog new --help
+has the item template); this command adds --review-refs. The agent is the writer of the item, as for every team command.
+
+${SHARED}
+
+Options:
+  --team NAME
+      The team the item belongs to. In a team session (TEAM_NAME set) it must be that team. A team without an entry in the
+      backlog configuration is refused.
+  --agent AGENT
+      The agent that files the item. In a team session (BACKLOG_AGENT set) it must be that agent.
+  --title TITLE, --name NAME
+      The title of the item. Required, unless --split-from is given.
+  --objective OBJECTIVE
+      The objective of the item, in one line. A split item inherits the objective of its parent when this is omitted.
+  --summary SUMMARY
+      A semantic summary of what is in the item, several sentences. The option may be given several times.
+  --context CONTEXT
+      The context carried over from the original request. It is written into the item body.
+  --description DESCRIPTION, --body BODY
+      The initial body of the item. When it has no "Definition of done" heading or line with checkable lines, a placeholder
+      checklist is added; the refinement replaces it.
+  --review-refs REFS
+      The documents that define a good result, comma-separated paths (references/review/code.md). A path that is absolute or
+      leaves the repository is refused. The refinement may set them later (backlog team update --set-review-refs).
+  --estimate MINUTES
+      The estimated minutes of work, an integer.
+  --complexity {low,medium,high}
+      The estimated complexity of the item.
+  --layer {1,2,3,4,5,process}
+      The layer of the item: 1 to 5, or the word process.
+  --chunk
+      Chunk work: small pieces done between items.
+  --depends-on DEPENDS_ON
+      The item numbers or slugs that must be done first, comma-separated, or the word none (the default).
+  --priority PRIORITY
+      The insertion rank, an integer. 0 makes the item the next thing to do; omitted, the item is appended.
+  --severity {normal,critical}
+      The default is normal. Critical puts the item at priority 0 (unless --priority is given) and is announced in a banner.
+  --split-from ITEM
+      Create a sibling item that inherits the context of this item (a number or a slug). The command refuses when the item
+      does not exist or lies outside the repository and branch of a bound session.
+  --force
+      Write the item even when an item of that name already exists.
+  --dry-run
+      Say which item would be created and change nothing.
+  --status STATUS
+      Refused: a team item starts in its own first status.
+${HELP_FLAG}
+
+On success the command prints a line that starts "created phase" with the item's slug, the item number and the rank the item now has.
+
+Exit codes:
+  0  The item was created (or, with --dry-run, would be).
+  1  The command refused: the reason is printed on standard output. Also: the split source does not exist or is outside the
+     session's scope, a dependency is not in the backlog, --status was given, or the team has no entry in the configuration.
+  2  Invalid input: a missing --team or --agent, another team than TEAM_NAME, an agent other than BACKLOG_AGENT, an unknown
+     option, or a review document path that is absolute or leaves the repository.
+  3  The repository that holds the items could not be synchronised with its origin: nothing was changed, or the change was not
+     published and was rolled back.
+  5  The split source was changed by somebody else after this agent last read it (backlog team query --phase <item> --agent <you>).
+
+Example:
+  backlog team new --team cli-1 --agent lead --name "Parser work" --objective "The parser reads the sample" --summary "Parser" --review-refs references/review/code.md --estimate 90
+`,
+
   'team update': `backlog team update — take one team step on an item: claim, release, review, close, hand-off and the refinement steps
 
 Usage:
@@ -137,7 +213,7 @@ Runs one team step on an item: --claim, --release, --waiting, --waiting-done, --
 --handoff, --accept-handoff, --reject-handoff, --reassign, --reassign-review, --refine-start, --refine-done,
 --request-refinement-review, --refinement-review, --request-decision, --decision, --wip-override, with the options of those steps.
 The field options of backlog update (--append, --note, --set-estimate, --set-depends-on, ...; backlog update --help) work here too and are
-checked against the team rules. A call takes at most one team step (--claim, --release, --request-review, --start-review, --review,
+checked against the team rules. The plain command refuses every change of a team's item, field edits included: this command is the one way to change one. A call takes at most one team step (--claim, --release, --request-review, --start-review, --review,
 --close, --waiting, --waiting-done, --handoff, --accept-handoff, --reject-handoff). A team item is claimed only when its
 refinement review passed (stage ready); an item that lacks required fields is only refined; the team's review rules are met before
 the close. A team's item closes when the review rules of its team (teams.json) are met for the item's current work commit.
@@ -326,7 +402,7 @@ Options:
       Open items that wait for dependencies that are not done, with the status and holder of each dependency .
   --decisions
       The items that wait in stage review-hitl for an owner decision, each with its question, for the morning report; with
-      --all every branch. Answer one with backlog update <item> --decision "<answer>".
+      --all every branch. Answer one with backlog team update <item> --team <team> --agent <you> --decision "<answer>".
   --wip
       The work in progress of the whole backlog repository against its limits (wip-limits.json at its top folder:
       overall, repository, branch, team, agent, each a number or {"default": n, "<key>": n} with the key owner/name, the

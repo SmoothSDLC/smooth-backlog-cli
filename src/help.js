@@ -12,12 +12,13 @@ export const USAGE = `backlog — the backlog of this repository and branch, for
 Usage:
   backlog [--json]                                 The next item (backlog next)
   backlog new --name <text> [options]              Add an item; --split-from <item> makes a sibling with its context
-  backlog update <item> [options]                  Change an item: fields, body, status, priority; claim, release, close
+  backlog update <item> [options]                  Change an item that has no team: fields, body, status, priority; claim, release, close
   backlog update --replan "<id,id,...>"            Set the order of the queue
   backlog query [options] [--json]                 The queue; --phase <item> one item; --events, --by-branch, --all
   backlog list [options] [--json]                  The same as backlog query
   backlog next [--all] [--branch <name>] [--json]  The next item of this repository and branch
   backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs (--dry-run: only answered), with the whole item
+  backlog team new --team <team> --agent <name> --name <text> [options]   Add an item of a team (it starts in stage refining); --review-refs, --split-from
   backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
   backlog team update <item> --team <team> --agent <name> <step>   One team step: claim, release, request-review, review, close, ...
   backlog team define --file <team.json>           Register a team (lead, members, reviewers, review stages) in the backlog configuration
@@ -56,7 +57,7 @@ Who: BACKLOG_AGENT names the agent running the command (--by, --claim and --agen
 records who made it and when. A write to an item that someone else changed since this agent last read it is refused
 (exit 5) until the agent reads it again (backlog query --phase <item>).
 
-Teams: the commands that know a team (pop, update, query, define, workflow) are under backlog team; backlog team --help describes
+Teams: the commands that know a team (pop, new, update, query, define, workflow) are under backlog team; backlog team --help describes
 them. The commands above know nothing of teams.
 
 Aliases (the command names of the first release still work; backlog <alias> --help shows what each runs):
@@ -138,6 +139,9 @@ ${EXIT}
 
 Example:
   backlog new --name "Fix login" --objective "An expired cookie no longer blocks sign-in" --summary "Login cookie handling" --depends-on none
+
+A team's items are filed by backlog team new, and a split of a team's item is refused here.
+Team items: backlog team new --help.
 `,
 
   update: `backlog update — change the fields of one item, move it in the queue, or re-plan the whole backlog
@@ -251,6 +255,7 @@ ${EXIT}
 Example:
   backlog update 18 --status in_progress --note "Started the help text"
 
+An item that belongs to a team is changed by backlog team update only: this command refuses every change of it, field edits included.
 Team items: backlog team update --help.
 `,
 

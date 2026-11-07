@@ -33,11 +33,10 @@ The first release's command names still work as aliases of these commands: `init
   next; `--depends-on <items>` when other items must finish first; `--split-from <item>` makes a sibling with its context.
 - Change: `backlog update <item> --name|--objective|--summary|--status|--location|--priority <value>`, `--append "<text>"`
   adds body text, `--note "<text>"` records an event, `--set-depends-on <items|none>`; `--replan "<id,id,...>"` orders the queue.
-- Claim and release (named agents): `backlog update <item> --claim <you>`, `--release <you>`; `backlog team pop --team <team> --agent <you>`
+- Claim and release (named agents; an item without a team): `backlog update <item> --claim <you>`, `--release <you>`; `backlog team pop --team <team> --agent <you>`
   says what to do next. Read an item (`query --phase <item>`) before you change it: a write after someone else changed
   the item since your read is refused (exit 5) until you read it again.
-- Review (optional): `--request-review <agent|any> --note "<commits, evidence>"`, then the reviewer's `--start-review --by
-  <reviewer>` and `--review pass|changes --by <reviewer> --comments "<findings>"`; the author never reviews its own work.
+- Reviews, refinement and hand-offs are team steps: see Team work. A plain `backlog update` refuses every change of an item that belongs to a team.
 - An item that cannot be read: every command names it and the field; `backlog update <item> --<field> <value>` sets the field again, `backlog update <item> --restore` brings back its previous version.
 - Finish: `backlog update <item> --status done` or `--close --summary "<what was delivered>"`; `backlog archive <item>`
   keeps a finished item out of the queue; `backlog move <item> --to-branch <name>` moves it to another branch.
@@ -47,14 +46,19 @@ The first release's command names still work as aliases of these commands: `init
 A team's items follow the team rules configured in `teams.json` of the backlog folder: each team's lead, members,
 `review` rules (how many members of which team must pass the current work commit before the close) and
 `refinement_review` rules. A team session is bound by TEAM_NAME, TEAM_REPOSITORY and TEAM_BRANCH; the caller is
-BACKLOG_AGENT and acts only as itself.
+BACKLOG_AGENT and acts only as itself. Every command here is a `backlog team` command and takes `--team <team> --agent <you>` (TEAM_NAME and
+BACKLOG_AGENT stand in); the step flags below are taken with `backlog team update <item> --team <team> --agent <you>`.
 
+- File an item of the team: `backlog team new --team <team> --agent <you> --name "<name>" --objective "<one line>" --summary "<what it is about>"
+  --review-refs <review document> --estimate <minutes>`; it starts in stage refining. `--split-from <item>` splits a team's item.
+- Review: `--request-review <agent|any> --note "<commits, evidence>"`, then the reviewer's `--start-review --by <reviewer>` and
+  `--review pass|changes --by <reviewer> --comments "<findings>"`; the author never reviews its own work.
 - Lead: `backlog team pop --team <team> --agent <you>` takes the team's work item (and gives the lead its next action); split it only when it is too big for
-  one member (`backlog new --split-from <item>`); `backlog team query --team <team> --plan` is the dispatch plan; `--request-refinement-review
+  one member (`backlog team new --split-from <item>`); `backlog team query --team <team> --plan` is the dispatch plan; `--request-refinement-review
   --by <you>` sends a refined item to its refinement review; `--request-decision "<question>" --by <you>` asks the owner
   (`backlog team query --team <team> --decisions`; the owner answers with `--decision "<answer>"`); `--reassign <agent> --reason "<why>"
   --by <you>` hands an item on and `--reassign-review <agent> --reason "<why>" --by <you>` a stale review;
-  `--wip-override "<reason>" --by <you>` lifts a work-in-progress limit for one item; `--set-team <team>` gives an item
+  `--wip-override "<reason>" --by <you>` lifts a work-in-progress limit for one item; `--set-team <team>` gives a plain item
   to a team and `--set-chunk yes` makes it chunk work any member does between items. Act only as yourself: another
   agent's item or review is the lead's to hand on.
 - Member: `backlog team pop --team <team> --agent <you> --json` gives the one next action and marks the item as yours. Refine an item in

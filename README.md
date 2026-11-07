@@ -53,7 +53,7 @@ Items are selected by their number (`1`) or slug (`001-fix-the-login-redirect`).
 
 - **Branch isolation:** every item belongs to the branch that was checked out when it was created; `backlog query` shows the queue of the current branch, `--all` every branch the backlog carries (inside the repository the items are committed on their branch, so a branch sees the items it carries), `backlog move <item> --to-branch <name>` moves an item.
 - **Many hands:** a named agent (`BACKLOG_AGENT=<name>`, or `--claim <name>`) claims an item; another agent cannot take it; a write to an item that someone else changed since the agent last read it is refused (exit 5) until the agent reads it again (`backlog query --phase <item>`).
-- **Reviews:** the holder asks for a review (`--request-review <agent|any> --note "<commits, evidence>"`); another agent records the verdict (`--review complete|reject --by <reviewer> --comments "<findings>"`); the author never reviews its own work.
+- **Reviews:** a team step, taken with `backlog team update <item> --team <team> --agent <you>`: the holder asks for a review (`--request-review <agent|any> --note "<commits, evidence>"`); another agent records the verdict (`--review complete|reject --by <reviewer> --comments "<findings>"`); the author never reviews its own work.
 - **Teams:** the team rules — refinement before work, review rules before the close, work-in-progress limits — apply to items that belong to a team. Teams, their leads and members and their review rules are configuration in the backlog folder (`teams.json`): for example "an item of team A closes when one member of team A and one member of team B passed the current commit". Nothing about a particular team or agent is built into the CLI. See `backlog update --help` and `backlog team --help`.
 - **Skill for agents:** `backlog setup` deploys the built-in backlog skill (`templates/skills/backlog`) into every agent folder present in the repository (`.agents`, `.claude`, `.github`, `.qwen`), so coding agents learn the commands from the repository itself.
 
@@ -64,7 +64,7 @@ other word (`pending`, `in progress`, `blocked on vendor`) keeps it in the queue
 <word>` sets it (hyphens and underscores stand for spaces: `in_progress`). The items of a team follow one order,
 `new`, `refining`, `refined`, `refinement review`, `ready`, `in progress`, `ready for review`, `reviewing`, `ready for
 external review`, `external review`, `review complete`, `closed`, `archived`, plus the wait `awaiting decision` for an
-owner question; the team steps (`--refine-start`, `--claim`, `--request-review`, `--review`, `--close` and the others)
+owner question; the team steps of `backlog team update` (`--refine-start`, `--claim`, `--request-review`, `--review`, `--close` and the others)
 move the item along it, and `--status` on such an item is refused. The order and the rules of each step are a
 definition file the CLI ships (`templates/workflows/team.json`). Which review stages apply, and how many passes each
 needs, comes from the team's entry in `teams.json` (`review`: a list of `{ "stage": "peer" | "external", "count": n }`;
@@ -77,12 +77,13 @@ the item is next written.
 ## Commands for people, commands for teams
 
 There are two kinds of commands. The plain ones (`new`, `update`, `query`, `next`, `fields`, `move`, `archive`, `setup`)
-know nothing of teams: they work on items, whoever the items belong to. A person's items take their owner from
+know nothing of teams: they work on items without a team. A plain `update` refuses every change of an item that belongs to a team,
+and a plain `new --split-from` refuses a team's item: those go through `backlog team`. A person's items take their owner from
 `.backlog/config.json`, where `backlog setup` writes `user` (the git `user.name`, else the name the person is logged in
 with) and an empty `team`; a second setup keeps what is there.
 
 Everything that knows a team lives under `backlog team`: `pop` (the one next-action command, answering by the agent's role in
-the team's entry), `update` (the team steps: claim, release, review, close, the refinement steps, hand-offs),
+the team's entry), `new` (files an item of the team in stage refining, and splits a team's item), `update` (the team steps: claim, release, review, close, the refinement steps, hand-offs),
 `query` (the views of the team) and `define` and `workflow`. Each takes `--team` and `--agent`; `TEAM_NAME` and
 `BACKLOG_AGENT` stand in for them, then the `team` and `user` of the configuration. A team without an entry is refused.
 
@@ -95,8 +96,9 @@ the team's entry), `update` (the team steps: claim, release, review, close, the 
 - **The status order** of a team's items is the flow's (see Statuses). **The item template** is `backlog fields`, and
   `backlog new --help` carries the same table.
 
-The earlier spellings of the team steps on `backlog update` (for example `--claim`) still work and print
-`moved: use backlog team update ...` on standard error. `backlog pop` and `backlog work` are gone: `backlog team pop` replaces both.
+The team options are not options of the plain commands: the team steps of `backlog update`, the team views of `backlog query` and
+`--team` and `--review-refs` of `backlog new` are refused as unrecognized arguments, and a team's item is refused by a plain `update`.
+`backlog pop` and `backlog work` are gone: `backlog team pop` replaces both.
 
 ## Where the data lives
 
@@ -117,12 +119,13 @@ The same five rules hold wherever the items live:
 | Command | Purpose |
 |---|---|
 | `backlog new --name <text> [options]` | Add an item; `--split-from <item>` makes a sibling with its context |
-| `backlog update <item> [options]` | Change fields, body, status, priority; claim, release, review, close; the team steps |
+| `backlog update <item> [options]` | Change fields, body, status, priority of an item without a team; claim, release, close |
 | `backlog query [options]` | The queue, one item (`--phase`), events, other branches |
 | `backlog list` | The queue (the same as `query`) |
 | `backlog next` | The next item of this branch, whole |
 | `backlog fields` | The item template: every field, what it is for, who sets it |
 | `backlog team pop --team <team> --agent <name>` | What one agent of a team does next, marked as theirs, with the whole item |
+| `backlog team new --team <team> --agent <name> --name <text> [options]` | Add an item of a team (stage refining); `--review-refs`, `--split-from` |
 | `backlog team update <item> --team <team> --agent <name> <step>` | One team step: claim, release, review, close, ... |
 | `backlog team query --team <team> --agent <name> <view>` | The team views: claimable, reviewable, blocked, decisions, plan, wip |
 | `backlog team define --file <team.json>` | Register a team in the backlog configuration |

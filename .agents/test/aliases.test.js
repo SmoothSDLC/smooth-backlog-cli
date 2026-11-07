@@ -35,6 +35,19 @@ test('the direct aliases translate to one command', () => {
   t(['--json', 'list', 'open'], { command: 'query', argv: ['--json', '--only', 'open'] });
 });
 
+test('a word that names an Object property is no key of the set or state tables', () => {
+  for (const word of ['constructor', 'toString', '__proto__']) {
+    assert.equal(translate(['set', '3', word, 'v']), null, word);
+    t(['set', '3', 'state', word], { command: 'update', argv: ['3', '--status', word] });
+    t(['new', 'X', '--state', word], { command: 'new', argv: ['--name', 'X', '--status', word, '--summary', 'X'] });
+  }
+});
+
+test('a --json after the item of priority is the switch, not the position', () => {
+  t(['priority', '3', '--json'], { command: 'query', argv: ['--phase', '3', '--json'] });
+  t(['priority', '3', '1', '--json'], { command: 'update', argv: ['3', '--priority', '1', '--json'] });
+});
+
 test('--ask and --headless are accepted and dropped, except where --ask means something', () => {
   t(['list', 'open', '--ask'], { command: 'query', argv: ['--only', 'open'] });
   t(['query', '--headless', '--status'], { command: 'query', argv: ['--status'] });

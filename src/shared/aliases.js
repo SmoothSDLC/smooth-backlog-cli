@@ -24,7 +24,8 @@ export const ALIASES = [
 
 const ITEM = /^\d+(-[\w.-]*)?$/;
 const FIRST_RELEASE_STATE = { new: 'new', open: 'in progress', done: 'closed' }; // --state and set … state
-const statusOf1x = word => FIRST_RELEASE_STATE[word] ?? word;
+const own = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined); // a word such as constructor is no key of a table
+const statusOf1x = word => own(FIRST_RELEASE_STATE, word) ?? word;
 const SET = { name: '--name', description: '--objective', summary: '--summary', priority: '--priority', branch: '--branch', commit: '--commit', location: '--location' };
 const ITEM_FIRST = new Set(['done', 'set', 'priority', 'move']); // the verbs that may follow their item
 const POP = '--pop is a team command: use backlog team pop --team <team> --agent <name> (--dry-run only answers)';
@@ -53,8 +54,11 @@ function alias(rest) {
     case 'list': return ['new', 'open', 'done', 'archive'].includes(a) ? to('query', ['--only', a, ...rest.slice(2)]) : a === 'branch' ? to('query', ['--branches', ...rest.slice(2)]) : null;
     case 'branch': return to('query', ['--branches', ...rest.slice(1)]);
     case 'new': return a !== undefined && !a.startsWith('-') ? newOf(rest) : null;
-    case 'set': return rest.length >= 4 && (SET[b] || b === 'state') ? to('update', [a, b === 'state' ? '--status' : SET[b], b === 'state' ? statusOf1x(rest[3]) : rest[3], ...rest.slice(4)]) : null;
-    case 'priority': return rest.length === 3 ? to('update', [a, '--priority', b]) : rest.length === 2 ? to('query', ['--phase', a]) : null;
+    case 'set': return rest.length >= 4 && (own(SET, b) || b === 'state') ? to('update', [a, b === 'state' ? '--status' : own(SET, b), b === 'state' ? statusOf1x(rest[3]) : rest[3], ...rest.slice(4)]) : null;
+    case 'priority': { // a --json after the item is the switch of the command, not a position
+      const json = rest.includes('--json') ? ['--json'] : []; const words = rest.filter(x => x !== '--json');
+      return words.length === 3 ? to('update', [a, '--priority', words[2], ...json]) : words.length === 2 ? to('query', ['--phase', a, ...json]) : null;
+    }
     case 'done': return a !== undefined && !a.startsWith('-') ? to('update', [a, '--status', 'done', ...rest.slice(2)]) : null;
     case 'move': return a !== undefined && !a.startsWith('-') && b !== undefined && !b.startsWith('-') ? to('move', [a, '--to-branch', b, ...rest.slice(3)]) : null;
     case 'query': return rest.includes('--pop') ? { error: POP } : null;

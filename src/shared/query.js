@@ -193,7 +193,7 @@ async function query(argv, fromTeam) {
     if (a.claimable || a.reviewable || a.blocked || a.decisions) return teamView(a, { rows, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
 
     if (a.branches) { // one line per branch of this repository: its open and its finished (not archived) items
-      const by = {};
+      const by = Object.create(null); // a branch is named by its item: __proto__ is a name like any other
       for (const r of rows.filter(x => !excluded.has(x.id) && x.repository === repo && x.branch && x.status !== 'archived')) {
         const c = (by[r.branch] ??= { branch: r.branch, open: 0, done: 0 });
         if (isOpen(r.status)) c.open++; else c.done++;

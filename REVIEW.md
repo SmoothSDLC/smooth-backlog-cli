@@ -250,8 +250,10 @@ Not changed by this pull request unless approved:
    `branch`, `update <version>`, the JSON manifest) — decision A; `list` would stay as an alias of `query`. Superseded by the
    owner's decision that every first-release command name stays: the direct ones (`init`, `init clean`, `list new|open|done|archive|branch`,
    `branch`, `new <name> --description --state`, `set`, `priority`, `done`, `<item> done`, `move <item> <branch>`) are aliases of
-   the one command set now (see Aliases in COMMANDS.md); `init backup` is not a command; the body-section, multi-item and
-   self-update forms are still to come.
+   the one command set now (see Aliases in COMMANDS.md); `init backup` is not a command. The body-section forms
+   (`add`, `replace`, `remove`, `priority <item> <list> <n> <position>`, `set <item> <list>`, the list flags of `new`) run `update --section`;
+   `import` and `archive done` run item commands in sequence; the self-update is `backlog upgrade` (`update` with no item, or
+   `update check|auto|off|disable|<version>`, runs it). Not restored: the weekly check for a newer release after each command.
 2. `query --pop`, `query --next --agent`, `--headless`, `BACKLOG_HEADLESS` — exact duplicates or dead. Done (Phase 1); the empty-backlog message no longer names the folder.
    Restored as aliases: `--headless` and `BACKLOG_HEADLESS` are accepted and ignored; `query --pop` and `next --agent` are refused with a pointer to `backlog team pop`.
 3. The team-process gates on items that have no team (`--depends-on` required at creation, refinement fields

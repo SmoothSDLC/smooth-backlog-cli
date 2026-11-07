@@ -7,6 +7,14 @@ One backlog, one CLI. Compared with 1.0.1:
 - **Items are markdown files with front matter**, one per item, numbered and slugged (`001-fix-the-login-redirect`),
   with a history of events; the JSON manifest of 1.x is not read. A repository with a 1.x `.backlog/backlog_manifest.json`
   starts a new backlog; recreate the items you still need with `backlog new`.
+- **Every command name of 1.x still works**, as an alias of the one command set (`backlog --help` and COMMANDS.md list them
+  all). The list fields of 1.x (`ac`, `tasks`, `outcomes`, `evidence`, `references`) are sections of the item body:
+  `backlog update <item> --section "<Heading>"` with `--set-lines`, `--add-line` (`--top`), `--remove-line <n>` or
+  `--move-line <n>:<position>` edits one section and leaves every other byte alone, and `add`, `replace`, `remove` and
+  `priority <item> <list> <n> <position>` run it. `import --branch <source> [--higher]` brings the open items of another
+  branch here, `archive done` archives every finished item, and the CLI's own update is `backlog upgrade`
+  (`backlog update`, `update check|auto|off|disable` and `update <version>` run it; `update <item> …` stays the item
+  command). `init backup` is gone.
 - **The order of the queue is a committed index.** Each repository folder holds one text file, `index.json`, that lists
   the items of every branch in order (P0 first), one entry per line. A change of the order changes that file and no
   item; two clones that changed it from one base are merged (each keeps its placement); the items no longer carry a

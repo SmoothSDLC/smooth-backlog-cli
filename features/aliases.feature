@@ -72,13 +72,13 @@ Feature: Aliases - every command name of the first release still works and runs 
     Given an item "Kept" exists
     When I run `backlog init clean` and answer "no"
     Then the command fails with exit code 2
-    And the output contains "This will destroy all configuration and current backlog items for"
+    And the output contains "This will remove every backlog item of"
     And the queue is 1
     When I run `backlog init clean`
     Then the command fails with exit code 2
     And the queue is 1
 
-  Scenario: init clean empties this repository's backlog as one published change
+  Scenario: init clean empties the current branch's backlog as one published change
     Given an item "Gone" exists
     And an item "Gone too" exists
     When I run `backlog init clean` and answer "yes"
@@ -86,6 +86,35 @@ Feature: Aliases - every command name of the first release still works and runs 
     And the output contains "2 items removed"
     And the queue is empty
     And the backlog repository has no uncommitted or unpushed change
+
+  Scenario: init clean leaves the items of the other branches alone
+    Given an item "Mine" exists
+    And an item "Theirs" exists
+    And a branch "feature" exists on the origin
+    And I run `backlog move 2 feature`
+    When I run `backlog init clean` and answer "yes"
+    Then the command succeeds
+    And the output contains "1 items removed from branch main"
+    And the queue is empty
+    When I run `backlog list branch`
+    Then the output contains "feature  open 1"
+
+  Scenario: init clean all-branches empties every branch of the repository
+    Given an item "Mine" exists
+    And an item "Theirs" exists
+    And a branch "feature" exists on the origin
+    And I run `backlog move 2 feature`
+    When I run `backlog init clean all-branches` and answer "yes"
+    Then the command succeeds
+    And the output contains "2 items removed from every branch"
+    When I run `backlog list branch`
+    Then the output does not contain "feature"
+
+  Scenario: init clean refuses a word it does not know
+    When I run `backlog init clean everything` and answer "yes"
+    Then the command fails with exit code 2
+    And the output contains "unrecognized arguments: everything"
+
 
   Scenario: import brings the open items of another branch here, after the ones already queued
     Given an item "Mine" exists

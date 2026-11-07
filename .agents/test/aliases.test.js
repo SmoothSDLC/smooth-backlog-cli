@@ -8,7 +8,7 @@ test('the direct aliases translate to one command', () => {
   t(['init'], { command: 'setup', argv: [] });
   t(['init', 'demo'], { command: 'setup', argv: [] });
   t(['init', 'clean'], { command: 'init-clean', argv: [] });
-  t(['init', 'clean', 'demo'], { command: 'init-clean', argv: [] });
+  t(['init', 'clean', 'all-branches'], { command: 'init-clean', argv: ['all-branches'] });
   t(['list', 'open'], { command: 'query', argv: ['--only', 'open'] });
   t(['list', 'new'], { command: 'query', argv: ['--only', 'new'] });
   t(['list', 'archive'], { command: 'query', argv: ['--only', 'archive'] });

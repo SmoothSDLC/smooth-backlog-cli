@@ -201,6 +201,6 @@ test('<alias> --help prints the alias line and then the help of the command it r
   assert.ok(backlog('3', 'set', '--help').stdout.includes(HELP.update));
   const init = backlog('init', '--help').stdout;
   assert.ok(init.startsWith('backlog init [name] runs backlog setup\n') && init.includes(HELP.setup));
-  assert.ok(backlog('init', 'clean', '--help').stdout.startsWith('backlog init clean [name] runs '));
+  assert.ok(backlog('init', 'clean', '--help').stdout.startsWith('backlog init clean [all-branches] runs '));
   assert.equal(backlog('list', '--help').stdout.trimEnd(), HELP.query.trimEnd()); // a bare list is the query command itself
 });

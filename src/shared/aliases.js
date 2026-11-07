@@ -3,7 +3,7 @@
 // form: the first-release spelling; runs: what it runs; heads: the spellings whose --help shows this row; help: the command whose help follows it.
 export const ALIASES = [
   { form: 'init [name]', runs: 'backlog setup', heads: ['init'], help: 'setup' },
-  { form: 'init clean [name]', runs: 'a typed yes, then every item of this repository\'s backlog is removed as one published change, then backlog setup', heads: ['init clean'] },
+  { form: 'init clean [all-branches]', runs: 'a typed yes, then every item of the current branch (archive included) is removed as one published change, then backlog setup; init clean all-branches removes the items of every branch of the repository', heads: ['init clean'] },
   { form: 'list new', runs: 'backlog query --only new', heads: ['list new'], help: 'query' },
   { form: 'list open', runs: 'backlog query --only open', heads: ['list open'], help: 'query' },
   { form: 'list done', runs: 'backlog query --only done', heads: ['list done'], help: 'query' },
@@ -65,7 +65,7 @@ function alias(rest) {
   if (ITEM.test(rest[0] ?? '') && ITEM_FIRST.has(rest[1])) rest = [rest[1], rest[0], ...rest.slice(2)];
   const [head, a, b] = rest;
   switch (head) {
-    case 'init': return a === 'backup' ? null : a === 'clean' ? to('init-clean', []) : to('setup', rest.includes('--ask') ? ['--ask'] : []);
+    case 'init': return a === 'backup' ? null : a === 'clean' ? to('init-clean', rest.slice(2)) : to('setup', rest.includes('--ask') ? ['--ask'] : []);
     case 'list': return ['new', 'open', 'done', 'archive'].includes(a) ? to('query', ['--only', a, ...rest.slice(2)]) : a === 'branch' ? to('query', ['--branches', ...rest.slice(2)]) : null;
     case 'branch': return to('query', ['--branches', ...rest.slice(1)]);
     case 'new': return a !== undefined && !a.startsWith('-') ? newOf(rest) : null;

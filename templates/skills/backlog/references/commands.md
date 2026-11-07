@@ -49,7 +49,7 @@ do now) or a change that was not published; 4 the configured backlog repository 
 The command names of the first release still work; each runs the command set below. `backlog <alias> --help` prints the alias line and then the help of the command it runs.
 
 - `init [name]` runs `backlog setup`
-- `init clean [name]` runs `a typed yes, then every item of this repository's backlog is removed as one published change, then backlog setup`
+- `init clean [all-branches]` runs `a typed yes, then every item of the current branch (archive included) is removed as one published change, then backlog setup; init clean all-branches removes the items of every branch of the repository`
 - `list new` runs `backlog query --only new`
 - `list open` runs `backlog query --only open`
 - `list done` runs `backlog query --only done`

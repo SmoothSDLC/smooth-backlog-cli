@@ -133,9 +133,9 @@ const files = root => readdirSync(root).flatMap(n => { const p = join(root, n); 
 const importsOf = text => [...text.matchAll(/(?:import|export)\s[^'"`;]*?from\s*['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map(m => m[1] ?? m[2]).filter(p => p.startsWith('.'));
 const NAMES = /TEAM_NAME|TEAM_REPOSITORY|TEAM_BRANCH|TEAM_LEAD|teams\.json/;
 // the modules outside src/team/ that the team code may import
-const SHARED = ['errors.js', 'storage.js', 'shared/dependencies.js', 'shared/frontmatter.js', 'shared/index.js', 'shared/new.js', 'shared/query.js', 'shared/safety.js', 'shared/seam.js',
+const SHARED = ['errors.js', 'storage.js', 'shared/dependencies.js', 'shared/frontmatter.js', 'shared/help-parts.js', 'shared/index.js', 'shared/new.js', 'shared/query.js', 'shared/safety.js', 'shared/seam.js',
   'shared/seen.js', 'shared/setup.js', 'shared/status.js', 'shared/store.js', 'shared/sync.js', 'shared/text.js', 'shared/update.js', 'shared/wip-limits.js'];
-const NOT_YET = ['help.js']; // the help text still names the team variables until it moves to the help of backlog team
+const NOT_YET = [];
 
 function breaches(root) {
   const out = [];

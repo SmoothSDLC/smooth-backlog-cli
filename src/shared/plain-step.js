@@ -7,7 +7,7 @@ import { now } from './store.js';
 import { strip } from './text.js';
 import { wipRefusal } from './wip-limits.js';
 
-export const TEAM_ITEM = "use backlog team update: a team item's status moves by its team steps";
+export const ofATeam = "use backlog team update: a team item's status moves by its team steps";
 const STEPS = ['claim', 'release', 'close'];
 
 const dependencyRefusal = (folder, fm) => {
@@ -28,7 +28,7 @@ export function plainStep(a, { fm, slug, folder, repo }) {
   const steps = STEPS.filter(k => a[k] !== undefined);
   if (!steps.length) return { event: 'state_change' };
   if (steps.length > 1) return { refuse: `one step at a time (got ${steps.map(k => `--${k}`).join(', ')})` };
-  if (fm.team) return { refuse: TEAM_ITEM };
+  if (fm.team) return { refuse: ofATeam };
   const who = fm.claimed_by || ''; const t = now();
   const no = why => ({ refuse: `${slug}: ${why}` });
   if (steps[0] === 'claim') {

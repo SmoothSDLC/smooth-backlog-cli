@@ -18,7 +18,10 @@ const load = async name => { const url = new URL(name, import.meta.url); return 
 export async function run(command, argv, { table = TABLE, help } = {}) {
   if (!Object.hasOwn(table, command)) return die(`${command} is not a backlog command (${Object.keys(TABLE).join(', ')}, setup). Use backlog --help.`);
   if (argv.includes('--help')) {
-    const text = (help ?? (await load('../help.js'))?.HELP)?.[HELP_OF[command] ?? command];
+    const base = help ?? (await load('../help.js'))?.HELP;
+    // backlog team <command> --help prints the help of that command; the team help lives with the team code
+    const team = command === 'team' ? (await load('../team/help.js'))?.teamHelp : null;
+    const text = team ? team[`team ${argv[0]}`] ?? team.team : base?.[HELP_OF[command] ?? command];
     if (text) { process.stdout.write(text.endsWith('\n') ? text : `${text}\n`); return 0; }
   }
   const { ask } = resolveHome(); // the storage location: a missing configured clone is refused here, before the command runs

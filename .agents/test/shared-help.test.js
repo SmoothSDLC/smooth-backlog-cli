@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import { HELP, USAGE } from '../../src/help.js';
+import { teamHelp } from '../../src/team/help.js';
 import { ALIASES } from '../../src/shared/aliases.js';
 
 const dirs = [];
@@ -19,7 +20,10 @@ sharedBacklog(t);
 const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
-const COMMANDS = ['new', 'update', 'query', 'next', 'fields', 'team', 'move', 'archive'];
+const TEAM = ['team', 'team pop', 'team update', 'team query', 'team define', 'team workflow']; // the help of the team code lives with it
+const COMMANDS = ['new', 'update', 'query', 'next', 'fields', ...TEAM, 'move', 'archive'];
+const ALL = { ...HELP, ...teamHelp };
+const ROUTED = COMMANDS.filter(c => !c.startsWith('team ')); // the commands of the router
 // Flags this build refuses (query.js TEAM and pop.js); --db is no flag of the CLI (item 058: not in its help).
 const REFUSED = {
   update: [],
@@ -35,8 +39,8 @@ test('backlog update --claim keeps its refusal conditions, query --plan the memb
   assert.match(claim, /refuses when another agent holds the item/);
   assert.match(claim, /depends_on\s+is not done/);
   assert.match(claim, /in progress/);
-  for (const command of ['team']) {
-    const text = backlog(command, '--help').stdout;
+  for (const command of ['team query']) {
+    const text = backlog(...command.split(' '), '--help').stdout;
     const plan = block(text, 'plan');
     assert.match(plan, /the\s+members\s+of\s+the\s+team's\s+entry\s+in\s+teams\.json/, command);
     assert.match(plan, /Any\s+session\s+may\s+review\s+an\s+item\s+except\s+the\s+sessions\s+recorded\s+on\s+it/, command);
@@ -48,7 +52,7 @@ test('backlog update --claim keeps its refusal conditions, query --plan the memb
 
 for (const [command, flags] of Object.entries(REFUSED)) {
   test(`backlog ${command} --help marks exactly the refused flags "Not in this build"`, () => {
-    const text = backlog(command, '--help').stdout;
+    const text = backlog(...command.split(' '), '--help').stdout;
     for (const flag of flagsOf(text).filter(f => block(text, f.slice(2)))) {
       const marked = /Not in this build/.test(block(text, flag.slice(2)));
       assert.equal(marked, flags.includes(flag.slice(2)), `${command} ${flag}: marked=${marked}`);
@@ -89,24 +93,24 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
 
 test('every command of the router has a help text, a line of backlog --help and a block in COMMANDS.md', async () => {
   const { TABLE } = await import('../../src/shared/router.js');
-  assert.deepEqual(Object.keys(TABLE).sort(), [...COMMANDS, 'list'].sort());
-  assert.deepEqual(Object.keys(HELP).sort(), [...COMMANDS, 'setup', 'upgrade'].sort()); // setup and upgrade run before the router; list prints the query help
+  assert.deepEqual(Object.keys(TABLE).sort(), [...ROUTED, 'list'].sort());
+  assert.deepEqual(Object.keys(ALL).sort(), [...COMMANDS, 'setup', 'upgrade'].sort()); // setup and upgrade run before the router; list prints the query help
   const top = cli(['--help'], { cwd: cons, tmp: t }).stdout;
   for (const command of Object.keys(TABLE)) {
     assert.match(top, new RegExp(`^ {2}backlog ${command}( |$)`, 'm'), `${command}: backlog --help`);
-    assert.equal(backlog(command, '--help').stdout, HELP[command === 'list' ? 'query' : command], `${command}: --help`);
+    assert.equal(backlog(...command.split(' '), '--help').stdout, ALL[command === 'list' ? 'query' : command], `${command}: --help`);
   }
 });
 
 test('exit code 3 is described for both cases: the update before the command failed, and the change was not pushed', () => {
   for (const command of ['new', 'update', 'query', 'next', 'archive']) {
-    const text = backlog(command, '--help').stdout;
+    const text = backlog(...command.split(' '), '--help').stdout;
     assert.match(text, /^ {2}3 {2}The repository that holds the items could not be synchronised with its origin\./m, command);
     assert.match(text, /update before a\s+change failed: then nothing was changed/, command);
     assert.match(text, /change was not published.*rolled back/, command);
   }
   assert.match(backlog('move', '--help').stdout, /3 the update of the local clone failed before\nthe move \(nothing was changed\), or the move was not published and was rolled back/);
-  assert.match(backlog('team', '--help').stdout, /^ {2}3 {2}idle: nothing to do now \(pop\)\. The same code is used when the local clone/m);
+  assert.match(backlog('team', 'pop', '--help').stdout, /^ {2}3 {2}idle: nothing to do now\. The same code is used when the local clone/m);
   // the build does what the text says: a command that only reads answers from the local copy with the offline warning
   const broken = mkdtempSync(join(tmpdir(), 'help-exit3-'));
   dirs.push(broken);
@@ -121,8 +125,8 @@ test('exit code 3 is described for both cases: the update before the command fai
 
 test('every command help has the sections Usage, Options and one Example that names the command', () => {
   for (const command of COMMANDS) {
-    const text = backlog(command, '--help').stdout;
-    assert.equal(text, HELP[command].endsWith('\n') ? HELP[command] : `${HELP[command]}\n`, `${command}: --help prints the HELP text`);
+    const text = backlog(...command.split(' '), '--help').stdout;
+    assert.equal(text, ALL[command].endsWith('\n') ? ALL[command] : `${ALL[command]}\n`, `${command}: --help prints the HELP text`);
     assert.match(text, new RegExp(`^backlog ${command} `, 'm'), `${command}: first line`);
     assert.match(text, /^Usage:\n {2}backlog /m);
     assert.match(text, /^Options:\n {2}--/m);
@@ -137,7 +141,7 @@ test('backlog next --help lists the flags that apply to next', () => {
 });
 
 test('the help is written in plain sentences: no internal job numbers, script names or file references', () => {
-  for (const command of COMMANDS) assert.doesNotMatch(HELP[command], /\bjob \d+|\.py\b|SKILL\.md|lib_db|update\.js|query\.js/i, command);
+  for (const command of COMMANDS) assert.doesNotMatch(ALL[command], /\bjob \d+|\.py\b|SKILL\.md|lib_db|update\.js|query\.js/i, command);
 });
 
 test('backlog --help names every command and the storage setting, and is the same wherever the items live', () => {
@@ -157,7 +161,7 @@ test('COMMANDS.md has the section "Commands" with the help text of every command
   const at = doc.indexOf('\n## Commands\n');
   assert.ok(at >= 0, 'section heading missing');
   const section = doc.slice(at);
-  for (const command of COMMANDS) assert.ok(section.includes(`\`\`\`text\n${HELP[command].trimEnd()}\n\`\`\``), `${command}: the help text is not in COMMANDS.md verbatim`);
+  for (const command of COMMANDS) assert.ok(section.includes(`\`\`\`text\n${ALL[command].trimEnd()}\n\`\`\``), `${command}: the help text is not in COMMANDS.md verbatim`);
 });
 
 test('096: the update help says the retired classification keys have no effect and are dropped at the next write', () => {
@@ -168,24 +172,31 @@ test('096: the update help says the retired classification keys have no effect a
 });
 
 test('127: the team pop help states a refined work item is claimable by members and team pop offers it only while the stage is unset', () => {
-  const flat = backlog('team', '--help').stdout.replace(/\s+/g, ' ');
+  const flat = backlog('team', 'pop', '--help').stdout.replace(/\s+/g, ' ');
   assert.match(flat, /A refined work item[^.]*is an ordinary item any member may claim/);
   assert.match(flat, /only while its stage is unset/);
   assert.match(flat, /too big for one member/);
 });
 
-test('059.V2: the --close and --status help blocks name the hand-off close rule, NONE and the legacy exemption', () => {
-  const help = backlog('update', '--help').stdout;
-  for (const [name, text] of [['--close', block(help, 'close')], ['--status', block(help, 'status')]]) {
-    const flat = text.replace(/\s+/g, ' ');
-    assert.match(flat, /each dependent's hand-off is recorded and accepted/, name);
-    assert.match(flat, /records handoffs: none/, name);
-    assert.match(flat, /already (done|closed) is not checked again/, name);
+test('059.V2: the team --close help block names the hand-off close rule, NONE and the legacy exemption', () => {
+  const flat = block(backlog('team', 'update', '--help').stdout, 'close').replace(/\s+/g, ' ');
+  assert.match(flat, /each dependent's hand-off is recorded and accepted/);
+  assert.match(flat, /records handoffs: none/);
+  assert.match(flat, /already (done|closed) is not checked again/);
+});
+
+test('the plain help names no team option and ends with the pointer to the team help', () => {
+  for (const command of ['new', 'update', 'query', 'next']) {
+    const text = backlog(command, '--help').stdout;
+    assert.doesNotMatch(text, /TEAM_|teams\.json|team session/, command);
+    for (const flag of ['team', 'review-refs', 'refine-start', 'request-review', 'accept-handoff', 'claimable', 'set-team', 'set-review-refs']) assert.equal(block(text, flag), undefined, `${command}: --${flag}`);
   }
+  assert.equal(backlog('update', '--help').stdout.trimEnd().split('\n').at(-1), 'Team items: backlog team update --help.');
+  for (const command of TEAM.slice(1)) assert.match(backlog(...command.split(' '), '--help').stdout, new RegExp(`^backlog ${command} `), command);
 });
 
 test('query, next and team help: no headless option, no query --pop', () => {
-  for (const command of ['query', 'next', 'team']) assert.doesNotMatch(HELP[command], /--pop\b|--headless|BACKLOG_HEADLESS|next --agent/, command);
+  for (const command of ['query', 'next', 'team']) assert.doesNotMatch(ALL[command], /--pop\b|--headless|BACKLOG_HEADLESS|next --agent/, command);
 });
 
 test('every alias row is in backlog --help, in COMMANDS.md and in the skill reference', () => {

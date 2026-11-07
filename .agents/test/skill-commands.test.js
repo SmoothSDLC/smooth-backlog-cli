@@ -7,6 +7,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HELP } from '../../src/help.js';
+import { teamHelp } from '../../src/team/help.js';
 import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
 
 const dir = fileURLToPath(new URL('../../templates/skills/backlog/', import.meta.url));
@@ -23,9 +24,9 @@ test('040: every team flag of backlog update and every team command is in the sk
   const shared = [...new Set([...Object.keys(HELP), ...[...readFileSync(fileURLToPath(new URL('../../COMMANDS.md', import.meta.url)), 'utf8').matchAll(/^### backlog (\S+)$/gm)].map(m => m[1])])];
   assert.ok(shared.length >= 8, shared.join());
   assert.deepEqual(shared.filter(c => !skill.includes(`\`${c}\``) && !skill.includes(`backlog ${c}`)), [], 'every shared-mode command is named');
-  const teamFlags = HELP.update.split(/\n(?= {2}--)/).filter(b => /\bteam\b|lead|member/.test(b)).map(b => /^ {2}--([\w-]+)/.exec(b)?.[1]).filter(Boolean);
+  const teamFlags = teamHelp['team update'].split(/\n(?= {2}--)/).filter(b => /\bteam\b|lead|member/.test(b)).map(b => /^ {2}--([\w-]+)/.exec(b)?.[1]).filter(Boolean);
   assert.ok(teamFlags.length >= 15, teamFlags.join());
-  assert.deepEqual(teamFlags.filter(f => !NOT_TAUGHT.has(f) && !new RegExp(`--${f}(?![\\w-])`).test(skill)), [], 'every team flag of the update help is taught');
+  assert.deepEqual(teamFlags.filter(f => !NOT_TAUGHT.has(f) && !new RegExp(`--${f}(?![\\w-])`).test(skill)), [], 'every flag of the team update help is taught');
   assert.match(skill, /review request, a changes verdict it gives and its close end its session \(never the lead's\)/);
   assert.match(skill, /END THE SESSION NOW/);
   assert.match(skill, /Act only as yourself/);

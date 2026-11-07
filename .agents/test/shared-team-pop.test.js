@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
-import { HELP } from '../../src/help.js';
+import { teamHelp } from '../../src/team/help.js';
 import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
@@ -364,8 +364,8 @@ test('--claim-now: a claim interrupted after it was saved is reported as a failu
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /claim of .* failed/);
   assert.equal(item(f, job).fm.claimed_by, 'ann', 'the saved claim stays in the item file');
-  assert.doesNotMatch(HELP.team, /nothing is claimed/);
-  assert.match(HELP.team, /check the item/);
+  assert.doesNotMatch(teamHelp['team pop'], /nothing is claimed/);
+  assert.match(teamHelp['team pop'], /check the item/);
   assert.doesNotMatch(readFileSync(new URL('../../COMMANDS.md', import.meta.url), 'utf8'), /nothing is claimed/);
 });
 
@@ -377,7 +377,7 @@ test('--claim-now: the diagnostics of a failed claim are forwarded with its exit
 });
 
 test('the exit codes of backlog team pop are described: 3 is idle, 1 a claim that failed', () => {
-  assert.match(HELP.team, /1 {2}A claim was refused or could not be run/);
+  assert.match(teamHelp['team pop'], /1 {2}A claim was refused or could not be run/);
 });
 
 test('the JSON of the pop stays valid when a credential follows a non-ASCII character (redaction before serialization)', () => {

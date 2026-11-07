@@ -49,10 +49,10 @@ const run = (f, args, env = {}) => {
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text) => { const r = run(f, args); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 // team: the item belongs to t1, which team pop and the team views need to reach it
-const make = (f, team = false) => { const slug = ok(f, ['new', ...NEW('review session')]).stdout.split('created phase ')[1].split(' ')[0]; return team ? intoTeam(slug, { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', BACKLOG_SESSION: '' } }) : slug; };
+const make = (f, team = true) => { const slug = ok(f, ['new', ...NEW('review session')]).stdout.split('created phase ')[1].split(' ')[0]; return team ? intoTeam(slug, { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', BACKLOG_SESSION: '' } }) : slug; };
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
 // the setup of every test: the building session claims and asks for the review
-const setup = (f, team = false) => { const s = make(f, team); ok(f, ['update', s, '--claim', A1]); ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]); return s; };
+const setup = (f, team = true) => { const s = make(f, team); ok(f, ['update', s, '--claim', A1]); ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]); return s; };
 
 test('082: 082aa:01 claims and asks for a review; 082aa:02 starts and passes it', () => {
   const f = fixture();
@@ -195,11 +195,8 @@ test('082: a legacy item keeps its original author in session_authors across eve
   const refuse = (f, s, by) => no(f, ['update', s, '--start-review', '--by', by], 'the same session cannot review its own work');
   const rows = [
     ['a new claim of an unclaimed item', (f, s) => {
-      // the review was requested before the list existed: the requester is on the item, the list is not
-      ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]);
-      legacy(f, s);
+      // the holder released it before the list existed (a released team item in review is not claimed again, so no review is asked for)
       ok(f, ['update', s, '--release', A1]);
-      legacy(f, s);
       ok(f, ['update', s, '--claim', B1]);
       return [A1, B1];
     }, (f, s) => refuse(f, s, A1)],
@@ -220,7 +217,8 @@ test('082: a legacy item keeps its original author in session_authors across eve
       return [A1, 'lead'];
     }, (f, s) => refuse(f, s, A1)],
     ['a team pop continuation claim', (f, s) => {
-      ok(f, ['update', s, '--set-team', 't1']);
+      // the lead's own work item carries no stage (the team's split items do): the pop continues it
+      const file = join(f.folder, 'phases', `${s}.md`); writeFileSync(file, readFileSync(file, 'utf8').replace(/^(stage|refiner): .*\n/mg, ''));
       const p = run(f, ['team', 'pop', '--team', 't1', '--json'], { TEAM_LEAD: A2, BACKLOG_AGENT: A2 });
       assert.equal(p.status, 0, p.stdout + p.stderr);
       return [A1, A2];

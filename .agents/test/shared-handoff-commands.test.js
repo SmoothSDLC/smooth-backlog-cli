@@ -31,7 +31,7 @@ const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', `Body of ${name}.\n\n${DOD}`];
 const LEAD = { TEAM_LEAD: 'lead' };
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...LEAD, ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, team: true, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...LEAD, ...env } });
 const ok = (f, args, env) => {
   // the named actor must have read the item after the last change by another actor (the stale-view guard, item 088)
   const named = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));

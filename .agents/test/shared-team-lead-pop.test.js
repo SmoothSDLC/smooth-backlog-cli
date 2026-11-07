@@ -27,6 +27,12 @@ const LEAD = { TEAM_LEAD: 'lead' };
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, BACKLOG_AGENT: env.TEAM_LEAD ?? 'lead', ...env } }); // the caller is the lead unless the test names another agent
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
+// another team takes an item: the one place a refining slice changes team, written to the file the way an earlier build left it
+const moveTeam = (f, slug, team) => {
+  const file = join(f.folder, 'phases', `${slug}.md`);
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/^team: .*$/m, `team: ${team}`));
+  for (const args of [['add', '-A'], ['commit', '-q', '-m', 'move team'], ['push', '-q']]) spawnSync('git', args, { cwd: f.home, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+};
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 const pop = (f, env, ...args) => { const r = run(f, ['team', 'pop', '--json', ...args], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
 
@@ -46,7 +52,7 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   const child = make(f, 'child', '--split-from', early); // a split item carries a stage: the members' work, never the lead's
   assert.equal(fm(f, child).status, 'new');
   ok(f, ['query', '--phase', early, '--agent', 'lead']); ok(f, ['update', early, '--release', 'lead']); ok(f, ['update', early, '--set-team', '']); // no longer the team's
-  ok(f, ['query', '--phase', child, '--agent', 'lead']); ok(f, ['update', child, '--set-team', 't2']); // nor is its slice: the next work item has none of its own yet
+  ok(f, ['query', '--phase', child, '--agent', 'lead']); moveTeam(f, child, 't2'); // nor is its slice: the next work item has none of its own yet
   p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item], ['claim', late]);
   const text = run(f, ['team', 'pop', '--team', 't1']);
@@ -168,10 +174,10 @@ test('query --phase --json names the team fields an item lacks', () => {
   const f = fixture();
   const full = make(f, 'complete item');
   const bare = ok(f, ['new', '--name', 'bare item', '--depends-on', 'none']).stdout.split('created phase ')[1].split(' ')[0];
-  const [a, b] = JSON.parse(ok(f, ['query', '--phase', `${full},${bare}`, '--json']).stdout);
+  const [a, b] = JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--phase', `${full},${bare}`, '--json']).stdout);
   assert.deepEqual(a.missing, []);
   assert.deepEqual(b.missing, ['review_refs', 'estimate_min', 'definition_of_done']);
-  assert.deepEqual(JSON.parse(ok(f, ['query', '--phase', bare, '--json']).stdout).missing, b.missing);
+  assert.deepEqual(JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--phase', bare, '--json']).stdout).missing, b.missing);
 });
 
 // A wrapper of the CLI for team pop's children (BACKLOG_TEST_SELF): FAIL_ON='<args prefix>' fails that call with FAIL_RC and
@@ -181,25 +187,26 @@ const WRAP = `import { spawnSync } from 'node:child_process'; import { existsSyn
 const bin = ${JSON.stringify(resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'))};
 const args = process.argv.slice(2); const e = process.env;
 const isUpdate = args[0] === 'team' && args[1] === 'update'; // the claim of team pop is a team update
+const isQuery = args[0] === 'team' && args[1] === 'query'; // its reads are team views
 if (e.FAIL_ON && args.join(' ').startsWith(e.FAIL_ON)) { process.stderr.write(e.FAIL_ERR + '\\n'); process.exit(Number(e.FAIL_RC)); }
-if (e.CLEAR_ON_READ && args[0] === 'query' && args.includes('--phase') && !existsSync(e.MOVE_MARK + '.cleared')) {
+if (e.CLEAR_ON_READ && isQuery && args.includes('--phase') && !existsSync(e.MOVE_MARK + '.cleared')) {
   writeFileSync(e.MOVE_MARK + '.cleared', '1'); // another agent takes the item out of the team just before the lead reads it
-  spawnSync(process.execPath, [bin, 'update', args[args.indexOf('--phase') + 1], '--set-team', ''], { env: { ...e, BACKLOG_AGENT: 'other', TEAM_NAME: '' } });
+  spawnSync(process.execPath, [bin, 'team', 'update', args[args.indexOf('--phase') + 1], '--set-team', '', '--team', 't1', '--agent', 'other'], { env: { ...e, BACKLOG_AGENT: 'other', TEAM_NAME: '' } });
 }
-if (e.REASSIGN_ON_READ && args[0] === 'query' && args[args.indexOf('--phase') + 1] === e.REASSIGN_ON_READ && !existsSync(e.MOVE_MARK + '.reassigned')) {
+if (e.REASSIGN_ON_READ && isQuery && args[args.indexOf('--phase') + 1] === e.REASSIGN_ON_READ && !existsSync(e.MOVE_MARK + '.reassigned')) {
   writeFileSync(e.MOVE_MARK + '.reassigned', '1'); // another writer hands the item to another session of the same card just before the lead reads it
   spawnSync(process.execPath, [bin, 'query', '--phase', e.REASSIGN_ON_READ, '--agent', e.REASSIGN_BY], { env: e }); // a fresh view for the hand-off
-  spawnSync(process.execPath, [bin, 'update', e.REASSIGN_ON_READ, '--reassign', e.REASSIGN_TO, '--by', e.REASSIGN_BY, '--reason', 'reassigned'], { env: e });
+  spawnSync(process.execPath, [bin, 'team', 'update', e.REASSIGN_ON_READ, '--reassign', e.REASSIGN_TO, '--by', e.REASSIGN_BY, '--reason', 'reassigned', '--team', 't1'], { env: e });
 }
 const r = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: e });
 let out = r.stdout;
 if (e.HAND_BACK_AFTER_CLAIM && isUpdate && args.includes('--claim') && r.status === 0) {
   const slug = args[2]; const to = e.HAND_BACK_TO; const from = args[args.indexOf('--agent') + 1];
   spawnSync(process.execPath, [bin, 'query', '--phase', slug, '--agent', from], { env: e }); // a fresh view for the hand-back
-  spawnSync(process.execPath, [bin, 'update', slug, '--reassign', to, '--by', from, '--reason', 'handed back'], { env: e }); // another writer hands the item back
+  spawnSync(process.execPath, [bin, 'team', 'update', slug, '--reassign', to, '--by', from, '--reason', 'handed back', '--team', 't1'], { env: e }); // another writer hands the item back
 }
 if (isUpdate && args.includes('--claim') && r.status === 0 && e.MOVE_AFTER_CLAIM) writeFileSync(e.MOVE_MARK, '1');
-if (args[0] === 'query' && args.includes('--phase') && e.MOVE_AFTER_CLAIM && existsSync(e.MOVE_MARK)) {
+if (isQuery && args.includes('--phase') && e.MOVE_AFTER_CLAIM && existsSync(e.MOVE_MARK)) {
   const j = JSON.parse(out); j.front_matter.branch = e.MOVE_AFTER_CLAIM; out = JSON.stringify(j);
 }
 process.stdout.write(out); process.stderr.write(r.stderr); process.exit(r.status ?? 1);
@@ -212,7 +219,7 @@ test('team pop: an update error, a failed synchronisation and a scope change are
   const seam = extra => ({ BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'moved'), ...extra });
   for (const [extra, text] of [
     [{ FAIL_ON: `team update ${s} --team t1 --agent lead --claim`, FAIL_RC: '1', FAIL_ERR: '❌ backlog: disk full' }, /team pop stopped: ❌ backlog: disk full/],
-    [{ FAIL_ON: 'query --status', FAIL_RC: '3', FAIL_ERR: 'could not synchronise the backlog clone' }, /team pop stopped: could not synchronise/],
+    [{ FAIL_ON: 'team query --team t1 --agent lead --status', FAIL_RC: '3', FAIL_ERR: 'could not synchronise the backlog clone' }, /team pop stopped: could not synchronise/],
   ]) {
     const r = run(f, ['team', 'pop', '--team', 't1', '--json'], seam(extra));
     assert.equal(r.status, 1, r.stdout + r.stderr); assert.match(r.stderr, text); assert.equal(r.stdout, '');
@@ -235,7 +242,7 @@ test('an item without depends_on names it', () => {
   const s = make(f, 'hand edited item');
   const file = join(f.folder, 'phases', `${s}.md`);
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^depends_on:.*\n/m, '').replace(/^review_refs:\n(?:- .*\n)*/m, '').replace(/^review_refs:.*\n/m, ''));
-  const x = JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout);
+  const x = JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--phase', s, '--json']).stdout);
   assert.deepEqual(x.missing, ['review_refs', 'depends_on']);
 });
 

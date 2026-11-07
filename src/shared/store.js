@@ -14,7 +14,7 @@ import { repoIdFromUrl } from './safety.js';
 import * as index from './index.js';
 import { actor, created, guarded } from './seen.js';
 import { CONFIG, configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
-import { outsideTeam, setTeamsHome } from '../team/team.js';
+import { seam } from './seam.js';
 import { asList } from './text.js';
 import { lifted } from './status.js';
 import { derivedKeys, dropsLegacy, isOpen } from './status.js';
@@ -56,13 +56,12 @@ export function resolveHome() {
       insideRepo = true;
       mkdirSync(join(abs, '.state'), { recursive: true });
       if (!existsSync(join(abs, '.gitignore'))) writeFileSync(join(abs, '.gitignore'), '.state/\n');
-      setTeamsHome(abs);
       return { home: abs, remote: false, ask: null };
     }
   }
   home = resolve(expand(home || join('~/git', name)));
   // Symlinks above the home (macOS /var, a linked ~) are resolved once here; a link AT the home is kept for validateHome to refuse.
-  if (existsSync(home)) { setTeamsHome(home); return { home: join(realpathSync(dirname(home)), basename(home)), remote: true, ask: null }; }
+  if (existsSync(home)) { return { home: join(realpathSync(dirname(home)), basename(home)), remote: true, ask: null }; }
   return {
     home,
     remote: true,
@@ -316,9 +315,9 @@ const statusOf = i => (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending');
 const branchOf = i => String(i.fm.branch || '');
 
 // The order of the backlog is the repository folder's index (index.js): a rank change writes it and no item. A session bound to a team
-// (TEAM_REPOSITORY/TEAM_BRANCH) orders only its own items, beyond python parity: the other items keep their places, and the team's items
+// (set by backlog team) orders only its own items, beyond python parity: the other items keep their places, and the team's items
 // are re-ordered among the places they already hold (a move target is a position among the team's own items).
-const inScope = i => !outsideTeam(i.fm);
+const inScope = i => seam.inScope(i.fm);
 
 // Makes the index right against the item files (new items appended, gone ones dropped, name and status copied from the files, open items
 // first) and, with { slug, target }, first moves that item to the clamped rank among the open items of its branch. { branches: [branch] } names

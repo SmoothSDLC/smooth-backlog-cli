@@ -10,7 +10,7 @@ import { redact } from '../shared/safety.js';
 import { cloneLocked, resolveHome } from '../shared/store.js';
 import * as sync from '../shared/sync.js';
 import { parse as parsePop } from './pop.js';
-import { forgetTeamsConfig, openItemsOf, setSessionTeam, teamEntry, teamsConfig, validateTeam } from './team.js';
+import { forgetTeamsConfig, openItemsOf, setSessionTeam, setTeamsHome, teamEntry, teamsConfig, validateTeam } from './team.js';
 import { strip } from '../shared/text.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
@@ -58,14 +58,14 @@ const unconfigured = team => { process.stdout.write(`❌ ${loadWorkflow('team').
 // The team views of the plain query: the agent is passed on only when it was named, as the views behaved before.
 async function query(rest, { team }, got) {
   if (!teamsConfig()[team]) return unconfigured(team);
-  return (await import('../shared/query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])], { fromTeam: true });
+  return (await import('./query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])]);
 }
 
 async function update(rest, { team, agent }) {
   if (!teamsConfig()[team]) return unconfigured(team);
   const args = withAgent(rest, agent);
   if (!args.some(x => x === '--by' || x.startsWith('--by=') || x === '--claim' || x === '--release')) args.push('--by', agent);
-  return (await import('../shared/update.js')).run(args, { team: true });
+  return (await import('./update.js')).run(args);
 }
 
 export async function run(argv) {
@@ -75,7 +75,7 @@ export async function run(argv) {
 async function dispatch(argv) {
   const sub = argv[0];
   if (!SUBS.includes(sub)) return die(`team needs a subcommand (${SUBS.join(', ')}): backlog team update <item> --team <name> --agent <name> ...`);
-  resolveHome(); // reads the team configuration of the backlog
+  setTeamsHome(resolveHome().home); // reads the team configuration of the backlog
   if (sub === 'define') return define(argv.slice(1));
   if (sub === 'workflow') return workflow(argv.slice(1));
   let split_; let who;

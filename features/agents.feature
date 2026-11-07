@@ -49,39 +49,55 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     Then the command succeeds
 
   Scenario: the holder asks for a review and another agent reviews it
-    Given I act as agent "alice"
+    Given a team "t1" with lead "lead" and members "alice, bob"
+    And the environment TEAM_NAME is "t1"
+    And I act as agent "lead"
+    And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done"`
+    And I act as agent "alice"
     And I run `backlog update 1 --claim alice`
-    When I run `backlog update 1 --request-review bob --note "commit abc123"`
+    When I run `backlog team update 1 --request-review bob --note "commit abc123"`
     Then the command succeeds
     And item 1 has review_state "requested"
     When I act as agent "bob"
-    And I run `backlog update 1 --review pass --by bob --comments "looks right"`
+    And I run `backlog team update 1 --review pass --by bob --comments "looks right (docs/review/code.md)"`
     Then the command succeeds
     And item 1 has review_state "passed"
 
   Scenario: the author cannot review its own work
-    Given I act as agent "alice"
+    Given a team "t1" with lead "lead" and members "alice, bob"
+    And the environment TEAM_NAME is "t1"
+    And I act as agent "lead"
+    And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done"`
+    And I act as agent "alice"
     And I run `backlog update 1 --claim alice`
-    And I run `backlog update 1 --request-review any --note "commit abc123"`
-    When I run `backlog update 1 --review pass --by alice --comments "fine"`
+    And I run `backlog team update 1 --request-review any --note "commit abc123"`
+    When I run `backlog team update 1 --review pass --by alice --comments "fine (docs/review/code.md)"`
     Then the command fails
     And the output contains "cannot review its own work"
 
   Scenario: a changes verdict sends the item back to work
-    Given I act as agent "alice"
+    Given a team "t1" with lead "lead" and members "alice, bob"
+    And the environment TEAM_NAME is "t1"
+    And I act as agent "lead"
+    And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done"`
+    And I act as agent "alice"
     And I run `backlog update 1 --claim alice`
-    And I run `backlog update 1 --request-review bob --note "commit abc123"`
+    And I run `backlog team update 1 --request-review bob --note "commit abc123"`
     When I act as agent "bob"
-    And I run `backlog update 1 --review changes --by bob --comments "missing tests"`
+    And I run `backlog team update 1 --review changes --by bob --comments "missing tests (docs/review/code.md)"`
     Then the command succeeds
     And item 1 has review_state "changes-requested"
 
   Scenario: the holder closes the reviewed item
-    Given I act as agent "alice"
+    Given a team "t1" with lead "lead" and members "alice, bob"
+    And the environment TEAM_NAME is "t1"
+    And I act as agent "lead"
+    And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done"`
+    And I act as agent "alice"
     And I run `backlog update 1 --claim alice`
-    And I run `backlog update 1 --request-review bob --note "commit abc123"`
+    And I run `backlog team update 1 --request-review bob --note "commit abc123"`
     And I act as agent "bob"
-    And I run `backlog update 1 --review pass --by bob --comments "looks right"`
+    And I run `backlog team update 1 --review pass --by bob --comments "looks right (docs/review/code.md)"`
     When I act as agent "alice"
     And I have read item 1
     And I run `backlog update 1 --close --summary "delivered"`
@@ -89,11 +105,16 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     And item 1 has status "closed"
 
   Scenario: the holder records what it waits on
-    Given I act as agent "alice"
-    And I run `backlog update 1 --claim alice`
-    When I run `backlog update 1 --waiting "the CI run" --by alice`
+    Given a team "t1" with lead "lead" and members "alice, bob"
+    And the environment TEAM_NAME is "t1"
+    And I act as agent "lead"
+    And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done" --set-team t1 --status ready`
+    And I act as agent "alice"
+    And I run `backlog team update 1 --claim alice`
+    Then the command succeeds
+    When I run `backlog team update 1 --waiting "the CI run" --by alice`
     Then the command succeeds
     And item 1 has wait_on "the CI run"
-    When I run `backlog update 1 --waiting-done --by alice`
+    When I run `backlog team update 1 --waiting-done --by alice`
     Then the command succeeds
     And item 1 has wait_on ""

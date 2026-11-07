@@ -382,27 +382,6 @@ test('review P2: after a cross-repository move both queues are dense (the source
   assert.deepEqual(ranks(f.other, 'main'), [0, 1]);
 });
 
-// A team session bound to another branch works only on items of its own repository and branch: archive and both move modes refuse
-// an item of another team before anything is written.
-const bound = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' }; // seed items are acme/demo on main (004-delta: feature/x)
-for (const [title, script, args] of [
-  ['archive', 'archive', ['5', '--force']],
-  ['move --to-branch', 'move', ['2', '--to-branch', 'release']],
-  ['move --to-repository', 'move', ['2', '--to-repository', 'other/proj']],
-  ['move --all-open-of-branch', 'move', ['--all-open-of-branch', 'main', '--to-branch', 'release']],
-]) {
-  test(`review P1: ${title} in a team session bound to another branch is refused and writes nothing`, () => {
-    const f = seed();
-    const before = [mirror(f), names(f.folder, 'phases'), names(f.folder, 'archive'), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'status', '--porcelain')];
-    const r = cli([script, ...args], { cwd: f.cons, tmp: f.t, env: bound });
-    const refused = { archive: '005-epsilon', 'move --to-branch': '002-beta', 'move --to-repository': '002-beta', 'move --all-open-of-branch': '001-alpha' }[title];
-    assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.equal(r.stdout, `❌ ${refused}: this item belongs to repository acme/demo branch main, but this team session is bound to acme/demo branch release (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them\n`);
-    assert.equal(r.stderr, '');
-    assert.deepEqual([mirror(f), names(f.folder, 'phases'), names(f.folder, 'archive'), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'status', '--porcelain')], before);
-  });
-}
-
 test('review P2: archive inserts status: archived into an item whose front matter has no status key (LF, CRLF, lone CR)', () => {
   for (const eol of ['\n', '\r\n', '\r']) {
     const f = seed();

@@ -1,86 +1,26 @@
-// work-in-progress limits overall (every repository of the backlog home), per repository,
-// per branch, per team and per agent, checked by every step that starts work (a claim, a refinement start). The limits
-// are <backlog home>/wip-limits.json; a level without a number has no limit (the default for every level):
-// {"overall": 40, "repository": 15 | {"default": 15, "owner/name": 20}, "branch": 8 | {"default": 8, "owner/name:branch": 2},
-// "team": 3 | {"default": 3, "t1": 4},
-// "agent": 2 | {"default": 2, "an agent": 1}, "stale_hours": 48}
-// Only the owner edits the file. The team lead lifts the team and agent limits for one item with a recorded reason
-// (backlog team update <item> --team <team> --agent <lead> --wip-override "<reason>"). Work in progress: an item with status in_progress, or
-// one a member is refining (stage refining, a refiner, no claimer).
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { load } from '../shared/store.js';
+// The team and agent levels of the work-in-progress limits, the lead's override, and the read view (backlog team query --wip).
+// The overall, repository and branch levels are src/shared/wip-limits.js. The limits file and its shape are described there; the team and
+// agent entries read {"team": 3 | {"default": 3, "t1": 4}, "agent": 2 | {"default": 2, "an agent": 1}, "stale_hours": 48}. The team lead lifts the
+// team and agent limits for one item with a recorded reason
+// (backlog team update <item> --team <team> --agent <lead> --wip-override "<reason>"). One a member is refining (stage refining, a refiner,
+// no claimer) is work in progress too.
+import { seam } from '../shared/seam.js';
+import { limitOf, limits, limitsFile, num, progressItems, wipRefusal as sharedRefusal } from '../shared/wip-limits.js';
 import { heldBy, teamStep } from './team.js';
 
-const LEVELS = ['overall', 'repository', 'branch', 'team', 'agent'];
-const warned = new Set();
-const warn = text => { if (!warned.has(text)) { warned.add(text); process.stderr.write(`⚠️  backlog: ${text}\n`); } };
-export const limitsFile = home => join(home, 'wip-limits.json');
-export function limits(home) {
-  let raw = {};
-  try { raw = JSON.parse(readFileSync(limitsFile(home), 'utf8')) ?? {}; } catch (e) { // never hold work over it, but say so
-    if (e.code !== 'ENOENT') warn(`${limitsFile(home)} cannot be read or is no JSON (${e.message}); no work-in-progress limit applies until it is fixed`);
-    raw = {};
-  }
-  return raw && typeof raw === 'object' ? raw : {};
-}
-const num = v => (Number.isInteger(v) && v >= 0 ? v : null);
-function limitOf(cfg, level, key) {
-  const v = cfg[level];
-  if (v && typeof v === 'object') return num(v[key] ?? v.default);
-  return num(v);
-}
-export const inProgress = fm => fm.status === 'in progress' || (fm.status === 'refining' && fm.refiner && !fm.claimed_by);
+seam.alsoActive = fm => fm.status === 'refining' && Boolean(fm.refiner) && !fm.claimed_by;
 const holderOf = fm => fm.claimed_by || (fm.stage === 'refining' ? fm.refiner : '') || ''; // a finished refinement holds nothing
-// [{repository, slug, fm, path}] of every item in progress in the backlog home
-export function progressItems(home) {
-  const out = [];
-  let owners = [];
-  try { owners = readdirSync(home, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')); } catch (e) { warn(`${home} cannot be read (${e.message}); no work in progress is counted`); return out; }
-  for (const o of owners) {
-    let names = [];
-    try { names = readdirSync(join(home, o.name), { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.')); } catch (e) { warn(`${join(home, o.name)} cannot be read (${e.message}); its items are not counted against the work-in-progress limits`); continue; }
-    for (const n of names) {
-      const folder = join(home, o.name, n.name);
-      if (!existsSync(join(folder, 'phases'))) continue;
-      let items = [];
-      try { items = load(folder); } catch (e) { warn(`the items of ${o.name}/${n.name} cannot be read (${e.message}); they are not counted against the work-in-progress limits`); continue; }
-      for (const i of items) if (i.path.startsWith('phases/') && inProgress(i.fm)) out.push({ repository: `${o.name}/${n.name}`, slug: i.fm.phase || i.path.slice(7, -3), fm: i.fm, path: i.path });
-    }
-  }
-  return out;
-}
-// The scopes an item falls in, for the item an agent is about to start.
-function scopes(repo, fm, agent) {
-  return {
-    overall: { key: 'all', of: x => true },
-    repository: { key: repo, of: x => x.repository === repo },
-    branch: { key: `${repo} ${fm.branch || ''}`, of: x => x.repository === repo && (x.fm.branch || '') === (fm.branch || '') },
-    team: { key: fm.team || '', of: x => Boolean(fm.team) && x.fm.team === fm.team, skip: !fm.team },
-    // work held by an earlier session of the same card counts against the agent's limit (the continuation)
-    agent: { key: agent, of: x => heldBy(holderOf(x.fm), agent) },
-  };
-}
-// null when the agent may start the item, else why not (the limit, the count and the items holding it).
+
+// null when the agent may start the item, else why not: the shared levels, then the team's and the agent's.
 // extra: items a plan has already given out; self: the item being started where it is now (a move counts it once)
 export function wipRefusal(folder, repo, fm, agent, slug, extra = [], self = { repository: repo, slug }) {
-  const home = dirname(dirname(resolve(folder)));
-  const cfg = limits(home);
-  if (LEVELS.every(l => cfg[l] === undefined)) return null;
-  const now = [...progressItems(home), ...extra].filter(x => !(x.repository === self.repository && x.slug === self.slug)); // the item itself does not count
-  const s = scopes(repo, fm, agent);
-  for (const level of LEVELS) {
-    if (s[level].skip) continue;
-    if ((level === 'team' || level === 'agent') && String(fm.wip_override ?? '').trim()) continue; // the lead's recorded override
-    const key = level === 'team' ? fm.team : level === 'agent' ? agent : level === 'repository' ? repo : level === 'branch' ? `${repo}:${fm.branch || ''}` : undefined;
-    const max = limitOf(cfg, level, key);
-    if (max === null) continue;
-    const held = now.filter(s[level].of);
-    if (held.length >= max) {
-      return `the ${level} work-in-progress limit${key && level !== 'overall' ? ` of ${level === 'branch' ? `${repo} branch ${fm.branch}` : key}` : ''} is ${max} and ${held.length} item(s) are in progress (${held.slice(0, 8).map(x => `${x.repository}#${x.fm.seq ?? x.slug}`).join(', ')}${held.length > 8 ? ', ...' : ''}); finish one first${level === 'team' || level === 'agent' ? `, or the team lead lifts the limit for this item: ${teamStep('<item>', '<lead>', '--wip-override "<reason>"')}` : ''}`;
-    }
-  }
-  return null;
+  const lifted = String(fm.wip_override ?? '').trim() !== ''; // the lead's recorded override
+  const hint = `, or the team lead lifts the limit for this item: ${teamStep('<item>', '<lead>', '--wip-override "<reason>"')}`;
+  return sharedRefusal(folder, repo, fm, slug, extra, self, [
+    { level: 'team', key: fm.team, of: x => Boolean(fm.team) && x.fm.team === fm.team, skip: !fm.team || lifted, hint },
+    // work held by an earlier session of the same card counts against the agent's limit (the continuation)
+    { level: 'agent', key: agent, of: x => heldBy(holderOf(x.fm), agent), skip: lifted, hint },
+  ]);
 }
 // The read view (backlog query --wip): the counts against every limit and the stale in-progress items.
 export function wipView(home, { now = Date.now() } = {}) {

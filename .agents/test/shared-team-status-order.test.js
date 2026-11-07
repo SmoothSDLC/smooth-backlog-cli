@@ -55,6 +55,8 @@ const refine = (f, s, verdict = 'complete') => [['--refine-start', '--by', 'ann'
 test('a team step for a team with no entry in the configuration is refused with the exact text, nothing written', () => {
   const f = fixture();
   const s = item(f, 'ghost');
+  const configured = JSON.parse(readFileSync(join(f.home, 'teams.json'), 'utf8')); delete configured.ghost; // the fixture gave the team an empty entry to set it; the item keeps naming it
+  writeFileSync(join(f.home, 'teams.json'), JSON.stringify(configured));
   const before = readFileSync(join(f.folder, 'phases', `${s}.md`), 'utf8');
   no(f, ['update', s, '--refine-start', '--by', 'ann'], 'team ghost is not configured in the backlog configuration');
   assert.equal(readFileSync(join(f.folder, 'phases', `${s}.md`), 'utf8'), before);
@@ -131,6 +133,6 @@ test('--request-decision waits as awaiting decision and records where it came fr
   up(f, s, '--request-decision', 'What: keep the format?\nWhy: parser.\nOptions: A or B. Recommendation: A.', '--by', 'ann');
   assert.deepEqual([fm(f, s).status, fm(f, s).decision_from], ['awaiting decision', 'refining']);
   no(f, ['update', s, '--claim', 'bob'], 'claim needs ready or in progress');
-  up(f, s, '--decision', 'A');
+  up(f, s, '--decision', 'A', '--by', 'owner');
   assert.equal(fm(f, s).status, 'refining'); assert.ok(!('decision_from' in fm(f, s)));
 });

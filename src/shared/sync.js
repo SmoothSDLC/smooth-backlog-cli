@@ -13,11 +13,9 @@ import { parseItem as parse } from './frontmatter.js';
 import * as index from './index.js';
 import { actor, primarySlug, publicationGuard, staleError, staleViews } from './seen.js';
 import * as store from './store.js';
-import { heldBy } from '../team/team.js';
 import { asList } from './text.js';
 import { foreignCycle, foreignItem, isForeign } from './dependencies.js';
-import { wipRefusal } from '../team/wip.js';
-import { isFinished, isOpen } from './status.js';
+
 
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'; // what a branch the origin does not have yet is compared with: every file is new
 const OFFLINE = '⚠️  origin offline, local backlog updates may be behind and need manual remediation later';
@@ -384,19 +382,8 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
       }
       const item = items.find(i => i.path === path);
       if (!item) reject(`${names[n]}: claimed item ${path} disappeared`);
-      for (const d of asList(item.fm.depends_on)) {
-        const target = isForeign(d) ? foreignItem(folders[n], d) : find(d);
-        if (!target || !isFinished(isForeign(d) ? target.status : target.fm.status)) reject(`${names[n]}: ${slug(item)} dependencies not done: ${d}`);
-      }
-      const wip = claim.reclaim ? null : wipRefusal(folders[n], names[n], item.fm, claim.agent, slug(item)); // a concurrent start elsewhere counts
-      if (wip) reject(`${names[n]}: ${slug(item)}: ${wip}`);
-      if (!claim.skipActiveLimit) {
-        // items held by an earlier session of the same card count (the continuation keeps the
-        // one-active-item rule across the card's sessions)
-        const held = items.filter(i => i !== item && i.path.startsWith('phases/') && isOpen(i.fm.status ?? 'pending')
-          && heldBy(i.fm.claimed_by, claim.agent) && !['requested', 'in_review'].includes(i.fm.review_state) && !i.fm.wait_on);
-        if (held.length) reject(`${names[n]}: ${claim.agent} holds ${held.length} active item(s): ${held.map(slug).join(', ')}; pull new work only when every item you hold waits; --force overrides`);
-      }
+      const why = claim.verify?.({ item, items, folder: folders[n], name: names[n], find, slug });
+      if (why) reject(`${names[n]}: ${why}`);
     }
   }
 }
@@ -414,7 +401,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
   const list = [].concat(folders);
   const names = [];
   for (const folder of list) names.push(t.prefix + (await assertInside(backlogHome, folder)).split(sep).join('/'));
-  // a configuration file of the backlog root (teams.json) is committed with the folders but holds no items to check
+  // a configuration file of the backlog root is committed with the folders but holds no items to check
   const isFile = f => existsSync(f) && lstatSync(f).isFile();
   const dirs = list.filter(f => !isFile(f)); const dirNames = names.filter((_, i) => !isFile(list[i]));
   // the backlog repository: the item folders. The user's repository: the whole .backlog folder (its configuration is committed with the items), nothing else

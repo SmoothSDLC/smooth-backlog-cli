@@ -22,6 +22,7 @@ function fixture() {
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD];
+const plainRun = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, plain: true, env: { TEAM_LEAD: 'lead', BACKLOG_AGENT: 'ann' } });
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, notices: true, env: { TEAM_LEAD: 'lead', BACKLOG_AGENT: '', ...env } }); // every command here names its agent; a session agent (BACKLOG_AGENT) would have to be the same one
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 // a refined, ready item of team t1
@@ -49,17 +50,16 @@ test('team update claims for the agent; --team is required', () => {
   assert.equal(fm(f, s).claimed_by, 'ann');
 });
 
-test('the plain update still takes a team step and says where it moved; a status word on a team item is refused', () => {
+test('the plain update refuses a team step and names the flag; a status word on a team item is refused', () => {
   const f = fixture();
   const s = createdSlug(run(f, ['new', ...NEW('plain')]).stdout);
   assert.equal(run(f, ['update', s, '--set-team', 't1']).status, 0);
-  run(f, ['query', '--phase', s, '--agent', 'ann']);
-  const r = run(f, ['update', s, '--refine-start', '--by', 'ann']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stderr, /^moved: use backlog team update <item> --team <t> --agent <a> --refine-start$/m);
+  const r = plainRun(f, ['update', s, '--refine-start', '--by', 'ann']);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /unrecognized arguments: --refine-start/);
   const t = run(f, ['team', 'update', s, '--team', 't1', '--agent', 'ann', '--status', 'closed']);
   assert.notEqual(t.status, 0);
-  assert.equal(fm(f, s).status, 'refining');
+  assert.equal(fm(f, s).status, 'pending');
 });
 
 test('team update runs a step with the agent and no notice', () => {
@@ -149,13 +149,13 @@ test('team workflow registers a flow from JSON, shows it, and refuses a flow tha
 });
 
 // ---- backlog team query: the team views
-test('the team views run under team query; the plain query refuses them and points at it; a team without an entry is refused', () => {
+test('the team views run under team query; the plain query does not know them; a team without an entry is refused', () => {
   const f = fixture();
   ready(f);
   for (const view of ['--claimable', '--reviewable', '--blocked', '--decisions', '--plan', '--wip']) {
-    const plain = run(f, ['query', view]);
+    const plain = plainRun(f, ['query', view]);
     assert.equal(plain.status, 2, `${view}: ${plain.stdout}${plain.stderr}`);
-    assert.match(plain.stderr, new RegExp(`^❌ backlog: ${view} is a team view: use backlog team query --team <team> --agent <name> ${view}`));
+    assert.match(plain.stderr, new RegExp(`unrecognized arguments: ${view}`));
     assert.equal(plain.stdout, '');
   }
   const viewed = run(f, ['team', 'query', '--team', 't1', '--claimable', '--json']);
@@ -239,7 +239,7 @@ test('team pop: a team without an entry is refused, and a refused flag is refuse
 
 test('no instruction of the engine tells an agent to run a team step through the plain update', async () => {
   const { readFileSync, readdirSync } = await import('node:fs');
-  const { TEAM_BOOL, TEAM_VALUE } = await import('../../src/shared/update.js');
+  const { TEAM_BOOL, TEAM_VALUE } = await import('../../src/team/update.js');
   const dir = new URL('../../src/shared/', import.meta.url);
   const step = new RegExp(`backlog update [^\`'"\\n]*--(?:${[...TEAM_BOOL, ...TEAM_VALUE].filter(f => f !== 'by').join('|')})(?![\\w-])`);
   for (const name of readdirSync(dir).filter(n => n.endsWith('.js') && n !== 'aliases.js')) {

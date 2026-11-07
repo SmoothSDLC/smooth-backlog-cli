@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog, intoTeam } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
@@ -30,6 +30,7 @@ function fixture() {
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer', count: 1, anyone: true }] } })); // every item is a team's: one peer review of its work
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
 // update() reads the write set as the named agent first; stale-view refusals have their own regression suite.
@@ -38,7 +39,7 @@ const update = (f, args, env) => {
   const who = named ?? (args.includes('--request-review') ? 'ann' : 'smooth'); // a review is requested by the one working on the item (ann here); an un-named write acts as the environment agent (smooth here)
   if (who && args[0] && !args[0].startsWith('-')) {
     const slugs = args.includes('--close') ? readdirSync(join(f.folder, 'phases')).map(n => n.replace(/\.md$/, '')) : [args[0]];
-    for (const slug of slugs) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t, env: env || { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
+    for (const slug of slugs) cli(['query', '--phase', slug, '--agent', named === undefined && args.includes('--close') ? (item(f, slug).fm.claimed_by || who) : who], { cwd: f.cons, tmp: f.t, env: env || { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
   }
   return cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: env || { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
 };
@@ -61,7 +62,7 @@ function make(f, name, extra = []) {
   const args = newArgs(name, extra);
   const r = cli(['new', ...args], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  return createdSlug(r.stdout);
+  return intoTeam(createdSlug(r.stdout), { cwd: f.cons, tmp: f.t }, 't1', extra.includes('--no-review-refs') ? '' : 'ready'); // an item without review documents stays unrefined
 }
 
 test('claim, review and close lifecycle (port of test_claim_review_close_lifecycle)', () => {
@@ -76,9 +77,9 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
   assert.ok(!('work_class' in fm) && !('review_classes' in fm)); // no class field is written
   assert.deepEqual(fm.depends_on, [Number(seq)]);
   assert.equal(fm.claimed_by, '');
-  assert.equal(fm.review_state, 'none');
+  assert.equal(fm.status, 'ready');
 
-  assert.ok(refused(job, '--claim', 'ann').includes(`${first} (status pending`)); // dependency not done
+  assert.ok(refused(job, '--claim', 'ann').includes(`${first} (status ready`)); // dependency not done
   ok(first, '--claim', 'bob');
   ok(first, '--request-review', 'any', '--note', 'tests written'); // every complete item is reviewed
   ok(first, '--review', 'pass', '--by', 'ann', '--comments', 'fine per references/review/code.md');
@@ -160,10 +161,10 @@ test('an incomplete item is only refined: no claim, no note', () => {
   assert.equal(update(f, [slug, '--set-team', 't1'], T).status, 0);
   const out = update(f, [slug, '--claim', 'ann'], T);
   assert.equal(out.status, 1);
-  assert.match(out.stdout, new RegExp(`^❌ ${slug}: incomplete item, missing review_refs, estimate_min, definition_of_done: in a team nobody claims, reviews or works it \\(--claim refused\\); the team lead refines it only: backlog team update ${slug} --team t1 --agent lead --set-review-refs <review document>,\\.\\.`));
+  assert.match(out.stdout, new RegExp(`^❌ ${slug}: incomplete item, missing review_refs, estimate_min, definition_of_done: only the team lead \\(lead\\) refines it, not ann`)); // `team update` names its agent
   assert.equal(update(f, [slug, '--release', 'ann'], T).status, 1); // a release is not work: only its own refusal
-  assert.match(update(f, [slug, '--release', 'ann'], T).stdout, /claimed by nobody, not by ann/);
-  assert.equal(update(f, [slug, '--set-estimate', '5'], T).status, 0); // refining is allowed
+  assert.match(update(f, [slug, '--release', 'ann'], T).stdout, /only the team lead \(lead\) refines it, not ann/); // `team update` names its agent
+  assert.equal(update(f, [slug, '--set-estimate', '5', '--by', 'lead'], T).status, 0); // refining is allowed (the lead refines)
 });
 
 test('team.js: lists, chunk items, review documents', () => {
@@ -311,7 +312,7 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   held = snapshot(n);
   const stale = update(n, [C, '--start-review', '--by', 'rex'], { BACKLOG_AGENT: '', BACKLOG_SESSION: '', TEAM_LEAD: 'lead', BACKLOG_REVIEW_STALE_SECONDS: '-1' });
   assert.equal(stale.status, 1, stale.stdout + stale.stderr);
-  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by zed since \\S+; review another item \\(the review is stale: the team lead hands it on with backlog team update <item> --team <team> --agent lead --reassign-review <agent> --reason "<why>"\\)\\n$`));
+  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by zed since \\S+; review another item \\(the review is stale: the team lead hands it on with backlog team update <item> --team t1 --agent lead --reassign-review <agent> --reason "<why>"\\)\\n$`));
   assert.deepEqual(snapshot(n), held); // refused: nothing changed
   // the class options are gone: unrecognized, exit 2
   const gone = update(n, [C, '--claim', 'ann', '--set-work-class', 'docs']);
@@ -328,7 +329,7 @@ test('075: the successful lifecycle steps print exactly what they record', t => 
   step([job, '--request-review', 'any', '--note', 'ready'], `✅ ${job} updated (review_requested=Review requested by ann at TS (reviewer: any))\n${STOP('ann')}`);
   step([job, '--start-review', '--by', 'amy'], `✅ ${job} updated (review_started=Review started by amy at TS)\n`);
   step([job, '--review', 'pass', '--by', 'amy', '--comments', 'ok per references/review/code.md'],
-    `✅ ${job} updated (reviewed=Review by amy: COMPLETE (TS))\n   ➡️  CLOSE NOW: ann closes it (backlog team update ${job} --team <team> --agent ann --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (backlog team update ${job} --team <team> --agent <lead> --close --summary ...)\n`);
+    `✅ ${job} updated (reviewed=Review by amy: COMPLETE (TS))\n   ➡️  CLOSE NOW: ann closes it (backlog team update ${job} --team t1 --agent ann --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (backlog team update ${job} --team t1 --agent <lead> --close --summary ...)\n`);
   step([job, '--close', '--summary', 'delivered with tests'],
     `✅ ${job} updated (summary=delivered with tests, closed=Closed by ann at TS)\n   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).\n      backlog now empty — no actionable phase remains.\n      the team lead re-evaluates the order (backlog update --replan, --priority); not you\n${STOP('ann')}`);
   const w = make(f, 'lifecycle waiting job', []);

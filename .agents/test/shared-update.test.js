@@ -58,12 +58,6 @@ function seed() {
 const run = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });
 const rankOf = (f, slug) => index.rows(f.folder).rows.find(r => r.slug === slug).priority; // the rank is in the index, not in the item
 const fm = (f, name) => parse(readFileSync(join(f.folder, 'phases', name), 'utf8'));
-// An item outside a team closes with --status done and no review; these tests complete the seeded items first (refs,
-// estimate, definition of done) so that they close as a refined item does.
-const bothStages = (f, item) => {
-  const r = run(f, [item, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', '## Definition of done\n- [ ] it holds']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-};
 
 test('the class options are gone: --set-work-class and --set-review-classes are unrecognized, nothing is written', () => {
   const f = seed();
@@ -151,7 +145,6 @@ test('order of work: pull first, then change, write, log the event, commit and p
 
 test('a refusal and a dry run make no commit', () => {
   const f = seed();
-  bothStages(f, '2');
   const head = git(f.home, 'rev-parse', 'HEAD');
   assert.equal(run(f, ['2', '--branch', 'x']).status, 1);
   assert.equal(run(f, ['2', '--status', 'done', '--dry-run']).status, 0);
@@ -462,7 +455,6 @@ test('--priority moves the item to that rank and re-densifies, with a planning_e
 
 test('--status done completes, stamps completed, re-prioritizes and prints the planning-event lines', () => {
   const f = seed();
-  for (const item of ['2', '1', '3', '4', '6']) bothStages(f, item); // item 088: the done transitions below need both stages
   const r = step(f, ['2', '--status', 'done']);
   assert.match(r.stdout, /PLANNING EVENT — completing work RE-PRIORITIZES the backlog/);
   assert.match(fm(f, '002-beta.md').fm.completed, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
@@ -481,10 +473,8 @@ test('--status takes any word on an item outside a team: a free word keeps it in
   assert.ok(queue().includes('001-alpha'), 'a free-text word is open');
   assert.equal(step(f, ['1', '--status', 'in-progress']).status, 0); // typed with a hyphen, stored as the word
   assert.equal(fm(f, '001-alpha.md').fm.status, 'in progress');
-  bothStages(f, '2');
   assert.equal(step(f, ['2', '--status', 'closed']).status, 0);
   assert.ok(!queue().includes('002-beta'));
-  bothStages(f, '1');
   assert.equal(step(f, ['1', '--status', 'done']).status, 0); // done is closed
   assert.equal(fm(f, '001-alpha.md').fm.status, 'closed');
   assert.ok(!queue().includes('001-alpha'));
@@ -533,10 +523,9 @@ test('a replan leaves no event; the order itself is the record', () => {
 
 test('--dry-run prints the plan and changes and commits nothing', () => {
   const f = seed();
-  bothStages(f, '2');
   const before = snapshot(f);
   const r = step(f, ['2', '--status', 'done', '--dry-run']);
-  assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'closed', 'handoffs': 'none'\}; COMPLETE -> re-prioritize backlog\n$/);
+  assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'closed'\}; COMPLETE -> re-prioritize backlog\n$/);
   step(f, ['3', '--priority', '1', '--name', "It's \"x\"", '--seq', '9', '--dry-run']);
   step(f, ['3', '--append', 'x', '--dry-run']);
   step(f, ['--replan', '3,1', '--dry-run']);
@@ -564,7 +553,8 @@ test('invalid command lines exit 2 or 1', () => {
 
 test('--note on an item that waits clears the wait with a WAIT DONE line', () => {
   const f = seed();
-  step(f, ['4', '--note', 'workflow finished']);
+  const noted = cli(['update', '4', '--note', 'workflow finished'], { cwd: f.cons, tmp: f.t, team: true }); // the wait is a team's: the note is a step of `backlog team update`
+  assert.equal(noted.status, 0, noted.stdout + noted.stderr);
   assert.equal(fm(f, '004-delta.md').fm.wait_on, '');
   assert.match(fm(f, '004-delta.md').body, /\n\nWAIT DONE \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \(next step on the item\)\n$/);
 });

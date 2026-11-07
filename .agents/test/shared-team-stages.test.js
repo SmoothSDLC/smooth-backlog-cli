@@ -91,7 +91,6 @@ test('each step refuses out of order, and one step at a time', () => {
   const w = work(f);
   const c = make(f, 'child', '--split-from', w);
   const plain = make(f, 'no team');
-  no(f, ['update', c, '--refine-start'], '--refine-start needs --by <agent>');
   no(f, ['update', plain, '--refine-start', '--by', 'ann'], 'only an item of a team in stage refining is refined (team none, stage none)');
   // the stage-less work item of a team is unrefined (stage refining); a member does not refine the lead's claimed work item
   no(f, ['update', w, '--refine-start', '--by', 'ann'], 'claimed by lead: the work item itself is refined and split by the team lead, not refined here');
@@ -125,7 +124,6 @@ test('the review-hitl stage: an owner decision holds the item and its dependents
   const dep = make(f, 'waits for it', '--depends-on', c.split('-')[0]);
   up(f, dep, '--set-team', 't1'); refined(f, dep); // a refined item of t1: claimable but for its dependency
   const Q = 'What: keep the old format?\nWhy: the parser needs it.\n## Options\nA keep, B drop.\n## Review by users at 2026-10-01T10:00:00Z\nDECISION 2026-10-01: an earlier answer, quoted\nRecommendation: A.'; // the whole question, its own headings included
-  no(f, ['update', c, '--request-decision', Q], '--request-decision needs --by <agent>');
   no(f, ['update', c, '--request-decision', ' ', '--by', 'ann'], '--request-decision needs the question');
   no(f, ['update', make(f, 'plain'), '--request-decision', Q, '--by', 'ann'], 'only a team item before ready waits for an owner decision (team none, stage none)');
   no(f, ['update', c, '--decision', 'A'], 'no owner decision is pending (stage refining)');
@@ -172,7 +170,7 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
   for (const slug of Object.values(gaps)) up(f, slug, '--set-team', 't1'); // team rules apply to the items of a team
   for (const [field, slug] of Object.entries(gaps)) { // a member never claims an item missing any one field
     assert.match(no(f, ['update', slug, '--claim', 'bob'], 'incomplete item, missing ').stdout, new RegExp(`missing [^:]*\\b${field}\\b`));
-    no(f, ['update', slug, '--note', 'working on it', '--append', 'x'], '--note', team);
+    no(f, ['update', slug, '--note', 'working on it', '--append', 'x'], 'only the team lead (lead) refines it', team); // `team update` always names its agent
   }
   const cl = JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--agent', 'bob', '--json']).stdout).map(x => x.slug);
   assert.ok(!Object.values(gaps).some(s => cl.includes(s)), cl.join(' '));
@@ -184,11 +182,11 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
   assert.ok(p.action === 'refine' && Object.values(gaps).includes(p.item) && p.missing.length && p.instruction.includes('never action it'), JSON.stringify(p));
   assert.equal(pop(f, 'bob', { ...tn, TEAM_LEAD: 'bob' }).action, 'refine'); // TEAM_LEAD names the lead
   no(f, ['update', gaps.estimate_min, '--claim', 'ann'], 'missing estimate_min', { ...team, TEAM_LEAD: 'ann' }); // the lead may not claim it either
-  ok(f, ['update', gaps.estimate_min, '--append', 'ESTIMATE: 5 min, complexity low. Gap: created without an estimate'], team); // an older item's ESTIMATE line still counts
-  ok(f, ['update', gaps.review_refs, '--set-review-refs', 'references/review/code.md', '--set-estimate', '9', '--set-layer', '2'], team);
-  ok(f, ['update', gaps.depends_on, '--set-depends-on', 'none'], team);
-  ok(f, ['update', gaps.definition_of_done, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', DOD], team); // a definition of done replaces the placeholder
-  for (const s of Object.values(gaps)) assert.deepEqual(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).missing, [], s); // complete now
+  ok(f, ['update', gaps.estimate_min, '--append', 'ESTIMATE: 5 min, complexity low. Gap: created without an estimate', '--by', 'lead'], { ...team, TEAM_LEAD: 'lead' }); // an older item's ESTIMATE line still counts
+  ok(f, ['update', gaps.review_refs, '--set-review-refs', 'references/review/code.md', '--set-estimate', '9', '--set-layer', '2', '--by', 'lead'], { ...team, TEAM_LEAD: 'lead' });
+  ok(f, ['update', gaps.depends_on, '--set-depends-on', 'none', '--by', 'lead'], { ...team, TEAM_LEAD: 'lead' });
+  ok(f, ['update', gaps.definition_of_done, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', DOD, '--by', 'lead'], { ...team, TEAM_LEAD: 'lead' }); // a definition of done replaces the placeholder
+  for (const s of Object.values(gaps)) assert.deepEqual(JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--agent', 'lead', '--phase', s, '--json']).stdout).missing, [], s); // complete now
   ok(f, ['update', gaps.estimate_min, '--claim', 'lead'], { ...tn, BACKLOG_AGENT: 'lead' });
 });
 

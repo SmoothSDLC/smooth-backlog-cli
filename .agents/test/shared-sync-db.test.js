@@ -259,7 +259,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
   assert.match(stale.stderr, /item 002-alpha was changed by other-writer .* after you last read it/);
   assert.equal(gitIn(bare, 'rev-parse', 'main'), head, 'the stale write published nothing');
   assert.match(gitIn(bare, 'show', `main:${path}`), /summary: "remote summary"/);
-  assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+  assert.equal(gitIn(b.home, 'status', '--porcelain', '--untracked-files=no'), '');
   assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
 });
 
@@ -293,11 +293,12 @@ test('review P2: update records its published identity when an added item is ren
 });
 
 // Writer b stops before its first push; writer a runs `aArgs` and pushes first; then b's command (bArgs) rebases onto it.
-async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv, afterSeed, seedEnv } = {}) {
+async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv, afterSeed, seedEnv, readAs } = {}) { // readAs: the agent whose view each writer holds before the race
   const [a, b, { bare }] = writers(t);
-  for (const args of seedArgs) { const r = cli(args, { cwd: a.cons, tmp: a.tmp, env: seedEnv }); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); }
+  for (const args of seedArgs) { if (typeof args === 'function') { args(a, b); continue; } const r = cli(args, { cwd: a.cons, tmp: a.tmp, env: seedEnv }); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); }
   afterSeed?.(a);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  if (readAs) assert.equal(cli(['query', '--all', '--agent', readAs], { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['query', '--all', ...(readAs ? ['--agent', readAs] : [])], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
   const second = cliAsync(bArgs, { cwd: b.cons, tmp: b.tmp, env: bEnv });
   await hold.held();
@@ -616,17 +617,6 @@ test('publication graph: a claim is refused when its completed dependency reopen
   rejectedPublication(t, b, bare, result, /dependencies not done/);
 });
 
-for (const force of [false, true]) test(`publication graph: concurrent claims by one agent ${force ? 'respect --force' : 'cannot bypass the active-work limit'}`, async t => {
-  const { b, bare, result } = await race(t, [COMPLETE('alpha'), COMPLETE('beta')],
-    ['update', '1', '--claim', 'amy'], ['update', '2', '--claim', 'amy', ...(force ? ['--force'] : [])]);
-  if (!force) rejectedPublication(t, b, bare, result, /amy holds.*active item/);
-  else {
-    assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.deepEqual(store.load(b.folder).map(i => i.fm.claimed_by), ['amy', 'amy']);
-    assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
-  }
-});
-
 test('publication identity: an upstream archived file cannot duplicate the slug of a written item', async t => {
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('alpha'), { cwd: a.cons, tmp: a.tmp }).status, 0);
@@ -665,6 +655,22 @@ test('publication graph: an outgoing slug dependency is rechecked after an upstr
 });
 
 // File-only publishers are supported peers too; validation must not depend on a conflict.
+// A team's items: the active-work limit is a team rule, so these claims are `backlog team update` steps of team t1.
+const teamEntry = (a, b) => { for (const h of [a.home, b.home]) writeFileSync(join(h, 'teams.json'), '{"t1":{}}'); };
+const readyInT1 = n => ['team', 'update', n, '--team', 't1', '--agent', 'lead', '--set-team', 't1', '--status', 'ready'];
+const AMY = { BACKLOG_AGENT: 'amy' }; // a team command acts as the session's agent
+for (const force of [false, true]) test(`publication graph: concurrent team claims by one agent ${force ? 'respect --force' : 'cannot bypass the active-work limit'}`, async t => {
+  const { b, bare, result } = await race(t, [teamEntry, COMPLETE('alpha'), COMPLETE('beta'), readyInT1('1'), readyInT1('2')],
+    ['team', 'update', '1', '--team', 't1', '--claim', 'amy'], ['team', 'update', '2', '--team', 't1', '--claim', 'amy', ...(force ? ['--force'] : [])], { aEnv: AMY, bEnv: AMY, readAs: 'amy' });
+  rmSync(join(b.home, 'teams.json')); // the fixture's team entry is no part of the published state
+  if (!force) rejectedPublication(t, b, bare, result, /amy holds.*active item/);
+  else {
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.deepEqual(store.load(b.folder).map(i => i.fm.claimed_by), ['amy', 'amy']);
+    assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+  }
+});
+
 async function fileRace(t, seed, args, publish, env) {
   const [a, b, { bare }] = writers(t);
   for (const cmd of seed) assert.equal(cli(cmd, { cwd: a.cons, tmp: a.tmp }).status, 0);
@@ -700,7 +706,7 @@ for (const [name, args, change] of [
   ['required fields', ['update', '1', '--claim', 'amy'], fm => { fm.estimate_min = 0; }],
   ['review state', ['update', '1', '--close', '--by', 'amy', '--summary', 'delivered'], fm => { fm.status = 'in progress'; }],
   ['claim ownership', ['update', '1', '--claim', 'amy'], fm => { fm.claimed_by = 'bob'; }],
-  ['team scope of a split parent', [...COMPLETE('child'), '--split-from', '1'], fm => { fm.branch = 'other'; }],
+  ['team scope of a split parent', ['team-new', ...COMPLETE('child').slice(1), '--split-from', '1'], fm => { fm.branch = 'other'; }],
 ]) test(`publication read set: concurrent ${name} changes cannot pass earlier validation`, async t => {
   const { b, bare, before, result } = await fileRace(t,
     [COMPLETE('alpha'), ['update', '1', '--request-review', 'any', '--note', 'initial evidence'],

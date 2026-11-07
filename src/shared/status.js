@@ -5,14 +5,12 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { seam } from './seam.js';
 import { asList } from './text.js';
 
 export const SHIPPED = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'templates', 'workflows');
 // The definition the CLI ships: its words are the status vocabulary of every item.
 export const TEAM = JSON.parse(readFileSync(join(SHIPPED, 'team.json'), 'utf8'));
-// What `backlog team` installs when it loads: the team entry of an item (teams.json) and the membership test of a review rule.
-// Without it (every other command) an item is read with the solo rule and no team has members.
-export const seam = { entry: () => SOLO, isMember: () => false };
 
 export const STATUSES = TEAM.statuses;
 export const SIDE = TEAM.side_statuses;
@@ -57,7 +55,7 @@ export const need = rule => (Number(rule.count) > 0 ? Number(rule.count) : 1);
 
 // May this reviewer pass the stage? Anyone for a solo item; the rule's team when it names one; else the entry's members (and lead) for the
 // peer stage and its external reviewers for the external one.
-const eligible = (rule, entry, by) => (rule.anyone ? Boolean(by) : rule.team ? seam.isMember(rule.team, by)
+const eligible = (rule, entry, by) => (rule.anyone ? Boolean(by) : rule.team ? (seam.isMember ?? (() => false))(rule.team, by)
   : rule.stage === 'peer' ? (asList(entry?.members).length ? [...asList(entry.members), entry.lead].includes(by) : Boolean(by)) // a team that lists no members lets anyone pass
     : asList(entry?.external_reviewers).includes(by));
 
@@ -138,4 +136,4 @@ function derive(fm) {
 export const dropsLegacy = fm => WORDS.has(fm.status);
 
 // An item read from its file as the word it carries, with the entry of its team (the solo rule outside `backlog team`).
-export const lifted = doc => lift(doc, seam.entry(doc.fm));
+export const lifted = doc => lift(doc, seam.entry ? seam.entry(doc.fm) : SOLO);

@@ -8,17 +8,16 @@
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { die, pyStr, refuse, say, teamRefusal, usage, valueLike, withBacklog } from './archive.js';
+import { die, pyStr, refuse, say, usage, valueLike, withBacklog } from './archive.js';
 import { parseItem as parseDoc } from './frontmatter.js';
 import { find } from './index.js';
 import { isOpen } from './status.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
-import { teamScope } from '../team/team.js';
 import { asList } from './text.js';
 import { isForeign } from './dependencies.js';
-import { inProgress, wipRefusal } from '../team/wip.js';
+import { inProgress, wipRefusal } from './wip-limits.js';
 
 const VALUE = ['to-branch', 'all-open-of-branch', 'note'];
 
@@ -58,14 +57,6 @@ async function originBranches() {
   return new Set(r.stdout.split('\n').filter(l => l.includes('refs/heads/')).map(l => l.split('refs/heads/')[1]));
 }
 
-// A bound team session (TEAM_REPOSITORY / TEAM_BRANCH) moves nothing into another team's repository or branch: teamRefusal checks only the source.
-function teamTarget({ branch, repository }) {
-  const t = teamScope();
-  if (branch !== undefined && t.branch && branch !== t.branch) return `this session is bound to branch '${t.branch}'; it cannot move an item to branch '${branch}'`;
-  if (repository !== undefined && t.repo && repository !== t.repo) return `this session is bound to ${t.repo}; it cannot move an item to ${repository}`;
-  return null;
-}
-
 // The refusal for a target branch the origin does not have (or null).
 async function branchRefusal(branch, repo) {
   const branches = await originBranches();
@@ -81,7 +72,7 @@ async function toBranch(folder, r, branch, note, { repo, guard, wrote }) {
   seen.check(folder, repo, seen.actor(), r.slug, r.path);
   guard.push({ path: `${repo}/${r.path}`, slug: r.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   const old = Object.hasOwn(fm, 'branch') ? fm.branch ?? 'None' : '';
-  if (inProgress(fm)) { const full = wipRefusal(folder, repo, { ...fm, branch }, fm.claimed_by || fm.refiner || '', r.slug); if (full) throw new BacklogError('INVALID_INPUT', `${r.slug}: in progress, and on branch ${branch}: ${full}`, 1); }
+  if (inProgress(fm)) { const full = wipRefusal(folder, repo, { ...fm, branch }, r.slug); if (full) throw new BacklogError('INVALID_INPUT', `${r.slug}: in progress, and on branch ${branch}: ${full}`, 1); }
   fm.branch = branch;
   store.stamp(fm);
   store.write({ path, fm, body }, folder);
@@ -94,11 +85,9 @@ async function move(a, rows, ctx) {
   if (a['all-open-of-branch']) { // move.py:76-86
     const from = a['all-open-of-branch'];
     if (!a['to-branch']) throw usage('--all-open-of-branch needs --to-branch');
-    const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
+    const refusal = await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
     const open = rows.filter(r => r.branch === from && r.repository === repo && isOpen(r.status));
-    const outside = open.map(teamRefusal).find(Boolean); // before the first file is written
-    if (outside) return refuse(outside);
     for (const r of open) await toBranch(folder, r, a['to-branch'], a.note || `all open items of ${from}`, ctx);
     store.reflow(folder); // the items leave the order of their branch and join the end of the open items of the other
     say(`✅ moved ${open.length} open item(s) of '${from}' to '${a['to-branch']}'`);
@@ -107,11 +96,9 @@ async function move(a, rows, ctx) {
   if (!a.phase) throw usage('name the item, or use --all-open-of-branch');
   const r = find(rows, a.phase);
   if (!r) return refuse(`no item ${pyStr(a.phase)} in the backlog of ${repo}`);
-  const outside = teamRefusal(r);
-  if (outside) return refuse(outside);
   if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (archived items are read-only)`);
   if (a['to-branch']) { // move.py:93-98
-    const refusal = teamTarget({ branch: a['to-branch'] }) || await branchRefusal(a['to-branch'], repo);
+    const refusal = await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);
     await toBranch(folder, r, a['to-branch'], a.note, ctx);
     store.reflow(folder);
@@ -122,8 +109,6 @@ async function move(a, rows, ctx) {
   // move.py:99-109
   const target = a['to-repository'] || r.repository;
   if (!target || target === repo) return refuse(`${r.slug} already belongs to ${repo}; name the target repository`);
-  const bound = teamTarget({ repository: target });
-  if (bound) return refuse(bound);
   let tdir;
   try { tdir = store.folder(home, target); } catch (e) { throw usage(e.message); } // owner/name only: the target is the user's text or a file's data
   a.folders = [[folder, repo], [tdir, target]]; // a stale-view refusal names what the agent read in both
@@ -144,7 +129,7 @@ async function move(a, rows, ctx) {
   // items of other repositories that name it as owner/name#seq would point at nothing too
   const elsewhere = foreignDependents(home, repo, r.seq);
   if (elsewhere.length) return refuse(`${elsewhere.join(', ')} of other repositories depend${elsewhere.length > 1 ? '' : 's'} on ${repo}#${r.seq} (${r.slug}), which would leave them pointing at nothing; clear them first in their repositories: update <dependent> --set-depends-on ...`);
-  if (inProgress(fm)) { const full = wipRefusal(tdir, target, { ...fm, repository: target }, fm.claimed_by || fm.refiner || '', r.slug, [], { repository: repo, slug: r.slug }); if (full) return refuse(`${r.slug}: in progress, and in ${target}: ${full}`); }
+  if (inProgress(fm)) { const full = wipRefusal(tdir, target, { ...fm, repository: target }, r.slug, [], { repository: repo, slug: r.slug }); if (full) return refuse(`${r.slug}: in progress, and in ${target}: ${full}`); }
   const tail = `-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;
   const seq = store.nextSeqFor(tdir, `${tail}.md`); // never a number whose file name the target already holds
   const slug = `${String(seq).padStart(3, '0')}${tail}`;

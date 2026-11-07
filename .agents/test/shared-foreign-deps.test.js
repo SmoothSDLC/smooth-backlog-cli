@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog, teamMembers } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, createdSlug, intoTeam, sharedBacklog, teamMembers } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -26,23 +26,25 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
     return r;
   };
   const NEW = (name, deps) => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', deps, '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', '## Definition of done\n\n- [ ] it holds'];
-  run(there, ['new', '--name', 'library change', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds']); // no review_refs: closed with --status done
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer', count: 1, anyone: true }] } })); // a team with one peer review
+  intoTeam(createdSlug(run(there, NEW('library change', 'none')).stdout), { cwd: there, tmp: t }, 't1'); // a team's item, ready: a review of it is a team step
   assert.match(run(here, NEW('needs a lost one', 'acme/nowhere#1'), 1).stdout, /no item 'acme\/nowhere#1' in the backlog repository/);
   assert.match(run(here, NEW('needs a missing item', 'acme/lib#9'), 1).stdout, /no item 'acme\/lib#9' in the backlog repository/);
   run(here, NEW('app change', 'acme/lib#1'));
   run(here, ['update', '1', '--set-team', 't1', '--status', 'ready']); // team pop and the team views reach only the items of t1
-  assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status pending\)/);
+  assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status ready\)/);
+  run(there, ['query', '--phase', '1']); // the move acts on the item as last read
   const moved = run(there, ['move', '1', '--to-repository', 'acme/third'], 1); // a move would leave it dangling
   assert.equal(moved.stdout, '❌ acme/app#1 of other repositories depends on acme/lib#1 (001-library-change), which would leave them pointing at nothing; clear them first in their repositories: update <dependent> --set-depends-on ...\n');
   assert.equal(moved.stderr, '');
   assert.equal(JSON.parse(run(here, ['next', '--json']).stdout).first[0].item, 'acme/lib#1'); // next names it too
-  assert.match(run(here, ['next']).stdout, /⛓ waits on acme\/lib#1 \(001-library-change, status pending\): do that first in repository acme\/lib/);
+  assert.match(run(here, ['next']).stdout, /⛓ waits on acme\/lib#1 \(001-library-change, status ready\): do that first in repository acme\/lib/);
   run(here, ['query', '--phase', '1', '--agent', 'ada']);
   assert.match(run(here, ['update', '1', '--claim', 'ada'], 1).stdout, /dependencies not done/);
   const p = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json'], 3).stdout);
   assert.equal(p.action, 'idle');
-  assert.deepEqual(p.first, [{ item: 'acme/lib#1', repository: 'acme/lib', seq: 1, slug: '001-library-change', status: 'pending' }]);
-  assert.match(p.instruction, /the work here waits on acme\/lib#1 \(001-library-change, status pending\): do that first in repository acme\/lib/);
+  assert.deepEqual(p.first, [{ item: 'acme/lib#1', repository: 'acme/lib', seq: 1, slug: '001-library-change', status: 'ready' }]);
+  assert.match(p.instruction, /the work here waits on acme\/lib#1 \(001-library-change, status ready\): do that first in repository acme\/lib/);
   assert.equal(p.blocked[0].waiting_on[0].repository, 'acme/lib');
   const lead = run(here, ['team', 'pop', '--team', 't1', '--agent', 'lead'], 3).stdout;
   assert.match(lead, /do that first in repository acme\/lib: end the session here; the team is started in that repository/);
@@ -57,10 +59,11 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   run(there, ['query', '--phase', '1', '--agent', 'tester']); // the review changed the item after tester's last read
   // item 059: the close needs the hand-off for the dependent of the other repository, accepted by the lead acting as itself
   run(there, ['update', '1', '--handoff', 'acme/app#1', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'tester']);
+  cli(['query', '--phase', '1', '--agent', 'lead'], { cwd: there, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead' } }); // the lead reads the record it accepts
   const accepted = cli(['update', '1', '--accept-handoff', 'acme/app#1', '--checks', 'verified', '--by', 'lead'], { cwd: there, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead' } });
   assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
   run(there, ['query', '--phase', '1', '--agent', 'tester']);
-  run(there, ['update', '1', '--status', 'done', '--by', 'tester']);
+  run(there, ['update', '1', '--close', '--summary', 'delivered', '--by', 'tester']);
   assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status closed\)/);
   const offered = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json']).stdout); // done: next-work offers the item
   assert.deepEqual([offered.action, offered.item, offered.first], ['claim', '001-app-change', undefined]);

@@ -48,7 +48,6 @@ test('034: each of the five levels refuses the claim past its limit; the lead\'s
     ['overall', { overall: 1 }, 'bob', o, 'other'],
     ['repository', { repository: { default: 9, 'acme/demo': 1 } }, 'bob', b, 'demo'],
     ['branch', { branch: 1 }, 'bob', b, 'demo'],
-    ['agent', { agent: 1 }, 'amy', b, 'demo'],
   ]) {
     f.limits(l);
     const r = f.run(repo, ['update', item, '--claim', who, ...(level === 'agent' ? ['--force'] : [])], 1);
@@ -58,6 +57,9 @@ test('034: each of the five levels refuses the claim past its limit; the lead\'s
   for (const s of [b, c]) { f.run('demo', ['update', s, '--set-team', 't1']); f.refine('demo', s); }
   f.run('demo', ['update', b, '--claim', 'bob']);
   assert.match(f.run('demo', ['update', c, '--claim', 'cat'], 1).stdout, /the team work-in-progress limit of t1 is 1 and 1 item\(s\) are in progress/);
+  f.limits({ agent: 1 }); // the agent level is a team's: amy holds one item and claims a second of the team
+  assert.match(f.run('demo', ['update', c, '--claim', 'amy', '--force'], 1).stdout, /the agent work-in-progress limit.* is 1 and 1 item\(s\) are in progress/);
+  f.limits({ team: 1 });
   assert.match(f.run('demo', ['update', c, '--wip-override', 'urgent fix', '--by', 'bob'], 1).stdout, /only the team lead \(lead\) lifts/);
   // a member cannot record the lead's override as the lead
   assert.match(f.run('demo', ['update', c, '--wip-override', 'mine', '--by', 'lead'], 1, { TEAM_NAME: 't1', BACKLOG_AGENT: 'bob' }).stdout, /you are bob \(BACKLOG_AGENT\): a member acts only as itself, not as lead/);

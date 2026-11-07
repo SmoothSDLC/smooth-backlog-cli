@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseItem as parse, storedFm } from '../../src/shared/frontmatter.js';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -20,6 +20,7 @@ function fixture() {
   writeFileSync(join(home, 'teams.json'), JSON.stringify({
     t1: { lead: 'lead', members: ['ann', 'bob', 'zed'], review: [{ team: 't1', count: 1 }, { team: 'reviewers', count: 1 }], refinement_review: [{ team: 'reviewers', count: 1 }] },
     reviewers: { lead: 'rex', members: ['rex', 'ria'] },
+    t3: { lead: 'lead', members: ['ann', 'bob', 'zed'], review: [{ stage: 'peer', count: 1, anyone: true }] }, // one peer review, as an item of no team had
     t2: { lead: 'lead2', members: ['zed', 'nobody'], review: [] }, // another team, for the tests that ask as one
   }));
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
@@ -45,6 +46,8 @@ const work = (f, agent, env, ...args) => { const r = run(f, ['team', 'pop', '--t
 const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => ok(f, ['update', slug, ...a]));
 // an item of team t1, refined: the team pop reaches only the items of its team
 const inT1 = (f, slug) => { ok(f, ['update', slug, '--set-team', 't1']); refined(f, slug); return slug; };
+// an item of team t1, ready to be claimed
+const inTeam = (f, slug, status = 'ready') => intoTeam(slug, { cwd: f.cons, tmp: f.t, env: LEAD }, 't3', status);
 const TM = agent => ({ TEAM_NAME: 't1', BACKLOG_AGENT: agent }); // a team session of the agent
 const STOP = /🛑 (\S+): END THE SESSION NOW\. Reply with text only and make no further tool call/;
 
@@ -91,7 +94,7 @@ test('backlog work: the next action marked as the agent\'s (claim, refinement st
 
 test('the hand-off to review, a changes verdict and a close end the agent\'s session; not for the lead, nor with another active item', () => {
   const f = fixture();
-  const [a, b] = ['first job', 'second job'].map(n => make(f, n));
+  const [a, b] = ['first job', 'second job'].map(n => inTeam(f, make(f, n)));
   ok(f, ['update', a, '--claim', 'bob']);
   let r = ok(f, ['update', a, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']);
   assert.equal(STOP.exec(r.stdout)?.[1], 'bob');
@@ -107,11 +110,12 @@ test('the hand-off to review, a changes verdict and a close end the agent\'s ses
   assert.match(r.stdout.trimEnd().split('\n').pop(), STOP); // the last line: nothing after it asks for more work
   assert.ok(r.stdout.includes('the team lead re-evaluates the order') && !r.stdout.includes('RE-EVALUATE the order now'), r.stdout);
   ok(f, ['update', b, '--claim', 'bob']);
-  const c = make(f, 'third job');
+  const c = inTeam(f, make(f, 'third job'));
   ok(f, ['update', c, '--claim', 'bob', '--force']); // bob holds two active items
   r = ok(f, ['update', b, '--request-review', 'any', '--note', 'commit ghi', '--by', 'bob']);
   assert.equal(STOP.exec(r.stdout)?.[1], 'bob'); // every hand-off ends the session (c being active only spares the lock)
-  const d = make(f, "the lead's item");
+  const d = createdSlug(cli(['new', '--name', "the lead's item", '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--complexity', 'low', '--body', `Body.\n\n${DOD}`], { cwd: f.cons, tmp: f.t, plain: true, env: { BACKLOG_AGENT: 'lead' } }).stdout); // an item of no team
+  ok(f, ['update', d, '--set-review-refs', 'references/review/code.md', '--by', 'lead']); // a review is asked for a complete item
   ok(f, ['update', d, '--claim', 'lead']);
   r = ok(f, ['update', d, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
   assert.doesNotMatch(r.stdout, STOP); // the lead is no member
@@ -124,7 +128,7 @@ test('in a team session a member acts only as itself; only the lead reassigns or
   no(f, ['update', job, '--claim', 'ann'], 'you are bob (BACKLOG_AGENT): a member acts only as itself, not as ann', BOB);
   ok(f, ['update', job, '--claim', 'ann'], ANN);
   no(f, ['update', job, '--release', 'ann'], 'not as ann', BOB);
-  no(f, ['update', job, '--close', '--summary', 'x'], 'not as ann', BOB); // closing ann's item without --by is acting as ann
+  no(f, ['update', job, '--close', '--summary', 'x'], 'only the claimer (ann) closes it', BOB); // closing ann's item: `team update` acts as the session's agent, bob
   no(f, ['update', job, '--reassign', 'bob', '--by', 'bob', '--reason', 'mine now'], '--reassign --by <the team lead>', BOB);
   no(f, ['update', job, '--reassign', 'bob', '--by', 'lead'], '--reassign needs --reason', LEADS);
   let r = ok(f, ['update', job, '--reassign', 'bob', '--by', 'lead', '--reason', 'ann is on another team'], LEADS);
@@ -180,7 +184,7 @@ test('backlog work on chunk work of another repository prints that item too', ()
 // the review, close and lead rules
 test('only the claimer closes its item, else the team lead; the close-now line names the claimer, else the lead, never the reviewer', () => {
   const f = fixture();
-  const job = make(f, 'close job');
+  const job = inTeam(f, make(f, 'close job'));
   ok(f, ['update', job, '--claim', 'bob']);
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']);
   const r = ok(f, ['update', job, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/code.md']);
@@ -337,7 +341,6 @@ test('an unclaimed team item names who asks for its review, who then never revie
   const x = make(f, 'unclaimed team item');
   ok(f, ['update', x, '--set-team', 't1']);
   refined(f, x);
-  no(f, ['update', x, '--request-review', 'any', '--note', 'y'], 'needs --by <agent>, the one who asks');
   ok(f, ['update', x, '--request-review', 'any', '--note', 'y', '--by', 'ann']);
   assert.equal(fm(f, x).review_author, 'ann');
   no(f, ['update', x, '--start-review', '--by', 'ann'], 'ann');
@@ -349,7 +352,7 @@ test('an unclaimed team item names who asks for its review, who then never revie
   refined(f, job);
   ok(f, ['update', job, '--claim', 'bob']);
   ok(f, ['update', job, '--waiting', 'a run', '--by', 'bob']);
-  ok(f, ['update', make(f, 'other branch work'), '--claim', 'bob', '--force']); // active work
+  ok(f, ['update', inTeam(f, make(f, 'other branch work')), '--claim', 'bob', '--force']); // active work
   const p = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'bob', '--json'], { TEAM_NAME: 't1' }).stdout);
   assert.notEqual(p.item, c, p.instruction);
 });

@@ -24,21 +24,6 @@ const newItem = (f, name, ...more) => {
   return r;
 };
 const setStatus = (f, item, status) => { const r = cli(['update', item, '--status', status], { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
-// item 088: --status done runs only after both review stages passed for the item's commit; the fixture completes
-// Delta, so the stages run here (a fresh amy card, then the external reviewer, each with a fresh view). An
-// incomplete item takes only the lead's refinement, so the item is completed first (refs, estimate, DoD).
-const bothStages = (f, item) => {
-  const step = args => { const r = cli(args, { cwd: f.cons, tmp: f.t }); assert.equal(r.status, 0, r.stdout + r.stderr); };
-  step(['update', item, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', '## Definition of done\n- [ ] it holds']);
-  step(['update', item, '--request-review', 'any', '--note', 'n']);
-  step(['query', '--phase', item, '--agent', 'amy-a']);
-  step(['update', item, '--start-review', '--by', 'amy-a']);
-  step(['update', item, '--review', 'pass', '--by', 'amy-a', '--comments', 'fine per references/review/code.md']);
-  step(['update', item, '--request-review', 'rex', '--note', 'n']);
-  step(['query', '--phase', item, '--agent', 'rex']);
-  step(['update', item, '--start-review', '--by', 'rex']);
-  step(['update', item, '--review', 'pass', '--by', 'rex', '--comments', 'fine per references/review/code.md']);
-};
 const commitAll = home => { git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'fixture'); git(home, 'push', '-q'); };
 
 // Shared home + consumer acme/demo on main, built with the CLI:
@@ -56,7 +41,6 @@ function build(withFindings) {
   newItem(f, 'Gamma');
   newItem(f, 'Delta');
   setStatus(f, '003-gamma', 'in_progress');
-  bothStages(f, '004-delta');
   setStatus(f, '004-delta', 'done');
   git(cons, 'checkout', '-q', '-b', 'feature');
   newItem(f, 'Feat');
@@ -217,7 +201,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "updated_at": "TS",
       "completed_at": "TS",
       "claimed_by": "",
-      "review_state": "passed"
+      "review_state": "none"
     }
   ],
   "gone_branch_items": [
@@ -413,12 +397,11 @@ test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
   assert.equal(view(f, ['--next', '--branch', 'nowhere', '--json']).stdout.trim(), '{}');
 });
 
-test('075: --phase prints the full item (row, front matter, body, missing) by slug and by number; not found is exit 1 on stdout', () => {
+test('075: --phase prints the full item (row, front matter, body) by slug and by number; not found is exit 1 on stdout', () => {
   const f = fx();
   const beta = { id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
     front_matter: { phase: '002-beta', seq: 2, title: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', last_updated: 'TS', last_updated_by: 'UPD', depends_on: [], owner: defaultUser(f.cons), owned_since: '', review_state: 'none', reviewer: '' },
-    body: '\n# Phase 002 — Beta\n\n**Objective:** Caf\u00e9 \u2615 Beta\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n',
-    missing: ['review_refs', 'estimate_min', 'definition_of_done'] };
+    body: '\n# Phase 002 — Beta\n\n**Objective:** Caf\u00e9 \u2615 Beta\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n' };
   // the item carries its history (events) in its front matter: compared apart from the rest
   const noEvents = j => { const { events, ...fm } = j.front_matter; return [{ ...j, front_matter: fm }, events]; };
   const [bySlug, betaEvents] = noEvents(normJson(view(f, ['--phase', '002-beta']).stdout));
@@ -468,7 +451,6 @@ test('075: --critical lists the open critical items (JSON and text) and says so 
     + '⚠️ ========================================================================\n');
   assert.deepEqual(normJson(view(f, ['--critical', '--json']).stdout).map(x => [x.slug, x.severity, x.priority]), [['002-beta', 'critical', 0]]);
   const g = build(false);
-  bothStages(g, '002-beta');
   setStatus(g, '002-beta', 'done');
   assert.equal(view(g, ['--critical']).stdout, '✅ no open CRITICAL items on the backlog\n');
   assert.deepEqual(normJson(view(g, ['--critical', '--json']).stdout), []);
@@ -485,14 +467,7 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
     '  TS  planning_event branch= commit= added 004-delta at rank end; backlog re-densified to 4 item(s)',
     '  TS  planning_event branch= commit= added 005-feat at rank end; backlog re-densified to 1 item(s)',
     '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)',
-    '  TS  review_requested branch=main commit=SHA n',
-    '  TS  review_requested branch=main commit=SHA n',
-    '  TS  review_started branch=main commit=SHA set review_started=Review started by amy-a at TS',
-    '  TS  review_started branch=main commit=SHA set review_started=Review started by rex at TS',
-    '  TS  reviewed       branch=main commit=SHA set reviewed=Review by amy-a: COMPLETE (TS)',
-    '  TS  reviewed       branch=main commit=SHA set reviewed=Review by rex: COMPLETE (TS)',
-    '  TS  state_change   branch=main commit=SHA set estimate_min=5, review_refs=references/review/code.md',
-    '  TS  state_change   branch=main commit=SHA set status=closed, handoffs=none',
+    '  TS  state_change   branch=main commit=SHA set status=closed',
     '  TS  state_change   branch=main commit=SHA set status=in progress',
   ]);
   assert.match(view(f, ['--events', '002-beta']).stdout, /^ {2}\S+ {2}planning_event branch= commit= added 002-beta at rank 0.*\n$/, 'one item: only its own lines');

@@ -28,7 +28,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
 const LEAD = { TEAM_LEAD: 'lead' };
 const C1 = '0123456789abcdef0123456789abcdef01234567';
 const C2 = 'fedcba9876543210fedcba9876543210fedcba98';
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...LEAD, ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, team: true, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const seq = slug => Number(slug.split('-')[0]);
@@ -86,6 +86,10 @@ test('059.V1: an acceptance before the producer review passed is refused and sto
   assert.match(r.stdout, /the producer's review has not passed \(review_state none\); the hand-off is accepted only after it/);
   assert.equal(receipts(f, p).length, 0);
 });
+
+// Review round 3 (rounds 3 and 4): the hand-off flags are detected by presence, not
+// truthiness - an empty value selects the action and is refused, instead of falling through to a
+// successful state change (parse accepts the empty value).
 
 test('059.V1: after the review passes the lead accepts the hand-off and the receipt is stored', () => {
   const f = fixture();
@@ -184,7 +188,7 @@ test('059.V1: a member without --by cannot record another claimer\'s hand-off', 
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
     { BACKLOG_AGENT: 'other', TEAM_NAME: 't1' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stdout, /you are other \(BACKLOG_AGENT\): a member acts only as itself, not as producer/);
+  assert.match(r.stdout, /a hand-off is recorded by the claimer: the item is claimed by producer, not by other/); // `team update` acts as the session's agent: --by is never missing
   assert.equal(handoffs(f, p).length, 0);
 });
 
@@ -199,44 +203,12 @@ test('059.V1: a member without --by cannot accept or reject as the lead claimer'
   reviewPass(f, p, 'lead');
   const accept = run(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked'], { BACKLOG_AGENT: 'other' });
   assert.equal(accept.status, 1, accept.stdout + accept.stderr);
-  assert.match(accept.stdout, /--accept-handoff needs --by <the team lead>/);
+  assert.match(accept.stdout, /a hand-off is accepted by the team lead \(lead\), not by other/); // `team update` names the session's agent as --by
   const reject = run(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'why not'], { BACKLOG_AGENT: 'other' });
   assert.equal(reject.status, 1, reject.stdout + reject.stderr);
-  assert.match(reject.stdout, /--reject-handoff needs --by <the team lead>/);
+  assert.match(reject.stdout, /not by other/);
   assert.equal(receipts(f, p).length, 0);
 });
-
-// Review round 2 (round 2): the stale-view check must run against the effective actor of the step.
-// A --handoff without --by records as the claimer, so the claimer's view is the one that must be fresh; the
-// environment actor's fresh view must not let the write through (update.js chose the actor before the item
-// loaded and substituted the claimer only for --request-review).
-
-test('059.V1: a hand-off recorded without --by is checked against the claimer\'s view, not the environment actor\'s', () => {
-  const f = fixture();
-  const p = make(f, 'producer item');
-  const d = make(f, 'dependent item', '--depends-on', seq(p));
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
-  ok(f, ['update', p, '--claim', 'producer']);
-  ok(f, ['query', '--phase', p, '--agent', 'producer']); // the claimer's view of the item as it stands
-  ok(f, ['update', p, '--append', 'a note from the lead', '--by', 'lead']); // someone else changes it: the claimer's view is now stale
-  const r = run(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
-    '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
-    { BACKLOG_AGENT: 'lead' });
-  assert.equal(r.status, 5, r.stdout + r.stderr);
-  assert.match(r.stderr, /was changed by lead at .* after you last read it/);
-  assert.equal(handoffs(f, p).length, 0);
-  ok(f, ['query', '--phase', p, '--agent', 'producer']); // the claimer reads the change, then the same call succeeds
-  const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
-    '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
-    { BACKLOG_AGENT: 'lead' });
-  assert.match(record.stdout, /handoff=DEPENDENCY_HANDOFF v1/);
-  assert.equal(handoffs(f, p).length, 1);
-  assert.equal(handoffs(f, p)[0].by, 'producer'); // the record is by the claimer, checked against its view
-});
-
-// Review round 3 (rounds 3 and 4): the hand-off flags are detected by presence, not
-// truthiness - an empty value selects the action and is refused, instead of falling through to a
-// successful state change (parse accepts the empty value).
 
 test('059.V1: an empty hand-off value is refused for the record, the accept and the reject', () => {
   const f = fixture();

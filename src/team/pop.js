@@ -61,7 +61,7 @@ export async function run({ team, agent }, rest) {
   let ownRepo; let branch;
   try { ownRepo = teamScope().repo || repoId(process.cwd()); branch = gitBranch(process.cwd()); } catch (e) { return die(e.message); }
   // the clone is brought up to date first: a failed synchronisation is a failure (exit 1), never an idle answer
-  const fresh = self(['query', '--status', '--json']);
+  const fresh = self(['team', 'query', '--team', team, '--agent', agent, '--status', '--json']);
   if (fresh.status === 2) { process.stderr.write(fresh.stderr); return 2; } // invalid input or place (a detached HEAD)
   if (fresh.status !== 0) { process.stderr.write(fresh.stderr); return die(`team pop stopped: ${last(fresh)}`, 1); }
   const markWith = (item, flag) => ['team', 'update', item, '--team', team, '--agent', agent, flag];
@@ -97,7 +97,7 @@ export async function run({ team, agent }, rest) {
   }
   let item = shown;
   if (!item && p.item && p.repository === ownRepo) {
-    const q = self(['query', '--phase', p.item, '--agent', agent]); // the whole item, and the agent's view of it for its next write
+    const q = self(['team', 'query', '--team', team, '--agent', agent, '--phase', p.item]); // the whole item, and the agent's view of it for its next write
     try { item = JSON.parse(q.stdout); } catch { item = null; }
     if (q.status !== 0 || !item) { process.stdout.write(q.stdout); process.stderr.write(q.stderr); return q.status || 1; }
   } else if (!item && p.item) { // chunk work of another repository: its item file in that repository's folder of the backlog repository
@@ -151,7 +151,7 @@ async function workItem({ team, agent, repo, branch, engine: e }) {
   if (e.action !== 'idle' && !(held && e.action === 'continue' && e.item === held.fm.phase && !children(held))) return { skipped: [] };
   if (held && children(held)) return { skipped: [] }; // the lead's work item is being worked by its team: the engine's idle answer stands
   if (!branch) return { fail: die('team pop needs a branch: check one out here or set TEAM_BRANCH (a detached HEAD names none)') };
-  const read = slug => self(['query', '--phase', slug, '--agent', agent]); // the agent's view of the item for its write
+  const read = slug => self(['team', 'query', '--team', team, '--agent', agent, '--phase', slug]); // the agent's view of the item for its write
   const claim = slug => self(['team', 'update', slug, '--team', team, '--agent', agent, '--claim'], { TEAM_REPOSITORY: repo, TEAM_BRANCH: branch });
   // a refused claim is update's refusal (exit 1, '❌ <item>: <why>' on stdout); any other failure ends the command
   const refused = r => r.status === 1 && /^❌ /m.test(r.stdout) && !/❌ backlog:/.test(r.stderr);

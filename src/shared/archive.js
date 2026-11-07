@@ -11,7 +11,7 @@ import { parseItem as parseDoc } from './frontmatter.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { outsideTeam, teamScope } from '../team/team.js';
+import { seam } from './seam.js';
 
 // Python repr of a str, for the earlier scripts `{x!r}`.
 export function pyStr(s) {
@@ -35,20 +35,13 @@ export const valueLike = s => s !== undefined && (!s.startsWith('-') || s === '-
 export const say = text => process.stdout.write(`${redact(text)}\n`);
 export const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 export const refuse = message => { say(`❌ ${message}`); return 1; }; // the scripts' refusals: stdout, exit 1
-// A team session (TEAM_REPOSITORY/TEAM_BRANCH) works only on items of its own repository and branch; every command that selects an
-// existing item and writes calls this before it writes (update through lifecycle.step). The item as a row, or as front matter.
-export const teamRefusal = item => {
-  const why = outsideTeam({ repository: item.repository, branch: item.branch });
-  return why ? `${item.slug ?? item.phase}: ${why}` : null;
-};
-
 // Resolve the consuming repository, take the clone's operation lock, pull, read the folder's rows and run fn(rows, {home, repo, folder, folders, guard, wrote}); then,
 // when fn answers 0 and `tail` (the commit message: script name + first two arguments, archive.py:112-117) is given, commit and push the folder.
 // The lock is held from the pull to the push (archive.py's run_lock) and covers every repository folder of the clone, a cross-repository move's too.
 export async function withBacklog(fn, tail) {
   const { home } = store.resolveHome();
   let repo;
-  try { repo = teamScope().repo || store.repoId(process.cwd()); } catch (e) { return die(e.message); } // update's rule: a team session works on its repository
+  try { repo = seam.scope().repo || store.repoId(process.cwd()); } catch (e) { return die(e.message); } // update's rule: a team session works on its repository
   return store.cloneLocked(home, async () => {
     await sync.pull(home); // every script works on origin/main as it is now
     const folder = store.folder(home, repo);
@@ -93,8 +86,6 @@ export async function run(argv) {
 async function archive(a, rows, { repo, folder, guard }) {
   const row = find(rows, a.phase);
   if (!row) return refuse(`no phase ${pyStr(a.phase)}`);
-  const outside = teamRefusal(row);
-  if (outside) return refuse(outside);
   if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived`); return 0; }
   if (row.status !== 'closed' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'closed' — finish it or pass --force`);
 

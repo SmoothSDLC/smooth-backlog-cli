@@ -1,7 +1,8 @@
 // Read views: `backlog query` and `backlog next`.
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the rows of the items (index.rows) and the committed index,
 // the earlier scripts order: pull, no-backlog check, branch, connect, findings. Output strings and --json match.
-// Never writes an item (the rows are built in memory). The team views are views.js, --plan is pop.js.
+// Never writes an item (the rows are built in memory). The views of a team (claimable, reviewable, blocked, decisions, plan, wip) come from `team`,
+// the object `backlog team query` passes in.
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
@@ -13,27 +14,26 @@ import * as store from './store.js';
 import * as sync from './sync.js';
 import { asList } from './text.js';
 import { foreignItem, isForeign, undoneDependencies } from './dependencies.js';
-import { teamScope } from '../team/team.js';
+import { seam } from './seam.js';
 import { lifted } from './status.js';
-import { missingFields } from '../team/lifecycle.js';
-import { SCOPES, teamView } from '../team/views.js';
-import { wipView } from '../team/wip.js';
 import { isFinished, isOpen } from './status.js';
 
-const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip', 'changed', 'branches'];
-const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'scope', 'only'];
+const BOOL = ['next', 'status', 'critical', 'json', 'all', 'changed', 'branches'];
+const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'only'];
 const ONLY = { new: r => r.status === 'pending' || r.status === 'new', open: r => isOpen(r.status), done: r => isFinished(r.status) && r.status !== 'archived', archive: r => r.status === 'archived' };
 
 // argparse. --events takes an optional value (const "*"); shortcut: no unique-prefix abbreviations.
-function parse(argv) {
+// `team` adds its flags: { bool, value, choices: { flag: [words] } }.
+function parse(argv, team) {
+  const bool = [...BOOL, ...(team?.bool ?? [])]; const value = [...VALUE, ...(team?.value ?? [])];
   const a = {};
   for (let i = 0; i < argv.length; i++) {
     const [flag, eq] = argv[i].startsWith('--') ? argv[i].slice(2).split(/=(.*)/s) : [null];
-    if (BOOL.includes(flag) && eq === undefined) a[flag] = true;
-    else if (VALUE.includes(flag)) {
+    if (bool.includes(flag) && eq === undefined) a[flag] = true;
+    else if (value.includes(flag)) {
       const v = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('-') ? undefined : argv[++i]);
       if (v === undefined) throw new BacklogError('INVALID_INPUT', `argument --${flag}: expected one argument`);
-      if (flag === 'scope' && !SCOPES.includes(v)) throw new BacklogError('INVALID_INPUT', `argument --scope: invalid choice: ${repr(v)} (choose from ${SCOPES.map(repr).join(', ')})`);
+      if (team?.choices?.[flag] && !team.choices[flag].includes(v)) throw new BacklogError('INVALID_INPUT', `argument --${flag}: invalid choice: ${repr(v)} (choose from ${team.choices[flag].map(repr).join(', ')})`);
       if (flag === 'only' && !Object.hasOwn(ONLY, v)) throw new BacklogError('INVALID_INPUT', `argument --only: invalid choice: ${repr(v)} (choose from ${Object.keys(ONLY).map(repr).join(', ')})`);
       a[flag] = v;
     } else if (flag === 'events') a.events = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('-') ? '*' : argv[++i]);
@@ -137,39 +137,29 @@ function changedReport(home, folder, repo, a) {
 }
 
 //
-const TEAM_VIEWS = ['claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip'];
-// `fromTeam`: the call of backlog team query, the only place of the team views
-export const run = (argv, { fromTeam = false } = {}) => store.cloneLocked(store.resolveHome().home, () => query(argv, fromTeam)); // a read that pulls waits for a writer of the clone
-async function query(argv, fromTeam) {
+// `team`: the call of backlog team query, the only place of the team views
+export const run = (argv, { team = null } = {}) => store.cloneLocked(store.resolveHome().home, () => query(argv, team)); // a read that pulls waits for a writer of the clone
+async function query(argv, team) {
   let a;
-  try { a = parse(argv); } catch (e) { return die(e.message); }
-  const view = TEAM_VIEWS.find(k => a[k]);
-  if (view && !fromTeam) return die(`--${view} is a team view: use backlog team query --team <team> --agent <name> --${view}`);
-  if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
-  if (a.plan) return (await import('../team/queue.js')).run(argv); // pop.js repeats the preamble below for its own flags
+  try { a = parse(argv, team); } catch (e) { return die(e.message); }
+  const early = await team?.early(a, argv, { die }); // the plan (its own parser) and a flag that goes with another
+  if (early !== undefined) return early;
 
   const cwd = process.cwd();
   let repo;
-  try { repo = teamScope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }
+  try { repo = seam.scope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }
   const { home } = store.resolveHome();
   try { await sync.pull(home, { read: true }); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
-  if (a.wip) { // the counts against every work-in-progress limit and the stale in-progress items, whole backlog home
-    const v = wipView(home);
-    if (a.json) { dump(v); return 0; }
-    say(`📊 work in progress — ${v.limits_file}${existsSync(v.limits_file) ? '' : ' (none: no limits)'}`);
-    for (const c of v.counts) say(`   ${c.level.padEnd(10)} ${String(c.key).padEnd(48)} ${String(c.count).padStart(3)}${c.limit === null ? '' : ` / ${c.limit}${c.count >= c.limit ? '  ⚠️ at the limit' : ''}`}`);
-    say(`   stale (no change of their own for more than ${v.stale_hours} h): ${v.stale.length}`);
-    for (const x of v.stale) say(`      - ${x.item} ${x.slug} (${x.holder || 'nobody'}, updated ${x.updated})`);
-    return 0;
-  }
+  const read = await team?.afterPull(a, { home, say, dump }); // --wip: the counts against every work-in-progress limit, whole backlog home
+  if (read !== undefined) return read;
   let folder;
-  try { folder = store.folder(home, repo); } catch (e) { return die(e.message); } // TEAM_REPOSITORY=../x passes the owner/name pattern; the folder must stay inside the home
+  try { folder = store.folder(home, repo); } catch (e) { return die(e.message); } // a repository named ../x passes the owner/name pattern; the folder must stay inside the home
   if (a.changed) return changedReport(home, folder, repo, a); // what changed since the calling agent's last use
   if (!existsSync(folder)) {
     say(a.json ? '{}' : `ℹ️  ${repo} has no backlog yet`);
     return 0;
   }
-  const branch = a.branch || teamScope().branch || (await git(['branch', '--show-current'], cwd)).stdout.trim(); // lib_db.git_branch: TEAM_BRANCH wins
+  const branch = a.branch || seam.scope().branch || (await git(['branch', '--show-current'], cwd)).stdout.trim(); // lib_db.git_branch: a team's branch wins
   const plain = a.phase || a.events !== undefined || a['by-branch'] || a.critical || a.branches;
   if (!branch && !a.all && (a.next || !plain)) return die('HEAD is detached: pass --branch <name> (the branch whose queue you want) or --all');
 
@@ -192,7 +182,8 @@ async function query(argv, fromTeam) {
       return 0;
     }
 
-    if (a.claimable || a.reviewable || a.blocked || a.decisions) return teamView(a, { rows, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
+    const view = await team?.view(a, { rows, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
+    if (view !== undefined) return view;
 
     if (a.branches) { // one line per branch of this repository: its open and its finished (not archived) items
       const by = Object.create(null); // a branch is named by its item: __proto__ is a name like any other
@@ -241,7 +232,7 @@ async function query(argv, fromTeam) {
         const r = index.find(rows, id);
         if (!r) { say(`❌ no phase ${repr(id)}`); return 1; }
         const file = items.find(i => i.path === r.path);
-        out.push({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
+        out.push({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null, ...(team ? { missing: team.missing(file) } : {}) });
       }
       dump(out);
       for (const r of out) seen.view(a.agent, folder, repo, r); // read only once all of them are shown
@@ -252,7 +243,7 @@ async function query(argv, fromTeam) {
       if (!r) { say(`❌ no phase ${repr(a.phase)}`); return 1; }
       // the earlier scripts row, then the whole item
       const file = items.find(i => i.path === r.path);
-      dump({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null, missing: file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null });
+      dump({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null, ...(team ? { missing: team.missing(file) } : {}) });
       seen.view(a.agent, folder, repo, r); // the agent now holds this version: its next write to the item is checked against it
       return 0;
     }

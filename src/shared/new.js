@@ -1,4 +1,4 @@
-// `backlog new`: adds an item to the queue.
+// `backlog new`: adds an item to the queue. `team` (passed in by `backlog team`) adds the options and rules of a team's items.
 // Order of work as the earlier scripts: pull, number, write, place in the index, commit and push.
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
@@ -7,13 +7,12 @@ import { parseItem as parse } from './frontmatter.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { actor, check, recordWrites } from './seen.js';
 import { configUser } from './setup.js';
-import { assertInside, checkRefs, git, redact, slugify } from './safety.js';
+import { assertInside, git, redact, slugify } from './safety.js';
 import { addEvent, branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, undoOnThrow, write } from './store.js';
 import { commitSettled, pull } from './sync.js';
 import { normalise } from './status.js';
-import { outsideTeam, teamName, teamScope } from '../team/team.js';
+import { seam } from './seam.js';
 import { foreignItem, isForeign } from './dependencies.js';
-import { strip } from './text.js';
 
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; //
 const pad = n => String(n).padStart(3, '0');
@@ -21,23 +20,24 @@ const pad = n => String(n).padStart(3, '0');
 //. 's' = text, 'i' = integer, an array = choices, true = a switch. argparse also takes a unique prefix.
 const OPTIONS = {
   name: 's', title: 's', status: 's', objective: 's', summary: 's', description: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
-  'review-refs': 's', 'depends-on': 's', estimate: 'i', team: 's', chunk: true,
+  'depends-on': 's', estimate: 'i', chunk: true,
   complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], force: true, 'dry-run': true,
 };
 const NEGATIVE = /^-(\d+|\d*\.\d+)$/;
 const optionLike = s => s.startsWith('-') && s !== '-' && !NEGATIVE.test(s) && !s.includes(' ');
 const camel = key => key.replace(/-(\w)/g, (_, c) => c.toUpperCase());
 
-function parseArgs(argv) {
+function parseArgs(argv, more = {}) {
+  const options = { ...OPTIONS, ...more };
   const out = {}; const extra = [];
   for (let i = 0; i < argv.length; i++) {
     const [head, ...eq] = argv[i].split('=');
     const long = head.length > 2 && head.startsWith('--') && optionLike(head);
-    let keys = long ? Object.keys(OPTIONS).filter(k => `--${k}` === head) : [];
-    if (long && !keys.length) keys = Object.keys(OPTIONS).filter(k => k.startsWith(head.slice(2)));
+    let keys = long ? Object.keys(options).filter(k => `--${k}` === head) : [];
+    if (long && !keys.length) keys = Object.keys(options).filter(k => k.startsWith(head.slice(2)));
     input(keys.length < 2, `ambiguous option: ${head} could match ${keys.map(k => `--${k}`).join(', ')}`);
     if (!keys.length) { extra.push(argv[i]); continue; }
-    const [key] = keys; const kind = OPTIONS[key]; const flag = `--${key}`;
+    const [key] = keys; const kind = options[key]; const flag = `--${key}`;
     if (kind === true) { input(!eq.length, `argument ${flag}: ignored explicit argument '${eq.join('=')}'`); out[camel(key)] = true; continue; }
     const value = eq.length ? eq.join('=') : argv[++i];
     input(value !== undefined && (eq.length || !optionLike(value)), `argument ${flag}: expected one argument`);
@@ -78,15 +78,15 @@ export function hasDefinitionOfDone(text) {
 
 const refuse = text => { process.stdout.write(`❌ ${redact(text)}\n`); return 1; };
 
-export async function run(argv) {
+export async function run(argv, { team = null } = {}) {
   try {
     const { home } = resolveHome();
-    const team = teamScope();
-    const repo = team.repo || repoId(process.cwd());
+    const scope = seam.scope();
+    const repo = scope.repo || repoId(process.cwd());
     const folder = repoFolder(home, repo);
     return await cloneLocked(home, async () => {
       await pull(home);
-      return await create(argv, { home, folder, repo, team });
+      return await create(argv, { home, folder, repo, scope, team });
     });
   } catch (error) {
     process.stderr.write(`❌ backlog: ${redact(error.message)}\n`);
@@ -94,19 +94,13 @@ export async function run(argv) {
   }
 }
 
-async function create(argv, { home, folder, repo, team }) {
-  const a = parseArgs(argv);
+async function create(argv, { home, folder, repo, scope, team }) {
+  const a = parseArgs(argv, team?.options);
   const severity = a.severity ?? 'normal';
   const priority = a.priority ?? (severity === 'critical' ? 0 : undefined); // a critical finding jumps the queue (:62)
   if (!a.name && !a.splitFrom) return refuse('--name is required (or --split-from <phase>)');
-  if (a.status !== undefined && (a.team || (a.splitFrom && teamName()))) return refuse('--status cannot be combined with --team: a team item starts in its own first status');
-  const refs = asList(a.reviewRefs);
-  checkRefs(refs); // before the folder is read
-  // an item of a team (--team, or a split of a team's item) starts in stage refining, where a member writes it
-  const intoRefining = a.team || (a.splitFrom && teamName()); // outside a team session a split is a plain item
-  if (!hasDefinitionOfDone(a.body) && (team.repo || refs.length) && !intoRefining) {
-    return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
-  }
+  const t = team?.begin(a, scope); // the team's checks of the options (status, review documents, definition of done); its state for the later steps
+  if (t?.refuse) return refuse(t.refuse);
 
   const { rows } = itemRows(folder); // a dry run only looks: nothing is created in the backlog clone
   let seq; let slug; let rel; let order; let rank; let where;
@@ -121,28 +115,21 @@ async function create(argv, { home, folder, repo, team }) {
     const src = a.splitFrom ? findItem(rows, a.splitFrom) : null;
     if (a.splitFrom) {
       if (!src) return refuse(`--split-from: no phase '${a.splitFrom}'`);
-      const outside = outsideTeam({ repository: src.repository, branch: src.branch }); // the split logs an event on the parent
-      if (outside) return refuse(`${src.slug}: ${outside}`);
+      const outside = team?.outside(src); // the split logs an event on the parent
+      if (outside) return refuse(outside);
       // INTENTIONAL: the parent's body goes in verbatim, duplicate headings included.
       const file = join(folder, String(src.path));
       await assertInside(folder, file); // no symlink between the folder and the file
       if (!existsSync(file)) return refuse(`--split-from: the contents of '${src.slug}' are missing from the backlog repository`);
       check(folder, repo, actor(), src.slug, src.path); // the split logs a parent event based on this version and scope
       const doc = parse(readFileSync(file, 'utf8'));
-      a.team = a.team || doc.fm.team || undefined; // a split item inherits the source's team
+      if (doc.fm.team && !team) return refuse(`item ${src.slug} belongs to team ${doc.fm.team}: a split of a team's item is made by the team`);
+      team?.inherit(a, doc); // a split item inherits the source's team
       const parent = Array.from(doc.body.trim()).slice(0, 800).join('');
       inherited = { objective: src.objective, summary: src.summary, context: `Split from \`${src.slug}\`. Inherited context:\n\n${parent}` };
     }
-    // in a named team session (TEAM_NAME, set by the team runner) the creator names how the
-    // item is reviewed, unless the item starts in stage refining (it has a team, its own or its source's), where the
-    // members' refinement gives it its review documents. TEAM_REPOSITORY alone (a write into another repository's folder)
-    // is no team session here.
-    if (intoRefining && !a.team && !hasDefinitionOfDone(a.body) && team.repo) { // the source had no team: no stage refining
-      return refuse("--body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written");
-    }
-    if (teamName() && !refs.length && !a.team) {
-      return refuse(`in a team session an item names its review documents at creation: --review-refs <review document> (an item of a team, which starts in stage refining, gets them in its refinement)`);
-    }
+    const no = team?.afterSplit(a, t, scope); // the source had no team, or the session names the review documents at creation
+    if (no) return refuse(no);
 
     const name = a.name || `${a.splitFrom || 'split'}-cont`;
     seq = nextSeqFor(folder, `-${slugify(name)}.md`);
@@ -153,14 +140,13 @@ async function create(argv, { home, folder, repo, team }) {
 
     const objective = a.objective || inherited.objective || name;
     const fm = {
-      phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: a.team || intoRefining ? 'new' : a.status !== undefined ? normalise(a.status) : 'pending', severity,
-      repository: repo, branch: team.branch || callerBranch(process.cwd()),
+      phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: team?.refining(a, t) ? 'new' : a.status !== undefined ? normalise(a.status) : 'pending', severity,
+      repository: repo, branch: scope.branch || callerBranch(process.cwd()),
       commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(), updated_by: actor(),
     };
-    if (a.team) Object.assign(fm, { team: strip(a.team), refiner: '' });
-    else if (intoRefining) Object.assign(fm, { refiner: '' }); // a slice split in a team session needs its refinement review too
+    team?.mark(fm, a, t); // the team and the refiner of a team's item
     if (a.chunk) fm.chunk = true;
-    if (refs.length) fm.review_refs = refs;
+    team?.reviewRefs(fm, t);
     for (const [k, v] of [['estimate_min', a.estimate], ['complexity', a.complexity], ['layer', a.layer]]) if (v !== undefined) fm[k] = v;
     Object.assign(fm, { depends_on: deps, claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
     if (!fm.team) fm.owner = configUser(); // an item outside a team belongs to the user of the configuration

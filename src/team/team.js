@@ -8,7 +8,8 @@ import { input } from '../errors.js';
 import { edgeState, satisfied } from './handoff.js';
 import { folderRows, isForeign, itemFm, undoneDependencies as undoneDeps } from '../shared/dependencies.js';
 import { load } from '../shared/store.js';
-import { SOLO, isOpen as isOpenWord, isFinished, seam } from '../shared/status.js';
+import { seam } from '../shared/seam.js';
+import { SOLO, isOpen as isOpenWord, isFinished } from '../shared/status.js';
 import { asList, rstrip, strip } from '../shared/text.js';
 import { loadWorkflow } from './workflow.js';
 
@@ -54,6 +55,11 @@ export function outsideTeam(fm) {
   if (!repo || ((fm.repository || '') === repo && (!branch || (fm.branch || '') === branch))) return null;
   return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them`;
 }
+// The refusal of a command that selects an existing item outside the session's scope, as an item or row: "<slug>: <why>", or null.
+export const teamRefusal = item => {
+  const why = outsideTeam({ repository: item.repository, branch: item.branch });
+  return why ? `${item.slug ?? item.phase}: ${why}` : null;
+};
 
 // the edge state of a done producer that does not satisfy the edge; null while it is satisfied
 // (accepted or legacy). The row decides the producer is done - the files give only the metadata the rows do not
@@ -174,6 +180,8 @@ export const entryOf = fm => (fm.team ? teamsConfig()[strip(String(fm.team))] : 
 // `backlog team` reads items with the team's entry: installed here, so any module that loads the team rules has it.
 seam.entry = entryOf;
 seam.isMember = isTeamMember;
+seam.scope = teamScope;
+seam.inScope = fm => !outsideTeam(fm);
 
 // ---- team definitions (backlog team define)
 

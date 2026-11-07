@@ -7,7 +7,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HELP } from '../../src/help.js';
-import { TEAM_BOOL, TEAM_VALUE } from '../../src/shared/update.js';
+import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
 
 const dir = fileURLToPath(new URL('../../templates/skills/backlog/', import.meta.url));
 const skill = readFileSync(join(dir, 'SKILL.md'), 'utf8');

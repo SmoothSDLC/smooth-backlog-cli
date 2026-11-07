@@ -2,12 +2,15 @@
 // Tests run against local bare repositories only: origins under <tmp>/origins,
 // clones under <tmp>, with BACKLOG_HOME and XDG_CONFIG_HOME inside the test's
 // temp dir - never the real backlog repository or ~/.config.
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parseItem } from '../../src/shared/frontmatter.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
+import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
+import { hooks as teamQuery } from '../../src/team/query.js';
 
 export const BACKLOG_OWNER = 'acme';
 export const BACKLOG_NAME = 'backlog-repo';
@@ -100,7 +103,61 @@ export function env(tmp) {
 
 let calls = 0;
 // Runs node bin/backlog.js (this repository's CLI) from a consumer checkout.
+// NOTE: cli() below routes legacy test spellings (update/query/new carrying team flags, items of a team, or a team session) to the real
+// `backlog team ...` commands. It is a test-only convenience and not product behaviour: the product's plain commands never do this.
+// The steps, views and creations of a team are `backlog team update|query|new`; a test that drives them names the item's flags, and cli() sends
+// the command to its team spelling with the same arguments (the team and the agent come from the test's environment, as before).
+// opts.plain keeps the command plain, for the tests of the plain commands; opts.team makes an update a team step (a close with its hand-off gate).
+const flagsOf = args => args.map(String).filter(a => a.startsWith('--')).map(a => a.slice(2).split('=')[0]);
+const valueOf = (args, flag) => { const i = args.indexOf(`--${flag}`); return i >= 0 ? args[i + 1] : undefined; };
+// A session of a team (TEAM_NAME), a --team, a --set-team or a flag only a team has makes the command a team command.
+function teamSpelling(args, env, opts) {
+  const flags = flagsOf(args);
+  const has = list => flags.some(f => list.includes(f));
+  const session = Boolean(env.TEAM_NAME || env.TEAM_REPOSITORY || env.TEAM_BRANCH) || has(['team', 'set-team']);
+  if (args[0] === 'update') return session || (opts.team && !has(['claim', 'release'])) || has([...TEAM_VALUE, ...TEAM_BOOL]);
+  if (args[0] === 'query') return session || has([...teamQuery.bool, ...teamQuery.value]);
+  if (args[0] === 'new') return session || has(['review-refs']) || ['TEAM_REPOSITORY', 'TEAM_BRANCH'].some(k => env[k]);
+  return false;
+}
+// The team and the holder of the item a command names (its front matter), read from the files: no command runs, so nothing is pulled or refreshed.
+function infoOf(item, opts) {
+  const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.BACKLOG_HOME;
+  if (!home || !existsSync(home)) return {};
+  for (const owner of readdirSync(home)) for (const name of existsSync(join(home, owner)) && statSync(join(home, owner)).isDirectory() ? readdirSync(join(home, owner)) : []) {
+    const dir = join(home, owner, name, 'phases');
+    if (!existsSync(dir) || (opts.cwd && existsSync(join(home, owner, basename(opts.cwd))) && name !== basename(opts.cwd))) continue; // the repository the command runs in
+    for (const file of readdirSync(dir)) {
+      if (file !== `${item}.md` && !(String(item).match(/^\d+$/) && Number(file.split('-')[0]) === Number(item))) continue;
+      let fm; try { fm = parseItem(readFileSync(join(dir, file), 'utf8')).fm; } catch { return {}; } // a damaged item names no team
+      return { team: fm.team || undefined, holder: fm.claimed_by || fm.owner || undefined, file: join(dir, file) };
+    }
+  }
+  return {};
+}
+// a team a test names without configuring it gets an empty entry, so that its steps can run
+function neutralTeam(e, name = 'neutral') {
+  if (!e.BACKLOG_HOME) return name;
+  const file = join(e.BACKLOG_HOME, 'teams.json');
+  let cfg = {}; try { cfg = JSON.parse(readFileSync(file, 'utf8')); } catch { /* none yet */ }
+  if (!cfg[name]) { cfg[name] = {}; writeFileSync(file, JSON.stringify(cfg)); }
+  return name;
+}
 export function cli(args = [], opts = {}) {
+  const sessionEnv = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env };
+  const named = !opts.plain && args[0] === 'update' && args[1] && !String(args[1]).startsWith('-') ? args[1] : !opts.plain && args[0] === 'new' ? valueOf(args, 'split-from') : undefined;
+  const info = named ? infoOf(named, opts) : {};
+  const itemTeam = info.team;
+  if (!opts.plain && (itemTeam || teamSpelling(args, sessionEnv, opts))) {
+    // a team session acts only as itself: the agent a command names (--by, --claim, --release, --agent) is the session's
+    const agent = ['by', 'claim', 'release', 'agent'].map(f => valueOf(args, f)).find(Boolean) || opts.env?.BACKLOG_AGENT || (args[0] === 'update' && info.holder) || `driver-${++calls}`;
+    // a session of a team acts as its BACKLOG_AGENT; outside one, the agent a command names acts
+    const via = { ...opts.env, BACKLOG_AGENT: sessionEnv.TEAM_NAME ? opts.env?.BACKLOG_AGENT || agent : agent };
+    if (args[0] === 'new') return teamNew(args.slice(1), { ...opts, env: via });
+    // an item without a team is stepped by a session of no particular team: a neutral entry stands in for it
+    const teamFlag = !sessionEnv.TEAM_NAME && !flagsOf(args).includes('team') && (valueOf(args, 'set-team') ? neutralTeam(sessionEnv, valueOf(args, 'set-team')) : itemTeam || neutralTeam(sessionEnv));
+    return cli(['team', ...args, ...(teamFlag ? ['--team', teamFlag] : [])], { ...opts, env: via, plain: true });
+  }
   const bin = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'));
   const p = spawnSync(process.execPath, [bin, ...args], {
     cwd: opts.cwd,
@@ -115,6 +172,18 @@ export function cli(args = [], opts = {}) {
   return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr };
 }
 
+// Creates a team's item: `backlog team new` is not wired yet, so this runs the function of src/team/new.js (--team, --review-refs, a split of a
+// team's item, a named team session) in a process of its own, with the same environment as cli().
+export function teamNew(args = [], opts = {}) {
+  const child = resolve(join(dirname(fileURLToPath(import.meta.url)), 'team-new-child.js'));
+  const p = spawnSync(process.execPath, [child, ...args], {
+    cwd: opts.cwd,
+    env: { ...process.env, BACKLOG_AGENT: `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
+    input: opts.input ?? '', encoding: 'utf8', timeout: opts.timeout ?? 60000,
+  });
+  return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
+}
+
 // The slug a `new` output names: `created phase <slug> (seq N)`.
 export const createdSlug = stdout => {
   const m = String(stdout).match(/created phase ([0-9A-Za-z][0-9A-Za-z._-]*) \(/);
@@ -125,8 +194,10 @@ export const createdSlug = stdout => {
 // Puts a created item into team `team`, ready to be claimed: `backlog new --team` starts in refinement, and the
 // team views and `backlog team pop` reach only the items of their team.
 export function intoTeam(slug, opts, team = 't1', status = 'ready') { // status '': the team only, the item stays unrefined and incomplete
-  const r = cli(['update', slug, '--set-team', team, ...(status ? ['--status', status] : [])], { ...opts, env: { ...opts.env, BACKLOG_AGENT: '' } }); // opts.env: the caller's own session, so its view of the item stays current
+  const r = cli(['team', 'update', slug, '--team', team, '--agent', opts.agent ?? 'lead', '--set-team', team, ...(status ? ['--status', status] : [])], { ...opts, env: { ...opts.env, BACKLOG_AGENT: '' } }); // opts.env: the caller's own session, so its view
   if (r.status !== 0) throw new Error(`intoTeam ${slug}: ${r.stdout}${r.stderr}`);
+  const file = status === 'ready' && infoOf(slug, opts).file; // the item is refined: it carries the stage a refined item has
+  if (file) { const text = readFileSync(file, 'utf8'); if (!/^stage:/m.test(text)) writeFileSync(file, text.replace(/^team: .*$/m, m => `${m}\nstage: ready\nrefiner: ${opts.agent ?? 'lead'}`)); }
   return slug;
 }
 

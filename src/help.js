@@ -230,6 +230,22 @@ Options:
       status, commit, location, summary, name, objective, seq or size_score). It takes no other option.
   --append APPEND
       Append this text to the body of the item.
+  --section HEADING
+      Edit one list of the body: the lines of the block under the heading "## <HEADING>" (the block is created at the end
+      of the body when it is missing). It takes exactly one of the four options below, which change the block's "- "
+      lines; the rest of the body and the front matter stay byte for byte as they were.
+  --set-lines TEXT
+      With --section: the block becomes these lines: a JSON array gives one "- <entry>" line per element, any other text
+      is written as given.
+  --add-line ENTRY
+      With --section: add the line "- <ENTRY>" at the end of the block (with --top at its start). ENTRY is one line.
+  --top
+      With --add-line: add at the start of the block.
+  --remove-line N
+      With --section: remove the Nth "- " line of the block (counted from 1).
+  --move-line N:POSITION
+      With --section: move the Nth "- " line of the block to POSITION among the "- " lines (both from 1; a position past
+      the end puts the line last).
   --replan REPLAN
       The new leading order of the backlog, as comma-separated item numbers or slugs. It is a pure planning event
       and renumbers the backlog to 0..M-1; the order itself is the record, no event is written. No item argument is

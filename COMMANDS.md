@@ -63,6 +63,12 @@ The command names of the first release still work; each runs the command set bel
 - `done <item>` runs `backlog update <item> --status done`
 - `<item> done` runs `backlog update <item> --status done`
 - `move <item> <branch>` runs `backlog move <item> --to-branch <branch>`
+- `set <item> ac|tasks|outcomes|evidence|references|item-state-description|work_item_id <value> [--force]` runs `backlog update <item> --section <Heading> --set-lines <value> (the list is the section of that name in the item body)`
+- `add <item> <list> <entry> [--top]` runs `backlog update <item> --section <Heading> --add-line <entry> [--top]`
+- `replace <item> <list> <JSON-array>` runs `backlog update <item> --section <Heading> --set-lines <JSON-array>`
+- `remove <item> <list> <n>` runs `backlog update <item> --section <Heading> --remove-line <n>`
+- `priority <item> <list> <n> <position>` runs `backlog update <item> --section <Heading> --move-line <n>:<position>`
+- `new … --ac A --tasks J --outcomes J --evidence J --references J --item-state-description T --work_item_id W` runs `the same new with --body holding one section per given list (--ac is the section Definition of done; a JSON array becomes one line per entry)`
 - `<item> set|priority|move …` runs `the same command with the item first (backlog 3 done)`
 - `<command> --ask | --headless (or BACKLOG_HEADLESS=1)` runs `the command without the switch: it is accepted and ignored (--ask still asks for the folder in setup and init)`
 - `query --pop, next --agent` runs `nothing: it is refused with a pointer to backlog team pop --team <team> --agent <name> (--dry-run only answers)`
@@ -262,6 +268,22 @@ Options:
       status, commit, location, summary, name, objective, seq or size_score). It takes no other option.
   --append APPEND
       Append this text to the body of the item.
+  --section HEADING
+      Edit one list of the body: the lines of the block under the heading "## <HEADING>" (the block is created at the end
+      of the body when it is missing). It takes exactly one of the four options below, which change the block's "- "
+      lines; the rest of the body and the front matter stay byte for byte as they were.
+  --set-lines TEXT
+      With --section: the block becomes these lines: a JSON array gives one "- <entry>" line per element, any other text
+      is written as given.
+  --add-line ENTRY
+      With --section: add the line "- <ENTRY>" at the end of the block (with --top at its start). ENTRY is one line.
+  --top
+      With --add-line: add at the start of the block.
+  --remove-line N
+      With --section: remove the Nth "- " line of the block (counted from 1).
+  --move-line N:POSITION
+      With --section: move the Nth "- " line of the block to POSITION among the "- " lines (both from 1; a position past
+      the end puts the line last).
   --replan REPLAN
       The new leading order of the backlog, as comma-separated item numbers or slugs. It is a pure planning event
       and renumbers the backlog to 0..M-1; the order itself is the record, no event is written. No item argument is

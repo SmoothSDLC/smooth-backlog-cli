@@ -76,3 +76,14 @@ test('every row of the table names a form and what it runs', () => {
   assert.ok(ALIASES.length >= 12);
   for (const row of ALIASES) assert.ok(row.form && row.runs, JSON.stringify(row));
 });
+
+test('the list aliases translate to the section editor', () => {
+  t(['add', '3', 'evidence', 'proof', '--top'], { command: 'update', argv: ['3', '--section', 'Evidence', '--add-line', 'proof', '--top'] });
+  t(['replace', '3', 'tasks', '["a","b"]'], { command: 'update', argv: ['3', '--section', 'Tasks', '--set-lines', '["a","b"]'] });
+  t(['remove', '3', 'references', '2'], { command: 'update', argv: ['3', '--section', 'References', '--remove-line', '2'] });
+  t(['priority', '3', 'tasks', '2', '1'], { command: 'update', argv: ['3', '--section', 'Tasks', '--move-line', '2:1'] });
+  t(['set', '3', 'ac', '["it works"]', '--force'], { command: 'update', argv: ['3', '--section', 'Definition of done', '--set-lines', '["it works"]'] });
+  t(['3', 'add', 'outcomes', 'o'], { command: 'update', argv: ['3', '--section', 'Outcomes', '--add-line', 'o'] });
+  t(['new', 'X', '--ac', 'it works', '--tasks', '["t1"]'], { command: 'new', argv: ['--name', 'X', '--summary', 'X', '--body', '## Definition of done\n\n- it works\n\n## Tasks\n\n- t1\n'] });
+  t(['add', '3', 'nonsense', 'x'], null);
+});

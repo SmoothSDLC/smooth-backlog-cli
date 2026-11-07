@@ -12,6 +12,7 @@ import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-co
 import * as index from '../../src/shared/index.js';
 import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
+import { editSection } from '../../src/shared/update.js';
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -293,7 +294,7 @@ test('review P1: update of an item of another team (field edit, note, append) is
   const f = seed();
   const text = readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8');
   const head = git(f.home, 'rev-parse', 'HEAD');
-  for (const args of [['2', '--summary', 'x'], ['2', '--note', 'x'], ['2', '--append', 'x'], ['2', '--priority', '0']]) {
+  for (const args of [['2', '--summary', 'x'], ['2', '--note', 'x'], ['2', '--append', 'x'], ['2', '--priority', '0'], ['2', '--section', 'Evidence', '--add-line', 'x']]) {
     const r = cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' } });
     assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
     assert.match(r.stdout, /team session is bound/);
@@ -576,4 +577,59 @@ test('refinement flags --set-review-refs --set-chunk --set-estimate --set-comple
   step(f, ['2', '--set-depends-on', '99']);
   step(f, ['2', '--set-chunk', 'no']);
   step(f, ['2', '--set-review-refs', 'docs/notes.md']);
+});
+
+test('editSection changes one block and no other byte; a missing block is created at the end', () => {
+  const body = '\n# Phase\n\nText.\n\n## Evidence\n\n- a\n- b\n\n## Tasks\n\n- t\n';
+  const e = (op, h = 'Evidence') => editSection(body, h, op);
+  assert.equal(e({ 'add-line': 'c' }).body, body.replace('- b\n', '- b\n- c\n'));
+  assert.equal(e({ 'add-line': 'z', top: true }).body, body.replace('- a\n', '- z\n- a\n'));
+  assert.equal(e({ 'remove-line': '1' }).body, body.replace('- a\n', ''));
+  assert.equal(e({ 'move-line': '2:1' }).body, body.replace('- a\n- b\n', '- b\n- a\n'));
+  assert.equal(e({ 'move-line': '1:9' }).body, body.replace('- a\n- b\n', '- b\n- a\n'), 'a position past the end puts the line last');
+  assert.equal(e({ 'set-lines': '["x","y"]' }).body, body.replace('- a\n- b\n', '- x\n- y\n'));
+  assert.equal(e({ 'set-lines': 'plain [text' }).body, body.replace('- a\n- b\n', 'plain [text\n'));
+  assert.equal(e({ 'add-line': 'n' }, 'Outcomes').body, `${body}\n## Outcomes\n\n- n\n`);
+  assert.equal(e({ 'add-line': 'n' }, 'Tasks').body, `${body}- n\n`);
+  assert.match(e({ 'remove-line': '3' }).refuse, /no line 3/);
+  assert.match(e({ 'move-line': '5:1' }, 'Outcomes').refuse, /no line 5/);
+  assert.equal(editSection('', 'Tasks', { 'add-line': 'a' }).body, '## Tasks\n\n- a\n');
+});
+
+const ok2 = (f, item) => assert.equal(run(f, [item, '--section', 'Evidence', '--add-line', 'late']).status, 0);
+
+test('update --section edits one body section and nothing else, through every edit option', () => {
+  const f = seed();
+  const body = () => fm(f, '001-alpha.md').body;
+  const before = body();
+  const ok = args => { const r = run(f, ['1', '--section', ...args]); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
+  ok(['Evidence', '--add-line', 'first proof']);
+  ok(['Evidence', '--add-line', 'zeroth proof', '--top']);
+  assert.match(body(), /## Evidence\n\n- zeroth proof\n- first proof\n/);
+  ok(['Evidence', '--remove-line', '1']);
+  ok(['Tasks', '--set-lines', '["a", "b"]']);
+  ok(['Tasks', '--move-line', '2:1']);
+  assert.match(body(), /## Evidence\n\n- first proof\n\n## Tasks\n\n- b\n- a\n$/);
+  assert.ok(body().startsWith(before.trimEnd()), 'the text before the edited sections is byte-identical');
+  assert.equal(fm(f, '001-alpha.md').fm.name, 'Name alpha', 'the front matter fields stay');
+  assert.match(fm(f, '001-alpha.md').fm.events.at(-1), /set Tasks=move-line/);
+  const other = readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8');
+  ok2(f, '6'); // a finished item takes the edit too, and no other item is written
+  assert.equal(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), other);
+  assert.match(fm(f, '006-zeta.md').body, /## Evidence\n\n- late\n$/);
+  const dry = run(f, ['1', '--section', 'Tasks', '--add-line', 'never', '--dry-run']);
+  assert.equal(dry.status, 0); assert.doesNotMatch(body(), /never/);
+});
+
+test('update --section refuses what it cannot do and writes nothing', () => {
+  const f = seed();
+  const text = () => readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8');
+  const before = text(); const head = git(f.home, 'rev-parse', 'HEAD');
+  for (const args of [['--section', 'Tasks'], ['--add-line', 'x'], ['--section', 'Tasks', '--add-line', 'x', '--remove-line', '1'], ['--section', 'Tasks', '--top', '--remove-line', '1'],
+    ['--section', 'Tasks', '--remove-line', '0'], ['--section', 'Tasks', '--move-line', '1'], ['--section', 'Tasks', '--add-line', 'a\nb'], ['--section', ' ', '--add-line', 'x']]) {
+    const r = run(f, ['1', ...args]); assert.equal(r.status, 2, `${args}: ${r.stdout}${r.stderr}`);
+  }
+  const r = run(f, ['1', '--section', 'Tasks', '--remove-line', '1']);
+  assert.equal(r.status, 1); assert.match(r.stdout, /no line 1/);
+  assert.equal(text(), before); assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });

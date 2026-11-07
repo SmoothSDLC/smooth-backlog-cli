@@ -20,8 +20,8 @@ import { inProgress, wipRefusal } from './wip.js';
 import { asList, foreignCycle, foreignItem, heldBy, isForeign, lifted, teamLead, teamScope } from './team.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
-const VALUE = [...SETTABLE, 'append', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
-const BOOL = ['dry-run', 'restore'];
+const VALUE = [...SETTABLE, 'append', 'section', 'set-lines', 'add-line', 'remove-line', 'move-line', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'set-team', 'severity'];
+const BOOL = ['dry-run', 'restore', 'top'];
 // the hand-off flags of an earlier change (the record is the producer's, the accept and reject the team lead's).
 export const TEAM_VALUE = ['wip-override', 'claim', 'waiting', 'set-review-refs', 'release', 'request-review', 'review', 'by', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reason', 'reassign-review',
   'handoff', 'handoff-commit', 'handoff-contract', 'handoff-verification', 'handoff-outputs', 'handoff-pickup', 'handoff-risks', 'accept-handoff', 'reject-handoff', 'checks'];
@@ -82,7 +82,55 @@ function parse(argv) {
       a[flag] = word;
     } else throw usage(`unrecognized arguments: ${tok}`);
   }
+  checkSection(a);
   return a;
+}
+
+// --section "<Heading>" with exactly one of --set-lines, --add-line (--top), --remove-line <n>, --move-line <n>:<position>.
+const SECTION_OPS = ['set-lines', 'add-line', 'remove-line', 'move-line'];
+function checkSection(a) {
+  const ops = SECTION_OPS.filter(k => a[k] !== undefined);
+  if (a.section === undefined && !ops.length && !a.top) return;
+  if (a.section === undefined || !strip(a.section) || a.section.includes('\n')) throw usage('--section needs the heading of one section of the body (one line)');
+  if (ops.length !== 1) throw usage(`--section needs exactly one of ${SECTION_OPS.map(k => `--${k}`).join(', ')}`);
+  if (a.top && ops[0] !== 'add-line') throw usage('--top goes with --add-line');
+  if (ops[0] === 'add-line' && (!strip(a['add-line']) || a['add-line'].includes('\n'))) throw usage('--add-line takes one entry on one line');
+  if (ops[0] === 'remove-line' && !(pyInt(a['remove-line']) > 0)) throw usage('--remove-line takes the number of the line, from 1');
+  if (ops[0] === 'move-line' && !/^[1-9]\d*:[1-9]\d*$/.test(a['move-line'])) throw usage('--move-line takes <line>:<position>, both from 1');
+}
+
+// The body with the `## <heading>` block changed and every other byte as it was (a missing block is created at the end).
+// Entries are the block's `- ` lines; other lines of the block stay where they are.
+// shortcut: --set-lines text is written as given (a line "## x" in it starts a new section), a "## " line inside a code fence ends a block, and new lines carry \n even in a CRLF body; upgrade if bodies need that.
+export function editSection(body, heading, a) {
+  const lines = body.split('\n');
+  const at = lines.findIndex(l => l.trimEnd() === `## ${heading}`);
+  const next = lines.findIndex((l, i) => i > at && l.startsWith('## '));
+  const end = at === -1 || next === -1 ? lines.length : next;
+  const block = at === -1 ? [] : lines.slice(at + 1, end);
+  while (block.length && !block[0].trim()) block.shift();
+  while (block.length && !block.at(-1).trim()) block.pop();
+  const slots = block.flatMap((l, i) => (l.startsWith('- ') ? [i] : []));
+  const need = n => (n <= slots.length ? null : { refuse: `the section ${heading} has ${slots.length} line(s), no line ${n}` });
+  if (a['set-lines'] !== undefined) {
+    let list = null;
+    try { list = JSON.parse(a['set-lines']); } catch { /* text as given */ }
+    block.splice(0, block.length, ...(Array.isArray(list) ? list.map(x => `- ${x}`) : a['set-lines'].split('\n')));
+  } else if (a['add-line'] !== undefined) {
+    block.splice(a.top ? slots[0] ?? 0 : slots.length ? slots.at(-1) + 1 : block.length, 0, `- ${a['add-line']}`);
+  } else if (a['remove-line'] !== undefined) {
+    const n = pyInt(a['remove-line']); const no = need(n); if (no) return no;
+    block.splice(slots[n - 1], 1);
+  } else {
+    const [n, position] = a['move-line'].split(':').map(Number); const no = need(n); if (no) return no;
+    const entries = slots.map(i => block[i]); const [moved] = entries.splice(n - 1, 1);
+    entries.splice(Math.min(position, entries.length + 1) - 1, 0, moved);
+    slots.forEach((i, k) => { block[i] = entries[k]; });
+  }
+  const text = block.length ? `## ${heading}\n\n${block.join('\n')}\n` : `## ${heading}\n`;
+  if (at === -1) return { body: `${rstrip(body)}${rstrip(body) ? '\n\n' : ''}${text}` };
+  const after = lines.slice(end);
+  return { body: `${lines.slice(0, at).join('\n')}${at ? '\n' : ''}${text}${after.length ? `\n${after.join('\n')}` : ''}` };
 }
 
 const say = text => process.stdout.write(`${redact(text)}\n`);
@@ -289,6 +337,12 @@ async function change(a, folder, repo) {
   if (completing && !fm.completed) fm.completed = store.now();
   store.stamp(fm);
   if (a.append) body = `${rstrip(body)}\n\n${a.append}\n`;
+  if (a.section !== undefined) {
+    const edited = editSection(body, strip(a.section), a);
+    if (edited.refuse) return refuse(`${row.slug}: ${edited.refuse}`);
+    body = edited.body;
+    changes[strip(a.section)] = SECTION_OPS.find(k => a[k] !== undefined);
+  }
 
   if (a['dry-run']) {
     const set = Object.keys(changes).length ? `{${Object.entries(changes).map(([k, v]) => `${pyStr(k)}: ${pyVal(v)}`).join(', ')}}` : '(no field changes)';

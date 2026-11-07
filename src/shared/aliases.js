@@ -17,6 +17,12 @@ export const ALIASES = [
   { form: 'done <item>', runs: 'backlog update <item> --status done', heads: ['done'], help: 'update' },
   { form: '<item> done', runs: 'backlog update <item> --status done' },
   { form: 'move <item> <branch>', runs: 'backlog move <item> --to-branch <branch>' },
+  { form: 'set <item> ac|tasks|outcomes|evidence|references|item-state-description|work_item_id <value> [--force]', runs: 'backlog update <item> --section <Heading> --set-lines <value> (the list is the section of that name in the item body)' },
+  { form: 'add <item> <list> <entry> [--top]', runs: 'backlog update <item> --section <Heading> --add-line <entry> [--top]', heads: ['add'], help: 'update' },
+  { form: 'replace <item> <list> <JSON-array>', runs: 'backlog update <item> --section <Heading> --set-lines <JSON-array>', heads: ['replace'], help: 'update' },
+  { form: 'remove <item> <list> <n>', runs: 'backlog update <item> --section <Heading> --remove-line <n>', heads: ['remove'], help: 'update' },
+  { form: 'priority <item> <list> <n> <position>', runs: 'backlog update <item> --section <Heading> --move-line <n>:<position>' },
+  { form: 'new … --ac A --tasks J --outcomes J --evidence J --references J --item-state-description T --work_item_id W', runs: 'the same new with --body holding one section per given list (--ac is the section Definition of done; a JSON array becomes one line per entry)' },
   { form: '<item> set|priority|move …', runs: 'the same command with the item first (backlog 3 done)' },
   { form: '<command> --ask | --headless (or BACKLOG_HEADLESS=1)', runs: 'the command without the switch: it is accepted and ignored (--ask still asks for the folder in setup and init)' },
   { form: 'query --pop, next --agent', runs: 'nothing: it is refused with a pointer to backlog team pop --team <team> --agent <name> (--dry-run only answers)' },
@@ -27,22 +33,28 @@ const FIRST_RELEASE_STATE = { new: 'new', open: 'in progress', done: 'closed' };
 const own = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined); // a word such as constructor is no key of a table
 const statusOf1x = word => own(FIRST_RELEASE_STATE, word) ?? word;
 const SET = { name: '--name', description: '--objective', summary: '--summary', priority: '--priority', branch: '--branch', commit: '--commit', location: '--location' };
-const ITEM_FIRST = new Set(['done', 'set', 'priority', 'move']); // the verbs that may follow their item
+const ITEM_FIRST = new Set(['done', 'set', 'priority', 'move', 'add', 'replace', 'remove']); // the verbs that may follow their item
+// the first release's list fields are sections of the item body
+const LISTS = { ac: 'Definition of done', tasks: 'Tasks', outcomes: 'Outcomes', evidence: 'Evidence', references: 'References', 'item-state-description': 'State', work_item_id: 'Work item' };
+const section = (item, list, ...edit) => to('update', [item, '--section', LISTS[list], ...edit]);
+const entries = value => { try { const list = JSON.parse(value); if (Array.isArray(list)) return list; } catch { /* one entry */ } return [value]; };
 const POP = '--pop is a team command: use backlog team pop --team <team> --agent <name> (--dry-run only answers)';
 const to = (command, argv) => ({ command, argv });
 
 // new <name> [--description D] [--state S] …: the flags the first release spelled differently
 function newOf(rest) {
-  const out = ['--name', rest[1]]; let summary = false;
+  const out = ['--name', rest[1]]; let summary = false; let body; const blocks = [];
   for (let i = 2; i < rest.length; i++) {
     const [flag, ...eq] = rest[i].split('=');
     const value = eq.length ? eq.join('=') : undefined;
     const take = () => value ?? rest[++i];
     if (flag === '--description') out.push('--objective', take());
     else if (flag === '--state') out.push('--status', statusOf1x(take()));
-    else { if (flag === '--summary') summary = true; out.push(rest[i]); }
+    else if (own(LISTS, flag.slice(2))) blocks.push(`## ${LISTS[flag.slice(2)]}\n\n${entries(take()).map(x => `- ${x}`).join('\n')}`);
+    else { if (flag === '--summary') summary = true; if (flag === '--body') body = take(); else out.push(rest[i]); }
   }
   if (!summary) out.push('--summary', rest[1]);
+  if (blocks.length || body !== undefined) out.push('--body', [body, ...blocks].filter(x => x !== undefined).join('\n\n') + '\n'); // the lists follow a body the user gave, in the order given
   return to('new', out);
 }
 
@@ -54,13 +66,18 @@ function alias(rest) {
     case 'list': return ['new', 'open', 'done', 'archive'].includes(a) ? to('query', ['--only', a, ...rest.slice(2)]) : a === 'branch' ? to('query', ['--branches', ...rest.slice(2)]) : null;
     case 'branch': return to('query', ['--branches', ...rest.slice(1)]);
     case 'new': return a !== undefined && !a.startsWith('-') ? newOf(rest) : null;
-    case 'set': return rest.length >= 4 && (own(SET, b) || b === 'state') ? to('update', [a, b === 'state' ? '--status' : own(SET, b), b === 'state' ? statusOf1x(rest[3]) : rest[3], ...rest.slice(4)]) : null;
+    case 'set': if (rest.length >= 4 && own(LISTS, b)) return section(a, b, '--set-lines', rest[3], ...rest.slice(4).filter(x => x !== '--force')); // --force of the first release is accepted and ignored
+      return rest.length >= 4 && (own(SET, b) || b === 'state') ? to('update', [a, b === 'state' ? '--status' : own(SET, b), b === 'state' ? statusOf1x(rest[3]) : rest[3], ...rest.slice(4)]) : null;
     case 'priority': { // a --json after the item is the switch of the command, not a position
       const json = rest.includes('--json') ? ['--json'] : []; const words = rest.filter(x => x !== '--json');
+      if (words.length === 5 && own(LISTS, words[2])) return section(a, words[2], '--move-line', `${words[3]}:${words[4]}`, ...json);
       return words.length === 3 ? to('update', [a, '--priority', words[2], ...json]) : words.length === 2 ? to('query', ['--phase', a, ...json]) : null;
     }
     case 'done': return a !== undefined && !a.startsWith('-') ? to('update', [a, '--status', 'done', ...rest.slice(2)]) : null;
     case 'move': return a !== undefined && !a.startsWith('-') && b !== undefined && !b.startsWith('-') ? to('move', [a, '--to-branch', b, ...rest.slice(3)]) : null;
+    case 'add': return rest.length >= 4 && own(LISTS, b) ? section(a, b, '--add-line', rest[3], ...rest.slice(4)) : null;
+    case 'replace': return rest.length >= 4 && own(LISTS, b) ? section(a, b, '--set-lines', rest[3], ...rest.slice(4)) : null;
+    case 'remove': return rest.length >= 4 && own(LISTS, b) ? section(a, b, '--remove-line', rest[3], ...rest.slice(4)) : null;
     case 'query': return rest.includes('--pop') ? { error: POP } : null;
     case 'next': return rest.some(x => x === '--agent' || x.startsWith('--agent=')) ? { error: POP } : null;
     default: return null;

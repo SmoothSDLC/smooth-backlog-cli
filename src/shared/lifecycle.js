@@ -463,16 +463,16 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   }
   const note = a.note ?? '';
   // Beyond the earlier scripts: a field, --set-* or body edit is a change too.
-  if (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-'))) {
+  if (actions.length || strip(note) || given.length || a.append || a.section || Object.keys(a).some(k => k.startsWith('set-'))) {
     const why = outsideTeam(fm);
     if (why) return { refuse: `${slug}: ${why}` };
   }
   // a refinement verdict is about the item as the reviewer saw it: nothing changes in the same call
-  if (a['refinement-review'] && (a.append || given.length || Object.keys(a).some(k => k.startsWith('set-')))) {
+  if (a['refinement-review'] && (a.append || a.section || given.length || Object.keys(a).some(k => k.startsWith('set-')))) {
     return { refuse: `${slug}: --refinement-review records the verdict alone; change the item first and have it reviewed again` };
   }
   // and while the refinement review runs, the item stays as the reviewer reads it
-  if (before.stage === 'refinement-review' && !actions.length && (a.append || given.length || Object.keys(a).some(k => k.startsWith('set-')))) {
+  if (before.stage === 'refinement-review' && !actions.length && (a.append || a.section || given.length || Object.keys(a).some(k => k.startsWith('set-')))) {
     return { refuse: `${slug}: in stage refinement-review the item stays as the reviewer reads it; a changes verdict returns it to refining` };
   }
   const steps = actions.filter(k => k !== 'release');
@@ -497,12 +497,12 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   // changes nothing on it)
   const who = me || a.by; // the team-session caller, else the agent named by --by
   // the DAG is the lead's (refine-and-split: the lead links the split items), so --set-depends-on is no refinement edit
-  const edits = strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-') && k !== 'set-depends-on');
+  const edits = strip(note) || given.length || a.append || a.section || Object.keys(a).some(k => k.startsWith('set-') && k !== 'set-depends-on');
   // the design: a member, not the lead, refines in the first round; the lead edits a refining item only as its refiner
   if (who === teamLead() && before.team && before.stage === 'refining' && fm.refiner !== who && edits) { // with a step or without
     return { refuse: `${slug}: a member, not the team lead, refines in the first round (spec section 4); the lead edits an item in stage refining only as its refiner` };
   }
-  if (incomplete.length && (before.team || teamScope().repo) && !refining && who && who !== teamLead() && !ownerClose && (actions.length || strip(note) || given.length || a.append || Object.keys(a).some(k => k.startsWith('set-')))) {
+  if (incomplete.length && (before.team || teamScope().repo) && !refining && who && who !== teamLead() && !ownerClose && (actions.length || strip(note) || given.length || a.append || a.section || Object.keys(a).some(k => k.startsWith('set-')))) {
     return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: only the team lead (${teamLead()}) refines it, not ${who}` };
   }
   // The team rules hold for team work only: an item of a team, or a session bound to a team (TEAM_NAME, TEAM_REPOSITORY). An item
@@ -512,7 +512,8 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
     const work = [...steps.filter(k => !(refining && REFINEMENT_STEPS.includes(k)) && !(k === 'close' && ownerClose)).map(k => `--${k}`), ...(strip(note) && !refining ? ['--note'] : []),
       // the owner's close of an incomplete item carries its --summary (the decision needs no refinement)
       ...given.filter(k => !(refining && ['name', 'objective', 'summary'].includes(k)) && !(ownerClose && k === 'summary')).map(k => `--${k}`),
-      ...(a.append && !/^(?:[ \t]*ESTIMATE:[^\n]*(?:\n|$))+$/.test(a.append.trim()) && !hasDefinitionOfDone(a.append) ? ['--append'] : [])]; // only ESTIMATE lines pass as such
+      ...(a.append && !/^(?:[ \t]*ESTIMATE:[^\n]*(?:\n|$))+$/.test(a.append.trim()) && !hasDefinitionOfDone(a.append) ? ['--append'] : []),
+      ...(a.section !== undefined && strip(a.section) !== 'Definition of done' ? ['--section'] : [])]; // only ESTIMATE lines and the definition of done pass as such
     if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${refineHow(slug, teamLead())}` };
   }
   if (!actions.length) return { event: 'state_change' };

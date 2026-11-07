@@ -63,6 +63,12 @@ The command names of the first release still work; each runs the command set bel
 - `done <item>` runs `backlog update <item> --status done`
 - `<item> done` runs `backlog update <item> --status done`
 - `move <item> <branch>` runs `backlog move <item> --to-branch <branch>`
+- `set <item> ac|tasks|outcomes|evidence|references|item-state-description|work_item_id <value> [--force]` runs `backlog update <item> --section <Heading> --set-lines <value> (the list is the section of that name in the item body)`
+- `add <item> <list> <entry> [--top]` runs `backlog update <item> --section <Heading> --add-line <entry> [--top]`
+- `replace <item> <list> <JSON-array>` runs `backlog update <item> --section <Heading> --set-lines <JSON-array>`
+- `remove <item> <list> <n>` runs `backlog update <item> --section <Heading> --remove-line <n>`
+- `priority <item> <list> <n> <position>` runs `backlog update <item> --section <Heading> --move-line <n>:<position>`
+- `new … --ac A --tasks J --outcomes J --evidence J --references J --item-state-description T --work_item_id W` runs `the same new with --body holding one section per given list (--ac is the section Definition of done; a JSON array becomes one line per entry)`
 - `<item> set|priority|move …` runs `the same command with the item first (backlog 3 done)`
 - `<command> --ask | --headless (or BACKLOG_HEADLESS=1)` runs `the command without the switch: it is accepted and ignored (--ask still asks for the folder in setup and init)`
 - `query --pop, next --agent` runs `nothing: it is refused with a pointer to backlog team pop --team <team> --agent <name> (--dry-run only answers)`

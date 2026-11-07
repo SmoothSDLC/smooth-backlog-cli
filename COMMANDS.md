@@ -69,6 +69,8 @@ The command names of the first release still work; each runs the command set bel
 - `remove <item> <list> <n>` runs `backlog update <item> --section <Heading> --remove-line <n>`
 - `priority <item> <list> <n> <position>` runs `backlog update <item> --section <Heading> --move-line <n>:<position>`
 - `new … --ac A --tasks J --outcomes J --evidence J --references J --item-state-description T --work_item_id W` runs `the same new with --body holding one section per given list (--ac is the section Definition of done; a JSON array becomes one line per entry)`
+- `import --branch <source> [--higher]` runs `for every open item of <source>, oldest first: backlog move <item> --to-branch <current branch>; with --higher then backlog update <item> --priority 0, newest first, so the imported items lead the queue in their order`
+- `archive done` runs `backlog archive <item> for every finished item of the current branch, oldest first`
 - `<item> set|priority|move …` runs `the same command with the item first (backlog 3 done)`
 - `<command> --ask | --headless (or BACKLOG_HEADLESS=1)` runs `the command without the switch: it is accepted and ignored (--ask still asks for the folder in setup and init)`
 - `query --pop, next --agent` runs `nothing: it is refused with a pointer to backlog team pop --team <team> --agent <name> (--dry-run only answers)`

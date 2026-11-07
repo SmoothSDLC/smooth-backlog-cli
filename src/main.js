@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { BacklogError } from './errors.js';
-import { aliasOf, translate } from './shared/aliases.js';
+import { aliasOf, plan, translate } from './shared/aliases.js';
 import { redact } from './shared/safety.js';
 const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 // One command set, wherever the item files live: setup here, everything else through the router. No arguments means next.
@@ -13,6 +13,9 @@ export async function run() {
       const row = aliasOf(argv); const { HELP } = await import('./help.js');
       if (row) { process.stdout.write(`backlog ${row.form} runs ${row.runs}\n${row.help ? `\n${HELP[row.help]}\n` : ''}`); return; }
     }
+    const sequence = plan(argv); // import and archive done run several commands
+    if (sequence?.error) throw new BacklogError('INVALID_INPUT', sequence.error);
+    if (sequence) { process.exitCode = await (await import('./shared/sequence.js')).run(sequence); return; }
     const alias = translate(argv); // the command names of the first release run the command set
     if (alias?.error) throw new BacklogError('INVALID_INPUT', alias.error);
     if (alias) argv = [alias.command, ...alias.argv];

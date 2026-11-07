@@ -86,3 +86,58 @@ Feature: Aliases - every command name of the first release still works and runs 
     And the output contains "2 items removed"
     And the queue is empty
     And the backlog repository has no uncommitted or unpushed change
+
+  Scenario: import brings the open items of another branch here, after the ones already queued
+    Given an item "Mine" exists
+    And an item "Theirs one" exists
+    And an item "Theirs two" exists
+    And a branch "feature" exists on the origin
+    And I run `backlog move 2 feature`
+    And I run `backlog move 3 feature`
+    When I run `backlog import --branch feature`
+    Then the command succeeds
+    And the output contains "imported 2 open item(s) of feature"
+    And the queue is 1, 2, 3
+    And item 2 has branch "main"
+
+  Scenario: import --higher puts the imported items first, in their original order
+    Given an item "Mine" exists
+    And an item "Theirs one" exists
+    And an item "Theirs two" exists
+    And a branch "feature" exists on the origin
+    And I run `backlog move 2 feature`
+    And I run `backlog move 3 feature`
+    When I run `backlog import --branch feature --higher`
+    Then the command succeeds
+    And the queue is 2, 3, 1
+
+  Scenario: import leaves finished items and an empty branch alone
+    Given an item "Mine" exists
+    And an item "Theirs" exists
+    And a branch "feature" exists on the origin
+    And I run `backlog done 2`
+    And I run `backlog move 2 feature`
+    When I run `backlog import --branch feature`
+    Then the command succeeds
+    And the output contains "nothing to import"
+    And the queue is 1
+    When I run `backlog import --branch main`
+    Then the command fails with exit code 2
+    And the output contains "that is the current branch"
+
+  Scenario: archive done archives every finished item and leaves the open ones
+    Given an item "One" exists
+    And an item "Two" exists
+    And an item "Three" exists
+    And I run `backlog done 1`
+    And I run `backlog done 2`
+    When I run `backlog archive done`
+    Then the command succeeds
+    And the output contains "archived 2 finished item(s): 001-one, 002-two"
+    And the queue is 3
+    When I run `backlog list archive`
+    Then the output contains "001-one"
+    When I run `backlog archive done`
+    Then the command succeeds
+    And the output contains "nothing to archive"
+

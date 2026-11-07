@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ALIASES, translate } from '../../src/shared/aliases.js';
+import { ALIASES, plan, translate } from '../../src/shared/aliases.js';
 
 const t = (input, output) => assert.deepEqual(translate(input), output, input.join(' '));
 
@@ -86,4 +86,16 @@ test('the list aliases translate to the section editor', () => {
   t(['3', 'add', 'outcomes', 'o'], { command: 'update', argv: ['3', '--section', 'Outcomes', '--add-line', 'o'] });
   t(['new', 'X', '--ac', 'it works', '--tasks', '["t1"]'], { command: 'new', argv: ['--name', 'X', '--summary', 'X', '--body', '## Definition of done\n\n- it works\n\n## Tasks\n\n- t1\n'] });
   t(['add', '3', 'nonsense', 'x'], null);
+});
+
+test('import and archive done are sequences, and the other spellings are refused or left alone', () => {
+  assert.deepEqual(plan(['import', '--branch', 'feature']), { kind: 'import', source: 'feature', higher: false });
+  assert.deepEqual(plan(['import', '--higher', '--branch=feature/x', '--headless']), { kind: 'import', source: 'feature/x', higher: true });
+  assert.match(plan(['import']).error, /needs --branch/);
+  assert.match(plan(['import', '--branch', 'a', '--force']).error, /unrecognized argument --force/);
+  assert.deepEqual(plan(['archive', 'done']), { kind: 'archive-done' });
+  assert.match(plan(['archive', 'done', 'x']).error, /takes no other argument/);
+  assert.equal(plan(['archive', '3']), null);
+  assert.equal(plan(['archive']), null);
+  assert.equal(plan(['query']), null);
 });

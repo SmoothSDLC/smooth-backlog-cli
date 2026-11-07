@@ -94,6 +94,8 @@ test('import and archive done are sequences, and the other spellings are refused
   assert.match(plan(['import']).error, /needs --branch/);
   assert.match(plan(['import', '--branch', 'a', '--force']).error, /unrecognized argument --force/);
   assert.deepEqual(plan(['archive', 'done']), { kind: 'archive-done' });
+  assert.match(plan(['--json', 'import', '--branch', 'a']).error, /import prints text only/);
+  assert.match(plan(['archive', 'done', '--json']).error, /archive done prints text only/);
   assert.match(plan(['archive', 'done', 'x']).error, /takes no other argument/);
   assert.equal(plan(['archive', '3']), null);
   assert.equal(plan(['archive']), null);

@@ -121,6 +121,9 @@ Feature: Aliases - every command name of the first release still works and runs 
     Then the command succeeds
     And the output contains "nothing to import"
     And the queue is 1
+    When I run `backlog import --branch nosuchbranch`
+    Then the command succeeds
+    And the output contains "check the name"
     When I run `backlog import --branch main`
     Then the command fails with exit code 2
     And the output contains "that is the current branch"

@@ -42,7 +42,11 @@ export async function run(plan) {
   const there = view(['--branch', plan.source]);
   if (there.failed) return stop(there.failed, 'nothing was changed');
   const open = (there.data.phases ?? []).filter(x => isOpen(x.status)).sort(bySeq);
-  if (!open.length) { say(`ℹ️  nothing to import: branch ${plan.source} has no open items`); return 0; }
+  if (!open.length) { // a name that no item carries is most likely a typo: say so (the exit code stays 0, as for a branch without open items)
+    const known = view(['--branches']).data;
+    say(Array.isArray(known) && known.some(c => c.branch === plan.source) ? `ℹ️  nothing to import: branch ${plan.source} has no open items` : `ℹ️  nothing to import: no item of branch ${plan.source} in this backlog (check the name)`);
+    return 0;
+  }
   const moved = [];
   for (const item of open) {
     const r = cli(['move', item.slug, '--to-branch', branch]);

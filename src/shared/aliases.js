@@ -104,7 +104,10 @@ export function translate(argv) {
 
 // The aliases that are a sequence of commands: { kind: 'import', source, higher } | { kind: 'archive-done' } | { error } | null.
 export function plan(argv) {
-  const rest = argv.filter(x => x !== '--headless' && x !== '--ask');
+  const all = argv.filter(x => x !== '--headless' && x !== '--ask');
+  const rest = all.filter(x => x !== '--json');
+  const name = rest[0] === 'archive' && rest[1] === 'done' ? 'archive done' : rest[0] === 'import' ? 'import' : null;
+  if (name && rest.length !== all.length) return { error: `${name} prints text only: --json is not available` }; // a JSON caller must not get text
   if (rest[0] === 'archive' && rest[1] === 'done') return rest.length === 2 ? { kind: 'archive-done' } : { error: `archive done takes no other argument (got ${rest[2]})` };
   if (rest[0] !== 'import') return null;
   let source; let higher = false;

@@ -10,8 +10,10 @@ import { configUser } from './setup.js';
 import { assertInside, checkRefs, git, redact, slugify } from './safety.js';
 import { addEvent, branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, undoOnThrow, write } from './store.js';
 import { commitSettled, pull } from './sync.js';
-import { normalise } from './workflow.js';
-import { foreignItem, isForeign, outsideTeam, strip, teamName, teamScope } from './team.js';
+import { normalise } from './status.js';
+import { outsideTeam, teamName, teamScope } from '../team/team.js';
+import { foreignItem, isForeign } from './dependencies.js';
+import { strip } from './text.js';
 
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; //
 const pad = n => String(n).padStart(3, '0');

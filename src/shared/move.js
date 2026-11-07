@@ -11,12 +11,14 @@ import { BacklogError } from '../errors.js';
 import { die, pyStr, refuse, say, teamRefusal, usage, valueLike, withBacklog } from './archive.js';
 import { parseItem as parseDoc } from './frontmatter.js';
 import { find } from './index.js';
-import { isOpen } from './workflow.js';
+import { isOpen } from './status.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
-import { asList, isForeign, teamScope } from './team.js';
-import { inProgress, wipRefusal } from './wip.js';
+import { teamScope } from '../team/team.js';
+import { asList } from './text.js';
+import { isForeign } from './dependencies.js';
+import { inProgress, wipRefusal } from '../team/wip.js';
 
 const VALUE = ['to-branch', 'all-open-of-branch', 'note'];
 

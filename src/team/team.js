@@ -2,15 +2,15 @@
 // (<home>/teams.json); identity and status come from the rows of the items (index.rows); the item files give the
 // metadata the rows do not hold (claims, waits, reviews).
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
-import { basename, dirname, join, resolve, sep } from 'node:path';
-import { BacklogError, input } from '../errors.js';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { input } from '../errors.js';
 import { edgeState, satisfied } from './handoff.js';
-import * as index from './index.js';
-import { parseItem as parse } from './frontmatter.js';
-import { itemSelector } from './safety.js';
-import { load } from './store.js';
-import { SOLO, isFinished, isOpen as isOpenWord, lift, loadWorkflow } from './workflow.js';
+import { folderRows, isForeign, itemFm, undoneDependencies as undoneDeps } from '../shared/dependencies.js';
+import { load } from '../shared/store.js';
+import { SOLO, isOpen as isOpenWord, isFinished, seam } from '../shared/status.js';
+import { asList, rstrip, strip } from '../shared/text.js';
+import { loadWorkflow } from './workflow.js';
 
 // An item's review documents (review_refs) say how it is reviewed; chunk work is chunk: true.
 // The refinement stages of a team's item; an item may be claimed when it has no stage (no team, or the team's work item,
@@ -19,14 +19,6 @@ export const isReady = fm => [undefined, null, '', 'ready'].includes(fm.stage);
 // The team lead: TEAM_LEAD, else the lead of the session's team in the backlog configuration (teams.json); no built-in name.
 export const teamLead = name => strip(name || process.env.TEAM_LEAD || teamsConfig()[teamName()]?.lead || '');
 
-// Python str.strip/rstrip whitespace (not JS's: \x1c-\x1f and \x85 count, a BOM does not).
-const WS = '\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
-export const rstrip = s => s.replace(new RegExp(`[${WS}]+$`), '');
-export const strip = s => rstrip(s).replace(new RegExp(`^[${WS}]+`), '');
-
-// a front-matter list as strings; missing, empty or 'none' is [].
-export const asList = v => (v == null || (typeof v === 'string' && ['', 'none'].includes(strip(v).toLowerCase())) ? []
-  : (Array.isArray(v) ? v : String(v).split(',')).map(x => strip(String(x))).filter(Boolean));
 
 // lib_db.is_chunk: a chunk item, small pieces of work any member does between items (front matter chunk: true).
 export const isChunk = fm => ['true', 'yes', '1'].includes(String(fm.chunk).toLowerCase());
@@ -63,68 +55,6 @@ export function outsideTeam(fm) {
   return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them`;
 }
 
-// phase_by_ident over the rows: by number (a live row before an archived one) or by slug.
-function byIdent(rows, ident) {
-  const sel = itemSelector(ident);
-  if (!sel) return null;
-  const hits = rows.filter(r => (sel.number !== undefined ? Number(r.seq) === sel.number : r.slug === sel.slug));
-  return hits.find(r => r.status !== 'archived') ?? hits[0] ?? null;
-}
-
-// item_fm: the front matter of the row's file, {} when it is gone (or outside the folder); a parse or I/O error propagates. The rows give
-// identity and status; the files only the metadata the rows do not hold.
-function itemFm(folder, row) {
-  let file;
-  try { file = realpathSync(resolve(folder, String(row.path))); } catch (e) { if (e.code === 'ENOENT') return {}; throw e; } // only a missing file is {}
-  return file.startsWith(realpathSync(folder) + sep) ? lifted(parse(readFileSync(file, 'utf8'))).fm : {};
-}
-
-// All rows of the folder's items (index.rows), in file order.
-export const folderRows = folder => index.rows(folder).rows;
-
-// owner/name#seq names an item of another repository's backlog in the same backlog repository clone.
-const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // an owner or repository name is one path segment, never. or..
-const FOREIGN = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
-export const isForeign = id => FOREIGN.test(String(id ?? '').trim());
-// {repository, seq, slug, status, fm} of a foreign reference; null when that repository has no backlog folder or no such
-// item; undefined when id is no foreign reference. folder: this repository's folder of the backlog repository.
-export function foreignItem(folder, id) {
-  const m = FOREIGN.exec(String(id ?? '').trim());
-  if (!m) return undefined;
-  if (!SAFE.test(m[1]) || !SAFE.test(m[2])) return null;
-  const other = join(dirname(dirname(resolve(folder))), m[1], m[2]);
-  if (!existsSync(other)) return null;
-  const hits = load(other).filter(i => Number(i.fm.seq) === Number(m[3]));
-  const it = hits.find(i => i.fm.status !== 'archived') ?? hits[0];
-  return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || basename(it.path, '.md'), status: it.fm.status ?? 'pending', fm: it.fm } : null;
-}
-// does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
-// to it? Returns the reference that closes the cycle, or null. Local entries are read in the folder they are written in.
-// cache: repository -> its items, shared by the calls of one check (a publication checks every changed item)
-export function foreignCycle(folder, repoId, seq, deps, cache = new Map()) {
-  const home = dirname(dirname(resolve(folder)));
-  const self = `${repoId}#${Number(seq)}`;
-  const items = repo => { if (!cache.has(repo)) { const dir = join(home, ...repo.split('/')); cache.set(repo, existsSync(dir) ? load(dir) : []); } return cache.get(repo); };
-  const nodeOf = (repo, d) => {
-    const s = String(d ?? '').trim();
-    const m = FOREIGN.exec(s);
-    if (m) return `${m[1]}/${m[2]}#${Number(m[3])}`;
-    const it = /^\d+$/.test(s) ? items(repo).find(i => Number(i.fm.seq) === Number(s)) : items(repo).find(i => (i.fm.phase || basename(i.path, '.md')) === s);
-    return it ? `${repo}#${Number(it.fm.seq)}` : null;
-  };
-  const seen = new Set();
-  const stack = asList(deps).map(d => nodeOf(repoId, d)).filter(Boolean);
-  while (stack.length) {
-    const node = stack.pop();
-    if (node === self) return self;
-    if (seen.has(node)) continue;
-    seen.add(node);
-    const [repo, n] = [node.slice(0, node.lastIndexOf('#')), Number(node.slice(node.lastIndexOf('#') + 1))];
-    const it = items(repo).find(i => Number(i.fm.seq) === n); // archived items too: their dependencies are still edges
-    if (it) for (const d of asList(it.fm.depends_on)) { const next = nodeOf(repo, d); if (next) stack.push(next); }
-  }
-  return null;
-}
 // the edge state of a done producer that does not satisfy the edge; null while it is satisfied
 // (accepted or legacy). The row decides the producer is done - the files give only the metadata the rows do not
 // hold - so the row's status stands in for a producer file that is gone (a done producer without a handoffs key
@@ -134,27 +64,6 @@ const edgeRefusal = (producerFm, dependentId) => {
   return satisfied(state) ? null : state;
 };
 
-// [{id as written, item: the row or null, fm}] for each depends_on entry that is not done or archived.
-// rows = the rows of folder (the default), or those of another repository's backlog read by the caller. A foreign
-// entry is read from that repository's folder; its item carries the repository. a done producer
-// whose hand-off the lead has not accepted is an unfinished dependency too - the entry carries the edge state in
-// handoff (missing, unaccepted, stale or rejected); a satisfied edge (accepted, legacy) is no entry. The dependent
-// is named as the producer's repository names it: its seq for a same-repository producer,
-// <dependent repository>#<seq> for a producer of another repository.
-export function undoneDependencies(folder, fm, rows = folderRows(folder)) {
-  return asList(fm.depends_on).map(id => {
-    const f = foreignItem(folder, id);
-    if (f !== undefined) {
-      const dependentId = f && f.repository === (fm.repository || undefined) ? String(fm.seq) : `${fm.repository}#${fm.seq}`;
-      const handoff = f && f.status === 'closed' ? edgeRefusal(f.fm, dependentId) : null;
-      return { id, item: f && { slug: f.slug, seq: f.seq, status: f.status, repository: f.repository }, fm: f ? f.fm : {}, foreign: true, ...(handoff ? { handoff } : {}) };
-    }
-    const item = byIdent(rows, id);
-    const producer = item ? itemFm(folder, item) : {};
-    const handoff = item && item.status === 'closed' ? edgeRefusal({ ...producer, status: item.status }, String(fm.seq)) : null;
-    return { id, item, fm: producer, ...(handoff ? { handoff } : {}) };
-  }).filter(d => !d.item || !isFinished(d.item.status) || d.handoff);
-}
 
 // the open rows of the active handoff whose file says agent holds them, on every branch, by number.
 // state: awaiting-review, waiting:<what>, active.
@@ -262,7 +171,9 @@ export const STOP_TEXT = 'your session is being replaced by a fresh one for your
 // The team entry that governs an item (its team's entry in the configuration; the solo rule for an item outside a team) and an item
 // read from its file as the word it carries (status) with the two fields the pop still asks (stage, review_state).
 export const entryOf = fm => (fm.team ? teamsConfig()[strip(String(fm.team))] : SOLO);
-export const lifted = doc => lift(doc, entryOf(doc.fm));
+// `backlog team` reads items with the team's entry: installed here, so any module that loads the team rules has it.
+seam.entry = entryOf;
+seam.isMember = isTeamMember;
 
 // ---- team definitions (backlog team define)
 
@@ -328,3 +239,6 @@ export function openItemsOf(home, name) {
   }
   return n;
 }
+
+// The undone dependencies with the hand-off rule of the team: a done producer whose hand-off the lead has not accepted is unfinished too.
+export const undoneDependencies = (folder, fm, rows) => undoneDeps(folder, fm, rows, edgeRefusal);

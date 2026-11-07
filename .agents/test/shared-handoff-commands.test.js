@@ -1,4 +1,4 @@
-// Item 059.2: the hand-off commands' logic (src/shared/handoff-commands.js): recordHandoff is the
+// Item 059.2: the hand-off commands' logic (src/team/handoff-commands.js): recordHandoff is the
 // producer's --handoff (only the claimer, only for a real dependent), acceptHandoff and rejectHandoff
 // are the team lead's --accept-handoff / --reject-handoff (only the lead, only while a record exists,
 // the acceptance only after the producer's review passed). The items are made with the CLI in a
@@ -10,10 +10,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as store from '../../src/shared/store.js';
-import * as handoff from '../../src/shared/handoff.js';
+import * as handoff from '../../src/team/handoff.js';
 import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 import { GIT_IDENTITY, cli, consumer, sharedBacklog } from './shared-fixtures.js';
-import { recordHandoff, acceptHandoff, rejectHandoff } from '../../src/shared/handoff-commands.js';
+import { recordHandoff, acceptHandoff, rejectHandoff } from '../../src/team/handoff-commands.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));

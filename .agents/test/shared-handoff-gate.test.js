@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
-import * as handoff from '../../src/shared/handoff.js';
+import * as handoff from '../../src/team/handoff.js';
 import { GIT_IDENTITY, cli, consumer, intoTeam, sharedBacklog, teamMembers } from './shared-fixtures.js';
 
 const dirs = [];

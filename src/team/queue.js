@@ -8,16 +8,17 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BacklogError } from '../errors.js';
-import * as index from './index.js';
+import * as index from '../shared/index.js';
 import { refineHow, missingFields, reviewRefusal, stageOf as stageOfItem } from './lifecycle.js';
-import { assertInside, git, redact } from './safety.js';
-import * as seen from './seen.js';
-import * as store from './store.js';
-import * as sync from './sync.js';
+import { assertInside, git, redact } from '../shared/safety.js';
+import * as seen from '../shared/seen.js';
+import * as store from '../shared/store.js';
+import * as sync from '../shared/sync.js';
 import * as team from './team.js';
+import { asList } from '../shared/text.js';
 import { SCOPES, refinementCap, reviewOffer, teamRows, waitingOn } from './views.js';
 import { wipRefusal } from './wip.js';
-import { isUnstarted } from './workflow.js';
+import { isUnstarted } from '../shared/status.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'plan', 'claim-now'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'scope'];
@@ -56,10 +57,10 @@ function excludedIds(rows, repo) {
 }
 
 //
-const dod = fm => { const refs = team.asList(fm.review_refs); return refs.length ? `; definition of done: ${refs.join(', ')} (the review-documents repository: load them before working)` : ''; };
+const dod = fm => { const refs = asList(fm.review_refs); return refs.length ? `; definition of done: ${refs.join(', ')} (the review-documents repository: load them before working)` : ''; };
 //
 function reviewSay(slug, fm, me) {
-  const refs = team.asList(fm.review_refs);
+  const refs = asList(fm.review_refs);
   let text = fm.review_state === 'in_review' && fm.reviewer === me ? `continue your review (started ${fm.review_started ?? 'None'}): `
     : `start the review: ${team.teamStep(slug, me, '--start-review')}; then `;
   text += 'review the work of ';
@@ -253,7 +254,7 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
 const waitsAway = (folder, x) => (x.undone ?? team.undoneDependencies(folder, x.fm)).some(d => d.foreign && d.item?.status !== 'closed');
 async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
   const roster = team.teamMembers(team.teamName()); // the members of the team's entry, in order
-  const want = new Set(a.agents ? team.asList(a.agents) : roster);
+  const want = new Set(a.agents ? asList(a.agents) : roster);
   const members = roster.filter(m => want.has(m));
   const lead = team.teamLead(a.lead);
   const files = new Map(store.load(folder).map(i => [i.path, i]));

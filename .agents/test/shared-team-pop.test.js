@@ -1,4 +1,4 @@
-// Tests for `backlog pop` (src/shared/pop.js) - cli-parity job 20 (POP).
+// Tests for `backlog pop` (src/team/queue.js) - cli-parity job 20 (POP).
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';

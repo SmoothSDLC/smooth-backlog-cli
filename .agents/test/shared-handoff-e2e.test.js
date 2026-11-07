@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
-import { decodeList, edgeState } from '../../src/shared/handoff.js';
+import { decodeList, edgeState } from '../../src/team/handoff.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 
 const dirs = [];

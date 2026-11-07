@@ -5,12 +5,14 @@
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
-import * as index from './index.js';
+import * as index from '../shared/index.js';
 import { missingFields, stageOf } from './lifecycle.js';
-import { assertInside, redact } from './safety.js';
-import * as store from './store.js';
+import { assertInside, redact } from '../shared/safety.js';
+import * as store from '../shared/store.js';
 import * as team from './team.js';
-import { isUnstarted } from './workflow.js';
+import { asList, strip } from '../shared/text.js';
+import { folderRows } from '../shared/dependencies.js';
+import { isUnstarted } from '../shared/status.js';
 
 export const SCOPES = ['branch', 'repo', 'all'];
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
@@ -43,7 +45,7 @@ export function reviewOffer(fm, agent) {
 export async function teamRows({ open, scope, cap, every, excluded, repo, branch, folder, home }) {
   const ref = RANK[scope] <= RANK[cap] ? scope : cap;
   const mine = files(folder);
-  const rowsOfFolder = team.folderRows(folder);
+  const rowsOfFolder = folderRows(folder);
   const out = [];
   for (const r of open) {
     if (excluded.has(r.id)) continue;
@@ -80,7 +82,7 @@ export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d
 // (the last "Owner decision needed" section of the item), for the morning report. Answer: backlog team update <item> --team <team> --agent <name> --decision.
 function decisionsView(found, { a, scope, repo, branch, own, say, dump }) {
   const rows = found.map(({ r, fm }) => ({ ...r, team: fm.team || null, decision_requested_by: fm.decision_requested_by || null,
-    decision_requested_at: fm.decision_requested_at || null, question: team.strip(String(fm.decision_question ?? '')) })); // review-hitl came with this build: every decision carries its question
+    decision_requested_at: fm.decision_requested_at || null, question: strip(String(fm.decision_question ?? '')) })); // review-hitl came with this build: every decision carries its question
   if (a.json) { dump(rows); return 0; }
   const where = a.all ? '(all)' : scope === 'branch' ? redact(branch) : `(scope ${scope})`;
   say(`📋 ${rows.length} owner decision(s) waiting — ${repo}, branch ${where}; answer with ${team.teamStep('<item>', '<you>', '--decision "<answer>"')}:`);
@@ -120,7 +122,7 @@ export async function teamView(a, { rows, excluded, repo, branch, folder, home, 
     say(`📋 ${found.length} ${a.claimable ? 'claimable' : a.reviewable ? 'reviewable' : 'blocked'} item(s) — ${repo}, branch ${where}, P0 = next:`);
     for (const { r, fm, undone, f } of found) {
       say(`   P${String(r.priority).padEnd(3)} ${r.slug} (${r.status}) — ${r.name}${f === repo ? '' : `  [repository ${redact(f)}]`}`);
-      say(`        review_refs=${team.asList(fm.review_refs).join(',') || '-'} `
+      say(`        review_refs=${asList(fm.review_refs).join(',') || '-'} `
         + `claimed_by=${fm.claimed_by || '-'} review=${fm.review_state || 'none'}${fm.reviewer ? ` reviewer=${fm.reviewer}` : ''}${jobFields(fm)}`);
       for (const dep of undone) say(`        waits on ${team.describeDependency(dep)}`);
     }

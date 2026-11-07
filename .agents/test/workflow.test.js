@@ -5,7 +5,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { STATUSES, SIDE, isFinished, isOpen, isUnstarted, loadWorkflow, normalise, stageList, statusOf, validateWorkflow } from '../../src/shared/workflow.js';
+import { loadWorkflow, validateWorkflow } from '../../src/team/workflow.js';
+import { STATUSES, SIDE, isFinished, isOpen, isUnstarted, normalise, stageList, statusOf } from '../../src/shared/status.js';
 
 const SHIPPED = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'templates', 'workflows', 'team.json'), 'utf8'));
 const copy = () => structuredClone(SHIPPED);

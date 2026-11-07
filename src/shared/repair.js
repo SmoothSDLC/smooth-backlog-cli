@@ -6,7 +6,7 @@ import { say, refuse } from './archive.js';
 import { dump, parse, splitBom } from './frontmatter.js';
 import { git, itemSelector } from './safety.js';
 import * as store from './store.js';
-import { normalise } from './workflow.js';
+import { normalise } from './status.js';
 
 const INTEGERS = ['seq', 'size_score'];
 

@@ -3,19 +3,17 @@
 // Each action takes item = {fm, folder, repo, body}, changes item.fm and returns {event, text}, or throws Rejected(message)
 // with the refusal text; step runs the guards and one action, and update.js writes the front matter and appends the text.
 import { spawnSync } from 'node:child_process';
-import { hasDefinitionOfDone } from './new.js';
-import { actor } from './seen.js';
+import { hasDefinitionOfDone } from '../shared/new.js';
+import { actor } from '../shared/seen.js';
 import { wipRefusal } from './wip.js';
-import { canStep, isFinished, need, next, passCount, stageOfStatus, stageRules, stageSatisfied } from './workflow.js';
-import { now } from './store.js';
+import { canStep, next, stageSatisfied } from './workflow.js';
+import { isFinished, need, passCount, stageOfStatus, stageRules } from '../shared/status.js';
+import { now } from '../shared/store.js';
 import { acceptHandoff, recordHandoff, rejectHandoff } from './handoff-commands.js';
 import { openEdges } from './handoff.js';
 import { closeGate } from './handoff-close.js';
-import {
-  entryOf, offeredTo, teamName, isTeamMember, refinementReviewRules,
-  asList, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, outsideTeam, reviewOpenTo, strip,
-  staleReview, teamLead, teamScope, teamStep, undoneDependencies,
-} from './team.js';
+import { entryOf, offeredTo, teamName, isTeamMember, refinementReviewRules, claimRefusal, describeDependency, gitBranch, heldBy, isReady, isReviewAuthor, outsideTeam, reviewOpenTo, staleReview, teamLead, teamScope, teamStep, undoneDependencies } from './team.js';
+import { asList, strip } from '../shared/text.js';
 
 export class Rejected extends Error {}
 const reject = (message, whole = false) => { throw Object.assign(new Rejected(message), { whole }); }; // whole: the text already names the item

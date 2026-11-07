@@ -7,9 +7,9 @@
 import { createHash } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { asList, strip } from './team.js';
-import { load } from './store.js';
-import { normalise } from './workflow.js';
+import { asList, strip } from '../shared/text.js';
+import { load } from '../shared/store.js';
+import { normalise } from '../shared/status.js';
 
 const HEX40 = /^[0-9a-f]{40}$/i; // git commit ids are hex, any case
 const empty = v => !v || !String(v).trim();

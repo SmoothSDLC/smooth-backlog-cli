@@ -11,12 +11,14 @@ import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import * as team from './team.js';
-import { lifted, teamScope } from './team.js';
-import { missingFields } from './lifecycle.js';
-import { SCOPES, teamView } from './views.js';
-import { wipView } from './wip.js';
-import { isFinished, isOpen } from './workflow.js';
+import { asList } from './text.js';
+import { foreignItem, isForeign, undoneDependencies } from './dependencies.js';
+import { teamScope } from '../team/team.js';
+import { lifted } from './status.js';
+import { missingFields } from '../team/lifecycle.js';
+import { SCOPES, teamView } from '../team/views.js';
+import { wipView } from '../team/wip.js';
+import { isFinished, isOpen } from './status.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip', 'changed', 'branches'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'scope', 'only'];
@@ -144,7 +146,7 @@ async function query(argv, fromTeam) {
   const view = TEAM_VIEWS.find(k => a[k]);
   if (view && !fromTeam) return die(`--${view} is a team view: use backlog team query --team <team> --agent <name> --${view}`);
   if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
-  if (a.plan) return (await import('./pop.js')).run(argv); // pop.js repeats the preamble below for its own flags
+  if (a.plan) return (await import('../team/queue.js')).run(argv); // pop.js repeats the preamble below for its own flags
 
   const cwd = process.cwd();
   let repo;
@@ -212,7 +214,7 @@ async function query(argv, fromTeam) {
         return 0;
       }
       // the next item may wait on another repository's item: that is named as the work to do first
-      const away = team.undoneDependencies(folder, fms.get(r.path) ?? {}, rows).filter(d => d.foreign && d.item && d.item.status !== 'closed')
+      const away = undoneDependencies(folder, fms.get(r.path) ?? {}, rows).filter(d => d.foreign && d.item && d.item.status !== 'closed')
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
       const file = items.find(i => i.path === r.path); // the whole item: front matter and body
       if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null }); return 0; }
@@ -266,7 +268,7 @@ async function query(argv, fromTeam) {
       }
       // newest first: the lines of one item are appended in time order, so reversing first keeps equal timestamps in that order
       const events = items.filter(i => path === null || i.path === path)
-        .flatMap(i => team.asList(i.fm.events).map(store.parseEvent)).reverse().sort((x, y) => (x.ts < y.ts ? 1 : x.ts > y.ts ? -1 : 0));
+        .flatMap(i => asList(i.fm.events).map(store.parseEvent)).reverse().sort((x, y) => (x.ts < y.ts ? 1 : x.ts > y.ts ? -1 : 0));
       if (path === null) events.length = Math.min(events.length, 50);
       for (const e of events) say(`  ${e.ts}  ${String(e.event).padEnd(14)} branch=${e.branch} commit=${sha7(e)} ${e.note}`);
       return 0;
@@ -314,8 +316,8 @@ async function query(argv, fromTeam) {
       // a dependency on another repository's item is shown with its state
       { // every status: a done item still shows what it depended on
         const deps = (byPath ??= new Map(items.map(i => [i.path, i.fm]))).get(r.path)?.depends_on;
-        for (const d of team.asList(deps).filter(team.isForeign)) {
-          const f = team.foreignItem(folder, d);
+        for (const d of asList(deps).filter(isForeign)) {
+          const f = foreignItem(folder, d);
           say(`        ⛓ depends on ${d}${f ? ` ${f.slug} (status ${f.status})` : ' (no such item in the backlog repository)'}`);
         }
       }

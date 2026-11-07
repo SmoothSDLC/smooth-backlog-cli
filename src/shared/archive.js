@@ -11,7 +11,7 @@ import { parseItem as parseDoc } from './frontmatter.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { outsideTeam, teamScope } from './team.js';
+import { outsideTeam, teamScope } from '../team/team.js';
 
 // Python repr of a str, for the earlier scripts `{x!r}`.
 export function pyStr(s) {

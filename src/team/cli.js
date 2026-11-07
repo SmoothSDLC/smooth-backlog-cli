@@ -5,12 +5,13 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { atomicWrite } from '../storage.js';
 import { BacklogError } from '../errors.js';
-import { readConfig, topOf } from './setup.js';
-import { redact } from './safety.js';
-import { cloneLocked, resolveHome } from './store.js';
-import * as sync from './sync.js';
-import { parse as parsePop } from './team-pop.js';
-import { forgetTeamsConfig, openItemsOf, setSessionTeam, strip, teamEntry, teamsConfig, validateTeam } from './team.js';
+import { readConfig, topOf } from '../shared/setup.js';
+import { redact } from '../shared/safety.js';
+import { cloneLocked, resolveHome } from '../shared/store.js';
+import * as sync from '../shared/sync.js';
+import { parse as parsePop } from './pop.js';
+import { forgetTeamsConfig, openItemsOf, setSessionTeam, teamEntry, teamsConfig, validateTeam } from './team.js';
+import { strip } from '../shared/text.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
@@ -57,14 +58,14 @@ const unconfigured = team => { process.stdout.write(`❌ ${loadWorkflow('team').
 // The team views of the plain query: the agent is passed on only when it was named, as the views behaved before.
 async function query(rest, { team }, got) {
   if (!teamsConfig()[team]) return unconfigured(team);
-  return (await import('./query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])], { fromTeam: true });
+  return (await import('../shared/query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])], { fromTeam: true });
 }
 
 async function update(rest, { team, agent }) {
   if (!teamsConfig()[team]) return unconfigured(team);
   const args = withAgent(rest, agent);
   if (!args.some(x => x === '--by' || x.startsWith('--by=') || x === '--claim' || x === '--release')) args.push('--by', agent);
-  return (await import('./update.js')).run(args, { team: true });
+  return (await import('../shared/update.js')).run(args, { team: true });
 }
 
 export async function run(argv) {
@@ -85,7 +86,7 @@ async function dispatch(argv) {
   if (sub === 'pop') {
     parsePop(split_.rest); // a flag this command refuses is refused before anything else
     if (!teamsConfig()[who.team]) { process.stdout.write(`❌ ${loadWorkflow('team').refusals.team_not_configured.replace('<team>', who.team)}\n`); return 1; }
-    return (await import('./team-pop.js')).run(who, split_.rest);
+    return (await import('./pop.js')).run(who, split_.rest);
   }
   return die(`team ${sub} is not available yet`);
 }

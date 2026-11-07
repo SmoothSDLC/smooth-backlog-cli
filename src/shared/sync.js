@@ -13,9 +13,11 @@ import { parseItem as parse } from './frontmatter.js';
 import * as index from './index.js';
 import { actor, primarySlug, publicationGuard, staleError, staleViews } from './seen.js';
 import * as store from './store.js';
-import { asList, foreignCycle, foreignItem, heldBy, isForeign } from './team.js';
-import { wipRefusal } from './wip.js';
-import { isFinished, isOpen } from './workflow.js';
+import { heldBy } from '../team/team.js';
+import { asList } from './text.js';
+import { foreignCycle, foreignItem, isForeign } from './dependencies.js';
+import { wipRefusal } from '../team/wip.js';
+import { isFinished, isOpen } from './status.js';
 
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'; // what a branch the origin does not have yet is compared with: every file is new
 const OFFLINE = '⚠️  origin offline, local backlog updates may be behind and need manual remediation later';

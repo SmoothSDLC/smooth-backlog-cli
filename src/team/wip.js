@@ -9,7 +9,7 @@
 // one a member is refining (stage refining, a refiner, no claimer).
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { load } from './store.js';
+import { load } from '../shared/store.js';
 import { heldBy, teamStep } from './team.js';
 
 const LEVELS = ['overall', 'repository', 'branch', 'team', 'agent'];

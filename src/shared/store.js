@@ -14,8 +14,10 @@ import { repoIdFromUrl } from './safety.js';
 import * as index from './index.js';
 import { actor, created, guarded } from './seen.js';
 import { CONFIG, configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
-import { asList, lifted, outsideTeam, setTeamsHome } from './team.js';
-import { derivedKeys, dropsLegacy, isOpen } from './workflow.js';
+import { outsideTeam, setTeamsHome } from '../team/team.js';
+import { asList } from './text.js';
+import { lifted } from './status.js';
+import { derivedKeys, dropsLegacy, isOpen } from './status.js';
 
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //

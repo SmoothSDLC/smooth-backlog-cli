@@ -1,4 +1,4 @@
-// Item 059.3: the close gate's logic (src/shared/handoff-close.js, the module the integration slice calls from
+// Item 059.3: the close gate's logic (src/team/handoff-close.js, the module the integration slice calls from
 // closeItem and the --status done path): an item closes only while every dependent's edge is accepted, the refusal
 // naming every open dependent, its edge state and the next command; without dependents the gate records NONE.
 // Fixtures are written in the stored form: handoffs and handoff_receipts hold the compact JSON strings encode makes.
@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import * as handoff from '../../src/shared/handoff.js';
-import { closeGate } from '../../src/shared/handoff-close.js';
+import * as handoff from '../../src/team/handoff.js';
+import { closeGate } from '../../src/team/handoff-close.js';
 import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 
 const dirs = [];

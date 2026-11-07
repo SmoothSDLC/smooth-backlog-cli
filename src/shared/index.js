@@ -9,7 +9,7 @@ import { hasFrontMatter } from './frontmatter.js';
 import { itemSelector } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { isOpen as workflowOpen } from './workflow.js';
+import { isOpen as workflowOpen } from './status.js';
 
 export const file = folder => join(folder, 'index.json');
 export const exists = folder => existsSync(file(folder));

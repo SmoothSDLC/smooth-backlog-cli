@@ -2,11 +2,11 @@
 // acceptHandoff and rejectHandoff the team lead's --accept-handoff / --reject-handoff. Each takes
 // ctx = {fm, body, slug, folder, repo} and the options, changes nothing on disk, and returns
 // {refuse} (the text after "❌ ") or {fm: {<keys to set, in the stored form>}, text: <the block to append
-// to the body>, event}. The data rules are 059.1's src/shared/handoff.js; the integration slice calls
-// these from src/shared/lifecycle.js.
+// to the body>, event}. The data rules are 059.1's src/team/handoff.js; the integration slice calls
+// these from src/team/lifecycle.js.
 import { decodeList, dependentsOf, edgeState, encode, makeReceipt, makeRecord, receiptBlock, recordBlock } from './handoff.js';
-import { now } from './store.js';
-import { strip } from './team.js';
+import { now } from '../shared/store.js';
+import { strip } from '../shared/text.js';
 
 const source = ctx => `${ctx.repo}#${ctx.fm.seq}`;
 // The current record for the dependent: the last one in the stored form, exactly as edgeState looks it up.

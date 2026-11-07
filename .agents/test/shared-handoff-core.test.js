@@ -1,4 +1,4 @@
-// Item 059.1: the hand-off core of item 059 (src/shared/handoff.js, pure functions, no command yet): the digest that
+// Item 059.1: the hand-off core of item 059 (src/team/handoff.js, pure functions, no command yet): the digest that
 // pins a producer record, the record and receipt builders, the six edge states, the dependents of a producer across
 // the repository folders of the backlog repository, and the DEPENDENCY_HANDOFF / HANDOFF_ACCEPTED / HANDOFF_REJECTED
 // body blocks of the item-dependency-handoff method.
@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import * as handoff from '../../src/shared/handoff.js';
-import * as team from '../../src/shared/team.js';
+import * as handoff from '../../src/team/handoff.js';
+import { foreignItem } from '../../src/shared/dependencies.js';
 import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 
 const dirs = [];
@@ -220,12 +220,12 @@ test('059.1: dependentsOf propagates a load error of a sibling repository folder
   assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), /item 004-broken: the item has no readable header \(line 1 is not a 'key: value' pair/, 'a folder that cannot be loaded propagates, so its dependents cannot be missed');
 });
 
-test('059.1: the zero-padded foreign spelling resolves through the item 042 pattern (team.js foreignItem)', () => {
+test('059.1: the zero-padded foreign spelling resolves through the item 042 pattern (dependencies.js foreignItem)', () => {
   const home = store();
   const other = join(home, 'acme', 'lib');
   mkdirSync(join(other, 'phases'), { recursive: true });
   writeFileSync(join(other, 'phases', '004-x.md'), dump({ seq: 4, phase: '004-x', status: 'pending', depends_on: [] }, '## Definition of done\n\n- [ ] x\n'));
-  const hit = team.foreignItem(join(home, 'acme', 'app'), 'acme/lib#04');
+  const hit = foreignItem(join(home, 'acme', 'app'), 'acme/lib#04');
   assert.equal(hit?.seq, 4, 'owner/name#04 names the item with seq 4, compared numerically');
 });
 

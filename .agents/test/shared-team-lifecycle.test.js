@@ -1,4 +1,4 @@
-// Tests for src/shared/team.js and src/shared/lifecycle.js - cli-parity job 15 (TEAM): the team metadata rules and the
+// Tests for src/team/team.js and src/team/lifecycle.js - cli-parity job 15 (TEAM): the team metadata rules and the
 // claim, review, wait and close lifecycle of `backlog update`.
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
@@ -11,8 +11,9 @@ import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './share
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
-import * as team from '../../src/shared/team.js';
-import { shutdown } from '../../src/shared/lifecycle.js';
+import * as team from '../../src/team/team.js';
+import { asList } from '../../src/shared/text.js';
+import { shutdown } from '../../src/team/lifecycle.js';
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -166,10 +167,10 @@ test('an incomplete item is only refined: no claim, no note', () => {
 });
 
 test('team.js: lists, chunk items, review documents', () => {
-  assert.deepEqual(team.asList(' a, b ,,c '), ['a', 'b', 'c']);
-  assert.deepEqual(team.asList(' None '), []);
-  assert.deepEqual(team.asList(undefined), []);
-  assert.deepEqual(team.asList([1, ' x ', '']), ['1', 'x']);
+  assert.deepEqual(asList(' a, b ,,c '), ['a', 'b', 'c']);
+  assert.deepEqual(asList(' None '), []);
+  assert.deepEqual(asList(undefined), []);
+  assert.deepEqual(asList([1, ' x ', '']), ['1', 'x']);
   for (const v of [true, 'true', 'yes', '1', 'True']) assert.equal(team.isChunk({ chunk: v }), true, String(v)); // lib_db.is_chunk
   for (const v of [false, 'no', '', undefined]) assert.equal(team.isChunk({ chunk: v }), false, String(v));
   assert.equal(team.isChunk({ work_class: ['chunk'] }), false); // the old class field means nothing

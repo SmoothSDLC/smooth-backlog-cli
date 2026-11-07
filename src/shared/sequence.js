@@ -2,7 +2,7 @@
 // itself; the first step that fails stops the sequence, and the output says what was done before it.
 // shortcut: each step starts a process and pulls the repository again, which is fine for the tens of items an import moves.
 import { spawnSync } from 'node:child_process';
-import { isFinished, isOpen } from './workflow.js';
+import { isFinished, isOpen } from './status.js';
 import { redact } from './safety.js';
 
 const cli = args => spawnSync(process.execPath, [process.argv[1], ...args], { encoding: 'utf8', maxBuffer: 1 << 26 });

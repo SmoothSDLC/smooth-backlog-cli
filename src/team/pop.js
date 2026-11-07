@@ -5,13 +5,14 @@
 // and the whole item is printed. Every step is a run of this CLI, so every rule of `team update` applies unchanged.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { storedFm } from './frontmatter.js';
-import * as index from './index.js';
+import { storedFm } from '../shared/frontmatter.js';
+import * as index from '../shared/index.js';
 import { caller, isSplitSlice, missingFields } from './lifecycle.js';
-import { redact } from './safety.js';
-import { folder as repoFolder, load, repoId, resolveHome } from './store.js';
-import { gitBranch, heldBy, strip, teamLead, teamScope, teamStep, undoneDependencies } from './team.js';
-import { isOpen } from './workflow.js';
+import { redact } from '../shared/safety.js';
+import { folder as repoFolder, load, repoId, resolveHome } from '../shared/store.js';
+import { gitBranch, heldBy, teamLead, teamScope, teamStep, undoneDependencies } from './team.js';
+import { strip } from '../shared/text.js';
+import { isOpen } from '../shared/status.js';
 
 const clean = v => (typeof v === 'string' ? redact(v) : Array.isArray(v) ? v.map(clean) : v !== null && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)])) : v); // redacted before it is serialized
 // The holder of an item as its front matter shows it (the stored form: owner while owned_since is set).
@@ -44,7 +45,7 @@ async function engine(args) {
   let out = '';
   process.stdout.write = chunk => { out += chunk; return true; };
   let code;
-  try { code = await (await import('./pop.js')).run(args); } finally { process.stdout.write = write; }
+  try { code = await (await import('./queue.js')).run(args); } finally { process.stdout.write = write; }
   return { code, out };
 }
 

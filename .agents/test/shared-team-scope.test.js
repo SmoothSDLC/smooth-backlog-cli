@@ -1,4 +1,4 @@
-// Tests for the team views of src/shared/query.js (src/shared/views.js) - cli-parity job 16 (VIEWS), part 2.
+// Tests for the team views of src/shared/query.js (src/team/views.js) - cli-parity job 16 (VIEWS), part 2.
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';

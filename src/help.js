@@ -30,6 +30,7 @@ Usage:
   backlog archive <item> [--force] [--dry-run]     Archive a finished item
   backlog fields [--json]                          The item template: every field, what it is for, who sets it
   backlog setup [--ask]                            Point this repository at its backlog folder and deploy the backlog skill
+  backlog upgrade [check|auto|off|disable|<version>]  Update the backlog program itself
   backlog <command> --help                         Every option of the command, what it does, and an example
   backlog --version
 
@@ -784,5 +785,35 @@ Exit codes: 0 done; 2 a usage error or a folder that is no clone of the backlog 
 
 Example:
   backlog setup
+`,
+  upgrade: `backlog upgrade — update the backlog program itself from the package registry
+
+Usage:
+  backlog upgrade                Install the latest stable release when it is newer than this one
+  backlog upgrade check          Look for a newer release and say which; install nothing
+  backlog upgrade auto           Turn automatic updates on (patch and minor releases within this major version) and check now
+  backlog upgrade off            Turn automatic updates off
+  backlog upgrade disable        Turn the weekly check for a newer release off
+  backlog upgrade <version>      Install exactly this release (for example 1.2.3) when it is newer than this one
+
+The first release's names work too: backlog update, backlog update check, auto, off, disable and backlog update 1.2.3 run
+this command. With an item or an option, backlog update is the item command.
+
+The program is replaced as a whole and only after the new one passed its own checks; a failed update leaves the installed
+program as it was. Only installs made with npm (global or into a user prefix) are updated; the command never asks for
+more privileges. The package registry must be configured for the @smoothsdlc scope (npm config set
+@smoothsdlc:registry https://npm.pkg.github.com, then npm login --scope=@smoothsdlc --auth-type=legacy
+--registry=https://npm.pkg.github.com with read:packages access); a missing setup is answered with these instructions.
+The choices (weekly check, automatic updates, last check) are kept in a file of the user's configuration folder
+(smooth-backlog-cli/config.json under $XDG_CONFIG_HOME, else ~/.config), never in a repository. It needs no backlog.
+
+Options:
+  --json
+      Print the result as JSON.
+${HELP_FLAG}
+Exit codes: 0 done; 1 the registry or npm could not be used, the install is not one the command can replace, or nothing may be written there; 2 a usage error.
+
+Example:
+  backlog upgrade check
 `,
 };

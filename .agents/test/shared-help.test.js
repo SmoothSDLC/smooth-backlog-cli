@@ -90,7 +90,7 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
 test('every command of the router has a help text, a line of backlog --help and a block in COMMANDS.md', async () => {
   const { TABLE } = await import('../../src/shared/router.js');
   assert.deepEqual(Object.keys(TABLE).sort(), [...COMMANDS, 'list'].sort());
-  assert.deepEqual(Object.keys(HELP).sort(), [...COMMANDS, 'setup'].sort()); // setup runs before the router; list prints the query help
+  assert.deepEqual(Object.keys(HELP).sort(), [...COMMANDS, 'setup', 'upgrade'].sort()); // setup and upgrade run before the router; list prints the query help
   const top = cli(['--help'], { cwd: cons, tmp: t }).stdout;
   for (const command of Object.keys(TABLE)) {
     assert.match(top, new RegExp(`^ {2}backlog ${command}( |$)`, 'm'), `${command}: backlog --help`);

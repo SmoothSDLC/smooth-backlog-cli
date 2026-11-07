@@ -24,7 +24,7 @@ in a backlog repository shared by many); it changes no command, and every change
 When the `backlog` command is missing, run `bash <this skill folder>/scripts/install-backlog-cli.sh` from inside the
 repository: it installs or updates the CLI and runs `backlog setup`.
 
-The first release's command names still work as aliases of these commands: `init`, `init clean`, `list open|done|new|archive|branch`, `branch`, `new <name> --description --state`, `set <item> <field> <value>`, `priority <item> [position]`, `done <item>` (also `<item> done`) and `move <item> <branch>`; `references/commands.md` lists what each runs.
+The first release's command names still work as aliases of these commands: `init`, `init clean`, `list open|done|new|archive|branch`, `branch`, `new <name> --description --state`, `set <item> <field> <value>`, `priority <item> [position]`, `done <item>` (also `<item> done`), `move <item> <branch>`, the list commands `add`, `replace`, `remove` and `priority <item> <list> <n> <position>` (the lists are sections of the item body, edited with `update --section`), `import --branch <source> [--higher]`, `archive done`, and `update`, `update check|auto|off|disable|<version>` for the CLI's own update (`backlog upgrade`); `references/commands.md` lists what each runs.
 
 ## Working alone (a person or one agent)
 

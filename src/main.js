@@ -16,8 +16,16 @@ export async function run() {
     const sequence = plan(argv); // import and archive done run several commands
     if (sequence?.error) throw new BacklogError('INVALID_INPUT', sequence.error);
     if (sequence) { process.exitCode = await (await import('./shared/sequence.js')).run(sequence); return; }
+    if (argv[0] === 'upgrade') { // the self-update needs no backlog
+      if (argv.includes('--help')) { process.stdout.write((await import('./help.js')).HELP.upgrade); return; }
+      process.exitCode = await (await import('./upgrade.js')).run(argv.slice(1)); return;
+    }
     const alias = translate(argv); // the command names of the first release run the command set
     if (alias?.error) throw new BacklogError('INVALID_INPUT', alias.error);
+    if (alias?.command === 'upgrade') { // the first release's update, update check, update 1.2.3
+      if (argv.includes('--help')) { process.stdout.write((await import('./help.js')).HELP.upgrade); return; }
+      process.exitCode = await (await import('./upgrade.js')).run(alias.argv); return;
+    }
     if (alias) argv = [alias.command, ...alias.argv];
     if (argv[0] === 'init-clean') { process.exitCode = await (await import('./shared/clean.js')).run(); return; }
     if (argv[0] === 'setup') { process.exitCode = await (await import('./shared/setup.js')).run(argv.slice(1)); return; }

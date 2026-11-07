@@ -99,3 +99,13 @@ test('import and archive done are sequences, and the other spellings are refused
   assert.equal(plan(['archive']), null);
   assert.equal(plan(['query']), null);
 });
+
+test('update with no item, or with a self-update word or a version, is the self-update; with an item or an option it is the item command', () => {
+  t(['update'], { command: 'upgrade', argv: [] });
+  t(['update', 'check'], { command: 'upgrade', argv: ['check'] });
+  for (const word of ['auto', 'off', 'disable']) t(['update', word], { command: 'upgrade', argv: [word] });
+  t(['update', '1.2.3'], { command: 'upgrade', argv: ['1.2.3'] });
+  t(['update', 'v1.2.3'], { command: 'upgrade', argv: ['1.2.3'] });
+  t(['--json', 'update', 'check'], { command: 'upgrade', argv: ['--json', 'check'] });
+  for (const item of [['3', '--status', 'done'], ['--replan', '1,2'], ['003-fix-login', '--note', 'x'], ['3.1', '--note', 'x'], ['--restore']]) assert.equal(translate(['update', ...item]), null, item.join(' '));
+});

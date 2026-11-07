@@ -25,6 +25,7 @@ export const ALIASES = [
   { form: 'new … --ac A --tasks J --outcomes J --evidence J --references J --item-state-description T --work_item_id W', runs: 'the same new with --body holding one section per given list (--ac is the section Definition of done; a JSON array becomes one line per entry)' },
   { form: 'import --branch <source> [--higher]', runs: 'for every open item of <source>, oldest first: backlog move <item> --to-branch <current branch>; with --higher then backlog update <item> --priority 0, newest first, so the imported items lead the queue in their order', heads: ['import'] },
   { form: 'archive done', runs: 'backlog archive <item> for every finished item of the current branch, oldest first', heads: ['archive done'], help: 'archive' },
+  { form: 'update, update check|auto|off|disable|<version>', runs: 'backlog upgrade [check|auto|off|disable|<version>] (the CLI self-update; update with an item or an option is the item command)' },
   { form: '<item> set|priority|move …', runs: 'the same command with the item first (backlog 3 done)' },
   { form: '<command> --ask | --headless (or BACKLOG_HEADLESS=1)', runs: 'the command without the switch: it is accepted and ignored (--ask still asks for the folder in setup and init)' },
   { form: 'query --pop, next --agent', runs: 'nothing: it is refused with a pointer to backlog team pop --team <team> --agent <name> (--dry-run only answers)' },
@@ -80,6 +81,7 @@ function alias(rest) {
     case 'add': return rest.length >= 4 && own(LISTS, b) ? section(a, b, '--add-line', rest[3], ...rest.slice(4)) : null;
     case 'replace': return rest.length >= 4 && own(LISTS, b) ? section(a, b, '--set-lines', rest[3], ...rest.slice(4)) : null;
     case 'remove': return rest.length >= 4 && own(LISTS, b) ? section(a, b, '--remove-line', rest[3], ...rest.slice(4)) : null;
+    case 'update': return a === undefined || ['check', 'auto', 'off', 'disable'].includes(a) || /^v?\d+\.\d+\.\d+/.test(a) ? to('upgrade', a === undefined ? [] : [a.replace(/^v/, ''), ...rest.slice(2)]) : null;
     case 'query': return rest.includes('--pop') ? { error: POP } : null;
     case 'next': return rest.some(x => x === '--agent' || x.startsWith('--agent=')) ? { error: POP } : null;
     default: return null;

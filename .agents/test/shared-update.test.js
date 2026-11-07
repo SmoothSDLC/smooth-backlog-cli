@@ -486,7 +486,7 @@ test('--status on an item of a team is refused: its status moves by the team ste
   const before = readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8');
   const r = step(f, ['1', '--status', 'closed']);
   assert.equal(r.status, 1, r.stdout);
-  assert.match(r.stdout, /use backlog team update: a team item's status moves by its team steps/);
+  assert.match(r.stdout, /use backlog team update: a team item is changed only there, and its status moves by its team steps/);
   assert.equal(readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8'), before);
 });
 

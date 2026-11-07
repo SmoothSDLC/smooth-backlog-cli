@@ -1,11 +1,13 @@
 // Team behaviour lives under `backlog team` only: the plain commands take none of its flags, refuse nothing new, and print none of its output.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import * as index from '../../src/shared/index.js';
 import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
 import { cli, consumer, createdSlug, intoTeam, sharedBacklog, teamNew } from './shared-fixtures.js';
 
@@ -87,18 +89,95 @@ test('a plain status close writes no hand-off record into the item', () => {
   assert.equal('handoffs' in fm(f, s), false);
 });
 
-test('the generic item flags work on a team item from the plain and from the team command', () => {
+// ---- one door: a team's item is changed by `backlog team update` only (a plain update refuses every change of it)
+
+const OF_A_TEAM = /use backlog team update: a team item is changed only there, and its status moves by its team steps/;
+// every generic field flag and plain step of `backlog update`, with a value that is valid for it
+const FIELD_FLAGS = [
+  ['name', ['--name', 'renamed']], ['objective', ['--objective', 'changed']], ['summary', ['--summary', 'changed']], ['location', ['--location', 'elsewhere']],
+  ['commit', ['--commit', 'abc123']], ['size_score', ['--size_score', '3']], ['priority', ['--priority', '0']], ['severity', ['--severity', 'critical']],
+  ['append', ['--append', 'more text']], ['note', ['--note', 'a note']], ['section', ['--section', 'Notes', '--add-line', 'one']],
+  ['set-estimate', ['--set-estimate', '7']], ['set-complexity', ['--set-complexity', 'high']], ['set-layer', ['--set-layer', '2']],
+  ['set-chunk', ['--set-chunk', 'yes']], ['set-depends-on', ['--set-depends-on', 'none']],
+];
+const PLAIN_ONLY = [['status', ['--status', 'closed']], ['branch', ['--branch', 'other']], ['seq', ['--seq', '9']], ['claim', ['--claim', 'ann']], ['release', ['--release', 'ann']],
+  ['close', ['--close', '--summary', 'done', '--by', 'ann']], ['dry-run', ['--dry-run', '--note', 'x']]];
+const asTeam = (f, agent, args) => cli(['team', 'update', ...args, '--team', 't1', '--agent', agent], { cwd: f.cons, tmp: f.t, plain: true, env: { BACKLOG_AGENT: '' } });
+
+test('a plain update refuses every field flag and step on a team item, with one line naming backlog team update, and writes nothing', () => {
   const f = fixture();
-  const s = intoTeam(plainItem(f), { cwd: f.cons, tmp: f.t }); // a team's item in stage ready
+  const s = teamItem(f);
+  const before = readFileSync(file(f, s), 'utf8');
+  for (const [flag, args] of [...FIELD_FLAGS, ...PLAIN_ONLY]) {
+    const r = run(f, ['update', s, ...args]);
+    assert.equal(r.status, 1, `--${flag}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, OF_A_TEAM, `--${flag}`);
+    assert.equal(r.stdout.trim().split('\n').length, 1, `--${flag}: one line`);
+  }
+  assert.equal(readFileSync(file(f, s), 'utf8'), before);
+});
+
+test('a plain update still restores an unreadable team item: --restore names no change, it runs before the item is read', () => {
+  const f = fixture();
+  const s = teamItem(f);
+  const edit = asTeam(f, 'ann', [s, '--summary', 'good one']);
+  assert.equal(edit.status, 0, edit.stdout + edit.stderr);
+  writeFileSync(file(f, s), readFileSync(file(f, s), 'utf8').replace(/^summary: .*$/m, 'summary: "cut'));
+  const git = (...a) => execFileSync('git', a, { cwd: f.home, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  git('add', '-A'); git('commit', '-q', '-m', 'damaged'); git('push', '-q');
+  const r = run(f, ['update', s, '--restore']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(fm(f, s).summary, 'good one');
+});
+
+test('backlog team update runs the stage rule on every field flag: in stage refining the lead is refused, as a member is not', () => {
+  const f = fixture();
+  const s = teamItem(f); // stage refining, no refiner: a member refines it
+  const before = readFileSync(file(f, s), 'utf8');
+  for (const [flag, args] of FIELD_FLAGS.filter(([k]) => k !== 'set-depends-on')) { // the links between items are the lead's
+    const r = asTeam(f, 'lead', [s, ...args]);
+    assert.equal(r.status, 1, `--${flag}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /a member, not the team lead, refines in the first round/, `--${flag}`);
+  }
+  assert.equal(readFileSync(file(f, s), 'utf8'), before, 'nothing was written');
+  const st = asTeam(f, 'ann', [s, '--status', 'closed']);
+  assert.equal(st.status, 1);
+  assert.match(st.stdout, OF_A_TEAM, 'a team item takes no --status through team update either');
+});
+
+test('backlog team update runs the incomplete-item guard on every field flag: a member is refused, the lead may edit', () => {
+  const f = fixture();
+  const s = intoTeam(plainItem(f), { cwd: f.cons, tmp: f.t }); // a team's item in stage ready that lacks its review documents and estimate
   assert.equal(fm(f, s).team, 't1');
-  run(f, ['query', '--phase', s]); // the plain caller reads the item before it writes
-  const plain = run(f, ['update', s, '--set-estimate', '7', '--note', 'plain edit']);
-  assert.equal(plain.status, 0, plain.stdout + plain.stderr);
-  assert.equal(fm(f, s).estimate_min, 7);
-  run(f, ['query', '--phase', s, '--agent', 'lead']);
-  const team = run(f, ['team', 'update', s, '--team', 't1', '--agent', 'lead', '--set-estimate', '9']);
-  assert.equal(team.status, 0, team.stdout + team.stderr);
-  assert.equal(fm(f, s).estimate_min, 9);
+  const before = readFileSync(file(f, s), 'utf8');
+  for (const [flag, args] of FIELD_FLAGS) {
+    const r = asTeam(f, 'ann', [s, ...args]);
+    assert.equal(r.status, 1, `--${flag}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /incomplete item, missing .*only the team lead \(lead\) refines it, not ann/, `--${flag}`);
+    assert.equal(readFileSync(file(f, s), 'utf8'), before, `--${flag}: nothing was written`);
+  }
+  run(f, ['team', 'query', '--team', 't1', '--agent', 'lead', '--phase', s]); // the lead reads the item before it writes
+  for (const [flag, args] of FIELD_FLAGS) { // the same edits by the lead, one after the other
+    const r = asTeam(f, 'lead', [s, ...args]);
+    assert.equal(r.status, 0, `--${flag}: ${r.stdout}${r.stderr}`);
+  }
+  const got = fm(f, s);
+  assert.deepEqual([got.name, got.objective, got.summary, got.location, got.commit, got.size_score, got.severity, got.estimate_min, got.complexity, String(got.layer), got.chunk, got.depends_on],
+    ['renamed', 'changed', 'changed', 'elsewhere', 'abc123', 3, 'critical', 7, 'high', '2', true, []]);
+  const text = readFileSync(file(f, s), 'utf8');
+  assert.ok(text.includes('more text') && text.includes('## Notes') && text.includes('- one'));
+});
+
+test('a plain replan names no single item: it reorders a team item like any other and leaves its file as it is', () => {
+  const f = fixture();
+  const a = plainItem(f, 'first');
+  const s = teamItem(f);
+  const before = readFileSync(file(f, s), 'utf8');
+  assert.equal(index.rank(f.folder, 'main', s), 1);
+  const r = run(f, ['update', '--replan', `${s},${a}`]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(index.rank(f.folder, 'main', s), 0, 'the team item is now P0');
+  assert.equal(readFileSync(file(f, s), 'utf8'), before, 'its file is not rewritten: the order lives in the index');
 });
 
 test('a plain update may not move the status of a team item; the team command says so too', () => {
@@ -106,7 +185,7 @@ test('a plain update may not move the status of a team item; the team command sa
   const s = teamItem(f);
   const r = run(f, ['update', s, '--status', 'closed']);
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /use backlog team update: a team item's status moves by its team steps/);
+  assert.match(r.stdout, /use backlog team update: a team item is changed only there, and its status moves by its team steps/);
 });
 
 test('a plain new does not split a team item', () => {

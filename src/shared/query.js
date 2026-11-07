@@ -289,9 +289,9 @@ async function query(argv, team) {
     if (a.json) {
       // who holds each item and whether it is in review, so no caller reads the item files for them
       const fmOf = r => lifted(parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8'))).fm;
-      const teamFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
-      const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(x => (x && typeof x === 'object' ? teamFields(x) : x)) : v])); // bare files stay paths
-      dump({ handoff: h, repository: repo, branch: redact(branch), phases: shown.map(teamFields), gone_branch_items: gone.map(teamFields), findings: each(bad) });
+      const itemFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
+      const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(x => (x && typeof x === 'object' ? itemFields(x) : x)) : v])); // bare files stay paths
+      dump({ handoff: h, repository: repo, branch: redact(branch), phases: shown.map(itemFields), gone_branch_items: gone.map(itemFields), findings: each(bad) });
       return 0;
     }
     criticalBanner(critical());

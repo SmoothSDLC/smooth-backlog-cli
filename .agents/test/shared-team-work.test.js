@@ -227,15 +227,14 @@ test("the lead never claims, waits without polling while its team works, keeps i
   assert.ok(p.instruction.startsWith('you hold it'), p.instruction);
 });
 
-test('in a team session an item names its review documents at creation, unless it starts in stage refining', () => {
+test('backlog team new files an item of its team in stage refining, in a team session or not; a plain new makes an item of no team', () => {
   const f = fixture();
   const team = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const base = ['new', '--name', 'x', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--body', DOD];
-  no(f, base, 'in a team session an item names its review documents at creation', team);
-  ok(f, [...base, '--review-refs', 'references/review/code.md'], team);
-  ok(f, [...base, '--team', 't1'], team);
-  ok(f, base); // outside a team session the item is refined later
-  ok(f, base, { TEAM_REPOSITORY: 'acme/demo' }); // TEAM_REPOSITORY alone writes into a repository's folder: no team session
+  const mine = r => fm(f, createdSlug(r.stdout));
+  assert.deepEqual([mine(ok(f, [...base, '--team', 't1'], team)).team, mine(ok(f, [...base, '--team', 't1', '--name', 'y'], team)).status], ['t1', 'new']);
+  assert.equal(mine(ok(f, [...base, '--name', 'z'])).team, undefined); // outside a team session, and with no --team, the plain command: an item of no team
+  assert.equal(mine(ok(f, [...base, '--name', 'w'], { TEAM_REPOSITORY: 'acme/demo' })).team, undefined); // TEAM_REPOSITORY alone: the plain command ignores it
 });
 
 test('the claimer never reviews its own item; a reviewed item finishes only through --close; an unclaimed team item is closed by the lead', () => {
@@ -278,14 +277,6 @@ test("the lead's close and rework are never hidden by its team's refinement revi
   assert.ok(p.instruction.startsWith(`close ${fm(f, w).seq} with --close --summary`), p.instruction);
   ok(f, ['update', w, '--close', '--summary', 'done', '--by', 'lead']);
   assert.equal(JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json'], T).stdout).action, 'refinement-review');
-});
-
-test('in a team session a split from an item without a team names its review documents too', () => {
-  const f = fixture();
-  const plain = make(f, 'plain parent');
-  const team = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
-  no(f, ['new', '--split-from', plain, '--depends-on', 'none', '--body', DOD], 'in a team session an item names its review documents at creation', team);
-  ok(f, ['new', '--split-from', plain, '--depends-on', 'none', '--body', DOD, '--review-refs', 'references/review/code.md'], team);
 });
 
 test('the lead waits while only an incomplete item of its team is open', () => {

@@ -12,7 +12,8 @@ const command = (world, text) => { const args = split(text); assert.equal(args.s
 const output = r => `${r.stdout}\n${r.stderr}`;
 
 step(/^a repository with a backlog$/, () => {}); // the world made it: a git repository with an origin, and the storage location
-step(/^the environment (\w+) is "([^"]*)"$/, (w, key, value) => { w.agentEnv[key] = value; });
+// "this repository": the id the plain commands give the repository (a team session is bound to it)
+step(/^the environment (\w+) is "([^"]*)"$/, (w, key, value) => { w.agentEnv[key] = value === 'this repository' ? (w.location === 'local' ? 'local/repository' : 'acme/demo') : value; });
 step(/^I act as agent "([^"]+)"$/, (w, name) => { w.agentEnv.BACKLOG_AGENT = name; });
 step(/^I act as a person$/, w => { delete w.agentEnv.BACKLOG_AGENT; });
 step(/^a team "([^"]+)" with lead "([^"]+)" and members "([^"]*)"$/, (w, team, lead, members) => w.configureTeam(team, { lead, members: members.split(',').map(x => x.trim()).filter(Boolean) }));

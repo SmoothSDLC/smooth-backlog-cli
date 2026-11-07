@@ -5,10 +5,9 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { GIT_IDENTITY, ORIGIN_URL, cli, consumer, sharedBacklog, teamNew } from '../../.agents/test/shared-fixtures.js';
+import { GIT_IDENTITY, ORIGIN_URL, cli, consumer, sharedBacklog } from '../../.agents/test/shared-fixtures.js';
 
-// `backlog team new` is not wired to a command yet: its steps run the function of src/team/new.js in a process of their own
-const runCli = (args, opts) => (args[0] === 'team' && args[1] === 'new' ? teamNew(args.slice(2), opts) : cli(args, opts));
+const runCli = cli;
 
 export const LOCATIONS = ['remote', 'local'];
 

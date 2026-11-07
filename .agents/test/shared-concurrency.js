@@ -17,11 +17,8 @@ export const gitIn = (cwd, ...args) => {
 };
 
 // The CLI as a child that does not block this process: { child, done } where done resolves to { status, stdout, stderr }.
-// args[0] 'team-new' runs the function of src/team/new.js (as teamNew() of the fixtures does) instead of the CLI.
-const NEW_CHILD = resolve(join(dirname(fileURLToPath(import.meta.url)), 'team-new-child.js'));
 export function cliAsync(args, { cwd, tmp, env: extra = {} }) {
-  const argv = args[0] === 'team-new' ? [NEW_CHILD, ...args.slice(1)] : [BIN, ...args];
-  const child = spawn(process.execPath, argv, { cwd, env: { ...process.env, ...env(tmp), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, ...env(tmp), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = ''; let stderr = ''; let exited = false;
   child.stdout.on('data', d => { stdout += d; });
   child.stderr.on('data', d => { stderr += d; });

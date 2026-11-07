@@ -10,11 +10,11 @@ Feature: Team - a team lead splits a work item, members refine it, a reviewed re
     And team "t1" work needs 1 pass by "t1" and 1 pass by "reviewers"
     And team "t1" refinements are reviewed by "reviewers"
     And the environment TEAM_NAME is "t1"
-    And the environment TEAM_REPOSITORY is "acme/demo"
+    And the environment TEAM_REPOSITORY is "this repository"
     And the environment TEAM_BRANCH is "main"
     And I act as agent "lead"
-    And I run `backlog team new --name "Parser work" --objective "o" --summary "s" --review-refs docs/review/code.md --estimate 90 --complexity medium --body "## Definition of done\n- [ ] the parser parses the sample"`
-    And I run `backlog team update 1 --set-team t1`
+    And I run `backlog new --name "Parser work" --objective "o" --summary "s" --estimate 90 --complexity medium --body "## Definition of done\n- [ ] the parser parses the sample"`
+    And I run `backlog team update 1 --set-team t1 --set-review-refs docs/review/code.md`
 
   Scenario: the lead takes its team's work item with team pop
     When I run `backlog team pop --team t1 --agent lead`

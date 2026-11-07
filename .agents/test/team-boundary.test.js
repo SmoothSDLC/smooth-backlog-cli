@@ -114,7 +114,33 @@ test('a plain new does not split a team item', () => {
   const s = teamItem(f);
   const r = run(f, ['new', '--split-from', s, '--name', 'child', '--depends-on', 'none']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stdout, new RegExp(`item ${s} belongs to team t1: a split of a team's item is made by the team`));
+  assert.match(r.stdout, new RegExp(`item ${s} belongs to team t1: a split of a team's item is made by backlog team new`));
+});
+
+test('backlog team new needs a team and an agent, refuses a team without an entry, and files the item under its team in its first status', () => {
+  const f = fixture();
+  const fresh = (...args) => cli(['team', 'new', ...args], { cwd: f.cons, tmp: f.t, plain: true, env: { BACKLOG_AGENT: '' } });
+  const refs = ['--review-refs', 'references/review/code.md', '--estimate', '5'];
+  const noTeam = fresh(...BASE('x'), '--agent', 'lead');
+  assert.equal(noTeam.status, 2, noTeam.stdout + noTeam.stderr);
+  assert.match(noTeam.stderr, /needs --team/);
+  const noAgent = fresh(...BASE('x'), '--team', 't1');
+  assert.equal(noAgent.status, 2, noAgent.stdout + noAgent.stderr);
+  assert.match(noAgent.stderr, /needs --agent/);
+  const unknown = fresh(...BASE('x'), '--team', 'nope', '--agent', 'lead');
+  assert.equal(unknown.status, 1, unknown.stdout + unknown.stderr);
+  assert.match(unknown.stdout, /team nope is not configured/);
+  const made = fresh(...BASE('x'), ...refs, '--team', 't1', '--agent', 'lead');
+  assert.equal(made.status, 0, made.stdout + made.stderr);
+  const s = createdSlug(made.stdout);
+  assert.deepEqual([fm(f, s).team, fm(f, s).status, fm(f, s).refiner, fm(f, s).estimate_min, fm(f, s).updated_by], ['t1', 'new', '', 5, 'lead']);
+  assert.deepEqual(fm(f, s).review_refs, ['references/review/code.md']);
+  const child = fresh('--name', 'child', '--split-from', s, '--team', 't1', '--agent', 'lead');
+  assert.equal(child.status, 0, child.stdout + child.stderr);
+  assert.deepEqual([fm(f, createdSlug(child.stdout)).team, fm(f, createdSlug(child.stdout)).status], ['t1', 'new']);
+  const status = fresh(...BASE('y'), '--status', 'ready', '--team', 't1', '--agent', 'lead');
+  assert.equal(status.status, 1);
+  assert.match(status.stdout, /--status cannot be combined with --team/);
 });
 
 test('a team item is created, claimed and read through the team spellings', () => {

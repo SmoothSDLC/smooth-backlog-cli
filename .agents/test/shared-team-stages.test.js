@@ -260,15 +260,13 @@ test("the lead never starts a first-round refinement nor is offered a member's c
   assert.deepEqual([pop(f, 'bob', T1).action, pop(f, 'bob', T1).item], ['refine', c]);
 });
 
-test('a split of a team item may keep the placeholder outside a team session, a split of another item may not inside one; only the lead changes an incomplete item there', () => {
+test('a split of a team item may keep the placeholder; only the lead changes an incomplete item of a bound session', () => {
   const f = fixture();
   const TR = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1');
-  const plain = make(f, 'plain item');
-  const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout); // outside a team session the split may keep the placeholder
+  const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout); // the split may keep the placeholder
   assert.deepEqual([fm(f, c).team, fm(f, c).status], ['t1', 'new']);
-  no(f, ['new', '--name', 'bare split', '--split-from', plain, '--depends-on', 'none'], '--body must hold a definition of done', TR);
   const bare = createdSlug(ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout); // no team field
   no(f, ['update', bare, '--set-estimate', '5'], 'only the team lead (lead) refines it, not bob', { ...TR, BACKLOG_AGENT: 'bob' });
   no(f, ['update', bare, '--set-estimate', '5', '--by', 'bob'], 'only the team lead (lead) refines it, not bob', { ...TR, BACKLOG_AGENT: 'bob' });

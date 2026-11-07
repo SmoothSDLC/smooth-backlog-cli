@@ -1,4 +1,4 @@
-// `backlog team <pop|update|query|define|workflow> --team <name> --agent <name>`: the only commands that know a team. The team
+// `backlog team <pop|new|update|query|define|workflow> --team <name> --agent <name>`: the only commands that know a team. The team
 // comes from --team, else TEAM_NAME, else the repository configuration's `team`; the agent from --agent (--by), else BACKLOG_AGENT,
 // else the configuration's `user`. The team's entry in the backlog configuration (teams.json) governs every step.
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -7,6 +7,7 @@ import { atomicWrite } from '../storage.js';
 import { BacklogError } from '../errors.js';
 import { readConfig, topOf } from '../shared/setup.js';
 import { redact } from '../shared/safety.js';
+import { setActor } from '../shared/seen.js';
 import { cloneLocked, resolveHome } from '../shared/store.js';
 import * as sync from '../shared/sync.js';
 import { parse as parsePop } from './pop.js';
@@ -15,7 +16,7 @@ import { strip } from '../shared/text.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
-const SUBS = ['pop', 'update', 'query', 'define', 'workflow'];
+const SUBS = ['pop', 'new', 'update', 'query', 'define', 'workflow'];
 const say = text => process.stdout.write(`${redact(text)}\n`);
 
 // Takes --team and --agent out of argv (both forms); the rest is passed on in order.
@@ -61,6 +62,13 @@ async function query(rest, { team }, got) {
   return (await import('./query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])]);
 }
 
+// The item is filed under the command's team: its stage is refining, and the agent is the writer of the stale-view guard.
+async function create(rest, { team, agent }) {
+  if (!teamsConfig()[team]) return unconfigured(team);
+  setActor(agent);
+  return (await import('./new.js')).run([...rest, '--team', team]);
+}
+
 async function update(rest, { team, agent }) {
   if (!teamsConfig()[team]) return unconfigured(team);
   const args = withAgent(rest, agent);
@@ -81,6 +89,7 @@ async function dispatch(argv) {
   let split_; let who;
   try { split_ = split(argv.slice(1)); who = resolve(split_.got, { agentOptional: sub === 'query' }); } catch (e) { return die(e.message); } // the views read: a named agent switches them to the team rules, none is needed
   setSessionTeam(who.team); // the command's team is the session's: its items are the only ones in reach
+  if (sub === 'new') return create(split_.rest, who);
   if (sub === 'update') return update(split_.rest, who);
   if (sub === 'query') return query(split_.rest, who, split_.got);
   if (sub === 'pop') {

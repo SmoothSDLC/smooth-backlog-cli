@@ -29,6 +29,8 @@ function fixture(t, prefix = 'new-test-') {
   return { dir, home, cons, folder: join(home, 'acme', 'demo'), bare: join(dir, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`) };
 }
 const node = (f, args, env) => cli(['new', ...args], { cwd: f.cons, tmp: f.dir, env });
+// `backlog team new`: the item belongs to team t1 and starts in stage refining
+const teamNode = (f, args, env) => cli(['team', 'new', ...args, '--team', 't1', '--agent', 'amy'], { cwd: f.cons, tmp: f.dir, env });
 const BASE = ['--name', 'Alpha job', '--objective', 'do alpha', '--summary', 'sum alpha'];
 const NONE = [...BASE, '--depends-on', 'none'];
 const items = f => store.load(f.folder).filter(i => i.path.startsWith('phases/'));
@@ -53,7 +55,6 @@ const REFUSALS = [
   ['a dependency that is not there', [...BASE, '--depends-on', 'no-such-item'], 1, "❌ --depends-on: no item 'no-such-item' in this backlog\n", ''],
   ['a number that is not there', [...BASE, '--depends-on', '99'], 1, "❌ --depends-on: no item '99' in this backlog\n", ''],
   ['--split-from not found', [...NONE, '--split-from', 'nope'], 1, "❌ --split-from: no phase 'nope'\n", ''],
-  ['review refs without a definition of done', [...NONE, '--review-refs', 'references/review/code.md'], 1, "❌ --body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written\n", ''],
   ['an unknown option', [...NONE, '--bogus', 'x'], 2, '', '❌ backlog: unrecognized arguments: --bogus x\n'],
   ['an invalid choice', [...NONE, '--severity', 'urgent'], 2, '', "❌ backlog: argument --severity: invalid choice: 'urgent' (choose from 'normal', 'critical')\n"],
   ['an invalid integer', [...NONE, '--priority', 'soon'], 2, '', "❌ backlog: argument --priority: invalid int value: 'soon'\n"],
@@ -218,7 +219,7 @@ test('review P1: a symlinked owner folder in the home is refused before any data
 test('review P2: review refs go through checkRefs: an absolute or ..-crossing ref is refused and nothing is persisted', t => {
   const f = fixture(t);
   for (const ref of ['../../outside/code.md', '/outside/code.md']) {
-    const r = node(f, [...NONE, '--review-refs', ref, '--body', '## Definition of done\n- [ ] x']);
+    const r = teamNode(f, [...NONE, '--review-refs', ref, '--body', '## Definition of done\n- [ ] x']);
     assert.equal(r.status, 2, ref);
     assert.match(r.stderr, /review ref .* (is absolute|contains '\.\.')/);
   }
@@ -266,34 +267,40 @@ test('review P1: new --split-from whose index write is refused leaves the item f
   assert.deepEqual(files(), before, 'no stray split event');
 });
 
-test('review P1: new --split-from an item of another team (TEAM_BRANCH differs) is refused and logs nothing', t => {
+test('review P1: team new --split-from an item of another branch (TEAM_BRANCH differs) is refused and logs nothing', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0); // 001-alpha-job on acme/demo, branch main
   const rows = () => readFileSync(join(f.folder, 'phases', '001-alpha-job.md'), 'utf8'); // the item carries its history
   const before = rows();
-  const r = node(f, [...NONE, '--split-from', '1', '--body', '## Definition of done\n- [ ] x'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' });
+  const r = teamNode(f, [...NONE, '--split-from', '1', '--body', '## Definition of done\n- [ ] x'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /team session is bound to acme\/demo branch release/);
   assert.equal(rows(), before);
   assert.deepEqual(readdirSync(join(f.folder, 'phases')), ['001-alpha-job.md']);
 });
 
-test('075: team mode: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the branch, an item without a definition of done is refused', t => {
+test('075: team new: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the branch; a body without a definition of done gets the placeholder', t => {
   const f = fixture(t); const env = { TEAM_REPOSITORY: 'acme/other', TEAM_BRANCH: 'team-1' };
-  const refused = node(f, NONE, env);
-  assert.equal(refused.status, 1);
-  assert.equal(refused.stdout, "❌ --body must hold a definition of done: a '## Definition of done' heading (or a 'Definition of done:' line) with checkable lines; in team mode no placeholder is written\n");
-  assert.equal(refused.stderr, '');
-  const ok = node(f, [...NONE, '--body', '## Definition of done\n- [ ] x'], env);
-  assert.equal(ok.status, 0);
+  const ok = teamNode(f, NONE, env);
+  assert.equal(ok.status, 0, ok.stdout + ok.stderr);
   assert.equal(ok.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   assert.equal(ok.stderr, '');
   const [item] = store.load(join(f.home, 'acme', 'other'));
   assert.equal(item.fm.repository, 'acme/other'); assert.equal(item.fm.branch, 'team-1');
-  const bad = node(f, NONE, { TEAM_REPOSITORY: '../x' });
+  assert.deepEqual([item.fm.team, item.fm.status, item.fm.refiner], ['t1', 'new', '']);
+  assert.match(item.body, /## Definition of done\n\n- \[ \] <machine-checkable acceptance>/);
+  const bad = teamNode(f, NONE, { TEAM_REPOSITORY: '../x' });
   assert.equal(bad.status, 2);
   assert.equal(bad.stdout, '');
-  assert.equal(bad.stderr, '❌ backlog: not an owner/name repository id: ../x\n');
+  assert.match(bad.stderr, /^❌ backlog: .*\.\.\/x/);
+});
+
+test('075: a plain new ignores TEAM_REPOSITORY and TEAM_BRANCH', t => {
+  const f = fixture(t);
+  const r = node(f, NONE, { TEAM_REPOSITORY: 'acme/other', TEAM_BRANCH: 'team-1' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(items(f).length, 1);
+  assert.equal(items(f)[0].fm.repository, 'acme/demo');
 });
 
 test('075: a skills.md review document is accepted and persisted; no class field is written', t => {
@@ -328,7 +335,7 @@ test('075: --split-from copies the objective, summary and body of the source and
 
 const SCENARIOS = {
   'every flag, appended': [[], [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--chunk',
-    '--review-refs', 'references/review/code.md,references/review/tests.example.md', '--estimate', '30', '--complexity', 'medium', '--layer', '3']],
+    '--estimate', '30', '--complexity', 'medium', '--layer', '3']],
   'inserted at rank 0 before older work': [[['--name', 'Older', '--depends-on', 'none'], ['--name', 'Oldest', '--depends-on', '1']], [...BASE, '--depends-on', '1,Oldest'.replace('Oldest', '002-oldest'), '--priority', '0']],
   'critical, forced to P0 with the banner': [[['--name', 'Older', '--depends-on', 'none']], [...NONE, '--severity', 'critical']],
   'a rank beyond the end is clamped, a layer of process': [[['--name', 'Older', '--depends-on', 'none']], [...NONE, '--priority', '7', '--layer', 'process', '--complexity', 'high']],
@@ -368,18 +375,18 @@ for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
   });
 }
 
-test('075: new: every flag, appended: the item carries the carried context, the review documents and the job fields', t => {
+test('075: team new: every flag, appended: the item carries the carried context, the review documents and the job fields, and belongs to its team', t => {
   const f = fixture(t);
-  const r = node(f, [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--chunk',
+  const r = teamNode(f, [...NONE, '--context', 'from the ask', '--body', 'Some body\n\n## Definition of done\n- [ ] it works', '--chunk',
     '--review-refs', 'references/review/code.md,references/review/tests.example.md', '--estimate', '30', '--complexity', 'medium', '--layer', '3']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   assert.equal(r.stderr, '');
   const [item] = items(f);
   assert.deepEqual(fmNorm(item.fm), { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
-    status: 'pending', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '',
+    status: 'new', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', team: 't1', refiner: '', stage: 'refining', owner: '',
     created: 0, updated: 0, updated_by: 0, chunk: true, review_refs: ['references/review/code.md', 'references/review/tests.example.md'],
-    estimate_min: 30, complexity: 'medium', layer: '3', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', owner: defaultUser(f.cons) });
+    estimate_min: 30, complexity: 'medium', layer: '3', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Carried context (from the original ask)\n\nfrom the ask\n\n\nSome body\n\n## Definition of done\n- [ ] it works\n');
 });
 

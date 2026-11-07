@@ -153,7 +153,15 @@ export function cli(args = [], opts = {}) {
     const agent = ['by', 'claim', 'release', 'agent'].map(f => valueOf(args, f)).find(Boolean) || opts.env?.BACKLOG_AGENT || (args[0] === 'update' && info.holder) || `driver-${++calls}`;
     // a session of a team acts as its BACKLOG_AGENT; outside one, the agent a command names acts
     const via = { ...opts.env, BACKLOG_AGENT: sessionEnv.TEAM_NAME ? opts.env?.BACKLOG_AGENT || agent : agent };
-    if (args[0] === 'new') return teamNew(args.slice(1), { ...opts, env: via });
+    // `backlog team new` makes only team items (--team, or a split in a team session). Any other creation here is the plain command: a team's work item, or an item that names
+    // review documents, which a team step then gives it
+    if (args[0] === 'new' && !itemTeam && !flagsOf(args).includes('team') && !(sessionEnv.TEAM_NAME && flagsOf(args).includes('split-from'))) {
+      const at = args.indexOf('--review-refs');
+      const made = cli(at < 0 ? args : args.filter((_, i) => i !== at && i !== at + 1), { ...opts, env: via, plain: true });
+      if (made.status !== 0 || at < 0) return made;
+      const set = cli(['team', 'update', createdSlug(made.stdout), ...(sessionEnv.TEAM_NAME ? [] : ['--team', neutralTeam(sessionEnv)]), '--set-review-refs', args[at + 1]], { ...opts, env: via, plain: true });
+      return set.status === 0 ? made : set;
+    }
     // an item without a team is stepped by a session of no particular team: a neutral entry stands in for it
     const teamFlag = !sessionEnv.TEAM_NAME && !flagsOf(args).includes('team') && (valueOf(args, 'set-team') ? neutralTeam(sessionEnv, valueOf(args, 'set-team')) : itemTeam || neutralTeam(sessionEnv));
     return cli(['team', ...args, ...(teamFlag ? ['--team', teamFlag] : [])], { ...opts, env: via, plain: true });
@@ -172,16 +180,10 @@ export function cli(args = [], opts = {}) {
   return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr };
 }
 
-// Creates a team's item: `backlog team new` is not wired yet, so this runs the function of src/team/new.js (--team, --review-refs, a split of a
-// team's item, a named team session) in a process of its own, with the same environment as cli().
+// Creates a team's item with `backlog team new <args>`: the team from --team (or TEAM_NAME), the agent from --agent, else the session's BACKLOG_AGENT, else a driver of its own.
 export function teamNew(args = [], opts = {}) {
-  const child = resolve(join(dirname(fileURLToPath(import.meta.url)), 'team-new-child.js'));
-  const p = spawnSync(process.execPath, [child, ...args], {
-    cwd: opts.cwd,
-    env: { ...process.env, BACKLOG_AGENT: `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
-    input: opts.input ?? '', encoding: 'utf8', timeout: opts.timeout ?? 60000,
-  });
-  return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
+  const agent = valueOf(args, 'agent') ? [] : ['--agent', opts.env?.BACKLOG_AGENT || `driver-${++calls}`];
+  return cli(['team', 'new', ...args, ...agent], { ...opts, plain: true });
 }
 
 // The slug a `new` output names: `created phase <slug> (seq N)`.

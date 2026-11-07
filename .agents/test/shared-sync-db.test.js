@@ -3,7 +3,7 @@
 import { configUser } from '../../src/shared/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -234,7 +234,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
   await hold.held();
   let collision;
   try {
-    collision = cli([...NEW('delta'), '--body', '## Definition of done\n- [ ] x'], {
+    collision = cli(['team', ...NEW('delta'), '--team', 't1', '--agent', 'amy', '--body', '## Definition of done\n- [ ] x'], {
       cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'new/place' },
     });
   } finally { hold.release(); }
@@ -480,7 +480,7 @@ test('publication: permanent failure after a push race removes renumbering and r
   let collision; let remote;
   try {
     collision = cli(NEW('upstream collision'), { cwd: a.cons, tmp: a.tmp });
-    remote = cli([...NEW('other folder'), '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'other/repo' } });
+    remote = cli(['team', ...NEW('other folder'), '--team', 't1', '--agent', 'amy', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'other/repo' } });
   } finally { hold.release(); }
   const r = await failed.done;
   assert.equal(collision.status, 0, collision.stdout + collision.stderr);
@@ -675,6 +675,7 @@ async function fileRace(t, seed, args, publish, env) {
   const [a, b, { bare }] = writers(t);
   for (const cmd of seed) assert.equal(cli(cmd, { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  if (args[0] === 'team') copyFileSync(join(a.home, 'teams.json'), join(b.home, 'teams.json')); // the team entries are local configuration of each clone
   const before = state(b.home);
   const hold = holdFirstPush(b);
   const second = cliAsync(args, { cwd: b.cons, tmp: b.tmp, env });
@@ -706,7 +707,7 @@ for (const [name, args, change] of [
   ['required fields', ['update', '1', '--claim', 'amy'], fm => { fm.estimate_min = 0; }],
   ['review state', ['update', '1', '--close', '--by', 'amy', '--summary', 'delivered'], fm => { fm.status = 'in progress'; }],
   ['claim ownership', ['update', '1', '--claim', 'amy'], fm => { fm.claimed_by = 'bob'; }],
-  ['team scope of a split parent', ['team-new', ...COMPLETE('child').slice(1), '--split-from', '1'], fm => { fm.branch = 'other'; }],
+  ['team scope of a split parent', ['team', 'new', ...COMPLETE('child').slice(1), '--split-from', '1', '--team', 't1', '--agent', 'amy'], fm => { fm.branch = 'other'; }],
 ]) test(`publication read set: concurrent ${name} changes cannot pass earlier validation`, async t => {
   const { b, bare, before, result } = await fileRace(t,
     [COMPLETE('alpha'), ['update', '1', '--request-review', 'any', '--note', 'initial evidence'],

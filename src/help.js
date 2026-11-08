@@ -14,8 +14,8 @@ Usage:
   backlog new --name <text> [options]              Add an item; --split-from <item> makes a sibling with its context
   backlog update <item> [options]                  Change an item that has no team: fields, body, status, priority; claim, release, close
   backlog update --replan "<id,id,...>"            Set the order of the queue
+  backlog list [new|open|done|archive|branches|critical|all-branches] [--json]   The items of this branch (the full stack by default), one kind of item, the branches, the critical items, or every branch
   backlog query [options] [--json]                 The queue; --phase <item> one item; --events, --by-branch, --all
-  backlog list [options] [--json]                  The same as backlog query
   backlog next [--all] [--branch <name>] [--json]  The next item of this repository and branch
   backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs (--dry-run: only answered), with the whole item
   backlog team new --team <team> --agent <name> --name <text> [options]   Add an item of a team (it starts in stage refining); --review-refs, --split-from
@@ -365,6 +365,55 @@ ${EXIT}
 
 Example:
   backlog next --json
+`,
+
+  list: `backlog list — the items of this branch: the open ones in queue order, then the finished ones; or one kind of item, the branches, the critical items, or every branch
+
+Usage:
+  backlog list [--json]
+  backlog list new [--json]
+  backlog list open [--json]
+  backlog list done [--json]
+  backlog list archive [--json]
+  backlog list branches [--json]
+  backlog list critical [--json]
+  backlog list all-branches [--json]
+
+Reads the backlog and never changes it. Without a word it prints the full stack of the branch that is checked out here: the open items in
+queue order (priority 0 is next), then the finished ones. Each row shows the item's number, slug, status word (free text; closed, done and
+archived are finished, every other word is open), priority and name, then its summary and every dependency on an item of another repository.
+Items that are not on the queue because they name another repository or no branch are reported as findings above the queue. Open items of a
+branch that no longer exists on the origin wait for a decision and are listed after the queue. With --json the command prints the data itself,
+without any wrapper; each row also carries claimed_by and review_state, from the item's front matter.
+
+${SHARED}
+
+Words (at most one):
+  new
+      The full stack filtered to the items not started yet.
+  open
+      Every item that is not finished: the queue.
+  done
+      The finished items that are not archived.
+  archive
+      The archived items.
+  branches
+      One line per branch of this repository: the branch, its open items and its done items (with --json, a list of {branch, open, done}).
+  critical
+      Only the open items with severity critical, in a banner (with --json, the list of those items). When there is none it says so.
+  all-branches
+      The full stack of every branch of this repository, not only the one checked out here. Each row ends with the branch of its item,
+      for example (branch main); with --json every item carries its branch.
+
+Options:
+  --json
+      Print machine-readable output.
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog list open
 `,
 
   fields: `backlog fields — show the item template: every field of an item and what it is for

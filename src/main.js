@@ -9,18 +9,20 @@ export async function run() {
   try {
     if (argv[0] === '--version' || argv[0] === 'version') { process.stdout.write(`${packageInfo.version}\n`); return; }
     if (argv[0] === '--help' || argv[0] === 'help' || argv[0] === '-h') { process.stdout.write((await import('./help.js')).USAGE); return; }
-    if (argv.includes('--help')) { // an alias prints its own line, then the help of the command it runs
+    const { own } = await import('./shared/router.js');
+    const direct = own(argv); // a command that is also an alias row runs as itself, not as the alias
+    if (!direct && argv.includes('--help')) { // an alias prints its own line, then the help of the command it runs
       const row = aliasOf(argv); const { HELP } = await import('./help.js');
       if (row) { process.stdout.write(`backlog ${row.form} runs ${row.runs}\n${row.help ? `\n${HELP[row.help]}\n` : ''}`); return; }
     }
-    const sequence = plan(argv); // import and archive done run several commands
+    const sequence = direct ? null : plan(argv); // import and archive done run several commands
     if (sequence?.error) throw new BacklogError('INVALID_INPUT', sequence.error);
     if (sequence) { process.exitCode = await (await import('./shared/sequence.js')).run(sequence); return; }
     if (argv[0] === 'upgrade') { // the self-update needs no backlog
       if (argv.includes('--help')) { process.stdout.write((await import('./help.js')).HELP.upgrade); return; }
       process.exitCode = await (await import('./upgrade.js')).run(argv.slice(1)); return;
     }
-    const alias = translate(argv); // the command names of the first release run the command set
+    const alias = direct ? null : translate(argv); // the command names of the first release run the command set
     if (alias?.error) throw new BacklogError('INVALID_INPUT', alias.error);
     if (alias?.command === 'upgrade') { // the first release's update, update check, update 1.2.3
       if (argv.includes('--help')) { process.stdout.write((await import('./help.js')).HELP.upgrade); return; }

@@ -138,8 +138,9 @@ function changedReport(home, folder, repo, a) {
 
 //
 // `team`: the call of backlog team query, the only place of the team views
-export const run = (argv, { team = null } = {}) => store.cloneLocked(store.resolveHome().home, () => query(argv, team)); // a read that pulls waits for a writer of the clone
-async function query(argv, team) {
+// `branchColumn`: every row of the text view names its branch (backlog list all-branches); the JSON rows carry it already.
+export const run = (argv, { team = null, branchColumn = false } = {}) => store.cloneLocked(store.resolveHome().home, () => query(argv, team, branchColumn)); // a read that pulls waits for a writer of the clone
+async function query(argv, team, branchColumn) {
   let a;
   try { a = parse(argv, team); } catch (e) { return die(e.message); }
   const early = await team?.early(a, argv, { die }); // the plan (its own parser) and a flag that goes with another
@@ -302,7 +303,7 @@ async function query(argv, team) {
     for (const r of shown) {
       const mark = { closed: '✅', done: '✅', archived: '📦', 'in progress': '🔄' }[r.status] ?? '•';
       const crit = (r.severity || 'normal') === 'critical' && isOpen(r.status) ? ' ⚠️CRIT' : '';
-      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority ?? '-', 3)}${crit}  ${r.name}`);
+      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority ?? '-', 3)}${crit}  ${r.name}${branchColumn ? `  (branch ${redact(r.branch ?? '')})` : ''}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
       // a dependency on another repository's item is shown with its state
       { // every status: a done item still shows what it depended on

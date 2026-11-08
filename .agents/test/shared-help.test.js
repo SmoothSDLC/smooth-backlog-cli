@@ -21,7 +21,7 @@ const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
 const TEAM = ['team', 'team pop', 'team new', 'team update', 'team query', 'team define', 'team workflow']; // the help of the team code lives with it
-const COMMANDS = ['new', 'update', 'query', 'next', 'fields', ...TEAM, 'move', 'archive'];
+const COMMANDS = ['new', 'update', 'query', 'list', 'next', 'fields', ...TEAM, 'move', 'archive'];
 const ALL = { ...HELP, ...teamHelp };
 const ROUTED = COMMANDS.filter(c => !c.startsWith('team ')); // the commands of the router
 // Flags this build refuses (query.js TEAM and pop.js); --db is no flag of the CLI (item 058: not in its help).
@@ -93,12 +93,12 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
 
 test('every command of the router has a help text, a line of backlog --help and a block in COMMANDS.md', async () => {
   const { TABLE } = await import('../../src/shared/router.js');
-  assert.deepEqual(Object.keys(TABLE).sort(), [...ROUTED, 'list'].sort());
-  assert.deepEqual(Object.keys(ALL).sort(), [...COMMANDS, 'setup', 'upgrade'].sort()); // setup and upgrade run before the router; list prints the query help
+  assert.deepEqual(Object.keys(TABLE).sort(), ROUTED.sort());
+  assert.deepEqual(Object.keys(ALL).sort(), [...COMMANDS, 'setup', 'upgrade'].sort()); // setup and upgrade run before the router
   const top = cli(['--help'], { cwd: cons, tmp: t }).stdout;
   for (const command of Object.keys(TABLE)) {
     assert.match(top, new RegExp(`^ {2}backlog ${command}( |$)`, 'm'), `${command}: backlog --help`);
-    assert.equal(backlog(...command.split(' '), '--help').stdout, ALL[command === 'list' ? 'query' : command], `${command}: --help`);
+    assert.equal(backlog(...command.split(' '), '--help').stdout, ALL[command], `${command}: --help`);
   }
 });
 
@@ -209,12 +209,12 @@ test('<alias> --help prints the alias line and then the help of the command it r
   const done = backlog('done', '--help').stdout;
   assert.ok(done.startsWith('backlog done <item> runs backlog update <item> --status done\n'), done);
   assert.ok(done.includes(HELP.update));
-  assert.ok(backlog('list', 'open', '--help').stdout.startsWith('backlog list open runs backlog query --only open\n'));
+  assert.ok(backlog('list', 'branch', '--help').stdout.startsWith('backlog list branch runs backlog query --branches\n')); // list open is a word of list now: it prints the help of list
   assert.ok(backlog('3', 'set', '--help').stdout.includes(HELP.update));
   const init = backlog('init', '--help').stdout;
   assert.ok(init.startsWith('backlog init [name] runs backlog setup\n') && init.includes(HELP.setup));
   assert.ok(backlog('init', 'clean', '--help').stdout.startsWith('backlog init clean [all-branches] runs '));
-  assert.equal(backlog('list', '--help').stdout.trimEnd(), HELP.query.trimEnd()); // a bare list is the query command itself
+  assert.equal(backlog('list', '--help').stdout.trimEnd(), HELP.list.trimEnd()); // list is a command of its own
 });
 
 test('backlog team --help lists new, and backlog team new --help has the flags, the exit codes and one example', () => {

@@ -69,14 +69,16 @@ test('an unknown command is refused (exit 2) naming the commands', t => {
   }
 });
 
-test('<command> --help prints the help text and needs no backlog folder; list prints the query help', t => {
+test('<command> --help prints the help text and needs no backlog folder; list prints its own help, also for a word of list', t => {
   const f = pair(t);
   const r = inproc(f, `process.exitCode = await router.run('fake', ['--help'], { table: { fake: ['./never.js'] }, help: { fake: 'FAKE HELP' } });`, { BACKLOG_HOME: join(f.tmp, 'nope') });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'FAKE HELP\n');
   const list = cli(['list', '--help'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: join(f.tmp, 'nope') } });
   assert.equal(list.status, 0, list.stderr);
-  assert.equal(list.stdout, cli(['query', '--help'], { cwd: f.cons, tmp: f.tmp }).stdout);
+  assert.notEqual(list.stdout, cli(['query', '--help'], { cwd: f.cons, tmp: f.tmp }).stdout);
+  assert.match(list.stdout, /^backlog list /);
+  assert.equal(cli(['list', 'open', '--help'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: join(f.tmp, 'nope') } }).stdout, list.stdout);
 });
 
 test('a configured backlog folder that is missing -> exit 4 naming backlog setup', t => {

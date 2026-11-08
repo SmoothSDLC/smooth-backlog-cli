@@ -497,6 +497,79 @@ Example:
   backlog next --json
 ```
 
+### backlog list
+
+```text
+backlog list — the items of this branch: the open ones in queue order, then the finished ones; or one kind of item, the branches, the critical items, or every branch
+
+Usage:
+  backlog list [--json]
+  backlog list new [--json]
+  backlog list open [--json]
+  backlog list done [--json]
+  backlog list archive [--json]
+  backlog list branches [--json]
+  backlog list critical [--json]
+  backlog list all-branches [--json]
+
+Reads the backlog and never changes it. Without a word it prints the full stack of the branch that is checked out here: the open items in
+queue order (priority 0 is next), then the finished ones. Each row shows the item's number, slug, status word (free text; closed, done and
+archived are finished, every other word is open), priority and name, then its summary and every dependency on an item of another repository.
+Items that are not on the queue because they name another repository or no branch are reported as findings above the queue. Open items of a
+branch that no longer exists on the origin wait for a decision and are listed after the queue. With --json the command prints the data itself,
+without any wrapper; each row also carries claimed_by and review_state, from the item's front matter.
+
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
+
+Words (at most one):
+  new
+      The full stack filtered to the items not started yet.
+  open
+      Every item that is not finished: the queue.
+  done
+      The finished items that are not archived.
+  archive
+      The archived items.
+  branches
+      One line per branch of this repository: the branch, its open items and its done items (with --json, a list of {branch, open, done}).
+  critical
+      Only the open items with severity critical, in a banner (with --json, the list of those items). When there is none it says so.
+  all-branches
+      The full stack of every branch of this repository, not only the one checked out here. Each row ends with the branch of its item,
+      for example (branch main); with --json every item carries its branch.
+
+Options:
+  --json
+      Print machine-readable output.
+  --help
+      Print this text and exit. Nothing is read or changed.
+
+Exit codes:
+  0  The command succeeded. Read views and --dry-run also exit 0.
+  1  The command refused: it printed a line that starts with a cross mark on standard output.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
+  4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
+
+Example:
+  backlog list open
+```
+
 ### backlog team
 
 ```text

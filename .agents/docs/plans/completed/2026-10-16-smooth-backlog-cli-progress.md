@@ -1,7 +1,7 @@
 # Execution ledger — 2026-10-16-smooth-backlog-cli
 
-Spec: ../specs/2026-10-16-smooth-backlog-cli-design.md
-Plan: 2026-10-16-smooth-backlog-cli.md
+Spec: [../../specs/2026-10-16-smooth-backlog-cli-design.md](../../specs/2026-10-16-smooth-backlog-cli-design.md)
+Plan: [2026-10-16-smooth-backlog-cli.md](2026-10-16-smooth-backlog-cli.md)
 
 - Tasks 1–2: core tests RED→GREEN; 19/19 pass (npm test before updater tests).
 - Task 3: updater tests RED→GREEN; 28/28 total pass.

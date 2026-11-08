@@ -18,8 +18,7 @@ for the folder inside the repository. The 1.x code path, the mode file and the m
 ## Global constraints
 
 - Public repository: no private repositories, hosts, machines, paths, ports, agent or team names, model names,
-  backlog item numbers or owner decisions in code, tests, docs or commit messages. Commit author `Cody
-  <cody@users.noreply.github.com>`, no trailers.
+  backlog item numbers or owner decisions in code, tests, docs or commit messages. Commit author `<author>`, no trailers.
 - No new test framework or dependency.
 - A user-facing command or option is removed only with the owner's approval (decisions A-D in REVIEW.md section 4);
   tasks that need an approval say so and wait.
@@ -95,7 +94,7 @@ its items with backlog new".
 delete the run-recorder hook (it names an internal agent and spawns a process on every run). `src/shared/query.js:90-115`:
 delete the mandate text and its `say`. Output: `query`'s header and `next`'s "file:" line no longer print the folder
 or file path (the product's own rule). Comments: internal item numbers and owner-decision citations in `src/` are
-rewritten as plain rationale or deleted. Test: `.agents/test/no-private-details.test.js` with the private list set
+rewritten as neutral rationale or deleted. Test: `.agents/test/no-private-details.test.js` with the private list set
 (run on the owner's machine), the synthetic list in CI; `.agents/test/package.test.js` for the hook removal.
 
 - [ ] Run the guard with the private list → FAIL on 5 files; fix; → PASS.
@@ -108,7 +107,7 @@ rewritten as plain rationale or deleted. Test: `.agents/test/no-private-details.
 
 **Files:** `src/shared/lifecycle.js` step(): the incomplete-item refusal and the stage refusals apply when
 `before.team || teamScope().repo || teamName()`; closeItem/`--status done`: the review stages apply to team items;
-`src/shared/new.js:90`: `--depends-on` optional (absent = none); `src/shared/pop.js`: a plain agent with no fitting
+`src/shared/new.js:90`: `--depends-on` optional (absent = none); `src/shared/pop.js`: an agent with no team with no fitting
 item is `idle`, not `chunk`. Test: features/plain-use.feature (6 scenarios) and the team scenarios unchanged.
 
 ### Task 5: no internal names in rules, flags, variables or output (needs decision C)

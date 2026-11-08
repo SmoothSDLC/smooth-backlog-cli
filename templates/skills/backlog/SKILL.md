@@ -38,8 +38,9 @@ The first release's command names still work as aliases of these commands: `init
   the item since your read is refused (exit 5) until you read it again.
 - Reviews, refinement and hand-offs are team steps: see Team work. A plain `backlog update` refuses every change of an item that belongs to a team.
 - An item that cannot be read: every command names it and the field; `backlog update <item> --<field> <value>` sets the field again, `backlog update <item> --restore` brings back its previous version.
-- Finish: `backlog update <item> --status done` or `--close --summary "<what was delivered>"`; `backlog archive <item>`
-  keeps a finished item out of the queue; `backlog move <item> --to-branch <name>` moves it to another branch.
+- Finish: `backlog done <item>` (the same as `backlog update <item> --status done`) or `backlog update <item> --close --summary "<what was delivered>"`; `backlog archive <item>`
+  keeps a finished item out of the queue (`backlog archive done` archives every finished item of the branch); `backlog move <item> --to-branch <name>` moves it to another branch;
+  `backlog import --branch <source> [--higher]` brings the open items of another branch here; `backlog clean [all-branches]` removes every item of the branch (or of every branch) after a typed yes.
 
 ## Team work
 

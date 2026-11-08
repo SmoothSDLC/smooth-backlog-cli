@@ -30,7 +30,7 @@ export async function run() {
       process.exitCode = await (await import('./upgrade.js')).run(alias.argv); return;
     }
     if (alias) argv = [alias.command, ...alias.argv];
-    if (argv[0] === 'init-clean') { process.exitCode = await (await import('./shared/clean.js')).run(argv.slice(1)); return; }
+    if (argv[0] === 'init-clean') { process.exitCode = await (await import('./shared/clean.js')).clean(argv.slice(1), 'init clean'); return; }
     if (argv[0] === 'setup') { process.exitCode = await (await import('./shared/setup.js')).run(argv.slice(1)); return; }
     let at = 0; while (argv[at] === '--json') at++; // a leading --json belongs to the command
     const named = argv[at] !== undefined && !argv[at].startsWith('-');

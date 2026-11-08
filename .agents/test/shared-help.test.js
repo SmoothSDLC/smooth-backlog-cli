@@ -21,7 +21,7 @@ const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
 const TEAM = ['team', 'team pop', 'team new', 'team update', 'team query', 'team define', 'team workflow']; // the help of the team code lives with it
-const COMMANDS = ['new', 'update', 'query', 'list', 'show', 'history', 'changes', 'next', 'next all-branches', 'fields', ...TEAM, 'move', 'archive'];
+const COMMANDS = ['new', 'update', 'query', 'list', 'show', 'history', 'changes', 'next', 'next all-branches', 'done', 'fields', ...TEAM, 'move', 'archive', 'archive done', 'import', 'clean'];
 const ALL = { ...HELP, ...teamHelp };
 const ROUTED = COMMANDS.filter(c => !c.startsWith('team ') && !c.includes(' ')); // the commands of the router (a word of a command has its own help, not its own row)
 // Flags this build refuses (query.js TEAM and pop.js); --db is no flag of the CLI (item 058: not in its help).
@@ -206,9 +206,10 @@ test('every alias row is in backlog --help, in COMMANDS.md and in the skill refe
 });
 
 test('<alias> --help prints the alias line and then the help of the command it runs', () => {
-  const done = backlog('done', '--help').stdout;
-  assert.ok(done.startsWith('backlog done <item> runs backlog update <item> --status done\n'), done);
-  assert.ok(done.includes(HELP.update));
+  assert.equal(backlog('done', '--help').stdout.trimEnd(), HELP.done.trimEnd()); // done is a command of its own: its help, no alias line
+  const first = backlog('done', '--ask', '--help').stdout; // a call that carries the dropped switch still goes through the alias
+  assert.ok(first.startsWith('backlog done <item> runs backlog update <item> --status done\n'), first);
+  assert.ok(first.includes(HELP.update));
   assert.ok(backlog('list', 'branch', '--help').stdout.startsWith('backlog list branch runs backlog query --branches\n')); // list open is a word of list now: it prints the help of list
   assert.ok(backlog('3', 'set', '--help').stdout.includes(HELP.update));
   const init = backlog('init', '--help').stdout;

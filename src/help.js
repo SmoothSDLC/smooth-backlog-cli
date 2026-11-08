@@ -20,6 +20,7 @@ Usage:
   backlog changes [--agent <name>] [--json]        Which items changed since your last use
   backlog next [--all] [--branch <name>] [--json]  The next item of this repository and branch
   backlog next all-branches [--json]               The next item over every branch of this repository
+  backlog done <item>                              Finish an item that has no team (backlog update <item> --status done)
   backlog query [options] [--json]                 The earlier read command; list, show, history, changes and next do what its options do
   backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs (--dry-run: only answered), with the whole item
   backlog team new --team <team> --agent <name> --name <text> [options]   Add an item of a team (it starts in stage refining); --review-refs, --split-from
@@ -29,6 +30,9 @@ Usage:
   backlog team workflow --file <flow.json>         Register a flow definition; --show <name> prints one
   backlog move <item> --to-branch <name>           Move an item to another branch (or --to-repository)
   backlog archive <item> [--force] [--dry-run]     Archive a finished item
+  backlog archive done                             Archive every finished item of this branch
+  backlog import --branch <source> [--higher]      Move the open items of another branch here; --higher puts them first in the queue
+  backlog clean [all-branches]                     Remove every item of this branch (or of every branch) after a typed yes
   backlog fields [--json]                          The item template: every field, what it is for, who sets it
   backlog setup [--ask]                            Point this repository at its backlog folder and deploy the backlog skill
   backlog upgrade [check|auto|off|disable|<version>]  Update the backlog program itself
@@ -529,6 +533,105 @@ Example:
   backlog next all-branches --json
 `,
 
+  done: `backlog done — finish one item that has no team
+
+Usage:
+  backlog done <item>
+
+Finishes the item given by number or slug. It runs backlog update <item> --status done: the status becomes closed, the completion time is set,
+the rest of the queue of the branch is renumbered, and the change records who made it and when. Every other argument after the item is passed on
+to backlog update (see backlog update --help), so its refusals and its output are those of update: an item that does not exist, an item
+that has a team (it is closed with backlog team update) and an item that someone else changed since this agent last read it (exit 5) are refused.
+
+${SHARED}
+
+Argument:
+  <item>
+      The item to finish, by number or slug. Required.
+
+Options:
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog done 12
+`,
+
+  clean: `backlog clean — remove every item of this branch, or of every branch, after a typed yes
+
+Usage:
+  backlog clean [all-branches]
+
+Asks "Type yes to continue" on standard error and reads the answer from standard input. Any other answer, or none, changes nothing and
+exits 2. After a yes it removes every item file of the branch checked out here, archived items included, as one published change, and
+the order of the other branches stays as it was. The removed items stay in the history of the backlog repository. Then it runs backlog
+setup again (the configuration and the copies of the skill). It prints how many items were removed. With the word all-branches it removes the
+items of every branch of this repository instead. When nothing is there to remove it says "0 items removed".
+
+${SHARED}
+
+Word:
+  all-branches
+      Remove the items of every branch of this repository, not only the one checked out here.
+
+Options:
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog clean
+`,
+
+  import: `backlog import — move the open items of another branch to this branch
+
+Usage:
+  backlog import --branch <source> [--higher]
+
+For every open item of the branch <source>, oldest first, it runs backlog move <item> --to-branch <the branch checked out here>. The items keep
+their content and their history; finished and archived items stay where they are. With --higher the imported items then lead the queue, in
+their original order (each gets priority 0, newest first). The queue of the branch is renumbered without gaps. The first step that fails stops
+the sequence, and the output says what was done before it. When the source has no open item the command says so and exits 0; when no item
+carries the branch name it says so too (check the name). The source cannot be the branch checked out here (exit 2). The command prints text
+only: --json is refused (exit 2).
+
+${SHARED}
+
+Options:
+  --branch SOURCE
+      The branch whose open items to bring here. Required.
+  --higher
+      Put the imported items first in the queue, in their original order. Without it they follow the items already queued.
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog import --branch feature --higher
+`,
+
+  'archive done': `backlog archive done — archive every finished item of this branch
+
+Usage:
+  backlog archive done
+
+For every finished item (status closed or done, not archived yet) of the branch checked out here, oldest first, it runs backlog archive <item>: the
+item leaves the work queue, is kept as archived, and the queue is renumbered. Open items stay. It prints which items it archived. When there is
+no finished item it says so and exits 0. The first archive that fails stops the sequence, and the output says what was archived before it. The
+command takes no other argument and prints text only: --json is refused (exit 2).
+
+${SHARED}
+
+Options:
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog archive done
+`,
+
   fields: `backlog fields — show the item template: every field of an item and what it is for
 
 Usage:
@@ -604,7 +707,7 @@ ${SHARED}
 
 Argument:
   <item>
-      The item to archive, by number or slug.
+      The item to archive, by number or slug. The word done archives every finished item of the branch (backlog archive done --help).
 
 Options:
   --force

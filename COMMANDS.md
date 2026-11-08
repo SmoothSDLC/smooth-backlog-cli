@@ -775,6 +775,201 @@ Example:
   backlog next all-branches --json
 ```
 
+### backlog done
+
+```text
+backlog done — finish one item that has no team
+
+Usage:
+  backlog done <item>
+
+Finishes the item given by number or slug. It runs backlog update <item> --status done: the status becomes closed, the completion time is set,
+the rest of the queue of the branch is renumbered, and the change records who made it and when. Every other argument after the item is passed on
+to backlog update (see backlog update --help), so its refusals and its output are those of update: an item that does not exist, an item
+that has a team (it is closed with backlog team update) and an item that someone else changed since this agent last read it (exit 5) are refused.
+
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
+
+Argument:
+  <item>
+      The item to finish, by number or slug. Required.
+
+Options:
+  --help
+      Print this text and exit. Nothing is read or changed.
+
+Exit codes:
+  0  The command succeeded. Read views and --dry-run also exit 0.
+  1  The command refused: it printed a line that starts with a cross mark on standard output.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
+  4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
+
+Example:
+  backlog done 12
+```
+
+### backlog clean
+
+```text
+backlog clean — remove every item of this branch, or of every branch, after a typed yes
+
+Usage:
+  backlog clean [all-branches]
+
+Asks "Type yes to continue" on standard error and reads the answer from standard input. Any other answer, or none, changes nothing and
+exits 2. After a yes it removes every item file of the branch checked out here, archived items included, as one published change, and
+the order of the other branches stays as it was. The removed items stay in the history of the backlog repository. Then it runs backlog
+setup again (the configuration and the copies of the skill). It prints how many items were removed. With the word all-branches it removes the
+items of every branch of this repository instead. When nothing is there to remove it says "0 items removed".
+
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
+
+Word:
+  all-branches
+      Remove the items of every branch of this repository, not only the one checked out here.
+
+Options:
+  --help
+      Print this text and exit. Nothing is read or changed.
+
+Exit codes:
+  0  The command succeeded. Read views and --dry-run also exit 0.
+  1  The command refused: it printed a line that starts with a cross mark on standard output.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
+  4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
+
+Example:
+  backlog clean
+```
+
+### backlog import
+
+```text
+backlog import — move the open items of another branch to this branch
+
+Usage:
+  backlog import --branch <source> [--higher]
+
+For every open item of the branch <source>, oldest first, it runs backlog move <item> --to-branch <the branch checked out here>. The items keep
+their content and their history; finished and archived items stay where they are. With --higher the imported items then lead the queue, in
+their original order (each gets priority 0, newest first). The queue of the branch is renumbered without gaps. The first step that fails stops
+the sequence, and the output says what was done before it. When the source has no open item the command says so and exits 0; when no item
+carries the branch name it says so too (check the name). The source cannot be the branch checked out here (exit 2). The command prints text
+only: --json is refused (exit 2).
+
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
+
+Options:
+  --branch SOURCE
+      The branch whose open items to bring here. Required.
+  --higher
+      Put the imported items first in the queue, in their original order. Without it they follow the items already queued.
+  --help
+      Print this text and exit. Nothing is read or changed.
+
+Exit codes:
+  0  The command succeeded. Read views and --dry-run also exit 0.
+  1  The command refused: it printed a line that starts with a cross mark on standard output.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
+  4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
+
+Example:
+  backlog import --branch feature --higher
+```
+
+### backlog archive done
+
+```text
+backlog archive done — archive every finished item of this branch
+
+Usage:
+  backlog archive done
+
+For every finished item (status closed or done, not archived yet) of the branch checked out here, oldest first, it runs backlog archive <item>: the
+item leaves the work queue, is kept as archived, and the queue is renumbered. Open items stay. It prints which items it archived. When there is
+no finished item it says so and exits 0. The first archive that fails stops the sequence, and the output says what was archived before it. The
+command takes no other argument and prints text only: --json is refused (exit 2).
+
+Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
+command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
+change before it exits; a folder inside the repository is committed with the repository by its user. The executable
+reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
+BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.
+
+Options:
+  --help
+      Print this text and exit. Nothing is read or changed.
+
+Exit codes:
+  0  The command succeeded. Read views and --dry-run also exit 0.
+  1  The command refused: it printed a line that starts with a cross mark on standard output.
+  2  The arguments or the place were wrong: the message is on standard error. An item of the backlog that cannot be read
+     also exits 2: the message names the item and the field, and the two ways out (set the field again, or --restore).
+  3  The repository that holds the items could not be synchronised with its origin. Either the update before a
+     change failed: then nothing was changed, and the command can be run again once the cause is fixed (a command that
+     only reads answers from the local copy instead, with the warning that the origin is offline and the local backlog
+     may be behind). Or the change was not published and was rolled back: fix the cause and retry the command. Existing
+     unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
+     explicit publish or drop commands.
+  4  The backlog repository is not set up; the printed question must be answered by the user.
+  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+     records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
+     names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
+     the item). Read the item again, then repeat the command. An item this agent never read is written without the
+     check (its first write).
+
+Example:
+  backlog archive done
+```
+
 ### backlog team
 
 ```text
@@ -1431,7 +1626,7 @@ BACKLOG_RUN_HOOK names an executable, and no child process when the variable is 
 
 Argument:
   <item>
-      The item to archive, by number or slug.
+      The item to archive, by number or slug. The word done archives every finished item of the branch (backlog archive done --help).
 
 Options:
   --force

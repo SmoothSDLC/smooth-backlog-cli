@@ -77,6 +77,11 @@ function parse(argv) { // archive.py:54-57 argparse
 }
 
 export async function run(argv) {
+  if (argv[0] === 'done') { // archive done: every finished item of the branch, one archive after the other (no item is named done)
+    if (argv.includes('--json')) return die('archive done prints text only: --json is not available');
+    if (argv.length > 1) return die(`archive done takes no other argument (got ${argv[1]})`);
+    return (await import('./sequence.js')).run({ kind: 'archive-done' });
+  }
   try {
     const a = parse(argv);
     return await withBacklog((rows, ctx) => archive(a, rows, ctx), a['dry-run'] ? null : ['archive.py', ...argv.slice(0, 2)].join(' '));

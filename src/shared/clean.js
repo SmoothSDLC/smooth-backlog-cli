@@ -1,4 +1,4 @@
-// `backlog init clean [all-branches]`: after a typed confirmation, removes every item of the current branch (archive included), or with
+// `backlog clean [all-branches]` (and its first-release spelling `init clean`): after a typed confirmation, removes every item of the current branch (archive included), or with
 // the subcommand all-branches of every branch of the repository, as one published change, then runs setup (configuration and skill copies). The removed
 // items stay in the backlog repository's history.
 import { rmSync } from 'node:fs';
@@ -19,9 +19,11 @@ async function answer(prompt) {
   try { for await (const line of rl) return line.trim(); return ''; } finally { rl.close(); }
 }
 
-export async function run(args = []) {
+export const run = args => clean(args, 'clean'); // the router's command
+// `name` is the spelling the caller typed: it is in the refusal and in the commit message of the removal.
+export async function clean(args = [], name = 'clean') {
   const every = args[0] === 'all-branches';
-  if (args.length > (every ? 1 : 0)) return die(`unrecognized arguments: ${args.join(' ')} (usage: init clean [all-branches])`);
+  if (args.length > (every ? 1 : 0)) return die(`unrecognized arguments: ${args.join(' ')} (usage: ${name} [all-branches])`);
   const cwd = process.cwd();
   const { home, ask } = store.resolveHome();
   if (ask) return die(ask.text, ask.code);
@@ -41,7 +43,7 @@ export async function run(args = []) {
       if (every) idx.branches = {}; else delete idx.branches[branch];
       index.write(folder, idx);
     });
-    await sync.commitSettled(home, folder, 'init clean');
+    await sync.commitSettled(home, folder, name);
     return items.length;
   });
   const code = await setup.run([]); // the configuration and the skill copies

@@ -184,7 +184,7 @@ test('team pop: the lead claims the work item and sees it whole, then a member h
   assert.deepEqual([JSON.parse(member.stdout).action, JSON.parse(member.stdout).item], ['chunk', null]);
   for (const gone of ['pop', 'work']) {
     const r = run(f, [gone, '--agent', 'ann']);
-    assert.equal(r.status, 2); assert.match(r.stderr, /is not a backlog command \(new, update, query, list, team, next, fields, move, archive, show, history, changes, setup\)/);
+    assert.equal(r.status, 2); assert.match(r.stderr, /is not a backlog command \(new, update, query, list, team, next, fields, move, archive, show, history, changes, done, clean, import, setup\)/);
   }
 });
 

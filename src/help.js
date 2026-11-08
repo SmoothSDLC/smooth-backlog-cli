@@ -72,6 +72,15 @@ records who made it and when. A write to an item that someone else changed since
 Teams: the commands that know a team (pop, new, update, query, define, workflow) are under backlog team; backlog team --help describes
 them. The commands above know nothing of teams.
 
+Update notice: when a person runs a command at a terminal (standard error is a terminal), the command also checks the package
+registry for a newer release, about once a week (about once a day after backlog upgrade auto; an hour after a check that failed). The
+check runs beside the command and adds at most 1.5 seconds when it is still running after the command; it prints at most one warning
+on standard error ("backlog: Version 2.1.0 is available; run backlog upgrade."), never changes the output or the exit code, and a check
+that fails is a warning too. Nothing runs when standard error is not a terminal (agents and scripts), for --help, --version, upgrade
+and setup. It installs nothing unless automatic updates are on. backlog upgrade disable turns the weekly check off, backlog upgrade
+off turns automatic updates off; with both off nothing is checked (backlog upgrade check turns the weekly check on again).
+backlog upgrade --help has the rest.
+
 Exit codes: 0 success; 1 refused (the reason on standard output, ❌ ...); 2 invalid input or a failure; 3 idle (team pop:
 nothing to do now); 4 the configured backlog repository is not cloned (run backlog setup); 5 stale view.
 `;
@@ -713,6 +722,17 @@ more privileges. The package registry must be configured for the @smoothsdlc sco
 --registry=https://npm.pkg.github.com with read:packages access); a missing setup is answered with these instructions.
 The choices (weekly check, automatic updates, last check) are kept in a file of the user's configuration folder
 (smooth-backlog-cli/config.json under $XDG_CONFIG_HOME, else ~/.config), never in a repository. It needs no backlog.
+
+The update notice: any other backlog command that a person runs at a terminal (standard error is a terminal) also looks for a newer
+release when the configuration says one is due. Defaults: the weekly check is on and automatic updates are off. A check is due about
+once a week; with automatic updates on, about once a day; an hour after a check that failed. It runs beside the command and adds at most
+1.5 seconds when it is still running after the command (a check that takes longer is stopped and counts as failed). It prints at most
+one warning on standard error: "backlog: Version <x> is available; run backlog upgrade." (or the note that a new major release needs
+backlog upgrade), or "backlog: Automatic update check failed: <reason>. Backlog work can continue; retry is eligible in one hour.". It never
+changes the output or the exit code of the command, and nothing runs when standard error is not a terminal (agents and scripts), for --help,
+--version, upgrade and setup. With automatic updates on, a compatible patch or minor release is installed by the check. backlog upgrade
+disable turns the weekly check off and backlog upgrade off turns automatic updates off; with both off nothing is checked and no notice
+appears (backlog upgrade check turns the weekly check on again).
 
 Options:
   --json

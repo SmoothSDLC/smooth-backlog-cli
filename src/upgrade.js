@@ -196,6 +196,24 @@ export function updater(options = {}) {
   };
 }
 
+// The update notice (decision AI). A command a person runs at a terminal starts the scheduled check of the user's configuration beside it
+// (about weekly, about daily with automatic updates, an hour after a failed check; nothing when `backlog upgrade disable` turned it off), and once
+// the command is done waits for it at most `limit` milliseconds more. Its warning is written to standard error then; it never changes the output or the
+// exit code of the command, and a check that fails or runs out of time is a warning at most. The commands in QUIET and every non-terminal run start nothing.
+// Returns the function to await when the command is done.
+const QUIET = ['--version', 'version', '--help', 'help', '-h', 'upgrade', 'setup'];
+export function startNotice(argv, { terminal = process.stderr.isTTY, make = updater, limit = 1500, write = text => process.stderr.write(text) } = {}) {
+  if (!terminal || !argv.length || QUIET.includes(argv[0]) || argv.includes('--help')) return async () => {};
+  const messages = []; const abort = new AbortController();
+  const check = Promise.resolve().then(() => make({ notice: message => messages.push(message), runner: (args, options) => runNpm(args, { ...options, signal: abort.signal }) }).scheduled()).catch(() => {});
+  const upTo = async (promise, ms) => { let timer; try { await Promise.race([promise, new Promise(done => { timer = setTimeout(done, ms); })]); } finally { clearTimeout(timer); } };
+  return async () => {
+    await upTo(check, limit);
+    abort.abort(); await upTo(check, 200); // a check still running is stopped; it records itself as failed (tried again in an hour) and says so
+    try { for (const message of messages) write(`backlog: ${redact(message)}\n`); } catch { /* a closed standard error is no failure of the command */ }
+  };
+}
+
 const say = text => process.stdout.write(`${redact(text)}\n`);
 // backlog upgrade [check|auto|off|disable|<version>]
 export async function run(args) {

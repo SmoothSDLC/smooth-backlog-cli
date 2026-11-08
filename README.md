@@ -147,6 +147,18 @@ The same five rules hold wherever the items live:
 
 `backlog <command> --help` is the contract of each command; [COMMANDS.md](COMMANDS.md) holds the same text.
 
+### The update notice
+
+A command that a person runs at a terminal (standard error is a terminal) also checks the package registry for a newer release
+when the user's configuration says one is due: the weekly check is on by default and automatic updates are off; a check is due about
+once a week, about once a day with `backlog upgrade auto`, and an hour after a check that failed. The check runs beside the command and
+adds at most 1.5 seconds when it is still running after the command; a check that takes longer is stopped and counts as failed. It
+prints at most one warning on standard error (`backlog: Version 2.1.0 is available; run backlog upgrade.`, or the note that a failed
+check is tried again in an hour), never changes the output or the exit code of the command, and installs nothing unless automatic
+updates are on. Nothing runs when standard error is not a terminal (agents and scripts), for `--help`, `--version`, `upgrade` and
+`setup`. `backlog upgrade disable` turns the weekly check off and `backlog upgrade off` turns automatic updates off; with both off
+nothing is checked. The choices live in `smooth-backlog-cli/config.json` of the user's configuration folder, never in a repository.
+
 ## Development and verification
 
 ```sh

@@ -54,6 +54,12 @@ One backlog, one CLI. Compared with 1.0.1:
   question after the other on standard error; an empty answer leaves a field out, lines typed ahead are kept for their question, and
   the result on standard output is the one of the same call without `--ask`. Without a terminal the command is refused (exit 2, one line)
   and creates nothing. Every other command rejects `--ask` as an unrecognized argument, except `backlog setup --ask`.
+- **The update notice runs after the commands of a person at a terminal.** The weekly check of `backlog upgrade` (on by default;
+  daily with `backlog upgrade auto`; an hour after a failed check; `backlog upgrade disable` and `off` turn it off) was implemented
+  and not called by any command; now every command except `--help`, `--version`, `upgrade` and `setup` starts it beside the command when
+  standard error is a terminal, waits for it at most 1.5 seconds after the command, and prints its warning on standard error. It never
+  changes the output or the exit code, a check that fails or runs out of time is a warning at most, and nothing runs for agents and
+  scripts (standard error is not a terminal). Documented in `backlog --help`, `backlog upgrade --help`, COMMANDS.md, the skill and the README.
 - **The configuration has a user and a team.** `backlog setup` writes `user` (the git `user.name`, else the login name) and
   an empty `team`; an item outside a team records its `owner`, and the writer with no agent named is the user.
 - **The item keys carry the owner's words.** An item file stores `title`, `last_updated`, `last_updated_by`, `owner` and `owned_since`

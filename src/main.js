@@ -5,6 +5,7 @@ const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.me
 // One command set, wherever the item files live: setup and upgrade here, everything else through the router. No arguments prints the help.
 export async function run() {
   const argv = process.argv.slice(2);
+  const finish = process.stderr.isTTY ? (await import('./upgrade.js')).startNotice(argv) : null; // the update notice: only for a person at a terminal
   try {
     if (argv[0] === '--version' || argv[0] === 'version') { process.stdout.write(`${packageInfo.version}\n`); return; }
     if (argv[0] === '--help' || argv[0] === 'help' || argv[0] === '-h') { process.stdout.write((await import('./help.js')).USAGE); return; }
@@ -22,5 +23,5 @@ export async function run() {
   } catch (error) {
     process.stderr.write(`❌ backlog: ${redact(error.message)}\n`);
     process.exitCode = error.exitCode || 2;
-  }
+  } finally { await finish?.(); }
 }

@@ -5,7 +5,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,6 +70,8 @@ test('team new --ask also asks for the review documents and files the item under
 test('new --ask on a real terminal (util-linux script) asks and reads lines typed ahead', t => {
   if (process.platform !== 'linux') return t.skip('needs the script command of util-linux');
   const f = build();
+  mkdirSync(join(f.t, 'config', 'smooth-backlog-cli'), { recursive: true }); // a terminal run would check for a new release: the weekly check is off here
+  writeFileSync(join(f.t, 'config', 'smooth-backlog-cli', 'config.json'), JSON.stringify({ schema_version: 1, weekly: false, auto: false }));
   const r = spawnSync('script', ['-qec', `'${process.execPath}' '${bin}' new --ask --depends-on none`, '/dev/null'], { cwd: f.cons, env: { ...process.env, ...env(f.t), BACKLOG_AGENT: 'driver-ask' }, encoding: 'utf8', input: 'Pty title\nobj\nsum\nbody line\nsecond\n\n' });
   if (!r.stdout?.includes('Title: ')) return t.skip('no pseudo-terminal here');
   assert.equal(r.status, 0, r.stdout + r.stderr);

@@ -10,7 +10,7 @@ export const USAGE = `backlog — the backlog of this repository and branch, for
 
 Usage:
   backlog                                          This help (backlog --json: the next item)
-  backlog new --name <text> [options]              Add an item; --split-from <item> makes a sibling with its context
+  backlog new --name <text> [options]              Add an item; --split-from <item> makes a sibling with its context; --ask asks on a terminal for the fields not given
   backlog update <item> [options]                  Change an item that has no team: fields, body, status, priority; claim, release, close
   backlog update --replan "<id,id,...>"            Set the order of the queue
   backlog list [new|open|done|archive|branches|critical|all-branches] [--json]   The items of this branch (the full stack by default), one kind of item, the branches, the critical items, or every branch
@@ -21,7 +21,7 @@ Usage:
   backlog next all-branches [--json]               The next item over every branch of this repository
   backlog done <item>                              Finish an item that has no team (backlog update <item> --status done)
   backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs (--dry-run: only answered), with the whole item
-  backlog team new --team <team> --agent <name> --name <text> [options]   Add an item of a team (it starts in stage refining); --review-refs, --split-from
+  backlog team new --team <team> --agent <name> --name <text> [options]   Add an item of a team (it starts in stage refining); --review-refs, --split-from, --ask
   backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
   backlog team update <item> --team <team> --agent <name> <step>   One team step: claim, release, request-review, review, close, ...
   backlog team define --file <team.json>           Register a team (lead, members, reviewers, review stages) in the backlog configuration
@@ -135,6 +135,11 @@ Options:
       Write the item even when an item of that name already exists. Without it the command refuses.
   --dry-run
       Say which item would be created and change nothing: nothing is written and nothing is committed.
+  --ask
+      Ask for the fields you did not give, on a terminal: the title, the objective, the summary and the body, one question after the
+      other (the body ends with an empty line). The questions go to standard error, an empty answer leaves a field out, and what the
+      command prints on standard output is what it prints without --ask. Without a terminal (standard input and standard error) the
+      command refuses, exit 2, and creates nothing. Every other option still applies, and a field given as an option is not asked.
 ${HELP_FLAG}
 
 On success the command prints a line that starts "created phase" with the item's slug, the item number and the rank

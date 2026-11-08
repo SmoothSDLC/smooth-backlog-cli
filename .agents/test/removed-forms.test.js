@@ -47,7 +47,7 @@ const REMOVED = [
   [24, ['update', '1.2.3'], 1, /^❌ no phase '1\.2\.3'/],
   [25, ['1', 'set', 'name', 'x'], 2, NOT],
   [26, ['next', '--headless'], 2, /unrecognized arguments: --headless/],
-  [26, ['new', '--name', 'X', '--ask'], 2, /unrecognized arguments: --ask/],
+  [26, ['update', '1', '--ask'], 2, /unrecognized arguments: --ask/],
   [27, ['next', '--agent', 'ada'], 2, /unrecognized arguments: --agent/],
   [27, ['query', '--pop', '--agent', 'ada'], 2, NOT],
   [27, ['next', '--pop'], 2, /unrecognized arguments: --pop/],

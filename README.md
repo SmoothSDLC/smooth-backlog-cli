@@ -122,7 +122,7 @@ The same five rules hold wherever the items live:
 
 | Command | Purpose |
 |---|---|
-| `backlog new --name <text> [options]` | Add an item; `--split-from <item>` makes a sibling with its context |
+| `backlog new --name <text> [options]` | Add an item; `--split-from <item>` makes a sibling with its context; `--ask` asks on a terminal for the title, objective, summary and body you did not give (refused without a terminal, exit 2) |
 | `backlog update <item> [options]` | Change fields, body, status, priority of an item without a team; claim, release, close |
 | `backlog done <item>` | Finish an item that has no team |
 | `backlog list [new\|open\|done\|archive\|branches\|critical\|all-branches]` | The full stack of this branch (open items in queue order, then the finished ones), one kind of item, the branches, the critical items, or every branch |
@@ -132,7 +132,7 @@ The same five rules hold wherever the items live:
 | `backlog changes` | Which items changed since your last use |
 | `backlog fields` | The item template: every field, what it is for, who sets it |
 | `backlog team pop --team <team> --agent <name>` | What one agent of a team does next, marked as theirs, with the whole item |
-| `backlog team new --team <team> --agent <name> --name <text> [options]` | Add an item of a team (stage refining); `--review-refs`, `--split-from` |
+| `backlog team new --team <team> --agent <name> --name <text> [options]` | Add an item of a team (stage refining); `--review-refs`, `--split-from`; `--ask` also asks for the review documents |
 | `backlog team update <item> --team <team> --agent <name> <step>` | One team step: claim, release, review, close, ... |
 | `backlog team query --team <team> --agent <name> <view>` | The team views (claimable, reviewable, blocked, decisions, plan, wip) and the read options of the team rules (`--phase`, `--status`, `--events`, `--branch`, ...) |
 | `backlog team define --file <team.json>` | Register a team in the backlog configuration |

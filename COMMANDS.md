@@ -169,6 +169,11 @@ Options:
       Write the item even when an item of that name already exists. Without it the command refuses.
   --dry-run
       Say which item would be created and change nothing: nothing is written and nothing is committed.
+  --ask
+      Ask for the fields you did not give, on a terminal: the title, the objective, the summary and the body, one question after the
+      other (the body ends with an empty line). The questions go to standard error, an empty answer leaves a field out, and what the
+      command prints on standard output is what it prints without --ask. Without a terminal (standard input and standard error) the
+      command refuses, exit 2, and creates nothing. Every other option still applies, and a field given as an option is not asked.
   --help
       Print this text and exit. Nothing is read or changed.
 
@@ -1278,6 +1283,11 @@ Options:
       Write the item even when an item of that name already exists.
   --dry-run
       Say which item would be created and change nothing.
+  --ask
+      Ask for the fields you did not give, on a terminal: the title, the objective, the summary, the body (it ends with an empty
+      line) and the review documents (--review-refs), one question after the other. The questions go to standard error, an empty
+      answer leaves a field out, and what the command prints on standard output is what it prints without --ask. Without a terminal
+      (standard input and standard error) the command refuses, exit 2, and creates nothing. A field given as an option is not asked.
   --status STATUS
       Refused: a team item starts in its own first status.
   --help

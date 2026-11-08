@@ -2,7 +2,8 @@
 // Order of work as the earlier scripts: pull, number, write, place in the index, commit and push.
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
-import { input } from '../errors.js';
+import { createInterface } from 'node:readline';
+import { BacklogError, input } from '../errors.js';
 import { parseItem as parse } from './frontmatter.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { actor, check, recordWrites } from './seen.js';
@@ -21,7 +22,7 @@ const pad = n => String(n).padStart(3, '0');
 const OPTIONS = {
   name: 's', title: 's', status: 's', objective: 's', summary: 's', description: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
   'depends-on': 's', estimate: 'i', chunk: true,
-  complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], force: true, 'dry-run': true,
+  complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], force: true, 'dry-run': true, ask: true,
 };
 const NEGATIVE = /^-(\d+|\d*\.\d+)$/;
 const optionLike = s => s.startsWith('-') && s !== '-' && !NEGATIVE.test(s) && !s.includes(' ');
@@ -78,8 +79,51 @@ export function hasDefinitionOfDone(text) {
 
 const refuse = text => { process.stdout.write(`❌ ${redact(text)}\n`); return 1; };
 
-export async function run(argv, { team = null } = {}) {
+// --ask: on a terminal the command asks, on standard error, for each of these fields the call did not give; an empty answer leaves the field out.
+// The other options stay options. `io` is the test seam: { isTerminal(), open() -> { ask(prompt) -> Promise<string|null>, close() } }, null being the end of the input.
+const MORE = '... '; // the prompt of the next line of the body
+const QUESTIONS = [['name', 'Title'], ['objective', 'Objective (one line)'], ['summary', 'Summary'], ['body', 'Body (finish with an empty line)']];
+const TEAM_QUESTIONS = [['review-refs', 'Review documents (comma separated)']];
+export const terminal = {
+  isTerminal: () => Boolean(process.stdin.isTTY && process.stderr.isTTY),
+  open() { // lines typed ahead (a paste) wait in the queue for their question
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
+    const lines = []; let want = null; let ended = false;
+    rl.on('line', line => { if (want) { const done = want; want = null; done(line); } else lines.push(line); });
+    rl.once('close', () => { ended = true; if (want) want(null); });
+    return {
+      ask(prompt) {
+        rl.setPrompt(prompt); rl.prompt();
+        return lines.length ? Promise.resolve(lines.shift()) : ended ? Promise.resolve(null) : new Promise(done => { want = done; });
+      },
+      close: () => rl.close(),
+    };
+  },
+};
+async function asked(argv, team, io) {
+  const a = parseArgs(argv, team?.options);
+  if (!a.ask) return argv;
+  input(io.isTerminal(), '--ask needs a terminal (standard input and standard error); give the fields as options instead (backlog new --help)');
+  const out = [...argv]; const reader = io.open();
   try {
+    for (const [key, label] of [...QUESTIONS, ...(team ? TEAM_QUESTIONS : [])]) {
+      if (a[camel(key)] !== undefined) continue;
+      let answer;
+      if (key === 'body') { // lines up to an empty one
+        const lines = []; let line = await reader.ask(`${label}: `);
+        while (line) { lines.push(line); line = await reader.ask(MORE); }
+        answer = line === null && !lines.length ? null : lines.join('\n');
+      } else answer = await reader.ask(`${label}: `);
+      if (answer === null) throw new BacklogError('INVALID_INPUT', 'no answer; nothing was created');
+      if (answer.trim()) out.push(`--${key}=${answer.trim()}`);
+    }
+  } finally { reader.close(); }
+  return out;
+}
+
+export async function run(argv, { team = null, io = terminal } = {}) {
+  try {
+    argv = await asked(argv, team, io);
     const { home } = resolveHome();
     const scope = seam.scope();
     const repo = scope.repo || repoId(process.cwd());

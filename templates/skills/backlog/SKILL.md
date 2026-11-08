@@ -30,6 +30,8 @@ repository: it installs or updates the CLI and runs `backlog setup`. The CLI upd
 - Read: `backlog list` (the queue and the finished items of this branch; `backlog list open|new|done|archive|branches|critical|all-branches` one kind, the branches, the critical items or every branch), `backlog fields` (the item template: every field and what it is for), `backlog show <item>` (one item, whole; `--agent <you>` records that you have read it), `backlog history [<item>]` (its events, or the latest 50), `backlog changes` (what changed since your last use), `backlog next` (`backlog next all-branches` over every branch).
 - Create: `backlog new --name "<name>" --objective "<one line>" --summary "<what it is about>"`; `--priority 0` makes it
   next; `--depends-on <items>` when other items must finish first; `--split-from <item>` makes a sibling with its context.
+  `backlog new --ask` (and `backlog team new --ask`) asks a person on a terminal for the title, objective, summary and body they did
+  not give; an agent without a terminal gives the fields as options (`--ask` is refused there, exit 2).
 - Change: `backlog update <item> --name|--objective|--summary|--status|--location|--priority <value>`, `--append "<text>"`
   adds body text, `--note "<text>"` records an event, `--set-depends-on <items|none>`; `--replan "<id,id,...>"` orders the queue.
 - Claim and release (named agents; an item without a team): `backlog update <item> --claim <you>`, `--release <you>`; `backlog team pop --team <team> --agent <you>`

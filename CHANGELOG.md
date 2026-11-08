@@ -49,6 +49,11 @@ One backlog, one CLI. Compared with 1.0.1:
   a team item (refused before anything is moved) and `clean` when a team item lies in its scope, archived ones included (refused before
   the question): one line on standard output, exit 1, nothing written; the line names `backlog team update` or says that no command
   deletes a team item. `move`, `archive` of a closed team item and `archive done` only file or store an item and keep working.
+- **`backlog new --ask` and `backlog team new --ask` ask for the fields you did not give.** On a terminal (standard input and standard
+  error) the command asks for the title, the objective, the summary and the body (a team item also for its review documents), one
+  question after the other on standard error; an empty answer leaves a field out, lines typed ahead are kept for their question, and
+  the result on standard output is the one of the same call without `--ask`. Without a terminal the command is refused (exit 2, one line)
+  and creates nothing. Every other command rejects `--ask` as an unrecognized argument, except `backlog setup --ask`.
 - **The configuration has a user and a team.** `backlog setup` writes `user` (the git `user.name`, else the login name) and
   an empty `team`; an item outside a team records its `owner`, and the writer with no agent named is the user.
 - **The item keys carry the owner's words.** An item file stores `title`, `last_updated`, `last_updated_by`, `owner` and `owned_since`

@@ -67,14 +67,18 @@ Feature: Commands - the commands of their own (done, clean, import, archive done
     And item 1 has status "pending"
     And the queue is 1
 
-  Scenario: the headless switch and the question switch are unknown options
+  Scenario: the headless switch is an unknown option; the question switch needs a terminal on new and is unknown elsewhere
     Given an item "Quiet" exists
     When I run `backlog list --headless`
     Then the command fails with exit code 2
     And the output contains "unrecognized arguments: --headless"
     When I run `backlog new --name "Asked" --ask`
     Then the command fails with exit code 2
+    And the output contains "--ask needs a terminal"
     And the queue is 1
+    When I run `backlog update 1 --ask`
+    Then the command fails with exit code 2
+    And the output contains "unrecognized arguments: --ask"
 
   Scenario: next --agent is an unknown option; the next action of an agent is backlog team pop
     When I run `backlog next --agent ada`

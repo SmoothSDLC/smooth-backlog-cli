@@ -19,4 +19,4 @@ export const hooks = {
   reviewRefs(fm, t) { if (t.refs.length) fm.review_refs = t.refs; },
 };
 
-export const run = argv => runNew(argv, { team: hooks });
+export const run = (argv, options) => runNew(argv, { ...options, team: hooks });

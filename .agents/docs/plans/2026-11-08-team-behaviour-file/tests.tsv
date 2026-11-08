@@ -1,0 +1,820 @@
+id	file:line	theme	class	disposition	reason	title
+TST-001	commands-documented.test.js:24	-	OTHER	-		every command, team subcommand and word with an entry of its own has a section in COMMANDS.md and in the skill reference
+TST-002	commands-documented.test.js:30	-	OTHER	-		every command, team subcommand and word has its own help, and backlog <it> --help prints it
+TST-003	commands-documented.test.js:40	-	OTHER	-		backlog --help names every command, and the help of list names every word of list
+TST-004	features.test.js:15	-	OTHER	-		${feature.name} / ${scenario.name} [${location}]
+TST-005	fields.test.js:23	-	OTHER	-		backlog fields prints one line per field with the five columns; --json lists the same fields
+TST-006	fields.test.js:37	-	OTHER	-		backlog new --help carries the same table
+TST-007	fields.test.js:45	-	OTHER	-		new takes --title and --description as the owner\
+TST-008	install-script.test.js:48	-	OTHER	-		044: missing -> installed, then backlog setup gets each argument as given
+TST-009	install-script.test.js:54	-	OTHER	-		044: an older release or a pre-release of the latest is updated; an up-to-date or newer one is left alone
+TST-010	install-script.test.js:63	-	OTHER	-		044: an unreachable registry is said; a different backlog command earlier on PATH is refused
+TST-011	new-ask.test.js:36	-	OTHER	-		new --ask asks for the title, objective, summary and body, and creates the item they describe; the result is on standard output as without --ask
+TST-012	new-ask.test.js:49	-	OTHER	-		new --ask does not ask for a field the call gave, and an empty answer leaves a field out
+TST-013	new-ask.test.js:57	-	OTHER	-		new --ask with an answer that starts with a dash keeps it as the value
+TST-014	new-ask.test.js:62	-	OTHER	-		team new --ask also asks for the review documents and files the item under the team
+TST-015	new-ask.test.js:70	-	OTHER	-		new --ask on a real terminal (util-linux script) asks and reads lines typed ahead
+TST-016	new-ask.test.js:83	-	OTHER	-		--ask answered by the end of the input creates nothing and exits 2
+TST-017	new-ask.test.js:91	-	OTHER	-		without a terminal --ask is refused with one line (exit 2) and nothing is created, for new and for team new
+TST-018	new-ask.test.js:102	-	OTHER	-		new without --ask is not affected: the same call creates the item and asks nothing
+TST-019	new-ask.test.js:108	-	OTHER	-		every other command still rejects --ask
+TST-020	no-child-process-proof.test.js:36	-	OTHER	-		no child process: --version, BACKLOG_RUN_HOOK unset - the CLI starts none
+TST-021	no-child-process-proof.test.js:46	-	OTHER	-		no child process: --version, the recorder variable set - the preload catches the one recorder call
+TST-022	no-child-process-proof.test.js:64	-	OTHER	-		no child process: a backlog repository, BACKLOG_RUN_HOOK unset - the only child processes are git
+TST-023	no-child-process-proof.test.js:78	-	OTHER	-		no child process: a backlog repository, the recorder variable set - the recorder is the one non-git call
+TST-024	no-private-details.test.js:16	-	OTHER	-		the tracked files name no private environment detail
+TST-025	no-private-details.test.js:38	-	OTHER	-		with BACKLOG_PRIVATE_DENYLIST unset the guard scans with the synthetic list and leaves that list file out
+TST-026	no-private-details.test.js:62	-	OTHER	-		the guard reports a hit by file and line, without the denied detail
+TST-027	package.test.js:8	-	OTHER	-		the packed npm artifact installs offline and runs with its bundled templates
+TST-028	package.test.js:25	-	OTHER	-		release verification exercises the installed artifact independently of checkout product code
+TST-029	plain-team-env.test.js:28	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	new files the item under this repository and branch, whatever the team environment says
+TST-030	plain-team-env.test.js:37	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	update edits an item outside the bound repository and branch
+TST-031	plain-team-env.test.js:44	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	query lists the items of this repository and branch, not only the bound ones
+TST-032	plain-team-env.test.js:50	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	archive takes an item outside the bound repository and branch
+TST-033	plain-team-env.test.js:57	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	move takes an item to another repository though the session is bound to a different one
+TST-034	plain-team-env.test.js:63	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	the order of the queue is every open item\
+TST-035	plain-team-env.test.js:70	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	an unreadable team configuration warns under backlog team and nowhere else
+TST-036	plain-team-items.test.js:63	T-BINDING	CODE-LITERAL	unchanged		done engages on an item with a team: refused, nothing written
+TST-037	plain-team-items.test.js:70	T-BINDING	CODE-LITERAL	unchanged		done bites only on a team item: an item without a team is finished
+TST-038	plain-team-items.test.js:75	T-BINDING	CODE-LITERAL	changed	team update --replan names an item outside a team, refused by D-06	update --replan engages on a team item it names: refused, nothing written; backlog team update --replan is the door
+TST-039	plain-team-items.test.js:84	T-BINDING	CODE-LITERAL	unchanged		update --replan bites only on a team item it names: a replan of items without a team goes through
+TST-040	plain-team-items.test.js:89	T-BINDING	CODE-LITERAL	unchanged		archive engages on a team item that is not closed, with and without --force: refused, nothing written
+TST-041	plain-team-items.test.js:96	T-BINDING	CODE-LITERAL	unchanged		archive bites only on an open team item: --force still archives an open item without a team
+TST-042	plain-team-items.test.js:101	T-BINDING	CODE-LITERAL	unchanged		archive and archive done keep working for a closed team item (finished-item storage)
+TST-043	plain-team-items.test.js:108	T-BINDING	CODE-LITERAL	unchanged		move keeps working for an item with a team (it files the item, no team rule): the team fields stay
+TST-044	plain-team-items.test.js:117	T-BINDING	CODE-LITERAL	unchanged		import --higher engages on a team item it would place first: refused before anything is moved
+TST-045	plain-team-items.test.js:124	T-BINDING	CODE-LITERAL	unchanged		import bites only with --higher on a team item: import without it moves the team item, and --higher on items without a team places them first
+TST-046	plain-team-items.test.js:132	T-BINDING	CODE-LITERAL	unchanged		clean engages on a team item in its scope, archived ones included: refused before the question, nothing written
+TST-047	plain-team-items.test.js:141	T-BINDING	CODE-LITERAL	unchanged		clean bites only on the scope: a team item on another branch does not stop it
+TST-048	release-pr.test.js:9	-	OTHER	-		only an exact merged main PR with successful CI authorizes publication
+TST-049	release-pr.test.js:16	-	OTHER	-		missing, pending, failed, or unrelated PR checks block publication
+TST-050	release-pr.test.js:24	-	OTHER	-		release eligibility checks use the exact main commit and final PR head and fail on API errors
+TST-051	release-pr.test.js:32	-	OTHER	-		merged PR CI remains valid when GitHub clears its PR links after merge
+TST-052	release.test.js:10	-	OTHER	-		the immutable tag version publishes only its exact artifact and commit
+TST-053	release.test.js:14	-	OTHER	-		rerunning a published commit verifies it again without overwriting its npm version
+TST-054	release.test.js:19	-	OTHER	-		release planning rejects conflicting artifacts, conflicting unpublished tags, and unsafe versions
+TST-055	release.test.js:24	-	OTHER	-		release tags are pushed to the exact validated commit and cannot be moved
+TST-056	release.test.js:47	-	OTHER	-		registry absence is distinguished from authentication and network failures
+TST-057	release.test.js:55	-	OTHER	-		main assigns the next patch from registry and reserved tags and reruns reuse the assigned tag
+TST-058	release.test.js:64	-	OTHER	-		publishing stamps only the tag version into package metadata and its lockfile
+TST-059	release.test.js:81	-	OTHER	-		the default workflow token dispatches publishing at the immutable tag and reports failures
+TST-060	release.test.js:90	-	OTHER	-		registry history handles one or many releases and distinguishes absence from failures
+TST-061	removed-forms.test.js:78	-	OTHER	-		all 27 rows of the first release\
+TST-062	removed-forms.test.js:91	-	OTHER	-		backlog update with nothing named prints the help of update (exit 2) and installs and writes nothing
+TST-063	router.test.js:28	-	OTHER	-		a leading --json is a global flag: the command after it is still found, no arguments prints the help
+TST-064	router.test.js:41	-	OTHER	-		a command leaves the consuming repository clean and writes nothing into it
+TST-065	router.test.js:49	-	OTHER	-		the router: fourteen commands; argv after the command reaches the module unparsed; its exit code is returned
+TST-066	router.test.js:64	-	OTHER	-		an unknown command is refused (exit 2) naming the commands
+TST-067	router.test.js:73	-	OTHER	-		<command> --help prints the help text and needs no backlog folder; list prints its own help, also for a word of list
+TST-068	router.test.js:85	-	OTHER	-		a configured backlog folder that is missing -> exit 4 naming backlog setup
+TST-069	script-runs.test.js:24	-	OTHER	-		backlog.js records one run with its name and exit code (${label})
+TST-070	script-runs.test.js:32	-	OTHER	-		backlog.js behaves the same without the recorder (${label})
+TST-071	script-runs.test.js:38	-	OTHER	-		backlog.js spawns no child process when BACKLOG_RUN_HOOK is unset (${label})
+TST-072	shared-audit.test.js:32	-	OTHER	-		audit t1/t9: a refused or dry-run command leaves nothing untracked that would block the next pull, and no backlog.db is ever created
+TST-073	shared-audit.test.js:45	-	OTHER	-		audit t4: a done item can be neither claimed nor released back into the queue (it stays done)
+TST-074	shared-audit.test.js:58	-	OTHER	-		audit: update --status refuses archived (backlog archive moves a finished item), takes any other word of a plain item
+TST-075	shared-audit.test.js:69	-	OTHER	-		audit: update --set-depends-on refuses itself and any cycle, and leaves the file as it was
+TST-076	shared-audit.test.js:83	-	OTHER	-		audit t7: list all-branches and team query --by-branch survive an item whose status is empty (shown as None)
+TST-077	shared-audit.test.js:94	-	OTHER	-		audit t6: a BOM file keeps its front matter; a phases/ file without front matter is skipped, reported and never rewritten
+TST-078	shared-audit.test.js:111	-	OTHER	-		review: archive stamps the status of a file that starts with a BOM and keeps the BOM
+TST-079	shared-audit.test.js:124	-	OTHER	-		review: a phases/ file without front matter is no item for new, query or update (no fake mirror row, never rewritten)
+TST-080	shared-audit.test.js:138	-	OTHER	-		review: update --seq refuses a number another item holds (archived ones included)
+TST-081	shared-audit.test.js:151	-	OTHER	-		review: releasing a claim after --request-review does not let the author review her own work
+TST-082	shared-audit.test.js:165	-	OTHER	-		review: a clone whose upstream is origin/side and push.default=upstream still publishes to origin/main
+TST-083	shared-audit.test.js:180	-	OTHER	-		review P1: a command killed (kill -9) mid-mutation is rolled back by the next command before it publishes anything
+TST-084	shared-audit.test.js:200	-	OTHER	-		review: update --seq is refused while another item (archived included) depends on the item
+TST-085	shared-audit.test.js:209	-	OTHER	-		review: a scalar comma depends_on ("1,2") counts as two references in move, --seq and the cycle check
+TST-086	shared-audit.test.js:222	-	OTHER	-		review: after the author released her claim, pop and query --reviewable still do not offer her the review of her own work
+TST-087	shared-audit.test.js:236	-	OTHER	-		review P2: the cycle check follows the outgoing edges of an item whose file has no phase field (slug from the file name, as ingestion)
+TST-088	shared-changed.test.js:51	-	OTHER	-		027: a change another agent makes while this agent is idle appears in its next --changed report, with the reference commit and time
+TST-089	shared-changed.test.js:85	-	OTHER	-		027: items the agent holds are listed apart from the other changed items
+TST-090	shared-changed.test.js:111	-	OTHER	-		027: no change since the last use gives an empty result that states its reference
+TST-091	shared-changed.test.js:129	-	OTHER	-		027: reading an item does not move the reference, the agent own write does
+TST-092	shared-changed.test.js:145	-	OTHER	-		027: the first --changed of an agent prints no earlier use and sets the reference
+TST-093	shared-changed.test.js:158	-	OTHER	-		027: the report lists the other agents with a last-use time
+TST-094	shared-changed.test.js:176	-	OTHER	-		027: --json has the keys agent, reference, held, others, agents
+TST-095	shared-changed.test.js:191	-	OTHER	-		027: an archived item appears in the report as a D for its old name
+TST-096	shared-changed.test.js:213	-	OTHER	-		027: a renumbered (moved) item reports one D for its old name, not a vanished item
+TST-097	shared-changed.test.js:228	-	OTHER	-		027: a failed comparison reports the failure, keeps the reference, and the change is still in the next report
+TST-098	shared-changed.test.js:250	-	OTHER	-		027: a failed reference write on the first use: the JSON reference is null and the text states it
+TST-099	shared-changed.test.js:264	-	OTHER	-		027: a failed output does not advance the reference: the change is still in the next report
+TST-100	shared-changed.test.js:289	-	OTHER	-		027: a failed reference write with an earlier use is stated in text and JSON, and the previous reference is kept
+TST-101	shared-checkout.test.js:28	-	OTHER	-		025: the waiting agent is told which agent holds the checkout and since when
+TST-102	shared-checkout.test.js:42	-	OTHER	-		025: the record names the --by agent of the holder when it has no BACKLOG_AGENT
+TST-103	shared-checkout.test.js:56	-	OTHER	-		025: a lock that a crash left without its record (empty, older than 30 s) is taken over; a new lock is never empty
+TST-104	shared-checkout.test.js:67	-	OTHER	-		025: two agents writing different items at once both succeed, and both changes are on the origin
+TST-105	shared-checkout.test.js:86	-	OTHER	-		025: a dead parent whose child still works, or a takeover whose owner still runs, is waited for, not taken over
+TST-106	shared-fixtures.test.js:11	-	OTHER	-		shared fixtures: a new phase lands on the local bare and the real backlog stays untouched
+TST-107	shared-foreign-deps.test.js:15	T-DEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	042: owner/name#seq across repositories: refused when unknown, blocks claim and next-work until done, shown and named first
+TST-108	shared-foreign-deps.test.js:94	T-DEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	042: a lead whose team items wait only on another repository is told to start the team there, not to wait
+TST-109	shared-foreign-deps.test.js:124	T-DEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	042: a dependency cycle through another repository, or on the item itself, is refused
+TST-110	shared-foreign-deps.test.js:153	T-DEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	042: two clones that each add one half of a cycle through another repository: the later publication is refused
+TST-111	shared-frontmatter.test.js:23	-	OTHER	-		fixture ${name} parses to its .json
+TST-112	shared-frontmatter.test.js:31	-	OTHER	-		fixture ${name}: dump then parse is identity
+TST-113	shared-frontmatter.test.js:40	-	OTHER	-		parse: a text without a front-matter header returns {} and the whole text
+TST-114	shared-frontmatter.test.js:44	-	OTHER	-		parse: an empty front-matter mapping passes through as {}
+TST-115	shared-frontmatter.test.js:48	-	OTHER	-		parse: the body keeps everything after the closing --- line
+TST-116	shared-frontmatter.test.js:57	-	OTHER	-		parse: plain scalar values, including unicode
+TST-117	shared-frontmatter.test.js:63	-	OTHER	-		parse: a plain scalar folds over a continuation line (PyYAML width-80 wrap)
+TST-118	shared-frontmatter.test.js:69	-	OTHER	-		parse: typed plain scalars (ints, negative, null, ~, booleans)
+TST-119	shared-frontmatter.test.js:74	-	OTHER	-		parse: a bare key with nothing after it is null
+TST-120	shared-frontmatter.test.js:79	-	OTHER	-		parse: single-quoted scalars (colon inside, apostrophe escape, empty)
+TST-121	shared-frontmatter.test.js:86	-	OTHER	-		parse: double-quoted scalars with escapes (\" \\ \\n)
+TST-122	shared-frontmatter.test.js:93	-	OTHER	-		parse: a double-quoted scalar folds over a continuation line
+TST-123	shared-frontmatter.test.js:98	-	OTHER	-		parse: a double-quoted scalar with an escaped line break (PyYAML wrap of a tab string)
+TST-124	shared-frontmatter.test.js:107	-	OTHER	-		parse: a block list of scalars
+TST-125	shared-frontmatter.test.js:112	-	OTHER	-		parse: an empty flow list is []; a flow list decodes its items
+TST-126	shared-frontmatter.test.js:117	-	OTHER	-		parse: anything outside the subset is a clear error, never a guess
+TST-127	shared-frontmatter.test.js:126	-	OTHER	-		parse: a list line after a key with an inline value is a clear error
+TST-128	shared-frontmatter.test.js:132	-	OTHER	-		dump: keys in the given order, strings as JSON double-quoted, body unchanged
+TST-129	shared-frontmatter.test.js:136	-	OTHER	-		dump: null, booleans, empty and block lists
+TST-130	shared-frontmatter.test.js:141	-	OTHER	-		dump: an empty front matter writes {}
+TST-131	shared-frontmatter.test.js:145	-	OTHER	-		dump: unsupported value types and non-identifier keys are clear errors
+TST-132	shared-frontmatter.test.js:153	-	OTHER	-		review P1: a quoted scalar keeps blank-line breaks (PyYAML folding: n breaks -> n-1 newlines)
+TST-133	shared-frontmatter.test.js:161	-	OTHER	-		review P1: credentials in a URL never appear in a parse or dump error
+TST-134	shared-frontmatter.test.js:181	-	OTHER	-		review P1: unsupported constructs are rejected in every scalar context, never guessed
+TST-135	shared-frontmatter.test.js:205	-	OTHER	-		review P2: block-list items that PyYAML wraps over lines decode whole
+TST-136	shared-frontmatter.test.js:210	-	OTHER	-		review P2: a flow list splits only outside quotes
+TST-137	shared-frontmatter.test.js:217	-	OTHER	-		review P2: the double-quoted decoder reads every escape PyYAML emits
+TST-138	shared-frontmatter.test.js:225	-	OTHER	-		review P2: dump escapes characters YAML forbids or reads as line breaks
+TST-139	shared-frontmatter.test.js:232	-	OTHER	-		review P2: integers outside the JavaScript safe range are errors in both directions
+TST-140	shared-frontmatter.test.js:244	-	OTHER	-		second review P2: a quote inside a plain flow-list item is content, not a delimiter
+TST-141	shared-frontmatter.test.js:256	-	OTHER	-		second review P2: only YAML separation characters (space, tab, line breaks) count in the comment and mapping checks
+TST-142	shared-frontmatter.test.js:269	-	OTHER	-		parse: ${name} in a plain continuation line starts a comment or mapping like a newline
+TST-143	shared-frontmatter.test.js:277	-	OTHER	-		review P1: an item saved with CRLF (or lone CR) line endings parses like the LF one (python text mode normalises)
+TST-144	shared-handoff-close.test.js:42	T-HANDOFF	CODE-LITERAL	unchanged		059.3: closeGate refuses a missing edge, naming the dependent, the state and the --handoff command
+TST-145	shared-handoff-close.test.js:54	T-HANDOFF	CODE-LITERAL	unchanged		059.3: closeGate refuses an unaccepted edge in the stored form and names the --accept-handoff command
+TST-146	shared-handoff-close.test.js:64	T-HANDOFF	CODE-LITERAL	unchanged		059.3: closeGate refuses a stale edge (the last receipt pins another digest) and names the --accept-handoff command
+TST-147	shared-handoff-close.test.js:74	T-HANDOFF	CODE-LITERAL	unchanged		059.3: closeGate refuses a rejected edge and names a new --handoff as the next command
+TST-148	shared-handoff-close.test.js:85	T-HANDOFF	CODE-LITERAL	unchanged		059.3: closeGate gives {} when every dependent edge is accepted, local and across repositories
+TST-149	shared-handoff-close.test.js:96	T-HANDOFF	CODE-LITERAL	unchanged		059.3: closeGate records NONE for an item without dependents
+TST-150	shared-handoff-close.test.js:103	T-HANDOFF	CODE-LITERAL	unchanged		059.3: closeGate records NONE when another repository item depends on a different item
+TST-151	shared-handoff-close.test.js:112	T-HANDOFF	CODE-LITERAL	unchanged		059.3: closeGate names every open dependent with its own state and its own next command
+TST-152	shared-handoff-close.test.js:126	T-HANDOFF	CODE-LITERAL	unchanged		059.3: closeGate takes the stored front-matter form straight from the codec round-trip
+TST-153	shared-handoff-commands.test.js:74	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: recordHandoff records the hand-off for a real dependent, in the stored form, with the method\
+TST-154	shared-handoff-commands.test.js:102	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: the record block names the producing agent as the session when the CLI session id is not set
+TST-155	shared-handoff-commands.test.js:110	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: recordHandoff turns handoffs: none into a list when the producer records its hand-off
+TST-156	shared-handoff-commands.test.js:122	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: a second record for the same dependent replaces the first, changes the digest, and keeps the other dependents\
+TST-157	shared-handoff-commands.test.js:142	T-HANDOFF	CODE-LITERAL	rewrite	recordHandoff loses its refusals to the template; the three texts are asserted through the CLI	059.2: recordHandoff refuses without a --by, for an archived item, and for an actor that is not the claimer
+TST-158	shared-handoff-commands.test.js:154	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: recordHandoff refuses a dependent that is not one of the item\
+TST-159	shared-handoff-commands.test.js:163	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: recordHandoff refuses an empty or non-40-hex commit, and an empty contract or verification
+TST-160	shared-handoff-commands.test.js:173	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: the acceptance receipt records the reviewer, the verdict and the hand-off commit - the record\
+TST-161	shared-handoff-commands.test.js:216	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: acceptHandoff refuses a hand-off record without a commit, naming the field - no fallback to the item\
+TST-162	shared-handoff-commands.test.js:238	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: acceptHandoff refuses a missing actor or lead, a non-lead actor, a missing record, empty checks, and a review that has not passed
+TST-163	shared-handoff-commands.test.js:255	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: handoff_receipts keeps every receipt: an acceptance, a rejection and a new acceptance all stay
+TST-164	shared-handoff-commands.test.js:277	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: rejectHandoff refuses a missing actor or lead, a non-lead actor, a missing record, and an empty reason
+TST-165	shared-handoff-commands.test.js:292	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	059.2: the stored form of the records and the receipts round-trips through the front-matter codec
+TST-166	shared-handoff-core.test.js:32	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: digest is stable, 64 hex, and changes with every one of the seven pinned fields
+TST-167	shared-handoff-core.test.js:43	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: makeRecord pins the digest of the seven fields and defaults outputs, pickup and risks
+TST-168	shared-handoff-core.test.js:55	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: makeRecord names the field when dependent, contract or verification is empty, or commit is not 40 hex
+TST-169	shared-handoff-core.test.js:66	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: makeReceipt takes accepted or rejected with non-empty checks, and names the field otherwise
+TST-170	shared-handoff-core.test.js:73	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: encode and decodeList move records between memory and the stored front-matter form
+TST-171	shared-handoff-core.test.js:91	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: edgeState gives the six edge states of the design
+TST-172	shared-handoff-core.test.js:107	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: edgeState takes the last receipt and the last record of the dependent
+TST-173	shared-handoff-core.test.js:114	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: edgeState accepts the stored front-matter form: records and receipts as compact JSON strings
+TST-174	shared-handoff-core.test.js:127	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: edgeState tells a present but empty handoffs key from an absent key, in the stored form (review r2)
+TST-175	shared-handoff-core.test.js:138	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: edgeState is stale in the stored form when the record digest is not the sha256 of its own fields (review r3)
+TST-176	shared-handoff-core.test.js:149	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: edgeState keeps the edge unsatisfied while the record or the last receipt has no digest (review r2)
+TST-177	shared-handoff-core.test.js:160	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: satisfied is accepted and legacy only
+TST-178	shared-handoff-core.test.js:166	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: dependentsOf finds the same folder by seq and slug, another folder by owner/name#seq, and skips archived
+TST-179	shared-handoff-core.test.js:187	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: dependentsOf matches a dependent that names a phase-less producer by its file-name-derived slug (review r5)
+TST-180	shared-handoff-core.test.js:205	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: dependentsOf propagates a directory-read error of the backlog home, it never skips a repository that vanished
+TST-181	shared-handoff-core.test.js:212	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: dependentsOf propagates a load error of a sibling repository folder, it never skips it
+TST-182	shared-handoff-core.test.js:222	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: the zero-padded foreign spelling resolves through the item 042 pattern (dependencies.js foreignItem)
+TST-183	shared-handoff-core.test.js:231	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: openEdges lists every dependent whose edge is not accepted, with the state that holds it open
+TST-184	shared-handoff-core.test.js:247	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: openEdges accepts the stored front-matter form and gives the same open edges
+TST-185	shared-handoff-core.test.js:264	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: recordBlock writes the branch, the session and the review the integration slice passes in opts (review r3)
+TST-186	shared-handoff-core.test.js:291	T-HANDOFF	CODE-LITERAL	misclassified	record format machinery (§8), not a team literal	059.1: receiptBlock is the HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body block of the method (review r2)
+TST-187	shared-handoff-e2e.test.js:61	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: the producer records its hand-off for its dependent; the block names the item branch and the session
+TST-188	shared-handoff-e2e.test.js:79	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: an acceptance before the producer review passed is refused and stores no receipt
+TST-189	shared-handoff-e2e.test.js:93	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: after the review passes the lead accepts the hand-off and the receipt is stored
+TST-190	shared-handoff-e2e.test.js:111	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: a re-recorded hand-off makes the old receipt stale
+TST-191	shared-handoff-e2e.test.js:132	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: a rejection is stored with its reason
+TST-192	shared-handoff-e2e.test.js:148	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: a member cannot accept or reject a hand-off
+TST-193	shared-handoff-e2e.test.js:164	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: the claimer records its hand-off without --by; the record is by the claimer
+TST-194	shared-handoff-e2e.test.js:180	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: a member without --by cannot record another claimer\
+TST-195	shared-handoff-e2e.test.js:194	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: a member without --by cannot accept or reject as the lead claimer
+TST-196	shared-handoff-e2e.test.js:212	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V1: an empty hand-off value is refused for the record, the accept and the reject
+TST-197	shared-handoff-e2e.test.js:245	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: a producer with a dependent is refused --close when the edge is missing
+TST-198	shared-handoff-e2e.test.js:261	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: a producer with a dependent is refused --close when the edge is unaccepted
+TST-199	shared-handoff-e2e.test.js:273	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: a producer with a dependent is refused --close when it is stale after a re-recorded hand-off
+TST-200	shared-handoff-e2e.test.js:292	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: a producer with a dependent is refused --close when it is rejected
+TST-201	shared-handoff-e2e.test.js:307	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: a producer with a dependent is refused --status done when the edge is missing
+TST-202	shared-handoff-e2e.test.js:323	T-HANDOFF	CODE-LITERAL	changed	--status done is status_flag under the template; the gate text appears only via --close	059.V2: a producer with a dependent is refused --status done when the edge is unaccepted
+TST-203	shared-handoff-e2e.test.js:334	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: a producer with a dependent is refused --status done when it is stale after a re-recorded hand-off
+TST-204	shared-handoff-e2e.test.js:351	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: a producer with a dependent is refused --status done when it is rejected
+TST-205	shared-handoff-e2e.test.js:366	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: after the lead accepts the hand-off the producer closes
+TST-206	shared-handoff-e2e.test.js:383	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: an item without dependents closes and records NONE (the item shows handoffs: none and the closed event text names it)
+TST-207	shared-handoff-e2e.test.js:396	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: a producer closed before this rule (no handoffs key) is not re-checked
+TST-208	shared-handoff-e2e.test.js:416	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; routes team steps to items without a team	059.V2: an open producer with a dependent and no handoffs key is refused naming the edge state missing, not legacy
+TST-209	shared-handoff-gate.test.js:126	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	059.4: a done producer with a ${state} edge is an unfinished dependency: claim refused, the dependent is offered by nothing
+TST-210	shared-handoff-gate.test.js:135	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	059.4: a done producer with an accepted edge lets the dependent be offered and claimed
+TST-211	shared-handoff-gate.test.js:143	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	059.4: a done producer without a handoffs key (legacy) lets the dependent be offered and claimed
+TST-212	shared-handoff-gate.test.js:166	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	059.4: a done producer of another repository with an unsatisfied edge is an unfinished dependency: claim refused, the dependent is offered by nothing
+TST-213	shared-handoff-gate.test.js:174	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	059.4: a done producer of another repository with an accepted edge lets the dependent be offered and claimed
+TST-214	shared-help.test.js:34	T-QUEUE	CODE-LITERAL	unchanged		backlog update --claim keeps its refusal conditions, query --plan the members, default and reviewer rule
+TST-215	shared-help.test.js:52	-	OTHER	-		backlog ${command} --help marks exactly the refused flags "Not in this build"
+TST-216	shared-help.test.js:61	-	OTHER	-		every refused flag is refused with its own diagnostic and exit 2, on an invocation that is otherwise valid
+TST-217	shared-help.test.js:91	-	OTHER	-		every command of the router has a help text, a line of backlog --help and a block in COMMANDS.md
+TST-218	shared-help.test.js:102	-	OTHER	-		exit code 3 is described for both cases: the update before the command failed, and the change was not pushed
+TST-219	shared-help.test.js:123	-	OTHER	-		every command help has the sections Usage, Options and one Example that names the command
+TST-220	shared-help.test.js:135	-	OTHER	-		backlog next --help lists the flags that apply to next
+TST-221	shared-help.test.js:141	-	OTHER	-		the help is written in plain sentences: no internal job numbers, script names or file references
+TST-222	shared-help.test.js:145	-	OTHER	-		backlog --help names every command and the storage setting, and is the same wherever the items live
+TST-223	shared-help.test.js:156	-	OTHER	-		COMMANDS.md has the section "Commands" with the help text of every command, and names no mode
+TST-224	shared-help.test.js:165	-	OTHER	-		096: the update help says the retired classification keys have no effect and are dropped at the next write
+TST-225	shared-help.test.js:172	T-QUEUE	CODE-LITERAL	unchanged		127: the team pop help states a refined work item is claimable by members and team pop offers it only while the stage is unset
+TST-226	shared-help.test.js:179	T-BINDING	CODE-LITERAL	unchanged		059.V2: the team --close help block names the hand-off close rule, NONE and the legacy exemption
+TST-227	shared-help.test.js:186	T-BINDING	CODE-LITERAL	unchanged		the plain help names no team option and ends with the pointer to the team help
+TST-228	shared-help.test.js:197	T-QUEUE	CODE-LITERAL	unchanged		query, next and team help: no headless option, no query --pop
+TST-229	shared-help.test.js:201	-	OTHER	-		backlog --help and COMMANDS.md name no alias, no first-release spelling and no earlier read command
+TST-230	shared-help.test.js:206	-	OTHER	-		a command that is a word of its own prints its own help, with no alias line
+TST-231	shared-help.test.js:218	T-BINDING	CODE-LITERAL	unchanged		backlog team --help lists new, and backlog team new --help has the flags, the exit codes and one example
+TST-232	shared-index.test.js:21	-	OTHER	-		read: a folder without an index has no branches
+TST-233	shared-index.test.js:27	-	OTHER	-		fromItems: the order of the legacy priority field (open items first), then the number; one entry per line
+TST-234	shared-index.test.js:40	-	OTHER	-		write: the same content gives the same bytes and is not rewritten
+TST-235	shared-index.test.js:51	-	OTHER	-		rank: the position of a live item in its branch, -1 when not listed
+TST-236	shared-index.test.js:59	-	OTHER	-		read: an index that is not JSON, or has no list of items per branch, is refused with exit 1 and points at the repository history
+TST-237	shared-index.test.js:67	-	OTHER	-		reconcile: items without an entry are appended, entries without an item leave, name and status follow the file, open entries come first
+TST-238	shared-index.test.js:77	-	OTHER	-		reconcile: a move puts the item at the clamped rank among the open ones; a lead list goes first; an item of another branch leaves the list
+TST-239	shared-index.test.js:89	-	OTHER	-		mergeOrders: upstream\
+TST-240	shared-index.test.js:104	-	OTHER	-		rows: the priority of a live item is its position in the index; a folder without an index reads its legacy priority field
+TST-241	shared-item-keys.test.js:39	-	OTHER	-		a new item carries the new keys and none of the earlier ones
+TST-242	shared-item-keys.test.js:49	-	OTHER	-		a file with the earlier keys is read as it was, and its next write carries only the new keys
+TST-243	shared-item-keys.test.js:65	-	OTHER	-		a holder in claimed_by and claimed_at becomes owner and owned_since, and a release clears them
+TST-244	shared-item-keys.test.js:81	-	OTHER	-		an item carrying both an earlier key and its new one keeps the new one
+TST-245	shared-item-keys.test.js:93	-	OTHER	-		backlog fields lists the new keys and no earlier one
+TST-246	shared-legacy-fields.test.js:43	T-LEGACY	CODE-LITERAL	changed	tests removal of work_class/review_classes on write (storage), not covered by the migration word table	096: writing an open item removes the two retired keys and keeps every other field
+TST-247	shared-legacy-fields.test.js:52	T-LEGACY	CODE-LITERAL	unchanged		096: backlog update --append on an item that carries both keys leaves the file without them; the commit contains the removal
+TST-248	shared-legacy-fields.test.js:66	T-LEGACY	CODE-LITERAL	unchanged		096: a priority move rewrites no neighbour: the keys stay in it until its own next write drops them
+TST-249	shared-legacy-fields.test.js:76	T-LEGACY	CODE-LITERAL	unchanged		096: a front-matter-only write drops the keys
+TST-250	shared-legacy-fields.test.js:85	T-LEGACY	CODE-LITERAL	unchanged		096: query --phase on an unwritten legacy item still shows the keys; after update --append it no longer does
+TST-251	shared-legacy-fields.test.js:95	T-LEGACY	CODE-LITERAL	unchanged		096 pin: an item without the keys is rewritten byte for byte as before
+TST-252	shared-list.test.js:39	-	OTHER	-		list prints the full stack: the open items in queue order, then the finished ones; a leading --json is the switch of the command
+TST-253	shared-list.test.js:49	-	OTHER	-		list new, open, done and archive are the filtered stack, in text and in JSON
+TST-254	shared-list.test.js:63	-	OTHER	-		list branches and list critical are the branch counts and the critical items
+TST-255	shared-list.test.js:72	-	OTHER	-		list all-branches shows every branch, and every row names its branch
+TST-256	shared-list.test.js:84	-	OTHER	-		list has its own help that names every word
+TST-257	shared-list.test.js:94	-	OTHER	-		a word list or next does not know is refused, and so is every option of the reader
+TST-258	shared-list.test.js:108	T-BINDING	CODE-LITERAL	unchanged		list and team query run the one reader
+TST-259	shared-long-name.test.js:14	-	OTHER	-		047: update, replan, close and new work beside an item with a 250-byte file name
+TST-260	shared-move-archive.test.js:93	T-STATUS	CODE-LITERAL	unchanged		archive finds the item by number, never by database row id
+TST-261	shared-move-archive.test.js:102	T-USERCONV	CODE-LITERAL	unchanged		review P2: a name with --- in it does not hide the closing front-matter delimiter: archive --force stamps the file
+TST-262	shared-move-archive.test.js:117	-	OTHER	-		a branch missing on the origin of the consuming repository is refused, nothing changes
+TST-263	shared-move-archive.test.js:130	-	OTHER	-		an origin that cannot be read refuses the move
+TST-264	shared-move-archive.test.js:143	T-CLAIM	CODE-LITERAL	misclassified	a path check of the archive folder (storage)	a target that is not a plain owner/name is refused before anything is written
+TST-265	shared-move-archive.test.js:156	-	OTHER	-		diagnostics that echo the input are redacted
+TST-266	shared-move-archive.test.js:170	T-STATUS	CODE-LITERAL	unchanged		review P1: a symlink at archive/ or archive/phases/ refuses the archive before anything is moved or stamped
+TST-267	shared-move-archive.test.js:187	T-STATUS	CODE-LITERAL	unchanged		review P1: archive and move hold the per-repository run lock from the pull to the push
+TST-268	shared-move-archive.test.js:201	-	OTHER	-		review P1: ${title} commits and pushes the rescan after a renumbering (checked from a fresh clone)
+TST-269	shared-move-archive.test.js:214	-	OTHER	-		review P2: move accepts --note="two words" (an option with a value, not a positional)
+TST-270	shared-move-archive.test.js:221	T-DEPS	CODE-LITERAL	unchanged		review P2: move --to-repository refuses an item with depends_on, before any file is written; cleared, it moves
+TST-271	shared-move-archive.test.js:237	-	OTHER	-		review P1: move --to-repository whose target index write is refused removes the target copy and leaves the source untouched
+TST-272	shared-move-archive.test.js:254	T-DEPS	CODE-LITERAL	unchanged		review P2: move --to-repository refuses an item other items depend on, by number or slug, before any file is written
+TST-273	shared-move-archive.test.js:277	T-STATUS	CODE-LITERAL	unchanged		review P2: archive replaces a whole escaped multiline status scalar (${JSON.stringify(eol)})
+TST-274	shared-move-archive.test.js:296	T-STATUS	CODE-LITERAL	unchanged		review P2: archive stamps status: archived into an item saved with CRLF line endings
+TST-275	shared-move-archive.test.js:307	T-STATUS	CODE-LITERAL	unchanged		review P1: archive and move --to-branch whose index write is refused put the files back and commit nothing
+TST-276	shared-move-archive.test.js:319	-	OTHER	-		review P1: a cross-repository move waits for the operation lock of the clone, which also covers the destination backlog
+TST-277	shared-move-archive.test.js:332	-	OTHER	-		review P1: a bare --to-repository (the item names its target) also waits for the destination run lock
+TST-278	shared-move-archive.test.js:344	-	OTHER	-		review P1: a cross-repository move whose source index write is refused leaves no copy in the destination
+TST-279	shared-move-archive.test.js:354	T-REFINE	CODE-LITERAL	unchanged		review P1: archive whose index write is refused leaves nothing staged in the git index
+TST-280	shared-move-archive.test.js:362	T-STATUS	CODE-LITERAL	unchanged		review P2: move of an archived item (--to-branch, --to-repository) is refused and writes nothing
+TST-281	shared-move-archive.test.js:376	T-QUEUE	CODE-LITERAL	unchanged		review P2: after a cross-repository move both queues are dense (the source closes the gap, the copy does not tie in the target)
+TST-282	shared-move-archive.test.js:384	T-STATUS	CODE-LITERAL	unchanged		review P2: archive inserts status: archived into an item whose front matter has no status key (LF, CRLF, lone CR)
+TST-283	shared-move-archive.test.js:400	-	OTHER	-		review P2: move adds the keys it sets (branch, repository) to an item whose front matter lacks them, and the item is listed in the index of its new place
+TST-284	shared-move-archive.test.js:413	T-USERCONV	CODE-LITERAL	unchanged		075: archive of a done item: git mv, status stamp, reflow, one commit
+TST-285	shared-move-archive.test.js:428	T-STATUS	CODE-LITERAL	unchanged		075: archive --dry-run names the move and changes nothing
+TST-286	shared-move-archive.test.js:442	T-STATUS	CODE-LITERAL	unchanged		075: archive of an already archived item: an info line, exit 0, nothing changes
+TST-287	shared-move-archive.test.js:453	-	OTHER	-		075: move --to-branch and --all-open-of-branch print what moved, and the mirror rows and the commit follow
+TST-288	shared-move-archive.test.js:475	-	OTHER	-		075: move has no --dry-run: argparse refuses it with exit 2 and nothing changes
+TST-289	shared-move-archive.test.js:485	-	OTHER	-		move --to-repository: the item brings its own history, once, with no prefix
+TST-290	shared-move-archive.test.js:496	-	OTHER	-		075: move --to-repository: new number in the target, source file gone, one published commit for both folders
+TST-291	shared-move-archive.test.js:511	T-USERCONV	CODE-LITERAL	unchanged		archive --force of an open item: the mirror row says archived, the queue no longer offers it, the change is published
+TST-292	shared-move-archive.test.js:525	T-STATUS	CODE-LITERAL	unchanged		075: archive of an unknown item: exit 1, the exact refusal, nothing written or committed
+TST-293	shared-move-archive.test.js:535	T-USERCONV	CODE-LITERAL	unchanged		075: archive of a not-done item without --force: exit 1, the exact refusal, nothing written or committed
+TST-294	shared-move-archive.test.js:545	T-STATUS	CODE-LITERAL	unchanged		075: archive whose target file already exists: exit 1, the exact refusal, nothing written or committed
+TST-295	shared-move-archive.test.js:558	-	OTHER	-		075: move of an unknown item: exit 1, the exact refusal, nothing written or committed
+TST-296	shared-move-archive.test.js:568	-	OTHER	-		075: move to the item own repository: exit 1, the exact refusal, nothing written or committed
+TST-297	shared-move-archive.test.js:578	T-USERCONV	CODE-LITERAL	unchanged		075: archive --force of an open item: the exact output, the stamp, the row, the published commit
+TST-298	shared-move-archive.test.js:595	T-STATUS	CODE-LITERAL	unchanged		057: archive and move print the slug and no path
+TST-299	shared-move-archive.test.js:612	T-STATUS	CODE-LITERAL	unchanged		057: archive whose file move fails names the slug and no path
+TST-300	shared-new.test.js:65	-	OTHER	-		075: refusal: ${title}: exit ${code}, the exact output, nothing written or committed
+TST-301	shared-new.test.js:77	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	--depends-on is optional outside a team, and any path is a review ref
+TST-302	shared-new.test.js:84	T-DEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	refusal: a detached HEAD dies with exit 2 after the dependency check
+TST-303	shared-new.test.js:93	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	refusal: a dependency that is in the backlog passes, a split source that is archived or missing is a refusal
+TST-304	shared-new.test.js:101	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	new lists the item in the index of its branch: at the end, or at --priority; the item file carries no priority
+TST-305	shared-new.test.js:110	-	OTHER	-		refusal: a diagnostic that echoes input carries no credential of a URL
+TST-306	shared-new.test.js:121	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	new: the planning event of a creation is recorded on the new item
+TST-307	shared-new.test.js:129	-	OTHER	-		new: writes the item, records its history, commits as "acme/demo: new --name Alpha job" and pushes
+TST-308	shared-new.test.js:154	-	OTHER	-		review P2: new --dry-run in a repository without a backlog writes nothing (new --help promises it)
+TST-309	shared-new.test.js:168	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	hasDefinitionOfDone: a heading or a line with checkable content; the placeholder and an empty section do not count
+TST-310	shared-new.test.js:179	-	OTHER	-		a number two clones picked at once: the later push is renumbered, rescanned and recommitted; the printed slug is the final one
+TST-311	shared-new.test.js:207	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	review P1: a symlinked owner folder in the home is refused before any database or item write
+TST-312	shared-new.test.js:218	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	review P2: review refs go through checkRefs: an absolute or ..-crossing ref is refused and nothing is persisted
+TST-313	shared-new.test.js:229	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	review P2: a file with the name of the next item is never replaced: the item takes the next free number, with or without --force
+TST-314	shared-new.test.js:244	-	OTHER	-		review P1: new whose index write is refused removes the file it wrote and commits nothing
+TST-315	shared-new.test.js:257	-	OTHER	-		review P1: new --split-from whose index write is refused leaves the item files as they were (no stray split event)
+TST-316	shared-new.test.js:269	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	review P1: team new --split-from an item of another branch (TEAM_BRANCH differs) is refused and logs nothing
+TST-317	shared-new.test.js:281	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	075: team new: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the branch; a body without a definition of done gets the placeholder
+TST-318	shared-new.test.js:297	-	OTHER	-		075: a plain new ignores TEAM_REPOSITORY and TEAM_BRANCH
+TST-319	shared-new.test.js:305	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	075: a skills.md review document is accepted and persisted; no class field is written
+TST-320	shared-new.test.js:316	-	OTHER	-		075: --split-from copies the objective, summary and body of the source and logs a split event
+TST-321	shared-new.test.js:347	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	075: new: ${title}: the exact output, the published commit and the queue
+TST-322	shared-new.test.js:377	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	075: team new: every flag, appended: the item carries the carried context, the review documents and the job fields, and belongs to its team
+TST-323	shared-new.test.js:392	-	OTHER	-		075: new: a prefix of an option and --opt=value: the item takes the abbreviated values
+TST-324	shared-new.test.js:402	-	OTHER	-		075: new: unicode and quotes in the name: the slug is slugified, the front matter keeps the original
+TST-325	shared-new.test.js:413	-	OTHER	-		075: --split-from a long parent: the inherited context is trimmed to 800 characters of the source body
+TST-326	shared-new.test.js:430	-	OTHER	-		057: new prints the slug and seq and no phases/ path or .md name
+TST-327	shared-new.test.js:438	-	OTHER	-		057: new --dry-run names the slug, no path
+TST-328	shared-new.test.js:446	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	057: the help of new, archive and move names no folder or item file
+TST-329	shared-new.test.js:460	T-USERCONV	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	--status starts an item in that status (free text outside a team); the default stays pending
+TST-330	shared-new.test.js:468	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	--status with --team is refused: a team item starts in its own first status
+TST-331	shared-no-classes.test.js:13	-	OTHER	-		the help of every command names no work or review class option
+TST-332	shared-no-classes.test.js:18	-	OTHER	-		COMMANDS.md names no class option
+TST-333	shared-no-classes.test.js:23	-	OTHER	-		git grep for the class words finds nothing in src, COMMANDS.md, README.md, templates and CHANGELOG.md
+TST-334	shared-origin-setting.test.js:30	-	OTHER	-		the variable wins over the config key: with both set, the origin check uses the variable
+TST-335	shared-origin-setting.test.js:38	-	OTHER	-		the config key works alone: with the variable unset, the key names the backlog repository
+TST-336	shared-origin-setting.test.js:45	-	OTHER	-		neither set, no BACKLOG_HOME and no record: the backlog is .backlog inside the repository, created with its config; the clone is not touched
+TST-337	shared-origin-setting.test.js:54	-	OTHER	-		neither set: backlog setup records .backlog inside the repository in .backlog/config.json, deploys the skill, clones nothing, commits and pushes its own change
+TST-338	shared-origin-setting.test.js:71	-	OTHER	-		setup keeps the config backlog_origin_url: a URL that lives only in the key survives the write, and the later shared command works
+TST-339	shared-origin-setting.test.js:84	-	OTHER	-		a second setup --ask keeps the config backlog_origin_url
+TST-340	shared-origin-setting.test.js:99	-	OTHER	-		the origin set and no clone anywhere: the missing-clone error names backlog setup and nothing is written inside the repository
+TST-341	shared-origin-setting.test.js:108	-	OTHER	-		the repository cannot be cloned or reached: setup says so, naming the configured value, and touches nothing (exit 3)
+TST-342	shared-origin-setting.test.js:122	-	OTHER	-		setup records the environment it ran with: the clone URL and the clone path go into .backlog/config.json, so later runs need no variables
+TST-343	shared-origin-setting.test.js:137	-	OTHER	-		setup inside the repository prints its summary: the folder, the configuration, the skill, the commit
+TST-344	shared-query.test.js:89	T-HANDOFF	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	075: --status --json prints handoff, repository, branch, phases, gone_branch_items and findings
+TST-345	shared-query.test.js:292	-	OTHER	-		an item file deleted outside the CLI is simply absent: no ghost, no crash
+TST-346	shared-query.test.js:305	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	075: --status text: the findings, the critical banner, the queue and the gone-branch warning, exactly
+TST-347	shared-query.test.js:324	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	075: --status --all and --branch: every branch in the queue, the gone item in its own branch only
+TST-348	shared-query.test.js:370	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	075: --next --json prints the queue head; --next text prints the findings and the item
+TST-349	shared-query.test.js:386	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	`backlog next` is --next
+TST-350	shared-query.test.js:393	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	an empty queue prints {} (JSON) or the info line, exit 0
+TST-351	shared-query.test.js:401	-	OTHER	-		075: --phase prints the full item (row, front matter, body) by slug and by number; not found is exit 1 on stdout
+TST-352	shared-query.test.js:423	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	history reads the item history from the items, newest first, archived items included
+TST-353	shared-query.test.js:446	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	075: --critical lists the open critical items (JSON and text) and says so when there are none
+TST-354	shared-query.test.js:460	-	OTHER	-		075: --events (all, and for one item) and --by-branch: the exact lines
+TST-355	shared-query.test.js:484	-	OTHER	-		075: a repository without a backlog folder prints the info line or {}, exit 0
+TST-356	shared-query.test.js:500	-	OTHER	-		075: a detached HEAD without --branch or --all is exit 2 with the exact refusal
+TST-357	shared-query.test.js:512	-	OTHER	-		a read view pulls first: an item pushed from another clone is shown, and no item or db file is written
+TST-358	shared-query.test.js:530	-	OTHER	-		a failed pull does not stop a read: it answers from the local copy with the offline warning; a write is refused with exit 3
+TST-359	shared-query.test.js:542	T-USERCONV	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	list new, open, done and archive filter the listing
+TST-360	shared-query.test.js:555	T-USERCONV	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	--branches counts the open and the done items of each branch of this repository
+TST-361	shared-query.test.js:561	-	OTHER	-		an unknown flag is exit 2
+TST-362	shared-query.test.js:587	-	OTHER	-		review P2: a symlink in the item folder is refused, and the file outside it is never read
+TST-363	shared-query.test.js:597	-	OTHER	-		review P2: input echoed in a diagnostic is redacted (flags, missing items)
+TST-364	shared-query.test.js:608	-	OTHER	-		review P3: --json escapes U+007F and non-ASCII as \\u escapes
+TST-365	shared-query.test.js:615	-	OTHER	-		review P2 (second): input echoed in a normal result is redacted too (--branch and --agent in every view)
+TST-366	shared-query.test.js:627	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	team query --plan answers or is idle, it is not an unknown flag
+TST-367	shared-read-commands.test.js:29	-	OTHER	-		show prints one item whole, several as an array, and a refusal for an item that is not there
+TST-368	shared-read-commands.test.js:40	-	OTHER	-		show without an item, with a second item or with an option it does not know is refused (exit 2) and reads nothing
+TST-369	shared-read-commands.test.js:50	-	OTHER	-		an agent that showed an item has read it: its next write is refused when somebody else changed the item since
+TST-370	shared-read-commands.test.js:58	-	OTHER	-		history prints the events of the backlog or of one item, newest first
+TST-371	shared-read-commands.test.js:69	-	OTHER	-		history prints text only: --json and a second item are refused (exit 2)
+TST-372	shared-read-commands.test.js:79	-	OTHER	-		changes: the first use sets the reference, the next report lists what another agent changed
+TST-373	shared-read-commands.test.js:93	-	OTHER	-		next all-branches finds the item of a branch other than the one checked out
+TST-374	shared-read-commands.test.js:104	-	OTHER	-		show, history, changes and next all-branches have their own help, with usage, options, exit codes and one example
+TST-375	shared-read-commands.test.js:121	-	OTHER	-		backlog alone prints the top-level help (exit 0) and writes nothing; backlog --json still prints the next item
+TST-376	shared-repair.test.js:22	-	OTHER	-		the codec names the field it cannot read; a broken line before any key names none
+TST-377	shared-repair.test.js:28	-	OTHER	-		load refuses an unreadable item with its name and field, never a path, and offers the two ways out
+TST-378	shared-repair.test.js:37	-	OTHER	-		a field update cannot repair is not offered; an item with no readable header offers the restore only
+TST-379	shared-repair.test.js:45	-	OTHER	-		setField replaces the key line and the lines that continue it, keeps the rest byte for byte, and adds a missing key
+TST-380	shared-repair.test.js:68	-	OTHER	-		restore: the previous committed version comes back, with a restored event, published
+TST-381	shared-repair.test.js:83	-	OTHER	-		restore: an unreadable item that was committed unreadable has no earlier version; a second broken field is named in the same refusal
+TST-382	shared-repair.test.js:99	-	OTHER	-		restore takes no other option; an item that is not the unreadable one is refused like every command
+TST-383	shared-routed-commands.test.js:39	-	OTHER	-		done finishes the item like update --status done, passes the other arguments on, and needs an item
+TST-384	shared-routed-commands.test.js:58	-	OTHER	-		done refuses an item that does not exist exactly as update does, and writes nothing
+TST-385	shared-routed-commands.test.js:66	-	OTHER	-		clean asks first, removes the items of this branch after a yes
+TST-386	shared-routed-commands.test.js:81	-	OTHER	-		clean all-branches removes the items of every branch; a word it does not know is refused and names clean
+TST-387	shared-routed-commands.test.js:96	-	OTHER	-		import brings the open items of another branch here, oldest first, and --higher puts them first
+TST-388	shared-routed-commands.test.js:107	-	OTHER	-		import refuses a missing source, an unknown argument, --json and the current branch (exit 2), and says so for a source without open items
+TST-389	shared-routed-commands.test.js:121	-	OTHER	-		archive done archives every finished item, oldest first, and leaves the open ones
+TST-390	shared-routed-commands.test.js:134	-	OTHER	-		done, clean, import and archive done have their own help; backlog archive --help is still the help of archive
+TST-391	shared-safety.test.js:34	-	OTHER	-		repoIdFromUrl: https, scp-style and local-path URLs
+TST-392	shared-safety.test.js:52	-	OTHER	-		slugify: lowercase, runs of non-alphanumerics to one dash, no / or .., fallback phase
+TST-393	shared-safety.test.js:67	-	OTHER	-		itemSelector: digits -> {number}, anything else -> {slug}, empty -> null
+TST-394	shared-safety.test.js:85	-	OTHER	-		validateHome: a good shared clone passes and returns the path
+TST-395	shared-safety.test.js:91	-	OTHER	-		validateHome: a relative path is refused before any git call
+TST-396	shared-safety.test.js:95	-	OTHER	-		validateHome: a missing path is refused with its message
+TST-397	shared-safety.test.js:104	-	OTHER	-		validateHome: a directory that is not the top folder of a git repository
+TST-398	shared-safety.test.js:113	-	OTHER	-		validateHome: a symlinked home is refused (item: no symlink on the path, via src/storage.js:8-17)
+TST-399	shared-safety.test.js:122	-	OTHER	-		validateHome: a home with another origin is refused, and the error names the configured value when the setting is given
+TST-400	shared-safety.test.js:131	-	OTHER	-		validateHome: a home with no origin is refused when the expected id is empty (two empty ids are not equal)
+TST-401	shared-safety.test.js:138	-	OTHER	-		validateHome: a home on another branch is refused
+TST-402	shared-safety.test.js:145	-	OTHER	-		validateHome: a detached home says detached HEAD
+TST-403	shared-safety.test.js:152	-	OTHER	-		assertInside: a path inside the root returns the relative path; the root itself is ""
+TST-404	shared-safety.test.js:162	-	OTHER	-		assertInside: ../x and /etc/passwd are refused (item hostile inputs)
+TST-405	shared-safety.test.js:169	-	OTHER	-		assertInside: a symlink component on the way down is refused (src/storage.js:8-17)
+TST-406	shared-safety.test.js:178	-	OTHER	-		checkRefs: relative refs without .. pass (including an empty list)
+TST-407	shared-safety.test.js:184	-	OTHER	-		checkRefs: absolute refs, .. refs and empty refs are refused (item hostile inputs)
+TST-408	shared-safety.test.js:192	-	OTHER	-		redact: user:token@ is stripped from URLs in git stderr (item hostile input)
+TST-409	shared-safety.test.js:200	-	OTHER	-		redact: the whole user-info of a URL goes, whatever characters the password holds (review P1)
+TST-410	shared-safety.test.js:208	-	OTHER	-		redact: colon-less userinfo and plain text are left intact; non-strings are stringified
+TST-411	shared-safety.test.js:217	-	OTHER	-		git: runs git with an argv array and returns {stdout, stderr, code}
+TST-412	shared-safety.test.js:233	-	OTHER	-		git: never a shell — a hostile commit message survives as one argv element (item hostile input)
+TST-413	shared-safety.test.js:242	-	OTHER	-		git: GIT_TERMINAL_PROMPT=0 reaches the child process
+TST-414	shared-safety.test.js:267	-	OTHER	-		validateHome: a home that is a clone of the right origin but a subdirectory is refused
+TST-415	shared-safety.test.js:277	-	OTHER	-		repoIdFromUrl strips URL user-info at the single place origins are parsed: no identity carries a credential
+TST-416	shared-safety.test.js:285	-	OTHER	-		no command prints the credential of an origin: the invalid-origin error of --use-backlog-repo and every command run from a credentialed clone
+TST-417	shared-session-continue.test.js:60	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: 082aa:02 continues the item 082aa:01 claimed (rework after review): claimed_by is 082aa:02, session_authors holds both
+TST-418	shared-session-continue.test.js:72	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: a continuation of an item without session_authors keeps the earlier holder blocked
+TST-419	shared-session-continue.test.js:90	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: 082bb:01 cannot take it over
+TST-420	shared-session-continue.test.js:100	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: after the continuation 082aa:01 still cannot review
+TST-421	shared-session-continue.test.js:115	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: query --plan offers the rework to the new session of the card while the earlier session still holds the item
+TST-422	shared-session-continue.test.js:127	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: query --plan offers the close to the new session of the card while the earlier session still holds the item
+TST-423	shared-session-continue.test.js:142	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: a fresh session of the card is told to claim the item before it reworks it
+TST-424	shared-session-continue.test.js:152	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: a fresh session of the card is told to claim the item before it closes the passed item
+TST-425	shared-session-continue.test.js:165	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: the lead\
+TST-426	shared-session-names.test.js:53	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	082: an agent name with colons (082aa:01) is stored in claimed_by, the event log, the commit subject and accepted by --by and --claim
+TST-427	shared-session-names.test.js:71	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	082: the commit subject carries the agent named by --by wherever the option is placed
+TST-428	shared-session-review.test.js:56	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: 082aa:01 claims and asks for a review; 082aa:02 starts and passes it
+TST-429	shared-session-review.test.js:67	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: 082aa:01 is refused --start-review and --review with the same-session message
+TST-430	shared-session-review.test.js:76	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: pop, work and query --reviewable offer the review to 082aa:02 and 082bb:01, never to 082aa:01
+TST-431	shared-session-review.test.js:92	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: a release keeps session_authors
+TST-432	shared-session-review.test.js:102	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: an item without session names keeps the old agent-name rule
+TST-433	shared-session-review.test.js:115	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: the lead requests the review of a claimed item: its session is recorded and it cannot review its own request
+TST-434	shared-session-review.test.js:131	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: a pass by a session-named reviewer is recorded with the work commit
+TST-435	shared-session-review.test.js:142	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: query --plan offers the requested review to the new session of the card, never to the asking session
+TST-436	shared-session-review.test.js:153	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: in a team session the author session is the session name, not the team name
+TST-437	shared-session-review.test.js:165	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: a reassignment keeps the former holder blocked: the legacy item keeps its self-review rule
+TST-438	shared-session-review.test.js:183	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	082: a legacy item keeps its original author in session_authors across every holder or review-request write
+TST-439	shared-setup.test.js:29	-	OTHER	-		043: setup clones beside the repository, writes a relative config, deploys the skill; the path survives a move
+TST-440	shared-setup.test.js:52	-	OTHER	-		043: a second setup leaves the clone, replaces the skill copies and keeps the config; a missing clone names backlog setup
+TST-441	shared-setup.test.js:73	-	OTHER	-		043: setup --ask shows the default, uses the answer and records it relative to the repository
+TST-442	shared-setup.test.js:87	-	OTHER	-		043: setup removes nothing through a symbolic link in an agent folder
+TST-443	shared-setup.test.js:100	-	OTHER	-		setup records the user (the git user name, else the login name) and an empty team; a second setup keeps what is there
+TST-444	shared-severity.test.js:14	-	OTHER	-		046: --severity changes the field, is published with an event, and refuses another value
+TST-445	shared-severity.test.js:39	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	046: --severity is a field edit: refused on another team\
+TST-446	shared-stale.test.js:52	-	OTHER	-		every write stamps updated_by next to updated; an item without updated_by is read and written
+TST-447	shared-stale.test.js:66	-	OTHER	-		a write to an item another writer changed after the agent read it is refused (exit 5) and changes nothing
+TST-448	shared-stale.test.js:90	-	OTHER	-		the read cache is a file in .git, survives across commands and is per agent; an unread item is written without a check
+TST-449	shared-stale.test.js:106	-	OTHER	-		two clones update different items concurrently: both succeed and neither loses its change
+TST-450	shared-stale.test.js:116	-	OTHER	-		push race on the same item: one wins, the other is refused, and its change is neither on origin nor on a side branch
+TST-451	shared-stale.test.js:137	-	OTHER	-		053: a publication refusal also names another item the agent read that changed only upstream
+TST-452	shared-stale.test.js:151	-	OTHER	-		a move never replaces an item of the target that holds the file name, even after update --seq freed its number
+TST-453	shared-stale.test.js:168	-	OTHER	-		a release ends the holder\
+TST-454	shared-stale.test.js:179	-	OTHER	-		a change in the same second by the same writer name is still a change: the view includes the content
+TST-455	shared-stale.test.js:190	-	OTHER	-		nextSeqFor never returns a number whose file name is held, also by a file without front matter
+TST-456	shared-stale.test.js:199	-	OTHER	-		the creator of an item has seen it: another writer\
+TST-457	shared-stale.test.js:209	-	OTHER	-		053: a cross-repository move refused for its own item also names the changed item it read in the destination
+TST-458	shared-stale.test.js:225	-	OTHER	-		review P2: exact agent names keep independent views despite slash, space and Unicode collisions
+TST-459	shared-stale.test.js:241	-	OTHER	-		review P2: published write views follow chained renumberings only in their own repository folder
+TST-460	shared-stale.test.js:263	-	OTHER	-		053: after bob closes an item, amy moves another at once; a content change still refuses her write until she reads
+TST-461	shared-store.test.js:44	-	OTHER	-		resolveHome: BACKLOG_HOME > home record > the default ~/git/<name>; a configured but missing clone is tagged exit 4 naming backlog setup, never cloned
+TST-462	shared-store.test.js:70	-	OTHER	-		folder(home, repoId): <home>/<owner>/<name>
+TST-463	shared-store.test.js:74	-	OTHER	-		repoId: owner/name of the origin; a worktree maps to it; local/<folder> without an origin; refused outside git
+TST-464	shared-store.test.js:91	-	OTHER	-		branch: the checked-out branch; a detached HEAD is refused
+TST-465	shared-store.test.js:104	-	OTHER	-		load: phases/*.md and archive/**/*.md with path, fm, body, sha256 (sha aliases it); a missing folder is empty
+TST-466	shared-store.test.js:121	-	OTHER	-		write: atomic, mode 0o600, parent folders created, no temp file left, key order preserved on rewrite
+TST-467	shared-store.test.js:139	-	OTHER	-		addEvent appends an event line to the item file and keeps every other key
+TST-468	shared-store.test.js:155	-	OTHER	-		nextSeq: 1 on an empty folder; 1 + max of the file seqs (phases and archive); stderr stays clean
+TST-469	shared-store.test.js:171	-	OTHER	-		reflow: the target is clamped to 0..len(rest); no item is rewritten, the order is written to the index
+TST-470	shared-store.test.js:185	-	OTHER	-		reflow: only pending/in_progress items are ranked, each branch in its own order; done items follow the open ones, archived ones are not listed
+TST-471	shared-store.test.js:198	-	OTHER	-		reflow and reorder write the index and no item: every item keeps its bytes, the order is in <folder>/index.json
+TST-472	shared-store.test.js:212	-	OTHER	-		undoOnThrow puts back only what the command wrote: a file that appears meanwhile (a pull) is not deleted
+TST-473	shared-store.test.js:230	-	OTHER	-		findings: a foreign and an untagged item are flagged, archived items are not
+TST-474	shared-store.test.js:247	-	OTHER	-		now(): second-precision UTC with a Z suffix
+TST-475	shared-store.test.js:260	-	OTHER	-		review P1: a symlinked phases/ folder, archive subfolder or item file is refused by load, reflow, nextSeq and write; nothing outside is touched
+TST-476	shared-store.test.js:292	-	OTHER	-		review P1: only a missing folder reads as empty; any other listing failure propagates (a file where a folder belongs stands in for a denied read: tests run as root)
+TST-477	shared-store.test.js:311	-	OTHER	-		review P2: an explicit status: null is kept (not defaulted to pending): the item is neither ranked, rewritten nor flagged
+TST-478	shared-store.test.js:326	-	OTHER	-		review P2: a legacy priority field written as a quoted number orders the folder at its first index; no item is rewritten
+TST-479	shared-store.test.js:340	-	OTHER	-		review P1: a symlinked repository folder or owner folder is refused from the home by load, reflow, nextSeq, findings and write; nothing outside is touched
+TST-480	shared-store.test.js:379	-	OTHER	-		075: archive reflows the queue: archiving the last item is a no-op; archiving a middle one re-densifies the index and rewrites no other item
+TST-481	shared-store.test.js:404	-	OTHER	-		075: replan: slugs and item numbers lead, the rest keeps its order, unknown idents are skipped
+TST-482	shared-store.test.js:427	-	OTHER	-		075: nextSeq: an archived item keeps its number: after archiving 2, the next new takes 4
+TST-483	shared-store.test.js:444	-	OTHER	-		075: findings: an item of another repository is foreign, an item without repository and branch is untagged
+TST-484	shared-symlinked-parent.test.js:37	-	OTHER	-		store and index: load, write and rows work when the folder is reached through a symlinked parent
+TST-485	shared-symlinked-parent.test.js:45	-	OTHER	-		safety: validateHome and assertInside accept a path whose ancestors contain a symlink
+TST-486	shared-symlinked-parent.test.js:51	-	OTHER	-		new, update, query, archive and move (each commits through sync.js) run under a symlinked parent
+TST-487	shared-symlinked-parent.test.js:62	-	OTHER	-		inside the root a symlink is still refused even when the root is reached through a symlink
+TST-488	shared-sync-db.test.js:96	-	OTHER	-		two CLI writers creating different items in separate clones: both succeed with distinct numbers and both can pull afterwards
+TST-489	shared-sync-db.test.js:123	-	OTHER	-		review P2: retrying a rolled-back creation takes the upstream number into account
+TST-490	shared-sync-db.test.js:138	-	OTHER	-		review P1: a cross-repository move racing another clone is ONE commit of the source and target folders: never the target pushed without the source
+TST-491	shared-sync-db.test.js:167	-	OTHER	-		review P1: ${title} after a pull whose autostash does not apply (exit 0, conflict markers) is refused: nothing ingests or pushes the markers
+TST-492	shared-sync-db.test.js:182	-	OTHER	-		review P1: a number collision in the destination of a cross-repository move renames nothing in the source (no phantom 002-alpha)
+TST-493	shared-sync-db.test.js:207	-	OTHER	-		audit: a move that empties phases/ does not carry another clone\
+TST-494	shared-sync-db.test.js:225	-	OTHER	-		review P2: a destination-renumbered move caches the moved item and refuses a subsequent stale summary overwrite
+TST-495	shared-sync-db.test.js:265	-	OTHER	-		review P2: update records its published identity when an added item is renumbered during recovery
+TST-496	shared-sync-db.test.js:316	-	OTHER	-		review P2: failed create, note and archive each roll back; successful retries retain events exactly once
+TST-497	shared-sync-db.test.js:340	-	OTHER	-		audit t2: the same item changed by two clones: the second is refused (exit 5), its change is not parked or pushed, and the clone keeps working
+TST-498	shared-sync-db.test.js:352	-	OTHER	-		review (merge risk): a failed push is rolled back; a later command never publishes the failed note
+TST-499	shared-sync-db.test.js:381	-	OTHER	-		publication: a legacy unpublished commit is refused without changing files, index or history
+TST-500	shared-sync-db.test.js:427	-	OTHER	-		publication: legacy two-commit move with destination-only conflict is refused; explicit drop and retry publishes both folders
+TST-501	shared-sync-db.test.js:467	-	OTHER	-		publication: permanent failure after a push race removes renumbering and retains all incoming remote files
+TST-502	shared-sync-db.test.js:520	-	OTHER	-		review P1: publication refuses update --seq when another clone allocates that sequence
+TST-503	shared-sync-db.test.js:532	-	OTHER	-		review P1: publication preflight rejecting an appended conflict marker restores starting files, database and staging
+TST-504	shared-sync-db.test.js:568	-	OTHER	-		review P1: publication refuses a sequence change after an upstream clone adds an incoming dependency
+TST-505	shared-sync-db.test.js:589	-	OTHER	-		publication graph: opposing dependencies ${forward}/${reverse} cannot publish a cycle
+TST-506	shared-sync-db.test.js:596	-	OTHER	-		publication graph: transitive cycle through an upstream edge is refused
+TST-507	shared-sync-db.test.js:605	-	OTHER	-		publication graph: a claim is refused when its completed dependency reopens upstream
+TST-508	shared-sync-db.test.js:619	-	OTHER	-		publication identity: an upstream archived file cannot duplicate the slug of a written item
+TST-509	shared-sync-db.test.js:634	-	OTHER	-		publication identity: an upstream slug dependent also prevents changing its target sequence
+TST-510	shared-sync-db.test.js:640	-	OTHER	-		item 045: an item without a phase field keeps the identity of its file name: renumbering it is refused while an upstream item depends on that slug
+TST-511	shared-sync-db.test.js:650	-	OTHER	-		publication graph: an outgoing slug dependency is rechecked after an upstream move
+TST-512	shared-sync-db.test.js:689	-	OTHER	-		publication identity: an upstream archived sequence colliding with an existing assignment is refused
+TST-513	shared-sync-db.test.js:696	-	OTHER	-		publication safety: upstream conflict markers abort an otherwise disjoint write
+TST-514	shared-sync-db.test.js:725	-	OTHER	-		cleanup: a CLI child killed mid-push leaves its child git process writing the dbconf-* folder; the cleanup settles it, no ENOTEMPTY (item 76)
+TST-515	shared-sync-db.test.js:745	-	OTHER	-		cleanup settle: a child process that survives the settle is reported loudly, not removed silently (item 76 review)
+TST-516	shared-sync-db.test.js:768	-	OTHER	-		cleanup: scenarioPids sees the processes carrying the fixture env (item 76 review)
+TST-517	shared-sync-db.test.js:792	-	OTHER	-		cleanup: a scan entry whose environ is gone (the process exited between the listing and the read: ENOENT, or ESRCH while the exit is in flight) is skipped, not fatal (item 76)
+TST-518	shared-sync-db.test.js:800	-	OTHER	-		cleanup settle: the settle ends only after two consecutive empty scans 100 ms apart, also when its rounds run out (item 76)
+TST-519	shared-sync-db.test.js:812	-	OTHER	-		cleanup: a folder the cleanup cannot remove fails loudly, naming what is left and the live scenario processes (item 76)
+TST-520	shared-sync.test.js:61	-	OTHER	-		pull: fetches what another clone pushed, and the lock file is gone afterwards
+TST-521	shared-sync.test.js:70	-	OTHER	-		pull: an unmergeable legacy commit is refused before rebasing
+TST-522	shared-sync.test.js:83	-	OTHER	-		commit: commits "<owner>/<name>: <message>" and pushes; nothing staged means no empty commit
+TST-523	shared-sync.test.js:93	-	OTHER	-		commit: stages only the repository folder
+TST-524	shared-sync.test.js:102	-	OTHER	-		two clones create at once: both items reach the bare with different numbers
+TST-525	shared-sync.test.js:114	-	OTHER	-		two clones rank different items from one base: the later publication keeps both placements in one dense order
+TST-526	shared-sync.test.js:131	-	OTHER	-		renumber: the later pusher gets nextSeq in file name, phase, seq and heading, and says so
+TST-527	shared-sync.test.js:152	-	OTHER	-		renumber: skips numbers already taken
+TST-528	shared-sync.test.js:164	-	OTHER	-		renumber: a stale creation that collides only with an ARCHIVED item is renumbered
+TST-529	shared-sync.test.js:180	-	OTHER	-		a distinct number is left alone: no renumber, nothing printed
+TST-530	shared-sync.test.js:188	-	OTHER	-		a bare that refuses pushes: exit 3, no unpublished commit, starting edits retained and token URL redacted
+TST-531	shared-sync.test.js:201	-	OTHER	-		an index.lock held for a moment is retried
+TST-532	shared-sync.test.js:211	-	OTHER	-		a folder outside the home is refused before git runs
+TST-533	shared-sync.test.js:227	-	OTHER	-		commit: a folder with wildcard characters stages only itself, not the sibling folders it would match
+TST-534	shared-sync.test.js:237	-	OTHER	-		commit: a failing git add is an error (exit 3), not a silent push without the change
+TST-535	shared-sync.test.js:245	-	OTHER	-		renumber: a failing git mv, or a failing git add of the renamed file, is an error (exit 3)
+TST-536	shared-sync.test.js:259	-	OTHER	-		add/add: two clones create the same numbered file name with different bodies; both reach the bare, the later one renumbered
+TST-537	shared-sync.test.js:277	-	OTHER	-		add/add: a conflict on anything else still aborts the rebase and exits 3
+TST-538	shared-sync.test.js:286	-	OTHER	-		review: renumbering the current command remaps LOCAL references (number, slug, split-from), never upstream\
+TST-539	shared-sync.test.js:303	-	OTHER	-		review: the same remap on the add/add recovery of a push
+TST-540	shared-sync.test.js:319	-	OTHER	-		pull and commit refuse an outstanding local commit, even a repairable sequence collision
+TST-541	shared-sync.test.js:335	-	OTHER	-		add/add: several conflicting additions whose front matter differs are all repaired (markers in another file do not stop the numbering)
+TST-542	shared-sync.test.js:346	-	OTHER	-		pull: refusing an old commit preserves its unstaged working edit
+TST-543	shared-sync.test.js:360	-	OTHER	-		review P2: commit takes only the repository folder: a file staged elsewhere stays staged and off origin; deletions in the folder are committed
+TST-544	shared-sync.test.js:382	-	OTHER	-		review P2: refusing a legacy stack preserves all commits and unrelated staging
+TST-545	shared-sync.test.js:408	-	OTHER	-		pull: incoming commits preserve unrelated staged and unstaged versions separately
+TST-546	shared-sync.test.js:456	-	OTHER	-		075: overlapping writers, the other writer first: a CLI commit held at its push while a second CLI creates and pushes 1 is renumbered to 2
+TST-547	shared-sync.test.js:481	-	OTHER	-		075: CLI steps publish a clean, in-sync state: after new, archive and an overlapping pair the tree is clean and the local mirror equals the published database
+TST-548	shared-sync.test.js:513	-	OTHER	-		075: overlapping writers, the same clone: a commit held at its push keeps its number when the second CLI writer in the same clone publishes item 2 on top of it
+TST-549	shared-sync.test.js:534	-	OTHER	-		two clones share the items through git alone: no database travels
+TST-550	shared-team-compat.test.js:55	T-LEGACY	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_new_item_refusals: refusals at creation, the class options are gone, release only by the holder
+TST-551	shared-team-compat.test.js:78	T-LEGACY	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_item_without_team_fields_keeps_working: an item written before team work stays visible, and in no team view
+TST-552	shared-team-compat.test.js:100	T-LEGACY	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_claim_review_close_lifecycle: the query views along the lifecycle (the part job 15 left out)
+TST-553	shared-team-compat.test.js:120	T-LEGACY	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--reviewable needs --agent; the text view lists the item with its dependencies
+TST-554	shared-team-compat.test.js:136	T-LEGACY	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	an item with old work_class and review_classes fields behaves exactly like one without them 
+TST-555	shared-team-done.test.js:36	T-BINDING	CODE-LITERAL	unchanged		--status done is refused on a team item: its status moves by the team steps
+TST-556	shared-team-done.test.js:49	T-BINDING	CODE-LITERAL	unchanged		--status done on an old teamless item without review_refs closes it without a review
+TST-557	shared-team-flow.test.js:17	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	the team workflow through the CLI only, step by step
+TST-558	shared-team-lead-pop.test.js:38	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop: the lead claims its team\
+TST-559	shared-team-lead-pop.test.js:62	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop records the continuation claim when the lead\
+TST-560	shared-team-lead-pop.test.js:73	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop exits 1 when the continuation claim is handed back before the final read
+TST-561	shared-team-lead-pop.test.js:86	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop exits 1 when the held item is reassigned to another session of the same card before the final read
+TST-562	shared-team-lead-pop.test.js:100	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop exits 1 when the continuation claim is refused; the earlier session keeps holding
+TST-563	shared-team-lead-pop.test.js:115	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop: an item whose claim is refused is named and skipped; nothing left is idle with exit 3
+TST-564	shared-team-lead-pop.test.js:131	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop: only the lead, only its team, only itself
+TST-565	shared-team-lead-pop.test.js:145	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	query --status --json rows carry claimed_by and review_state
+TST-566	shared-team-lead-pop.test.js:162	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop: an unclaimed in-progress work item is taken; no output names a file of the backlog
+TST-567	shared-team-lead-pop.test.js:172	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	query --phase --json names the team fields an item lacks
+TST-568	shared-team-lead-pop.test.js:214	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop: an update error, a failed synchronisation and a scope change are failures (exit 1), never a skip or idle
+TST-569	shared-team-lead-pop.test.js:231	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop: the claim itself refuses another team\
+TST-570	shared-team-lead-pop.test.js:239	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	an item without depends_on names it
+TST-571	shared-team-lead-pop.test.js:248	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	in a team session a claim takes only an item of the session\
+TST-572	shared-team-lead-pop.test.js:256	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	team pop: an item taken out of the team before the read is skipped, never claimed; a detached HEAD is refused
+TST-573	shared-team-lifecycle.test.js:67	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	claim, review and close lifecycle (port of test_claim_review_close_lifecycle)
+TST-574	shared-team-lifecycle.test.js:117	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team session: TEAM_REPOSITORY binds the repository, a step on another scope is refused
+TST-575	shared-team-lifecycle.test.js:131	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team scope guards every mutating update path, not only the team steps 
+TST-576	shared-team-lifecycle.test.js:154	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	an incomplete item is only refined: no claim, no note
+TST-577	shared-team-lifecycle.test.js:169	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team.js: lists, chunk items, review documents
+TST-578	shared-team-lifecycle.test.js:182	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team.js: the team entry names the members in order and the review-only ones; the roster file reader is gone
+TST-579	shared-team-lifecycle.test.js:202	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team.js: held items, the claim rule, undone dependencies on a folder
+TST-580	shared-team-lifecycle.test.js:218	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	a holder whose item file has malformed front matter still blocks a second claim: the error propagates and nothing is written
+TST-581	shared-team-lifecycle.test.js:235	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the lifecycle steps, in order: each succeeds or is refused with the expected exit status, a refusal changes nothing
+TST-582	shared-team-lifecycle.test.js:321	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	075: the successful lifecycle steps print exactly what they record
+TST-583	shared-team-plan.test.js:37	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_one_claimable_item_goes_to_exactly_one_member
+TST-584	shared-team-plan.test.js:52	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_review_goes_to_any_member_but_the_author; a member\
+TST-585	shared-team-plan.test.js:66	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_changes_verdict_is_planned_once_per_verdict_for_the_claimer_and_plain_continue_never
+TST-586	shared-team-plan.test.js:84	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	a review in progress is hidden from the plan; a stale one goes to the lead to hand on
+TST-587	shared-team-plan.test.js:96	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the lead and a review_only member get no claim; the lead refines an incomplete item
+TST-588	shared-team-plan.test.js:109	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	with TEAM_NAME another team's item is never planned, and nothing before stage ready is claimed or reviewed
+TST-589	shared-team-plan.test.js:123	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_plan_gives_a_review_to_the_first_idle_member_but_the_author; a member refining an item is not idle
+TST-590	shared-team-plan.test.js:139	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	two review requests at once go to two members, neither to its author
+TST-591	shared-team-plan.test.js:148	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	a member refining an item gets no respond or close in the plan
+TST-592	shared-team-plan.test.js:161	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the plan through claims, a review, a changes verdict, a close and the lead\
+TST-593	shared-team-pop.test.js:77	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_pop_precedence_and_claim_now: continue > review > claim > chunk > idle, team pop claims
+TST-594	shared-team-pop.test.js:116	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	075: the pop of an idle lead and of a claimable item prints its text and its JSON exactly, with empty stderr
+TST-595	shared-team-pop.test.js:150	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_closed
+TST-596	shared-team-pop.test.js:177	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_claim_only_when_every_held_item_waits
+TST-597	shared-team-pop.test.js:215	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_review_refs_any_reviewer_and_review_first
+TST-598	shared-team-pop.test.js:251	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	a member the team entry lists as review_only never claims; --roster is no option any more
+TST-599	shared-team-pop.test.js:269	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_no_new_flags_unchanged
+TST-600	shared-team-pop.test.js:291	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	pop with --scope all and the refinement_scope cap of backlog.scope
+TST-601	shared-team-pop.test.js:309	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--agents without --plan and --critical stay refused with pop
+TST-602	shared-team-pop.test.js:319	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	credentials in a wait are redacted in the text and the JSON of the pop (blocked and held)
+TST-603	shared-team-pop.test.js:353	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--claim-now: an interrupted claim process is a failure, not a claim
+TST-604	shared-team-pop.test.js:361	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--claim-now: a claim interrupted after it was saved is reported as a failure but is not undone, and the help does not promise otherwise
+TST-605	shared-team-pop.test.js:371	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--claim-now: the diagnostics of a failed claim are forwarded with its exit code and without credentials
+TST-606	shared-team-pop.test.js:378	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the exit codes of backlog team pop are described: 3 is idle, 1 a claim that failed
+TST-607	shared-team-pop.test.js:382	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the JSON of the pop stays valid when a credential follows a non-ASCII character (redaction before serialization)
+TST-608	shared-team-pop.test.js:396	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	pop --scope with an unknown scope exits 2 and names the choices
+TST-609	shared-team-pop.test.js:402	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--roster is refused by pop and by the plan: unrecognized arguments, exit 2
+TST-610	shared-team-pop.test.js:412	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--claim-now on an item the agent already holds continues it and does not claim it twice
+TST-611	shared-team-pop.test.js:452	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	in a backlog with every pop state, the requested reviews are started and the free item is claimed
+TST-612	shared-team-scope.test.js:50	T-SCOPE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	test_scopes_and_refinement_cap: --scope and the refinement_scope cap of backlog.scope
+TST-613	shared-team-scope.test.js:94	T-SCOPE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--agents goes with --plan only (the plan is shared-team-plan.test.js)
+TST-614	shared-team-scope.test.js:104	T-SCOPE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--scope takes branch, repo or all
+TST-615	shared-team-scope.test.js:123	T-SCOPE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--scope all does not read another repository\
+TST-616	shared-team-scope.test.js:134	T-SCOPE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the refinement cap file backlog.scope is not followed through a symlink
+TST-617	shared-team-scope.test.js:146	T-SCOPE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the diagnostic of an unreadable backlog of another repository does not print credentials
+TST-618	shared-team-scope.test.js:158	T-SCOPE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	any member but the author is offered the review at once; the reviewable view needs no member list
+TST-619	shared-team-scope.test.js:173	T-SCOPE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	a team session whose repository id leaves the home (../x) is refused with exit 2
+TST-620	shared-team-scope.test.js:181	T-SCOPE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	075: the claimable, reviewable and blocked views print their exact rows, and the blocked JSON names the edge it waits on
+TST-621	shared-team-stages.test.js:51	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	test_the_team_workflow_from_work_item_to_ready_work: split, member refinement, refinement review, ready, claim by its team only
+TST-622	shared-team-stages.test.js:88	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	each step refuses out of order, and one step at a time
+TST-623	shared-team-stages.test.js:119	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the review-hitl stage: an owner decision holds the item and its dependents; --decisions lists it; --decision sends it back to refining
+TST-624	shared-team-stages.test.js:153	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewed or worked; the lead refines, then any member claims
+TST-625	shared-team-stages.test.js:192	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	an incomplete item waiting in review-hitl is not offered to the lead for refinement
+TST-626	shared-team-stages.test.js:206	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	refine-done is refused while a field or the definition of done is missing; event lines are no definition of done
+TST-627	shared-team-stages.test.js:234	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	a complete team item before stage ready takes only its refinement steps: no work, review, close or status change
+TST-628	shared-team-stages.test.js:250	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the lead never starts a first-round refinement nor is offered a member's child; the parent's definition of done is no child's
+TST-629	shared-team-stages.test.js:262	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	a split of a team item may keep the placeholder; only the lead changes an incomplete item of a bound session
+TST-630	shared-team-stages.test.js:275	T-REFINE	CODE-LITERAL	deleted	--lead is removed (REQ-206); replaced by T-206-2	backlog work --lead names only the lead the updates know; pop --lead keeps a member\
+TST-631	shared-team-stages.test.js:288	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the lead edits a refining item only as its refiner; an append of ESTIMATE lines plus text is no estimate note
+TST-632	shared-team-stages.test.js:301	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	a refinement verdict changes nothing else in the same call
+TST-633	shared-team-stages.test.js:312	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	in stage refinement-review the item takes no edit until its verdict
+TST-634	shared-team-stages.test.js:323	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the lead edits nothing of a first-round refinement, with a step or without
+TST-635	shared-team-stages.test.js:330	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the successful stage steps print exactly what they record
+TST-636	shared-team-status-order.test.js:54	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	a team step for a team with no entry in the configuration is refused with the exact text, nothing written
+TST-637	shared-team-status-order.test.js:64	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	a claim of an item that is not ready is refused, naming ready; the refinement steps move the word along the order
+TST-638	shared-team-status-order.test.js:80	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	an entry that lists only the peer stage: one member verdict complete leads straight to review complete
+TST-639	shared-team-status-order.test.js:90	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	an entry with no review stages: a review request leads straight to review complete
+TST-640	shared-team-status-order.test.js:98	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the default entry reviews in both stages; a reject at the external stage returns the item to in progress, clears both passes and keeps the finding
+TST-641	shared-team-status-order.test.js:115	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--review pass and changes are synonyms and the printed line says the canonical word; an unknown verdict is refused naming both words
+TST-642	shared-team-status-order.test.js:128	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--request-decision waits as awaiting decision and records where it came from; --decision returns the item to refining
+TST-643	shared-team-teams.test.js:37	T-ROLES	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the runner sets the team on the work item and claims it for the lead; --set-team "" clears it
+TST-644	shared-team-teams.test.js:49	T-ROLES	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	backlog new --team writes the team and starts the item as new; --split-from inherits the team
+TST-645	shared-team-teams.test.js:66	T-ROLES	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	with TEAM_NAME set, another team\
+TST-646	shared-team-teams.test.js:91	T-ROLES	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	another team\
+TST-647	shared-team-teams.test.js:115	T-ROLES	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the lead refines only an incomplete item of its own team
+TST-648	shared-team-teams.test.js:128	T-ROLES	CODE-LITERAL	changed	set-team of an item of t2 under session_team_only is refused with other_team	--set-team, --team and a split child of a team item: every step succeeds
+TST-649	shared-team-work.test.js:53	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	query --phase shows the whole item: the row, every front matter field and the body
+TST-650	shared-team-work.test.js:64	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	backlog work: the next action marked as the agent\
+TST-651	shared-team-work.test.js:94	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the hand-off to review, a changes verdict and a close end the agent\
+TST-652	shared-team-work.test.js:123	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	in a team session a member acts only as itself; only the lead reassigns or releases another agent\
+TST-653	shared-team-work.test.js:150	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	a member never takes over another agent\
+TST-654	shared-team-work.test.js:169	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	backlog work on chunk work of another repository prints that item too
+TST-655	shared-team-work.test.js:185	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	only the claimer closes its item, else the team lead; the close-now line names the claimer, else the lead, never the reviewer
+TST-656	shared-team-work.test.js:197	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the lead never claims, waits without polling while its team works, keeps its close and rework, and closes the work item when every item is done
+TST-657	shared-team-work.test.js:229	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	backlog team new files an item of its team in stage refining, in a team session or not; a plain new makes an item of no team
+TST-658	shared-team-work.test.js:239	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the claimer never reviews its own item; a reviewed item finishes only through --close; an unclaimed team item is closed by the lead
+TST-659	shared-team-work.test.js:262	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the lead's close and rework are never hidden by its team's refinement review or a stale review
+TST-660	shared-team-work.test.js:281	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the lead waits while only an incomplete item of its team is open
+TST-661	shared-team-work.test.js:292	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	a refinement in progress is active work; an unclaimed hand-off ends the caller\
+TST-662	shared-team-work.test.js:310	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	a member acts only as itself on an unclaimed item; a request outside a team session ends the session of --by; only the lead refines an incomplete team item; a busy lead gets no chunk
+TST-663	shared-team-work.test.js:329	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	an unclaimed team item names who asks for its review, who then never reviews it; an agent with active work is offered no refinement
+TST-664	shared-team-work.test.js:350	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	a review in progress is not requested again by its holder
+TST-665	shared-team-work.test.js:360	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	backlog work answers only for the team caller itself
+TST-666	shared-team-work.test.js:369	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	the lead asking for the review of a member's item ends no session and locks nobody
+TST-667	shared-team-work.test.js:379	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	a member names nobody else as the one asking for a review
+TST-668	shared-team-work.test.js:390	T-STEPS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter; routes team steps to items without a team	a member asks for no review of another member's item
+TST-669	shared-twostage.test.js:51	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	the close waits for every review rule of the team on the same work commit
+TST-670	shared-twostage.test.js:64	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a changes verdict clears the passes: the rules run again
+TST-671	shared-unrefined-claim.test.js:48	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	a member cannot claim a team item without a stage: the refusal names --refine-start, and nothing is written
+TST-672	shared-unrefined-claim.test.js:57	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the team lead's own claim of its team's work item is allowed (backlog team pop takes it to split it)
+TST-673	shared-unrefined-claim.test.js:64	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the team lead's claim of a team split slice without a stage is refused, naming --refine-start
+TST-674	shared-unrefined-claim.test.js:72	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	--refine-start accepts a team item without a stage
+TST-675	shared-unrefined-claim.test.js:79	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	pop offers an unrefined team item as refine, never as claim; query --claimable and --plan do not offer it
+TST-676	shared-unrefined-claim.test.js:91	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	an item without a team and without the split marker stays claimable: no stage is solo work, ready; no team view lists it
+TST-677	shared-update.test.js:61	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	the class options are gone: --set-work-class and --set-review-classes are unrecognized, nothing is written
+TST-678	shared-update.test.js:72	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	update --priority changes the index and no other item file; the item itself is stamped and records the move
+TST-679	shared-update.test.js:88	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	a folder whose items carry the rank of an earlier build gets its index at the first write; the items lose the key when they are next written
+TST-680	shared-update.test.js:107	-	OTHER	-		a bare number is the item number, never the database row id
+TST-681	shared-update.test.js:121	-	OTHER	-		order of work: pull first, then change, write, log the event, commit and push
+TST-682	shared-update.test.js:145	-	OTHER	-		a refusal and a dry run make no commit
+TST-683	shared-update.test.js:154	-	OTHER	-		diagnostics that echo the input are redacted
+TST-684	shared-update.test.js:164	-	OTHER	-		a repository without a backlog yet: no phase, exit 1
+TST-685	shared-update.test.js:177	-	OTHER	-		review P1: update holds the per-repository run lock from the pull to the push (a held lock makes it wait)
+TST-686	shared-update.test.js:188	-	OTHER	-		review P1: a renumbering during the commit is followed by a rescan that is committed and pushed (db and working tree current)
+TST-687	shared-update.test.js:201	-	OTHER	-		review P2: --summary="two words" and --append="extra text" are options with a value, not positionals (argparse)
+TST-688	shared-update.test.js:221	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	review P1 (job 15): two processes cannot both claim an unclaimed item; a claim waits for the run lock
+TST-689	shared-update.test.js:237	T-REVIEW	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	review P2 (job 15): --set-review-refs goes through checkRefs: an absolute or ..-crossing ref is refused and nothing is written
+TST-690	shared-update.test.js:250	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	review P2: update on an archived item is refused for every flag that goes through it, and writes nothing
+TST-691	shared-update.test.js:265	-	OTHER	-		review P1: update whose index write is refused restores the file, and commits nothing
+TST-692	shared-update.test.js:277	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	review P2: after two clones picked one number, the merged queue is re-densified (no two items share a priority)
+TST-693	shared-update.test.js:285	T-BINDING	CODE-LITERAL	rewrite	the session-bound text comes from the environment read the guard forbids; becomes the outside_update text	review P1: update of an item of another team (field edit, note, append) is refused and writes nothing
+TST-694	shared-update.test.js:300	-	OTHER	-		review P1: ${title} (a read that pulls) waits while another command holds the operation lock of the clone
+TST-695	shared-update.test.js:306	T-CLAIM	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	review P1: a lock left by a dead process is taken over (said once); a live holder is waited for and, after the configured wait, named in the refusal
+TST-696	shared-update.test.js:344	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	review P1: processes racing on one dead lock take it over one at a time: critical sections never overlap, no fresh lock is displaced
+TST-697	shared-update.test.js:357	-	OTHER	-		review P1: a takeover marker held by another waiter keeps the others waiting; one left by a dead process is stale after 30 s
+TST-698	shared-update.test.js:379	T-USERCONV	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	review P2: an item that returns from done to ${status} is ranked again: no two actionable items share a priority
+TST-699	shared-update.test.js:388	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	review P1: a bound team session reorders and re-ranks only its own items: --replan naming another team is refused, other files are never written
+TST-700	shared-update.test.js:430	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	field updates (status, location, commit, summary, name, objective, note)
+TST-701	shared-update.test.js:440	-	OTHER	-		--append adds the text after a blank line and a final newline
+TST-702	shared-update.test.js:446	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	--priority moves the item to that rank and re-densifies, with a planning_event
+TST-703	shared-update.test.js:455	T-USERCONV	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	--status done completes, stamps completed, re-prioritizes and prints the planning-event lines
+TST-704	shared-update.test.js:466	T-USERCONV	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	--status takes any word on an item outside a team: a free word keeps it in the queue, closed (or done) takes it out
+TST-705	shared-update.test.js:482	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	--status on an item of a team is refused: its status moves by the team steps, and nothing is written
+TST-706	shared-update.test.js:492	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	an item written with the earlier fields reads as the new word, and its first write drops stage and review_state
+TST-707	shared-update.test.js:506	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	--replan sets the leading order by slug or number, ignores unknown names, and prints the order
+TST-708	shared-update.test.js:515	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	a replan leaves no event; the order itself is the record
+TST-709	shared-update.test.js:523	T-QUEUE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	--dry-run prints the plan and changes and commits nothing
+TST-710	shared-update.test.js:534	-	OTHER	-		refusals: exit 1, nothing written, nothing committed
+TST-711	shared-update.test.js:544	-	OTHER	-		invalid command lines exit 2 or 1
+TST-712	shared-update.test.js:553	T-STATUS	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	--note on an item that waits clears the wait with a WAIT DONE line
+TST-713	shared-update.test.js:561	T-REFINE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter; routes team steps to items without a team	refinement flags --set-review-refs --set-chunk --set-estimate --set-complexity --set-layer --set-depends-on
+TST-714	shared-update.test.js:571	-	OTHER	-		editSection changes one block and no other byte; a missing block is created at the end
+TST-715	shared-update.test.js:590	-	OTHER	-		update --section edits one body section and nothing else, through every edit option
+TST-716	shared-update.test.js:613	-	OTHER	-		update --section refuses what it cannot do and writes nothing
+TST-717	shared-wip.test.js:41	T-WIP	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	034: each of the five levels refuses the claim past its limit; the lead\
+TST-718	shared-wip.test.js:77	T-WIP	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	034: with a team limit of three, pop offers no fourth item while three are in progress
+TST-719	shared-wip.test.js:89	T-WIP	CODE-LITERAL	rewrite	stale_hours moves to views.wip.stale_hours of the definition	034: query --wip prints the counts and the stale items; a renumbering leaves updated of the re-ranked items
+TST-720	shared-wip.test.js:107	T-WIP	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	034: a start that another clone made while this one published counts: the later publication is refused
+TST-721	shared-wip.test.js:123	T-WIP	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	034: a reclaim of an item set back to pending is a start; a combined start and team change counts the new team
+TST-722	shared-wip.test.js:136	T-WIP	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	034: a branch limit is keyed owner/name:branch
+TST-723	shared-wip.test.js:146	T-WIP	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	034: an owner decision past a limit is recorded; the item then waits in refining with no refiner
+TST-724	shared-wip.test.js:159	T-WIP	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	034: an item in progress is not moved into a repository past its limit
+TST-725	shared-wip.test.js:167	T-WIP	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	034: work in progress joins a full team only with the lead; a move counts the moved item once
+TST-726	skill-commands.test.js:18	-	OTHER	-		040: every team flag of backlog update and every team command is in the skill
+TST-727	skill-commands.test.js:34	-	OTHER	-		040: the skill names no backlog folder, item file, git command or Python backlog script; its description is unchanged
+TST-728	skill-commands.test.js:44	-	OTHER	-		the skill is complete: front matter, size, referenced files, eval fixtures
+TST-729	skill-commands.test.js:55	-	OTHER	-		the skill, the help and COMMANDS.md name no script, storage file or old pattern
+TST-730	storage-location.test.js:23	-	OTHER	-		nothing configured: the backlog is .backlog inside the repository, created with its config on first use
+TST-731	storage-location.test.js:42	-	OTHER	-		setup records the location in .backlog/config.json, deploys the skill, commits and pushes; it names no folder path
+TST-732	storage-location.test.js:57	-	OTHER	-		the root file .smooth-backlog.json of earlier builds is still read when .backlog has no config
+TST-733	storage-location.test.js:71	-	OTHER	-		work staged elsewhere in the repository is left staged, not committed with the backlog
+TST-734	storage-location.test.js:80	-	OTHER	-		a read in a repository with no backlog creates no item folder
+TST-735	storage-location.test.js:88	-	OTHER	-		inside the repository the items survive a renamed folder and a changed origin
+TST-736	storage-location.test.js:115	-	OTHER	-		outside a git repository nothing is created and the error says so
+TST-737	storage-location.test.js:125	-	OTHER	-		a configured backlog repository that is not cloned is an error naming backlog setup, not a silent fallback
+TST-738	storage-location.test.js:133	-	OTHER	-		the per-user record is found without the origin setting when it is the only one
+TST-739	storage-location.test.js:160	-	OTHER	-		inside the repository every command pulls first: a change published from another clone is read without a manual pull
+TST-740	storage-location.test.js:170	-	OTHER	-		the user's own unpushed commit survives and is pushed with the backlog change
+TST-741	storage-location.test.js:180	-	OTHER	-		a dirty tree survives the pull
+TST-742	storage-location.test.js:192	-	OTHER	-		a rejected publication puts only the backlog back; a read with the origin down answers with a warning
+TST-743	storage-location.test.js:208	-	OTHER	-		a new branch gets its origin branch on the first push
+TST-744	storage-location.test.js:217	-	OTHER	-		push-backlog-updates=false commits the change and pushes nothing
+TST-745	team-boundary.test.js:36	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain update takes none of the team flags and prints no notice of where they moved
+TST-746	team-boundary.test.js:49	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain list has no team view, no --agents, --scope or --lead, and there is no plain query
+TST-747	team-boundary.test.js:62	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain new takes no --team and no --review-refs, and still takes the generic item options
+TST-748	team-boundary.test.js:75	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain query of one item shows no missing-fields list; the team query does
+TST-749	team-boundary.test.js:84	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain status close writes no hand-off record into the item
+TST-750	team-boundary.test.js:109	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain update refuses every field flag and step on a team item, with one line naming backlog team update, and writes nothing
+TST-751	team-boundary.test.js:122	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain update still restores an unreadable team item: --restore names no change, it runs before the item is read
+TST-752	team-boundary.test.js:135	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	backlog team update runs the stage rule on every field flag: in stage refining the lead is refused, as a member is not
+TST-753	team-boundary.test.js:151	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	backlog team update runs the incomplete-item guard on every field flag: a member is refused, the lead may edit
+TST-754	team-boundary.test.js:174	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain replan refuses a team item it names (its place in the queue is a team matter) and reorders items without a team, leaving the team item as it is
+TST-755	team-boundary.test.js:188	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain update may not move the status of a team item; the team command says so too
+TST-756	team-boundary.test.js:196	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a plain new does not split a team item
+TST-757	team-boundary.test.js:204	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	backlog team new needs a team and an agent, refuses a team without an entry, and files the item under its team in its first status
+TST-758	team-boundary.test.js:230	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	a team item is created, claimed and read through the team spellings
+TST-759	team-boundary.test.js:268	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	no file outside src/team/ names a team variable or the team file, imports team code (the router apart), and the team code imports only the listed shared modules
+TST-760	team-boundary.test.js:272	T-BINDING	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD	the guard finds a plain command reading a team variable, a team import, and a team module reaching into a plain one
+TST-761	team-cli.test.js:37	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team update claims for the agent; --team is required
+TST-762	team-cli.test.js:52	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the plain update refuses a team step and names the flag; a status word on a team item is refused
+TST-763	team-cli.test.js:64	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team update runs a step with the agent and no notice
+TST-764	team-cli.test.js:86	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team define registers a team beside the others, commits it, and another checkout sees it after a pull
+TST-765	team-cli.test.js:102	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team define without review takes the flow default; a bad file is refused naming every field, nothing written
+TST-766	team-cli.test.js:124	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team define does not replace a team that has open items; it names the count
+TST-767	team-cli.test.js:134	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team workflow registers a flow from JSON, shows it, and refuses a flow that traps items
+TST-768	team-cli.test.js:152	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	the team views run under team query; the plain query does not know them; a team without an entry is refused
+TST-769	team-cli.test.js:171	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team pop: the lead claims the work item and sees it whole, then a member has nothing to take; pop and work are not commands
+TST-770	team-cli.test.js:190	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team pop: a member whose item waits for its review is idle; the next member starts the review, marked reviewing
+TST-771	team-cli.test.js:207	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team pop --dry-run answers without claiming or marking: the item stays unheld, and the same pop without it claims
+TST-772	team-cli.test.js:219	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team pop and team update reach only the items of --team: an item of no team is not offered, and its claim is refused
+TST-773	team-cli.test.js:231	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team pop: a team without an entry is refused, and a refused flag is refused before anything runs
+TST-774	team-cli.test.js:239	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	no instruction of the engine tells an agent to run a team step through the plain update
+TST-775	team-cli.test.js:249	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): names the lead through TEAM_LEAD; writes schema 1 front matter	team define keeps review_only, a list of names within the members, in the entry
+TST-776	team-spelling-docs.test.js:21	-	OTHER	-		no document shows a plain update, query or new with an option that only a team command takes
+TST-777	team-spelling-docs.test.js:31	-	OTHER	-		the check finds the removed spellings
+TST-778	team-spelling-docs.test.js:38	-	OTHER	-		backlog fields says the team fields are set by backlog team new
+TST-779	update-notice.test.js:25	-	OTHER	-		a command at a terminal runs the scheduled check beside it and prints the warning on standard error afterwards
+TST-780	update-notice.test.js:38	-	OTHER	-		without a terminal nothing runs: no registry call, no configuration written, nothing printed
+TST-781	update-notice.test.js:43	-	OTHER	-		--help, --version, upgrade, setup and the bare command never start a check
+TST-782	update-notice.test.js:48	-	OTHER	-		the weekly check turned off (backlog upgrade disable) and a check that is not due ask nothing
+TST-783	update-notice.test.js:54	-	OTHER	-		a registry that does not answer adds at most the time limit, writes one warning at most, and never throws
+TST-784	update-notice.test.js:61	-	OTHER	-		a failed check is a warning, not an error: the next command waits an hour
+TST-785	update-notice.test.js:73	-	OTHER	-		backlog at a terminal checks once and warns; with standard error piped it checks nothing
+TST-786	update-notice.test.js:100	-	OTHER	-		a registry that takes five seconds delays the command by the time limit at most, then warns once
+TST-787	upgrade.test.js:10	-	OTHER	-		weekly, auto daily, and failure hourly scheduling obey persisted attempts
+TST-788	upgrade.test.js:20	-	OTHER	-		stable release selection excludes prereleases, prevents downgrade and identifies latest within installed major
+TST-789	upgrade.test.js:25	-	OTHER	-		not-due invocations do not call npm or rewrite user config
+TST-790	upgrade.test.js:31	-	OTHER	-		registry check persists one attempt and major-version notice without auto-installing a major
+TST-791	upgrade.test.js:44	-	OTHER	-		failed scheduled registry access is nonfatal, records failure, and retries after an hour
+TST-792	upgrade.test.js:51	-	OTHER	-		missing GitHub registry returns exact configuration instructions
+TST-793	upgrade.test.js:56	-	OTHER	-		auto enabling refuses an unmanaged install without persisting auto=true
+TST-794	upgrade.test.js:62	-	OTHER	-		disabling weekly notices and turning auto off are independent user preferences
+TST-795	upgrade.test.js:75	-	OTHER	-		runtime activation keeps the executable stable and rolls back a failed activation
+TST-796	upgrade.test.js:86	-	OTHER	-		auto installs only a staged compatible release while retaining the major notice
+TST-797	upgrade.test.js:105	-	OTHER	-		auto enable refuses a real nonwritable package directory without elevation
+TST-798	upgrade.test.js:120	-	OTHER	-		a custom --prefix installation is manageable even when npm default prefix differs
+TST-799	upgrade.test.js:133	-	OTHER	-		a stale auto updater cannot downgrade a package another process upgraded to a major release
+TST-800	upgrade.test.js:149	-	OTHER	-		unsupported schema/runtime releases fail before activation and staging enforces npm engines
+TST-801	upgrade.test.js:161	-	OTHER	-		termination at the activation boundary always leaves a callable stable executable
+TST-802	upgrade.test.js:172	-	OTHER	-		an incompatible Node floor is rejected even if a controlled staging runner ignores npm engine enforcement
+TST-803	upgrade.test.js:183	-	OTHER	-		custom-prefix recognition compares physical paths across macOS-style parent directory aliases
+TST-804	upgrade.test.js:192	-	OTHER	-		registry setup guidance uses the GitHub Packages legacy login flow required by npm 9+
+TST-805	upgrade.test.js:197	-	OTHER	-		upgrade <version> installs exactly that release, and never a downgrade
+TST-806	upgrade.test.js:213	-	OTHER	-		upgrade takes one of its words or a version, nothing else
+TST-807	upgrade.test.js:218	-	OTHER	-		backlog upgrade --help reaches the self-update; update --help, with or without a self-update word, is the item command
+TST-808	workflow.test.js:13	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	the ordered statuses are the file\
+TST-809	workflow.test.js:15	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	the side status is the wait for a decision
+TST-810	workflow.test.js:16	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	finished words
+TST-811	workflow.test.js:20	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	normalise
+TST-812	workflow.test.js:26	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	stage list follows the team entry
+TST-813	workflow.test.js:33	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	the shipped definition carries no name of an internal team or agent
+TST-814	workflow.test.js:39	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	an unknown workflow is refused with the way to register one
+TST-815	workflow.test.js:44	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	a flow registered in the backlog is found before the shipped one
+TST-816	workflow.test.js:51	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	the shipped definition is valid
+TST-817	workflow.test.js:94	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	statusOf: an item that already carries a word of the order is never translated again
+TST-818	workflow.test.js:97	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	statusOf: a free-text word outside the order is kept as written
+TST-819	workflow.test.js:98	T-FILE	CODE-LITERAL	harness	the shared harness changes (05 §2.1): writes schema 1 front matter	open and unstarted: only closed, done and archived are finished; a started word is not unstarted

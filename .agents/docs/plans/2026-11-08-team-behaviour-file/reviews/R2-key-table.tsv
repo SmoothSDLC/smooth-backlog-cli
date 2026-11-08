@@ -1,0 +1,287 @@
+schema_file	key_path	spec_row	type	allowed_values	default_or_required	validation	exact_error	readers	effect	interplay	valid_example	invalid_example	status	notes
+team-behaviour	schema	§4.1 schema	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	workflow	§4.1 workflow	Y	Y	Y	CONTRADICTS	Y	Y	Y	Y	Y	Y	INCOMPLETE	R2-004: workflows.json propertyNames pattern ^[a-z0-9][a-z0-9._-]{0,63}$ lacks ":" that this pattern allows
+team-behaviour	description	§4.1 description	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	statuses	§4.1 statuses	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	V-17 text has no <path> prefix (R2-030)
+team-behaviour	initial	§4.1 initial	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	finished	§4.1 finished	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	side_statuses	§4.1 side_statuses	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	side_statuses.<*>.enter	§4.1 side_statuses (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	side_statuses.<*>.leave	§4.1 side_statuses (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	side_statuses.<*>.returns_to	§4.1 side_statuses (sub-key)	PARTIAL(inline in parent row)	CONTRADICTS	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	R2-026: "a status or previous" vs V-05 "is not one of statuses"
+team-behaviour	identity	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	identity.same_worker_pattern	§4.2 identity.same_worker_pattern	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	identity.caller_acts_only_as_itself	§4.2 identity.caller_acts_only_as_itself	Y	Y	Y	PARTIAL	Y	Y	Y	Y	Y	Y	INCOMPLETE	R2-011: refusal key caller_not_actor (and pop_caller) not required when the key is set
+team-behaviour	identity.caller_acts_only_as_itself.except_roles	§4.2 identity.caller_acts_only_as_itself (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	scope	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	scope.bind_session	§4.2 scope.bind_session	Y	Y	Y	PARTIAL	Y	Y	Y	Y	Y	Y	INCOMPLETE	R2-011: refusal keys outside_scope, session_branch not required when true
+team-behaviour	scope.session_team_only	§4.2 scope.session_team_only	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	scope.foreign_items	§4.2 scope.foreign_items	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	roles	§4.2 roles	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	roles.<*>.entry	§4.2 roles (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	roles.<*>.entry_list	§4.2 roles (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	roles.<*>.entry_rule_teams	§4.2 roles (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	roles.<*>.when_empty	§4.2 roles (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	R2-032: a role with only when_empty passes the schema; no rule
+team-behaviour	roles.<*>.item_field	§4.2 roles (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	roles.<*>.item_fields	§4.2 roles (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	roles.<*>.union	§4.2 roles (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	roles.<*>.literal	§4.2 roles (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	roles.<*>.anyone	§4.2 roles (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	completeness	§4.3 completeness	Y	Y	Y	Y	Y	Y	Y	Y	PARTIAL(template ref)	Y	INCOMPLETE	
+team-behaviour	completeness[].name	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	completeness[].field	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	completeness[].test	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	completeness[].body_pattern	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	completeness[].section	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	completeness[].placeholders	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	completeness[].remove	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	completeness[].ignore_lines	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	create	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	create.sets	§4.3 create.sets	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	create.missing_section	§4.3 create.missing_section	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	create.missing_section.heading	§4.3 create.missing_section (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	create.missing_section.placeholder	§4.3 create.missing_section (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	create.ask	§4.3 create.ask	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	create.ask[].flag	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	create.ask[].label	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	create.priority_by_severity	§4.3 create.priority_by_severity	Y	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	INCOMPLETE	R2-033: severities other than normal/critical and the meaning of the rank undefined
+team-behaviour	create.priority_by_severity.normal	§4.3 create.priority_by_severity (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	create.priority_by_severity.critical	§4.3 create.priority_by_severity (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	review	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	review.stages_order	§4.4 review.stages_order	Y	Y	PARTIAL(conditional, no error text)	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	R2-011: "required when ..." has no error text
+team-behaviour	review.stages	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-011: no rule that review.stages keys equal review.stages_order
+team-behaviour	review.stages.<*>.ready	§4.4 review.stages.<st>.ready	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	review.stages.<*>.active	§4.4 review.stages.<st>.active	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	review.stages.<*>.reviewers	§4.4 review.stages.<st>.reviewers	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	review.stages.<*>.default_count	§4.4 review.stages.<st>.default_count	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	review.after_last_stage	§4.4 review.after_last_stage	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	review.reject_clears_passes	§4.4 review.reject_clears_passes	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	review.stale_after_seconds	§4.4 review.stale_after_seconds	Y	Y	PARTIAL(conditional, no error text)	N	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	validation column says "-" although schema minimum 1 and V-30 apply (R2-031)
+team-behaviour	defaults	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	defaults.review	§4.4 defaults.review	Y	Y	Y	Y	Y	Y	Y	CONTRADICTS	Y	Y	INCOMPLETE	R2-001: default peer+external collides with E-07 for every entry without external_reviewers
+team-behaviour	defaults.review[].stage	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	defaults.review[].count	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	limits	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	limits.count_scope	§4.5 limits.count_scope	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	limits.active_item	§4.5 limits.active_item	Y	Y	Y	Y	Y	PARTIAL	Y	Y	PARTIAL(template ref)	Y	INCOMPLETE	
+team-behaviour	limits.holder	§4.5 limits.holder	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	limits.holder[].field	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	limits.holder[].when	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	limits.levels	§4.5 limits.levels	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	limits.override	§4.5 limits.override	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	limits.override.field	§4.5 limits.override (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	limits.override.lifts	§4.5 limits.override (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	R2-011: no rule that lifts is a subset of limits.levels
+team-behaviour	active_work	§4.5 active_work	Y	Y	Y	Y	Y	PARTIAL	Y	Y	PARTIAL(template ref)	Y	INCOMPLETE	
+team-behaviour	active_work.any	§4.5 active_work (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	active_work.except	§4.5 active_work (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	waiting	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	waiting.field	§4.5 waiting.field	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	waiting.since_field	§4.5 waiting.since_field	Y	Y	Y	Y	Y	PARTIAL	N	Y	Y	Y	INCOMPLETE	R2-008: what writes or reads it is undefined
+team-behaviour	waiting.cleared_by_steps	§4.5 waiting.cleared_by_steps	Y	Y	Y	Y	PARTIAL	PARTIAL	Y	Y	Y	Y	INCOMPLETE	R2-030: invalid example message ends in "..."; V-20 unreachable in S-013-28
+team-behaviour	waiting.cleared_by_note	NO ROW	Y(schema only)	Y(schema only)	CONTRADICTS	N	N	N	N	N	N	N	INCOMPLETE	R2-008: required by the schema, absent from the section 4.5 table
+team-behaviour	waiting.record	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: no row; default when absent undefined
+team-behaviour	steps	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	steps.<*>.actor	§4.6 actor	Y	Y	Y	Y	Y	Y	Y	Y	Y	Y	FULL	
+team-behaviour	steps.<*>.effect	§4.6 effect	Y	Y	Y	Y	Y	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.from	§4.6 from	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	steps.<*>.to	§4.6 to	Y	CONTRADICTS	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	R2-007: REQ-113 token flag_value missing from the token list
+team-behaviour	steps.<*>.to_rules	§4.6 to_rules	Y	Y	Y	Y	Y	PARTIAL	Y	Y	PARTIAL(template ref)	PARTIAL(no exact message)	INCOMPLETE	
+team-behaviour	steps.<*>.to_rules[].when	§4.6 to_rules (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	PARTIAL(no exact message)	INCOMPLETE	
+team-behaviour	steps.<*>.to_rules[].to	§4.6 to_rules (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	PARTIAL(no exact message)	INCOMPLETE	
+team-behaviour	steps.<*>.by	§4.6 by	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	steps.<*>.not_by	§4.6 not_by	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	steps.<*>.by_refusal	§4.6 by_refusal	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	steps.<*>.not_by_refusal	§4.6 not_by_refusal	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	steps.<*>.from_refusal	§4.6 from_refusal	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	steps.<*>.from_refusal_hints	§4.6 from_refusal_hints	Y	Y	Y	Y	N	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.from_refusal_hints[].when	§4.6 from_refusal_hints (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.from_refusal_hints[].hint	§4.6 from_refusal_hints (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.skip_from_when	§4.6 skip_from_when	Y	Y	Y	Y	N	PARTIAL	Y	Y	Y	N	INCOMPLETE	
+team-behaviour	steps.<*>.variants	§4.6 variants	Y	Y	Y	Y	N	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.variants[].when	§4.6 variants (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.variants[].from	§4.6 variants (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.variants[].to	§4.6 variants (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.variants[].by	§4.6 variants (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.arguments	§4.6 arguments	Y	Y	Y	Y	PARTIAL	PARTIAL	Y	Y	Y	Y	INCOMPLETE	R2-030: invalid example message ends in "..."; meaning of argument "value" undefined (R2-034)
+team-behaviour	steps.<*>.arguments.<*>.required	§4.6 arguments (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	steps.<*>.arguments.<*>.refusal	§4.6 arguments (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	steps.<*>.arguments.<*>.cites_field	§4.6 arguments (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	steps.<*>.arguments.<*>.cites_refusal	§4.6 arguments (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	steps.<*>.arguments.<*>.order	§4.6 arguments (sub-key)	PARTIAL(inline in parent row)	CONTRADICTS	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	R2-008: after_gate undefined; before_from/after_from for arguments undefined
+team-behaviour	steps.<*>.requires	§4.6 requires	Y	Y	Y	Y	N	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.recheck_at_publication	§4.6 recheck_at_publication	Y	Y	Y	Y	N	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.sets	§4.6 sets	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	steps.<*>.sets_rules	§4.6 sets_rules	Y	Y	Y	Y	N	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.sets_rules[].when	§4.6 sets_rules (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.sets_rules[].sets	§4.6 sets_rules (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.sets_rules[].records	§4.6 sets_rules (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	N	PARTIAL(template ref)	N	INCOMPLETE	R2-034: precedence with records/records_rules undefined
+team-behaviour	steps.<*>.clears	§4.6 clears	Y	Y	Y	Y	N	PARTIAL	Y	Y	Y	N	INCOMPLETE	
+team-behaviour	steps.<*>.appends	§4.6 appends	Y	Y	Y	Y	N	PARTIAL	Y	Y	Y	N	INCOMPLETE	
+team-behaviour	steps.<*>.records	§4.6 records	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	Y	INCOMPLETE	
+team-behaviour	steps.<*>.records_rules	§4.6 records_rules	Y	Y	Y	Y	Y	PARTIAL	PARTIAL	Y	Y	Y	INCOMPLETE	R2-034: first match? precedence with sets_rules[].records undefined
+team-behaviour	steps.<*>.records_rules[].when	§4.6 records_rules (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	steps.<*>.records_rules[].records	§4.6 records_rules (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	INCOMPLETE	
+team-behaviour	steps.<*>.stages	§4.6 stages	Y	Y	Y	Y	N	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.stages.<*>.from	§4.6 stages (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.stages.<*>.to	§4.6 stages (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.stages.<*>.by	§4.6 stages (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.verdicts	§4.6 verdicts	Y	Y	Y	Y	N	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.verdicts.<*>.to	§4.6 verdicts (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.verdicts.<*>.sets	§4.6 verdicts (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.verdicts.<*>.clears	§4.6 verdicts (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.verdicts.<*>.appends	§4.6 verdicts (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.verdicts.<*>.notice	§4.6 verdicts (sub-key)	PARTIAL(inline in parent row)	CONTRADICTS	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	R2-009: schema free string, spec only close_now_or_next
+team-behaviour	steps.<*>.verdicts.<*>.records_verdict	§4.6 verdicts (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	N	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	R2-008: undefined (only as placeholder)
+team-behaviour	steps.<*>.verdicts.<*>.ends_session	§4.6 verdicts (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.verdicts.<*>.ends_session.who	§4.6 verdicts (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.verdicts.<*>.ends_session.except_roles	§4.6 verdicts (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.verdict_words	§4.6 verdict_words	Y	Y	Y	Y	Y	PARTIAL	Y	Y	Y	N	INCOMPLETE	
+team-behaviour	steps.<*>.exclusive	§4.6 exclusive	Y	Y	Y	PARTIAL	N	PARTIAL	Y	Y	Y	N	INCOMPLETE	R2-011: refusal key edit_exclusive not required
+team-behaviour	steps.<*>.combinable	§4.6 combinable	Y	Y	Y	Y	N	PARTIAL	Y	Y	Y	N	INCOMPLETE	
+team-behaviour	steps.<*>.binds	§4.6 binds	Y	Y	Y	Y	N	PARTIAL	Y	Y	Y	N	INCOMPLETE	
+team-behaviour	steps.<*>.ends_session	§4.6 ends_session	Y	Y	Y	Y	N	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.ends_session.who	§4.6 ends_session (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.ends_session.except_roles	§4.6 ends_session (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	steps.<*>.notice	§4.6 notice	Y	CONTRADICTS	Y	Y	N	PARTIAL	Y	Y	PARTIAL(template ref)	N	INCOMPLETE	R2-009: step-level notice exists in the schema; spec defines only verdict notice
+team-behaviour	edit_rules	§4.7 edit_rules	Y	Y	Y	Y	Y	Y	Y	N(no column)	PARTIAL(template ref)	PARTIAL	INCOMPLETE	R2-030: "two lines" is not an exact message
+team-behaviour	edit_rules[].when	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	edit_rules[].request_has	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	edit_rules[].unless_request_has	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: semantics undefined
+team-behaviour	edit_rules[].allow	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	edit_rules[].refusal	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.scope_default	§4.7 queue.scope_default	Y	Y	Y	Y	N	Y	Y	N(no column)	Y	PARTIAL(value without message)	INCOMPLETE	R2-031: invalid example "world" has no message
+team-behaviour	queue.roles	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.roles.<*>.offers	§4.7 queue.roles.<role>.offers	Y	Y	Y	Y	Y	Y	CONTRADICTS	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	R2-010: "lead before member" hard-codes role names
+team-behaviour	queue.roles.<*>.offers[].action	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.roles.<*>.offers[].select	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.roles.<*>.offers[].when_actor	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: undefined
+team-behaviour	queue.roles.<*>.offers[].when_team	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: value no_other_open_items undefined
+team-behaviour	queue.roles.<*>.offers[].mark	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.roles.<*>.offers[].scope	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: values and entry_chunk_scope only hinted
+team-behaviour	queue.roles.<*>.offers[].instruction	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.roles.<*>.offers[].otherwise_instruction	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: undefined
+team-behaviour	queue.roles.<*>.offers[].preempts	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: entries like "continue:plain" have no grammar
+team-behaviour	queue.roles.<*>.busy_when	§4.7 queue.roles.<role>.busy_when	Y	Y	Y	Y	N	PARTIAL	PARTIAL	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	R2-008: "predicate (over the team)" and "busy answer replaces offers after the first" vague
+team-behaviour	queue.roles.<*>.busy_instruction	§4.7 queue.roles.<role>.busy_instruction	Y	Y	Y	Y	N	PARTIAL	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	queue.roles.<*>.idle_instruction	§4.7 queue.roles.<role>.idle_instruction	Y	Y	Y	Y	N	PARTIAL	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	queue.plan	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.plan.passes	§4.7 queue.plan.passes	Y	Y	PARTIAL	Y	N	Y	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	R2-008/R2-011: "required when --plan is used" has no error; assign strategies undefined
+team-behaviour	queue.plan.passes[].action	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.plan.passes[].select	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.plan.passes[].assign	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: the four strategies are not defined
+team-behaviour	queue.plan.passes[].limit	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: undefined
+team-behaviour	queue.plan.passes[].instruction	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	queue.plan.passes[].reason	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: free string vs instruction text key; output use undefined
+team-behaviour	queue.plan.skip_items	§4.7 queue.plan.skip_items	Y	Y	Y	Y	N	PARTIAL	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	views	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	views.claimable	§4.7 views.claimable	Y	Y	Y	Y	N	Y	PARTIAL	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	R2-024: undefined-view line stream and prefix unspecified
+team-behaviour	views.reviewable	§4.7 views.reviewable	Y	Y	Y	Y	N	Y	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	views.blocked	§4.7 views.blocked	Y	Y	Y	Y	N	Y	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	views.decisions	§4.7 views.decisions	Y	Y	Y	Y	N	Y	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	views.wip	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-008: team query --wip when views.wip is absent undefined
+team-behaviour	views.wip.stale_hours	§4.7 views.wip.stale_hours	Y	Y	Y	Y	N	Y	Y	N(no column)	Y	PARTIAL(value without message)	INCOMPLETE	
+team-behaviour	plain_commands	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	plain_commands.<*>.allow	§4.7 plain_commands.<op> (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	plain_commands.<*>.refusal	§4.7 plain_commands.<op> (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	
+team-behaviour	session	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	session.end_text	§4.7 session.end_text	Y	Y	Y	Y	N	PARTIAL	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	R2-011: no rule requiring session when ends_session is used
+team-behaviour	session.block_after_end	§4.7 session.block_after_end	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-behaviour	texts	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-behaviour	texts.team_step	§4.7 texts.team_step	Y	Y	Y	Y	N	PARTIAL	PARTIAL	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	R2-035: "step hints" vague
+team-behaviour	texts.refine_how	§4.7 texts.refine_how	Y	Y	Y	Y	N	PARTIAL	PARTIAL	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	R2-035: "step hints" vague
+team-behaviour	refusals	§4.7 refusals	Y	Y	Y	PARTIAL	N	PARTIAL	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	R2-002: 40+ keys used implicitly by the machinery are unspecified
+team-behaviour	instructions	§4.7 instructions	Y	Y	Y	PARTIAL	N	Y	Y	N(no column)	PARTIAL(template ref)	N	INCOMPLETE	R2-002: implicitly used keys unspecified
+teams	schema	§4.9 teams.json (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	N(no column)	N	N	INCOMPLETE	
+teams	teams	§4.9 teams	Y	Y	Y(4.9 implicit required)	Y	N	PARTIAL	Y	N(no column)	N	N	INCOMPLETE	
+teams	teams.<*>.workflow	§4.8 workflow	Y	Y	Y	Y	Y	Y	Y	N(no column)	Y	Y	INCOMPLETE	R2-004: allows ":" which the workflows.json key pattern forbids
+teams	teams.<*>.lead	§4.8 lead	Y	Y	Y	Y	CONTRADICTS	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	R2-003: E-02 text says "not one of the members" for a lead that IS a member
+teams	teams.<*>.members	§4.8 members	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+teams	teams.<*>.review_only	§4.8 review_only	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	PARTIAL(no exact message)	INCOMPLETE	
+teams	teams.<*>.external_reviewers	§4.8 external_reviewers	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+teams	teams.<*>.review	§4.8 review	Y	Y	CONTRADICTS	Y	Y	Y	Y	N(no column)	Y	Y	INCOMPLETE	R2-001/R2-006: read-time default undefined; E-07 vs defaults.review
+teams	teams.<*>.review[].stage	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+teams	teams.<*>.review[].count	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+teams	teams.<*>.review[].team	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-036: pattern allows "." which team names do not
+teams	teams.<*>.refinement_review	§4.8 refinement_review	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+teams	teams.<*>.refinement_review[].team	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	R2-036: pattern allows "." which team names do not
+teams	teams.<*>.refinement_review[].count	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+teams	teams.<*>.limits	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	R2-037: map key formats, "default", minProperties 1 error, levels absent from the definition undefined
+teams	teams.<*>.limits.overall	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+teams	teams.<*>.limits.repository	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+teams	teams.<*>.limits.branch	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+teams	teams.<*>.limits.team	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+teams	teams.<*>.limits.member	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+teams	teams.<*>.chunk_scope	§4.8 chunk_scope	Y	Y	Y	Y	Y	Y	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	schema	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	only REQ-008 gives the wrong-schema message; no row
+team-definition	name	§4.8 name	Y	Y	Y	Y	Y	Y	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	workflow	§4.8 workflow	Y	Y	Y	Y	Y	Y	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	lead	§4.8 lead	Y	Y	Y	Y	CONTRADICTS	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	R2-003
+team-definition	members	§4.8 members	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	review_only	§4.8 review_only	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	PARTIAL(no exact message)	INCOMPLETE	
+team-definition	external_reviewers	§4.8 external_reviewers	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	review	§4.8 review	Y	Y	Y	Y	Y	Y	Y	CONTRADICTS	Y	Y	INCOMPLETE	R2-001
+team-definition	review[].stage	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-definition	review[].count	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-definition	review[].team	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-definition	refinement_review	§4.8 refinement_review	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	refinement_review[].team	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-definition	refinement_review[].count	NO ROW	Y(schema only)	Y(schema only)	N	N	N	N	N	N	N	N	INCOMPLETE	
+team-definition	limits	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	limits.overall	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	limits.repository	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	limits.branch	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	limits.team	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	limits.member	§4.8 limits	Y	Y	Y	Y	Y	PARTIAL	Y	N(no column)	Y	Y	INCOMPLETE	
+team-definition	chunk_scope	§4.8 chunk_scope	Y	Y	Y	Y	Y	Y	Y	N(no column)	Y	Y	INCOMPLETE	
+workflows	schema	§4.9 workflows.json (sub-key)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	PARTIAL(inline in parent row)	N	PARTIAL	PARTIAL(inline in parent row)	N(no column)	N	N	INCOMPLETE	
+workflows	workflows	§4.9 workflows	Y	Y	Y(4.9 implicit required)	CONTRADICTS	N	PARTIAL	Y	N(no column)	N	N	INCOMPLETE	R2-013: $ref "backlog-team-behaviour/2" unresolvable by a standard 2020-12 validator
+team-behaviour	$defs.predicate.all	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.any	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.not	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.status_in	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.status_not_in	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.field_empty	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.field_present	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.field_exists	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.field_absent	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.field_true	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.field_is_actor	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.field_empty_or_actor	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.field_equals_flag_value	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.actor_has_role	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.actor_lacks_role	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.flag_value_lacks_role	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.actor_equals_flag_value	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.flag_value_empty	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.flag_value_is_configured_team	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.unbound	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.argument_present	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.dependencies_finished	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL	N	N	N	INCOMPLETE	R2-002: refusal composition (dep_* keys) and "closed-like" undefined
+team-behaviour	$defs.predicate.waits_on_other_repository	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.complete	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.incomplete	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.within_limits	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.within_limits_for_role	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.within_limits_of_target_team	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.matches_limits_active_item	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.actor_active_items_at_most	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.stale	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.last_review_rejected	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.review_rules_met	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.team_has_open_items_not_held_by_actor	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.dependent_exists	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.handoff_record_exists	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.handoff_record_has_commit	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.not_caller_session_of	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.review_passes_met	§5 catalogue	Y	Y(schema)	n/a	CONTRADICTS	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	R2-005: condition minProperties 2 forbids the refusal-less form section 5.1 allows; R2-012 allowed in views
+team-behaviour	$defs.predicate.no_later_own_work	§5 catalogue	Y	Y(schema)	n/a	CONTRADICTS	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	R2-005; R2-012
+team-behaviour	$defs.predicate.dependents_handoffs_accepted	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.any_of	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.all_of	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.predicate.exact	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	R2-032: {"exact":true} alone passes the schema
+team-behaviour	$defs.condition.refusal	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.condition.when	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.condition.unless	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.condition.force	§5 catalogue	Y	Y(schema)	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	
+team-behaviour	$defs.condition.order	§5 catalogue	Y	CONTRADICTS	n/a	PARTIAL(V-24 only)	N	PARTIAL	PARTIAL(§5.1/§5.2 prose)	N	N	N	INCOMPLETE	R2-008: schema has after_gate, section 5.1 does not

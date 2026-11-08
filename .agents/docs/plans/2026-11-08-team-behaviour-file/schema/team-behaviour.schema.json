@@ -1,0 +1,2211 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "urn:backlog:team-behaviour:2",
+ "title": "Team behaviour definition (one entry of workflows.json)",
+ "type": "object",
+ "required": [
+  "schema",
+  "workflow",
+  "statuses",
+  "initial",
+  "finished",
+  "roles",
+  "steps",
+  "user_commands",
+  "refusals"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "schema": {
+   "const": "backlog-team-behaviour/2"
+  },
+  "workflow": {
+   "$ref": "#/$defs/name"
+  },
+  "description": {
+   "type": "string"
+  },
+  "statuses": {
+   "type": "array",
+   "items": {
+    "$ref": "#/$defs/word"
+   },
+   "minItems": 2,
+   "uniqueItems": true
+  },
+  "initial": {
+   "$ref": "#/$defs/word"
+  },
+  "finished": {
+   "$ref": "#/$defs/words"
+  },
+  "side_statuses": {
+   "type": "object",
+   "propertyNames": {
+    "$ref": "#/$defs/word"
+   },
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "enter": {
+      "$ref": "#/$defs/step"
+     },
+     "leave": {
+      "$ref": "#/$defs/step"
+     },
+     "returns_to": {
+      "$ref": "#/$defs/word"
+     }
+    },
+    "required": [
+     "enter",
+     "leave",
+     "returns_to"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "identity": {
+   "type": "object",
+   "properties": {
+    "same_worker_pattern": {
+     "type": "string",
+     "minLength": 1
+    },
+    "caller_acts_only_as_itself": {
+     "anyOf": [
+      {
+       "const": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "except_roles": {
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/role"
+         },
+         "uniqueItems": true
+        }
+       },
+       "required": [
+        "except_roles"
+       ],
+       "additionalProperties": false
+      }
+     ]
+    }
+   },
+   "additionalProperties": false
+  },
+  "scope": {
+   "type": "object",
+   "properties": {
+    "bind_session": {
+     "type": "boolean"
+    },
+    "session_team_only": {
+     "type": "boolean"
+    },
+    "foreign_items": {
+     "type": "object",
+     "required": [
+      "when"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "when": {
+       "$ref": "#/$defs/predicate"
+      }
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "roles": {
+   "type": "object",
+   "propertyNames": {
+    "$ref": "#/$defs/role"
+   },
+   "additionalProperties": {
+    "type": "object",
+    "minProperties": 1,
+    "properties": {
+     "entry_list": {
+      "$ref": "#/$defs/entrykey"
+     },
+     "entry_rule_teams": {
+      "$ref": "#/$defs/entrykey"
+     },
+     "when_empty": {
+      "const": "anyone"
+     },
+     "item_field": {
+      "$ref": "#/$defs/field"
+     },
+     "item_fields": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/field"
+      },
+      "minItems": 1
+     },
+     "union": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/role"
+      },
+      "minItems": 2
+     },
+     "literal": {
+      "type": "string",
+      "minLength": 1
+     },
+     "anyone": {
+      "const": true
+     },
+     "entry_person": {
+      "$ref": "#/$defs/entrykey"
+     }
+    },
+    "additionalProperties": false
+   },
+   "minProperties": 1
+  },
+  "completeness": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "$ref": "#/$defs/field"
+     },
+     "field": {
+      "$ref": "#/$defs/field"
+     },
+     "test": {
+      "enum": [
+       "non_empty",
+       "present",
+       "positive_integer",
+       "section"
+      ]
+     },
+     "body_pattern": {
+      "type": "string",
+      "minLength": 1
+     },
+     "section": {
+      "type": "string",
+      "minLength": 1
+     },
+     "placeholders": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "minLength": 1
+      }
+     },
+     "remove": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "minLength": 1
+      }
+     },
+     "ignore_lines": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "minLength": 1
+      }
+     }
+    },
+    "required": [
+     "name",
+     "test"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "create": {
+   "type": "object",
+   "properties": {
+    "sets": {
+     "type": "object",
+     "propertyNames": {
+      "$ref": "#/$defs/field"
+     },
+     "additionalProperties": {
+      "$ref": "#/$defs/value"
+     }
+    },
+    "missing_section": {
+     "type": "object",
+     "properties": {
+      "heading": {
+       "type": "string",
+       "minLength": 1
+      },
+      "placeholder": {
+       "type": "string",
+       "minLength": 1
+      }
+     },
+     "required": [
+      "heading",
+      "placeholder"
+     ],
+     "additionalProperties": false
+    },
+    "ask": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "field",
+       "label"
+      ],
+      "additionalProperties": false,
+      "properties": {
+       "field": {
+        "$ref": "#/$defs/field"
+       },
+       "label": {
+        "type": "string",
+        "minLength": 1
+       }
+      }
+     }
+    },
+    "priority_by_severity": {
+     "type": "object",
+     "properties": {
+      "normal": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "critical": {
+       "type": "integer",
+       "minimum": 0
+      }
+     },
+     "additionalProperties": false
+    }
+   },
+   "additionalProperties": false
+  },
+  "review": {
+   "type": "object",
+   "required": [
+    "stages_order",
+    "stages",
+    "after_last_stage"
+   ],
+   "properties": {
+    "stages_order": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/role"
+     },
+     "minItems": 1,
+     "uniqueItems": true
+    },
+    "stages": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "properties": {
+       "ready": {
+        "$ref": "#/$defs/word"
+       },
+       "active": {
+        "$ref": "#/$defs/word"
+       },
+       "reviewers": {
+        "$ref": "#/$defs/role"
+       },
+       "default_count": {
+        "type": "integer",
+        "minimum": 1
+       }
+      },
+      "required": [
+       "ready",
+       "active",
+       "reviewers",
+       "default_count"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "after_last_stage": {
+     "$ref": "#/$defs/word"
+    },
+    "stale_after_seconds": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "reject_clears": {
+     "type": "object",
+     "required": [
+      "verdict",
+      "field"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "verdict": {
+       "type": "string",
+       "pattern": "^[a-z]+$"
+      },
+      "field": {
+       "$ref": "#/$defs/field"
+      }
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "defaults": {
+   "type": "object",
+   "properties": {
+    "review": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "stage": {
+        "$ref": "#/$defs/role"
+       },
+       "count": {
+        "type": "integer",
+        "minimum": 1
+       }
+      },
+      "required": [
+       "stage",
+       "count"
+      ],
+      "additionalProperties": false
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "limits": {
+   "type": "object",
+   "required": [
+    "count_scope",
+    "active_item",
+    "holder",
+    "levels"
+   ],
+   "properties": {
+    "count_scope": {
+     "enum": [
+      "home",
+      "team"
+     ]
+    },
+    "active_item": {
+     "$ref": "#/$defs/predicate"
+    },
+    "holder": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "field": {
+        "$ref": "#/$defs/field"
+       },
+       "when": {
+        "$ref": "#/$defs/predicate"
+       }
+      },
+      "required": [
+       "field"
+      ],
+      "additionalProperties": false
+     },
+     "minItems": 1
+    },
+    "levels": {
+     "$ref": "#/$defs/levels"
+    },
+    "override": {
+     "type": "object",
+     "properties": {
+      "field": {
+       "$ref": "#/$defs/field"
+      },
+      "lifts": {
+       "$ref": "#/$defs/levels"
+      }
+     },
+     "required": [
+      "field",
+      "lifts"
+     ],
+     "additionalProperties": false
+    },
+    "held_shown": {
+     "type": "integer",
+     "minimum": 1
+    }
+   },
+   "additionalProperties": false
+  },
+  "active_work": {
+   "type": "object",
+   "properties": {
+    "any": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/predicate"
+     }
+    },
+    "except": {
+     "$ref": "#/$defs/predicate"
+    }
+   },
+   "required": [
+    "any"
+   ],
+   "additionalProperties": false
+  },
+  "waiting": {
+   "type": "object",
+   "properties": {
+    "field": {
+     "$ref": "#/$defs/field"
+    },
+    "cleared_by_steps": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/step"
+     },
+     "uniqueItems": true
+    },
+    "cleared_by_note": {
+     "type": "boolean"
+    },
+    "record": {
+     "type": "string",
+     "minLength": 1
+    }
+   },
+   "required": [
+    "field",
+    "cleared_by_steps",
+    "cleared_by_note"
+   ],
+   "additionalProperties": false
+  },
+  "steps": {
+   "type": "object",
+   "propertyNames": {
+    "$ref": "#/$defs/step"
+   },
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "actor": {
+      "enum": [
+       "by",
+       "by_or_holder",
+       "flag_value",
+       "by_or_flag_value"
+      ]
+     },
+     "effect": {
+      "type": "object",
+      "required": [
+       "kind",
+       "records_field"
+      ],
+      "additionalProperties": false,
+      "properties": {
+       "kind": {
+        "enum": [
+         "handoff_record",
+         "handoff_accept",
+         "handoff_reject"
+        ]
+       },
+       "records_field": {
+        "$ref": "#/$defs/field"
+       }
+      }
+     },
+     "from": {
+      "$ref": "#/$defs/from"
+     },
+     "to": {
+      "type": "string"
+     },
+     "to_rules": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "when": {
+         "$ref": "#/$defs/predicate"
+        },
+        "to": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "to"
+       ],
+       "additionalProperties": false
+      },
+      "minItems": 1
+     },
+     "by": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/role"
+      },
+      "minItems": 1
+     },
+     "not_by": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/role"
+      }
+     },
+     "by_refusal": {
+      "$ref": "#/$defs/textkey"
+     },
+     "not_by_refusal": {
+      "$ref": "#/$defs/textkey"
+     },
+     "from_refusal": {
+      "$ref": "#/$defs/textkey"
+     },
+     "from_refusal_hints": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "when": {
+         "$ref": "#/$defs/predicate"
+        },
+        "hint": {
+         "$ref": "#/$defs/textkey"
+        }
+       },
+       "required": [
+        "when",
+        "hint"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "skip_from_when": {
+      "$ref": "#/$defs/predicate"
+     },
+     "variants": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "when": {
+         "$ref": "#/$defs/predicate"
+        },
+        "from": {
+         "$ref": "#/$defs/from"
+        },
+        "to": {
+         "type": "string"
+        },
+        "by": {
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/role"
+         }
+        }
+       },
+       "required": [
+        "when"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "arguments": {
+      "type": "object",
+      "propertyNames": {
+       "enum": [
+        "value",
+        "note",
+        "summary",
+        "reason",
+        "comments",
+        "checks",
+        "handoff-commit",
+        "handoff-contract",
+        "handoff-verification",
+        "handoff-outputs",
+        "handoff-pickup",
+        "handoff-risks"
+       ]
+      },
+      "additionalProperties": {
+       "type": "object",
+       "properties": {
+        "required": {
+         "type": "boolean"
+        },
+        "refusal": {
+         "$ref": "#/$defs/textkey"
+        },
+        "cites_field": {
+         "$ref": "#/$defs/field"
+        },
+        "cites_refusal": {
+         "$ref": "#/$defs/textkey"
+        },
+        "order": {
+         "enum": [
+          "first"
+         ]
+        }
+       },
+       "required": [
+        "required"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "requires": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/condition"
+      }
+     },
+     "recheck_at_publication": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/condition"
+      }
+     },
+     "sets": {
+      "type": "object",
+      "propertyNames": {
+       "$ref": "#/$defs/field"
+      },
+      "additionalProperties": {
+       "$ref": "#/$defs/value"
+      }
+     },
+     "sets_rules": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "when": {
+         "$ref": "#/$defs/predicate"
+        },
+        "sets": {
+         "type": "object",
+         "propertyNames": {
+          "$ref": "#/$defs/field"
+         },
+         "additionalProperties": {
+          "$ref": "#/$defs/value"
+         }
+        },
+        "records": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "sets"
+       ],
+       "additionalProperties": false
+      },
+      "minItems": 1
+     },
+     "clears": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/field"
+      },
+      "uniqueItems": true
+     },
+     "appends": {
+      "type": "object",
+      "propertyNames": {
+       "$ref": "#/$defs/field"
+      },
+      "additionalProperties": {
+       "type": "array",
+       "items": {
+        "type": "string",
+        "minLength": 1
+       },
+       "minItems": 1
+      }
+     },
+     "records": {
+      "type": "string"
+     },
+     "records_rules": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "when": {
+         "$ref": "#/$defs/predicate"
+        },
+        "records": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "records"
+       ],
+       "additionalProperties": false
+      },
+      "minItems": 1
+     },
+     "stages": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "object",
+       "properties": {
+        "from": {
+         "$ref": "#/$defs/from"
+        },
+        "to": {
+         "type": "string"
+        },
+        "by": {
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/role"
+         },
+         "minItems": 1
+        }
+       },
+       "required": [
+        "from",
+        "by"
+       ],
+       "additionalProperties": false
+      },
+      "minProperties": 1
+     },
+     "verdicts": {
+      "type": "object",
+      "propertyNames": {
+       "pattern": "^[a-z]+$"
+      },
+      "additionalProperties": {
+       "type": "object",
+       "properties": {
+        "to": {
+         "type": "string"
+        },
+        "sets": {
+         "type": "object",
+         "propertyNames": {
+          "$ref": "#/$defs/field"
+         },
+         "additionalProperties": {
+          "$ref": "#/$defs/value"
+         }
+        },
+        "clears": {
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/field"
+         }
+        },
+        "appends": {
+         "type": "object",
+         "propertyNames": {
+          "$ref": "#/$defs/field"
+         },
+         "additionalProperties": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1
+          },
+          "minItems": 1
+         }
+        },
+        "records_verdict": {
+         "type": "string"
+        },
+        "ends_session": {
+         "type": "object",
+         "properties": {
+          "who": {
+           "const": "actor"
+          },
+          "except_roles": {
+           "type": "array",
+           "items": {
+            "$ref": "#/$defs/role"
+           },
+           "uniqueItems": true
+          }
+         },
+         "required": [
+          "who"
+         ],
+         "additionalProperties": false
+        },
+        "notice_rules": {
+         "type": "array",
+         "minItems": 1,
+         "items": {
+          "type": "object",
+          "required": [
+           "instruction"
+          ],
+          "additionalProperties": false,
+          "properties": {
+           "when": {
+            "$ref": "#/$defs/predicate"
+           },
+           "instruction": {
+            "$ref": "#/$defs/textkey"
+           }
+          }
+         }
+        }
+       },
+       "required": [
+        "to"
+       ],
+       "additionalProperties": false
+      },
+      "minProperties": 1
+     },
+     "verdict_words": {
+      "type": "object",
+      "propertyNames": {
+       "pattern": "^[a-z]+$"
+      },
+      "additionalProperties": {
+       "type": "string",
+       "pattern": "^[a-z]+$"
+      }
+     },
+     "exclusive": {
+      "type": "boolean"
+     },
+     "combinable": {
+      "type": "boolean"
+     },
+     "binds": {
+      "type": "boolean"
+     },
+     "ends_session": {
+      "type": "object",
+      "properties": {
+       "who": {
+        "const": "actor"
+       },
+       "except_roles": {
+        "type": "array",
+        "items": {
+         "$ref": "#/$defs/role"
+        },
+        "uniqueItems": true
+       }
+      },
+      "required": [
+       "who"
+      ],
+      "additionalProperties": false
+     },
+     "value": {
+      "enum": [
+       "none",
+       "text",
+       "agent",
+       "item",
+       "team",
+       "word",
+       "verdict"
+      ]
+     }
+    },
+    "additionalProperties": false
+   },
+   "minProperties": 1
+  },
+  "edit_rules": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "when": {
+      "$ref": "#/$defs/predicate"
+     },
+     "request_has": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1
+     },
+     "unless_request_has": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "allow": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "refusal": {
+      "$ref": "#/$defs/textkey"
+     }
+    },
+    "required": [
+     "when",
+     "request_has",
+     "refusal"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "queue": {
+   "type": "object",
+   "properties": {
+    "scope_default": {
+     "enum": [
+      "branch",
+      "repo",
+      "all"
+     ]
+    },
+    "roles": {
+     "type": "object",
+     "propertyNames": {
+      "$ref": "#/$defs/role"
+     },
+     "additionalProperties": {
+      "type": "object",
+      "properties": {
+       "offers": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "action": {
+           "type": "string",
+           "pattern": "^[a-z-]+$"
+          },
+          "select": {
+           "$ref": "#/$defs/predicate"
+          },
+          "when_actor": {
+           "$ref": "#/$defs/predicate"
+          },
+          "when_team": {
+           "$ref": "#/$defs/predicate"
+          },
+          "mark": {
+           "$ref": "#/$defs/step"
+          },
+          "scope": {
+           "enum": [
+            "branch",
+            "repo",
+            "all",
+            "entry_chunk_scope"
+           ]
+          },
+          "instruction": {
+           "$ref": "#/$defs/textkey"
+          },
+          "otherwise_instruction": {
+           "$ref": "#/$defs/textkey"
+          },
+          "preempts": {
+           "type": "array",
+           "minItems": 1,
+           "items": {
+            "type": "object",
+            "required": [
+             "action"
+            ],
+            "additionalProperties": false,
+            "properties": {
+             "action": {
+              "type": "string",
+              "pattern": "^[a-z-]+$"
+             },
+             "unless": {
+              "$ref": "#/$defs/predicate"
+             }
+            }
+           }
+          },
+          "holder_field": {
+           "$ref": "#/$defs/field"
+          },
+          "marked_instruction": {
+           "$ref": "#/$defs/textkey"
+          },
+          "try_each": {
+           "type": "boolean"
+          },
+          "skipped_instruction": {
+           "$ref": "#/$defs/textkey"
+          }
+         },
+         "required": [
+          "action",
+          "select",
+          "instruction"
+         ],
+         "additionalProperties": false
+        },
+        "minItems": 1
+       },
+       "busy_when": {
+        "$ref": "#/$defs/predicate"
+       },
+       "busy_instruction": {
+        "$ref": "#/$defs/textkey"
+       },
+       "idle_instruction": {
+        "$ref": "#/$defs/textkey"
+       }
+      },
+      "required": [
+       "offers",
+       "idle_instruction"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "plan": {
+     "type": "object",
+     "properties": {
+      "passes": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "action": {
+          "type": "string",
+          "pattern": "^[a-z-]+$"
+         },
+         "select": {
+          "$ref": "#/$defs/predicate"
+         },
+         "assign": {
+          "type": "object",
+          "required": [
+           "pick"
+          ],
+          "additionalProperties": false,
+          "properties": {
+           "pick": {
+            "enum": [
+             "holder",
+             "role",
+             "first_idle",
+             "least_loaded"
+            ]
+           },
+           "role": {
+            "$ref": "#/$defs/role"
+           },
+           "exclude_role": {
+            "$ref": "#/$defs/role"
+           },
+           "within_limits": {
+            "$ref": "#/$defs/levels"
+           }
+          }
+         },
+         "limit": {
+          "type": "integer",
+          "minimum": 1
+         },
+         "instruction": {
+          "$ref": "#/$defs/textkey"
+         },
+         "reason": {
+          "type": "string",
+          "minLength": 1
+         }
+        },
+        "required": [
+         "action",
+         "select",
+         "assign",
+         "instruction",
+         "reason"
+        ],
+        "additionalProperties": false
+       },
+       "minItems": 1
+      },
+      "skip_items": {
+       "$ref": "#/$defs/predicate"
+      }
+     },
+     "required": [
+      "passes"
+     ],
+     "additionalProperties": false
+    },
+    "role_order": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/role"
+     },
+     "minItems": 1,
+     "uniqueItems": true
+    },
+    "reorder_scope": {
+     "enum": [
+      "all",
+      "command_team"
+     ]
+    }
+   },
+   "required": [
+    "roles"
+   ],
+   "additionalProperties": false
+  },
+  "views": {
+   "type": "object",
+   "propertyNames": {
+    "type": "string",
+    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+   },
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "fields"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "select": {
+      "$ref": "#/$defs/predicate"
+     },
+     "counts_limits": {
+      "const": true
+     },
+     "stale_hours": {
+      "type": "integer",
+      "minimum": 1
+     },
+     "fields": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/field"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+     }
+    }
+   }
+  },
+  "user_commands": {
+   "type": "object",
+   "required": [
+    "update",
+    "update-replan",
+    "done",
+    "archive-unfinished",
+    "archive-finished",
+    "archive-done",
+    "move-branch",
+    "move-repository",
+    "import",
+    "import-higher",
+    "clean",
+    "new-split-from"
+   ],
+   "propertyNames": {
+    "enum": [
+     "update",
+     "update-replan",
+     "done",
+     "archive-unfinished",
+     "archive-finished",
+     "archive-done",
+     "move-branch",
+     "move-repository",
+     "import",
+     "import-higher",
+     "clean",
+     "new-split-from"
+    ]
+   },
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "allow": {
+      "type": "boolean"
+     },
+     "refusal": {
+      "$ref": "#/$defs/textkey"
+     }
+    },
+    "required": [
+     "allow"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "session": {
+   "type": "object",
+   "properties": {
+    "end_text": {
+     "type": "string",
+     "minLength": 1
+    },
+    "block_after_end": {
+     "type": "object",
+     "required": [
+      "field"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "field": {
+       "$ref": "#/$defs/field"
+      }
+     }
+    }
+   },
+   "required": [
+    "end_text"
+   ],
+   "additionalProperties": false
+  },
+  "texts": {
+   "type": "object",
+   "properties": {
+    "team_step": {
+     "type": "string",
+     "minLength": 1
+    },
+    "refine_how": {
+     "type": "string",
+     "minLength": 1
+    },
+    "list_cap": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "conditional": {
+     "type": "object",
+     "propertyNames": {
+      "$ref": "#/$defs/field"
+     },
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "when",
+       "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+       "when": {
+        "$ref": "#/$defs/predicate"
+       },
+       "text": {
+        "$ref": "#/$defs/textkey"
+       }
+      }
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "refusals": {
+   "type": "object",
+   "propertyNames": {
+    "$ref": "#/$defs/textkey"
+   },
+   "additionalProperties": {
+    "type": "string",
+    "minLength": 1
+   },
+   "required": [
+    "wrong_status",
+    "wrong_actor",
+    "missing_argument",
+    "step_not_defined",
+    "one_step",
+    "empty_flag_value",
+    "not_team_item",
+    "other_team",
+    "create_status_flag"
+   ],
+   "properties": {
+    "wrong_status": {
+     "type": "string",
+     "minLength": 1,
+     "description": "always required; <item> <status> <step> <from> <hint>"
+    },
+    "wrong_actor": {
+     "type": "string",
+     "minLength": 1,
+     "description": "always required; <step> <item> <who> <actor>"
+    },
+    "missing_argument": {
+     "type": "string",
+     "minLength": 1,
+     "description": "always required; <step> <argument> <item>"
+    },
+    "step_not_defined": {
+     "type": "string",
+     "minLength": 1,
+     "description": "always required; <step> <workflow> <team>"
+    },
+    "one_step": {
+     "type": "string",
+     "minLength": 1,
+     "description": "always required; <flags>"
+    },
+    "empty_flag_value": {
+     "type": "string",
+     "minLength": 1,
+     "description": "always required; <item> <step>"
+    },
+    "not_team_item": {
+     "type": "string",
+     "minLength": 1,
+     "description": "always required; <item>"
+    },
+    "other_team": {
+     "type": "string",
+     "minLength": 1,
+     "description": "always required; <item> <item_team> <team>"
+    },
+    "create_status_flag": {
+     "type": "string",
+     "minLength": 1,
+     "description": "always required (team new --status); <team>"
+    },
+    "caller_not_actor": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when identity.caller_acts_only_as_itself is an object; <caller> <actor> <step> <item>"
+    },
+    "pop_caller": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when identity.caller_acts_only_as_itself is an object; <caller> <agent>"
+    },
+    "edit_exclusive": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a step has exclusive true; <step> <item> <flags>"
+    },
+    "outside_scope": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when scope.bind_session is true; <item> <repository> <branch> <bound>"
+    },
+    "session_branch": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when scope.bind_session is true; <branch> <bound>"
+    },
+    "pop_session_team": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when scope.session_team_only is true; <session_team> <team>"
+    },
+    "session_ended": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when session.block_after_end is set; <agent> <item>"
+    },
+    "limit_hint": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when limits.override is set and a within_limits condition is used; <item> <team> <lead>"
+    },
+    "close_gate_edge": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependents_handoffs_accepted condition is used; <dependent> <state> <command>"
+    },
+    "close_gate_none_record": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependents_handoffs_accepted condition is used; <actor> <now>"
+    },
+    "close_gate_missing_hint": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependents_handoffs_accepted condition is used; <item> <dependent>"
+    },
+    "review_rule_not_met": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a review_passes_met condition is used; <item> <stage> <need> <have> <reviewers_text>"
+    },
+    "review_no_work_commit": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a no_later_own_work condition is used; <item>"
+    },
+    "review_lookup_failed": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a no_later_own_work condition is used; <item> <reason_text>"
+    },
+    "review_later_work": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a no_later_own_work condition is used; <item> <work_commit> <sha>"
+    },
+    "reviewers_rule_team": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a review_passes_met condition is used and an entry review rule may name a team; <team>"
+    },
+    "reviewers_members": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a review_passes_met condition is used; <role>"
+    },
+    "reviewers_role": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a review_passes_met condition is used; <role>"
+    },
+    "dep_status": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependencies_finished condition is used; <id> <status>"
+    },
+    "dep_foreign": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependencies_finished condition is used; <id> <repository> <status>"
+    },
+    "dep_missing": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependencies_finished condition is used; <id>"
+    },
+    "dep_handoff_missing": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependencies_finished condition with handoff_states is used; <id>"
+    },
+    "dep_handoff_unaccepted": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependencies_finished condition with handoff_states is used; <id>"
+    },
+    "dep_handoff_stale": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependencies_finished condition with handoff_states is used; <id>"
+    },
+    "dep_handoff_rejected": {
+     "type": "string",
+     "minLength": 1,
+     "description": "required when a dependencies_finished condition with handoff_states is used; <id>"
+    }
+   }
+  },
+  "instructions": {
+   "type": "object",
+   "propertyNames": {
+    "$ref": "#/$defs/textkey"
+   },
+   "additionalProperties": {
+    "type": "string",
+    "minLength": 1
+   }
+  },
+  "entry_constraints": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "minProperties": 1,
+    "maxProperties": 1,
+    "additionalProperties": false,
+    "properties": {
+     "disjoint": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/entrykey"
+      },
+      "minItems": 2,
+      "uniqueItems": true
+     },
+     "subset": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/entrykey"
+      },
+      "minItems": 2,
+      "maxItems": 2
+     },
+     "non_empty": {
+      "$ref": "#/$defs/entrykey"
+     }
+    }
+   }
+  },
+  "on_finish": {
+   "type": "object",
+   "additionalProperties": false,
+   "minProperties": 1,
+   "properties": {
+    "sets": {
+     "type": "object",
+     "propertyNames": {
+      "$ref": "#/$defs/field"
+     },
+     "additionalProperties": {
+      "$ref": "#/$defs/value"
+     }
+    },
+    "instruction": {
+     "$ref": "#/$defs/textkey"
+    }
+   }
+  },
+  "undefined_step_refusals": {
+   "type": "object",
+   "propertyNames": {
+    "$ref": "#/$defs/step"
+   },
+   "additionalProperties": {
+    "$ref": "#/$defs/textkey"
+   }
+  }
+ },
+ "$defs": {
+  "word": {
+   "type": "string",
+   "pattern": "^[a-z][a-z0-9 -]{0,39}$"
+  },
+  "words": {
+   "type": "array",
+   "items": {
+    "$ref": "#/$defs/word"
+   },
+   "minItems": 1,
+   "uniqueItems": true
+  },
+  "name": {
+   "type": "string",
+   "pattern": "^[a-z0-9][a-z0-9._:-]{0,63}$"
+  },
+  "role": {
+   "type": "string",
+   "pattern": "^[a-z][a-z0-9-]{0,39}$"
+  },
+  "field": {
+   "type": "string",
+   "pattern": "^[a-z][a-z0-9_]{0,63}$"
+  },
+  "from": {
+   "type": "array",
+   "items": {
+    "type": "string",
+    "minLength": 1
+   },
+   "minItems": 1,
+   "uniqueItems": true
+  },
+  "levels": {
+   "type": "array",
+   "items": {
+    "enum": [
+     "overall",
+     "repository",
+     "branch",
+     "team",
+     "member"
+    ]
+   },
+   "minItems": 1,
+   "uniqueItems": true
+  },
+  "textkey": {
+   "type": "string",
+   "pattern": "^[a-z][a-z0-9_]{0,63}$"
+  },
+  "predicate": {
+   "type": "object",
+   "minProperties": 1,
+   "properties": {
+    "all": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/predicate"
+     },
+     "minItems": 1
+    },
+    "any": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/predicate"
+     },
+     "minItems": 1
+    },
+    "not": {
+     "$ref": "#/$defs/predicate"
+    },
+    "status_in": {
+     "$ref": "#/$defs/words"
+    },
+    "status_not_in": {
+     "$ref": "#/$defs/words"
+    },
+    "field_empty": {
+     "$ref": "#/$defs/field"
+    },
+    "field_present": {
+     "$ref": "#/$defs/field"
+    },
+    "field_exists": {
+     "$ref": "#/$defs/field"
+    },
+    "field_absent": {
+     "$ref": "#/$defs/field"
+    },
+    "field_true": {
+     "$ref": "#/$defs/field"
+    },
+    "field_is_actor": {
+     "$ref": "#/$defs/field"
+    },
+    "field_empty_or_actor": {
+     "$ref": "#/$defs/field"
+    },
+    "field_equals_flag_value": {
+     "$ref": "#/$defs/field"
+    },
+    "actor_has_role": {
+     "$ref": "#/$defs/role"
+    },
+    "actor_lacks_role": {
+     "$ref": "#/$defs/role"
+    },
+    "flag_value_lacks_role": {
+     "$ref": "#/$defs/role"
+    },
+    "actor_equals_flag_value": {
+     "const": true
+    },
+    "flag_value_empty": {
+     "const": true
+    },
+    "unbound": {
+     "const": true
+    },
+    "argument_present": {
+     "type": "string",
+     "pattern": "^[a-z][a-z-]*$"
+    },
+    "dependencies_finished": {
+     "type": "object",
+     "properties": {
+      "handoff_states": {
+       "anyOf": [
+        {
+         "type": "null"
+        },
+        {
+         "type": "array",
+         "items": {
+          "enum": [
+           "accepted",
+           "unrecorded",
+           "unaccepted",
+           "stale",
+           "rejected",
+           "missing"
+          ]
+         },
+         "uniqueItems": true
+        }
+       ]
+      }
+     },
+     "required": [
+      "handoff_states"
+     ],
+     "additionalProperties": false
+    },
+    "waits_on_other_repository": {
+     "const": true
+    },
+    "complete": {
+     "const": true
+    },
+    "incomplete": {
+     "const": true
+    },
+    "within_limits": {
+     "$ref": "#/$defs/levels"
+    },
+    "matches_limits_active_item": {
+     "const": true
+    },
+    "actor_active_items_at_most": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "stale": {
+     "type": "object",
+     "properties": {
+      "field": {
+       "$ref": "#/$defs/field"
+      }
+     },
+     "required": [
+      "field"
+     ],
+     "additionalProperties": false
+    },
+    "last_review_rejected": {
+     "type": "object",
+     "required": [
+      "history_field",
+      "verdict"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "history_field": {
+       "$ref": "#/$defs/field"
+      },
+      "verdict": {
+       "type": "string",
+       "pattern": "^[a-z]+$"
+      }
+     }
+    },
+    "review_rules_met": {
+     "type": "object",
+     "required": [
+      "step"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "step": {
+       "$ref": "#/$defs/step"
+      }
+     }
+    },
+    "exact": {
+     "type": "boolean"
+    },
+    "finished": {
+     "const": true
+    },
+    "waits_on_actor_items": {
+     "const": true
+    },
+    "team_count": {
+     "type": "object",
+     "required": [
+      "select",
+      "at_most"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "select": {
+       "$ref": "#/$defs/predicate"
+      },
+      "at_most": {
+       "type": "integer",
+       "minimum": 0
+      }
+     }
+    },
+    "within_limits_for_role": {
+     "type": "object",
+     "properties": {
+      "role": {
+       "$ref": "#/$defs/role"
+      },
+      "levels": {
+       "$ref": "#/$defs/levels"
+      }
+     },
+     "required": [
+      "role",
+      "levels"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "additionalProperties": false
+  },
+  "condition": {
+   "type": "object",
+   "properties": {
+    "all": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/predicate"
+     },
+     "minItems": 1
+    },
+    "any": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/predicate"
+     },
+     "minItems": 1
+    },
+    "not": {
+     "$ref": "#/$defs/predicate"
+    },
+    "status_in": {
+     "$ref": "#/$defs/words"
+    },
+    "status_not_in": {
+     "$ref": "#/$defs/words"
+    },
+    "field_empty": {
+     "$ref": "#/$defs/field"
+    },
+    "field_present": {
+     "$ref": "#/$defs/field"
+    },
+    "field_exists": {
+     "$ref": "#/$defs/field"
+    },
+    "field_absent": {
+     "$ref": "#/$defs/field"
+    },
+    "field_true": {
+     "$ref": "#/$defs/field"
+    },
+    "field_is_actor": {
+     "$ref": "#/$defs/field"
+    },
+    "field_empty_or_actor": {
+     "$ref": "#/$defs/field"
+    },
+    "field_equals_flag_value": {
+     "$ref": "#/$defs/field"
+    },
+    "actor_has_role": {
+     "$ref": "#/$defs/role"
+    },
+    "actor_lacks_role": {
+     "$ref": "#/$defs/role"
+    },
+    "flag_value_lacks_role": {
+     "$ref": "#/$defs/role"
+    },
+    "actor_equals_flag_value": {
+     "const": true
+    },
+    "flag_value_empty": {
+     "const": true
+    },
+    "unbound": {
+     "const": true
+    },
+    "argument_present": {
+     "type": "string",
+     "pattern": "^[a-z][a-z-]*$"
+    },
+    "dependencies_finished": {
+     "type": "object",
+     "properties": {
+      "handoff_states": {
+       "anyOf": [
+        {
+         "type": "null"
+        },
+        {
+         "type": "array",
+         "items": {
+          "enum": [
+           "accepted",
+           "unrecorded",
+           "unaccepted",
+           "stale",
+           "rejected",
+           "missing"
+          ]
+         },
+         "uniqueItems": true
+        }
+       ]
+      }
+     },
+     "required": [
+      "handoff_states"
+     ],
+     "additionalProperties": false
+    },
+    "waits_on_other_repository": {
+     "const": true
+    },
+    "complete": {
+     "const": true
+    },
+    "incomplete": {
+     "const": true
+    },
+    "within_limits": {
+     "$ref": "#/$defs/levels"
+    },
+    "matches_limits_active_item": {
+     "const": true
+    },
+    "actor_active_items_at_most": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "stale": {
+     "type": "object",
+     "properties": {
+      "field": {
+       "$ref": "#/$defs/field"
+      }
+     },
+     "required": [
+      "field"
+     ],
+     "additionalProperties": false
+    },
+    "last_review_rejected": {
+     "type": "object",
+     "required": [
+      "history_field",
+      "verdict"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "history_field": {
+       "$ref": "#/$defs/field"
+      },
+      "verdict": {
+       "type": "string",
+       "pattern": "^[a-z]+$"
+      }
+     }
+    },
+    "review_rules_met": {
+     "type": "object",
+     "required": [
+      "step"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "step": {
+       "$ref": "#/$defs/step"
+      }
+     }
+    },
+    "exact": {
+     "type": "boolean"
+    },
+    "finished": {
+     "const": true
+    },
+    "waits_on_actor_items": {
+     "const": true
+    },
+    "team_count": {
+     "type": "object",
+     "required": [
+      "select",
+      "at_most"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "select": {
+       "$ref": "#/$defs/predicate"
+      },
+      "at_most": {
+       "type": "integer",
+       "minimum": 0
+      }
+     }
+    },
+    "dependent_exists": {
+     "const": "flag_value"
+    },
+    "handoff_record_exists": {
+     "const": "flag_value"
+    },
+    "handoff_record_has_commit": {
+     "const": "flag_value"
+    },
+    "not_caller_session_of": {
+     "$ref": "#/$defs/field"
+    },
+    "review_passes_met": {
+     "type": "object",
+     "required": [
+      "passes_field",
+      "commit_field"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "passes_field": {
+       "$ref": "#/$defs/field"
+      },
+      "commit_field": {
+       "$ref": "#/$defs/field"
+      }
+     }
+    },
+    "no_later_own_work": {
+     "type": "object",
+     "required": [
+      "commit_field",
+      "subject_item_pattern"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "commit_field": {
+       "$ref": "#/$defs/field"
+      },
+      "subject_item_pattern": {
+       "type": "string",
+       "minLength": 1
+      }
+     }
+    },
+    "dependents_handoffs_accepted": {
+     "type": "object",
+     "required": [
+      "records_field",
+      "none_value"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "records_field": {
+       "$ref": "#/$defs/field"
+      },
+      "none_value": {
+       "type": "string",
+       "minLength": 1
+      }
+     }
+    },
+    "any_of": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/condition"
+     },
+     "minItems": 1
+    },
+    "all_of": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/condition"
+     },
+     "minItems": 1
+    },
+    "within_limits_for_role": {
+     "type": "object",
+     "properties": {
+      "role": {
+       "$ref": "#/$defs/role"
+      },
+      "levels": {
+       "$ref": "#/$defs/levels"
+      }
+     },
+     "required": [
+      "role",
+      "levels"
+     ],
+     "additionalProperties": false
+    },
+    "within_limits_of_target_team": {
+     "$ref": "#/$defs/levels"
+    },
+    "flag_value_is_configured_team": {
+     "const": true
+    },
+    "refusal": {
+     "$ref": "#/$defs/textkey"
+    },
+    "when": {
+     "$ref": "#/$defs/predicate"
+    },
+    "unless": {
+     "$ref": "#/$defs/predicate"
+    },
+    "force": {
+     "const": "bypasses"
+    },
+    "order": {
+     "enum": [
+      "first",
+      "before_from",
+      "after_from"
+     ]
+    }
+   },
+   "additionalProperties": false,
+   "minProperties": 1
+  },
+  "step": {
+   "type": "string",
+   "pattern": "^[a-z][a-z0-9-]{0,39}$"
+  },
+  "entrykey": {
+   "type": "string",
+   "pattern": "^[a-z][a-z0-9_]{0,39}$"
+  },
+  "value": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "object",
+     "required": [
+      "head_unless_covered"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "head_unless_covered": {
+       "type": "object",
+       "required": [
+        "passes_field",
+        "commit_field",
+        "subject_item_pattern"
+       ],
+       "additionalProperties": false,
+       "properties": {
+        "passes_field": {
+         "$ref": "#/$defs/field"
+        },
+        "commit_field": {
+         "$ref": "#/$defs/field"
+        },
+        "subject_item_pattern": {
+         "type": "string",
+         "minLength": 1
+        }
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+}

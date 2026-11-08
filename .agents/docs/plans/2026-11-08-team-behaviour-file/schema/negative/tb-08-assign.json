@@ -1,0 +1,2912 @@
+{
+ "schema": "backlog-team-behaviour/2",
+ "workflow": "team",
+ "description": "The team flow of smooth-backlog-cli 174c76d expressed as data: a lead splits a work item, members refine, a reviewed refinement is claimed, worked, reviewed in two stages and closed.",
+ "statuses": [
+  "new",
+  "refining",
+  "refined",
+  "refinement review",
+  "ready",
+  "in progress",
+  "ready for review",
+  "reviewing",
+  "ready for external review",
+  "external review",
+  "review complete",
+  "closed",
+  "archived"
+ ],
+ "initial": "new",
+ "finished": [
+  "closed",
+  "archived"
+ ],
+ "side_statuses": {
+  "awaiting decision": {
+   "enter": "request-decision",
+   "leave": "decision",
+   "returns_to": "refining"
+  }
+ },
+ "identity": {
+  "same_worker_pattern": "^(.+):\\d+$",
+  "caller_acts_only_as_itself": {
+   "except_roles": [
+    "lead"
+   ]
+  }
+ },
+ "scope": {
+  "bind_session": true,
+  "session_team_only": true,
+  "foreign_items": {
+   "when": {
+    "field_true": "chunk"
+   }
+  }
+ },
+ "roles": {
+  "lead": {
+   "entry_person": "lead"
+  },
+  "member": {
+   "entry_list": "members"
+  },
+  "team": {
+   "union": [
+    "member",
+    "lead"
+   ]
+  },
+  "review-only": {
+   "entry_list": "review_only"
+  },
+  "external": {
+   "entry_list": "external_reviewers"
+  },
+  "refinement-reviewer": {
+   "entry_rule_teams": "refinement_review",
+   "when_empty": "anyone"
+  },
+  "holder": {
+   "item_field": "claimed_by"
+  },
+  "refiner": {
+   "item_field": "refiner"
+  },
+  "reviewer": {
+   "item_field": "reviewer"
+  },
+  "author": {
+   "item_fields": [
+    "claimed_by",
+    "review_author",
+    "session_authors"
+   ]
+  },
+  "owner": {
+   "literal": "owner"
+  },
+  "anyone": {
+   "anyone": true
+  }
+ },
+ "entry_constraints": [
+  {
+   "non_empty": "members"
+  },
+  {
+   "disjoint": [
+    "lead",
+    "members"
+   ]
+  },
+  {
+   "subset": [
+    "review_only",
+    "members"
+   ]
+  }
+ ],
+ "completeness": [
+  {
+   "name": "review_refs",
+   "field": "review_refs",
+   "test": "non_empty"
+  },
+  {
+   "name": "depends_on",
+   "field": "depends_on",
+   "test": "present"
+  },
+  {
+   "name": "estimate_min",
+   "field": "estimate_min",
+   "test": "positive_integer",
+   "body_pattern": "\\bESTIMATE:\\s*(\\d+)"
+  },
+  {
+   "name": "definition_of_done",
+   "test": "section",
+   "section": "definition of done",
+   "placeholders": [
+    "^(?:[-*][ \\t]+(?:\\[[ x]\\][ \\t]*)?)?(?:tbd|tba|todo|to ?do|n/?a|none|-|\\.\\.\\.|…)\\.?$"
+   ],
+   "remove": [
+    "- [ ] <machine-checkable acceptance>"
+   ],
+   "ignore_lines": [
+    "^[ \\t]*(?:Claimed by|Released by|Review started by|Review by \\S+ stale|Refinement started by|Refinement review requested by|WAITING |WAIT DONE |DECISION |CHUNK |ESTIMATE:)[^\\n]*$"
+   ]
+  }
+ ],
+ "create": {
+  "sets": {
+   "refiner": ""
+  },
+  "missing_section": {
+   "heading": "Definition of done",
+   "placeholder": "- [ ] <machine-checkable acceptance>"
+  },
+  "ask": [
+   {
+    "field": "review_refs",
+    "label": "Review documents (comma separated)"
+   }
+  ],
+  "priority_by_severity": {
+   "critical": 0
+  }
+ },
+ "review": {
+  "stages_order": [
+   "peer",
+   "external"
+  ],
+  "stages": {
+   "peer": {
+    "ready": "ready for review",
+    "active": "reviewing",
+    "reviewers": "team",
+    "default_count": 1
+   },
+   "external": {
+    "ready": "ready for external review",
+    "active": "external review",
+    "reviewers": "external",
+    "default_count": 1
+   }
+  },
+  "after_last_stage": "review complete",
+  "stale_after_seconds": 1200,
+  "reject_clears": {
+   "verdict": "reject",
+   "field": "reviews"
+  }
+ },
+ "defaults": {
+  "review": [
+   {
+    "stage": "peer",
+    "count": 1
+   },
+   {
+    "stage": "external",
+    "count": 1
+   }
+  ]
+ },
+ "limits": {
+  "count_scope": "home",
+  "active_item": {
+   "any": [
+    {
+     "status_in": [
+      "in progress"
+     ]
+    },
+    {
+     "all": [
+      {
+       "status_in": [
+        "refining"
+       ]
+      },
+      {
+       "field_present": "refiner"
+      },
+      {
+       "field_empty": "claimed_by"
+      }
+     ]
+    }
+   ]
+  },
+  "holder": [
+   {
+    "field": "claimed_by"
+   },
+   {
+    "field": "refiner",
+    "when": {
+     "status_in": [
+      "refining"
+     ]
+    }
+   }
+  ],
+  "levels": [
+   "overall",
+   "repository",
+   "branch",
+   "team",
+   "member"
+  ],
+  "override": {
+   "field": "wip_override",
+   "lifts": [
+    "team",
+    "member"
+   ]
+  },
+  "held_shown": 8
+ },
+ "active_work": {
+  "any": [
+   {
+    "status_in": [
+     "in progress",
+     "refining"
+    ]
+   }
+  ],
+  "except": {
+   "any": [
+    {
+     "status_in": [
+      "ready for review",
+      "reviewing",
+      "ready for external review",
+      "external review"
+     ]
+    },
+    {
+     "field_present": "wait_on"
+    }
+   ]
+  }
+ },
+ "waiting": {
+  "field": "wait_on",
+  "cleared_by_steps": [
+   "request-review",
+   "review",
+   "close"
+  ],
+  "cleared_by_note": true,
+  "record": "WAIT DONE <now> (next step on the item)"
+ },
+ "steps": {
+  "claim": {
+   "value": "agent",
+   "actor": "flag_value",
+   "from": [
+    "ready",
+    "in progress"
+   ],
+   "to": "in progress",
+   "by": [
+    "member",
+    "lead"
+   ],
+   "variants": [
+    {
+     "when": {
+      "all": [
+       {
+        "actor_has_role": "lead"
+       },
+       {
+        "field_absent": "refiner"
+       }
+      ]
+     },
+     "from": [
+      "new",
+      "in progress"
+     ]
+    }
+   ],
+   "requires": [
+    {
+     "status_not_in": [
+      "closed",
+      "archived"
+     ],
+     "refusal": "finished_claim",
+     "order": "before_from"
+    },
+    {
+     "when": {
+      "actor_has_role": "lead"
+     },
+     "field_absent": "refiner",
+     "refusal": "lead_claims_split",
+     "order": "before_from"
+    },
+    {
+     "field_empty_or_actor": "claimed_by",
+     "refusal": "claimed_by_other"
+    },
+    {
+     "dependencies_finished": {
+      "handoff_states": [
+       "accepted",
+       "unrecorded"
+      ]
+     },
+     "refusal": "dependencies_not_done"
+    },
+    {
+     "unless": {
+      "field_is_actor": "claimed_by"
+     },
+     "actor_active_items_at_most": 0,
+     "force": "bypasses",
+     "refusal": "active_items"
+    },
+    {
+     "unless": {
+      "all": [
+       {
+        "field_is_actor": "claimed_by"
+       },
+       {
+        "status_in": [
+         "in progress"
+        ]
+       }
+      ]
+     },
+     "within_limits": [
+      "overall",
+      "repository",
+      "branch",
+      "team",
+      "member"
+     ],
+     "refusal": "limit"
+    }
+   ],
+   "from_refusal_hints": [
+    {
+     "when": {
+      "status_in": [
+       "awaiting decision"
+      ]
+     },
+     "hint": "claim_awaiting_decision_hint"
+    },
+    {
+     "when": {
+      "all": [
+       {
+        "status_in": [
+         "new",
+         "refining"
+        ]
+       },
+       {
+        "field_empty": "refiner"
+       }
+      ]
+     },
+     "hint": "refine_first_hint"
+    }
+   ],
+   "sets": {
+    "claimed_by": "actor",
+    "claimed_at": "now",
+    "author_session": "caller_session"
+   },
+   "appends": {
+    "session_authors": [
+     "field:claimed_by",
+     "field:review_author",
+     "actor"
+    ]
+   },
+   "records": "Claimed by <actor> at <now> repository=<repository> branch=<branch> cwd=<cwd><forced>",
+   "recheck_at_publication": [
+    {
+     "dependencies_finished": {
+      "handoff_states": null
+     },
+     "refusal": "recheck_dependencies"
+    },
+    {
+     "unless": {
+      "all": [
+       {
+        "field_is_actor": "claimed_by"
+       },
+       {
+        "status_in": [
+         "in progress"
+        ]
+       }
+      ]
+     },
+     "within_limits": [
+      "overall",
+      "repository",
+      "branch",
+      "team",
+      "member"
+     ],
+     "refusal": "recheck_limit"
+    },
+    {
+     "unless": {
+      "field_is_actor": "claimed_by"
+     },
+     "actor_active_items_at_most": 0,
+     "force": "bypasses",
+     "refusal": "recheck_active_items"
+    }
+   ]
+  },
+  "release": {
+   "value": "agent",
+   "actor": "by_or_flag_value",
+   "from": [
+    "in progress",
+    "ready for review",
+    "reviewing",
+    "ready for external review",
+    "external review",
+    "review complete"
+   ],
+   "by": [
+    "holder",
+    "lead"
+   ],
+   "requires": [
+    {
+     "status_not_in": [
+      "closed",
+      "archived"
+     ],
+     "refusal": "finished_release",
+     "order": "before_from"
+    },
+    {
+     "field_equals_flag_value": "claimed_by",
+     "refusal": "release_not_holder",
+     "order": "before_from"
+    },
+    {
+     "when": {
+      "not": {
+       "actor_equals_flag_value": true
+      }
+     },
+     "all_of": [
+      {
+       "actor_has_role": "lead"
+      },
+      {
+       "argument_present": "reason"
+      }
+     ],
+     "refusal": "release_other"
+    }
+   ],
+   "to_rules": [
+    {
+     "when": {
+      "status_in": [
+       "ready for review",
+       "reviewing",
+       "ready for external review",
+       "external review",
+       "review complete"
+      ]
+     },
+     "to": "same"
+    },
+    {
+     "when": {
+      "field_exists": "refiner"
+     },
+     "to": "ready"
+    },
+    {
+     "to": "new"
+    }
+   ],
+   "clears": [
+    "claimed_by",
+    "claimed_at",
+    "wait_on"
+   ],
+   "appends": {
+    "session_authors": [
+     "field:claimed_by",
+     "field:review_author"
+    ]
+   },
+   "records_rules": [
+    {
+     "when": {
+      "not": {
+       "actor_equals_flag_value": true
+      }
+     },
+     "records": "Released by <actor> for <value> at <now>: <reason>"
+    },
+    {
+     "records": "Released by <value> at <now>"
+    }
+   ]
+  },
+  "waiting": {
+   "value": "text",
+   "actor": "by",
+   "from": [
+    "*"
+   ],
+   "to": "same",
+   "by": [
+    "holder"
+   ],
+   "requires": [
+    {
+     "field_is_actor": "claimed_by",
+     "exact": true,
+     "refusal": "waiting_not_holder"
+    }
+   ],
+   "sets": {
+    "wait_on": "flag_value",
+    "wait_since": "now"
+   },
+   "records": "WAITING <now> <actor>: <value>"
+  },
+  "waiting-done": {
+   "value": "none",
+   "actor": "by_or_holder",
+   "from": [
+    "*"
+   ],
+   "to": "same",
+   "by": [
+    "anyone"
+   ],
+   "clears": [
+    "wait_on"
+   ],
+   "records": "WAIT DONE <now> <actor>"
+  },
+  "handoff": {
+   "value": "item",
+   "actor": "by_or_holder",
+   "effect": {
+    "kind": "handoff_record",
+    "records_field": "handoffs"
+   },
+   "from": [
+    "new",
+    "refining",
+    "refined",
+    "refinement review",
+    "ready",
+    "in progress",
+    "ready for review",
+    "reviewing",
+    "ready for external review",
+    "external review",
+    "review complete",
+    "closed",
+    "awaiting decision"
+   ],
+   "to": "same",
+   "by": [
+    "holder"
+   ],
+   "requires": [
+    {
+     "field_is_actor": "claimed_by",
+     "exact": true,
+     "refusal": "handoff_not_holder"
+    },
+    {
+     "dependent_exists": "flag_value",
+     "refusal": "handoff_not_dependent"
+    }
+   ],
+   "arguments": {
+    "handoff-contract": {
+     "required": true,
+     "refusal": "handoff_contract_empty"
+    },
+    "handoff-verification": {
+     "required": true,
+     "refusal": "handoff_verification_empty"
+    }
+   }
+  },
+  "accept-handoff": {
+   "value": "item",
+   "actor": "by",
+   "effect": {
+    "kind": "handoff_accept",
+    "records_field": "handoffs"
+   },
+   "from": [
+    "*"
+   ],
+   "to": "same",
+   "by": [
+    "lead"
+   ],
+   "requires": [
+    {
+     "argument_present": "by",
+     "refusal": "handoff_accept_needs_by",
+     "order": "first"
+    },
+    {
+     "handoff_record_exists": "flag_value",
+     "refusal": "handoff_no_record"
+    },
+    {
+     "argument_present": "checks",
+     "refusal": "handoff_checks_empty"
+    },
+    {
+     "any_of": [
+      {
+       "status_in": [
+        "review complete"
+       ]
+      },
+      {
+       "all": [
+        {
+         "status_in": [
+          "closed"
+         ]
+        },
+        {
+         "field_present": "reviews"
+        }
+       ]
+      }
+     ],
+     "refusal": "handoff_review_not_passed"
+    },
+    {
+     "handoff_record_has_commit": "flag_value",
+     "refusal": "handoff_no_commit"
+    }
+   ],
+   "by_refusal": "handoff_accept_not_lead"
+  },
+  "reject-handoff": {
+   "value": "item",
+   "actor": "by",
+   "effect": {
+    "kind": "handoff_reject",
+    "records_field": "handoffs"
+   },
+   "from": [
+    "*"
+   ],
+   "to": "same",
+   "by": [
+    "lead"
+   ],
+   "requires": [
+    {
+     "handoff_record_exists": "flag_value",
+     "refusal": "handoff_no_record"
+    },
+    {
+     "argument_present": "reason",
+     "refusal": "handoff_reason_empty"
+    }
+   ],
+   "by_refusal": "handoff_reject_not_lead"
+  },
+  "request-review": {
+   "value": "agent",
+   "actor": "by_or_holder",
+   "from": [
+    "in progress",
+    "ready for review",
+    "ready for external review",
+    "review complete"
+   ],
+   "skip_from_when": {
+    "field_empty": "claimed_by"
+   },
+   "by": [
+    "anyone"
+   ],
+   "requires": [
+    {
+     "argument_present": "note",
+     "refusal": "request_review_no_note",
+     "order": "before_from"
+    },
+    {
+     "status_not_in": [
+      "reviewing",
+      "external review"
+     ],
+     "refusal": "request_review_in_review",
+     "order": "before_from"
+    },
+    {
+     "when": {
+      "field_present": "claimed_by"
+     },
+     "any_of": [
+      {
+       "field_is_actor": "claimed_by",
+       "exact": true
+      },
+      {
+       "actor_has_role": "lead"
+      }
+     ],
+     "refusal": "request_review_not_holder"
+    }
+   ],
+   "to_rules": [
+    {
+     "when": {
+      "status_in": [
+       "ready for external review"
+      ]
+     },
+     "to": "same"
+    },
+    {
+     "to": "first_review_stage"
+    }
+   ],
+   "sets": {
+    "work_commit": {
+     "head_unless_covered": {
+      "passes_field": "reviews",
+      "commit_field": "work_commit",
+      "subject_item_pattern": "^(\\d+)(?:\\s+and\\s+(\\d+))*"
+     }
+    },
+    "reviewer": "flag_value",
+    "review_requested_at": "now",
+    "review_started": "",
+    "review_author": "actor"
+   },
+   "appends": {
+    "session_authors": [
+     "field:claimed_by",
+     "field:review_author",
+     "actor"
+    ]
+   },
+   "records": "## Review requested by <actor> at <now> (reviewer: <value>)\n\n<note>",
+   "ends_session": {
+    "who": "actor",
+    "except_roles": [
+     "lead"
+    ]
+   }
+  },
+  "start-review": {
+   "value": "none",
+   "actor": "by",
+   "not_by": [
+    "author"
+   ],
+   "not_by_refusal": "self_review",
+   "requires": [
+    {
+     "status_in": [
+      "ready for review",
+      "reviewing",
+      "ready for external review",
+      "external review"
+     ],
+     "refusal": "no_review_requested"
+    },
+    {
+     "any_of": [
+      {
+       "status_in": [
+        "ready for review",
+        "ready for external review"
+       ]
+      },
+      {
+       "field_is_actor": "reviewer",
+       "exact": true
+      }
+     ],
+     "refusal": "review_taken"
+    }
+   ],
+   "stages": {
+    "peer": {
+     "from": [
+      "ready for review",
+      "reviewing"
+     ],
+     "to": "reviewing",
+     "by": [
+      "anyone"
+     ]
+    },
+    "external": {
+     "from": [
+      "ready for external review",
+      "external review"
+     ],
+     "to": "external review",
+     "by": [
+      "external"
+     ]
+    }
+   },
+   "sets": {
+    "reviewer": "actor",
+    "review_started": "now"
+   },
+   "records": "Review started by <actor> at <now>"
+  },
+  "review": {
+   "value": "verdict",
+   "actor": "by",
+   "not_by": [
+    "author"
+   ],
+   "not_by_refusal": "self_review",
+   "arguments": {
+    "comments": {
+     "required": true,
+     "refusal": "review_needs_comments",
+     "cites_field": "review_refs",
+     "cites_refusal": "review_cite_refs"
+    }
+   },
+   "requires": [
+    {
+     "when": {
+      "status_in": [
+       "reviewing",
+       "external review"
+      ]
+     },
+     "field_is_actor": "reviewer",
+     "exact": true,
+     "refusal": "review_taken_short"
+    },
+    {
+     "status_in": [
+      "ready for review",
+      "reviewing",
+      "ready for external review",
+      "external review"
+     ],
+     "refusal": "no_review_requested_first"
+    },
+    {
+     "not_caller_session_of": "author_session",
+     "refusal": "review_author_session"
+    }
+   ],
+   "stages": {
+    "peer": {
+     "from": [
+      "reviewing",
+      "ready for review"
+     ],
+     "by": [
+      "anyone"
+     ]
+    },
+    "external": {
+     "from": [
+      "external review",
+      "ready for external review"
+     ],
+     "by": [
+      "external"
+     ]
+    }
+   },
+   "verdict_words": {
+    "pass": "complete",
+    "changes": "reject"
+   },
+   "verdicts": {
+    "complete": {
+     "to": "next_review_stage_if_satisfied",
+     "appends": {
+      "reviews": [
+       "text:<actor> <work_commit>"
+      ]
+     },
+     "notice_rules": [
+      {
+       "when": {
+        "not": {
+         "status_in": [
+          "review complete"
+         ]
+        }
+       },
+       "instruction": "next_status"
+      },
+      {
+       "when": {
+        "not": {
+         "review_rules_met": {
+          "step": "close"
+         }
+        }
+       },
+       "instruction": "next_rules_pending"
+      },
+      {
+       "when": {
+        "field_empty": "claimed_by"
+       },
+       "instruction": "close_now_unheld"
+      },
+      {
+       "instruction": "close_now"
+      }
+     ]
+    },
+    "reject": {
+     "to": "in progress",
+     "clears": [
+      "reviews"
+     ],
+     "ends_session": {
+      "who": "actor",
+      "except_roles": [
+       "lead"
+      ]
+     }
+    }
+   },
+   "sets": {
+    "reviewer": "actor",
+    "review_started": "",
+    "reviewed_at": "now"
+   },
+   "appends": {
+    "review_history": [
+     "text:<now> <stage> <verdict> <actor> <work_commit>: <comments_line>"
+    ]
+   },
+   "records": "## Review by <actor>: <VERDICT> (<now>)\n\n<comments>"
+  },
+  "reassign": {
+   "value": "agent",
+   "actor": "by",
+   "from": [
+    "*"
+   ],
+   "to": "same",
+   "by": [
+    "lead"
+   ],
+   "by_refusal": "reassign_not_lead",
+   "arguments": {
+    "reason": {
+     "required": true,
+     "refusal": "reassign_no_reason"
+    }
+   },
+   "requires": [
+    {
+     "status_not_in": [
+      "closed",
+      "archived"
+     ],
+     "refusal": "reassign_finished"
+    },
+    {
+     "field_present": "claimed_by",
+     "refusal": "reassign_nobody"
+    },
+    {
+     "not": {
+      "field_equals_flag_value": "claimed_by"
+     },
+     "refusal": "reassign_same"
+    }
+   ],
+   "sets": {
+    "claimed_by": "flag_value",
+    "claimed_at": "now"
+   },
+   "clears": [
+    "wait_on"
+   ],
+   "appends": {
+    "session_authors": [
+     "field:claimed_by",
+     "field:review_author",
+     "flag_value"
+    ]
+   },
+   "records": "## Reassigned by <actor> from <holder> to <value> at <now>\n\n<reason>"
+  },
+  "reassign-review": {
+   "value": "agent",
+   "actor": "by",
+   "from": [
+    "*"
+   ],
+   "by": [
+    "lead"
+   ],
+   "by_refusal": "reassign_review_not_lead",
+   "arguments": {
+    "reason": {
+     "required": true,
+     "refusal": "reassign_review_no_reason"
+    }
+   },
+   "requires": [
+    {
+     "status_in": [
+      "ready for review",
+      "reviewing",
+      "ready for external review",
+      "external review"
+     ],
+     "refusal": "no_review_requested"
+    },
+    {
+     "flag_value_lacks_role": "author",
+     "refusal": "self_review_target"
+    }
+   ],
+   "to": "active_review_stage",
+   "sets": {
+    "reviewer": "flag_value",
+    "review_started": "now"
+   },
+   "records": "## Review reassigned by <actor> from <reviewer_if_active> to <value> at <now>\n\n<reason>"
+  },
+  "refine-start": {
+   "value": "none",
+   "actor": "by",
+   "from": [
+    "new",
+    "refining"
+   ],
+   "to": "refining",
+   "by": [
+    "anyone"
+   ],
+   "requires": [
+    {
+     "field_empty": "claimed_by",
+     "refusal": "refine_claimed",
+     "order": "before_from"
+    },
+    {
+     "field_empty_or_actor": "refiner",
+     "exact": true,
+     "refusal": "refine_other",
+     "order": "before_from"
+    },
+    {
+     "when": {
+      "actor_has_role": "lead"
+     },
+     "field_is_actor": "refiner",
+     "exact": true,
+     "refusal": "refine_lead_first_round",
+     "order": "before_from"
+    },
+    {
+     "unless": {
+      "any": [
+       {
+        "field_is_actor": "refiner",
+        "exact": true
+       },
+       {
+        "actor_has_role": "lead"
+       }
+      ]
+     },
+     "actor_active_items_at_most": 0,
+     "force": "bypasses",
+     "refusal": "active_items",
+     "order": "before_from"
+    },
+    {
+     "unless": {
+      "field_is_actor": "refiner",
+      "exact": true
+     },
+     "within_limits": [
+      "overall",
+      "repository",
+      "branch",
+      "team",
+      "member"
+     ],
+     "refusal": "limit",
+     "order": "before_from"
+    }
+   ],
+   "from_refusal": "refine_wrong_status",
+   "sets": {
+    "refiner": "actor",
+    "refine_started": "now"
+   },
+   "records": "Refinement started by <actor> at <now>"
+  },
+  "refine-done": {
+   "value": "none",
+   "actor": "by",
+   "from": [
+    "refining"
+   ],
+   "to": "refined",
+   "by": [
+    "refiner"
+   ],
+   "by_refusal": "refine_done_not_refiner",
+   "from_refusal": "refine_done_not_refiner",
+   "arguments": {
+    "note": {
+     "required": true,
+     "refusal": "refine_done_no_note"
+    }
+   },
+   "requires": [
+    {
+     "complete": true,
+     "refusal": "refine_done_incomplete",
+     "order": "first"
+    }
+   ],
+   "sets": {
+    "refined_at": "now"
+   },
+   "records": "## Refined by <actor> at <now>\n\n<note>"
+  },
+  "request-refinement-review": {
+   "value": "none",
+   "actor": "by",
+   "from": [
+    "refined"
+   ],
+   "to": "refinement review",
+   "by": [
+    "lead"
+   ],
+   "by_refusal": "rr_request_not_lead",
+   "from_refusal": "rr_request_not_refined",
+   "sets": {
+    "refinement_review_requested_at": "now"
+   },
+   "records": "Refinement review requested by <actor> at <now>"
+  },
+  "refinement-review": {
+   "value": "verdict",
+   "actor": "by",
+   "from": [
+    "refinement review"
+   ],
+   "by": [
+    "refinement-reviewer"
+   ],
+   "by_refusal": "rr_not_reviewer",
+   "from_refusal": "rr_not_requested",
+   "exclusive": true,
+   "arguments": {
+    "comments": {
+     "required": true,
+     "refusal": "rr_no_comments"
+    }
+   },
+   "verdicts": {
+    "complete": {
+     "to": "ready",
+     "records_verdict": "COMPLETE: ready"
+    },
+    "reject": {
+     "to": "refining",
+     "sets": {
+      "refiner": ""
+     },
+     "appends": {
+      "refinement_reviews": [
+       "text:<now> reject <actor>: <comments_line>"
+      ]
+     },
+     "records_verdict": "REJECT: back to refining"
+    },
+    "limit": {
+     "to": "refining",
+     "sets": {
+      "refiner": ""
+     },
+     "appends": {
+      "refinement_reviews": [
+       "text:<now> reject <actor>: <comments_line>"
+      ]
+     },
+     "records_verdict": "REJECT: back to refining"
+    }
+   },
+   "sets": {
+    "refinement_reviewed_by": "actor",
+    "refinement_reviewed_at": "now"
+   },
+   "records": "## Refinement review by <actor>: <records_verdict> (<now>)\n\n<comments>"
+  },
+  "request-decision": {
+   "value": "text",
+   "actor": "by",
+   "from": [
+    "new",
+    "refining",
+    "refined",
+    "refinement review"
+   ],
+   "to": "awaiting decision",
+   "by": [
+    "anyone"
+   ],
+   "from_refusal": "decision_not_before_ready",
+   "arguments": {
+    "value": {
+     "required": true,
+     "refusal": "decision_no_question"
+    }
+   },
+   "sets": {
+    "decision_requested_by": "actor",
+    "decision_requested_at": "now",
+    "decision_question": "flag_value",
+    "refiner": ""
+   },
+   "records": "## Owner decision needed (asked by <actor> at <now>)\n\n<value>"
+  },
+  "decision": {
+   "value": "text",
+   "actor": "by",
+   "from": [
+    "awaiting decision"
+   ],
+   "to": "refining",
+   "by": [
+    "anyone"
+   ],
+   "from_refusal": "decision_not_pending",
+   "arguments": {
+    "value": {
+     "required": true,
+     "refusal": "decision_no_answer"
+    }
+   },
+   "sets": {
+    "decided_at": "now",
+    "decision_question": ""
+   },
+   "sets_rules": [
+    {
+     "when": {
+      "within_limits_for_role": {
+       "role": "lead",
+       "levels": [
+        "overall",
+        "repository",
+        "branch",
+        "team",
+        "member"
+       ]
+      }
+     },
+     "sets": {
+      "refiner": "role:lead",
+      "refine_started": "now"
+     },
+     "records": "DECISION <today>: <value>"
+    },
+    {
+     "sets": {
+      "refiner": "",
+      "refine_started": ""
+     },
+     "records": "DECISION <today>: <value>\n(no refiner yet: <limit_text>)"
+    }
+   ]
+  },
+  "close": {
+   "value": "none",
+   "actor": "by_or_holder",
+   "from": [
+    "review complete"
+   ],
+   "to": "closed",
+   "by": [
+    "anyone"
+   ],
+   "arguments": {
+    "summary": {
+     "required": true,
+     "refusal": "close_no_summary",
+     "order": "first"
+    }
+   },
+   "requires": [
+    {
+     "dependents_handoffs_accepted": {
+      "records_field": "handoffs",
+      "none_value": "none"
+     },
+     "refusal": "close_gate",
+     "order": "first"
+    },
+    {
+     "when": {
+      "actor_has_role": "owner"
+     },
+     "argument_present": "reason",
+     "refusal": "close_owner_no_reason"
+    },
+    {
+     "when": {
+      "field_present": "claimed_by"
+     },
+     "any_of": [
+      {
+       "field_is_actor": "claimed_by",
+       "exact": true
+      },
+      {
+       "actor_has_role": "lead"
+      },
+      {
+       "actor_has_role": "owner"
+      }
+     ],
+     "refusal": "close_not_holder"
+    },
+    {
+     "when": {
+      "field_empty": "claimed_by"
+     },
+     "any_of": [
+      {
+       "actor_has_role": "lead"
+      },
+      {
+       "actor_has_role": "owner"
+      }
+     ],
+     "refusal": "close_unheld"
+    },
+    {
+     "unless": {
+      "actor_has_role": "owner"
+     },
+     "review_passes_met": {
+      "passes_field": "reviews",
+      "commit_field": "work_commit"
+     }
+    },
+    {
+     "unless": {
+      "actor_has_role": "owner"
+     },
+     "no_later_own_work": {
+      "subject_item_pattern": "^(\\d+)(?:\\s+and\\s+(\\d+))*",
+      "commit_field": "work_commit"
+     }
+    }
+   ],
+   "skip_from_when": {
+    "actor_has_role": "owner"
+   },
+   "records_rules": [
+    {
+     "when": {
+      "actor_has_role": "owner"
+     },
+     "records": "## Closed by owner at <now> (owner decision: <reason>)\n\n<summary>"
+    },
+    {
+     "records": "## Closed by <actor> at <now>\n\n<summary>"
+    }
+   ],
+   "ends_session": {
+    "who": "actor",
+    "except_roles": [
+     "lead"
+    ]
+   }
+  },
+  "wip-override": {
+   "value": "text",
+   "actor": "by",
+   "from": [
+    "*"
+   ],
+   "to": "same",
+   "by": [
+    "lead"
+   ],
+   "by_refusal": "wip_override_not_lead",
+   "combinable": true,
+   "arguments": {
+    "value": {
+     "required": true,
+     "refusal": "wip_override_no_reason"
+    }
+   },
+   "sets": {
+    "wip_override": "flag_value",
+    "wip_override_by": "actor",
+    "wip_override_at": "now"
+   }
+  },
+  "set-team": {
+   "value": "team",
+   "actor": "by",
+   "from": [
+    "*"
+   ],
+   "by": [
+    "anyone"
+   ],
+   "combinable": true,
+   "binds": true,
+   "requires": [
+    {
+     "when": {
+      "flag_value_empty": true
+     },
+     "field_absent": "refiner",
+     "refusal": "set_team_keep"
+    },
+    {
+     "unless": {
+      "flag_value_empty": true
+     },
+     "flag_value_is_configured_team": true,
+     "refusal": "team_not_configured"
+    },
+    {
+     "when": {
+      "matches_limits_active_item": true
+     },
+     "within_limits_of_target_team": [
+      "team"
+     ],
+     "refusal": "set_team_limit"
+    }
+   ],
+   "to_rules": [
+    {
+     "when": {
+      "unbound": true
+     },
+     "to": "initial"
+    },
+    {
+     "to": "same"
+    }
+   ],
+   "sets": {
+    "team": "flag_value"
+   }
+  }
+ },
+ "undefined_step_refusals": {
+  "status": "status_flag"
+ },
+ "on_finish": {
+  "sets": {
+   "completed": "now_if_empty"
+  },
+  "instruction": "completion_ender"
+ },
+ "edit_rules": [
+  {
+   "when": {
+    "status_in": [
+     "refinement review"
+    ]
+   },
+   "request_has": [
+    "field:*",
+    "set:*",
+    "append",
+    "section:*"
+   ],
+   "unless_request_has": [
+    "step:*"
+   ],
+   "refusal": "edit_frozen"
+  },
+  {
+   "when": {
+    "any": [
+     {
+      "status_in": [
+       "refining",
+       "refined",
+       "refinement review",
+       "awaiting decision"
+      ]
+     },
+     {
+      "all": [
+       {
+        "status_in": [
+         "new"
+        ]
+       },
+       {
+        "field_exists": "refiner"
+       }
+      ]
+     }
+    ]
+   },
+   "request_has": [
+    "step:*",
+    "field:status"
+   ],
+   "allow": [
+    "step:refine-start",
+    "step:refine-done",
+    "step:request-refinement-review",
+    "step:refinement-review",
+    "step:request-decision",
+    "step:decision",
+    "step:claim",
+    "step:release",
+    "step:close?actor_role=owner"
+   ],
+   "refusal": "edit_before_ready"
+  },
+  {
+   "when": {
+    "all": [
+     {
+      "status_in": [
+       "new",
+       "refining"
+      ]
+     },
+     {
+      "field_exists": "refiner"
+     },
+     {
+      "actor_has_role": "lead"
+     },
+     {
+      "not": {
+       "field_is_actor": "refiner",
+       "exact": true
+      }
+     }
+    ]
+   },
+   "request_has": [
+    "note",
+    "field:*",
+    "set:*",
+    "append",
+    "section:*"
+   ],
+   "allow": [
+    "set:depends-on"
+   ],
+   "refusal": "edit_lead_refining"
+  },
+  {
+   "when": {
+    "all": [
+     {
+      "incomplete": true
+     },
+     {
+      "not": {
+       "status_in": [
+        "refining",
+        "awaiting decision"
+       ]
+      }
+     },
+     {
+      "not": {
+       "actor_has_role": "lead"
+      }
+     }
+    ]
+   },
+   "request_has": [
+    "step:*",
+    "note",
+    "field:*",
+    "set:*",
+    "append",
+    "section:*"
+   ],
+   "allow": [
+    "step:close?actor_role=owner"
+   ],
+   "refusal": "edit_incomplete_not_lead"
+  },
+  {
+   "when": {
+    "incomplete": true
+   },
+   "request_has": [
+    "step:*",
+    "note",
+    "field:*",
+    "append",
+    "section:*"
+   ],
+   "allow": [
+    "step:refine-start?when_status=refining",
+    "step:refine-done?when_status=refining",
+    "step:request-refinement-review?when_status=refining",
+    "step:refinement-review?when_status=refining",
+    "step:request-decision?when_status=refining",
+    "step:decision?when_status=refining",
+    "step:close?actor_role=owner",
+    "note?when_status=refining",
+    "field:name?when_status=refining",
+    "field:objective?when_status=refining",
+    "field:summary?when_status=refining",
+    "field:summary?actor_role=owner",
+    "append?matches_rule=estimate_min,definition_of_done",
+    "section:Definition of done",
+    "step:release"
+   ],
+   "refusal": "edit_incomplete"
+  }
+ ],
+ "queue": {
+  "scope_default": "branch",
+  "roles": {
+   "member": {
+    "offers": [
+     {
+      "action": "review",
+      "select": {
+       "all": [
+        {
+         "status_in": [
+          "reviewing",
+          "external review"
+         ]
+        },
+        {
+         "field_is_actor": "reviewer",
+         "exact": true
+        }
+       ]
+      },
+      "instruction": "review_continue"
+     },
+     {
+      "action": "continue",
+      "select": {
+       "all": [
+        {
+         "field_is_actor": "claimed_by"
+        },
+        {
+         "status_in": [
+          "in progress"
+         ]
+        },
+        {
+         "field_empty": "wait_on"
+        },
+        {
+         "not": {
+          "waits_on_other_repository": true
+         }
+        },
+        {
+         "not": {
+          "last_review_rejected": {
+           "history_field": "review_history",
+           "verdict": "reject"
+          }
+         }
+        }
+       ]
+      },
+      "instruction": "continue_work"
+     },
+     {
+      "action": "refine",
+      "select": {
+       "all": [
+        {
+         "status_in": [
+          "new",
+          "refining"
+         ]
+        },
+        {
+         "field_is_actor": "refiner",
+         "exact": true
+        },
+        {
+         "field_empty": "claimed_by"
+        }
+       ]
+      },
+      "instruction": "refine_continue"
+     },
+     {
+      "action": "continue",
+      "select": {
+       "all": [
+        {
+         "field_is_actor": "claimed_by"
+        },
+        {
+         "status_in": [
+          "review complete"
+         ]
+        },
+        {
+         "field_empty": "wait_on"
+        },
+        {
+         "review_rules_met": {
+          "step": "close"
+         }
+        }
+       ]
+      },
+      "instruction": "continue_passed"
+     },
+     {
+      "action": "continue",
+      "select": {
+       "all": [
+        {
+         "field_is_actor": "claimed_by"
+        },
+        {
+         "status_in": [
+          "review complete"
+         ]
+        },
+        {
+         "field_empty": "wait_on"
+        },
+        {
+         "not": {
+          "review_rules_met": {
+           "step": "close"
+          }
+         }
+        }
+       ]
+      },
+      "instruction": "continue_passed_rules_pending"
+     },
+     {
+      "action": "continue",
+      "select": {
+       "all": [
+        {
+         "field_is_actor": "claimed_by"
+        },
+        {
+         "status_in": [
+          "in progress"
+         ]
+        },
+        {
+         "last_review_rejected": {
+          "history_field": "review_history",
+          "verdict": "reject"
+         }
+        },
+        {
+         "field_empty": "wait_on"
+        }
+       ]
+      },
+      "instruction": "continue_work"
+     },
+     {
+      "action": "review",
+      "select": {
+       "all": [
+        {
+         "status_in": [
+          "ready for review",
+          "ready for external review"
+         ]
+        },
+        {
+         "actor_lacks_role": "author"
+        },
+        {
+         "not": {
+          "waits_on_other_repository": true
+         }
+        }
+       ]
+      },
+      "mark": "start-review",
+      "instruction": "review_start",
+      "holder_field": "reviewer"
+     },
+     {
+      "action": "refine",
+      "when_actor": {
+       "all": [
+        {
+         "actor_lacks_role": "review-only"
+        },
+        {
+         "actor_active_items_at_most": 0
+        }
+       ]
+      },
+      "select": {
+       "all": [
+        {
+         "status_in": [
+          "new",
+          "refining"
+         ]
+        },
+        {
+         "field_exists": "refiner"
+        },
+        {
+         "field_empty": "refiner"
+        },
+        {
+         "field_empty": "claimed_by"
+        },
+        {
+         "within_limits": [
+          "overall",
+          "repository",
+          "branch",
+          "team",
+          "member"
+         ]
+        },
+        {
+         "not": {
+          "waits_on_other_repository": true
+         }
+        }
+       ]
+      },
+      "mark": "refine-start",
+      "instruction": "refine_start",
+      "holder_field": "refiner"
+     },
+     {
+      "action": "claim",
+      "when_actor": {
+       "all": [
+        {
+         "actor_lacks_role": "review-only"
+        },
+        {
+         "actor_active_items_at_most": 0
+        }
+       ]
+      },
+      "select": {
+       "all": [
+        {
+         "status_in": [
+          "ready"
+         ]
+        },
+        {
+         "field_empty": "claimed_by"
+        },
+        {
+         "dependencies_finished": {
+          "handoff_states": [
+           "accepted",
+           "unrecorded"
+          ]
+         }
+        },
+        {
+         "not": {
+          "field_true": "chunk"
+         }
+        },
+        {
+         "within_limits": [
+          "overall",
+          "repository",
+          "branch",
+          "team",
+          "member"
+         ]
+        }
+       ]
+      },
+      "mark": "claim",
+      "instruction": "claim",
+      "marked_instruction": "claimed",
+      "holder_field": "claimed_by"
+     },
+     {
+      "action": "idle",
+      "select": {
+       "waits_on_other_repository": true
+      },
+      "instruction": "foreign_wait_member"
+     },
+     {
+      "action": "chunk",
+      "scope": "entry_chunk_scope",
+      "select": {
+       "all": [
+        {
+         "field_true": "chunk"
+        },
+        {
+         "status_in": [
+          "ready"
+         ]
+        },
+        {
+         "field_empty": "claimed_by"
+        },
+        {
+         "dependencies_finished": {
+          "handoff_states": [
+           "accepted",
+           "unrecorded"
+          ]
+         }
+        }
+       ]
+      },
+      "instruction": "chunk_item",
+      "otherwise_instruction": "chunk_generic"
+     }
+    ],
+    "idle_instruction": "idle_member"
+   },
+   "lead": {
+    "offers": [
+     {
+      "action": "continue",
+      "select": {
+       "all": [
+        {
+         "field_is_actor": "claimed_by"
+        },
+        {
+         "field_absent": "refiner"
+        },
+        {
+         "not": {
+          "status_in": [
+           "closed",
+           "archived"
+          ]
+         }
+        },
+        {
+         "review_rules_met": {
+          "step": "close"
+         }
+        }
+       ]
+      },
+      "when_team": {
+       "team_count": {
+        "select": {
+         "all": [
+          {
+           "not": {
+            "field_is_actor": "claimed_by"
+           }
+          },
+          {
+           "not": {
+            "all": [
+             {
+              "field_absent": "refiner"
+             },
+             {
+              "field_empty": "claimed_by"
+             },
+             {
+              "complete": true
+             },
+             {
+              "dependencies_finished": {
+               "handoff_states": null
+              }
+             }
+            ]
+           }
+          }
+         ]
+        },
+        "at_most": 0
+       }
+      },
+      "instruction": "lead_close_work_item"
+     },
+     {
+      "action": "continue",
+      "select": {
+       "all": [
+        {
+         "field_is_actor": "claimed_by"
+        },
+        {
+         "field_absent": "refiner"
+        },
+        {
+         "not": {
+          "status_in": [
+           "closed",
+           "archived"
+          ]
+         }
+        },
+        {
+         "not": {
+          "review_rules_met": {
+           "step": "close"
+          }
+         }
+        }
+       ]
+      },
+      "when_team": {
+       "team_count": {
+        "select": {
+         "all": [
+          {
+           "not": {
+            "field_is_actor": "claimed_by"
+           }
+          },
+          {
+           "not": {
+            "all": [
+             {
+              "field_absent": "refiner"
+             },
+             {
+              "field_empty": "claimed_by"
+             },
+             {
+              "complete": true
+             },
+             {
+              "dependencies_finished": {
+               "handoff_states": null
+              }
+             }
+            ]
+           }
+          }
+         ]
+        },
+        "at_most": 0
+       }
+      },
+      "instruction": "lead_close_work_item_review"
+     },
+     {
+      "action": "refinement-review",
+      "select": {
+       "status_in": [
+        "refined",
+        "refinement review"
+       ]
+      },
+      "preempts": [
+       {
+        "action": "review"
+       },
+       {
+        "action": "continue",
+        "unless": {
+         "any": [
+          {
+           "status_in": [
+            "review complete"
+           ]
+          },
+          {
+           "last_review_rejected": {
+            "history_field": "review_history",
+            "verdict": "reject"
+           }
+          }
+         ]
+        }
+       }
+      ],
+      "instruction": "lead_refinement_review"
+     },
+     {
+      "action": "reassign-review",
+      "select": {
+       "all": [
+        {
+         "status_in": [
+          "reviewing",
+          "external review"
+         ]
+        },
+        {
+         "stale": {
+          "field": "review_started"
+         }
+        },
+        {
+         "not": {
+          "field_is_actor": "reviewer",
+          "exact": true
+         }
+        }
+       ]
+      },
+      "preempts": [
+       {
+        "action": "review"
+       },
+       {
+        "action": "continue",
+        "unless": {
+         "any": [
+          {
+           "status_in": [
+            "review complete"
+           ]
+          },
+          {
+           "last_review_rejected": {
+            "history_field": "review_history",
+            "verdict": "reject"
+           }
+          }
+         ]
+        }
+       }
+      ],
+      "instruction": "lead_stale_review"
+     },
+     {
+      "action": "claim",
+      "select": {
+       "all": [
+        {
+         "field_absent": "refiner"
+        },
+        {
+         "status_in": [
+          "new"
+         ]
+        },
+        {
+         "field_empty": "claimed_by"
+        },
+        {
+         "complete": true
+        },
+        {
+         "dependencies_finished": {
+          "handoff_states": [
+           "accepted",
+           "unrecorded"
+          ]
+         }
+        }
+       ]
+      },
+      "mark": "claim",
+      "instruction": "lead_work_item",
+      "marked_instruction": "claimed",
+      "holder_field": "claimed_by",
+      "try_each": true,
+      "skipped_instruction": "lead_claim_skipped"
+     },
+     {
+      "action": "refine",
+      "select": {
+       "all": [
+        {
+         "incomplete": true
+        },
+        {
+         "field_absent": "refiner"
+        },
+        {
+         "not": {
+          "waits_on_other_repository": true
+         }
+        }
+       ]
+      },
+      "instruction": "lead_refine_incomplete"
+     },
+     {
+      "action": "idle",
+      "select": {
+       "waits_on_other_repository": true
+      },
+      "instruction": "foreign_wait_lead"
+     }
+    ],
+    "busy_when": {
+     "any": [
+      {
+       "not": {
+        "team_count": {
+         "select": {
+          "all": [
+           {
+            "not": {
+             "finished": true
+            }
+           },
+           {
+            "not": {
+             "field_is_actor": "claimed_by"
+            }
+           },
+           {
+            "not": {
+             "waits_on_actor_items": true
+            }
+           },
+           {
+            "not": {
+             "waits_on_other_repository": true
+            }
+           }
+          ]
+         },
+         "at_most": 0
+        }
+       }
+      },
+      {
+       "not": {
+        "team_count": {
+         "select": {
+          "all": [
+           {
+            "not": {
+             "finished": true
+            }
+           },
+           {
+            "waits_on_other_repository": true
+           }
+          ]
+         },
+         "at_most": 0
+        }
+       }
+      }
+     ]
+    },
+    "busy_instruction": "lead_busy",
+    "idle_instruction": "idle_member"
+   }
+  },
+  "plan": {
+   "passes": [
+    {
+     "action": "respond",
+     "select": {
+      "all": [
+       {
+        "status_in": [
+         "in progress"
+        ]
+       },
+       {
+        "last_review_rejected": {
+         "history_field": "review_history",
+         "verdict": "reject"
+        }
+       },
+       {
+        "field_empty": "wait_on"
+       }
+      ]
+     },
+     "assign": {
+      "pick": "lead"
+     },
+     "instruction": "plan_respond",
+     "reason": "claimer"
+    },
+    {
+     "action": "close",
+     "select": {
+      "all": [
+       {
+        "status_in": [
+         "review complete"
+        ]
+       },
+       {
+        "review_rules_met": {
+         "step": "close"
+        }
+       }
+      ]
+     },
+     "assign": {
+      "pick": "holder"
+     },
+     "instruction": "plan_close",
+     "reason": "claimer"
+    },
+    {
+     "action": "review-request",
+     "select": {
+      "all": [
+       {
+        "status_in": [
+         "review complete"
+        ]
+       },
+       {
+        "not": {
+         "review_rules_met": {
+          "step": "close"
+         }
+        }
+       }
+      ]
+     },
+     "assign": {
+      "pick": "holder"
+     },
+     "instruction": "plan_review_request",
+     "reason": "review rules pending"
+    },
+    {
+     "action": "reassign-review",
+     "select": {
+      "all": [
+       {
+        "status_in": [
+         "reviewing",
+         "external review"
+        ]
+       },
+       {
+        "stale": {
+         "field": "review_started"
+        }
+       }
+      ]
+     },
+     "assign": {
+      "pick": "role",
+      "role": "lead"
+     },
+     "instruction": "lead_stale_review",
+     "reason": "stale review"
+    },
+    {
+     "action": "review",
+     "select": {
+      "status_in": [
+       "ready for review",
+       "ready for external review"
+      ]
+     },
+     "assign": {
+      "pick": "first_idle",
+      "role": "member",
+      "exclude_role": "author"
+     },
+     "instruction": "review_start",
+     "reason": "any member but the author"
+    },
+    {
+     "action": "claim",
+     "select": {
+      "all": [
+       {
+        "status_in": [
+         "ready"
+        ]
+       },
+       {
+        "field_empty": "claimed_by"
+       },
+       {
+        "dependencies_finished": {
+         "handoff_states": [
+          "accepted",
+          "unrecorded"
+         ]
+        }
+       },
+       {
+        "not": {
+         "field_true": "chunk"
+        }
+       }
+      ]
+     },
+     "assign": {
+      "pick": "least_loaded",
+      "role": "member",
+      "within_limits": [
+       "team",
+       "member"
+      ]
+     },
+     "instruction": "plan_claim",
+     "reason": "free member"
+    },
+    {
+     "action": "refine",
+     "select": {
+      "all": [
+       {
+        "incomplete": true
+       },
+       {
+        "field_absent": "refiner"
+       },
+       {
+        "not": {
+         "status_in": [
+          "awaiting decision"
+         ]
+        }
+       }
+      ]
+     },
+     "assign": {
+      "pick": "role",
+      "role": "lead"
+     },
+     "limit": 1,
+     "instruction": "lead_refine_incomplete",
+     "reason": "incomplete"
+    }
+   ],
+   "skip_items": {
+    "any": [
+     {
+      "incomplete": true
+     },
+     {
+      "waits_on_other_repository": true
+     }
+    ]
+   }
+  },
+  "role_order": [
+   "lead",
+   "member"
+  ],
+  "reorder_scope": "command_team"
+ },
+ "views": {
+  "claimable": {
+   "select": {
+    "all": [
+     {
+      "status_in": [
+       "ready"
+      ]
+     },
+     {
+      "field_empty": "claimed_by"
+     },
+     {
+      "dependencies_finished": {
+       "handoff_states": [
+        "accepted",
+        "unrecorded"
+       ]
+      }
+     },
+     {
+      "complete": true
+     }
+    ]
+   },
+   "fields": [
+    "id",
+    "seq",
+    "slug",
+    "status",
+    "priority",
+    "claimed_by",
+    "reviewer",
+    "refiner",
+    "repository",
+    "branch"
+   ]
+  },
+  "reviewable": {
+   "select": {
+    "all": [
+     {
+      "any": [
+       {
+        "status_in": [
+         "ready for review",
+         "ready for external review"
+        ]
+       },
+       {
+        "all": [
+         {
+          "status_in": [
+           "reviewing",
+           "external review"
+          ]
+         },
+         {
+          "field_is_actor": "reviewer",
+          "exact": true
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "actor_lacks_role": "author"
+     },
+     {
+      "complete": true
+     },
+     {
+      "not": {
+       "waits_on_other_repository": true
+      }
+     }
+    ]
+   },
+   "fields": [
+    "id",
+    "seq",
+    "slug",
+    "status",
+    "priority",
+    "claimed_by",
+    "reviewer",
+    "refiner",
+    "repository",
+    "branch"
+   ]
+  },
+  "blocked": {
+   "select": {
+    "not": {
+     "dependencies_finished": {
+      "handoff_states": [
+       "accepted",
+       "unrecorded"
+      ]
+     }
+    }
+   },
+   "fields": [
+    "id",
+    "seq",
+    "slug",
+    "status",
+    "priority",
+    "claimed_by",
+    "reviewer",
+    "refiner",
+    "repository",
+    "branch"
+   ]
+  },
+  "decisions": {
+   "select": {
+    "status_in": [
+     "awaiting decision"
+    ]
+   },
+   "fields": [
+    "id",
+    "seq",
+    "slug",
+    "status",
+    "priority",
+    "claimed_by",
+    "reviewer",
+    "refiner",
+    "repository",
+    "branch"
+   ]
+  },
+  "wip": {
+   "counts_limits": true,
+   "stale_hours": 48,
+   "fields": [
+    "level",
+    "limit",
+    "count",
+    "held"
+   ]
+  }
+ },
+ "user_commands": {
+  "update": {
+   "allow": false,
+   "refusal": "user_update"
+  },
+  "update-replan": {
+   "allow": false,
+   "refusal": "user_replan"
+  },
+  "done": {
+   "allow": false,
+   "refusal": "user_update"
+  },
+  "archive-unfinished": {
+   "allow": false,
+   "refusal": "user_archive_unfinished"
+  },
+  "archive-finished": {
+   "allow": true
+  },
+  "archive-done": {
+   "allow": true
+  },
+  "move-branch": {
+   "allow": true
+  },
+  "move-repository": {
+   "allow": true
+  },
+  "import": {
+   "allow": true
+  },
+  "import-higher": {
+   "allow": false,
+   "refusal": "user_import_higher"
+  },
+  "clean": {
+   "allow": false,
+   "refusal": "user_clean"
+  },
+  "new-split-from": {
+   "allow": false,
+   "refusal": "user_split"
+  }
+ },
+ "session": {
+  "end_text": "🛑 <agent>: END THE SESSION NOW. Reply with text only and make no further tool call; your next task starts in a fresh session."
+ },
+ "texts": {
+  "team_step": "backlog team update <item> --team <team> --agent <agent> <flags>",
+  "refine_how": "backlog team update <item> --team <team> --agent <agent> --set-review-refs <review document>,.. / --set-depends-on <ids|none> / --set-estimate <minutes> --set-complexity low|medium|high [--set-layer 1-5|process] / --append '## Definition of done\\n- [ ] <checkable line>'",
+  "list_cap": 5,
+  "conditional": {
+   "claim_first": {
+    "when": {
+     "field_empty": "claimed_by"
+    },
+    "text": "claim_first"
+   },
+   "dod": {
+    "when": {
+     "field_present": "review_refs"
+    },
+    "text": "dod"
+   },
+   "refs_note": {
+    "when": {
+     "field_present": "review_refs"
+    },
+    "text": "refs_note"
+   },
+   "stale_hint": {
+    "when": {
+     "stale": {
+      "field": "review_started"
+     }
+    },
+    "text": "stale_hint"
+   }
+  }
+ },
+ "refusals": {
+  "team_not_configured": "team <team> is not configured in the backlog configuration",
+  "wrong_status": "<item> is <status>; <step> needs <from>",
+  "wrong_actor": "<step> on <item> is for <who>, not <actor>",
+  "missing_argument": "<step> needs --<argument>",
+  "step_not_defined": "<step> is not a step of workflow <workflow> (team <team>); the team's behaviour file defines its steps",
+  "status_flag": "backlog team update takes no --status: the status of a team item moves by its steps (--claim, --request-review, --start-review, --review, --close)",
+  "one_step": "one team-work step at a time (got <flags>)",
+  "empty_flag_value": "<item>: --<step> needs the dependent (an empty value records nothing)",
+  "not_team_item": "<item> belongs to no team: use backlog update, or bind it with backlog team update <item> --team <team> --set-team <team>",
+  "other_team": "the item belongs to team <item_team>, not to this session's team <team>",
+  "outside_scope": "this item belongs to repository <repository> branch <branch>, but this team session is bound to <bound> (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog team query --scope, never claim or change them",
+  "caller_not_actor": "you are <caller> (BACKLOG_AGENT): a member acts only as itself, not as <actor>; only the team lead (<lead>) takes or gives another agent's work (backlog team update <item> --team <team> --agent <lead> --reassign <agent> --reason \"<why>\")",
+  "create_status_flag": "--status cannot be combined with --team: a team item starts in its own first status",
+  "session_branch": "--branch <value>: this team session is bound to branch <bound> (TEAM_BRANCH)",
+  "pop_session_team": "this session is team <session_team> (TEAM_NAME), not <team>",
+  "pop_caller": "you are <caller> (BACKLOG_AGENT): team pop answers only for yourself, not for <agent>",
+  "session_ended": "<actor>: this session handed its item on and ended; a fresh session takes the next step",
+  "finished_claim": "<item>: status is <status>; a finished item cannot be claimed",
+  "lead_claims_split": "<item>: the team lead (<actor>) never claims an item of its team's split; a member claims it",
+  "claim_awaiting_decision_hint": "; nobody claims it, --force included (backlog team update <item> --team <team> --agent <you> --decision \"<answer>\" first)",
+  "refine_first_hint": "; refine it first: backlog team update <item> --team <team> --agent <you> --refine-start",
+  "claimed_by_other": "<item>: claimed by <holder> since <claimed_at>; message <holder> or pick another item",
+  "dependencies_not_done": "<item>: dependencies not done: <list>",
+  "active_items": "<item>: <actor> holds <n> active item(s): <list>; pull new work only when every item you hold waits (review requested, or backlog team update <item> --team <team> --agent <actor> --waiting \"<what>\"); --force overrides",
+  "limit": "<item>: the <level> work-in-progress limit<of> is <limit> and <count> item(s) are in progress (<held>); finish one first<hint>",
+  "limit_hint": ", or the team lead lifts the limit for this item: backlog team update <item> --team <team> --agent <lead> --wip-override \"<reason>\"",
+  "recheck_dependencies": "<item> dependencies not done: <list>",
+  "recheck_limit": "<item>: <limit_text>",
+  "recheck_active_items": "<actor> holds <n> active item(s): <list>; pull new work only when every item you hold waits; --force overrides",
+  "dep_status": "<slug> (status <status>, claimed by <holder>)",
+  "dep_foreign": "<repository>#<seq> <slug> of repository <repository> (<state>)",
+  "dep_missing": "<id> (no such item in <where>)",
+  "dep_handoff_missing": "done, hand-off missing: the producer has not recorded a hand-off for this item; it records one and the team lead accepts it",
+  "dep_handoff_unaccepted": "done, hand-off unaccepted: the team lead has not accepted the producer's hand-off",
+  "dep_handoff_stale": "done, hand-off stale: the last receipt does not match the current hand-off record: the producer re-recorded it after the last receipt (an acceptance or a rejection), or the record's digest does not match its own fields; the producer records a clean hand-off when the record is broken, and the team lead must accept the current record",
+  "dep_handoff_rejected": "done, hand-off rejected: the team lead rejected the producer's hand-off; the team lead must accept the current record (or the producer records a new one and the lead accepts that)",
+  "finished_release": "<item>: status is <status>; a finished item cannot be released into the queue",
+  "release_not_holder": "<item>: claimed by <holder_or_nobody>, not by <value>",
+  "release_other": "<item>: <actor> cannot release <value>'s item: only the team lead (<lead>) does, with --reason \"<why>\"",
+  "waiting_not_holder": "<item>: --waiting needs --by <the agent holding it> (claimed by <holder_or_nobody>)",
+  "reassign_not_lead": "<item>: --reassign --by <the team lead>: only the lead (<lead>) gives one agent's item to another (got <actor_or_none>)",
+  "reassign_no_reason": "<item>: --reassign needs --reason \"<why>\"",
+  "reassign_finished": "<item>: status is <status>; a finished item is not reassigned",
+  "reassign_nobody": "<item>: nobody holds the item: the agent claims it (backlog team update <item> --team <team> --agent <agent> --claim)",
+  "reassign_same": "<item>: <value> holds it already",
+  "handoff_not_holder": "<item>: a hand-off is recorded by the claimer: the item is claimed by <holder_or_nobody>, not by <actor>",
+  "handoff_not_dependent": "<item>: dependent '<value>' is not one of this item's dependents (<dependents>)",
+  "handoff_contract_empty": "<item>: handoff record: 'contract' is empty",
+  "handoff_verification_empty": "<item>: handoff record: 'verification' is empty",
+  "handoff_no_record": "<item>: no hand-off record for dependent '<value>'; the producer records it first (--handoff)",
+  "handoff_checks_empty": "<item>: the acceptance of a hand-off needs its checks (--checks \"<text>\")",
+  "handoff_review_not_passed": "<item>: the producer's review has not passed (status <status>); the hand-off is accepted only after it",
+  "handoff_no_commit": "<item>: the hand-off record for dependent '<value>' has no commit; a hand-off without its commit on record is not accepted (--handoff-commit <sha>)",
+  "handoff_accept_not_lead": "<item>: a hand-off is accepted by the team lead (<lead>), not by <actor>",
+  "handoff_reject_not_lead": "<item>: a hand-off is rejected by the team lead (<lead>), not by <actor>",
+  "handoff_reason_empty": "<item>: the rejection of a hand-off needs its reason (--reason \"<text>\")",
+  "handoff_accept_needs_by": "<item>: --<step> needs --by <the team lead>",
+  "request_review_no_note": "<item>: --request-review needs --note \"<what to review: commits, deployed evidence>\"",
+  "request_review_in_review": "<item>: <reviewer> is reviewing it since <review_started>: wait for the verdict; the team lead hands a stale review on (--reassign-review)",
+  "request_review_not_holder": "<item>: <holder> holds it: only the holder, or the team lead, asks for its review (not <actor>)",
+  "self_review": "<item>: <actor>: the same session cannot review its own work; a new session may",
+  "self_review_target": "<item>: <value>: the same session cannot review its own work; a new session may",
+  "no_review_requested": "<item>: no review is requested (status <status>)",
+  "no_review_requested_first": "<item>: no review is requested (status <status>); the agent working on it runs --request-review first",
+  "review_taken": "<item>: in review by <reviewer> since <review_started>; review another item<stale_hint>",
+  "review_taken_short": "<item>: in review by <reviewer> since <review_started>; review another item",
+  "stale_hint": " (the review is stale: the team lead hands it on with backlog team update <item> --team <team> --agent <lead> --reassign-review <agent> --reason \"<why>\")",
+  "review_needs_comments": "<item>: --review needs --by <agent> and --comments \"<findings>\"",
+  "review_cite_refs": "<item>: --comments must cite at least one of the item's review_refs (<review_refs>): they are its definition of done and the review document",
+  "review_author_session": "<item>: <actor> reviews in the author session: a review runs in a fresh session",
+  "reassign_review_not_lead": "<item>: --reassign-review --by <the team lead>: only the lead (<lead>) hands a review on (got <actor_or_none>)",
+  "reassign_review_no_reason": "<item>: --reassign-review needs --reason \"<why>\"",
+  "review_no_work_commit": "team <team>: the review rules need a work commit; request the review from the repository (--request-review)",
+  "review_lookup_failed": "team <team>: the commit lookup failed (<reason_text>); fail closed: request the review again",
+  "review_later_work": "team <team>: the item has new work after its last review request; request the review again",
+  "review_rule_not_met": "team <team>: review rule not met - <need> pass(es) by <reviewers_text> on the current work commit needed, <have> recorded (teams.json)",
+  "refine_claimed": "<item>: claimed by <holder>: the work item itself is refined and split by the team lead, not refined here",
+  "refine_other": "<item>: <refiner> is refining it since <refine_started>; refine another item",
+  "refine_lead_first_round": "<item>: a member, not the team lead, refines in the first round (spec section 4); the lead re-refines only an item an owner decision returned to it",
+  "refine_wrong_status": "<item>: only an item of a team in stage refining is refined (team <team>, status <status>)",
+  "refine_done_not_refiner": "<item>: --refine-done --by <the refiner>: refiner is <refiner_or_nobody>, status <status>",
+  "refine_done_no_note": "<item>: --refine-done needs --note \"<what you refined>\"",
+  "refine_done_incomplete": "<item>: still missing <missing>: complete it before --refine-done (<how>)",
+  "rr_request_not_lead": "<item>: --request-refinement-review --by <the team lead>: the lead (<lead>) sends a refined item to the refinement review (got <actor_or_none>)",
+  "rr_request_not_refined": "<item>: only a refined item goes to the refinement review (status <status>)",
+  "rr_not_reviewer": "<item>: --refinement-review --by <actor>: the refinement of team <team> is reviewed by a member of <teams> (teams.json)",
+  "rr_not_requested": "<item>: no refinement review is requested (status <status>)",
+  "rr_no_comments": "<item>: --refinement-review needs --comments \"<the reviewer's findings, and its thread or session id>\"",
+  "decision_not_before_ready": "<item>: only a team item before ready waits for an owner decision (team <team>, status <status>)",
+  "decision_no_question": "<item>: --request-decision needs the question: what, why, how it came up, the options and a recommendation",
+  "decision_not_pending": "<item>: no owner decision is pending (status <status>)",
+  "decision_no_answer": "<item>: --decision needs the owner's answer",
+  "close_no_summary": "<item>: --close needs --summary \"<what was delivered>\"",
+  "close_owner_no_reason": "<item>: --close --by owner needs --reason \"<the owner's decision>\"",
+  "close_not_holder": "<item>: only the claimer (<holder>) closes it, else the team lead (<lead>); not <actor>",
+  "close_unheld": "<item>: nobody holds this item of team <team>: the team lead (<lead>) closes it; not <actor>",
+  "close_gate": "close refused for <item>: <edges>",
+  "close_gate_edge": "<dependent> edge <state>; <command>",
+  "close_gate_missing_hint": " A hand-off is required: run `backlog update --help` for details.",
+  "close_gate_none_record": "DEPENDENCY_HANDOFF: NONE (no dependent items; checked by the CLI at close)",
+  "wip_override_not_lead": "<item>: only the team lead (<lead>) lifts the team and agent work-in-progress limits for an item (got <actor_or_nobody>; --by <lead>)",
+  "wip_override_no_reason": "<item>: --wip-override needs the reason",
+  "set_team_keep": "<item>: an item in a refinement or work status keeps a team (the stages are team work); set another team instead",
+  "set_team_limit": "<item>: in progress, and in team <value>: <limit_text>",
+  "edit_frozen": "<item>: in stage refinement-review the item stays as the reviewer reads it; a changes verdict returns it to refining",
+  "edit_exclusive": "<item>: --<step> records the verdict alone; change the item first and have it reviewed again",
+  "edit_before_ready": "<item>: team <team> item in status <status>: before stage ready only its refinement steps run (<flags> refused)",
+  "edit_lead_refining": "<item>: a member, not the team lead, refines in the first round (spec section 4); the lead edits an item in stage refining only as its refiner",
+  "edit_incomplete_not_lead": "<item>: incomplete item, missing <missing>: only the team lead (<lead>) refines it, not <actor>",
+  "edit_incomplete": "<item>: incomplete item, missing <missing>: in a team nobody claims, reviews or works it (<flags> refused); the team lead refines it only: <how>",
+  "user_update": "use backlog team update: a team item is changed only there, and its status moves by its team steps",
+  "user_replan": "use backlog team update --replan: <list> <belong> to a team, and a team item takes its place in the queue only there",
+  "user_archive_unfinished": "use backlog team update: <item> belongs to a team and is not closed, and a team item is archived only after its team close (--force does not change that)",
+  "user_import_higher": "import --higher: <list> <belong> to a team, and a team item takes its place in the queue only with backlog team update --priority; nothing was moved (import without --higher moves them)",
+  "user_clean": "clean: <list> <belong> to a team, and no command deletes a team item (there is no team door for it); nothing was removed",
+  "user_split": "item <item> belongs to team <item_team>: a split of a team's item is made by backlog team new",
+  "reviewers_rule_team": "members of team <team>",
+  "reviewers_members": "members of the team",
+  "reviewers_role": "its <role> reviewers"
+ },
+ "instructions": {
+  "review_continue": "continue your review (started <review_started>): review the work of <holder_or_author><refs_note>, then backlog team update <item> --team <team> --agent <agent> --review pass|changes --comments \"<findings>\"",
+  "review_start": "start the review: backlog team update <item> --team <team> --agent <agent> --start-review; then review the work of <holder_or_author><refs_note>, then backlog team update <item> --team <team> --agent <agent> --review pass|changes --comments \"<findings>\"",
+  "refs_note": "; load its review_refs first: <review_refs> (the review-documents repository) and cite one in --comments",
+  "continue_work": "you hold it: <claim_first>keep working and record each step in the item (backlog update <item> --append \"...\"), then write the reviewer handoff and --request-review - the team's review rules must be met before the close<dod>",
+  "continue_passed": "<claim_first>close <seq> with --close --summary (backlog team update <item> --team <team> --agent <agent> --close --summary \"<outcome>\")",
+  "continue_passed_rules_pending": "<claim_first><review_refusal>: request the next review (backlog team update <item> --team <team> --agent <agent> --request-review <reviewer> --note \"<the commit>\"); after the rules are met, close <seq>",
+  "claim_first": "first claim it as <agent> (backlog team update <item> --team <team> --agent <agent> --claim), then ",
+  "dod": "; definition of done: <review_refs> (the review-documents repository: load them before working)",
+  "refine_continue": "you are refining <seq>: complete its team fields and definition of done (<how>), then backlog team update <item> --team <team> --agent <agent> --refine-done --note \"<what you refined>\"",
+  "refine_start": "refine it before anyone works on it: backlog team update <item> --team <team> --agent <agent> --refine-start, complete its team fields and definition of done (<how>), then backlog team update <item> --team <team> --agent <agent> --refine-done --note \"<what you refined>\"",
+  "claim": "claim it: backlog team update <item> --team <team> --agent <agent> --claim<dod>",
+  "claimed": "claimed for <agent>: start the work and record each step in the item<dod>",
+  "foreign_wait_member": "the work here waits on <first>: do that first in <repositories>: tell the team lead",
+  "foreign_wait_lead": "the work here waits on <first>: do that first in <repositories>: end the session here; the team is started in that repository",
+  "chunk_item": "do one small chunk (<= 10 min) of it<where>, then backlog update <item> --append \"CHUNK <time> <what> <result>\"",
+  "chunk_generic": "no item fits you: do one small chunk (<= 10 min) of refinement or tests on the open items of your team <team> and append \"CHUNK <time> <what> <result>\" to the item you touched",
+  "idle_member": "nothing for <agent>: <idle_reason><claim_refusal>",
+  "lead_close_work_item": "<claim_first>every item of team <team> is done: close <seq> (backlog team update <item> --team <team> --agent <agent> --close --summary \"<outcome>\")",
+  "lead_close_work_item_review": "<claim_first>every item of team <team> is done: have <seq> reviewed first (backlog team update <item> --team <team> --agent <agent> --request-review any --note \"<the items and their evidence>\") - the team's review rules must be met before the close",
+  "lead_refinement_review": "have the refinement of <seqs> reviewed before anyone works on them: backlog team update <item> --team <team> --agent <agent> --request-refinement-review for each refined one; have a reviewer of the team's refinement_review rule (teams.json) give a pass or changes verdict per item against the team standard (the item's review documents); then record each verdict: backlog team update <item> --team <team> --agent <reviewer> --refinement-review pass|changes --comments \"<findings; thread or session id>\"",
+  "lead_stale_review": "the review of <seq> by <reviewer> is stale (started <review_started>): hand it on: backlog team update <item> --team <team> --agent <agent> --reassign-review <member> --reason \"<why>\"",
+  "lead_work_item": "you hold <item>, the work item of team <team>: refine it, and split it only when it is too big for one member (backlog new --split-from <item> --depends-on <ids|none> --estimate <minutes> per item; they start in stage refining for the members); a refined work item is an ordinary item any member may claim; then run backlog team pop --team <team> --agent <agent> for each next step",
+  "lead_refine_incomplete": "refine <seq>, never action it: set <missing> (<how>); an incomplete item means the backlog was not filled properly: once complete, record the gap in the item (backlog update <item> --append \"GAP: ...\")",
+  "lead_busy": "your team works on <n> item(s) (<seqs>): end your turn now with a text-only reply and no tool call; do not poll, the dispatcher wakes you",
+  "plan_respond": "the review by <reviewer> asked for changes (<reviewed_at>): <claim_first>read its findings in the item, fix them, record each step (backlog update <item> --append \"...\"), then backlog team update <item> --team <team> --agent <agent> --request-review any --note \"<what changed>\"",
+  "plan_close": "<claim_first>close <seq> with --close --summary (backlog team update <item> --team <team> --agent <agent> --close --summary \"<outcome>\")",
+  "plan_review_request": "<claim_first><review_refusal>: request the next review (backlog team update <item> --team <team> --agent <agent> --request-review <reviewer> --note \"<the commit>\") and close after the rules are met",
+  "plan_claim": "claim exactly this item (planned for you; do not pop for another): backlog team update <item> --team <team> --agent <agent> --claim, then start the work and record each step in the item<dod>",
+  "close_now": "   ➡️  CLOSE NOW: <holder> closes it (backlog team update <item> --team <team> --agent <holder> --close --summary \"<outcome>\"); if the claimer has not, the team lead closes it when available (backlog team update <item> --team <team> --agent <lead> --close --summary ...)",
+  "close_now_unheld": "   ➡️  CLOSE NOW: nobody holds it: the team lead closes it (backlog team update <item> --team <team> --agent <lead> --close --summary \"<outcome>\")",
+  "next_rules_pending": "   ➡️  NEXT: <review_refusal>",
+  "next_status": "   ➡️  NEXT: the item is now <status>",
+  "completion_ender": "      the team lead re-evaluates the order (backlog update --replan, --priority); not you",
+  "lead_claim_skipped": "not taken <item>: <reason_text>"
+ }
+}

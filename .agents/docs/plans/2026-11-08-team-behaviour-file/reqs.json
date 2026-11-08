@@ -1,0 +1,3589 @@
+[
+{
+"id": "REQ-001",
+"title": "Registry files and their shape",
+"phase": "PH-3a",
+"groups": [
+"CFG-TEAMS",
+"DEF-ENTRY"
+],
+"sids": [
+"S-001-1",
+"S-001-2"
+],
+"tids": [
+"T-001-1",
+"T-001-2",
+"T-001-3"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"engine-files.test.js",
+"writes teams.json as {schema, teams}",
+"define input gold",
+"file equals the expected JSON"
+],
+[
+"engine-files.test.js",
+"writes workflows.json as {schema, workflows}",
+"team.full.json",
+"file equals the expected JSON"
+],
+[
+"engine-files.test.js",
+"rejects an unknown top-level key",
+"teams.json with extra key",
+"error \"teams.json: extra: not a key of this object\""
+]
+]
+},
+{
+"id": "REQ-002",
+"title": "Schema identity and version check",
+"phase": "PH-3a",
+"groups": [
+"ST-LEGACY"
+],
+"sids": [
+"S-002-1",
+"S-002-2",
+"S-002-3"
+],
+"tids": [
+"T-002-1",
+"T-002-2",
+"T-002-3",
+"T-002-4"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"engine-files.test.js",
+"detects schema 1 teams.json (flat map)",
+"teams-v1.json",
+"throws exit 2 with the migrate text"
+],
+[
+"engine-files.test.js",
+"detects schema 1 workflow (version 1)",
+"workflows-v1.json",
+"throws exit 2 with the migrate text"
+],
+[
+"engine-files.test.js",
+"accepts schema 2",
+"teams.example.json",
+"no error"
+],
+[
+"engine-files.test.js",
+"old item predicate: stage, review_state, earlier codec keys, bound pending/in_progress/done",
+"seven item files",
+"each read exits 2 with \"<path> carries schema 1 fields (<key>); run backlog team migrate\"; an unbound done item reads"
+]
+]
+},
+{
+"id": "REQ-003",
+"title": "Discovery: only the backlog home, no shipped fallback",
+"phase": "PH-3a",
+"groups": [
+"CFG-WORKFLOW-LOAD",
+"SHIP-TEAMCACHE"
+],
+"sids": [
+"S-003-1"
+],
+"tids": [
+"T-003-1",
+"T-003-2",
+"T-003-3"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"engine-files.test.js",
+"never reads templates at run time",
+"package without templates/team-behaviour",
+"results equal"
+],
+[
+"user-guard.test.js",
+"no run-time import of templates/team-behaviour",
+"source scan",
+"no match outside tests and migrate"
+],
+[
+"engine-files.test.js",
+"E-01 unregistered workflow",
+"teams.example.json without workflows",
+"error text E-01"
+]
+]
+},
+{
+"id": "REQ-004",
+"title": "Validate once per process, then cache",
+"phase": "PH-0",
+"groups": [
+"ST-VALIDATE",
+"DEF-TEAM"
+],
+"sids": [
+"S-004-1"
+],
+"tids": [
+"T-004-1",
+"T-004-2"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"engine-files.test.js",
+"parses each registry once per process",
+"spy on readFileSync",
+"1 read each"
+],
+[
+"engine-files.test.js",
+"cache is dropped after a registry write",
+"define then read",
+"second read sees the new entry"
+]
+]
+},
+{
+"id": "REQ-005",
+"title": "Missing files and unknown teams",
+"phase": "PH-3a",
+"groups": [
+"DEF-NOTCONF",
+"CFG-TEAMS"
+],
+"sids": [
+"S-005-1",
+"S-005-2"
+],
+"tids": [
+"T-005-1",
+"T-005-2"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"engine-files.test.js",
+"missing teams.json: team not configured (exit 1)",
+"empty home",
+"stdout text, exit 1"
+],
+[
+"engine-files.test.js",
+"missing workflows.json with entries: E-01",
+"teams only",
+"exit 2"
+]
+]
+},
+{
+"id": "REQ-006",
+"title": "Invalid files fail closed",
+"phase": "PH-3a",
+"groups": [
+"CFG-TEAMS-SILENT",
+"CFG-WORKFLOW-LOAD"
+],
+"sids": [
+"S-006-1",
+"S-006-2",
+"S-006-3"
+],
+"tids": [
+"T-006-1",
+"T-006-2",
+"T-006-3",
+"T-006-4"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"engine-files.test.js",
+"non-JSON registry: exit 2, first problem printed",
+"broken file",
+"text and code"
+],
+[
+"engine-binding.test.js",
+"port fails closed on invalid files for bound items",
+"broken file + bound item",
+"exit 2, no write"
+],
+[
+"engine-binding.test.js",
+"port ignores invalid files for unbound items",
+"broken file + user items",
+"allow"
+],
+[
+"engine-binding.test.js",
+"a bound item whose team has no entry",
+"home without the entry ghost",
+"exit 2, stderr \"<path> is bound to team ghost, which has no entry in <home>/teams.json\""
+]
+]
+},
+{
+"id": "REQ-007",
+"title": "backlog team validate",
+"phase": "PH-0",
+"groups": [
+"ST-VALIDATE",
+"DEF-TEAM"
+],
+"sids": [
+"S-007-1",
+"S-007-2",
+"S-007-3"
+],
+"tids": [
+"T-007-1",
+"T-007-2",
+"T-007-3",
+"T-007-4"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"team-validate-cli.test.js",
+"valid configuration: exit 0 and the counts",
+"teams.example.json + both templates",
+"stdout line"
+],
+[
+"team-validate-cli.test.js",
+"every problem one line, sorted",
+"fixture with 3 errors",
+"3 lines, exit 2"
+],
+[
+"team-validate-cli.test.js",
+"--json shape",
+"valid and invalid",
+"JSON shape"
+],
+[
+"team-validate-cli.test.js",
+"--help names files, exit codes, example",
+"-",
+"help text"
+]
+]
+},
+{
+"id": "REQ-008",
+"title": "backlog team validate --file",
+"phase": "PH-0",
+"groups": [
+"ST-VALIDATE",
+"DEF-TEAM"
+],
+"sids": [
+"S-008-1",
+"S-008-2"
+],
+"tids": [
+"T-008-1",
+"T-008-2",
+"T-008-3"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"team-validate-cli.test.js",
+"--file selects the schema by its schema key",
+"both kinds",
+"valid"
+],
+[
+"team-validate-cli.test.js",
+"--file with unknown schema",
+"{\"schema\":\"x\"}",
+"exit 2 text"
+],
+[
+"team-validate-cli.test.js",
+"--file unreadable",
+"missing path",
+"exit 2 text"
+]
+]
+},
+{
+"id": "REQ-009",
+"title": "Registration of a behaviour definition",
+"phase": "PH-3a",
+"groups": [
+"DEF-WFREG",
+"ST-VALIDATE",
+"DI-DEFINE-IO"
+],
+"sids": [
+"S-009-1",
+"S-009-2"
+],
+"tids": [
+"T-009-1",
+"T-009-2"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"team-validate-cli.test.js",
+"workflow --file registers schema 2 only",
+"v1 and v2 files",
+"v1 refused with migrate text"
+],
+[
+"team-validate-cli.test.js",
+"workflow --show unregistered",
+"-",
+"exit 2 text"
+]
+]
+},
+{
+"id": "REQ-010",
+"title": "team define validates against the referenced workflow",
+"phase": "PH-3a",
+"groups": [
+"DEF-TEAM",
+"DEF-ENTRY",
+"DI-DEFINE-IO"
+],
+"sids": [
+"S-010-1",
+"S-010-2",
+"S-010-3"
+],
+"tids": [
+"T-010-1",
+"T-010-2",
+"T-010-3",
+"T-010-4"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"team-validate-cli.test.js",
+"define fills review from defaults.review",
+"gold without review",
+"entry review = defaults"
+],
+[
+"team-validate-cli.test.js",
+"define accepts refinement_review, limits, chunk_scope",
+"gold full",
+"entry has the keys"
+],
+[
+"team-validate-cli.test.js",
+"define E-rules",
+"E-02..E-08 fixtures",
+"each text"
+],
+[
+"team-define-cli.test.js",
+"absent review is not written and reads as defaults.review",
+"define t9 without review",
+"teams.json has no teams.t9.review; team validate exit 0; stage rules of t9 = peer 1, external 1"
+]
+]
+},
+{
+"id": "REQ-011",
+"title": "backlog team migrate",
+"phase": "PH-1",
+"groups": [
+"ST-LEGACY",
+"RF-LEGACYSTAGE",
+"RF-JOIN",
+"CFG-WIPFILE",
+"CFG-SCOPEFILE"
+],
+"sids": [
+"S-011-1",
+"S-011-2",
+"S-011-3",
+"S-011-4",
+"S-011-5",
+"S-011-6"
+],
+"tids": [
+"T-011-1",
+"T-011-2",
+"T-011-3",
+"T-011-4",
+"T-011-5",
+"T-011-6",
+"T-011-7",
+"T-011-8",
+"T-011-9",
+"T-011-10",
+"T-011-11",
+"T-011-12",
+"T-011-13",
+"T-011-14"
+],
+"cond": null,
+"feature": "team-migrate",
+"tests": [
+[
+"team-migrate.test.js",
+"teams.json flat \u2192 schema 2 with workflow team",
+"teams-v1.json",
+"expected file"
+],
+[
+"team-migrate.test.js",
+"wip-limits.json \u2192 entry limits, file deleted",
+"wip fixture",
+"limits copied, agent\u2192member"
+],
+[
+"team-migrate.test.js",
+"backlog.scope \u2192 chunk_scope; conflict aborts",
+"two folders",
+"abort text"
+],
+[
+"team-migrate.test.js",
+"item words translated like statusOf (table of 14 cases)",
+"legacy items",
+"each word"
+],
+[
+"team-migrate.test.js",
+"teamless split slice gets the parent team",
+"slice fixture",
+"team set"
+],
+[
+"team-migrate.test.js",
+"--file converts the example-team definition",
+"backlog-workflow.json copy",
+"valid schema 2"
+],
+[
+"team-migrate.test.js",
+"--dry-run writes nothing",
+"v1 home",
+"no change"
+],
+[
+"team-migrate.test.js",
+"invalid result aborts, nothing written",
+"entry with bad lead",
+"exit 2"
+],
+[
+"team-migrate.test.js",
+"legacy slice gets refiner \"\" (3a); changes-requested gets the history line (3b)",
+"home with two legacy items",
+"front matter equals the expected objects"
+],
+[
+"team-migrate.test.js",
+"slice parent resolution (3d): file name, phase, archive/phases, not found",
+"four slices",
+"three bound to the parent's team, one listed under \"not bound (parent not found)\""
+],
+[
+"team-migrate.test.js",
+"teams.json old forms: {team,count} review, unknown stage, duplicate, no lead, empty members, unknown key, bad name",
+"seven entries",
+"entries as in REQ-011 (1) or the abort line \"teams.json: teams.<t>: <problem>; fix the entry ...\""
+],
+[
+"team-migrate.test.js",
+"wip-limits.json maps (team, agent), stale_hours other than 48, backlog.scope conflict",
+"three homes",
+"limits per entry; the two abort lines of REQ-011 (1)"
+],
+[
+"team-migrate.test.js",
+"example-team converted equals the template with peer renamed local (T-011-9)",
+"topology copy at a4ab4c11",
+"deep equality"
+],
+[
+"team-migrate.test.js",
+"partly migrated home completes; --file --dry-run prints JSON and writes nothing",
+"home with teams.json schema 2 and workflows.json schema 1",
+"one commit; file unchanged in dry run"
+]
+]
+},
+{
+"id": "REQ-012",
+"title": "JSON Schema subset interpreter",
+"phase": "PH-0",
+"groups": [
+"ST-VALIDATE",
+"DEF-TEAM"
+],
+"sids": [
+null
+],
+"tids": [
+"T-012-1",
+"T-012-2",
+"T-012-3",
+"T-012-4"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"engine-schema.test.js",
+"each keyword: one passing and one failing case with the exact message",
+"keyword table",
+"messages of \u00a74"
+],
+[
+"engine-schema.test.js",
+"schema files use no other keyword",
+"schema/*.json",
+"no unknown keyword"
+],
+[
+"engine-schema.test.js",
+"same problems as the reference interpreter",
+"corpus of 40 invalid definitions",
+"equal lists"
+],
+[
+"engine-schema.test.js",
+"python jsonschema and the JS interpreter agree on templates and schema/negative/*.json",
+"tools/check_schemas.py",
+"every template valid in both; every negative file invalid in both with the message of schema/negative/expected.tsv"
+]
+]
+},
+{
+"id": "REQ-013",
+"title": "Semantic validation rules",
+"phase": "PH-0",
+"groups": [
+"ST-VALIDATE",
+"DEF-TEAM"
+],
+"sids": [
+"S-013-1",
+"S-013-2",
+"S-013-3",
+"S-013-4",
+"S-013-5",
+"S-013-6",
+"S-013-7",
+"S-013-8",
+"S-013-9",
+"S-013-10",
+"S-013-11",
+"S-013-12",
+"S-013-13",
+"S-013-14",
+"S-013-15",
+"S-013-16",
+"S-013-17",
+"S-013-18",
+"S-013-19",
+"S-013-20",
+"S-013-21",
+"S-013-22",
+"S-013-23",
+"S-013-24",
+"S-013-25",
+"S-013-26",
+"S-013-27",
+"S-013-28",
+"S-013-29",
+"S-013-30",
+"S-013-31",
+"S-013-32",
+"S-013-33",
+"S-013-34",
+"S-013-35",
+"S-013-36",
+"S-013-37",
+"S-013-38",
+"S-013-39",
+"S-013-40",
+"S-013-41",
+"S-013-42",
+"S-013-43",
+"S-013-44",
+"S-013-45",
+"S-013-46",
+"S-013-47",
+"S-013-48",
+"S-013-49",
+"S-013-50",
+"S-013-51",
+"S-013-52",
+"S-013-53",
+"S-013-54",
+"S-013-55",
+"S-013-56",
+"S-013-57",
+"S-013-58",
+"S-013-59",
+"S-013-60",
+"S-013-61",
+"S-013-62",
+"S-013-63"
+],
+"tids": [
+"T-013-1",
+"T-013-2"
+],
+"cond": null,
+"feature": "validator-keys",
+"tests": [
+[
+"engine-validate.test.js",
+"V-01..V-30 each: fixture triggers exactly that text",
+"team.full.json patched",
+"one problem"
+],
+[
+"engine-validate.test.js",
+"E-01..E-08 each",
+"teams.example.json patched",
+"one problem"
+]
+]
+},
+{
+"id": "REQ-014",
+"title": "Shipped templates",
+"phase": "PH-0",
+"groups": [
+"SHIP-TEAMCACHE",
+"ST-VOCAB"
+],
+"sids": [
+"S-014-1",
+"S-014-2"
+],
+"tids": [
+"T-014-1",
+"T-014-2"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"engine-conformance.test.js",
+"templates validate",
+"templates/*",
+"valid"
+],
+[
+"package.test.js",
+"package files include templates/team-behaviour",
+"npm pack list",
+"`npm pack --dry-run --json` lists templates/team-behaviour/team.json, minimal.json, teams.example.json, workflows.example.json and the four schema files"
+]
+]
+},
+{
+"id": "REQ-015",
+"title": "Redefinition of a team or workflow in use",
+"phase": "-",
+"groups": [
+"DI-DEFINE-INUSE"
+],
+"sids": [
+"S-015-1"
+],
+"tids": [
+"T-015-1"
+],
+"cond": null,
+"feature": "team-file",
+"tests": [
+[
+"team-cli.test.js",
+"define refuses a team in use (kept)",
+"existing",
+"unchanged"
+]
+]
+},
+{
+"id": "REQ-101",
+"title": "Status vocabulary, initial and finished words",
+"phase": "PH-4b",
+"groups": [
+"ST-VOCAB",
+"ST-FINISHED",
+"DI-ARCHIVE"
+],
+"sids": [
+"S-101-1",
+"S-101-2",
+"S-101-3"
+],
+"tids": [
+"T-101-1",
+"T-101-2",
+"T-101-3"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"statuses/initial/finished read from the definition",
+"minimal.json",
+"words used"
+],
+[
+"engine-steps.test.js",
+"archived reserved: only archive writes it",
+"set-status to archived",
+"refused"
+],
+[
+"user-guard.test.js",
+"after PH-4b src/shared/status.js exports no status word of the template (R3-004)",
+"source of src/shared/status.js",
+"no string literal of status.js is a status, side status or stage of templates/team-behaviour/team.json"
+]
+]
+},
+{
+"id": "REQ-102",
+"title": "Side statuses",
+"phase": "PH-8",
+"groups": [
+"RF-DECISION"
+],
+"sids": [
+"S-102-1"
+],
+"tids": [
+"T-102-1",
+"T-102-2"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"to previous resolves to returns_to",
+"patched decision.to=previous",
+"refining"
+],
+[
+"engine-validate.test.js",
+"V-04..V-06",
+"patched",
+"the three lines \"def.json: side_statuses: ready is also one of statuses\", \"...returns_to: limbo is not one of statuses\", \"...enter: request-decision is not defined in steps\""
+]
+]
+},
+{
+"id": "REQ-103",
+"title": "Step catalogue and undefined steps",
+"phase": "PH-4b",
+"groups": [
+"BIND-NOSTATUS",
+"DI-MACHINE"
+],
+"sids": [
+"S-103-1",
+"S-103-2"
+],
+"tids": [
+"T-103-1",
+"T-103-2"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"undefined step \u2192 step_not_defined",
+"minimal.json",
+"stdout \"\u274c finish is not a step of workflow minimal (team m)\", exit 1"
+],
+[
+"engine-steps.test.js",
+"--status without set-status \u2192 status_flag",
+"team.full.json",
+"stdout \"\u274c backlog team update takes no --status: the status of a team item moves by its steps\", exit 1 (undefined_step_refusals.status)"
+]
+]
+},
+{
+"id": "REQ-104",
+"title": "From check",
+"phase": "PH-4b",
+"groups": [
+"ST-CANSTEP",
+"STEP-GATE"
+],
+"sids": [
+"S-104-1",
+"S-104-2",
+"S-104-3"
+],
+"tids": [
+"T-104-1",
+"T-104-2"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"from, *, variants, skip_from_when, hints",
+"fixtures",
+"allow/refuse texts"
+],
+[
+"engine-steps.test.js",
+"from_refusal overrides wrong_status",
+"refine-start",
+"stdout = the filled refine_wrong_status text, not wrong_status"
+]
+]
+},
+{
+"id": "REQ-105",
+"title": "To resolution",
+"phase": "PH-4b",
+"groups": [
+"ST-NEXT"
+],
+"sids": [
+"S-105-1",
+"S-105-2",
+"S-105-3"
+],
+"tids": [
+"T-105-1",
+"T-105-2"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"tokens same, previous, initial, first_review_stage, next_review_stage_if_satisfied, active_review_stage",
+"fixtures",
+"seven (token, status before, status after) triples equal: same/in progress/in progress; previous/awaiting decision/refining; initial/-/new; first_review_stage/in progress/ready for review; next_review_stage_if_satisfied/reviewing/ready for external review; active_review_stage/ready for review/reviewing; flag_value/new/<value>"
+],
+[
+"engine-steps.test.js",
+"to_rules first match; last rule without when",
+"release",
+"release: reviewing\u2192reviewing, slice in progress\u2192ready, work item in progress\u2192new; V-rule \"the last rule needs no when\""
+]
+]
+},
+{
+"id": "REQ-106",
+"title": "Writes: sets, clears, appends, value sources",
+"phase": "PH-4b",
+"groups": [
+"RV-HISTORY",
+"DI-GIT"
+],
+"sids": [
+"S-106-1",
+"S-106-2"
+],
+"tids": [
+"T-106-1",
+"T-106-2",
+"T-106-3"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"each value source",
+"unit",
+"actor=ann, now matches ^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ$, today matches ^\\d{4}-\\d\\d-\\d\\d$, head = git rev-parse HEAD, flag_value=<v>, \"\"=\"\", field:x=<old x>, role:lead=lead, text:<a>=filled, argument:note=<note>, head_unless_covered and now_if_empty per \u00a75.3"
+],
+[
+"engine-steps.test.js",
+"appends moves an existing entry to the end",
+"session_authors",
+"order"
+],
+[
+"engine-validate.test.js",
+"V-28 and sets.status refused",
+"patched",
+"\"def.json: steps.claim.sets.claimed_by: me is no value source\" and \"def.json: steps.claim.sets.status: the status is set by to\""
+]
+]
+},
+{
+"id": "REQ-107",
+"title": "Body records",
+"phase": "PH-4b",
+"groups": [
+"DI-MACHINE"
+],
+"sids": [
+"S-107-1",
+"S-107-2"
+],
+"tids": [
+"T-107-1",
+"T-107-2"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"records filled and headline",
+"each template step",
+"for each template step the body gains the filled records text after a blank line and the update line headline equals its first line without # marks"
+],
+[
+"engine-validate.test.js",
+"V-12 unknown placeholder",
+"patched",
+"\"def.json: refusals.limit: placeholder <who_knows> is unknown\""
+]
+]
+},
+{
+"id": "REQ-108",
+"title": "Arguments",
+"phase": "PH-4b",
+"groups": [
+"RV-CLOSE",
+"RF-STEPS"
+],
+"sids": [
+"S-108-1",
+"S-108-2"
+],
+"tids": [
+"T-108-1",
+"T-108-2"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"required, blank, cites_field (empty list passes)",
+"fixtures",
+"missing: filled refusal; blank \"  \": same; cites_field review_refs [\"r.md\"] without r.md in --comments: review_cite_refs; empty list: passes"
+],
+[
+"engine-steps.test.js",
+"argument order first/after_gate/default",
+"close",
+"order of refusals"
+]
+]
+},
+{
+"id": "REQ-109",
+"title": "Evaluation order and refusal contract",
+"phase": "PH-4b",
+"groups": [
+"STEP-GATE",
+"DI-MACHINE"
+],
+"sids": [
+"S-109-1"
+],
+"tids": [
+"T-109-1",
+"T-109-2"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"order a..g of \u00a76 (one case per adjacent pair)",
+"synthetic definition",
+"first text wins"
+],
+[
+"engine-steps.test.js",
+"refusal writes nothing",
+"fixture clone",
+"tree equal"
+]
+]
+},
+{
+"id": "REQ-110",
+"title": "One step per call; combinable and exclusive steps",
+"phase": "PH-4b",
+"groups": [
+"DI-SYNTAX",
+"RF-EDITS"
+],
+"sids": [
+"S-110-1",
+"S-110-2",
+"S-110-3"
+],
+"tids": [
+"T-110-1"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"one_step, combinable first, exclusive",
+"fixtures",
+"texts/order"
+]
+]
+},
+{
+"id": "REQ-111",
+"title": "Session end and notices",
+"phase": "PH-7",
+"groups": [
+"RV-NOTICE"
+],
+"sids": [
+"S-111-1",
+"S-111-2"
+],
+"tids": [
+"T-111-1",
+"T-111-2"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"ends_session with except_roles",
+"fixtures",
+"line present/absent"
+],
+[
+"engine-steps.test.js",
+"close_now_or_next notice variants",
+"fixtures",
+"4 texts"
+]
+]
+},
+{
+"id": "REQ-112",
+"title": "team update on an unbound item",
+"phase": "PH-11b",
+"groups": [
+"BIND-UNBOUND",
+"BIND-CLOSESTATUS",
+"WIP-START"
+],
+"sids": [
+"S-112-1",
+"S-112-2",
+"S-112-3"
+],
+"tids": [
+"T-112-1",
+"T-112-2",
+"T-112-3"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-binding.test.js",
+"unbound: only set-team",
+"fixtures",
+"refusal text"
+],
+[
+"engine-binding.test.js",
+"other team with session_team_only",
+"fixtures",
+"other_team"
+],
+[
+"engine-binding.test.js",
+"other team without session_team_only uses the item team definition",
+"patched",
+"allowed"
+]
+]
+},
+{
+"id": "REQ-113",
+"title": "A set-status step (S29b)",
+"phase": "PH-4b",
+"groups": [
+"BIND-NOSTATUS"
+],
+"sids": [
+"S-113-1",
+"S-113-2"
+],
+"tids": [
+"T-113-1"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"set-status with to flag_value; unknown word refused",
+"patched",
+"status / wrong word text"
+]
+]
+},
+{
+"id": "REQ-114",
+"title": "Blocking a session after it ended (S82)",
+"phase": "PH-7",
+"groups": [
+"RV-NOTICE"
+],
+"sids": [
+"S-114-1"
+],
+"tids": [
+"T-114-1",
+"T-114-2"
+],
+"cond": null,
+"feature": "team-statuses",
+"tests": [
+[
+"engine-steps.test.js",
+"block_after_end false writes nothing",
+"template",
+"no ended_sessions"
+],
+[
+"engine-steps.test.js",
+"block_after_end true refuses the ended session only",
+"patched",
+"with block_after_end {field: ended_sessions}: session s1 refused with filled session_ended after its review request; session s2 allowed; absent: no field written"
+]
+]
+},
+{
+"id": "REQ-201",
+"title": "Roles from sources",
+"phase": "PH-5",
+"groups": [
+"RO-MEMBERS",
+"RO-AUTHOR"
+],
+"sids": [
+"S-201-1",
+"S-201-2"
+],
+"tids": [
+"T-201-1",
+"T-201-2",
+"T-201-3"
+],
+"cond": null,
+"feature": "team-roles",
+"tests": [
+[
+"engine-roles.test.js",
+"each role source resolves",
+"entry fixtures",
+"role sets"
+],
+[
+"engine-roles.test.js",
+"entry_rule_teams with when_empty anyone",
+"no rules",
+"anyone"
+],
+[
+"engine-validate.test.js",
+"V-09, V-10",
+"patched",
+"\"def.json: steps.claim.by: role captain is not defined in roles\" and \"def.json: roles.a: union cycle through b\""
+]
+]
+},
+{
+"id": "REQ-202",
+"title": "by and not_by",
+"phase": "PH-5",
+"groups": [
+"ST-CANSTEP"
+],
+"sids": [
+"S-202-1",
+"S-202-2"
+],
+"tids": [
+"T-202-1"
+],
+"cond": null,
+"feature": "team-roles",
+"tests": [
+[
+"engine-roles.test.js",
+"by/not_by with refusal keys and wrong_actor default",
+"fixtures",
+"by: filled wrong_actor with <who> \"member or lead\"; not_by author: filled self_review; by_refusal key used when given"
+]
+]
+},
+{
+"id": "REQ-203",
+"title": "The actor of a step",
+"phase": "PH-5",
+"groups": [
+"RO-ACTSAS"
+],
+"sids": [
+"S-203-1"
+],
+"tids": [
+"T-203-1"
+],
+"cond": null,
+"feature": "team-roles",
+"tests": [
+[
+"engine-roles.test.js",
+"each actor mode",
+"fixtures",
+"actor"
+]
+]
+},
+{
+"id": "REQ-204",
+"title": "A caller acts only as itself",
+"phase": "PH-5",
+"groups": [
+"RO-CALLER"
+],
+"sids": [
+"S-204-1"
+],
+"tids": [
+"T-204-1"
+],
+"cond": null,
+"feature": "team-roles",
+"tests": [
+[
+"engine-roles.test.js",
+"caller check with except_roles; false disables it",
+"fixtures",
+"member ann acting as bob: filled caller_not_actor; lead acting as bob: allowed; caller_acts_only_as_itself false: allowed"
+]
+]
+},
+{
+"id": "REQ-205",
+"title": "Same worker (session continuation)",
+"phase": "PH-5",
+"groups": [
+"RO-SAMEWORKER"
+],
+"sids": [
+"S-205-1",
+"S-205-2"
+],
+"tids": [
+"T-205-1"
+],
+"cond": null,
+"feature": "team-roles",
+"tests": [
+[
+"engine-roles.test.js",
+"same worker with and without the key; exact",
+"fixtures",
+"allow/refuse"
+]
+]
+},
+{
+"id": "REQ-206",
+"title": "The lead comes only from the team entry",
+"phase": "PH-5",
+"groups": [
+"ENV-LEAD"
+],
+"sids": [
+"S-206-1",
+"S-206-2"
+],
+"tids": [
+"T-206-1",
+"T-206-2",
+"T-206-3"
+],
+"cond": null,
+"feature": "team-roles",
+"tests": [
+[
+"engine-roles.test.js",
+"TEAM_LEAD ignored",
+"env",
+"entry lead"
+],
+[
+"team-cli.test.js",
+"--lead removed from pop and query --plan",
+"argv",
+"exit 2"
+],
+[
+"user-guard.test.js",
+"no TEAM_LEAD read in src",
+"grep",
+"none"
+]
+]
+},
+{
+"id": "REQ-207",
+"title": "Session scope and session team",
+"phase": "PH-5",
+"groups": [
+"SC-SCOPE",
+"SC-INTEAM",
+"SC-BRANCHBOUND"
+],
+"sids": [
+"S-207-1",
+"S-207-2"
+],
+"tids": [
+"T-207-1",
+"T-207-2"
+],
+"cond": null,
+"feature": "team-roles",
+"tests": [
+[
+"engine-roles.test.js",
+"bind_session on/off",
+"fixtures",
+"bind_session true: item of branch dev refused with filled outside_scope; false: allowed"
+],
+[
+"engine-roles.test.js",
+"session_branch for pop",
+"fixture",
+"team pop --branch dev in a session bound to main: filled session_branch, exit 1"
+]
+]
+},
+{
+"id": "REQ-208",
+"title": "Items of another repository",
+"phase": "PH-10a",
+"groups": [
+"SC-INTEAM",
+"Q-ROWS"
+],
+"sids": [
+"S-208-1",
+"S-208-2"
+],
+"tids": [
+"T-208-1"
+],
+"cond": null,
+"feature": "team-roles",
+"tests": [
+[
+"engine-queue.test.js",
+"foreign_items chunk_only/none",
+"two folders",
+"foreign_items {when: field_true chunk}: chunk item of the other folder offered, user item not; absent: neither offered (exit 3)"
+]
+]
+},
+{
+"id": "REQ-209",
+"title": "Team entry names",
+"phase": "PH-3a",
+"groups": [
+"RO-MEMBERS",
+"DEF-TEAM"
+],
+"sids": [
+"S-209-1"
+],
+"tids": [
+"T-209-1"
+],
+"cond": null,
+"feature": "team-roles",
+"tests": [
+[
+"engine-validate.test.js",
+"E-02, E-03",
+"patched",
+"\"team.json: lead and members must not share a name (b)\" and \"team.json: lists.review_only: z is not in members\""
+]
+]
+},
+{
+"id": "REQ-301",
+"title": "Conditions: shape, when, unless, force, order",
+"phase": "PH-6a",
+"groups": [
+"STEP-ACTIVE"
+],
+"sids": [
+"S-301-1",
+"S-301-2"
+],
+"tids": [
+"T-301-1",
+"T-301-2"
+],
+"cond": null,
+"feature": "team-claims-handoffs",
+"tests": [
+[
+"engine-conditions.test.js",
+"when/unless/force/order/exact on a synthetic condition",
+"unit",
+"pass/skip"
+],
+[
+"engine-validate.test.js",
+"V-24 exactly one test key; missing refusal",
+"patched",
+"\"...requires[0]: a condition has exactly one test key (found status_not_in, field_empty)\" and \"...requires[2]: a condition needs refusal\""
+]
+]
+},
+{
+"id": "REQ-302",
+"title": "Field conditions",
+"phase": "PH-6a",
+"groups": [
+"STEP-CLAIM",
+"STEP-RELEASE"
+],
+"sids": [
+"S-302-1"
+],
+"tids": [
+"T-302-1"
+],
+"cond": null,
+"feature": "team-claims-handoffs",
+"tests": [
+[
+"engine-conditions.test.js",
+"field tests pass/fail",
+"unit",
+"field_empty x on {} true / on {x:\"a\"} false; field_present the reverse; field_exists/field_absent on key presence; field_is_actor ann on {claimed_by:\"ann:1\"} true without exact, false with exact"
+]
+]
+},
+{
+"id": "REQ-303",
+"title": "The claim step of the template",
+"phase": "PH-6a",
+"groups": [
+"STEP-CLAIM",
+"STEP-ACTIVE"
+],
+"sids": [
+"S-303-1",
+"S-303-2",
+"S-303-3"
+],
+"tids": [
+"T-303-1"
+],
+"cond": null,
+"feature": "team-claims-handoffs",
+"tests": [
+[
+"engine-conformance.test.js",
+"claim: today's claim tests over the template",
+"shared-team-lifecycle, shared-unrefined-claim, shared-session-continue",
+"the 25 tests TST-417..TST-676 of shared-team-lifecycle.test.js, shared-unrefined-claim.test.js, shared-session-continue.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-304",
+"title": "Release, waiting, waiting-done, reassign",
+"phase": "PH-6a",
+"groups": [
+"STEP-RELEASE",
+"STEP-WAIT",
+"STEP-REASSIGN"
+],
+"sids": [
+"S-304-1",
+"S-304-2",
+"S-304-3"
+],
+"tids": [
+"T-304-1"
+],
+"cond": null,
+"feature": "team-claims-handoffs",
+"tests": [
+[
+"engine-conformance.test.js",
+"release/waiting/reassign tests over the template",
+"shared-team-work, shared-team-lifecycle",
+"the 30 tests TST-573..TST-668 of shared-team-work.test.js, shared-team-lifecycle.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-305",
+"title": "Waiting cleared by the next step",
+"phase": "PH-6a",
+"groups": [
+"STEP-WAIT"
+],
+"sids": [
+"S-305-1"
+],
+"tids": [
+"T-305-1"
+],
+"cond": null,
+"feature": "team-claims-handoffs",
+"tests": [
+[
+"engine-steps.test.js",
+"cleared_by_steps and cleared_by_note",
+"fixtures",
+"field and record"
+]
+]
+},
+{
+"id": "REQ-306",
+"title": "Recheck at publication",
+"phase": "PH-6a",
+"groups": [
+"STEP-RECHECK",
+"DI-PUBLISH-HOOK"
+],
+"sids": [
+null
+],
+"tids": [
+"T-306-1"
+],
+"cond": null,
+"feature": "team-claims-handoffs",
+"tests": [
+[
+"engine-conformance.test.js",
+"publication recheck: dependencies, limit, active item",
+"race fixture",
+"rollback text"
+]
+]
+},
+{
+"id": "REQ-307",
+"title": "Hand-off record step",
+"phase": "PH-6b",
+"groups": [
+"HO-RECORD",
+"DI-HANDOFF-FORMAT"
+],
+"sids": [
+"S-307-1"
+],
+"tids": [
+"T-307-1",
+"T-307-2"
+],
+"cond": null,
+"feature": "team-claims-handoffs",
+"tests": [
+[
+"engine-conformance.test.js",
+"hand-off command tests over the template",
+"shared-handoff-commands, shared-handoff-e2e",
+"the 35 tests TST-153..TST-208 of shared-handoff-commands.test.js, shared-handoff-e2e.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+],
+[
+"engine-validate.test.js",
+"V-27 effect only on hand-off steps",
+"patched",
+"\"def.json: steps.set-team: a binding step needs to or to_rules\" (V-27 reduced, D-25)"
+]
+]
+},
+{
+"id": "REQ-308",
+"title": "Accept and reject a hand-off",
+"phase": "PH-6b",
+"groups": [
+"HO-RECEIPT"
+],
+"sids": [
+"S-308-1"
+],
+"tids": [
+"T-308-1"
+],
+"cond": null,
+"feature": "team-claims-handoffs",
+"tests": [
+[
+"engine-conformance.test.js",
+"accept/reject tests over the template",
+"shared-handoff-commands",
+"the 13 tests TST-153..TST-165 of shared-handoff-commands.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-309",
+"title": "The close gate",
+"phase": "PH-6b",
+"groups": [
+"HO-GATE",
+"HO-EDGE",
+"HO-TEXTS",
+"DI-HANDOFF-GRAPH"
+],
+"sids": [
+"S-309-1",
+"S-309-2"
+],
+"tids": [
+"T-309-1"
+],
+"cond": null,
+"feature": "team-claims-handoffs",
+"tests": [
+[
+"engine-conformance.test.js",
+"close gate tests over the template",
+"shared-handoff-gate, shared-handoff-close",
+"the 14 tests TST-144..TST-213 of shared-handoff-gate.test.js, shared-handoff-close.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-401",
+"title": "Review stages",
+"phase": "PH-7",
+"groups": [
+"ST-VOCAB",
+"ST-NEXT"
+],
+"sids": [
+"S-401-1",
+"S-401-2"
+],
+"tids": [
+"T-401-1",
+"T-401-2"
+],
+"cond": null,
+"feature": "team-review",
+"tests": [
+[
+"engine-review.test.js",
+"stage selection and skipping",
+"entry variants",
+"entry review [external] skips peer: request-review \u2192 ready for external review; [] \u2192 review complete; [peer, external] \u2192 ready for review"
+],
+[
+"engine-validate.test.js",
+"V-13, V-18",
+"patched",
+"\"...stages.qa: stage is not in review.stages_order\" and \"def.json: review.stages.peer.ready: waiting is no status of this workflow\""
+]
+]
+},
+{
+"id": "REQ-402",
+"title": "Entry review rules and defaults",
+"phase": "PH-7",
+"groups": [
+"ST-STAGERULES",
+"ST-ELIGIBLE"
+],
+"sids": [
+"S-402-1"
+],
+"tids": [
+"T-402-1",
+"T-402-2"
+],
+"cond": null,
+"feature": "team-review",
+"tests": [
+[
+"engine-review.test.js",
+"count, team rule, distinct reviewers, work commit",
+"fixtures",
+"passes"
+],
+[
+"team-validate-cli.test.js",
+"define writes defaults.review",
+"-",
+"entry"
+]
+]
+},
+{
+"id": "REQ-403",
+"title": "Request review",
+"phase": "PH-7",
+"groups": [
+"RV-REQUEST"
+],
+"sids": [
+"S-403-1"
+],
+"tids": [
+"T-403-1",
+"T-403-2"
+],
+"cond": null,
+"feature": "team-review",
+"tests": [
+[
+"engine-conformance.test.js",
+"request-review tests over the template",
+"shared-team-stages, shared-twostage",
+"the 17 tests TST-621..TST-670 of shared-team-stages.test.js, shared-twostage.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+],
+[
+"engine-steps.test.js",
+"head_unless_covered",
+"git fixture",
+"work_commit"
+]
+]
+},
+{
+"id": "REQ-404",
+"title": "Start review, verdicts, passes, history",
+"phase": "PH-7",
+"groups": [
+"RV-START",
+"RV-REVIEW",
+"RV-VERDICTS",
+"RV-HISTORY",
+"ST-ELIGIBLE"
+],
+"sids": [
+"S-404-1",
+"S-404-2",
+"S-404-3"
+],
+"tids": [
+"T-404-1",
+"T-404-2"
+],
+"cond": null,
+"feature": "team-review",
+"tests": [
+[
+"engine-conformance.test.js",
+"review tests over the template",
+"shared-session-review, shared-team-flow",
+"the 12 tests TST-428..TST-557 of shared-session-review.test.js, shared-team-flow.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+],
+[
+"engine-review.test.js",
+"verdict_words, reject_clears_passes",
+"patched",
+"fields"
+]
+]
+},
+{
+"id": "REQ-405",
+"title": "Review rules at the close",
+"phase": "PH-7",
+"groups": [
+"RV-RULES"
+],
+"sids": [
+"S-405-1"
+],
+"tids": [
+"T-405-1",
+"T-405-2"
+],
+"cond": null,
+"feature": "team-review",
+"tests": [
+[
+"engine-review.test.js",
+"review_passes_met texts per rule kind",
+"fixtures",
+"rule team gold: \"<reviewers_text>\" = \"members of team gold\"; stage reviewers union: \"members of the team\"; external: \"its external reviewers\""
+],
+[
+"engine-review.test.js",
+"no_later_own_work with subject pattern, lookup failure",
+"git fixture",
+"subject \"12 and 13: fix\" after the work commit of item 12: filled review_later_work; git failing: filled review_lookup_failed; no work commit: review_no_work_commit"
+]
+]
+},
+{
+"id": "REQ-406",
+"title": "Author session and citation",
+"phase": "PH-7",
+"groups": [
+"RV-REVIEW",
+"RO-AUTHOR"
+],
+"sids": [
+"S-406-1"
+],
+"tids": [
+"T-406-1"
+],
+"cond": null,
+"feature": "team-review",
+"tests": [
+[
+"engine-review.test.js",
+"not_caller_session_of",
+"env fixtures",
+"caller session equals author_session: refused with review_author_session; differs: allowed; empty caller session: allowed"
+]
+]
+},
+{
+"id": "REQ-407",
+"title": "Stale reviews and reassign-review",
+"phase": "PH-7",
+"groups": [
+"RV-REASSIGN",
+"RV-STALE",
+"ENV-STALE"
+],
+"sids": [
+"S-407-1"
+],
+"tids": [
+"T-407-1",
+"T-407-2"
+],
+"cond": null,
+"feature": "team-review",
+"tests": [
+[
+"engine-review.test.js",
+"stale predicate uses the file",
+"env set",
+"ignored"
+],
+[
+"engine-conformance.test.js",
+"reassign-review tests",
+"shared-team-lead-pop",
+"the 15 tests TST-558..TST-572 of shared-team-lead-pop.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-408",
+"title": "The close step",
+"phase": "PH-7",
+"groups": [
+"RV-CLOSE"
+],
+"sids": [
+"S-408-1",
+"S-408-2"
+],
+"tids": [
+"T-408-1"
+],
+"cond": null,
+"feature": "team-review",
+"tests": [
+[
+"engine-conformance.test.js",
+"close tests over the template",
+"shared-team-lifecycle, shared-team-done",
+"the 12 tests TST-555..TST-582 of shared-team-lifecycle.test.js, shared-team-done.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-501",
+"title": "Refinement steps",
+"phase": "PH-8",
+"groups": [
+"RF-STEPS",
+"RV-VERDICTS"
+],
+"sids": [
+"S-501-1",
+"S-501-2"
+],
+"tids": [
+"T-501-1"
+],
+"cond": null,
+"feature": "team-refinement",
+"tests": [
+[
+"engine-conformance.test.js",
+"refinement tests over the template",
+"shared-team-stages, shared-unrefined-claim",
+"the 21 tests TST-621..TST-676 of shared-team-stages.test.js, shared-unrefined-claim.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-502",
+"title": "Refinement reviewers from the entry",
+"phase": "PH-8",
+"groups": [
+"RF-STEPS"
+],
+"sids": [
+"S-502-1"
+],
+"tids": [
+"T-502-1"
+],
+"cond": null,
+"feature": "team-refinement",
+"tests": [
+[
+"engine-roles.test.js",
+"refinement-reviewer with and without rules",
+"entry fixtures",
+"with rules.refinement_review [gold]: members and lead of gold hold refinement-reviewer, others not; without rules: anyone holds it (when_empty anyone)"
+]
+]
+},
+{
+"id": "REQ-503",
+"title": "Owner decisions",
+"phase": "PH-8",
+"groups": [
+"RF-DECISION"
+],
+"sids": [
+"S-503-1"
+],
+"tids": [
+"T-503-1"
+],
+"cond": null,
+"feature": "team-refinement",
+"tests": [
+[
+"engine-conformance.test.js",
+"decision tests over the template",
+"team.feature decision scenario, shared-team-stages",
+"the 15 tests TST-621..TST-635 of shared-team-stages.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-504",
+"title": "Edit rules",
+"phase": "PH-8",
+"groups": [
+"RF-EDITS"
+],
+"sids": [
+"S-504-1",
+"S-504-2",
+"S-504-3",
+"S-504-4",
+"S-504-5",
+"S-504-6",
+"S-504-7",
+"S-504-8",
+"S-504-9",
+"S-504-10"
+],
+"tids": [
+"T-504-1",
+"T-504-2"
+],
+"cond": null,
+"feature": "team-refinement",
+"tests": [
+[
+"engine-steps.test.js",
+"edit rule selectors and qualifiers",
+"synthetic rules",
+"match table"
+],
+[
+"engine-conformance.test.js",
+"incomplete-item tests over the template",
+"shared-team-work, shared-team-stages",
+"the 35 tests TST-621..TST-668 of shared-team-work.test.js, shared-team-stages.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-505",
+"title": "Completeness",
+"phase": "PH-8",
+"groups": [
+"RF-COMPLETE",
+"CR-DOD"
+],
+"sids": [
+"S-505-1",
+"S-505-2"
+],
+"tids": [
+"T-505-1"
+],
+"cond": null,
+"feature": "team-refinement",
+"tests": [
+[
+"engine-conditions.test.js",
+"completeness tests: non_empty, present, positive_integer+body_pattern, section",
+"14 DoD cases of shared-new",
+"the 31 tests TST-300..TST-330 of shared-new.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted; the 14 definition-of-done inputs give the same complete/incomplete answer"
+]
+]
+},
+{
+"id": "REQ-601",
+"title": "Limit numbers in the team entry",
+"phase": "PH-9",
+"groups": [
+"CFG-WIPFILE",
+"WIP-LEVELS"
+],
+"sids": [
+"S-601-1",
+"S-601-2"
+],
+"tids": [
+"T-601-1",
+"T-601-2"
+],
+"cond": null,
+"feature": "team-limits",
+"tests": [
+[
+"engine-limits.test.js",
+"numbers per level, map with default and key",
+"entry fixtures",
+"limit"
+],
+[
+"engine-limits.test.js",
+"wip-limits.json ignored",
+"file present",
+"no effect"
+]
+]
+},
+{
+"id": "REQ-602",
+"title": "What counts and whose it is",
+"phase": "PH-9",
+"groups": [
+"WIP-ACTIVE"
+],
+"sids": [
+"S-602-1",
+"S-602-2"
+],
+"tids": [
+"T-602-1",
+"T-602-2"
+],
+"cond": null,
+"feature": "team-limits",
+"tests": [
+[
+"engine-limits.test.js",
+"active_item and holder over a home with 3 folders",
+"fixture home",
+"overall 3, repository o/a 2, branch o/a:main 1, team 2, member ann 1 for the fixture home of 3 folders with 3 active items"
+],
+[
+"engine-limits.test.js",
+"count_scope team excludes other teams and user items",
+"fixture",
+"count_scope team: overall 1 (only t1 items); home: overall 3"
+]
+]
+},
+{
+"id": "REQ-603",
+"title": "within_limits evaluation and text",
+"phase": "PH-9",
+"groups": [
+"WIP-LEVELS"
+],
+"sids": [
+null
+],
+"tids": [
+"T-603-1"
+],
+"cond": null,
+"feature": "team-limits",
+"tests": [
+[
+"engine-limits.test.js",
+"text with 9 holders ends with \", ...\"",
+"fixture",
+"the held list is 8 entries \"<repository>#<seq>\" joined by \", \" followed by \", ...\""
+]
+]
+},
+{
+"id": "REQ-604",
+"title": "The override",
+"phase": "PH-9",
+"groups": [
+"WIP-OVERRIDE"
+],
+"sids": [
+"S-604-1",
+"S-604-2"
+],
+"tids": [
+"T-604-1"
+],
+"cond": null,
+"feature": "team-limits",
+"tests": [
+[
+"engine-limits.test.js",
+"override lifts only listed levels",
+"fixture",
+"with wip_override set: team and member levels skipped (claim allowed), overall level still refuses"
+]
+]
+},
+{
+"id": "REQ-605",
+"title": "The wip view",
+"phase": "PH-9",
+"groups": [
+"WIP-VIEW"
+],
+"sids": [
+"S-605-1",
+"S-605-2"
+],
+"tids": [
+"T-605-1"
+],
+"cond": null,
+"feature": "team-limits",
+"tests": [
+[
+"engine-limits.test.js",
+"wip view rows and stale list",
+"fixture home",
+"lines \"team t1: 1 of 4\", \"member ann: 1 of 1\", \"limits: <home>/teams.json\" and \"stale: 001-a (updated 2000-01-01T00:00:00Z)\""
+]
+]
+},
+{
+"id": "REQ-701",
+"title": "Dependencies finished",
+"phase": "PH-9",
+"groups": [
+"DEP-FINISHED",
+"HO-EDGE"
+],
+"sids": [
+"S-701-1"
+],
+"tids": [
+"T-701-1",
+"T-701-2"
+],
+"cond": null,
+"feature": "team-creation-dependencies",
+"tests": [
+[
+"engine-conditions.test.js",
+"dependencies_finished: states, null, foreign, unbound target",
+"fixtures",
+"handoff_states [accepted, unrecorded]: unaccepted edge false, accepted true, producer without records field true (unrecorded); null: true; foreign closed target true; unbound target per the display convention"
+],
+[
+"engine-conformance.test.js",
+"dependency tests",
+"shared-foreign-deps, shared-handoff-gate",
+"the 9 tests TST-107..TST-213 of shared-foreign-deps.test.js, shared-handoff-gate.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-702",
+"title": "Creation (team new)",
+"phase": "PH-8",
+"groups": [
+"CR-TEAMNEW",
+"CR-DOD",
+"PC-NEWKEYS",
+"PC-SEVERITY"
+],
+"sids": [
+"S-702-1",
+"S-702-2",
+"S-702-3",
+"S-702-4"
+],
+"tids": [
+"T-702-1",
+"T-702-2"
+],
+"cond": null,
+"feature": "team-creation-dependencies",
+"tests": [
+[
+"engine-conformance.test.js",
+"team new tests",
+"shared-new (team cases), new-ask",
+"the 9 tests TST-011..TST-019 of new-ask.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+],
+[
+"engine-steps.test.js",
+"create.priority_by_severity",
+"fixture",
+"rank"
+]
+]
+},
+{
+"id": "REQ-703",
+"title": "Binding an item (set-team)",
+"phase": "PH-11b",
+"groups": [
+"WIP-SETTEAM",
+"BIND-UNBOUND"
+],
+"sids": [
+"S-703-1",
+"S-703-2"
+],
+"tids": [
+"T-703-1"
+],
+"cond": null,
+"feature": "team-creation-dependencies",
+"tests": [
+[
+"engine-binding.test.js",
+"set-team bind/unbind/limit/unknown",
+"fixtures",
+"texts and fields"
+]
+]
+},
+{
+"id": "REQ-704",
+"title": "Dependency integrity stays generic",
+"phase": "-",
+"groups": [
+"DI-REF"
+],
+"sids": [
+"S-704-1"
+],
+"tids": [
+"T-704-1"
+],
+"cond": null,
+"feature": "team-creation-dependencies",
+"tests": [
+[
+"shared-update.test.js",
+"dependency integrity (kept)",
+"existing",
+"unchanged"
+]
+]
+},
+{
+"id": "REQ-801",
+"title": "Predicate evaluator",
+"phase": "PH-10a",
+"groups": [
+"Q-POP",
+"Q-VIEWS"
+],
+"sids": [
+null
+],
+"tids": [
+"T-801-1"
+],
+"cond": null,
+"feature": "team-queue",
+"tests": [
+[
+"engine-conditions.test.js",
+"every predicate key true/false",
+"unit",
+"for every predicate key of \u00a75.2 one fixture where it is true and one where it is false (table in the test file, 41 keys)"
+]
+]
+},
+{
+"id": "REQ-802",
+"title": "team pop from queue.roles",
+"phase": "PH-10c",
+"groups": [
+"Q-POP",
+"Q-REVIEWONLY",
+"RF-HOWTEXT",
+"DI-CONCURRENCY"
+],
+"sids": [
+"S-802-1",
+"S-802-2",
+"S-802-3"
+],
+"tids": [
+"T-802-1",
+"T-802-2"
+],
+"cond": null,
+"feature": "team-queue",
+"tests": [
+[
+"engine-conformance.test.js",
+"pop tests over the template",
+"shared-team-pop, shared-team-lead-pop",
+"the 34 tests TST-558..TST-611 of shared-team-pop.test.js, shared-team-lead-pop.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+],
+[
+"engine-queue.test.js",
+"offers order, preempts, when_actor, busy",
+"synthetic queue",
+"answers: first matching offer in file order; preempts replaces a review answer and a continue answer unless the item is review complete or rejected; when_actor false skips the offer; busy_when true gives busy_instruction"
+]
+]
+},
+{
+"id": "REQ-803",
+"title": "The lead's work item",
+"phase": "PH-10d",
+"groups": [
+"Q-LEADWORK"
+],
+"sids": [
+"S-803-1"
+],
+"tids": [
+"T-803-1"
+],
+"cond": null,
+"feature": "team-queue",
+"tests": [
+[
+"engine-conformance.test.js",
+"lead pop tests",
+"shared-team-lead-pop",
+"the 15 tests TST-558..TST-572 of shared-team-lead-pop.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-804",
+"title": "team query --plan from queue.plan",
+"phase": "PH-10b",
+"groups": [
+"Q-PLAN",
+"Q-REVIEWONLY"
+],
+"sids": [
+"S-804-1"
+],
+"tids": [
+"T-804-1",
+"T-804-2"
+],
+"cond": null,
+"feature": "team-queue",
+"tests": [
+[
+"engine-conformance.test.js",
+"plan tests",
+"shared-team-plan",
+"the 10 tests TST-583..TST-592 of shared-team-plan.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+],
+[
+"engine-queue.test.js",
+"assignment strategies",
+"synthetic",
+"assignments"
+]
+]
+},
+{
+"id": "REQ-805",
+"title": "Team views",
+"phase": "PH-10a",
+"groups": [
+"Q-VIEWS"
+],
+"sids": [
+"S-805-1",
+"S-805-2"
+],
+"tids": [
+"T-805-1"
+],
+"cond": null,
+"feature": "team-queue",
+"tests": [
+[
+"engine-conformance.test.js",
+"view tests",
+"shared-team-scope, shared-query (team views)",
+"the 9 tests TST-612..TST-620 of shared-team-scope.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-806",
+"title": "Chunk scope in the entry",
+"phase": "PH-10c",
+"groups": [
+"CFG-SCOPEFILE",
+"Q-ROWS"
+],
+"sids": [
+"S-806-1"
+],
+"tids": [
+"T-806-1"
+],
+"cond": null,
+"feature": "team-queue",
+"tests": [
+[
+"engine-queue.test.js",
+"chunk_scope caps",
+"fixtures",
+"chunk_scope off: no chunk offer; branch: only the branch's chunk items; repo: the folder's; all: every folder's"
+]
+]
+},
+{
+"id": "REQ-901",
+"title": "The binding port and user_commands",
+"phase": "PH-11a",
+"groups": [
+"BIND-TEXTS",
+"BIND-UPDATE",
+"BIND-REPLAN",
+"BIND-ARCHIVE",
+"BIND-IMPORT",
+"BIND-CLEAN",
+"BIND-SPLIT",
+"BIND-ENTRYOF",
+"PC-SEAM"
+],
+"sids": [
+"S-901-1",
+"S-901-2",
+"S-901-3",
+"S-901-4"
+],
+"tids": [
+"T-901-1",
+"T-901-2",
+"T-901-3",
+"T-901-4"
+],
+"cond": null,
+"feature": "user-guarantee",
+"tests": [
+[
+"engine-binding.test.js",
+"each of the 12 operations allow/refuse",
+"patched definitions",
+"for each of the 12 operations: allow true \u2192 the command exits 0; allow false \u2192 stdout \"\u274c <filled refusal>\", exit 1, nothing written"
+],
+[
+"engine-binding.test.js",
+"list texts: 5 names then \"and N more\", belongs/belong",
+"7 bound items",
+"7 bound items: \"<list>\" = 5 slugs joined by \", \" then \" and 2 more\"; one item: \"belongs\"; two: \"belong\""
+],
+[
+"engine-binding.test.js",
+"no team file read when no item is bound",
+"spy",
+"0 reads"
+],
+[
+"engine-conformance.test.js",
+"plain-team-items tests over the template",
+"plain-team-items, team-boundary",
+"the 28 tests TST-036..TST-760 of plain-team-items.test.js, team-boundary.test.js pass against the registered template with their assertions unchanged except the rows whose disposition in tests.tsv is harness, rewrite, changed or deleted"
+]
+]
+},
+{
+"id": "REQ-902",
+"title": "The user-command code enforces nothing",
+"phase": "PH-12",
+"groups": [
+"ST-SOLO",
+"PC-NEWKEYS",
+"PC-SEAM",
+"CFG-OWNER"
+],
+"sids": [
+"S-902-1",
+"S-902-2"
+],
+"tids": [
+"T-902-1",
+"T-902-2",
+"T-902-3",
+"T-902-4",
+"T-902-5"
+],
+"cond": null,
+"feature": "user-guarantee",
+"tests": [
+[
+"user-guard.test.js",
+"no flow or team word in src/shared (allow-list)",
+"source scan",
+"0 hits"
+],
+[
+"user-guard.test.js",
+"import graph: src/shared imports from src/engine only binding.js",
+"graph",
+"the import graph of src/shared has no edge to src/team and only binding.js into src/engine (test passes; a mutated import fails)"
+],
+[
+"shared-new.test.js",
+"user new writes no team key",
+"user new",
+"keys"
+],
+[
+"shared-changed.test.js",
+"held is the holder field only",
+"item with reviewer ann, owner bob",
+"held = [], others = [item]"
+],
+[
+"user-guard.test.js",
+"src/shared/status.js removed (moved from REQ-101 to the phase that deletes the file, R3-004)",
+"tree",
+"absent"
+]
+]
+},
+{
+"id": "REQ-903",
+"title": "Refusal and instruction tables",
+"phase": "PH-4b",
+"groups": [
+"BIND-TEXTS",
+"HO-TEXTS",
+"RF-HOWTEXT",
+"STEP-GATE",
+"ST-FILL"
+],
+"sids": [
+"S-903-1",
+"S-903-2"
+],
+"tids": [
+"T-903-1",
+"T-903-2"
+],
+"cond": null,
+"feature": "user-guarantee",
+"tests": [
+[
+"engine-steps.test.js",
+"filler: every placeholder of \u00a74.7 has a value rule",
+"unit",
+"for every filled placeholder of \u00a74.7 a fixture value gives the expected text (table in the test file)"
+],
+[
+"engine-conformance.test.js",
+"every template text is produced at least once",
+"coverage",
+"100%"
+]
+]
+},
+{
+"id": "REQ-904",
+"title": "The hard-code allow-list",
+"phase": "PH-13",
+"groups": [
+"DI-ERR",
+"DI-CLI",
+"DI-SYNTAX",
+"DI-LOCK",
+"DI-UPGRADE",
+"DI-SETUP",
+"DI-STORE",
+"DI-SYNC",
+"DI-SAFETY",
+"DI-FM",
+"DI-STALE",
+"DI-REPAIR",
+"DI-INDEX",
+"DI-ITEMSCHEMA",
+"DI-ARCHIVE",
+"DI-IDENTITY-FIELD",
+"DI-MACHINE",
+"DI-FINDINGS",
+"DI-INPUT-IDENTITY",
+"DEAD"
+],
+"sids": [
+null
+],
+"tids": [
+"T-904-1",
+"T-904-2"
+],
+"cond": null,
+"feature": "user-guarantee",
+"tests": [
+[
+"user-guard.test.js",
+"engine source contains no status/role/team word outside the allow-list",
+"src/engine scan",
+"0 hits"
+],
+[
+"user-guard.test.js",
+"dead exports removed",
+"grep",
+"none"
+]
+]
+},
+{
+"id": "REQ-905",
+"title": "Guard tests",
+"phase": "PH-11c",
+"groups": [
+"PC-SEAM"
+],
+"sids": [
+null
+],
+"tids": [
+"T-905-1",
+"T-905-2",
+"T-905-3"
+],
+"cond": null,
+"feature": "user-guarantee",
+"tests": [
+[
+"user-guard.test.js",
+"mutation: a planted word fails the guard",
+"temp copy",
+"fails"
+],
+[
+"user-guard.test.js",
+"allow-list file is the only exception list",
+"-",
+"exists"
+],
+[
+"user-guard.test.js",
+"hooks: a team parameter, an import of a command module, a property assignment on an imported object",
+"three mutated copies",
+"checks 3 and 4 fail naming file and line"
+]
+]
+},
+{
+"id": "REQ-906",
+"title": "Documentation of every key",
+"phase": "PH-13",
+"groups": [
+"DI-HELP",
+"DI-FIELDS"
+],
+"sids": [
+null
+],
+"tids": [
+"T-906-1",
+"T-906-2"
+],
+"cond": null,
+"feature": "user-guarantee",
+"tests": [
+[
+"docs-keys.test.js",
+"every schema key path is documented",
+"schema/*.json vs docs/team-behaviour.md",
+"none missing"
+],
+[
+"commands-documented.test.js",
+"validate and migrate are in COMMANDS.md",
+"-",
+"COMMANDS.md and templates/skills/backlog/references/commands.md each contain \"### backlog team validate\" and \"### backlog team migrate\""
+]
+]
+},
+{
+"id": "REQ-907",
+"title": "Conformance of the shipped template",
+"phase": "PH-4b",
+"groups": [
+"ST-VOCAB",
+"ST-CANSTEP",
+"ST-NEXT"
+],
+"sids": [
+null
+],
+"tids": [
+"T-907-1"
+],
+"cond": null,
+"feature": "user-guarantee",
+"tests": [
+[
+"engine-conformance.test.js",
+"\u00a79 rows R01..R23 each covered",
+"map",
+"23/23"
+]
+]
+},
+{
+"id": "REQ-908",
+"title": "Default words of the user commands",
+"phase": "PH-12",
+"groups": [
+"ST-NORMALISE",
+"PC-LISTWORDS",
+"PC-FINISHED",
+"PC-DEFAULT",
+"PC-ARCHIVE-CLOSED",
+"PC-DONE",
+"PC-SEVERITY"
+],
+"sids": [
+"S-908-1",
+"S-908-2",
+"S-908-3",
+"S-908-4"
+],
+"tids": [
+"T-908-1"
+],
+"cond": null,
+"feature": "user-flow",
+"tests": [
+[
+"user-flow.test.js",
+"default words: list new/open/done, done, archive done, next with an unknown word",
+"items pending, closed, shipped, Done",
+"list open = pending, shipped, Done; list done = closed; archive of shipped exits 0; Done stored as typed"
+]
+]
+},
+{
+"id": "REQ-909",
+"title": "Holding flags of the user commands refuse nobody",
+"phase": "PH-12",
+"groups": [
+"PC-STEP"
+],
+"sids": [
+"S-909-1",
+"S-909-2"
+],
+"tids": [
+"T-909-1"
+],
+"cond": null,
+"feature": "user-flow",
+"tests": [
+[
+"user-flow.test.js",
+"claim, release, close refuse nobody",
+"one item",
+"claim over a holder exits 0 owner bob; close without summary exits 0 status closed; release exits 0 owner = configuration user"
+]
+]
+},
+{
+"id": "REQ-910",
+"title": "No limits and no dependency gate outside a team",
+"phase": "PH-9",
+"groups": [
+"PC-WIP",
+"PC-DEPGATE"
+],
+"sids": [
+"S-910-1"
+],
+"tids": [
+"T-910-1"
+],
+"cond": null,
+"feature": "user-flow",
+"tests": [
+[
+"user-flow.test.js",
+"no limit and no dependency gate outside a team",
+"home with wip-limits.json overall 1 and a dependency on an open item",
+"update --claim, --status in progress and move exit 0"
+]
+]
+},
+{
+"id": "REQ-911",
+"title": "Session inputs",
+"phase": "PH-5",
+"groups": [
+"ENV-INPUT"
+],
+"sids": [
+null
+],
+"tids": [
+"T-911-1"
+],
+"cond": "Q-04",
+"feature": "team-roles",
+"tests": [
+[
+"engine-roles.test.js",
+"Q-04 option A/B input resolution",
+"env/flags",
+"inputs"
+]
+]
+},
+{
+"id": "REQ-912",
+"title": "Keys the old definition declared but nothing enforced",
+"phase": "PH-8",
+"groups": [
+"RF-STEPS",
+"RF-DECISION"
+],
+"sids": [
+"S-912-1"
+],
+"tids": [
+"T-912-1"
+],
+"cond": "Q-05",
+"feature": "user-flow",
+"tests": [
+[
+"engine-steps.test.js",
+"Q-05 option A: no max_rounds key accepted (V-schema)",
+"patched",
+"not a key"
+]
+]
+},
+{
+"id": "REQ-920",
+"title": "Read one chosen branch (decision AR)",
+"phase": "PH-14",
+"groups": [],
+"sids": [
+"S-920-1",
+"S-920-2"
+],
+"tids": [
+"T-920-1",
+"T-920-2",
+"T-920-3"
+],
+"cond": null,
+"feature": "user-gaps",
+"tests": [
+[
+"user-gaps.test.js",
+"list branch <name> equals list on that branch",
+"two branches",
+"equal"
+],
+[
+"user-gaps.test.js",
+"next branch <name>; unknown name info line",
+"fixtures",
+"\"next branch dev\" prints the first open item of branch dev; an unknown name prints \"\u2139\ufe0f  branch nope has no items\" and exits 0"
+],
+[
+"commands-documented.test.js",
+"list branch and next branch documented",
+"-",
+"COMMANDS.md contains \"### backlog list branch\" and \"### backlog next branch\""
+]
+]
+},
+{
+"id": "REQ-921",
+"title": "list branches columns",
+"phase": "PH-14",
+"groups": [],
+"sids": [
+"S-921-1"
+],
+"tids": [
+"T-921-1"
+],
+"cond": null,
+"feature": "user-gaps",
+"tests": [
+[
+"user-gaps.test.js",
+"list branches columns and totals",
+"fixture",
+"columns branch, open, done, archived, total; the totals row equals the sums"
+]
+]
+},
+{
+"id": "REQ-922",
+"title": "Import every unarchived item",
+"phase": "PH-14",
+"groups": [],
+"sids": [
+"S-922-1"
+],
+"tids": [
+"T-922-1"
+],
+"cond": null,
+"feature": "user-gaps",
+"tests": [
+[
+"user-gaps.test.js",
+"import all moves open and finished, not archived",
+"fixture",
+"moved list"
+]
+]
+},
+{
+"id": "REQ-923",
+"title": "Several section lines in one call",
+"phase": "PH-14",
+"groups": [],
+"sids": [
+"S-923-1"
+],
+"tids": [
+"T-923-1"
+],
+"cond": null,
+"feature": "user-gaps",
+"tests": [
+[
+"shared-update.test.js",
+"add-line JSON array, --top order",
+"fixture",
+"body"
+]
+]
+},
+{
+"id": "REQ-924",
+"title": "Skill copies refreshed after a version change",
+"phase": "PH-14",
+"groups": [],
+"sids": [
+"S-924-1"
+],
+"tids": [
+"T-924-1"
+],
+"cond": null,
+"feature": "user-gaps",
+"tests": [
+[
+"user-gaps.test.js",
+"refresh on version change only; failure warns",
+"fixtures",
+"stderr and files"
+]
+]
+},
+{
+"id": "REQ-925",
+"title": "Exit-code contract",
+"phase": "PH-14",
+"groups": [
+"DI-ERR"
+],
+"sids": [
+"S-925-1",
+"S-925-2"
+],
+"tids": [
+"T-925-1",
+"T-925-2"
+],
+"cond": null,
+"feature": "user-gaps",
+"tests": [
+[
+"router.test.js",
+"exit-code table (one case per class)",
+"fixtures",
+"codes"
+],
+[
+"router.test.js",
+"uncaught error exits 1 with internal error",
+"thrown TypeError",
+"1"
+]
+]
+},
+{
+"id": "REQ-926",
+"title": "Detached HEAD",
+"phase": "PH-14",
+"groups": [],
+"sids": [
+"S-926-1"
+],
+"tids": [
+"T-926-1"
+],
+"cond": null,
+"feature": "user-gaps",
+"tests": [
+[
+"user-gaps.test.js",
+"detached: reads via branch subcommands, others refused",
+"fixture",
+"codes/text"
+]
+]
+},
+{
+"id": "REQ-927",
+"title": "Items waiting on dependencies",
+"phase": "PH-14",
+"groups": [],
+"sids": [
+"S-927-1"
+],
+"tids": [
+"T-927-1"
+],
+"cond": null,
+"feature": "user-gaps",
+"tests": [
+[
+"user-gaps.test.js",
+"list blocked",
+"fixture",
+"one row \"002-b waits on 001-a (ready)\"; an item depending on a finished item is not listed"
+]
+]
+},
+{
+"id": "REQ-940",
+"title": "Interactive creation and the update notice stay",
+"phase": "-",
+"groups": [],
+"sids": [
+"S-940-1"
+],
+"tids": [
+"T-940-1",
+"T-940-2"
+],
+"cond": null,
+"feature": "user-gaps",
+"tests": [
+[
+"new-ask.test.js",
+"existing 9 tests",
+"-",
+"green"
+],
+[
+"update-notice.test.js",
+"existing 8 tests",
+"-",
+"green"
+]
+]
+},
+{
+"id": "REQ-930",
+"title": "A lead-only deletion door for team items",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+"S-930-1"
+],
+"tids": [
+"T-930-1"
+],
+"cond": "Q-06",
+"feature": "team-conditional",
+"tests": [
+[
+"team-conditional.test.js",
+"Q-06 delete step",
+"fixtures",
+"A: lead --delete removes the file in one commit; member refused with the filled delete refusal"
+]
+]
+},
+{
+"id": "REQ-931",
+"title": "Moving team items",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+null
+],
+"tids": [
+"T-931-1"
+],
+"cond": "Q-07",
+"feature": "team-conditional",
+"tests": [
+[
+"team-conditional.test.js",
+"Q-07 option B move step",
+"fixtures",
+"B: lead --move-to <branch> changes branch through the step; a member is refused"
+]
+]
+},
+{
+"id": "REQ-932",
+"title": "Abandoning an unfinished team item",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+"S-932-1"
+],
+"tids": [
+"T-932-1"
+],
+"cond": "Q-08",
+"feature": "team-conditional",
+"tests": [
+[
+"team-conditional.test.js",
+"Q-08 abandon step",
+"fixtures",
+"A: lead --abandon \"r\" on a refining item gives status = the template abandon to word and the template record"
+]
+]
+},
+{
+"id": "REQ-933",
+"title": "Interactive value of update",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+"S-933-1"
+],
+"tids": [
+"T-933-1"
+],
+"cond": "Q-09",
+"feature": "user-flow",
+"tests": [
+[
+"user-flow.test.js",
+"Q-09",
+"fixture",
+"A: update 1 --ask asks each field on a terminal and writes the answers; without a terminal exit 2"
+]
+]
+},
+{
+"id": "REQ-934",
+"title": "JSON envelope",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+"S-934-1"
+],
+"tids": [
+"T-934-1"
+],
+"cond": "Q-10",
+"feature": "user-flow",
+"tests": [
+[
+"user-flow.test.js",
+"Q-10",
+"fixture",
+"B: list --json top level is an array; show --json an object (as COMMANDS.md)"
+]
+]
+},
+{
+"id": "REQ-935",
+"title": "JSON error object",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+"S-935-1"
+],
+"tids": [
+"T-935-1"
+],
+"cond": "Q-11",
+"feature": "user-flow",
+"tests": [
+[
+"user-flow.test.js",
+"Q-11",
+"fixtures",
+"A: each code INVALID_INPUT, REFUSED, NOT_FOUND, STORAGE_ERROR, SYNC_FAILED, STALE, TEAM_CONFIG once as {\"ok\":false,\"error\":{\"code\":..}} with its exit code"
+]
+]
+},
+{
+"id": "REQ-936",
+"title": "User environment fallbacks",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+"S-936-1"
+],
+"tids": [
+"T-936-1"
+],
+"cond": "Q-12",
+"feature": "user-flow",
+"tests": [
+[
+"user-flow.test.js",
+"Q-12",
+"env",
+"A: BACKLOG_CLI_BRANCH, BACKLOG_HOME, BACKLOG_ORIGIN_URL set have no effect on the resolved home and branch"
+]
+]
+},
+{
+"id": "REQ-937",
+"title": "Selecting an item by its queue position",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+"S-937-1"
+],
+"tids": [
+"T-937-1"
+],
+"cond": "Q-13",
+"feature": "user-flow",
+"tests": [
+[
+"user-flow.test.js",
+"Q-13 selector",
+"fixture",
+"item"
+]
+]
+},
+{
+"id": "REQ-938",
+"title": "History of items written before the event move",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+"S-938-1"
+],
+"tids": [
+"T-938-1"
+],
+"cond": "Q-14",
+"feature": "user-flow",
+"tests": [
+[
+"user-flow.test.js",
+"Q-14",
+"fixture",
+"A: history of an item written before the event move prints \"(history before <date> not recorded)\""
+]
+]
+},
+{
+"id": "REQ-939",
+"title": "Update notice timing",
+"phase": "PH-15",
+"groups": [],
+"sids": [
+null
+],
+"tids": [
+"T-939-1"
+],
+"cond": "Q-15",
+"feature": "user-flow",
+"tests": [
+[
+"update-notice.test.js",
+"Q-15 timeout and warnings",
+"stubbed registry",
+"A: a check that times out after 3000 ms prints nothing on stderr; a registry error prints the warning line"
+]
+]
+},
+{
+"id": "REQ-016",
+"title": "Which workflow the running team uses after the migration",
+"phase": "PH-1",
+"groups": [
+"CFG-TEAMS"
+],
+"sids": [
+"S-016-1"
+],
+"tids": [
+"T-016-1"
+],
+"cond": "Q-16",
+"feature": "team-migrate",
+"tests": [
+[
+"team-migrate.test.js",
+"Q-16 option A / B",
+"schema 1 home",
+"teams.t1.workflow = team (A) / example-team with the converted definition registered (B)"
+]
+]
+},
+{
+"id": "REQ-017",
+"title": "Items bound to teams that have no entry",
+"phase": "PH-1",
+"groups": [
+"ST-LEGACY"
+],
+"sids": [
+"S-017-1"
+],
+"tids": [
+"T-017-1"
+],
+"cond": "Q-17",
+"feature": "team-migrate",
+"tests": [
+[
+"team-migrate.test.js",
+"Q-17 option A / B",
+"home with an item of team ghost",
+"team removed and listed (A) / exit 2 with the listing text (B)"
+]
+]
+},
+{
+"id": "REQ-018",
+"title": "Archived items with schema 1 fields",
+"phase": "PH-1",
+"groups": [
+"ST-LEGACY"
+],
+"sids": [
+"S-018-1"
+],
+"tids": [
+"T-018-1"
+],
+"cond": "Q-18",
+"feature": "team-migrate",
+"tests": [
+[
+"team-migrate.test.js",
+"Q-18 option A / B",
+"home with an archived item with stage",
+"front matter rewritten (A) / unchanged and readable (B)"
+]
+]
+},
+{
+"id": "REQ-019",
+"title": "Split slices without a team",
+"phase": "PH-1",
+"groups": [
+"RF-JOIN"
+],
+"sids": [
+"S-019-1"
+],
+"tids": [
+"T-019-1"
+],
+"cond": "Q-19",
+"feature": "team-migrate",
+"tests": [
+[
+"team-migrate.test.js",
+"Q-19 option A / B",
+"home with a teamless slice of a bound parent",
+"bound with refiner \"\" (A) / unchanged (B)"
+]
+]
+},
+{
+"id": "REQ-020",
+"title": "Upgrading a definition used by teams with open items",
+"phase": "PH-15",
+"groups": [
+"DI-DEFINE-INUSE"
+],
+"sids": [
+"S-020-1"
+],
+"tids": [
+"T-020-1"
+],
+"cond": "Q-20",
+"feature": "team-file",
+"tests": [
+[
+"team-define-cli.test.js",
+"Q-20 option A / B",
+"team with an open item",
+"compatible definition registered, incompatible refused naming the words (A) / refused (B)"
+]
+]
+},
+{
+"id": "REQ-807",
+"title": "Which items a team re-orders",
+"phase": "PH-10b",
+"groups": [
+"Q-REORDER"
+],
+"sids": [
+"S-807-1",
+"S-807-2"
+],
+"tids": [
+"T-807-1"
+],
+"cond": null,
+"feature": "team-queue",
+"tests": [
+[
+"engine-queue.test.js",
+"reorder_scope command_team vs all",
+"home with items of t1, t2 and outside a team",
+"index order: only t1 items move (command_team); every item re-densified (all)"
+]
+]
+},
+{
+"id": "REQ-928",
+"title": "Rows of list --json outside a team",
+"phase": "PH-12",
+"groups": [
+"ST-LEGACY"
+],
+"sids": [
+"S-928-1"
+],
+"tids": [
+"T-928-1"
+],
+"cond": null,
+"feature": "user-guarantee",
+"tests": [
+[
+"shared-list.test.js",
+"list --json rows have no derived fields",
+"one item",
+"keys = index columns + owner, owned_since"
+]
+]
+},
+{
+"id": "REQ-941",
+"title": "Team commands own their path",
+"phase": "PH-11c",
+"groups": [
+"PC-HOOKS",
+"PC-SEAM"
+],
+"sids": [
+null
+],
+"tids": [
+"T-941-1"
+],
+"cond": null,
+"feature": "user-guarantee",
+"tests": [
+[
+"user-guard.test.js",
+"no seam, no team parameter, engine imports only primitives",
+"source tree",
+"checks 3 and 4 pass; seam.js absent"
+]
+]
+}
+]

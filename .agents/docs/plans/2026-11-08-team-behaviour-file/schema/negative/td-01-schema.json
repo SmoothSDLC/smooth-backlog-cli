@@ -1,0 +1,14 @@
+{
+ "schema": "backlog-team-definition/9",
+ "name": "gold",
+ "workflow": "team",
+ "people": {
+  "lead": "ann"
+ },
+ "lists": {
+  "members": [
+   "bob",
+   "cy"
+  ]
+ }
+}

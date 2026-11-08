@@ -35,7 +35,7 @@ repository: it installs or updates the CLI and runs `backlog setup`. The CLI upd
 - Claim and release (named agents; an item without a team): `backlog update <item> --claim <you>`, `--release <you>`; `backlog team pop --team <team> --agent <you>`
   says what to do next. Read an item (`backlog show <item> --agent <you>`) before you change it: a write after someone else changed
   the item since your read is refused (exit 5) until you read it again.
-- Reviews, refinement and hand-offs are team steps: see Team work. A plain `backlog update` refuses every change of an item that belongs to a team.
+- Reviews, refinement and hand-offs are team steps: see Team work. A plain `backlog update` refuses every change of an item that belongs to a team, and so do `done`, `update --replan` naming it, `archive` of a team item that is not closed, `import --higher` and `clean` (one line, exit 1, nothing written); `move`, `archive` of a closed team item and `archive done` work on it like on any other.
 - An item that cannot be read: every command names it and the field; `backlog update <item> --<field> <value>` sets the field again, `backlog update <item> --restore` brings back its previous version.
 - Finish: `backlog done <item>` (the same as `backlog update <item> --status done`) or `backlog update <item> --close --summary "<what was delivered>"`; `backlog archive <item>`
   keeps a finished item out of the queue (`backlog archive done` archives every finished item of the branch); `backlog move <item> --to-branch <name>` moves it to another branch;

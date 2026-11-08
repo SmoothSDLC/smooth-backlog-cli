@@ -5,6 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { isFinished, isOpen } from './status.js';
 import { redact } from './safety.js';
+import { IMPORT_HIGHER_TEAM } from './team-items.js';
 
 const cli = args => spawnSync(process.execPath, [process.argv[1], ...args], { encoding: 'utf8', maxBuffer: 1 << 26 });
 const say = text => process.stdout.write(`${redact(text)}\n`);
@@ -45,6 +46,12 @@ export async function run(plan) {
   if (!open.length) { // a name that no item carries is most likely a typo: say so (the exit code stays 0, as for a branch without open items)
     say(rows.some(x => x.branch === plan.source && x.status !== 'archived') ? `ℹ️  nothing to import: branch ${plan.source} has no open items` : `ℹ️  nothing to import: no item of branch ${plan.source} in this backlog (check the name)`);
     return 0;
+  }
+  if (plan.higher) { // --higher places the items first in the queue, which a team item takes only from backlog team update: refused before anything is moved
+    const shown = cli(['show', open.map(x => x.slug).join(','), '--json']);
+    if (shown.status !== 0) return stop(shown, 'nothing was moved');
+    const owned = [].concat(JSON.parse(shown.stdout)).filter(x => x.front_matter?.team).map(x => x.slug);
+    if (owned.length) { say(`❌ ${IMPORT_HIGHER_TEAM(owned)}`); return 1; }
   }
   const moved = [];
   for (const item of open) {

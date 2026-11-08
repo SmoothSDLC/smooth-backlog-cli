@@ -12,6 +12,7 @@ import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { seam } from './seam.js';
+import { ARCHIVE_OPEN_TEAM } from './team-items.js';
 
 // Python repr of a str, for the earlier scripts `{x!r}`.
 export function pyStr(s) {
@@ -92,11 +93,11 @@ async function archive(a, rows, { repo, folder, guard }) {
   const row = find(rows, a.phase);
   if (!row) return refuse(`no phase ${pyStr(a.phase)}`);
   if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived`); return 0; }
-  if (row.status !== 'closed' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'closed' — finish it or pass --force`);
-
   const src = join(folder, row.path);
   await assertInside(folder, src); // the file is inside the folder, no symlink on the way
   const { fm } = parseDoc(readFileSync(src, 'utf8'));
+  if (fm.team && row.status !== 'closed') return refuse(ARCHIVE_OPEN_TEAM(row.slug)); // an open team item leaves its team's queue by the team's steps, not by --force
+  if (row.status !== 'closed' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'closed' — finish it or pass --force`);
   seen.check(folder, repo, seen.actor(), row.slug, row.path);
   guard.push({ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   const from = relative(folder, resolve(src)).split('\\').join('/');

@@ -19,14 +19,14 @@ import { wipRefusal } from './wip-limits.js';
 import { seam } from './seam.js';
 import { asList, rstrip, strip } from './text.js';
 import { foreignCycle, foreignItem, isForeign } from './dependencies.js';
+import { OF_A_TEAM, REPLAN_TEAM } from './team-items.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'section', 'set-lines', 'add-line', 'remove-line', 'move-line', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'severity', 'by', 'claim', 'release', 'reason'];
 const BOOL = ['dry-run', 'restore', 'top', 'close'];
 const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], 'set-chunk': ['yes', 'no'], severity: ['normal', 'critical'] };
 
-// The two lines for a team's item: a plain update refuses every change of it, and backlog team update refuses --status (its status moves by the steps).
-const OF_A_TEAM = 'use backlog team update: a team item is changed only there, and its status moves by its team steps';
+// backlog team update refuses --status (the status of a team item moves by its steps); the plain command's own line is OF_A_TEAM.
 const NO_STATUS_FLAG = 'backlog team update takes no --status: the status of a team item moves by its steps (--claim, --request-review, --start-review, --review, --close)';
 const pyInt = s => (/^\s*[+-]?\d+\s*$/.test(s) ? Number(s) : null);
 // Python repr of a str, for the earlier scripts `{x!r}` and dict/list prints.
@@ -186,10 +186,14 @@ async function change(a, folder, repo, team) {
     const done = await repairUnreadable(a, folder, bad);
     if (done !== undefined) return done;
   }
-  const { rows } = itemRows(folder);
+  const { rows, items } = itemRows(folder);
   // --- pure planning event: explicit replan of the whole backlog
   if (a.replan) {
     const idents = a.replan.split(',').map(strip).filter(Boolean);
+    if (!team) { // a team item takes its place in the queue by backlog team update only
+      const owned = idents.map(ident => findItem(rows, ident)).filter(r => r && items.find(i => i.path === r.path)?.fm.team).map(r => r.slug);
+      if (owned.length) return refuse(REPLAN_TEAM([...new Set(owned)]));
+    }
     for (const ident of idents) { // a bound team session reorders only its own items: naming another team's item is refused, before anything is written
       const named = findItem(rows, ident);
       const outside = named && team?.refuseOutside(named);

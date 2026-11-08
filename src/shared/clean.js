@@ -9,6 +9,7 @@ import * as index from './index.js';
 import * as setup from './setup.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
+import { CLEAN_TEAM } from './team-items.js';
 
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 
@@ -31,10 +32,14 @@ export async function clean(args = [], name = 'clean') {
   const folder = store.folder(home, repo);
   const branch = store.branch(cwd);
   const scope = every ? `${repo}, every branch` : `${repo}, branch ${branch}`;
+  const owned = () => store.load(folder).filter(i => i.fm.team && (every || String(i.fm.branch || '') === branch)).map(i => String(i.fm.phase || i.path)); // a team's items are never deleted by a plain command (archive included)
+  const refuse = () => { process.stdout.write(`❌ ${redact(CLEAN_TEAM(owned()))}\n`); return 1; };
+  if (owned().length) return refuse(); // before the question: no use asking for a yes that cannot be honoured
   if (await answer(`This will remove every backlog item of ${scope} (archive included) and run setup again. Type yes to continue: `) !== 'yes') return die('not confirmed (type yes); nothing changed');
   const removed = await store.cloneLocked(home, async () => {
     await sync.pull(home);
     await assertInside(home, folder);
+    if (owned().length) return -1; // the pull brought a team item in
     const items = store.load(folder).filter(i => every || String(i.fm.branch || '') === branch);
     if (!items.length) return 0;
     await store.undoOnThrow(folder, async () => {
@@ -46,6 +51,7 @@ export async function clean(args = [], name = 'clean') {
     await sync.commitSettled(home, folder, name);
     return items.length;
   });
+  if (removed < 0) return refuse();
   const code = await setup.run([]); // the configuration and the skill copies
   if (code) return code;
   process.stdout.write(`✅ ${removed} items removed from ${every ? 'every branch' : `branch ${branch}`}\n`);

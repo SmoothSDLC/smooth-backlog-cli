@@ -78,7 +78,11 @@ the item is next written.
 
 There are two kinds of commands. The plain ones (`new`, `update`, `done`, `list`, `show`, `next`, `history`, `changes`, `fields`, `move`, `archive`, `import`, `clean`, `setup`, `upgrade`)
 know nothing of teams: they work on items without a team. A plain `update` refuses every change of an item that belongs to a team,
-and a plain `new --split-from` refuses a team's item: those go through `backlog team`. A person's items take their owner from
+and a plain `new --split-from` refuses a team's item: those go through `backlog team`. So do the plain commands that would change the
+team state of an item (status, claim, review, refinement, dependencies, its place in the team's queue, its deletion): `done`, `update --replan`
+naming it, `archive` of a team item that is not closed (also with `--force`), `import --higher` and `clean` refuse it with one line, exit 1,
+and write nothing. `move`, `archive` of a closed team item and `archive done` only file or store an item and work on a team item
+like on any other. A person's items take their owner from
 `.backlog/config.json`, where `backlog setup` writes `user` (the git `user.name`, else the name the person is logged in
 with) and an empty `team`; a second setup keeps what is there.
 

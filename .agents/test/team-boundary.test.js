@@ -172,15 +172,17 @@ test('backlog team update runs the incomplete-item guard on every field flag: a 
   assert.ok(text.includes('more text') && text.includes('## Notes') && text.includes('- one'));
 });
 
-test('a plain replan names no single item: it reorders a team item like any other and leaves its file as it is', () => {
+test('a plain replan refuses a team item it names (its place in the queue is a team matter) and reorders items without a team, leaving the team item as it is', () => {
   const f = fixture();
   const a = plainItem(f, 'first');
   const s = teamItem(f);
   const before = readFileSync(file(f, s), 'utf8');
   assert.equal(index.rank(f.folder, 'main', s), 1);
   const r = run(f, ['update', '--replan', `${s},${a}`]);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(index.rank(f.folder, 'main', s), 0, 'the team item is now P0');
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /^❌ use backlog team update --replan: .* belongs to a team/);
+  assert.equal(index.rank(f.folder, 'main', s), 1, 'the team item keeps its place');
+  assert.equal(run(f, ['update', '--replan', a]).status, 0);
   assert.equal(readFileSync(file(f, s), 'utf8'), before, 'its file is not rewritten: the order lives in the index');
 });
 

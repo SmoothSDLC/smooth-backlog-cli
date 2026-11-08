@@ -44,6 +44,11 @@ One backlog, one CLI. Compared with 1.0.1:
   reviewable, blocked, decisions, plan and wip views, and the read options of the reader), `define` and `workflow`. `--team` and `--agent` come from the flags, then
   `TEAM_NAME` and `BACKLOG_AGENT`, then the `team` and `user` of `.backlog/config.json`. `backlog next` prints the open item
   with the best priority whole (front matter and body) and skips nothing for team reasons.
+- **The plain commands refuse an item with a team when they would change its team state.** `done` (through `update`), `update --replan`
+  naming a team item, `archive` of a team item that is not closed (`--force` does not change that), `import --higher` when the source has
+  a team item (refused before anything is moved) and `clean` when a team item lies in its scope, archived ones included (refused before
+  the question): one line on standard output, exit 1, nothing written; the line names `backlog team update` or says that no command
+  deletes a team item. `move`, `archive` of a closed team item and `archive done` only file or store an item and keep working.
 - **The configuration has a user and a team.** `backlog setup` writes `user` (the git `user.name`, else the login name) and
   an empty `team`; an item outside a team records its `owner`, and the writer with no agent named is the user.
 - **The item keys carry the owner's words.** An item file stores `title`, `last_updated`, `last_updated_by`, `owner` and `owned_since`

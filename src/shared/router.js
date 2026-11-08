@@ -6,7 +6,8 @@ import { resolveHome } from './store.js';
 // command -> [module relative to this file, ...arguments put in front of the user's argv]
 export const TABLE = {
   new: ['./new.js'], update: ['./update.js'], query: ['./query.js'], list: ['./read.js', 'list'], team: ['../team/cli.js'],
-  next: ['./query.js', '--next'], fields: ['./fields.js'], move: ['./move.js'], archive: ['./archive.js'],
+  next: ['./read.js', 'next'], fields: ['./fields.js'], move: ['./move.js'], archive: ['./archive.js'],
+  show: ['./read.js', 'show'], history: ['./read.js', 'history'], changes: ['./read.js', 'changes'],
 };
 
 // The commands that an alias row also spells (list open) are real commands first: main.js does not translate them.
@@ -14,6 +15,7 @@ export const TABLE = {
 export function own(argv) {
   const at = argv.findIndex(x => x !== '--json');
   if (at < 0 || argv.some(x => x === '--ask' || x === '--headless')) return false;
+  if (['show', 'history', 'changes'].includes(argv[at])) return true;
   return argv[at] === 'list' && argv[at + 1] !== 'branch'; // list branch is the alias of list branches
 }
 

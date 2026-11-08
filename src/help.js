@@ -10,13 +10,17 @@ import { SHARED, EXIT, HELP_FLAG } from './shared/help-parts.js';
 export const USAGE = `backlog — the backlog of this repository and branch, for people and coding agents
 
 Usage:
-  backlog [--json]                                 The next item (backlog next)
+  backlog                                          This help (backlog --json: the next item)
   backlog new --name <text> [options]              Add an item; --split-from <item> makes a sibling with its context
   backlog update <item> [options]                  Change an item that has no team: fields, body, status, priority; claim, release, close
   backlog update --replan "<id,id,...>"            Set the order of the queue
   backlog list [new|open|done|archive|branches|critical|all-branches] [--json]   The items of this branch (the full stack by default), one kind of item, the branches, the critical items, or every branch
-  backlog query [options] [--json]                 The queue; --phase <item> one item; --events, --by-branch, --all
+  backlog show <item>[,<item>...] [--agent <name>] [--json]   One item whole: its row, front matter and body
+  backlog history [<item>]                         The events of one item, or the latest 50 of the backlog
+  backlog changes [--agent <name>] [--json]        Which items changed since your last use
   backlog next [--all] [--branch <name>] [--json]  The next item of this repository and branch
+  backlog next all-branches [--json]               The next item over every branch of this repository
+  backlog query [options] [--json]                 The earlier read command; list, show, history, changes and next do what its options do
   backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs (--dry-run: only answered), with the whole item
   backlog team new --team <team> --agent <name> --name <text> [options]   Add an item of a team (it starts in stage refining); --review-refs, --split-from
   backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
@@ -344,10 +348,12 @@ Example:
 
 Usage:
   backlog next [--all] [--branch <name>] [--json]
+  backlog next all-branches [--json]
 
 Prints the open item with the best priority on the branch that is checked out here, whole: its objective, summary and
 progress, then its front matter and its body. It is the same as backlog query --next and reads the backlog without changing it. When the queue is empty it says so
 (with --json it prints {}). Critical items are announced in a banner first. The other options of backlog query are described in backlog query --help.
+backlog next all-branches shows the next item over every branch (backlog next all-branches --help).
 
 ${SHARED}
 
@@ -414,6 +420,113 @@ ${EXIT}
 
 Example:
   backlog list open
+`,
+
+  show: `backlog show — print one item whole: its row, front matter and body
+
+Usage:
+  backlog show <item>[,<item>...] [--agent <name>] [--json]
+
+Prints the item given by number or slug as JSON: the row of the item (number, slug, name, status, priority, branch, commit and the other columns),
+its front_matter and its body. Several items given as a comma-separated list are printed as a JSON array, one object each, in the order given. The
+command refuses (exit 1) when one of them does not exist, and then prints none of them. A file that cannot be read or parsed fails the command, as every
+read does. The command never changes an item. The agent that shows an item has read it: its next write of that item is refused (exit 5) when somebody
+else changed the item since, and the refusal says to show it again. The agent is --agent, else BACKLOG_AGENT.
+
+${SHARED}
+
+Argument:
+  <item>
+      The item to show, by number or slug; several items, comma-separated.
+
+Options:
+  --agent AGENT
+      The agent that has now read the item. Its next write of the item is checked against the version shown.
+  --json
+      Accepted for the sake of the other read commands; the output is JSON with or without it.
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog show 12
+`,
+
+  history: `backlog history — print the events of one item, or the latest 50 of the backlog
+
+Usage:
+  backlog history [<item>]
+
+Prints the history that is kept in the item files, newest first, one line per event: the time, the event, the branch, the commit and the note.
+With an item (number or slug) it prints the events of that item. Without one it prints the latest 50 events of the backlog, archived items
+included. The command refuses (exit 1) when the item does not exist. It prints text only: --json is refused (exit 2). It never changes an item.
+
+${SHARED}
+
+Argument:
+  <item>
+      The item whose events to print, by number or slug. Optional.
+
+Options:
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog history 12
+`,
+
+  changes: `backlog changes — which items of this repository changed since your last use
+
+Usage:
+  backlog changes [--agent <name>] [--json]
+
+Prints which items changed since the last use of the calling agent. The reference is the agent's own last write or its own last
+backlog changes, never a global timestamp, so a change made while the agent is idle still appears in its next report. Its commit and time are
+stated in every result, also when it is empty. The items the agent holds (its name as owner, reviewer or refiner) are listed in a held
+section, every other changed item under others; a file moved inside the folder (an archive, a renumbering) is one D entry for its old name.
+The first use prints "no earlier use: reference set now" and sets the reference. The result also lists the agents that use the backlog and
+their last-use time. Reading an item with backlog show does not move the reference.
+It never changes an item; its one write is the agent's own reference. The report is printed before the reference is written, so a failed
+output consumes no change. When the write of the reference fails, the result says so (with --json it prints {"reference_write": "failed"} after
+the report), the exit is 0 and the previous reference is kept. When the comparison fails (the reference commit is no longer in the clone, for
+example after a history rewrite) the command reports the failure (exit 2) and keeps the reference, so no change is lost.
+
+${SHARED}
+
+Options:
+  --agent AGENT
+      The agent whose last use is the reference. The default is BACKLOG_AGENT, else the user.
+  --json
+      Print machine-readable output.
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog changes --agent ada
+`,
+
+  'next all-branches': `backlog next all-branches — show the next actionable item over every branch of this repository
+
+Usage:
+  backlog next all-branches [--json]
+
+Prints the open item with the best priority over all branches of this repository, whole: its objective, summary and progress, then its
+front matter and its body, the same as backlog next does for the branch checked out here. When there is no open item it says so (with --json
+it prints {}). Critical items are announced in a banner first. It reads the backlog without changing it.
+
+${SHARED}
+
+Options:
+  --json
+      Print the item as machine-readable data.
+${HELP_FLAG}
+
+${EXIT}
+
+Example:
+  backlog next all-branches --json
 `,
 
   fields: `backlog fields — show the item template: every field of an item and what it is for

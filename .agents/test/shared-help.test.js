@@ -21,9 +21,9 @@ const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
 const TEAM = ['team', 'team pop', 'team new', 'team update', 'team query', 'team define', 'team workflow']; // the help of the team code lives with it
-const COMMANDS = ['new', 'update', 'query', 'list', 'next', 'fields', ...TEAM, 'move', 'archive'];
+const COMMANDS = ['new', 'update', 'query', 'list', 'show', 'history', 'changes', 'next', 'next all-branches', 'fields', ...TEAM, 'move', 'archive'];
 const ALL = { ...HELP, ...teamHelp };
-const ROUTED = COMMANDS.filter(c => !c.startsWith('team ')); // the commands of the router
+const ROUTED = COMMANDS.filter(c => !c.startsWith('team ') && !c.includes(' ')); // the commands of the router (a word of a command has its own help, not its own row)
 // Flags this build refuses (query.js TEAM and pop.js); --db is no flag of the CLI (item 058: not in its help).
 const REFUSED = {
   update: [],

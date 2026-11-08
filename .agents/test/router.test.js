@@ -26,7 +26,7 @@ function inproc(f, source, extraEnv = {}) {
   return { status: p.status, stdout: p.stdout, stderr: p.stderr };
 }
 
-test('a leading --json is a global flag: the command after it is still found, no arguments means next', t => {
+test('a leading --json is a global flag: the command after it is still found, no arguments prints the help', t => {
   const f = pair(t);
   const r = cli(['--json', 'query'], { cwd: f.cons, tmp: f.tmp });
   assert.equal(r.status, 0, r.stderr);
@@ -34,7 +34,9 @@ test('a leading --json is a global flag: the command after it is still found, no
   const bare = cli(['--json'], { cwd: f.cons, tmp: f.tmp });
   assert.equal(bare.status, 0, bare.stderr);
   assert.equal(typeof JSON.parse(bare.stdout), 'object'); // next: the empty queue, as JSON
-  assert.equal(cli([], { cwd: f.cons, tmp: f.tmp }).status, 0);
+  const none = cli([], { cwd: f.cons, tmp: f.tmp });
+  assert.equal(none.status, 0);
+  assert.equal(none.stdout, cli(['--help'], { cwd: f.cons, tmp: f.tmp }).stdout);
 });
 
 test('a command leaves the consuming repository clean and writes nothing into it', t => {
@@ -45,7 +47,7 @@ test('a command leaves the consuming repository clean and writes nothing into it
   assert.equal(existsSync(join(f.cons, '.backlog')), false);
 });
 
-test('the router: nine commands; argv after the command reaches the module unparsed; its exit code is returned', t => {
+test('the router: twelve commands; argv after the command reaches the module unparsed; its exit code is returned', t => {
   const f = pair(t);
   writeFileSync(join(f.tmp, 'fake.mjs'), 'export const run = async argv => { console.log(JSON.stringify(argv)); return 7; };\n');
   const spec = JSON.stringify(pathToFileURL(join(f.tmp, 'fake.mjs')).href);
@@ -54,7 +56,7 @@ test('the router: nine commands; argv after the command reaches the module unpar
     process.exitCode = await router.run('fake', ['--name', 'A b', '--weird=x', '--', '-z'], { table: { fake: [${spec}], dash: [${spec}, '--next'] } });`);
   assert.equal(r.status, 7, r.stderr);
   const [names, argv] = r.stdout.trim().split('\n');
-  assert.equal(names, 'archive,fields,list,move,new,next,query,team,update');
+  assert.equal(names, 'archive,changes,fields,history,list,move,new,next,query,show,team,update');
   assert.deepEqual(JSON.parse(argv), ['--name', 'A b', '--weird=x', '--', '-z']);
   const lead = inproc(f, `process.exitCode = await router.run('dash', ['--json'], { table: { dash: [${spec}, '--next'] } });`);
   assert.deepEqual(JSON.parse(lead.stdout.trim()), ['--next', '--json']);
@@ -65,7 +67,7 @@ test('an unknown command is refused (exit 2) naming the commands', t => {
   for (const c of ['init', 'constructor', 'nope', 'pop', 'work']) { // pop and work are team commands now: backlog team pop; init backup is no command
     const r = cli(c === 'init' ? [c, 'backup'] : [c], { cwd: f.cons, tmp: f.tmp });
     assert.equal(r.status, 2, c);
-    assert.match(r.stderr, new RegExp(`^❌ backlog: ${c} is not a backlog command \\(new, update, query, list, team, next, fields, move, archive, setup\\)`));
+    assert.match(r.stderr, new RegExp(`^❌ backlog: ${c} is not a backlog command \\(new, update, query, list, team, next, fields, move, archive, show, history, changes, setup\\)`));
   }
 });
 

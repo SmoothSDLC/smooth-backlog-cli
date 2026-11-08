@@ -28,7 +28,7 @@ The first release's command names still work as aliases of these commands: `init
 
 ## Working alone (a person or one agent)
 
-- Read: `backlog list` (the queue and the finished items of this branch; `backlog list open|new|done|archive|branches|critical|all-branches` one kind, the branches, the critical items or every branch), `backlog query` (the same queue), `backlog fields` (the item template: every field and what it is for), `backlog query --phase <item> --json` (one item, whole), `backlog next`.
+- Read: `backlog list` (the queue and the finished items of this branch; `backlog list open|new|done|archive|branches|critical|all-branches` one kind, the branches, the critical items or every branch), `backlog query` (the same queue), `backlog fields` (the item template: every field and what it is for), `backlog show <item>` (one item, whole; the earlier `backlog query --phase <item> --json` prints the same), `backlog history [<item>]` (its events, or the latest 50), `backlog changes` (what changed since your last use), `backlog next` (`backlog next all-branches` over every branch).
 - Create: `backlog new --name "<name>" --objective "<one line>" --summary "<what it is about>"`; `--priority 0` makes it
   next; `--depends-on <items>` when other items must finish first; `--split-from <item>` makes a sibling with its context.
 - Change: `backlog update <item> --name|--objective|--summary|--status|--location|--priority <value>`, `--append "<text>"`

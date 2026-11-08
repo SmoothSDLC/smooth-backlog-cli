@@ -3,12 +3,13 @@ import { BacklogError } from './errors.js';
 import { aliasOf, plan, translate } from './shared/aliases.js';
 import { redact } from './shared/safety.js';
 const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-// One command set, wherever the item files live: setup here, everything else through the router. No arguments means next.
+// One command set, wherever the item files live: setup here, everything else through the router. No arguments prints the help.
 export async function run() {
   let argv = process.argv.slice(2);
   try {
     if (argv[0] === '--version' || argv[0] === 'version') { process.stdout.write(`${packageInfo.version}\n`); return; }
     if (argv[0] === '--help' || argv[0] === 'help' || argv[0] === '-h') { process.stdout.write((await import('./help.js')).USAGE); return; }
+    if (argv.length === 0) { process.stdout.write((await import('./help.js')).USAGE); return; } // no word: the top-level help
     const { own } = await import('./shared/router.js');
     const direct = own(argv); // a command that is also an alias row runs as itself, not as the alias
     if (!direct && argv.includes('--help')) { // an alias prints its own line, then the help of the command it runs

@@ -39,9 +39,9 @@ One backlog, one CLI. Compared with 1.0.1:
 - **Two kinds of commands.** The plain commands know nothing of teams. Everything that knows a team is under `backlog team`:
   `pop` (the one next-action command by the agent's role in the team's entry; it marks the claim, the start of a refinement
   or of a review in one locked write and prints the whole item, and replaces `backlog pop` and `backlog work`),
-  `update <item> --team <t> --agent <a> <step>` (the team steps; on `backlog update` the earlier spelling still works and
-  prints `moved: use backlog team update ...`), `query` (the claimable, reviewable, blocked, decisions, plan and wip
-  views; the plain `query` points at it), `define` and `workflow`. `--team` and `--agent` come from the flags, then
+  `new` (files an item of a team), `update <item> --team <t> --agent <a> <step>` (the team steps; a plain `backlog update`
+  refuses every change of an item that belongs to a team and names `backlog team update`), `query` (the claimable,
+  reviewable, blocked, decisions, plan and wip views, and the read options of the reader), `define` and `workflow`. `--team` and `--agent` come from the flags, then
   `TEAM_NAME` and `BACKLOG_AGENT`, then the `team` and `user` of `.backlog/config.json`. `backlog next` prints the open item
   with the best priority whole (front matter and body) and skips nothing for team reasons.
 - **The configuration has a user and a team.** `backlog setup` writes `user` (the git `user.name`, else the login name) and
@@ -58,7 +58,7 @@ One backlog, one CLI. Compared with 1.0.1:
 - **The item template is visible.** `backlog fields` prints every field, the name it is shown under, what it means, who sets it
   and when it is required; `backlog new --help` carries the table, `new` takes `--title` and `--description` for `--name`
   and `--body`, and `--summary` may repeat.
-- **The history of an item is part of the item** (`backlog query --events`); a replan records no event of its own.
+- **The history of an item is part of the item** (`backlog history [<item>]`); a replan records no event of its own.
 - **Where the items live is configuration, not a mode.** The backlog is always a git repository and every change to it
   is committed and pushed before the command exits. The repository's `.backlog` folder holds the configuration
   (`.backlog/config.json`, written by `backlog setup` or on first use; the root file `.smooth-backlog.json` of earlier
@@ -67,9 +67,14 @@ One backlog, one CLI. Compared with 1.0.1:
   instead (`BACKLOG_ORIGIN_URL` names it). Environment variables override the configuration. Every command, option,
   output and help text is the same in both places. The 1.x mode switches are gone. `setup` reports what it did without
   naming any folder path.
-- **The command set:** `new`, `update`, `query` (`list` is the same), `next`, `pop`, `work`, `team pop`, `move`,
-  `archive`, `setup`. `backlog update` changes an item (fields, body, status, priority, claim, release, review, close,
-  the team steps); `--replan` sets the order of the queue. `--json` prints the data itself, not an `{"ok","data"}` envelope.
+- **The command set:** `setup`, `new`, `update`, `done`, `move`, `archive` (`archive done`), `import`, `clean`, `list`,
+  `show`, `next`, `history`, `changes`, `fields`, `upgrade`, and under `backlog team` `pop`, `new`, `update`, `query`,
+  `define` and `workflow`. `backlog update` changes an item that has no team (fields, body, status, priority, claim,
+  release, close); `--replan` sets the order of the queue. The read command `query` of the earlier builds is gone from the
+  plain commands: `list` (the full stack of this branch, or `new|open|done|archive|branches|critical|all-branches`), `show
+  <item>[,<item>...]` (with `--agent`), `next` (`next all-branches`), `history [<item>]` and `changes [--agent]` each
+  do one thing; `--branch`, `--by-branch` and `--all` of the plain read commands are gone with it, and the read options of
+  the reader (`--phase`, `--status`, `--events`, `--branch`, ...) are options of `backlog team query` only. `--json` prints the data itself, not an `{"ok","data"}` envelope.
 - **Many writers.** Every write records who made it (`BACKLOG_AGENT`, `--by`, `--claim`, `--agent`) and when. A
   write to an item that someone else changed since this agent last read it is refused (exit 5) until the agent reads
   it again. A named agent claims an item; a review is requested and recorded on the item.

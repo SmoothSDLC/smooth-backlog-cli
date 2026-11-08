@@ -38,7 +38,7 @@ const run = (f, args, env = {}) => {
   // BACKLOG_SESSION stays out: these tests pin the continuation rules, not the author-session rule
   // (item 088), which a session id inherited from the running shell would apply to the session-name reviewers
   const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', HOME: f.user, BACKLOG_SESSION: '', ...env } };
-  if (args[0] === 'update' && reader(args)) cli(['query', '--phase', args[1], '--agent', reader(args)], o);
+  if (args[0] === 'update' && reader(args)) cli(['show', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };

@@ -29,7 +29,7 @@ const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`
 function ready(f) {
   const s = createdSlug(run(f, ['new', ...NEW('item')]).stdout);
   for (const a of [['--set-team', 't1'], ['--refine-start', '--by', 'ann'], ['--refine-done', '--by', 'ann', '--note', 'r'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'complete', '--by', 'rex', '--comments', 'ok']]) {
-    run(f, ['query', '--phase', s, '--agent', a.includes('--by') ? a[a.indexOf('--by') + 1] : 'ann']);
+    run(f, ['show', s, '--agent', a.includes('--by') ? a[a.indexOf('--by') + 1] : 'ann']);
     assert.equal(run(f, ['update', s, ...a]).status, 0);
   }
   return s;
@@ -38,11 +38,11 @@ function ready(f) {
 test('team update claims for the agent; --team is required', () => {
   const f = fixture();
   const s = ready(f);
-  run(f, ['query', '--phase', s, '--agent', 'zz']);
+  run(f, ['show', s, '--agent', 'zz']);
   const missing = run(f, ['team', 'update', s, '--agent', 'ann', '--claim'], { TEAM_NAME: '' });
   assert.equal(missing.status, 2); assert.match(missing.stderr, /--team/);
   assert.equal(fm(f, s).status, 'ready');
-  run(f, ['query', '--phase', s, '--agent', 'ann']);
+  run(f, ['show', s, '--agent', 'ann']);
   const c = run(f, ['team', 'update', s, '--team', 't1', '--agent', 'ann', '--claim']);
   assert.equal(c.status, 0, c.stdout + c.stderr);
   assert.equal(c.stderr, '');
@@ -66,7 +66,7 @@ test('team update runs a step with the agent and no notice', () => {
   const f = fixture();
   const s = createdSlug(run(f, ['new', ...NEW('step')]).stdout);
   run(f, ['update', s, '--set-team', 't1']);
-  run(f, ['query', '--phase', s, '--agent', 'ann']);
+  run(f, ['show', s, '--agent', 'ann']);
   const r = run(f, ['team', 'update', s, '--team', 't1', '--agent', 'ann', '--refine-start']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
@@ -153,7 +153,7 @@ test('the team views run under team query; the plain query does not know them; a
   const f = fixture();
   ready(f);
   for (const view of ['--claimable', '--reviewable', '--blocked', '--decisions', '--plan', '--wip']) {
-    const plain = plainRun(f, ['query', view]);
+    const plain = plainRun(f, ['list', view]);
     assert.equal(plain.status, 2, `${view}: ${plain.stdout}${plain.stderr}`);
     assert.match(plain.stderr, new RegExp(`unrecognized arguments: ${view}`));
     assert.equal(plain.stdout, '');
@@ -184,7 +184,7 @@ test('team pop: the lead claims the work item and sees it whole, then a member h
   assert.deepEqual([JSON.parse(member.stdout).action, JSON.parse(member.stdout).item], ['chunk', null]);
   for (const gone of ['pop', 'work']) {
     const r = run(f, [gone, '--agent', 'ann']);
-    assert.equal(r.status, 2); assert.match(r.stderr, /is not a backlog command \(new, update, query, list, team, next, fields, move, archive, show, history, changes, done, clean, import, setup\)/);
+    assert.equal(r.status, 2); assert.match(r.stderr, /is not a backlog command \(new, update, list, team, next, fields, move, archive, show, history, changes, done, clean, import, setup, upgrade\)/);
   }
 });
 
@@ -194,7 +194,7 @@ test('team pop: a member whose item waits for its review is idle; the next membe
   const s = ready(f);
   const claimed = JSON.parse(pop(f, 'zed').stdout);
   assert.deepEqual([claimed.action, claimed.item], ['claim', s]);
-  run(f, ['query', '--phase', s, '--agent', 'zed']);
+  run(f, ['show', s, '--agent', 'zed']);
   assert.equal(run(f, ['team', 'update', s, '--team', 't1', '--agent', 'zed', '--request-review', 'any', '--note', 'commit abc']).status, 0);
   const idle = pop(f, 'zed');
   assert.equal(idle.status, 0, idle.stdout + idle.stderr); // a review request ends its work on the item: chunk work is left
@@ -223,7 +223,7 @@ test('team pop and team update reach only the items of --team: an item of no tea
   const idle = pop(f, 'ann');
   assert.equal(idle.status, 0, idle.stdout + idle.stderr);
   assert.deepEqual([JSON.parse(idle.stdout).action, JSON.parse(idle.stdout).item, fm(f, plain).claimed_by], ['chunk', null, '']);
-  run(f, ['query', '--phase', plain, '--agent', 'ann']);
+  run(f, ['show', plain, '--agent', 'ann']);
   const r = run(f, ['team', 'update', plain, '--team', 't1', '--agent', 'ann', '--claim'], { TEAM_NAME: '' });
   assert.equal(r.status, 1); assert.match(r.stdout, /belongs to no team; this session's team t1 claims only its own team's items/);
   assert.equal(fm(f, plain).claimed_by, '');

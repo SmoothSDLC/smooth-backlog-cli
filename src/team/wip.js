@@ -22,7 +22,7 @@ export function wipRefusal(folder, repo, fm, agent, slug, extra = [], self = { r
     { level: 'agent', key: agent, of: x => heldBy(holderOf(x.fm), agent), skip: lifted, hint },
   ]);
 }
-// The read view (backlog query --wip): the counts against every limit and the stale in-progress items.
+// The read view (backlog team query --wip): the counts against every limit and the stale in-progress items.
 export function wipView(home, { now = Date.now() } = {}) {
   const cfg = limits(home);
   const items = progressItems(home);

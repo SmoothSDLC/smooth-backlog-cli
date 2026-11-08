@@ -5,7 +5,7 @@ import { resolveHome } from './store.js';
 
 // command -> [module relative to this file, ...arguments put in front of the user's argv]
 export const TABLE = {
-  new: ['./new.js'], update: ['./update.js'], query: ['./query.js'], list: ['./read.js', 'list'], team: ['../team/cli.js'],
+  new: ['./new.js'], update: ['./update.js'], list: ['./read.js', 'list'], team: ['../team/cli.js'],
   next: ['./read.js', 'next'], fields: ['./fields.js'], move: ['./move.js'], archive: ['./archive.js'],
   show: ['./read.js', 'show'], history: ['./read.js', 'history'], changes: ['./read.js', 'changes'],
   done: ['./done.js'], clean: ['./clean.js'], import: ['./import.js'],
@@ -17,7 +17,7 @@ const load = async name => { const url = new URL(name, import.meta.url); return 
 
 // `deps` is a test seam: { table, help } replace TABLE and src/help.js.
 export async function run(command, argv, { table = TABLE, help } = {}) {
-  if (!Object.hasOwn(table, command)) return die(`${command} is not a backlog command (${Object.keys(TABLE).join(', ')}, setup). Use backlog --help.`);
+  if (!Object.hasOwn(table, command)) return die(`${command} is not a backlog command (${[...Object.keys(TABLE), 'setup', 'upgrade'].join(', ')}). Use backlog --help.`);
   if (argv.includes('--help')) {
     const base = help ?? (await load('../help.js'))?.HELP;
     // backlog team <command> --help prints the help of that command; the team help lives with the team code

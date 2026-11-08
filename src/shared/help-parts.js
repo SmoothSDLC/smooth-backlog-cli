@@ -17,7 +17,7 @@ export const EXIT = `Exit codes:
      unpublished commits of a backlog repository clone are refused before any change; the message lists them and gives
      explicit publish or drop commands.
   4  The backlog repository is not set up; the printed question must be answered by the user.
-  5  The item was changed by somebody else after this agent last read it (backlog query --phase <item> --agent <you>; a write
+  5  The item was changed by somebody else after this agent last read it (backlog show <item> --agent <you>; a write
      records the agent's view of the item too), or while this command was pushing: nothing was written or pushed, and the message
      names who changed it and when, and is followed by the item as it is now (with --json, one object with the error and
      the item). Read the item again, then repeat the command. An item this agent never read is written without the

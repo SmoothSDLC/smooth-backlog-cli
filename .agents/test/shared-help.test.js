@@ -20,13 +20,12 @@ const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
 const TEAM = ['team', 'team pop', 'team new', 'team update', 'team query', 'team define', 'team workflow']; // the help of the team code lives with it
-const COMMANDS = ['new', 'update', 'query', 'list', 'show', 'history', 'changes', 'next', 'next all-branches', 'done', 'fields', ...TEAM, 'move', 'archive', 'archive done', 'import', 'clean'];
+const COMMANDS = ['new', 'update', 'list', 'show', 'history', 'changes', 'next', 'next all-branches', 'done', 'fields', ...TEAM, 'move', 'archive', 'archive done', 'import', 'clean'];
 const ALL = { ...HELP, ...teamHelp };
 const ROUTED = COMMANDS.filter(c => !c.startsWith('team ') && !c.includes(' ')); // the commands of the router (a word of a command has its own help, not its own row)
 // Flags this build refuses (query.js TEAM and pop.js); --db is no flag of the CLI (item 058: not in its help).
 const REFUSED = {
   update: [],
-  query: [],
   new: [], move: [], archive: [],
 };
 const flagsOf = text => [...new Set((text.match(/--[a-z][\w-]*/g) ?? []).filter(f => !f.endsWith('-')))];
@@ -70,9 +69,9 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
     [['new', '--name', 'n', '--depends-on', 'none', '--db', 'x.db'], unknown],
     [['update', '1', '--note', 'n', '--db', 'x.db'], unknown],
     [['archive', '1', '--force', '--dry-run', '--db', 'x.db'], unknown],
-    [['query', '--status', '--db', 'x.db'], unknown],
-    [['query', '--agents', 'x'], /^--agents goes with --plan/],
-    [['query', '--plan', '--roster', roster], /unrecognized arguments: --roster/],
+    [['list', '--db', 'x.db'], unknown],
+    [['team', 'query', '--team', 't1', '--agents', 'x'], /^--agents goes with --plan/],
+    [['team', 'query', '--team', 't1', '--plan', '--roster', roster], /unrecognized arguments: --roster/],
     [['team', 'pop', '--team', 't1', '--agent', 'x', '--agents', 'x'], /^unrecognized arguments: --agents/],
     [['team', 'pop', '--team', 't1', '--agent', 'x', '--db', 'x.db'], unknown],
   ];
@@ -83,11 +82,11 @@ test('every refused flag is refused with its own diagnostic and exit 2, on an in
     assert.match(r.stderr.replace(/^❌ backlog: /, '').trimEnd(), diagnostic, args.join(' '));
   }
   // the same invocations without the refused flag are accepted, and the refusals changed nothing
-  for (const args of [['archive', '1', '--force', '--dry-run'], ['query', '--status'], ['update', '1', '--note', 'n', '--dry-run']]) {
+  for (const args of [['archive', '1', '--force', '--dry-run'], ['list'], ['update', '1', '--note', 'n', '--dry-run']]) {
     const r = backlog(...args);
     assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
   }
-  assert.match(backlog('query', '--phase', '1', '--json').stdout, /"status": "pending"/);
+  assert.match(backlog('show', '1', '--json').stdout, /"status": "pending"/);
 });
 
 test('every command of the router has a help text, a line of backlog --help and a block in COMMANDS.md', async () => {
@@ -102,7 +101,7 @@ test('every command of the router has a help text, a line of backlog --help and 
 });
 
 test('exit code 3 is described for both cases: the update before the command failed, and the change was not pushed', () => {
-  for (const command of ['new', 'update', 'query', 'next', 'archive']) {
+  for (const command of ['new', 'update', 'list', 'next', 'archive']) {
     const text = backlog(...command.split(' '), '--help').stdout;
     assert.match(text, /^ {2}3 {2}The repository that holds the items could not be synchronised with its origin\./m, command);
     assert.match(text, /update before a\s+change failed: then nothing was changed/, command);
@@ -116,7 +115,7 @@ test('exit code 3 is described for both cases: the update before the command fai
   sharedBacklog(broken);
   const demo = consumer(broken, 'acme', 'demo', 'main');
   renameSync(join(broken, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), join(broken, 'origin-gone.git'));
-  for (const args of [['query', '--status'], ['team', 'pop', '--team', 't1', '--agent', 'x']]) {
+  for (const args of [['list'], ['team', 'pop', '--team', 't1', '--agent', 'x']]) {
     const r = cli(args, { cwd: demo, tmp: broken });
     assert.match(r.stderr, /origin offline, local backlog updates may be behind and need manual remediation later/, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
   }
@@ -186,7 +185,7 @@ test('059.V2: the team --close help block names the hand-off close rule, NONE an
 });
 
 test('the plain help names no team option and ends with the pointer to the team help', () => {
-  for (const command of ['new', 'update', 'query', 'next']) {
+  for (const command of ['new', 'update', 'list', 'next']) {
     const text = backlog(command, '--help').stdout;
     assert.doesNotMatch(text, /TEAM_|teams\.json|team session/, command);
     for (const flag of ['team', 'review-refs', 'refine-start', 'request-review', 'accept-handoff', 'claimable', 'set-team', 'set-review-refs']) assert.equal(block(text, flag), undefined, `${command}: --${flag}`);
@@ -197,7 +196,7 @@ test('the plain help names no team option and ends with the pointer to the team 
 });
 
 test('query, next and team help: no headless option, no query --pop', () => {
-  for (const command of ['query', 'next', 'team']) assert.doesNotMatch(ALL[command], /--pop\b|--headless|BACKLOG_HEADLESS|next --agent/, command);
+  for (const command of ['list', 'next', 'team']) assert.doesNotMatch(ALL[command], /--pop\b|--headless|BACKLOG_HEADLESS|next --agent/, command);
 });
 
 test('backlog --help and COMMANDS.md name no alias, no first-release spelling and no earlier read command', () => {

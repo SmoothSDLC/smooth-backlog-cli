@@ -1,5 +1,5 @@
 // Tests for `backlog show`, `backlog history`, `backlog changes`, `backlog next all-branches` and the bare `backlog` (the help).
-// Each prints what the matching option of the query reader prints. Local bare repositories only (shared-fixtures.js).
+// Each runs the one reader (src/shared/query.js) that backlog team query also runs, with its word spelled as the reader's option. Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -26,21 +26,14 @@ function build(onlyFeature = false) {
   if (onlyFeature) { git(cons, 'checkout', '-q', '-b', 'feature'); add('Feat'); git(cons, 'checkout', '-q', 'main'); } else { add('Alpha'); add('Beta'); run('update', '2', '--append', 'a line'); }
   return { t, cons, run: (...a) => cli(a, { cwd: cons, tmp: t }) };
 }
-const same = (f, a, b) => {
-  const x = f.run(...a); const y = f.run(...b);
-  assert.equal(y.status, x.status, `${b.join(' ')} and ${a.join(' ')} exit alike: ${x.stdout}${x.stderr}`);
-  assert.equal(x.stdout, y.stdout, `${a.join(' ')} prints what ${b.join(' ')} prints`);
-  assert.equal(x.stderr, y.stderr);
-  return x;
-};
-
-test('show prints what query --phase prints: one item, several as an array, and a refusal for an item that is not there', () => {
+test('show prints one item whole, several as an array, and a refusal for an item that is not there', () => {
   const f = build();
-  const one = same(f, ['show', '1'], ['query', '--phase', '1']);
+  const one = f.run('show', '1');
   assert.equal(JSON.parse(one.stdout).slug, '001-alpha');
-  assert.deepEqual(JSON.parse(same(f, ['show', '1,002-beta'], ['query', '--phase', '1,002-beta']).stdout).map(x => x.slug), ['001-alpha', '002-beta']);
-  same(f, ['show', '1', '--json'], ['query', '--phase', '1', '--json']);
-  const missing = same(f, ['show', '99'], ['query', '--phase', '99']);
+  assert.deepEqual(Object.keys(JSON.parse(one.stdout)).filter(k => ['front_matter', 'body'].includes(k)), ['front_matter', 'body']);
+  assert.deepEqual(JSON.parse(f.run('show', '1,002-beta').stdout).map(x => x.slug), ['001-alpha', '002-beta']);
+  assert.equal(f.run('show', '1', '--json').stdout, one.stdout);
+  const missing = f.run('show', '99');
   assert.equal(missing.status, 1);
   assert.match(missing.stdout, /^❌ no phase '99'/);
 });
@@ -63,13 +56,15 @@ test('an agent that showed an item has read it: its next write is refused when s
   assert.equal(late.status, 5, late.stdout + late.stderr);
 });
 
-test('history prints the events like query --events, for the backlog and for one item', () => {
+test('history prints the events of the backlog or of one item, newest first', () => {
   const f = build();
-  const all = same(f, ['history'], ['query', '--events']);
+  const all = f.run('history');
+  assert.equal(all.status, 0, all.stderr);
   assert.match(all.stdout, /planning_event/);
-  const one = same(f, ['history', '2'], ['query', '--events', '2']);
-  assert.ok(one.stdout.trim().split('\n').length >= 1);
-  assert.equal(same(f, ['history', '99'], ['query', '--events', '99']).status, 1);
+  const one = f.run('history', '2');
+  assert.equal(one.status, 0, one.stderr);
+  assert.ok(one.stdout.trim().split('\n').length >= 1 && one.stdout.trim().split('\n').length < all.stdout.trim().split('\n').length);
+  assert.equal(f.run('history', '99').status, 1);
 });
 
 test('history prints text only: --json and a second item are refused (exit 2)', () => {
@@ -82,7 +77,7 @@ test('history prints text only: --json and a second item are refused (exit 2)', 
   assert.match(two.stderr, /unrecognized arguments: 2/);
 });
 
-test('changes is query --changed: the first use sets the reference, the next report lists what another agent changed', () => {
+test('changes: the first use sets the reference, the next report lists what another agent changed', () => {
   const f = build();
   const first = f.run('changes', '--agent', 'amy');
   assert.equal(first.status, 0, first.stderr);
@@ -91,8 +86,6 @@ test('changes is query --changed: the first use sets the reference, the next rep
   const next = JSON.parse(f.run('changes', '--agent', 'amy', '--json').stdout);
   assert.deepEqual(Object.keys(next).sort(), ['agent', 'agents', 'held', 'others', 'reference']);
   assert.deepEqual(next.others.map(x => x.slug), ['001-alpha']);
-  const old = JSON.parse(f.run('query', '--changed', '--agent', 'amy', '--json').stdout);
-  assert.deepEqual(Object.keys(old).sort(), Object.keys(next).sort());
   const bad = f.run('changes', 'extra');
   assert.equal(bad.status, 2);
   assert.match(bad.stderr, /unrecognized arguments: extra/);

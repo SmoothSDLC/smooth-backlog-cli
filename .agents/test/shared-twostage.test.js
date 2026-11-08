@@ -30,9 +30,9 @@ const NEW = ['new', '--name', 'ruled item', '--objective', 'o', '--summary', 's'
 const run = (f, who, args) => cli(args, { cwd: f.cons, tmp: f.t, env: { TEAM_NAME: 't1', TEAM_LEAD: 'lead', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main', BACKLOG_AGENT: who, BACKLOG_SESSION: '' } });
 const ok = (f, who, args) => { const r = run(f, who, args); assert.equal(r.status, 0, `${who}: ${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 // the stale-view guard needs each actor's fresh read of the item first
-const upd = (f, who, args) => { ok(f, who, ['query', '--phase', '1', '--agent', who]); return ok(f, who, ['update', '1', ...args]); };
-const item = f => { const v = JSON.parse(ok(f, 'ann', ['query', '--phase', '1', '--json']).stdout); return { ...v, ...(v.front_matter ?? {}) }; };
-const close = f => { ok(f, 'ann', ['query', '--phase', '1', '--agent', 'ann']); return run(f, 'ann', ['update', '1', '--close', '--summary', 'done']); };
+const upd = (f, who, args) => { ok(f, who, ['show', '1', '--agent', who]); return ok(f, who, ['update', '1', ...args]); };
+const item = f => { const v = JSON.parse(ok(f, 'ann', ['show', '1', '--json']).stdout); return { ...v, ...(v.front_matter ?? {}) }; };
+const close = f => { ok(f, 'ann', ['show', '1', '--agent', 'ann']); return run(f, 'ann', ['update', '1', '--close', '--summary', 'done']); };
 const pass = (f, who, verdict = 'pass') => {
   upd(f, who, ['--start-review', '--by', who]);
   upd(f, who, ['--review', verdict, '--by', who, '--comments', 'checked per references/review/code.md']);

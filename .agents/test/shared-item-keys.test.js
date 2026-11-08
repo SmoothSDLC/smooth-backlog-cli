@@ -53,7 +53,7 @@ test('a file with the earlier keys is read as it was, and its next write carries
   asEarlier(f, s);
   const before = fmOf(f, s);
   assert.deepEqual(NEW_KEYS.filter(k => k !== 'owner' && k in before), []); // the user the item belongs to was already in owner
-  const shown = JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout);
+  const shown = JSON.parse(ok(f, ['show', s, '--json']).stdout);
   assert.equal(shown.front_matter.title, 'Old keys'); // the item as the codec reads it, under the new keys
   assert.equal(shown.name, 'Old keys');
   ok(f, ['update', s, '--append', 'a note']);
@@ -84,7 +84,7 @@ test('an item carrying both an earlier key and its new one keeps the new one', (
   const s = make(f, 'Both');
   const p = pathOf(f, s);
   writeFileSync(p, readFileSync(p, 'utf8').replace(/^title: .*$/m, 'name: "Earlier"\ntitle: "Newer"'));
-  assert.equal(JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout).front_matter.title, 'Newer');
+  assert.equal(JSON.parse(ok(f, ['show', s, '--json']).stdout).front_matter.title, 'Newer');
   ok(f, ['update', s, '--append', 'x']);
   const after = fmOf(f, s);
   assert.equal(after.title, 'Newer');

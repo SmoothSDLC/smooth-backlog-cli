@@ -23,15 +23,15 @@ test('046: --severity changes the field, is published with an event, and refuses
   assert.equal(made.status, 0, made.stdout + made.stderr);
   const file = join(home, 'acme', 'demo', 'phases', '001-loud-item.md');
   assert.equal(parse(readFileSync(file, 'utf8')).fm.severity, 'critical');
-  run(['query', '--phase', '1', '--agent', 'tester']);
+  run(['show', '1', '--agent', 'tester']);
   const r = run(['update', '1', '--severity', 'normal', '--by', 'tester']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /severity=normal/);
   assert.equal(parse(readFileSync(file, 'utf8')).fm.severity, 'normal');
   const bare = spawnSync('git', ['-C', home, 'remote', 'get-url', 'origin'], { encoding: 'utf8' }).stdout.trim();
   assert.match(spawnSync('git', ['--git-dir', bare, 'show', 'main:acme/demo/phases/001-loud-item.md'], { encoding: 'utf8' }).stdout, /^severity: "?normal"?$/m); // pushed
-  assert.match(run(['query', '--events', '1']).stdout, /severity=normal/); // the event
-  assert.equal(run(['query', '--critical']).stdout.includes('001-loud-item'), false);
+  assert.match(run(['history', '1']).stdout, /severity=normal/); // the event
+  assert.equal(run(['list', 'critical']).stdout.includes('001-loud-item'), false);
   const bad = run(['update', '1', '--severity', 'urgent', '--by', 'tester']);
   assert.equal(bad.status, 2, bad.stdout + bad.stderr);
   assert.match(bad.stderr + bad.stdout, /invalid choice: 'urgent' \(choose from normal, critical\)/);
@@ -45,7 +45,7 @@ test('046: --severity is a field edit: refused on another team\'s item like any 
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const run = (args, env = {}) => cli(args, { cwd: cons, tmp: t, env: { BACKLOG_AGENT: 'tester', TEAM_LEAD: 'lead', ...env } });
   assert.equal(run(['new', '--name', 'other team item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds', '--team', 't2']).status, 0);
-  run(['query', '--phase', '1', '--agent', 'tester']);
+  run(['show', '1', '--agent', 'tester']);
   const r = run(['update', '1', '--severity', 'critical', '--by', 'tester'], { TEAM_NAME: 't1' });
   assert.equal(r.status, 1, r.stdout + r.stderr); // another team's item
 });

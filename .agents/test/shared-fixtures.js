@@ -10,7 +10,6 @@ import { parseItem } from '../../src/shared/frontmatter.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
-import { hooks as teamQuery } from '../../src/team/query.js';
 
 export const BACKLOG_OWNER = 'acme';
 export const BACKLOG_NAME = 'backlog-repo';
@@ -103,9 +102,9 @@ export function env(tmp) {
 
 let calls = 0;
 // Runs node bin/backlog.js (this repository's CLI) from a consumer checkout.
-// NOTE: cli() below routes legacy test spellings (update/query/new carrying team flags, items of a team, or a team session) to the real
+// NOTE: cli() below routes legacy test spellings (update/new carrying team flags, items of a team, or a team session) to the real
 // `backlog team ...` commands. It is a test-only convenience and not product behaviour: the product's plain commands never do this.
-// The steps, views and creations of a team are `backlog team update|query|new`; a test that drives them names the item's flags, and cli() sends
+// The steps and creations of a team are `backlog team update|new`; a test that drives them names the item's flags, and cli() sends
 // the command to its team spelling with the same arguments (the team and the agent come from the test's environment, as before).
 // opts.plain keeps the command plain, for the tests of the plain commands; opts.team makes an update a team step (a close with its hand-off gate).
 const flagsOf = args => args.map(String).filter(a => a.startsWith('--')).map(a => a.slice(2).split('=')[0]);
@@ -116,7 +115,6 @@ function teamSpelling(args, env, opts) {
   const has = list => flags.some(f => list.includes(f));
   const session = Boolean(env.TEAM_NAME || env.TEAM_REPOSITORY || env.TEAM_BRANCH) || has(['team', 'set-team']);
   if (args[0] === 'update') return session || (opts.team && !has(['claim', 'release'])) || has([...TEAM_VALUE, ...TEAM_BOOL]);
-  if (args[0] === 'query') return session || has([...teamQuery.bool, ...teamQuery.value]);
   if (args[0] === 'new') return session || has(['review-refs']) || ['TEAM_REPOSITORY', 'TEAM_BRANCH'].some(k => env[k]);
   return false;
 }

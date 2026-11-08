@@ -24,7 +24,7 @@ function fixture() {
 const plain = (f, args, env = BOUND) => cli(args, { cwd: f.cons, tmp: f.t, env, plain: true });
 const ok = (f, args, env) => { const r = plain(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
-const rows = f => JSON.parse(ok(f, ['query', '--json', '--all']).stdout).phases;
+const rows = f => JSON.parse(ok(f, ['list', 'all-branches', '--json']).stdout).phases;
 
 test('new files the item under this repository and branch, whatever the team environment says', () => {
   const f = fixture();
@@ -72,7 +72,7 @@ test('an unreadable team configuration warns under backlog team and nowhere else
   const f = fixture();
   ok(f, NEW('first'), {});
   writeFileSync(join(f.home, 'teams.json'), '{ not json');
-  for (const args of [['query'], ['query', '--json'], ['update', '1', '--summary', 'x'], ['new', '--name', 'two', '--objective', 'o', '--summary', 's', '--depends-on', 'none']]) {
+  for (const args of [['list'], ['list', '--json'], ['update', '1', '--summary', 'x'], ['new', '--name', 'two', '--objective', 'o', '--summary', 's', '--depends-on', 'none']]) {
     const r = plain(f, args);
     assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
     assert.doesNotMatch(r.stderr, /no JSON/, `${args[0]} does not read the team configuration`);

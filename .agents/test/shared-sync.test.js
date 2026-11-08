@@ -473,7 +473,7 @@ test('075: overlapping writers, the other writer first: a CLI commit held at its
     assert.equal(b.out, '✅ created phase 001-otheritem (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
     assert.equal(b.err, '');
     assertPublish(f, f.home2, f.folder2, ['acme/demo/phases/001-otheritem.md', 'acme/demo/phases/002-nodeitem.md']); // the last publisher's mirror equals the published database
-    const ev = cli(['query', '--events', '2'], { cwd: cons2, tmp: f.dir, env: { BACKLOG_HOME: f.home2 } });
+    const ev = cli(['history', '2'], { cwd: cons2, tmp: f.dir, env: { BACKLOG_HOME: f.home2 } });
     assert.match(ev.stdout, /renumbered.*001 -> 002/, ev.stdout + ev.stderr); // the history line of the renumbering is in the item
     assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all'), '', "B's clone tree is clean too");
   } finally { g.release(); } // never leave the held push (and its hook) running
@@ -540,16 +540,16 @@ test('two clones share the items through git alone: no database travels', t => {
   const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
   const names = r => JSON.parse(r.stdout).phases.map(p => p.name).sort();
   assert.equal(run(NEW('From A'), f.home).status, 0);
-  const qb = run(['query', '--json'], f.home2);
+  const qb = run(['list', '--json'], f.home2);
   assert.equal(qb.status, 0, qb.stdout + qb.stderr);
   assert.deepEqual(names(qb), ['From A'], 'the second clone pulled and rebuilt its cache');
   assert.equal(run(NEW('From B'), f.home2).status, 0);
-  const qa = run(['query', '--json'], f.home);
+  const qa = run(['list', '--json'], f.home);
   assert.deepEqual(names(qa), ['From A', 'From B']);
   assert.ok(!git(f.home, 'ls-files').includes('.db'), 'no database is tracked');
   // a database left over from before is ignored and never deleted by the CLI
   const stale = join(f.folder, 'backlog.db');
   writeFileSync(stale, 'stale');
-  assert.equal(run(['query'], f.home).status, 0);
+  assert.equal(run(['list'], f.home).status, 0);
   assert.equal(readFileSync(stale, 'utf8'), 'stale');
 });

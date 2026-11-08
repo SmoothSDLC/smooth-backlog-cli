@@ -31,7 +31,7 @@ const make = (f, name) => createdSlug(ok(f, ['new', '--name', name, '--objective
   '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout);
 const pathOf = (f, slug) => join(f.folder, 'phases', `${slug}.md`);
 const text = (f, slug) => readFileSync(pathOf(f, slug), 'utf8');
-const read = (f, slug) => ok(f, ['query', '--phase', slug, '--agent', 'me']);
+const read = (f, slug) => ok(f, ['show', slug, '--agent', 'me']);
 // A class-era item: both keys written straight into the file, bypassing the migration.
 function seed(f, slug) {
   const s = text(f, slug);
@@ -87,7 +87,7 @@ test('096: query --phase on an unwritten legacy item still shows the keys; after
   const f = fixture();
   const s = make(f, 'transition');
   seed(f, s);
-  const keys = () => { const j = JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout); return KEYS.filter(k => k in (j.front_matter ?? j)); };
+  const keys = () => { const j = JSON.parse(ok(f, ['show', s, '--json']).stdout); return KEYS.filter(k => k in (j.front_matter ?? j)); };
   assert.deepEqual(keys(), KEYS);
   ok(f, ['update', s, '--append', 'a note', '--by', 'me']);
   assert.deepEqual(keys(), []);

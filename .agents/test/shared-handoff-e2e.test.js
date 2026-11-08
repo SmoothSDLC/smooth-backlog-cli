@@ -42,7 +42,7 @@ const receipts = (f, slug) => decodeList(fm(f, slug).handoff_receipts) ?? [];
 function producerWithHandoff(f, commit, session) {
   const p = make(f, 'producer item');
   const d = make(f, 'dependent item', '--depends-on', seq(p));
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   ok(f, ['update', p, '--claim', 'producer']);
   const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', commit, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--handoff-outputs', 'src/shared/update.js',
@@ -53,10 +53,10 @@ function producerWithHandoff(f, commit, session) {
 // The producer's review passing, through the CLI (by = the claimer who requests).
 function reviewPass(f, p, by = 'producer') {
   ok(f, ['update', p, '--request-review', 'rex', '--note', 'the hand-off wiring', '--by', by]);
-  ok(f, ['query', '--phase', p, '--agent', 'rex']);
+  ok(f, ['show', p, '--agent', 'rex']);
   ok(f, ['update', p, '--start-review', '--by', 'rex']);
   ok(f, ['update', p, '--review', 'pass', '--by', 'rex', '--comments', 'PASS (references/review/code.md)']);
-  ok(f, ['query', '--phase', p, '--agent', by]); // the claimer's view is stale after the pass; the claimer reads it before handing on
+  ok(f, ['show', p, '--agent', by]); // the claimer's view is stale after the pass; the claimer reads it before handing on
 }
 
 test('059.V1: the producer records its hand-off for its dependent; the block names the item branch and the session', () => {
@@ -80,7 +80,7 @@ test('059.V1: the producer records its hand-off for its dependent; the block nam
 test('059.V1: an acceptance before the producer review passed is refused and stores no receipt', () => {
   const f = fixture();
   const { p, d } = producerWithHandoff(f, C1, 'e2e-77-session');
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   const r = run(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked the contract', '--by', 'lead']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /the producer's review has not passed \(review_state none\); the hand-off is accepted only after it/);
@@ -96,7 +96,7 @@ test('059.V1: after the review passes the lead accepts the hand-off and the rece
   const { p, d } = producerWithHandoff(f, C1, 'e2e-77-session');
   const record = handoffs(f, p)[0];
   reviewPass(f, p);
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   const accept = ok(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'the record pins a 40-hex commit', '--by', 'lead']);
   assert.match(accept.stdout, /handoff-accepted=HANDOFF_ACCEPTED v1/);
   const receipt = receipts(f, p)[0];
@@ -113,11 +113,11 @@ test('059.V1: a re-recorded hand-off makes the old receipt stale', () => {
   const f = fixture();
   const { p, d } = producerWithHandoff(f, C1, 'e2e-77-session');
   reviewPass(f, p);
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   ok(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked', '--by', 'lead']);
   assert.equal(edgeState(fm(f, p), String(seq(d))), 'accepted');
   const oldRecord = handoffs(f, p)[0];
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C2, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--by', 'producer']);
   const records = handoffs(f, p);
@@ -133,7 +133,7 @@ test('059.V1: a re-recorded hand-off makes the old receipt stale', () => {
 test('059.V1: a rejection is stored with its reason', () => {
   const f = fixture();
   const { p, d } = producerWithHandoff(f, C1, 'e2e-77-session');
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   const reject = ok(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'the contract names the wrong module', '--by', 'lead']);
   assert.match(reject.stdout, /handoff-rejected=HANDOFF_REJECTED v1/);
   const record = handoffs(f, p)[0];
@@ -166,7 +166,7 @@ test('059.V1: the claimer records its hand-off without --by; the record is by th
   const f = fixture();
   const p = make(f, 'producer item');
   const d = make(f, 'dependent item', '--depends-on', seq(p));
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   ok(f, ['update', p, '--claim', 'producer']);
   const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
@@ -182,7 +182,7 @@ test('059.V1: a member without --by cannot record another claimer\'s hand-off', 
   const f = fixture();
   const p = make(f, 'producer item');
   const d = make(f, 'dependent item', '--depends-on', seq(p));
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   ok(f, ['update', p, '--claim', 'producer']);
   const r = run(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
@@ -196,7 +196,7 @@ test('059.V1: a member without --by cannot accept or reject as the lead claimer'
   const f = fixture();
   const p = make(f, 'producer item');
   const d = make(f, 'dependent item', '--depends-on', seq(p));
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   ok(f, ['update', p, '--claim', 'lead']);
   ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--by', 'lead']);
@@ -213,12 +213,12 @@ test('059.V1: a member without --by cannot accept or reject as the lead claimer'
 test('059.V1: an empty hand-off value is refused for the record, the accept and the reject', () => {
   const f = fixture();
   const { p, d } = producerWithHandoff(f, C1, 'e2e-77-session');
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   const record = run(f, ['update', p, '--handoff', '', '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--by', 'producer']);
   assert.equal(record.status, 1, record.stdout + record.stderr);
   assert.match(record.stdout, /--handoff needs the dependent/);
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   const accept = run(f, ['update', p, '--accept-handoff', '', '--checks', 'checked', '--by', 'lead']);
   assert.equal(accept.status, 1, accept.stdout + accept.stderr);
   assert.match(accept.stdout, /--accept-handoff needs the dependent/);
@@ -240,7 +240,7 @@ test('059.V1: an empty hand-off value is refused for the record, the accept and 
 
 function reviewed(f, p) {
   reviewPass(f, p);
-  ok(f, ['query', '--phase', p, '--agent', 'producer']); // fresh view: the reviews changed the item
+  ok(f, ['show', p, '--agent', 'producer']); // fresh view: the reviews changed the item
 }
 
 test('059.V2: a producer with a dependent is refused --close when the edge is missing', () => {
@@ -275,11 +275,11 @@ test('059.V2: a producer with a dependent is refused --close when it is stale af
   const f = fixture();
   const { p, d } = producerWithHandoff(f, C1, 'e2e-78-session');
   reviewPass(f, p);
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   ok(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked', '--by', 'lead']);
   assert.equal(edgeState(fm(f, p), String(seq(d))), 'accepted');
   // the re-record (after the producer reads the acceptance) changes the record's digest: the receipt pins the old one
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C2, '--handoff-contract', 'the close gate wiring',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--by', 'producer']);
   assert.equal(edgeState(fm(f, p), String(seq(d))), 'stale');
@@ -293,10 +293,10 @@ test('059.V2: a producer with a dependent is refused --close when it is stale af
 test('059.V2: a producer with a dependent is refused --close when it is rejected', () => {
   const f = fixture();
   const { p, d } = producerWithHandoff(f, C1, 'e2e-78-session');
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   ok(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'the contract is incomplete', '--by', 'lead']);
   assert.equal(edgeState(fm(f, p), String(seq(d))), 'rejected');
-  ok(f, ['query', '--phase', p, '--agent', 'producer']); // the lead's rejection changed the item: the claimer re-reads
+  ok(f, ['show', p, '--agent', 'producer']); // the lead's rejection changed the item: the claimer re-reads
   reviewed(f, p); // the close also needs the 088 review gate to have passed
   const r = run(f, ['update', p, '--close', '--summary', 'the close gate wiring', '--by', 'producer']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
@@ -336,9 +336,9 @@ test('059.V2: a producer with a dependent is refused --status done when it is st
   const f = fixture();
   const { p, d } = producerWithHandoff(f, C1, 'e2e-78-session');
   reviewPass(f, p);
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   ok(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked', '--by', 'lead']);
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C2, '--handoff-contract', 'the close gate wiring',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--by', 'producer']);
   assert.equal(edgeState(fm(f, p), String(seq(d))), 'stale');
@@ -352,10 +352,10 @@ test('059.V2: a producer with a dependent is refused --status done when it is st
 test('059.V2: a producer with a dependent is refused --status done when it is rejected', () => {
   const f = fixture();
   const { p, d } = producerWithHandoff(f, C1, 'e2e-78-session');
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   ok(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'the contract is incomplete', '--by', 'lead']);
   assert.equal(edgeState(fm(f, p), String(seq(d))), 'rejected');
-  ok(f, ['query', '--phase', p, '--agent', 'producer']); // the lead's rejection changed the item: the claimer re-reads
+  ok(f, ['show', p, '--agent', 'producer']); // the lead's rejection changed the item: the claimer re-reads
   reviewed(f, p);
   const r = run(f, ['update', p, '--status', 'done', '--by', 'producer']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
@@ -368,11 +368,11 @@ test('059.V2: after the lead accepts the hand-off the producer closes', () => {
   const f = fixture();
   const { p, d } = producerWithHandoff(f, C1, 'e2e-78-session');
   reviewPass(f, p);
-  ok(f, ['query', '--phase', p, '--agent', 'lead']);
+  ok(f, ['show', p, '--agent', 'lead']);
   const accept = ok(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'the record pins a 40-hex commit', '--by', 'lead']);
   assert.match(accept.stdout, /handoff-accepted=HANDOFF_ACCEPTED v1/);
   assert.equal(edgeState(fm(f, p), String(seq(d))), 'accepted');
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   const close = ok(f, ['update', p, '--close', '--summary', 'the close gate wiring', '--by', 'producer']);
   assert.match(close.stdout, /updated/);
   assert.equal(fm(f, p).status, 'closed');
@@ -386,7 +386,7 @@ test('059.V2: an item without dependents closes and records NONE (the item shows
   const p = make(f, 'producer item');
   ok(f, ['update', p, '--claim', 'producer']);
   reviewPass(f, p);
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   const close = ok(f, ['update', p, '--close', '--summary', 'the close gate wiring', '--by', 'producer']);
   assert.match(close.stdout, /updated/);
   assert.equal(fm(f, p).handoffs, 'none'); // the stored form: the string none
@@ -399,7 +399,7 @@ test('059.V2: a producer closed before this rule (no handoffs key) is not re-che
   const p = make(f, 'producer item');
   ok(f, ['update', p, '--claim', 'producer']);
   reviewPass(f, p);
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   ok(f, ['update', p, '--close', '--summary', 'closed while the rule did not exist', '--by', 'producer']);
   assert.equal(fm(f, p).status, 'closed');
   // a producer closed before the rule has no handoffs key: remove the one this rule records, to stand in for it
@@ -407,7 +407,7 @@ test('059.V2: a producer closed before this rule (no handoffs key) is not re-che
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^handoffs:.*\n/m, ''));
   assert.ok(!('handoffs' in fm(f, p)));
   const d = make(f, 'dependent item', '--depends-on', seq(p));
-  ok(f, ['query', '--phase', p, '--agent', 'producer']);
+  ok(f, ['show', p, '--agent', 'producer']);
   const r = ok(f, ['update', p, '--close', '--summary', 're-checked after the rule existed', '--by', 'producer']);
   assert.match(r.stdout, /updated/); // the done producer is not re-checked by the close gate
   assert.equal(fm(f, p).status, 'closed');

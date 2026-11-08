@@ -1,4 +1,4 @@
-// `backlog team query`: the read views of `backlog query` plus the views of a team (claimable, reviewable, blocked, decisions, plan, wip).
+// `backlog team query`: the read views of the reader (src/shared/query.js) plus the views of a team (claimable, reviewable, blocked, decisions, plan, wip).
 // src/shared/query.js runs the query; this module is the `team` object it asks.
 import { existsSync } from 'node:fs';
 import { run as runQuery } from '../shared/query.js';

@@ -1,4 +1,4 @@
-// Step definitions. Every check goes through the CLI itself (backlog query --json), never through the item files.
+// Step definitions. Every check goes through the CLI itself (backlog list --json), never through the item files.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,7 +35,7 @@ step(/^I define the (team|workflow) from the JSON `(.+)`$/, (w, kind, json) => {
   command(w, `backlog team ${kind === 'team' ? 'define' : 'workflow'} --file ${file}`);
 });
 step(/^another checkout sees team "([^"]+)" with lead "([^"]+)"$/, (w, team, lead) => {
-  const r = w.runOther(['query', '--json']); assert.equal(r.status, 0, output(r)); // the read pulls the published configuration
+  const r = w.runOther(['list', '--json']); assert.equal(r.status, 0, output(r)); // the read pulls the published configuration
   const file = join(w.other(), w.env.BACKLOG_HOME ? '' : '.backlog', 'teams.json');
   assert.equal(JSON.parse(readFileSync(file, 'utf8'))[team]?.lead, lead, readFileSync(file, 'utf8'));
 });
@@ -61,7 +61,7 @@ step(/^a refined item "([^"]+)" exists$/, (w, name) => {
   const r = command(w, `backlog new --name "${name}" --objective "do ${name}" --summary "${name}" --depends-on none --review-refs docs/review/code.md --estimate 30 --complexity low --body "## Definition of done\\n- [ ] ${name} works"`);
   assert.equal(r.status, 0, `could not create the refined item: ${output(r)}`);
 });
-step(/^I have read item (\S+)$/, (w, item) => { const r = command(w, `backlog query --phase ${item} --json`); assert.equal(r.status, 0, output(r)); });
+step(/^I have read item (\S+)$/, (w, item) => { const r = command(w, `backlog show ${item} --json`); assert.equal(r.status, 0, output(r)); });
 
 // the second checkout of the same backlog (see world.other)
 step(/^another checkout runs `(.+)`$/, (w, text) => {
@@ -70,11 +70,11 @@ step(/^another checkout runs `(.+)`$/, (w, text) => {
   const r = w.runOther(args, { env }); assert.equal(r.status, 0, `the other checkout failed: ${output(r)}`);
 });
 step(/^another checkout sees item (\S+) with status "([^"]*)"$/, (w, item, status) => {
-  const r = w.runOther(['query', '--phase', item, '--json']); assert.equal(r.status, 0, output(r));
+  const r = w.runOther(['show', item, '--json']); assert.equal(r.status, 0, output(r));
   assert.equal(JSON.parse(r.stdout).status, status, r.stdout);
 });
 step(/^another checkout sees (\d+) items$/, (w, n) => {
-  const r = w.runOther(['query', '--json']); assert.equal(r.status, 0, output(r));
+  const r = w.runOther(['list', '--json']); assert.equal(r.status, 0, output(r));
   assert.equal((JSON.parse(r.stdout).phases ?? []).length, Number(n), r.stdout);
 });
 // a pre-push hook in the repository that holds the items: on its first run only, the other checkout publishes a change, so this push is rejected once
@@ -106,16 +106,16 @@ step(/^the JSON output has (\d+) items?$/, (w, n) => { const v = JSON.parse(w.la
 
 // item facts, read back through the CLI
 const read = (w, item) => {
-  const r = w.run(['query', '--phase', item, '--json'], { env: { BACKLOG_AGENT: 'reader' } });
+  const r = w.run(['show', item, '--json'], { env: { BACKLOG_AGENT: 'reader' } });
   assert.equal(r.status, 0, `cannot read item ${item}: ${output(r)}`);
   const v = JSON.parse(r.stdout); return { ...v, ...(v.front_matter ?? {}) };
 };
 step(/^item (\S+) has (\w+) "([^"]*)"$/, (w, item, field, value) => { const v = read(w, item); assert.equal(String(v[field] ?? ''), value, `${field} of ${item}: ${JSON.stringify(v[field])}`); });
 step(/^item (\S+) has (\w+) (\d+)$/, (w, item, field, value) => { const v = read(w, item); assert.equal(Number(v[field]), Number(value), `${field} of ${item}: ${JSON.stringify(v[field])}`); });
 step(/^item (\S+) body contains "([^"]*)"$/, (w, item, text) => { const v = read(w, item); assert.ok(String(v.body ?? '').includes(text), `body of ${item}:\n${v.body}`); });
-step(/^item (\S+) does not exist$/, (w, item) => { const r = w.run(['query', '--phase', item, '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.notEqual(r.status, 0, `item ${item} exists: ${r.stdout}`); });
+step(/^item (\S+) does not exist$/, (w, item) => { const r = w.run(['show', item, '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.notEqual(r.status, 0, `item ${item} exists: ${r.stdout}`); });
 step(/^the queue is (\d+(?:, \d+)*)$/, (w, list) => {
-  const r = w.run(['query', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r));
+  const r = w.run(['list', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r));
   const open = (JSON.parse(r.stdout).phases ?? []).filter(p => !['closed', 'done', 'archived'].includes(p.status)).sort((a, b) => a.priority - b.priority).map(p => String(p.seq));
   assert.deepEqual(open, list.split(', '), r.stdout);
 });
@@ -138,4 +138,4 @@ step(/^the status of item (\d+) is damaged in the backlog repository$/, (w, n) =
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'damaged'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
 });
 step(/^the backlog has an index$/, w => assert.ok(existsSync(join(w.folder(), 'index.json')), 'no index file in the backlog folder'));
-step(/^the queue is empty$/, w => { const r = w.run(['query', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r)); assert.deepEqual((JSON.parse(r.stdout).phases ?? []).filter(p => !['closed', 'done', 'archived'].includes(p.status)), [], r.stdout); });
+step(/^the queue is empty$/, w => { const r = w.run(['list', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r)); assert.deepEqual((JSON.parse(r.stdout).phases ?? []).filter(p => !['closed', 'done', 'archived'].includes(p.status)), [], r.stdout); });

@@ -18,10 +18,14 @@ after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
 const NOT = /^❌ backlog: (\S+) is not a backlog command \(/;
 const UNKNOWN = /^❌ backlog: (?:\S+ )?(?:unrecognized arguments?:|.*takes no other argument)/;
 // [row of the table, the removed spelling, exit code, the answer]. A row that is kept as a command of its own (3-7, 13, 22, 23) is listed
-// with the part of its first-release spelling that no longer exists: the old read command, the singular word, or the dropped switch.
+// with the part of its first-release spelling that no longer exists: the earlier read command query (rows 3-6), the singular word, or the dropped switch.
 const REMOVED = [
   [1, ['init', 'demo'], 2, NOT],
   [2, ['init', 'clean'], 2, NOT],
+  [3, ['query', '--only', 'new'], 2, NOT],
+  [4, ['query', '--only', 'open'], 2, NOT],
+  [5, ['query', '--only', 'done'], 2, NOT],
+  [6, ['query', '--only', 'archive'], 2, NOT],
   [7, ['list', 'branch'], 2, /unrecognized arguments: branch \(usage: backlog list /],
   [8, ['branch'], 2, NOT],
   [9, ['new', 'Fix login', '--description', 'users land right', '--state', 'open', '--priority', '0'], 2, UNKNOWN],
@@ -45,6 +49,7 @@ const REMOVED = [
   [26, ['next', '--headless'], 2, /unrecognized arguments: --headless/],
   [26, ['new', '--name', 'X', '--ask'], 2, /unrecognized arguments: --ask/],
   [27, ['next', '--agent', 'ada'], 2, /unrecognized arguments: --agent/],
+  [27, ['query', '--pop', '--agent', 'ada'], 2, NOT],
   [27, ['next', '--pop'], 2, /unrecognized arguments: --pop/],
 ];
 
@@ -72,7 +77,7 @@ function build() {
 }
 
 test('all 27 rows of the first release\'s alias table are answered generically (exit code, message) and write nothing', () => {
-  assert.deepEqual([...new Set(REMOVED.map(r => r[0]))].sort((a, b) => a - b), [1, 2, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]); // rows 3-6 (query --only ...) are added with the removal of query
+  assert.deepEqual([...new Set(REMOVED.map(r => r[0]))].sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]);
   const f = build();
   for (const [row, args, code, answer] of REMOVED) {
     const before = f.state();

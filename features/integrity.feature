@@ -10,7 +10,7 @@ Feature: Integrity - every interaction updates from the origin first, publishes 
 
   Scenario: a read sees a change published from another checkout without any manual step
     When another checkout runs `backlog update 1 --summary "changed elsewhere"`
-    And I run `backlog query --phase 1 --json`
+    And I run `backlog show 1 --json`
     Then the command succeeds
     And item 1 has summary "changed elsewhere"
 

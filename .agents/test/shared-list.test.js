@@ -1,5 +1,5 @@
 // Tests for `backlog list`: the full stack by default, list new|open|done|archive|branches|critical|all-branches, on the reader that
-// `backlog team query` also uses. Local bare repositories only (shared-fixtures.js).
+// `backlog team query` also runs. Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -35,66 +35,58 @@ function build() {
 }
 // the JSON holds the time of the read in its handoff block (to the second), so two runs differ only there
 const norm = text => text.replace(/"handoff": \{[^}]*\}/, '"handoff": {}');
-const same = (f, listArgs, queryArgs) => {
-  const l = f.run(...listArgs); const q = f.run(...queryArgs);
-  assert.equal(q.status, 0, `${queryArgs.join(' ')}: ${q.stderr}`);
-  assert.equal(l.status, 0, `${listArgs.join(' ')}: ${l.stdout}${l.stderr}`);
-  assert.equal(norm(l.stdout), norm(q.stdout), `${listArgs.join(' ')} prints what ${queryArgs.join(' ')} prints`);
-};
 const slugs = r => JSON.parse(r.stdout).phases.map(x => x.slug);
 
-test('list --json is byte-identical to query --status --json, and a bare list to query --status', () => {
+test('list prints the full stack: the open items in queue order, then the finished ones; a leading --json is the switch of the command', () => {
   const f = build();
-  same(f, ['list', '--json'], ['query', '--status', '--json']);
-  same(f, ['list'], ['query', '--status']);
-  same(f, ['--json', 'list'], ['query', '--status', '--json']);
-  assert.ok(slugs(f.run('list', '--json')).includes('004-delta'), 'the full stack holds the finished items');
+  assert.deepEqual(slugs(f.run('list', '--json')), ['002-beta', '001-alpha', '003-gamma', '004-delta', '005-eps']);
+  assert.equal(norm(f.run('--json', 'list').stdout), norm(f.run('list', '--json').stdout));
+  const text = f.run('list').stdout;
+  assert.match(text, /^📋 acme\/demo — branch main$/m);
+  assert.ok(text.indexOf('002-beta') < text.indexOf('001-alpha') && text.indexOf('003-gamma') < text.indexOf('004-delta'));
+  assert.doesNotMatch(text, /\[ {2}6\]/, 'the item of another branch is no row of the stack of main');
 });
 
 test('list new, open, done and archive are the filtered stack, in text and in JSON', () => {
   const f = build();
-  for (const word of ['new', 'open', 'done', 'archive']) {
-    same(f, ['list', word], ['query', '--only', word]);
-    same(f, ['list', word, '--json'], ['query', '--only', word, '--json']);
-    same(f, ['--json', 'list', word], ['query', '--only', word, '--json']); // a leading --json belongs to the command
-  }
   assert.deepEqual(slugs(f.run('list', 'done', '--json')), ['004-delta']);
   assert.deepEqual(slugs(f.run('list', 'archive', '--json')), ['005-eps']);
   assert.deepEqual(slugs(f.run('list', 'new', '--json')), ['002-beta', '001-alpha']);
+  assert.deepEqual(slugs(f.run('list', 'open', '--json')), ['002-beta', '001-alpha', '003-gamma']);
+  for (const word of ['new', 'open', 'done', 'archive']) {
+    assert.equal(norm(f.run('--json', 'list', word).stdout), norm(f.run('list', word, '--json').stdout), word); // a leading --json belongs to the command
+    const text = f.run('list', word).stdout;
+    for (const slug of slugs(f.run('list', word, '--json'))) assert.ok(text.includes(slug), `${word}: ${slug}`);
+  }
+  assert.doesNotMatch(f.run('list', 'done').stdout, /001-alpha/);
 });
 
 test('list branches and list critical are the branch counts and the critical items', () => {
   const f = build();
-  same(f, ['list', 'branches'], ['query', '--branches']);
-  same(f, ['list', 'branches', '--json'], ['query', '--branches', '--json']);
-  same(f, ['list', 'critical'], ['query', '--critical']);
-  same(f, ['list', 'critical', '--json'], ['query', '--critical', '--json']);
   assert.match(f.run('list', 'branches').stdout, /^main {2}open 3 {2}done 1$/m);
   assert.match(f.run('list', 'branches').stdout, /^feature {2}open 1 {2}done 0$/m);
+  assert.deepEqual(JSON.parse(f.run('list', 'branches', '--json').stdout).map(x => x.branch).sort(), ['feature', 'main']);
   assert.deepEqual(JSON.parse(f.run('list', 'critical', '--json').stdout).map(x => x.slug), ['002-beta']);
+  assert.match(f.run('list', 'critical').stdout, /1 CRITICAL ITEM\(S\)/);
 });
 
 test('list all-branches shows every branch, and every row names its branch', () => {
   const f = build();
-  same(f, ['list', 'all-branches', '--json'], ['query', '--all', '--json']);
   const all = JSON.parse(f.run('list', 'all-branches', '--json').stdout).phases;
   assert.deepEqual([...new Set(all.map(x => x.branch))].sort(), ['feature', 'main']);
   const rowsOf = r => r.stdout.split('\n').filter(l => /^ {3}\S+ \[/.test(l));
   const rows = rowsOf(f.run('list', 'all-branches'));
   assert.equal(rows.length, all.length);
   for (const l of rows) assert.match(l, /\(branch (main|feature)\)/, l);
-  // the old spelling is untouched: its rows carry no branch
-  for (const l of rowsOf(f.run('query', '--all'))) assert.doesNotMatch(l, /\(branch /, l);
   // the plain list stays on the branch checked out
   assert.doesNotMatch(f.run('list').stdout, /\[ {2}6\]/); // the item of the branch feature is no row of the queue of main
 });
 
-test('list has its own help that names every word, and it is not the query help', () => {
+test('list has its own help that names every word', () => {
   const f = build();
   const r = f.run('list', '--help');
   assert.equal(r.status, 0);
   assert.equal(r.stdout, `${HELP.list.trimEnd()}\n`);
-  assert.notEqual(r.stdout, `${HELP.query.trimEnd()}\n`);
   for (const word of ['new', 'open', 'done', 'archive', 'branches', 'critical', 'all-branches']) assert.match(HELP.list, new RegExp(`^ {2}backlog list ${word}( |$)`, 'm'), word);
   assert.match(HELP.list, /^Example:\n {2}backlog list /m);
   assert.equal(f.run('list', 'open', '--help').stdout, r.stdout);

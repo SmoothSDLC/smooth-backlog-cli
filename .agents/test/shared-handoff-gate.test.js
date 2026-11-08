@@ -70,7 +70,7 @@ function producerDone(f, p, state, who, { folder = f.folder, cwd = f.cons } = {}
   // item 059.V2: the close gate runs on --status done, so the edge is satisfied (record + acceptance) while the
   // producer closes; the state under test is written afterwards, as the stored form.
   setFront(f, p, { handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(rcpt(rec))] }, folder);
-  ok(f, ['query', '--phase', p, '--agent', 'tester'], cwd); // the pins are a change: the closer reads the item again
+  ok(f, ['show', p, '--agent', 'tester'], cwd); // the pins are a change: the closer reads the item again
   ok(f, ['update', p, '--status', 'done', '--by', 'tester'], cwd);
   if (state === 'accepted') return; // the satisfied edge is the accepted state itself
   if (state === 'legacy') return edgeState(f, p, {}, folder); // closed before the rule: done, no handoffs key
@@ -86,7 +86,7 @@ function producerDone(f, p, state, who, { folder = f.folder, cwd = f.cons } = {}
 // depId: the dependency as the dependent writes it (the producer's slug same-repository, <owner/name>#<seq>
 // foreign); blockedOn: the describeDependency prefix of the producer line in the blocked view and in next.
 function gate(f, state, p, d, h, { depId = p, blockedOn = p } = {}) {
-  ok(f, ['query', '--phase', d, '--agent', 'ada']); // the claimer reads its item first
+  ok(f, ['show', d, '--agent', 'ada']); // the claimer reads its item first
   const satisfied = state === 'accepted' || state === 'legacy';
   const nextItem = satisfied ? d : h;
   if (!satisfied) {
@@ -160,7 +160,7 @@ function foreignFixture(prefix) {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const f = { t, home, cons, folder: join(home, 'acme', 'demo'), there, producerFolder: join(home, 'acme', 'lib') };
   const p = ok(f, NEW('library change', 'none'), there).stdout.split('created phase ')[1].split(' ')[0];
-  ok(f, ['query', '--phase', '1', '--agent', 'tester'], there); // the producer's claimer reads its item before it closes
+  ok(f, ['show', '1', '--agent', 'tester'], there); // the producer's claimer reads its item before it closes
   return { ...f, producer: p };
 }
 

@@ -41,10 +41,10 @@ test('043: setup clones beside the repository, writes a relative config, deploys
   assert.ok(existsSync(join(clone, 'acme', 'app', 'phases', '001-first.md'))); // new used the configured clone
   renameSync(join(t, 'consumer'), join(t, 'moved')); // the repository and its sibling clone move together
   const moved = join(t, 'moved', 'app');
-  const q = run(moved, ['query', '--phase', '1', '--agent', 'tester']);
+  const q = run(moved, ['show', '1', '--agent', 'tester']);
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.equal(JSON.parse(q.stdout).slug, '001-first');
-  run(moved, ['query', '--phase', '1', '--agent', 'tester']);
+  run(moved, ['show', '1', '--agent', 'tester']);
   const u = run(moved, ['update', '1', '--append', 'after the move', '--by', 'tester']);
   assert.equal(u.status, 0, u.stdout + u.stderr);
   assert.match(readFileSync(join(t, 'moved', BACKLOG_NAME, 'acme', 'app', 'phases', '001-first.md'), 'utf8'), /after the move/);
@@ -65,7 +65,7 @@ test('043: a second setup leaves the clone, replaces the skill copies and keeps 
   assert.notEqual(readFileSync(join(app, '.claude', 'skills', 'backlog', 'SKILL.md'), 'utf8'), 'edited'); // the release's copy
   assert.equal(cfg(app).note, 'kept');
   writeFileSync(join(app, '.backlog', 'config.json'), JSON.stringify({ backlog_repository: '../nowhere' }));
-  const missing = run(app, ['query', '--status']);
+  const missing = run(app, ['list']);
   assert.equal(missing.status, 4, missing.stdout + missing.stderr);
   assert.match(missing.stderr, /backlog setup.*backlog setup --ask/);
   assert.doesNotMatch(missing.stderr, /set_home\.py/);

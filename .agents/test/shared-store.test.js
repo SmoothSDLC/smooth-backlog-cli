@@ -398,7 +398,7 @@ test('075: archive reflows the queue: archiving the last item is a no-op; archiv
   assert.equal(index.rank(b.folder, 'main', '003-three'), 1, '003 is re-densified from P2 to P1');
   assert.ok(!existsSync(join(b.folder, 'phases', '002-two.md')), '002 left phases/');
   assert.ok(existsSync(join(b.folder, 'archive', 'phases', '002-two.md')), '002 is in archive/');
-  const q = cli(['query', '--all'], { cwd: b.cons, tmp: b.t });
+  const q = cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.t });
   assert.match(q.stdout, /📦 \[  2\] 002-two\s+archived\s+P  -\s/, 'an archived item has no rank: the view shows no number');
 });
 
@@ -451,7 +451,7 @@ test('075: findings: an item of another repository is foreign, an item without r
     '---\nphase: "005-untagged"\nseq: 5\nname: "Untagged"\nstatus: "pending"\n---\n');
   // the hand-written files reach the mirror when the next write command rescans
   cli(['update', '1', '--note', 'the mirror rescan'], { cwd: f.cons, tmp: f.t });
-  const r = cli(['query'], { cwd: f.cons, tmp: f.t });
+  const r = cli(['list'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout.replace(f.folder, '<folder>'),

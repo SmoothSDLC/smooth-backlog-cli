@@ -40,7 +40,7 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   const f = fixture();
   const late = make(f, 'late work item'); const early = make(f, 'early work item'); const other = make(f, 'other team item');
   for (const [s, t] of [[late, 't1'], [early, 't1'], [other, 't2']]) ok(f, ['update', s, '--set-team', t]);
-  ok(f, ['query', '--phase', early, '--agent', 'lead']); ok(f, ['update', early, '--priority', '0']);
+  ok(f, ['show', early, '--agent', 'lead']); ok(f, ['update', early, '--priority', '0']);
   let p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.status, fm(f, early).claimed_by], ['claim', early, 0, 'lead']);
   assert.deepEqual(Object.keys(p), ['action', 'item', 'seq', 'team', 'repository', 'branch', 'instruction', 'claimed', 'blocked', 'held', 'marked', 'skipped', 'front_matter', 'body', 'status']); // status: added by pop() here
@@ -51,8 +51,8 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
   assert.deepEqual([p.action, p.item, fm(f, late).claimed_by], ['continue', early, '']);
   const child = make(f, 'child', '--split-from', early); // a split item carries a stage: the members' work, never the lead's
   assert.equal(fm(f, child).status, 'new');
-  ok(f, ['query', '--phase', early, '--agent', 'lead']); ok(f, ['update', early, '--release', 'lead']); ok(f, ['update', early, '--set-team', '']); // no longer the team's
-  ok(f, ['query', '--phase', child, '--agent', 'lead']); moveTeam(f, child, 't2'); // nor is its slice: the next work item has none of its own yet
+  ok(f, ['show', early, '--agent', 'lead']); ok(f, ['update', early, '--release', 'lead']); ok(f, ['update', early, '--set-team', '']); // no longer the team's
+  ok(f, ['show', child, '--agent', 'lead']); moveTeam(f, child, 't2'); // nor is its slice: the next work item has none of its own yet
   p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item], ['claim', late]);
   const text = run(f, ['team', 'pop', '--team', 't1']);
@@ -63,7 +63,7 @@ test('team pop: the lead claims its team\'s first work item in the work order, t
 test('team pop records the continuation claim when the lead\'s earlier session holds the work item', () => {
   const f = fixture();
   const s = make(f, 'continuation work item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', 'zed:01']);
+  ok(f, ['show', s, '--agent', 'zed:01']);
   ok(f, ['update', s, '--claim', 'zed:01'], { TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
   const p = pop(f, { TEAM_LEAD: 'zed:02' }, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.status], ['continue', s, 0]);
@@ -75,7 +75,7 @@ test('team pop exits 1 when the continuation claim is handed back before the fin
   const f = fixture();
   const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
   const s = make(f, 'handed back work item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', 'zed:01']);
+  ok(f, ['show', s, '--agent', 'zed:01']);
   ok(f, ['update', s, '--claim', 'zed:01'], { TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
   const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: 'zed:02', BACKLOG_TEST_SELF: wrap, HAND_BACK_AFTER_CLAIM: '1', HAND_BACK_TO: 'zed:01' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
@@ -88,7 +88,7 @@ test('team pop exits 1 when the held item is reassigned to another session of th
   const f = fixture();
   const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
   const s = make(f, 'exact holder work item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', 'zed:02']);
+  ok(f, ['show', s, '--agent', 'zed:02']);
   ok(f, ['update', s, '--claim', 'zed:02'], { TEAM_LEAD: 'zed:02' }); // the lead's own session holds it: the call makes no claim
   const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: 'zed:02', BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'reassigned'),
     REASSIGN_ON_READ: s, REASSIGN_TO: 'zed:03', REASSIGN_BY: 'zed:02' });
@@ -102,9 +102,9 @@ test('team pop exits 1 when the continuation claim is refused; the earlier sessi
   const f = fixture();
   const dep = make(f, 'open dependency');
   const s = make(f, 'refused continuation item'); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', 'zed:01']);
+  ok(f, ['show', s, '--agent', 'zed:01']);
   ok(f, ['update', s, '--claim', 'zed:01'], { TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
-  ok(f, ['query', '--phase', s, '--agent', 'zed:01']);
+  ok(f, ['show', s, '--agent', 'zed:01']);
   ok(f, ['update', s, '--set-depends-on', dep.split('-')[0], '--by', 'zed:01']); // an undone dependency: the continuation claim is refused
   const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: 'zed:02' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
@@ -118,7 +118,7 @@ test('team pop: an item whose claim is refused is named and skipped; nothing lef
   const dep = make(f, 'open dependency');
   const blocked = make(f, 'blocked work item', '--depends-on', dep.split('-')[0]);
   ok(f, ['update', blocked, '--set-team', 't1']);
-  ok(f, ['query', '--phase', blocked, '--agent', 'lead']); ok(f, ['update', blocked, '--priority', '0']);
+  ok(f, ['show', blocked, '--agent', 'lead']); ok(f, ['update', blocked, '--priority', '0']);
   let p = pop(f, {}, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.status], ['idle', null, 3]);
   assert.equal(p.skipped.length, 1); assert.equal(p.skipped[0].item, blocked); assert.match(p.skipped[0].reason, /depends_on|not done|dependenc/i);
@@ -146,24 +146,24 @@ test('team pop: only the lead, only its team, only itself', () => {
 test('query --status --json rows carry claimed_by and review_state', () => {
   const f = fixture();
   const held = make(f, 'held item'); const reviewed = make(f, 'reviewed item'); const free = make(f, 'free item');
-  ok(f, ['query', '--phase', reviewed, '--agent', 'bob']); ok(f, ['update', reviewed, '--claim', 'bob']);
+  ok(f, ['show', reviewed, '--agent', 'bob']); ok(f, ['update', reviewed, '--claim', 'bob']);
   ok(f, ['update', reviewed, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']); // it waits: bob may pull new work
-  ok(f, ['query', '--phase', held, '--agent', 'bob']); ok(f, ['update', held, '--claim', 'bob']);
-  const rows = Object.fromEntries(JSON.parse(ok(f, ['query', '--status', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
+  ok(f, ['show', held, '--agent', 'bob']); ok(f, ['update', held, '--claim', 'bob']);
+  const rows = Object.fromEntries(JSON.parse(ok(f, ['list', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
   assert.deepEqual(rows[held], ['bob', 'none']);
   assert.deepEqual(rows[reviewed], ['bob', 'requested']);
   assert.deepEqual(rows[free], ['', 'none']);
-  ok(f, ['query', '--phase', reviewed, '--agent', 'zed']); ok(f, ['update', reviewed, '--start-review', '--by', 'zed']);
+  ok(f, ['show', reviewed, '--agent', 'zed']); ok(f, ['update', reviewed, '--start-review', '--by', 'zed']);
   const file = join(f.folder, 'phases', `${free}.md`); // a front matter without the two keys: '' (written by hand here, never by the CLI)
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^owner:.*\n/m, '').replace(/^owned_since:.*\n/m, '').replace(/^review_state:.*\n/m, ''));
-  const again = Object.fromEntries(JSON.parse(ok(f, ['query', '--status', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
+  const again = Object.fromEntries(JSON.parse(ok(f, ['list', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
   assert.deepEqual([again[reviewed], again[free]], [['bob', 'in_review'], ['', '']]);
 });
 
 test('team pop: an unclaimed in-progress work item is taken; no output names a file of the backlog', () => {
   const f = fixture();
   const s = make(f, 'started work item'); ok(f, ['update', s, '--status', 'in_progress']); ok(f, ['update', s, '--set-team', 't1']);
-  ok(f, ['query', '--phase', s, '--agent', 'lead']);
+  ok(f, ['show', s, '--agent', 'lead']);
   assert.deepEqual([fm(f, s).status, fm(f, s).claimed_by], ['in progress', '']);
   const j = run(f, ['team', 'pop', '--team', 't1', '--json']); const text = run(f, ['team', 'pop', '--team', 't1']);
   assert.equal(JSON.parse(j.stdout).action, 'claim'); assert.equal(text.status, 0, text.stderr);
@@ -195,14 +195,14 @@ if (e.CLEAR_ON_READ && isQuery && args.includes('--phase') && !existsSync(e.MOVE
 }
 if (e.REASSIGN_ON_READ && isQuery && args[args.indexOf('--phase') + 1] === e.REASSIGN_ON_READ && !existsSync(e.MOVE_MARK + '.reassigned')) {
   writeFileSync(e.MOVE_MARK + '.reassigned', '1'); // another writer hands the item to another session of the same card just before the lead reads it
-  spawnSync(process.execPath, [bin, 'query', '--phase', e.REASSIGN_ON_READ, '--agent', e.REASSIGN_BY], { env: e }); // a fresh view for the hand-off
+  spawnSync(process.execPath, [bin, 'show', e.REASSIGN_ON_READ, '--agent', e.REASSIGN_BY], { env: e }); // a fresh view for the hand-off
   spawnSync(process.execPath, [bin, 'team', 'update', e.REASSIGN_ON_READ, '--reassign', e.REASSIGN_TO, '--by', e.REASSIGN_BY, '--reason', 'reassigned', '--team', 't1'], { env: e });
 }
 const r = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: e });
 let out = r.stdout;
 if (e.HAND_BACK_AFTER_CLAIM && isUpdate && args.includes('--claim') && r.status === 0) {
   const slug = args[2]; const to = e.HAND_BACK_TO; const from = args[args.indexOf('--agent') + 1];
-  spawnSync(process.execPath, [bin, 'query', '--phase', slug, '--agent', from], { env: e }); // a fresh view for the hand-back
+  spawnSync(process.execPath, [bin, 'show', slug, '--agent', from], { env: e }); // a fresh view for the hand-back
   spawnSync(process.execPath, [bin, 'team', 'update', slug, '--reassign', to, '--by', from, '--reason', 'handed back', '--team', 't1'], { env: e }); // another writer hands the item back
 }
 if (isUpdate && args.includes('--claim') && r.status === 0 && e.MOVE_AFTER_CLAIM) writeFileSync(e.MOVE_MARK, '1');
@@ -232,7 +232,7 @@ test('team pop: an update error, a failed synchronisation and a scope change are
 test('team pop: the claim itself refuses another team\'s item in a team session', () => {
   const f = fixture();
   const s = make(f, 'their work item'); ok(f, ['update', s, '--set-team', 't2']);
-  ok(f, ['query', '--phase', s, '--agent', 'lead']);
+  ok(f, ['show', s, '--agent', 'lead']);
   const r = run(f, ['update', s, '--claim', 'lead'], { TEAM_NAME: 't1' });
   assert.equal(r.status, 1); assert.match(r.stdout, /belongs to team t2, not to this session's team t1/);
 });
@@ -248,7 +248,7 @@ test('an item without depends_on names it', () => {
 
 test('in a team session a claim takes only an item of the session\'s team in its repository', () => {
   const f = fixture();
-  const free = make(f, 'no team item'); ok(f, ['query', '--phase', free, '--agent', 'lead']);
+  const free = make(f, 'no team item'); ok(f, ['show', free, '--agent', 'lead']);
   const r = run(f, ['update', free, '--claim', 'lead'], { TEAM_NAME: 't1' });
   assert.equal(r.status, 1); assert.match(r.stdout, /belongs to no team; this session's team t1/);
   ok(f, ['update', free, '--claim', 'lead']); // outside a team session the claim is as before

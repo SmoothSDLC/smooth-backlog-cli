@@ -35,7 +35,7 @@ const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, team: true
 const ok = (f, args, env) => {
   // the named actor must have read the item after the last change by another actor (the stale-view guard, item 088)
   const named = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
-  if (named && args[0] === 'update' && args[1] && !args[1].startsWith('-')) run(f, ['query', '--phase', args[1], '--agent', named], env);
+  if (named && args[0] === 'update' && args[1] && !args[1].startsWith('-')) run(f, ['show', args[1], '--agent', named], env);
   const r = run(f, args, env);
   assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
   return r;

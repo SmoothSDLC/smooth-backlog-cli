@@ -28,7 +28,7 @@ test('nothing configured: the backlog is .backlog inside the repository, created
   assert.deepEqual(JSON.parse(readFileSync(join(repo, '.backlog', 'config.json'), 'utf8')), { backlog_repository: '.backlog' }, 'the config lives in .backlog');
   assert.ok(existsSync(join(repo, '.backlog', 'local', 'repository', 'phases', '001-x.md')), 'the item file is inside the repository');
   assert.equal(readFileSync(join(repo, '.backlog', '.gitignore'), 'utf8').trim(), '.state/');
-  const q = run(['query', '--phase', '1', '--json']);
+  const q = run(['show', '1', '--json']);
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.equal(JSON.parse(q.stdout).name, 'x');
   // the change is committed on the repository's branch, with the backlog's paths only (config included), and pushed
@@ -52,7 +52,7 @@ test('setup records the location in .backlog/config.json, deploys the skill, com
   assert.equal(git(repo, 'status', '--porcelain'), '', 'setup commits what it wrote');
   assert.equal(git(repo, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'and pushes it');
   assert.match(git(repo, 'log', '-1', '--format=%s'), /^backlog: setup/);
-  assert.equal(run(['query']).status, 0);
+  assert.equal(run(['list']).status, 0);
 });
 
 test('the root file .smooth-backlog.json of earlier builds is still read when .backlog has no config', t => {
@@ -80,7 +80,7 @@ test('work staged elsewhere in the repository is left staged, not committed with
 
 test('a read in a repository with no backlog creates no item folder', t => {
   const { repo, run, setup } = world(t); setup();
-  const q = run(['query']);
+  const q = run(['list']);
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.match(q.stdout, /no backlog yet/);
   assert.ok(!existsSync(join(repo, '.backlog', 'acme')), 'no item folder');
@@ -104,10 +104,10 @@ test('inside the repository the items survive a renamed folder and a changed ori
   const moved = join(tmp, 'renamed');
   renameSync(alone, moved);
   spawnSync('git', ['remote', 'set-url', 'origin', bare], { cwd: moved }); // a changed origin
-  const q = run(['query', '--phase', '1', '--json'], { cwd: moved });
+  const q = run(['show', '1', '--json'], { cwd: moved });
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.equal(JSON.parse(q.stdout).name, 'x');
-  assert.deepEqual(JSON.parse(run(['query', '--json'], { cwd: moved }).stdout).phases.map(p => p.seq), [1]);
+  assert.deepEqual(JSON.parse(run(['list', '--json'], { cwd: moved }).stdout).phases.map(p => p.seq), [1]);
   const u = run(['update', '1', '--status', 'in_progress'], { cwd: moved });
   assert.equal(u.status, 0, u.stdout + u.stderr);
   assert.equal(git(moved, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'pushed once the origin exists');
@@ -117,7 +117,7 @@ test('outside a git repository nothing is created and the error says so', t => {
   const { tmp, run } = world(t);
   const plain = join(tmp, 'plain');
   mkdirSync(plain);
-  const r = run(['query'], { cwd: plain });
+  const r = run(['list'], { cwd: plain });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /inside a git repository/);
   assert.ok(!existsSync(join(plain, '.backlog')), 'nothing was created');
@@ -125,7 +125,7 @@ test('outside a git repository nothing is created and the error says so', t => {
 
 test('a configured backlog repository that is not cloned is an error naming backlog setup, not a silent fallback', t => {
   const { repo, run } = world(t);
-  const r = run(['query'], { env: { BACKLOG_ORIGIN_URL: ORIGIN_URL } });
+  const r = run(['list'], { env: { BACKLOG_ORIGIN_URL: ORIGIN_URL } });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /backlog setup/);
   assert.ok(!existsSync(join(repo, '.backlog')), 'nothing was created inside the repository');
@@ -141,12 +141,12 @@ test('the per-user record is found without the origin setting when it is the onl
   spawnSync('git', ['push', '-q', '-u', 'origin', 'main'], { cwd: clone });
   mkdirSync(join(tmp, 'config', 'some-backlog'), { recursive: true });
   writeFileSync(join(tmp, 'config', 'some-backlog', 'home'), `${clone}\n`);
-  const r = run(['query']);
+  const r = run(['list']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.ok(!existsSync(join(repo, '.backlog')), 'the record wins over any in-repository default');
   mkdirSync(join(tmp, 'config', 'other-backlog'), { recursive: true });
   writeFileSync(join(tmp, 'config', 'other-backlog', 'home'), `${clone}\n`);
-  const two = run(['query']);
+  const two = run(['list']);
   assert.equal(two.status, 4, 'two records and no setting: the CLI does not guess');
   assert.match(two.stderr, /two backlog records|run backlog setup/);
 });
@@ -163,7 +163,7 @@ test('inside the repository every command pulls first: a change published from a
   assert.equal(w.run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']).status, 0);
   assert.equal(spawnSync('git', ['pull', '-q'], { cwd: o.dir }).status, 0);
   assert.equal(o.run(['update', '1', '--summary', 'from the other clone']).status, 0);
-  const q = w.run(['query', '--phase', '1', '--json']);
+  const q = w.run(['show', '1', '--json']);
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.equal(JSON.parse(q.stdout).summary, 'from the other clone');
 });
@@ -184,7 +184,7 @@ test('a dirty tree survives the pull', t => {
   spawnSync('git', ['pull', '-q'], { cwd: o.dir });
   assert.equal(o.run(['update', '1', '--note', 'elsewhere']).status, 0);
   writeFileSync(join(w.repo, 'draft.txt'), 'uncommitted\n'); git(w.repo, 'add', 'draft.txt'); writeFileSync(join(w.repo, 'draft.txt'), 'edited again\n');
-  const q = w.run(['query']);
+  const q = w.run(['list']);
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.equal(readFileSync(join(w.repo, 'draft.txt'), 'utf8'), 'edited again\n');
   assert.equal(git(w.repo, 'status', '--porcelain', '--', 'draft.txt'), 'AM draft.txt');
@@ -200,7 +200,7 @@ test('a rejected publication puts only the backlog back; a read with the origin 
   assert.equal(r.status, 3, r.stdout + r.stderr);
   assert.equal(git(w.repo, 'rev-parse', 'HEAD'), head, 'HEAD is where the user left it');
   assert.equal(git(w.repo, 'status', '--porcelain'), '', 'nothing of the rejected write is left');
-  const q = w.run(['query', '--phase', '1', '--json']);
+  const q = w.run(['show', '1', '--json']);
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.equal(JSON.parse(q.stdout).status, 'pending', 'the answer comes from the local copy');
   assert.match(q.stderr, /origin offline, local backlog updates may be behind and need manual remediation later/);
@@ -209,7 +209,7 @@ test('a rejected publication puts only the backlog back; a read with the origin 
 test('a new branch gets its origin branch on the first push', t => {
   const w = world(t);
   git(w.repo, 'switch', '-q', '-c', 'feature');
-  assert.equal(w.run(['query']).status, 0, 'no origin branch yet: nothing to pull, no failure');
+  assert.equal(w.run(['list']).status, 0, 'no origin branch yet: nothing to pull, no failure');
   const r = w.run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(git(w.repo, 'rev-list', '--count', 'origin/feature..HEAD'), '0');

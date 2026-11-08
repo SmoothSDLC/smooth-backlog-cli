@@ -35,7 +35,7 @@ Feature: Queue - priorities, dependencies, branches
     When I run `backlog new --name "Data loss" --objective "o" --summary "s" --depends-on none --severity critical`
     Then the command succeeds
     And the queue is 4, 1, 2, 3
-    When I run `backlog query`
+    When I run `backlog list`
     Then the output contains "CRITICAL"
 
   Scenario: an item depends on another item
@@ -57,16 +57,16 @@ Feature: Queue - priorities, dependencies, branches
     Then the command succeeds
     And the queue is 1, 3
     And item 2 has branch "feature"
-    When I run `backlog query --all`
+    When I run `backlog list all-branches`
     Then the output contains "002-b"
 
   Scenario: the events of an item are kept with the item
     When I run `backlog update 1 --status in_progress --note "started"`
     Then the command succeeds
     And item 1 has status "in progress"
-    When I run `backlog query --events 1`
+    When I run `backlog history 1`
     Then the command succeeds
     And the output contains "started"
     And the output contains "branch="
-    When I run `backlog query --phase 1 --json`
+    When I run `backlog show 1 --json`
     Then the JSON field front_matter.events has 1 or more entries

@@ -28,7 +28,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
   const TEAM = { TEAM_NAME: 't1', TEAM_LEAD: 'lead', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const as = (agent, args, want = 0, envExtra = {}) => {
     const env = { ...TEAM, BACKLOG_AGENT: agent, BACKLOG_SESSION: '', ...envExtra };
-    if (args[0] === 'update') cli(['query', '--phase', args[1], '--agent', agent], { cwd: cons, tmp: t, env }); // read before the write
+    if (args[0] === 'update') cli(['show', args[1], '--agent', agent], { cwd: cons, tmp: t, env }); // read before the write
     const r = cli(args, { cwd: cons, tmp: t, env });
     assert.ok([].concat(want).includes(r.status), `${agent}: backlog ${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
@@ -42,7 +42,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
   let w; let c1; let c2;
   await step('S01 new work item', () => { w = slugOf(as('lead', ['new', '--name', 'parser work', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'docs/review/code.md', '--estimate', '90', '--complexity', 'medium', '--body', DOD])); });
   await step('S02 runner: --set-team and --claim for the lead', () => { as('lead', ['update', w, '--set-team', 't1']); as('lead', ['update', w, '--claim', 'lead']); assert.equal(fm(w).claimed_by, 'lead'); });
-  await step('S03 query --status --json', () => { assert.ok(JSON.stringify(json('lead', ['query', '--status', '--json'])).includes(w)); });
+  await step('S03 query --status --json', () => { assert.ok(JSON.stringify(json('lead', ['list', '--json'])).includes(w)); });
   await step('S04 split: new --split-from (stage refining)', () => {
     c1 = slugOf(as('lead', ['new', '--name', 'parser child', '--split-from', w, '--depends-on', 'none']));
     c2 = slugOf(as('lead', ['new', '--name', 'printer child', '--split-from', w, '--depends-on', 'none', '--review-refs', 'docs/review/code.md',
@@ -115,7 +115,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
       '--handoff-verification', 'parser.test (pass)', '--by', 'zed']);
     as('lead', ['update', c1, '--accept-handoff', c2seq, '--checks', 'the record pins the commit and the contract', '--by', 'lead']);
     // zed wrote c2 in S20, the lead after it: the close re-ranks c2 too, so zed reads c2 again first (stale-view guard)
-    as('zed', ['query', '--phase', c2, '--agent', 'zed']);
+    as('zed', ['show', c2, '--agent', 'zed']);
     as('zed', ['update', c1, '--close', '--summary', 'parser done', '--by', 'zed']);
     assert.equal(fm(c1).status, 'closed');
   });

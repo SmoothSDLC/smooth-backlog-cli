@@ -42,7 +42,7 @@ export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry 
     let commands = 0;
     const cli = async (...args) => { const { stdout } = await exec(process.execPath, [bin, ...args], options); commands++; return stdout; };
     const json = async (...args) => JSON.parse(await cli(...args, '--json'));
-    const queue = async (...args) => (await json('query', ...args)).phases.filter(p => !['closed', 'done', 'archived'].includes(p.status)).map(p => p.seq); // the open items; query lists finished ones last
+    const queue = async (...args) => (await json('list', ...args)).phases.filter(p => !['closed', 'done', 'archived'].includes(p.status)).map(p => p.seq); // the open items; list prints finished ones last
     const fail = async (code, ...args) => {
       try { await exec(process.execPath, [bin, ...args], options); assert.fail(`Expected backlog ${args.join(' ')} to be refused`); }
       catch (error) { assert.equal(error.code, code, `backlog ${args.join(' ')}: exit ${error.code}\n${error.stdout}${error.stderr}`); commands++; }
@@ -55,26 +55,26 @@ export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry 
     if (upgradeFrom) {
       await runNpm(['install', '--global', '--prefix', prefix, '--ignore-scripts', '--engine-strict', '--no-audit', '--no-fund', '--registry', registry, '--prefer-online', `${packageName}@${expectedVersion}`], { timeout: 120000 });
       assert.equal((await cli('--version')).trim(), expectedVersion);
-      assert.equal((await json('query', '--phase', '1')).name, 'First published task', 'an upgrade keeps the items');
+      assert.equal((await json('show', '1')).name, 'First published task', 'an upgrade keeps the items');
     }
     await cli('new', '--name', 'Second published task', '--objective', 'Verify ordering', '--summary', 'priorities stay dense', '--priority', '0');
     assert.deepEqual(await queue(), [2, 1]);
     assert.equal((await json('next')).seq, 2);
     await cli('update', '1', '--priority', '0'); assert.equal((await json('next')).seq, 1);
     await cli('update', '1', '--append', '## Findings\n- the installed commands work');
-    assert.match((await json('query', '--phase', '1')).body, /the installed commands work/);
+    assert.match((await json('show', '1')).body, /the installed commands work/);
     await fail(1, 'archive', '1');
     await cli('update', '1', '--status', 'done');
-    assert.equal((await json('query', '--phase', '1')).status, 'closed');
+    assert.equal((await json('show', '1')).status, 'closed');
     assert.match(await cli('archive', '1'), /archived/);
-    assert.equal((await json('query', '--phase', '1')).status, 'archived');
+    assert.equal((await json('show', '1')).status, 'archived');
     await git(['switch', '-c', 'feature']);
     await cli('new', '--name', 'Feature', '--objective', 'Cross-branch isolation', '--summary', 'items follow their branch');
     assert.deepEqual(await queue(), [3]);
-    assert.equal((await json('query', '--all')).phases.length, 3);
+    assert.equal((await json('list', 'all-branches')).phases.length, 3);
     await git(['switch', 'main']); // inside the repository the items are committed on their branch: main does not carry the feature's item
     assert.deepEqual(await queue(), [2]);
-    assert.equal((await json('query', '--all')).phases.length, 2);
+    assert.equal((await json('list', 'all-branches')).phases.length, 2);
     await fail(2, 'frobnicate');
     if (verifyRegistry) {
       const latest = JSON.parse(await runNpm(['view', packageName, 'version', '--json', '--registry', registry, '--prefer-online']));

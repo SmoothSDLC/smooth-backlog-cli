@@ -77,7 +77,7 @@ export function recordWrites(folder, repo, agent, views, pairs = []) {
 }
 
 // the agent's reference point - the commit of the agent's last write or its last
-// `query --changed`, under a reserved key of the views file. It has no '/', so every reader of
+// `backlog changes`, under a reserved key of the views file. It has no '/', so every reader of
 // the per-item keys (<owner>/<name>/<slug>) ignores it. A read never moves it.
 const USE = '~use';
 export const lastUse = (home, agent) => read(home, agent)[USE] ?? null;
@@ -189,7 +189,7 @@ export function staleError(slug, by, at, was, others = [], repo, text) {
   let here = null; try { here = repoId(process.cwd()); } catch { /* not in a repository: name every one */ }
   const all = [...groups].flatMap(([r, ss]) => ss.map(s => (r === repo ? s : `${s} of ${r}`)));
   const also = all.length > 1 ? `; ${all.length - 1} other item(s) you read changed too (${all.slice(1).join(', ')})` : '';
-  const how = [...groups].map(([r, ss]) => `${r && r !== here ? `in repository ${r}: ` : ''}backlog query --phase ${ss.join(',')} --agent <you>`).join('; ');
+  const how = [...groups].map(([r, ss]) => `${r && r !== here ? `in repository ${r}: ` : ''}backlog show ${ss.join(',')} --agent <you>`).join('; ');
   const e = new BacklogError('STALE_ITEM', `item ${slug} was changed by ${by || 'someone'} at ${at ?? 'an unknown time (it was moved or removed)'} after you last read it (${was})${also}; read ${all.length > 1 ? 'them' : 'it'} again (${how}) and retry`, STALE_EXIT);
   e.stale = { slug, by, at, was, groups, repo, text }; // text: the item as it is now
   return e;

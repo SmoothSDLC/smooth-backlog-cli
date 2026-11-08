@@ -1,4 +1,4 @@
-// Tests for the backlog CLI as the team members' only view of the backlog: `backlog query --phase` shows the whole item, `backlog work --agent <you>` gives the one next action
+// Tests for the backlog CLI as the team members' only view of the backlog: `backlog show <item>` shows the whole item, `backlog work --agent <you>` gives the one next action
 // marked as the agent's with the whole item, the hand-off, a changes verdict and a close end the agent's session, and in a
 // team session a member acts only as itself while only the lead reassigns another agent's work. Local bare repos.
 import test, { after } from 'node:test';
@@ -33,8 +33,8 @@ const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(
 const run = (f, args, env = {}) => {
   const o = { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...LEAD, ...env } };
   const actor = reader(args);
-  if (args[0] === 'update') cli(['query', '--phase', args[1], ...(actor ? ['--agent', actor] : [])], o); // read before the write, as the acting agent or the env actor (seen.js)
-  if (args[0] === 'new') { const i = args.indexOf('--split-from'); if (i > -1) cli(['query', '--phase', args[i + 1]], o); } // the split reads the parent's refinement state; the env actor's view of it must be fresh (seen.js)
+  if (args[0] === 'update') cli(['show', args[1], ...(actor ? ['--agent', actor] : [])], o); // read before the write, as the acting agent or the env actor (seen.js)
+  if (args[0] === 'new') { const i = args.indexOf('--split-from'); if (i > -1) cli(['show', args[i + 1]], o); } // the split reads the parent's refinement state; the env actor's view of it must be fresh (seen.js)
   return cli(args, o);
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
@@ -54,12 +54,12 @@ const STOP = /🛑 (\S+): END THE SESSION NOW\. Reply with text only and make no
 test('query --phase shows the whole item: the row, every front matter field and the body', () => {
   const f = fixture();
   const s = make(f, 'whole item');
-  const j = JSON.parse(ok(f, ['query', '--phase', s, '--json']).stdout);
+  const j = JSON.parse(ok(f, ['show', s, '--json']).stdout);
   assert.equal(j.slug, s);
   assert.deepEqual(j.front_matter, storedFm(fm(f, s)));
   for (const k of ['review_refs', 'depends_on', 'estimate_min', 'complexity', 'owner']) assert.ok(k in j.front_matter, k);
   assert.ok(j.body.includes('Body of whole item.') && j.body.includes("- [ ] the test's check holds"), j.body);
-  assert.deepEqual(JSON.parse(ok(f, ['query', '--phase', s]).stdout), j); // the text view is the same object
+  assert.deepEqual(JSON.parse(ok(f, ['show', s]).stdout), j); // the text view is the same object
 });
 
 test('backlog work: the next action marked as the agent\'s (claim, refinement start, review start) with the whole item', () => {

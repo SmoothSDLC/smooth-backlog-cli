@@ -375,13 +375,16 @@ Example:
 
 Usage:
   backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--scope branch|repo|all] [--json]
-  backlog team query --team <name> [--agent <name>] --phase <item> | --status | --events [<item>] [--json]
+  backlog team query --team <name> [--agent <name>] --next | --status | --critical | --branches [--all] [--branch <name>] [--json]
+  backlog team query --team <name> [--agent <name>] --phase <item>[,<item>...] | --events [<item>] | --by-branch <name> | --only {new,open,done,archive} [--json]
+  backlog team query --team <name> [--agent <name>] --changed [--json]
 
-Reads the backlog and changes nothing. The view is one of the options below; --agent is the agent that asks (given, it switches to the
-team rules: an incomplete item is not offered and the agent never reviews its own work). The options of backlog query (--phase, --status,
---events, --all, ...; backlog query --help) work here too, and each item shown also carries what the team rules say about it: missing (the
-team fields it lacks: review_refs, depends_on, estimate_min, definition_of_done; [] when complete; null when the item's file is gone
-or holds no item), the stage and the review state. A team without an entry is refused. The plain query has none of the views.
+Reads the backlog and changes nothing, except that --changed advances the agent's own last-use reference (its record of its own use, not an
+item). The view is one of the options below; --agent is the agent that asks (given, it switches to the team rules: an incomplete item is not
+offered and the agent never reviews its own work). Without a view option it prints the full stack of the branch, as backlog list does.
+Each item shown also carries what the team rules say about it: missing (the team fields it lacks: review_refs, depends_on, estimate_min,
+definition_of_done; [] when complete; null when the item's file is gone or holds no item), the stage and the review state. A team without
+an entry is refused. The plain read commands (backlog list, show, next, history, changes) have none of the team views.
 
 ${SHARED}
 
@@ -389,9 +392,61 @@ Options:
   --team NAME
       The team (pop, update). In a team session (TEAM_NAME set) it must be that team.
   --agent AGENT
-      The agent the command answers for (pop, update). In a team session (BACKLOG_AGENT set) it must be that agent.
+      The agent the command answers for (pop, update). In a team session (BACKLOG_AGENT set) it must be that agent. With
+      --phase the agent has read that item (or each of a comma-separated list, printed as a JSON array): its next write of it
+      is checked against that version. A change of an item's rank alone never makes the agent's view stale; a change of its
+      content does, and the refusal names every such item of the write in one backlog team query --phase <a>,<b> command.
   --json
       Print the answer as JSON.
+  --next
+      The next actionable item: the open item with the lowest priority on the branch. When the queue is empty the
+      command says so (with --json it prints {}). Open items of a branch that no longer exists on the origin
+      are in no queue.
+  --status
+      The full stack of the branch (this is the default view). Each row shows the item's status word (free text; closed,
+      done and archived are finished, every other word is open). With --json each row also carries claimed_by, from the item's front matter
+      ('' when unset).
+  --critical
+      Only the open items with severity critical.
+  --phase PHASE
+      One item, given by number or slug, or several as a comma-separated list (a JSON array). The command refuses when
+      one does not exist. Each item is shown whole: its row, front_matter and body (a file that cannot be read or parsed fails the
+      command, as every read does).
+  --events [EVENTS]
+      The history of the items, kept in the item files. With an item (number or slug) it prints the events of that
+      item, newest first; without one it prints the latest 50 events of the backlog, archived items included.
+  --by-branch BY_BRANCH
+      The items recorded on this branch.
+  --only {new,open,done,archive}
+      The full stack filtered to one kind of item: new (not started), open (every item not finished), done (finished,
+      not archived) or archive (archived). The listing is the same one, in queue order. Same as backlog list new, list open,
+      list done and list archive.
+  --branches
+      One line per branch of this repository: the branch, its open items and its done items (with --json, a list of
+      {branch, open, done}). Same as backlog list branches.
+  --changed
+      Which items of this repository changed since your last use: your own write or your own --changed is
+      the reference (its commit and time, stated in every result, also when it is empty), never a global
+      timestamp, so a change made while you are idle still appears in your next report; your own reads
+      (--phase) do not move it. The first --changed prints "no earlier use: reference set now"
+      and sets the reference. The items you hold (your name as owner, reviewer or refiner) are listed
+      in a "held" section; every other changed item goes to "others"; a file moved inside the folder (an
+      archive, a renumbering) is one "D" entry for its old name. When the comparison fails (your reference
+      commit is no longer in the clone, for example after a history rewrite), the command reports the
+      failure (exit 2) and keeps your reference, so the change is not lost. The report is printed before
+      the reference is written, so a failed output consumes no change (the same changes repeat in the
+      next report); on a first use the report is empty and the write happens first, so the result states
+      exactly what was stored. When the write of your reference fails, the result says so and keeps the
+      previous reference: a failed first use prints "no earlier use: the reference could not be set"
+      (with --json the reference is null), and a failed write after an earlier use says so in the text
+      and, with --json, prints the line {"reference_write": "failed"} after the report (the exit is 0).
+      The result also lists the agents that use the backlog (those with a reference point in this clone)
+      and their last-use time.
+  --all
+      Show --next or --status for every branch, not only the current one.
+  --branch BRANCH
+      The branch whose queue to show. The default is the branch that is checked out here; a detached HEAD needs
+      this option or --all.
   --claimable
       Open, unclaimed items whose dependencies are all done, in priority order (a team item before stage ready, or without a stage, is not claimable: it is refined first); another repository's items only as chunk
       work (chunk: true, with --scope all); with TEAM_NAME set, only that team's items of this repository .

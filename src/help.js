@@ -20,7 +20,6 @@ Usage:
   backlog next [--json]                            The next item of this branch
   backlog next all-branches [--json]               The next item over every branch of this repository
   backlog done <item>                              Finish an item that has no team (backlog update <item> --status done)
-  backlog query [options] [--json]                 The earlier read command; list, show, history, changes and next do what its options do
   backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs (--dry-run: only answered), with the whole item
   backlog team new --team <team> --agent <name> --name <text> [options]   Add an item of a team (it starts in stage refining); --review-refs, --split-from
   backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
@@ -62,7 +61,7 @@ field again, and backlog update <item> --restore brings back the item's previous
 
 Who: BACKLOG_AGENT names the agent running the command (--by, --claim and --agent name one explicitly); every change
 records who made it and when. A write to an item that someone else changed since this agent last read it is refused
-(exit 5) until the agent reads it again (backlog query --phase <item>).
+(exit 5) until the agent reads it again (backlog show <item> --agent <you>).
 
 Teams: the commands that know a team (pop, new, update, query, define, workflow) are under backlog team; backlog team --help describes
 them. The commands above know nothing of teams.
@@ -106,7 +105,7 @@ Options:
       The status the item starts in, as free text (done means closed); the default is pending.
   --severity {normal,critical}
       The default is normal. Critical means a finding about repository corruption, data loss, the source of truth
-      or security. It puts the item at priority 0 (unless --priority is given) and makes backlog query print it in
+      or security. It puts the item at priority 0 (unless --priority is given) and makes backlog list and backlog next print it in
       a loud banner so that it is never buried.
   --split-from ITEM
       Create a sibling item that inherits the context of this item (a number or a slug). The command refuses when
@@ -247,7 +246,7 @@ Options:
   --set-chunk {yes,no}
       Mark the item as chunk work (small pieces done between items) or not.
   --severity {normal,critical}
-      Change the item's severity (backlog new sets it, and starts a critical item at P0; backlog query --critical lists
+      Change the item's severity (backlog new sets it, and starts a critical item at P0; backlog list critical lists
       the critical items). The item does not move: change its place with --priority.
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
@@ -262,87 +261,6 @@ Example:
 
 An item that belongs to a team is changed by backlog team update only: this command refuses every change of it, field edits included.
 Team items: backlog team update --help.
-`,
-
-  query: `backlog query — read the backlog of this repository: the queue, one item, the history, or the critical items
-
-Usage:
-  backlog query [--status] [--all] [--branch <name>] [--json]
-  backlog query --next | --critical | --phase <item> | --events [<item>] | --by-branch <name> [--json]
-  backlog query --changed [--agent <name>] [--json]
-  backlog query --only {new,open,done,archive} | --branches [--json]
-
-Reads the backlog and never changes it, except that --changed advances
-the agent's own last-use reference (its record of its own use, not an item). Without a view option it prints the full stack of the branch: the open
-items in queue order (priority 0 is next), then the finished ones. Items that are not on the queue because they name
-another repository or no branch are reported as findings above the queue.
-With --json the command prints the data itself, without any wrapper.
-
-${SHARED}
-
-Options:
-  --next
-      The next actionable item: the open item with the lowest priority on the branch. When the queue is empty the
-      command says so (with --json it prints {}). Open items of a branch that no longer exists on the origin
-      are in no queue.
-  --status
-      The full stack of the branch (this is the default view). Each row shows the item's status word (free text; closed,
-      done and archived are finished, every other word is open). With --json each row also carries claimed_by, from the item's front matter
-      ('' when unset).
-  --critical
-      Only the open items with severity critical.
-  --phase PHASE
-      One item, given by number or slug, or several as a comma-separated list (a JSON array). The command refuses when
-      one does not exist. Each item is shown whole: its row, front_matter and body (a file that cannot be read or parsed fails the
-      command, as every read does).
-  --events [EVENTS]
-      The history of the items, kept in the item files. With an item (number or slug) it prints the events of that
-      item, newest first; without one it prints the latest 50 events of the backlog, archived items included.
-  --by-branch BY_BRANCH
-      The items recorded on this branch.
-  --only {new,open,done,archive}
-      The full stack filtered to one kind of item: new (not started), open (every item not finished), done (finished,
-      not archived) or archive (archived). The listing is the same one, in queue order. Same as backlog list new,
-      list open, list done, list archive.
-  --branches
-      One line per branch of this repository: the branch, its open items and its done items (with --json, a list of
-      {branch, open, done}). Same as backlog branch and backlog list branch.
-  --changed
-      Which items of this repository changed since your last use: your own write or your own --changed is
-      the reference (its commit and time, stated in every result, also when it is empty), never a global
-      timestamp, so a change made while you are idle still appears in your next report; your own reads
-      (query --phase) do not move it. The first --changed prints "no earlier use: reference set now"
-      and sets the reference. The items you hold (your name as owner, reviewer or refiner) are listed
-      in a "held" section; every other changed item goes to "others"; a file moved inside the folder (an
-      archive, a renumbering) is one "D" entry for its old name. When the comparison fails (your reference
-      commit is no longer in the clone, for example after a history rewrite), the command reports the
-      failure (exit 2) and keeps your reference, so the change is not lost. The report is printed before
-      the reference is written, so a failed output consumes no change (the same changes repeat in the
-      next report); on a first use the report is empty and the write happens first, so the result states
-      exactly what was stored. When the write of your reference fails, the result says so and keeps the
-      previous reference: a failed first use prints "no earlier use: the reference could not be set"
-      (with --json the reference is null), and a failed write after an earlier use says so in the text
-      and, with --json, prints the line {"reference_write": "failed"} after the report (the exit is 0).
-      The result also lists the agents that use the backlog (those with a reference point in this clone)
-      and their last-use time.
-  --json
-      Print machine-readable output.
-  --all
-      Show --next or --status for every branch, not only the current one.
-  --branch BRANCH
-      The branch whose queue to show. The default is the branch that is checked out here; a detached HEAD needs
-      this option or --all.
-  --agent AGENT
-      With --phase the agent has read that item (or each of a comma-separated list, printed as a JSON array): its next
-      write of it is checked against that version. A change of an item's rank alone (another agent's move or reflow)
-      never makes the agent's view stale; a change of its content does, and the refusal names every such item of the
-      write in one backlog query --phase <a>,<b> command.
-${HELP_FLAG}
-
-${EXIT}
-
-Example:
-  backlog query --status --branch main
 `,
 
   next: `backlog next — show the next actionable item of this branch

@@ -28,7 +28,7 @@ function inproc(f, source, extraEnv = {}) {
 
 test('a leading --json is a global flag: the command after it is still found, no arguments prints the help', t => {
   const f = pair(t);
-  const r = cli(['--json', 'query'], { cwd: f.cons, tmp: f.tmp });
+  const r = cli(['--json', 'list'], { cwd: f.cons, tmp: f.tmp });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(typeof JSON.parse(r.stdout), 'object');
   const bare = cli(['--json'], { cwd: f.cons, tmp: f.tmp });
@@ -47,7 +47,7 @@ test('a command leaves the consuming repository clean and writes nothing into it
   assert.equal(existsSync(join(f.cons, '.backlog')), false);
 });
 
-test('the router: fifteen commands; argv after the command reaches the module unparsed; its exit code is returned', t => {
+test('the router: fourteen commands; argv after the command reaches the module unparsed; its exit code is returned', t => {
   const f = pair(t);
   writeFileSync(join(f.tmp, 'fake.mjs'), 'export const run = async argv => { console.log(JSON.stringify(argv)); return 7; };\n');
   const spec = JSON.stringify(pathToFileURL(join(f.tmp, 'fake.mjs')).href);
@@ -56,7 +56,7 @@ test('the router: fifteen commands; argv after the command reaches the module un
     process.exitCode = await router.run('fake', ['--name', 'A b', '--weird=x', '--', '-z'], { table: { fake: [${spec}], dash: [${spec}, '--next'] } });`);
   assert.equal(r.status, 7, r.stderr);
   const [names, argv] = r.stdout.trim().split('\n');
-  assert.equal(names, 'archive,changes,clean,done,fields,history,import,list,move,new,next,query,show,team,update');
+  assert.equal(names, 'archive,changes,clean,done,fields,history,import,list,move,new,next,show,team,update');
   assert.deepEqual(JSON.parse(argv), ['--name', 'A b', '--weird=x', '--', '-z']);
   const lead = inproc(f, `process.exitCode = await router.run('dash', ['--json'], { table: { dash: [${spec}, '--next'] } });`);
   assert.deepEqual(JSON.parse(lead.stdout.trim()), ['--next', '--json']);
@@ -64,10 +64,10 @@ test('the router: fifteen commands; argv after the command reaches the module un
 
 test('an unknown command is refused (exit 2) naming the commands', t => {
   const f = pair(t);
-  for (const c of ['init', 'constructor', 'nope', 'pop', 'work']) { // pop and work are team commands now: backlog team pop; init backup is no command
+  for (const c of ['init', 'constructor', 'nope', 'pop', 'work', 'query']) { // pop and work are team commands now: backlog team pop; init backup is no command; query is gone (list, show, next, history, changes, and backlog team query)
     const r = cli(c === 'init' ? [c, 'backup'] : [c], { cwd: f.cons, tmp: f.tmp });
     assert.equal(r.status, 2, c);
-    assert.match(r.stderr, new RegExp(`^❌ backlog: ${c} is not a backlog command \\(new, update, query, list, team, next, fields, move, archive, show, history, changes, done, clean, import, setup\\)`));
+    assert.match(r.stderr, new RegExp(`^❌ backlog: ${c} is not a backlog command \\(new, update, list, team, next, fields, move, archive, show, history, changes, done, clean, import, setup, upgrade\\)`));
   }
 });
 
@@ -78,7 +78,7 @@ test('<command> --help prints the help text and needs no backlog folder; list pr
   assert.equal(r.stdout, 'FAKE HELP\n');
   const list = cli(['list', '--help'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: join(f.tmp, 'nope') } });
   assert.equal(list.status, 0, list.stderr);
-  assert.notEqual(list.stdout, cli(['query', '--help'], { cwd: f.cons, tmp: f.tmp }).stdout);
+  assert.notEqual(list.stdout, cli(['next', '--help'], { cwd: f.cons, tmp: f.tmp }).stdout);
   assert.match(list.stdout, /^backlog list /);
   assert.equal(cli(['list', 'open', '--help'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: join(f.tmp, 'nope') } }).stdout, list.stdout);
 });

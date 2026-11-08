@@ -27,13 +27,13 @@ repository: it installs or updates the CLI and runs `backlog setup`. The CLI upd
 
 ## Working alone (a person or one agent)
 
-- Read: `backlog list` (the queue and the finished items of this branch; `backlog list open|new|done|archive|branches|critical|all-branches` one kind, the branches, the critical items or every branch), `backlog query` (the same queue), `backlog fields` (the item template: every field and what it is for), `backlog show <item>` (one item, whole; the earlier `backlog query --phase <item> --json` prints the same), `backlog history [<item>]` (its events, or the latest 50), `backlog changes` (what changed since your last use), `backlog next` (`backlog next all-branches` over every branch).
+- Read: `backlog list` (the queue and the finished items of this branch; `backlog list open|new|done|archive|branches|critical|all-branches` one kind, the branches, the critical items or every branch), `backlog fields` (the item template: every field and what it is for), `backlog show <item>` (one item, whole; `--agent <you>` records that you have read it), `backlog history [<item>]` (its events, or the latest 50), `backlog changes` (what changed since your last use), `backlog next` (`backlog next all-branches` over every branch).
 - Create: `backlog new --name "<name>" --objective "<one line>" --summary "<what it is about>"`; `--priority 0` makes it
   next; `--depends-on <items>` when other items must finish first; `--split-from <item>` makes a sibling with its context.
 - Change: `backlog update <item> --name|--objective|--summary|--status|--location|--priority <value>`, `--append "<text>"`
   adds body text, `--note "<text>"` records an event, `--set-depends-on <items|none>`; `--replan "<id,id,...>"` orders the queue.
 - Claim and release (named agents; an item without a team): `backlog update <item> --claim <you>`, `--release <you>`; `backlog team pop --team <team> --agent <you>`
-  says what to do next. Read an item (`query --phase <item>`) before you change it: a write after someone else changed
+  says what to do next. Read an item (`backlog show <item> --agent <you>`) before you change it: a write after someone else changed
   the item since your read is refused (exit 5) until you read it again.
 - Reviews, refinement and hand-offs are team steps: see Team work. A plain `backlog update` refuses every change of an item that belongs to a team.
 - An item that cannot be read: every command names it and the field; `backlog update <item> --<field> <value>` sets the field again, `backlog update <item> --restore` brings back its previous version.

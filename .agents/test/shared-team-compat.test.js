@@ -28,9 +28,9 @@ const COMMIT = 'def45678def45678def45678def45678def45678'; // a 40-hex commit fo
 const handoff = (f, slug, job, claimer) => {
   ok(f, slug, '--request-review', 'any', '--note', 'commit abc1234');
   ok(f, slug, '--review', 'pass', '--by', 'bob', '--comments', 'fine per docs/review/code.md');
-  run(f, 'query', ['--phase', slug, '--agent', claimer]);
+  run(f, 'show', [slug, '--agent', claimer]);
   ok(f, slug, '--handoff', String(Number(job.split('-')[0])), '--handoff-commit', COMMIT, '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', claimer);
-  run(f, 'query', ['--phase', slug, '--agent', 'lead']);
+  run(f, 'show', [slug, '--agent', 'lead']);
   const r = cli(['update', slug, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'lead'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: 'lead', BACKLOG_SESSION: '', TEAM_LEAD: 'lead' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
 };
@@ -84,9 +84,9 @@ test('test_item_without_team_fields_keeps_working: an item written before team w
   const { fm, body } = item(f, s);
   store.write({ path, fm: Object.fromEntries(Object.entries(fm).filter(([k]) => !OLD.includes(k))), body }, f.folder); // as an old item looks
 
-  const status = JSON.parse(run(f, 'query', ['--status', '--json']).stdout);
+  const status = JSON.parse(run(f, 'list', ['--json']).stdout);
   assert.ok(status.phases.some(p => p.slug === s));
-  assert.equal(JSON.parse(run(f, 'query', ['--phase', s]).stdout).slug, s);
+  assert.equal(JSON.parse(run(f, 'show', [s]).stdout).slug, s);
   ok(f, s, '--append', 'a note added the old way');
   ok(f, s, '--status', 'in_progress');
   assert.ok(!q(f, '--blocked').includes(s) && !q(f, '--claimable').includes(s)); // in progress, and of no team
@@ -94,7 +94,7 @@ test('test_item_without_team_fields_keeps_working: an item written before team w
   assert.ok(!q(f, '--claimable').includes(s)); // an item of no team is in no team's view
   const text = readFileSync(path, 'utf8');
   assert.ok(text.includes('a note added the old way') && !OLD.some(k => text.includes(`\n${k}:`)));
-  run(f, 'query', ['--phase', s, '--agent', 'smooth']); // the actor re-reads
+  run(f, 'show', [s, '--agent', 'smooth']); // the actor re-reads
   ok(f, s, '--status', 'done', '--by', 'smooth'); // read and write run as the same explicit actor (the CI runner's USER differs)
 });
 
@@ -106,9 +106,9 @@ test('test_claim_review_close_lifecycle: the query views along the lifecycle (th
   assert.ok(q(f, '--blocked').includes(job) && !q(f, '--claimable').includes(job));
   assert.ok(refused(f, job, '--claim', 'bob').includes(`${first} (status ready`)); // dependency not done
   ok(f, first, '--claim', 'ann');
-  run(f, 'query', ['--phase', first, '--agent', 'ann']); // the claimer re-reads; the claimer closes, as the same explicit actor
+  run(f, 'show', [first, '--agent', 'ann']); // the claimer re-reads; the claimer closes, as the same explicit actor
   handoff(f, first, job, 'ann');
-  run(f, 'query', ['--phase', first, '--agent', 'ann']); // the claimer re-reads
+  run(f, 'show', [first, '--agent', 'ann']); // the claimer re-reads
   ok(f, first, '--close', '--summary', 'tests written', '--by', 'ann');
   assert.ok(!q(f, '--blocked').includes(job));
   assert.ok(q(f, '--claimable').includes(job));
@@ -142,7 +142,7 @@ test('an item with old work_class and review_classes fields behaves exactly like
   // as a class-era item looks: the keys are written straight into the file (store.write drops them)
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^---\n/, '---\nwork_class:\n- chunk\n- docs\nreview_classes:\n- security\n'));
   assert.ok(/^work_class:/m.test(readFileSync(path, 'utf8')) && /^review_classes:/m.test(readFileSync(path, 'utf8')), 'the seeded file carries both keys');
-  run(f, 'query', ['--phase', old, '--agent', 'me']); // the file changed behind the CLI: read it again before the writes below
+  run(f, 'show', [old, '--agent', 'me']); // the file changed behind the CLI: read it again before the writes below
   const pop = agent => JSON.parse(run(f, 'team', ['pop', '--team', 't1', '--agent', agent, '--json']).stdout); // team pop claims what it offers
   // the team view of both items is the same but for identity, rank and time stamps
   const IDENTITY = ['id', 'slug', 'seq', 'name', 'objective', 'summary', 'priority', 'path', 'sha', 'created_at', 'updated_at'];

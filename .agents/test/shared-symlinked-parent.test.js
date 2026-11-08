@@ -53,7 +53,7 @@ test('new, update, query, archive and move (each commits through sync.js) run un
   const f = linked(t);
   for (const name of ['Alpha', 'Beta']) ok(f, ['new', '--name', name, '--objective', `do ${name}`, '--summary', 's', '--depends-on', 'none']);
   ok(f, ['update', '1', '--status', 'in_progress']);
-  assert.match(ok(f, ['query', '--status']).stdout, /001-alpha/);
+  assert.match(ok(f, ['list']).stdout, /001-alpha/);
   ok(f, ['archive', '1', '--force']);
   assert.equal(spawnSync('git', ['push', '-q', 'origin', 'HEAD:refs/heads/release'], { cwd: f.cons }).status, 0);
   ok(f, ['move', '2', '--to-branch', 'release']);

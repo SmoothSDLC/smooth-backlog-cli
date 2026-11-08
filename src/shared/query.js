@@ -1,4 +1,4 @@
-// Read views: `backlog query` and `backlog next`.
+// The one reader behind backlog list, show, next, history, changes and backlog team query (the only command that takes the options below as written).
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the rows of the items (index.rows) and the committed index,
 // the earlier scripts order: pull, no-backlog check, branch, connect, findings. Output strings and --json match.
 // Never writes an item (the rows are built in memory). The views of a team (claimable, reviewable, blocked, decisions, plan, wip) come from `team`,

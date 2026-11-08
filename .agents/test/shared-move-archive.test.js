@@ -516,7 +516,7 @@ test('archive --force of an open item: the mirror row says archived, the queue n
   const r = run(f, 'archive', ['2', '--force']);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(row(), { status: 'archived', path: 'archive/phases/002-beta.md' });
-  assert.ok(cli(['query', '--next', '--json'], { cwd: f.cons, tmp: f.t }).stdout.indexOf('002-beta') < 0);
+  assert.ok(cli(['next', '--json'], { cwd: f.cons, tmp: f.t }).stdout.indexOf('002-beta') < 0);
   assert.deepEqual(names(f.folder, 'archive'), ['phases/002-beta.md']);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
 });

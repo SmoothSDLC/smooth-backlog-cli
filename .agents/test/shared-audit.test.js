@@ -26,7 +26,7 @@ const FULL = (name, ...more) => NEW(name, '--review-refs', 'references/review/do
 function finish(s, file) {
   const path = join(s.folder, 'phases', file);
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^status: .*$/m, 'status: done'));
-  assert.equal(s.run(['query', '--all']).status, 0); // ingests the edit
+  assert.equal(s.run(['list', 'all-branches']).status, 0); // ingests the edit
 }
 const out = r => `${r.stdout}${r.stderr}`;
 
@@ -81,12 +81,12 @@ test('audit: update --set-depends-on refuses itself and any cycle, and leaves th
   assert.equal(s.run(['update', '3', '--set-depends-on', '1,2']).status, 0); // a diamond is no cycle
 });
 
-test('audit t7: query --all and --by-branch survive an item whose status is empty (shown as None)', t => {
+test('audit t7: list all-branches and team query --by-branch survive an item whose status is empty (shown as None)', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
   const file = join(s.folder, 'phases', '001-alpha-job.md');
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^status: .*$/m, 'status: null')); // a hand-edited item without a status
-  for (const args of [['query', '--all'], ['query', '--by-branch', 'main']]) {
+  for (const args of [['list', 'all-branches'], ['team', 'query', '--team', 't1', '--by-branch', 'main']]) {
     const r = s.run(args);
     assert.equal(r.status, 0, out(r)); assert.match(r.stdout, /001-alpha-job/); assert.match(r.stdout, /None/);
   }
@@ -105,7 +105,7 @@ test('audit t6: a BOM file keeps its front matter; a phases/ file without front 
   const fixed = readFileSync(alpha, 'utf8');
   assert.match(fixed, /^title: "alpha job"$/m); assert.match(fixed, /^seq: 1$/m); // fields kept, number not reused
   assert.ok(existsSync(join(s.folder, 'phases', '002-beta-job.md')));
-  const q = s.run(['query', '--all']);
+  const q = s.run(['list', 'all-branches']);
   assert.equal(q.status, 0, out(q)); assert.match(q.stdout, /phases\/README\.md has no front matter/);
 });
 
@@ -128,7 +128,7 @@ test('review: a phases/ file without front matter is no item for new, query or u
   const readme = join(s.folder, 'phases', 'README.md'); const note = 'notes for humans\n';
   writeFileSync(readme, note);
   assert.equal(s.run(NEW('beta job')).status, 0);
-  const q = s.run(['query', '--phase', 'README']);
+  const q = s.run(['show', 'README']);
   assert.doesNotMatch(q.stdout, /README\b.*pending|phase README/i, out(q));
   const u = s.run(['update', 'README', '--summary', 'test']);
   assert.equal(u.status, 1, out(u));
@@ -239,7 +239,7 @@ test('review P2: the cycle check follows the outgoing edges of an item whose fil
   for (const n of ['alpha job', 'beta job']) assert.equal(s.run(NEW(n)).status, 0);
   const path = join(s.folder, 'phases', '002-beta-job.md');
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^phase: .*\n/m, ''));
-  assert.equal(s.run(['query', '--all']).status, 0); // ingests the edit
+  assert.equal(s.run(['list', 'all-branches']).status, 0); // ingests the edit
   assert.equal(s.run(['update', '2', '--set-depends-on', '1']).status, 0);
   const r = s.run(['update', '1', '--set-depends-on', '2']);
   assert.equal(r.status, 1, out(r)); assert.match(out(r), /cycle/);

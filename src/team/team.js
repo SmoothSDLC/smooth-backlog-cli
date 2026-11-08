@@ -53,7 +53,7 @@ export const gitBranch = cwd => teamScope().branch
 export function outsideTeam(fm) {
   const { repo, branch } = teamScope();
   if (!repo || ((fm.repository || '') === repo && (!branch || (fm.branch || '') === branch))) return null;
-  return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them`;
+  return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog team query --scope, never claim or change them`;
 }
 // The refusal of a command that selects an existing item outside the session's scope, as an item or row: "<slug>: <why>", or null.
 export const teamRefusal = item => {

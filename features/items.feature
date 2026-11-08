@@ -15,11 +15,11 @@ Feature: Items - a person creates, reads, changes and finishes backlog items
   Scenario: read the queue and one item
     Given an item "One" exists
     And an item "Two" exists
-    When I run `backlog query`
+    When I run `backlog list`
     Then the command succeeds
     And the output contains "001-one"
     And the output contains "002-two"
-    When I run `backlog query --phase 2 --json`
+    When I run `backlog show 2 --json`
     Then the command succeeds
     And the output contains "\"name\": \"Two\""
 

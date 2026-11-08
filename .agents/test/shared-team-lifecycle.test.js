@@ -39,11 +39,11 @@ const update = (f, args, env) => {
   const who = named ?? (args.includes('--request-review') ? 'ann' : 'smooth'); // a review is requested by the one working on the item (ann here); an un-named write acts as the environment agent (smooth here)
   if (who && args[0] && !args[0].startsWith('-')) {
     const slugs = args.includes('--close') ? readdirSync(join(f.folder, 'phases')).map(n => n.replace(/\.md$/, '')) : [args[0]];
-    for (const slug of slugs) cli(['query', '--phase', slug, '--agent', named === undefined && args.includes('--close') ? (item(f, slug).fm.claimed_by || who) : who], { cwd: f.cons, tmp: f.t, env: env || { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
+    for (const slug of slugs) cli(['show', slug, '--agent', named === undefined && args.includes('--close') ? (item(f, slug).fm.claimed_by || who) : who], { cwd: f.cons, tmp: f.t, env: env || { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
   }
   return cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: env || { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
 };
-const query = (f, args) => cli(['query', ...args], { cwd: f.cons, tmp: f.t });
+const history = (f, item) => cli(['history', item], { cwd: f.cons, tmp: f.t });
 const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 
 // A complete team item: review refs, an estimate, a definition of done.
@@ -110,7 +110,7 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
   for (const line of ['Claimed by ann at', '## Review requested by ann at', '(reviewer: any)', 'commit abc1234',
     '## Review by bob: REJECT', 'missing a test for the empty input (references/review/code.md)',
     '## Review by amy: COMPLETE', '## Closed by ann at']) assert.ok(text.includes(line), line);
-  const ev = query(f, ['--events', job]).stdout;
+  const ev = history(f, job).stdout;
   for (const e of ['claimed', 'review_requested', 'reviewed', 'closed']) assert.ok(ev.includes(` ${e} `), `${e}: ${ev}`);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
 });
@@ -121,7 +121,7 @@ test('team session: TEAM_REPOSITORY binds the repository, a step on another scop
   const inScope = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
   const out = update(f, [s, '--claim', 'ann'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'other' });
   assert.equal(out.status, 1);
-  assert.equal(out.stdout, `❌ ${s}: this item belongs to repository acme/demo branch main, but this team session is bound to acme/demo branch other (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog query --scope, never claim or change them\n`);
+  assert.equal(out.stdout, `❌ ${s}: this item belongs to repository acme/demo branch main, but this team session is bound to acme/demo branch other (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog team query --scope, never claim or change them\n`);
   assert.equal(item(f, s).fm.claimed_by, '');
   const ok = update(f, [s, '--claim', 'ann'], inScope);
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);

@@ -9,7 +9,7 @@ Feature: Storage - where the item files live changes nothing about the commands
     When I run `backlog --help`
     Then the command succeeds
     And the output contains "backlog new"
-    And the output contains "backlog query"
+    And the output contains "backlog list"
     And the output contains "backlog update"
     And the output does not contain "shared mode"
     And the output does not contain "local mode"
@@ -21,7 +21,7 @@ Feature: Storage - where the item files live changes nothing about the commands
     Then the command succeeds
     When I run `backlog update --help`
     Then the command succeeds
-    When I run `backlog query --help`
+    When I run `backlog list --help`
     Then the command succeeds
     When I run `backlog next --help`
     Then the command succeeds
@@ -46,13 +46,13 @@ Feature: Storage - where the item files live changes nothing about the commands
     And the output does not contain "mode"
 
   Scenario: the output never names the item files or their folder
-    When I run `backlog query`
+    When I run `backlog list`
     Then the command succeeds
     And the output does not contain the backlog folder path
     When I run `backlog next`
     Then the output does not contain the backlog folder path
     Given an item "Hidden file" exists
-    When I run `backlog query`
+    When I run `backlog list`
     Then the command succeeds
     And the output does not contain "phases/"
     And the output does not contain ".md"

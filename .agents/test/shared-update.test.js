@@ -296,7 +296,7 @@ test('review P1: update of an item of another team (field edit, note, append) is
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
-for (const [title, args] of [['query', ['query', '--all']], ['next', ['next']], ['pop', ['team', 'pop', '--team', 't1', '--agent', 'ann']]]) {
+for (const [title, args] of [['list', ['list', 'all-branches']], ['next', ['next']], ['pop', ['team', 'pop', '--team', 't1', '--agent', 'ann']]]) {
   test(`review P1: ${title} (a read that pulls) waits while another command holds the operation lock of the clone`, async () => {
     const f = seed();
     const w = await waitsForRunLock(f, args, () => git(f.home, 'rev-parse', 'HEAD'));
@@ -309,21 +309,21 @@ test('review P1: a lock left by a dead process is taken over (said once); a live
   const lock = join(f.home, '.git', 'smooth-backlog-cli-run.lock');
   const dead = spawnSync(process.execPath, ['-e', '0']).pid; // a pid that was alive a moment ago and is not now
   writeFileSync(lock, JSON.stringify({ pid: dead, host: hostname(), command: 'update' }));
-  const r = cli(['query', '--all'], { cwd: f.cons, tmp: f.t });
+  const r = cli(['list', 'all-branches'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr.split(`took over a stale lock of process ${dead}`).length, 2, r.stderr);
   assert.equal(existsSync(lock), false, 'the lock is released after the command');
 
   // a live holder: refused after the configured wait, naming pid and command
   let refused;
-  await store.cloneLocked(f.home, async () => { refused = cli(['query', '--all'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400' } }); });
+  await store.cloneLocked(f.home, async () => { refused = cli(['list', 'all-branches'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400' } }); });
   assert.equal(refused.status, 1, refused.stdout + refused.stderr);
   assert.match(refused.stderr, new RegExp(`locked by another process \\((agent [^,]+, )?pid ${process.pid}[,)]`));
   assert.match(refused.stderr, /since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\)/); // item 025: since when
   // a holder that finishes inside the configured wait: the command waits and succeeds
   let ok;
   await store.cloneLocked(f.home, async () => {
-    const child = cliAsync(['query', '--all'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '15000' } });
+    const child = cliAsync(['list', 'all-branches'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '15000' } });
     await new Promise(res => setTimeout(res, 1500));
     assert.equal(child.exited(), false, 'still waiting while the holder runs');
     ok = child;
@@ -496,7 +496,7 @@ test('an item written with the earlier fields reads as the new word, and its fir
   const { fm: old, body } = parse(readFileSync(file, 'utf8'));
   store.write({ path: file, fm: { ...old, review_state: 'requested' }, body }, f.folder);
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an item of an earlier build'); git(f.home, 'push', '-q');
-  const read = cli(['query', '--phase', '3', '--json'], { cwd: f.cons, tmp: f.t });
+  const read = cli(['show', '3', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(JSON.parse(read.stdout).status, 'ready for review');
   assert.equal(step(f, ['3', '--note', 'x']).status, 0);
   const after = fm(f, '003-gamma.md').fm;
@@ -516,7 +516,7 @@ test('--replan sets the leading order by slug or number, ignores unknown names, 
 test('a replan leaves no event; the order itself is the record', () => {
   const f = seed();
   step(f, ['--replan', '3', '--note', 'because']);
-  const ev = cli(['query', '--events'], { cwd: f.cons, tmp: f.t });
+  const ev = cli(['history'], { cwd: f.cons, tmp: f.t });
   assert.equal(ev.status, 0, ev.stderr);
   assert.doesNotMatch(ev.stdout, /replan|because/);
 });

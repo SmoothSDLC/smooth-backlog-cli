@@ -122,7 +122,7 @@ test('refusal: a diagnostic that echoes input carries no credential of a URL', t
 test('new: the planning event of a creation is recorded on the new item', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0);
-  const ev = cli(['query', '--events', '1'], { cwd: f.cons, tmp: f.dir });
+  const ev = cli(['history', '1'], { cwd: f.cons, tmp: f.dir });
   assert.equal(ev.status, 0, ev.stderr);
   assert.match(ev.stdout, /planning_event branch= commit= added 001-alpha-job at rank end; backlog re-densified to 1 item\(s\)/);
 });

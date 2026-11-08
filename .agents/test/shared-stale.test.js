@@ -53,7 +53,7 @@ const sleepSec = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0,
 test('every write stamps updated_by next to updated; an item without updated_by is read and written', () => {
   const f = seed();
   assert.equal(fm(f.folder, '001-alpha.md').updated_by, undefined);
-  assert.equal(run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']).status, 0); // reads the older file
+  assert.equal(run(f, f.home, ['show', '001-alpha', '--agent', 'amy']).status, 0); // reads the older file
   const r = run(f, f.home, ['update', '1', '--append', 'x', '--by', 'amy']);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const keys = Object.keys(fm(f.folder, '001-alpha.md'));
@@ -66,7 +66,7 @@ test('every write stamps updated_by next to updated; an item without updated_by 
 
 test('a write to an item another writer changed after the agent read it is refused (exit 5) and changes nothing', () => {
   const f = seed();
-  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
+  run(f, f.home, ['show', '001-alpha', '--agent', 'amy']);
   git(f.home, 'pull', '-q', '--rebase');
   const b = run(f, f.home2, ['update', '1', '--append', 'from bob', '--by', 'bob']);
   assert.equal(b.status, 0, b.stderr);
@@ -74,7 +74,7 @@ test('a write to an item another writer changed after the agent read it is refus
   const localBefore = git(f.home, 'rev-parse', 'HEAD');
   const a = run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']);
   assert.equal(a.status, 5, a.stderr + a.stdout);
-  assert.match(a.stderr, /item 001-alpha was changed by bob at \d{4}-\d\d-\d\dT[\d:]+Z after you last read it \(2026-10-01T00:00:00Z\); read it again \(backlog query --phase 001-alpha --agent <you>\) and retry/);
+  assert.match(a.stderr, /item 001-alpha was changed by bob at \d{4}-\d\d-\d\dT[\d:]+Z after you last read it \(2026-10-01T00:00:00Z\); read it again \(backlog show 001-alpha --agent <you>\) and retry/);
   assert.match(a.stdout, /^--- current 001-alpha ---$/m, 'the refusal shows the item as it is now');
   assert.match(a.stdout, /from bob/, "with the other writer's change");
   assert.doesNotMatch(a.stdout, /phases\//, 'and no path');
@@ -84,13 +84,13 @@ test('a write to an item another writer changed after the agent read it is refus
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   assert.ok(git(f.home, 'rev-parse', 'HEAD') !== '' && git(f.home, 'merge-base', '--is-ancestor', localBefore, 'HEAD') === '');
   // reading again lifts the refusal
-  assert.equal(run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']).status, 0);
+  assert.equal(run(f, f.home, ['show', '001-alpha', '--agent', 'amy']).status, 0);
   assert.equal(run(f, f.home, ['update', '1', '--append', 'from amy', '--by', 'amy']).status, 0);
 });
 
 test('the read cache is a file in .git, survives across commands and is per agent; an unread item is written without a check', () => {
   const f = seed();
-  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
+  run(f, f.home, ['show', '001-alpha', '--agent', 'amy']);
   const cache = viewCache(f.home, 'amy');
   const seen = JSON.parse(readFileSync(cache, 'utf8'))['acme/demo/001-alpha'];
   assert.equal(seen.updated, '2026-10-01T00:00:00Z');
@@ -106,7 +106,7 @@ test('the read cache is a file in .git, survives across commands and is per agen
 
 test('two clones update different items concurrently: both succeed and neither loses its change', () => {
   const f = seed();
-  for (const [h, who] of [[f.home, 'amy'], [f.home2, 'bob']]) run(f, h, ['query', '--phase', who === 'amy' ? '001-alpha' : '002-beta', '--agent', who]);
+  for (const [h, who] of [[f.home, 'amy'], [f.home2, 'bob']]) run(f, h, ['show', who === 'amy' ? '001-alpha' : '002-beta', '--agent', who]);
   const a = run(f, f.home, ['update', '1', '--append', 'amy was here', '--by', 'amy']);
   const b = run(f, f.home2, ['update', '2', '--append', 'bob was here', '--by', 'bob']);
   assert.equal(a.status, 0, a.stderr); assert.equal(b.status, 0, b.stderr);
@@ -116,7 +116,7 @@ test('two clones update different items concurrently: both succeed and neither l
 
 test('push race on the same item: one wins, the other is refused, and its change is neither on origin nor on a side branch', () => {
   const f = seed();
-  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']);
+  run(f, f.home, ['show', '001-alpha', '--agent', 'amy']);
   // while amy's push is on its way, bob pushes his change to the same item
   const hook = join(f.home, '.git', 'hooks', 'pre-push');
   const flag = join(f.t, 'hook-ran');
@@ -137,7 +137,7 @@ test('push race on the same item: one wins, the other is refused, and its change
 
 test('053: a publication refusal also names another item the agent read that changed only upstream', () => {
   const f = seed();
-  run(f, f.home, ['query', '--phase', '001-alpha,002-beta', '--agent', 'amy']);
+  run(f, f.home, ['show', '001-alpha,002-beta', '--agent', 'amy']);
   // while amy's push is on its way, bob changes both items she read
   const hook = join(f.home, '.git', 'hooks', 'pre-push');
   const flag = join(f.t, 'hook-ran');
@@ -146,7 +146,7 @@ test('053: a publication refusal also names another item the agent read that cha
   chmodSync(hook, 0o755);
   const a = run(f, f.home, ['update', '1', '--append', 'amy lost', '--by', 'amy']);
   assert.equal(a.status, 5, a.stderr + a.stdout);
-  assert.match(a.stderr, /item 001-alpha was changed by bob .*1 other item\(s\) you read changed too \(002-beta\); read them again \(backlog query --phase 001-alpha,002-beta --agent <you>\)/);
+  assert.match(a.stderr, /item 001-alpha was changed by bob .*1 other item\(s\) you read changed too \(002-beta\); read them again \(backlog show 001-alpha,002-beta --agent <you>\)/);
 });
 
 test('a move never replaces an item of the target that holds the file name, even after update --seq freed its number', () => {
@@ -179,7 +179,7 @@ test('a release ends the holder\'s wait, so the released item is not offered whi
 
 test('a change in the same second by the same writer name is still a change: the view includes the content', () => {
   const f = seed();
-  run(f, f.home, ['query', '--phase', '001-alpha', '--agent', 'amy']); // the first read publishes the index of the legacy folder
+  run(f, f.home, ['show', '001-alpha', '--agent', 'amy']); // the first read publishes the index of the legacy folder
   git(f.home2, 'pull', '-q', '--rebase');
   const file = join(f.folder2, 'phases', '001-alpha.md');
   writeFileSync(file, readFileSync(file, 'utf8') + '\nedited elsewhere, updated and updated_by untouched\n');
@@ -213,14 +213,14 @@ test('053: a cross-repository move refused for its own item also names the chang
   const folder = join(f.home, 'acme', 'source');
   store.write({ path: join(folder, 'phases', '001-source.md'), fm: { ...fm(f.folder, '001-alpha.md'), phase: '001-source', repository: 'acme/source' }, body: '\nSource item\n' }, folder);
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'move source'); git(f.home, 'push', '-q');
-  assert.equal(run(f, f.home, ['query', '--phase', '002-beta', '--agent', 'amy']).status, 0);
-  assert.equal(run(f, f.home, ['query', '--phase', '001-source', '--agent', 'amy'], { cwd }).status, 0);
+  assert.equal(run(f, f.home, ['show', '002-beta', '--agent', 'amy']).status, 0);
+  assert.equal(run(f, f.home, ['show', '001-source', '--agent', 'amy'], { cwd }).status, 0);
   assert.equal(run(f, f.home2, ['update', '2', '--append', 'bob', '--by', 'bob']).status, 0);
   const src2 = run(f, f.home2, ['update', '1', '--append', 'bob', '--by', 'bob'], { cwd });
   assert.equal(src2.status, 0, src2.stderr + src2.stdout);
   const amy = run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd, env: { BACKLOG_AGENT: 'amy' } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
-  assert.match(amy.stderr, /item 001-source was changed by bob .*1 other item\(s\) you read changed too \(002-beta of acme\/demo\); read them again \(backlog query --phase 001-source --agent <you>; in repository acme\/demo: backlog query --phase 002-beta --agent <you>\)/);
+  assert.match(amy.stderr, /item 001-source was changed by bob .*1 other item\(s\) you read changed too \(002-beta of acme\/demo\); read them again \(backlog show 001-source --agent <you>; in repository acme\/demo: backlog show 002-beta --agent <you>\)/);
 });
 
 test('review P2: exact agent names keep independent views despite slash, space and Unicode collisions', async () => {
@@ -262,8 +262,8 @@ test('review P2: published write views follow chained renumberings only in their
 // item's content still refuses its write, and the refusal names one command that reads every item a move re-ranks.
 test('053: after bob closes an item, amy moves another at once; a content change still refuses her write until she reads', () => {
   const f = seed(['alpha', 'beta', 'gamma', 'delta']);
-  for (const item of ['002-beta', '003-gamma', '004-delta']) assert.equal(run(f, f.home, ['query', '--phase', item, '--agent', 'amy']).status, 0);
-  assert.equal(run(f, f.home2, ['query', '--phase', '001-alpha', '--agent', 'bob']).status, 0);
+  for (const item of ['002-beta', '003-gamma', '004-delta']) assert.equal(run(f, f.home, ['show', item, '--agent', 'amy']).status, 0);
+  assert.equal(run(f, f.home2, ['show', '001-alpha', '--agent', 'bob']).status, 0);
   const bob = run(f, f.home2, ['update', '1', '--status', 'done', '--by', 'bob']); // the reflow re-ranks beta, gamma and delta
   assert.equal(bob.status, 0, bob.stderr + bob.stdout);
   const amy = run(f, f.home, ['update', '4', '--priority', '0', '--by', 'amy']); // reranks beta and gamma again
@@ -273,8 +273,8 @@ test('053: after bob closes an item, amy moves another at once; a content change
   assert.equal(content.status, 0, content.stderr + content.stdout);
   const stale = run(f, f.home, ['update', '3', '--append', 'from amy', '--by', 'amy']);
   assert.equal(stale.status, 5, stale.stderr + stale.stdout);
-  assert.match(stale.stderr, /item 003-gamma was changed by bob .*read it again \(backlog query --phase 003-gamma --agent <you>\)/);
-  assert.equal(run(f, f.home, ['query', '--phase', '3', '--agent', 'amy']).status, 0);
+  assert.match(stale.stderr, /item 003-gamma was changed by bob .*read it again \(backlog show 003-gamma --agent <you>\)/);
+  assert.equal(run(f, f.home, ['show', '3', '--agent', 'amy']).status, 0);
   const again = run(f, f.home, ['update', '3', '--append', 'from amy', '--by', 'amy']);
   assert.equal(again.status, 0, again.stderr + again.stdout);
 });

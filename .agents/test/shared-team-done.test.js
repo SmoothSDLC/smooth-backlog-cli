@@ -28,7 +28,7 @@ function fixture(name, extra) {
   return { t, home, cons, slug, file: join(home, 'acme', 'demo', 'phases', `${slug}.md`) };
 }
 const update = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
-const q = (f, agent) => cli(['query', '--phase', f.slug, '--agent', agent], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
+const q = (f, agent) => cli(['show', f.slug, '--agent', agent], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
 const status = f => parse(readFileSync(f.file, 'utf8')).fm.status;
 
 const TEAM = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };

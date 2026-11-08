@@ -32,14 +32,14 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.match(run(here, NEW('needs a missing item', 'acme/lib#9'), 1).stdout, /no item 'acme\/lib#9' in the backlog repository/);
   run(here, NEW('app change', 'acme/lib#1'));
   run(here, ['update', '1', '--set-team', 't1', '--status', 'ready']); // team pop and the team views reach only the items of t1
-  assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status ready\)/);
-  run(there, ['query', '--phase', '1']); // the move acts on the item as last read
+  assert.match(run(here, ['list']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status ready\)/);
+  run(there, ['show', '1']); // the move acts on the item as last read
   const moved = run(there, ['move', '1', '--to-repository', 'acme/third'], 1); // a move would leave it dangling
   assert.equal(moved.stdout, '❌ acme/app#1 of other repositories depends on acme/lib#1 (001-library-change), which would leave them pointing at nothing; clear them first in their repositories: update <dependent> --set-depends-on ...\n');
   assert.equal(moved.stderr, '');
   assert.equal(JSON.parse(run(here, ['next', '--json']).stdout).first[0].item, 'acme/lib#1'); // next names it too
   assert.match(run(here, ['next']).stdout, /⛓ waits on acme\/lib#1 \(001-library-change, status ready\): do that first in repository acme\/lib/);
-  run(here, ['query', '--phase', '1', '--agent', 'ada']);
+  run(here, ['show', '1', '--agent', 'ada']);
   assert.match(run(here, ['update', '1', '--claim', 'ada'], 1).stdout, /dependencies not done/);
   const p = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json'], 3).stdout);
   assert.equal(p.action, 'idle');
@@ -53,22 +53,22 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   // an item outside a team closes with --status done; the hand-off of the producer is accepted after its review passed
   run(there, ['update', '1', '--claim', 'tester']);
   run(there, ['update', '1', '--request-review', 'any', '--note', 'n', '--by', 'tester']);
-  run(there, ['query', '--phase', '1', '--agent', 'rex']);
+  run(there, ['show', '1', '--agent', 'rex']);
   run(there, ['update', '1', '--start-review', '--by', 'rex'], 0, { BACKLOG_AGENT: 'rex' });
   run(there, ['update', '1', '--review', 'pass', '--by', 'rex', '--comments', 'fine per references/review/code.md'], 0, { BACKLOG_AGENT: 'rex' }); // a fresh session reviews
-  run(there, ['query', '--phase', '1', '--agent', 'tester']); // the review changed the item after tester's last read
+  run(there, ['show', '1', '--agent', 'tester']); // the review changed the item after tester's last read
   // item 059: the close needs the hand-off for the dependent of the other repository, accepted by the lead acting as itself
   run(there, ['update', '1', '--handoff', 'acme/app#1', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'tester']);
-  cli(['query', '--phase', '1', '--agent', 'lead'], { cwd: there, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead' } }); // the lead reads the record it accepts
+  cli(['show', '1', '--agent', 'lead'], { cwd: there, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead' } }); // the lead reads the record it accepts
   const accepted = cli(['update', '1', '--accept-handoff', 'acme/app#1', '--checks', 'verified', '--by', 'lead'], { cwd: there, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead' } });
   assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
-  run(there, ['query', '--phase', '1', '--agent', 'tester']);
+  run(there, ['show', '1', '--agent', 'tester']);
   run(there, ['update', '1', '--close', '--summary', 'delivered', '--by', 'tester']);
-  assert.match(run(here, ['query', '--status']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status closed\)/);
+  assert.match(run(here, ['list']).stdout, /⛓ depends on acme\/lib#1 001-library-change \(status closed\)/);
   const offered = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'ada', '--json']).stdout); // done: next-work offers the item
   assert.deepEqual([offered.action, offered.item, offered.first], ['claim', '001-app-change', undefined]);
   assert.deepEqual([offered.claimed, offered.front_matter.owner], [true, 'ada']); // and the claim went through
-  run(here, ['query', '--phase', '1', '--agent', 'tester']);
+  run(here, ['show', '1', '--agent', 'tester']);
   assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/lib#7', '--by', 'tester'], 1).stdout, /no item 'acme\/lib#7' in the backlog repository/);
   run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester']);
   // a dependency added after the claim: the holder is not told to go on, the other repository's item is named first
@@ -82,10 +82,10 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   assert.ok(!planned.some(e => e.item === '001-app-change'), JSON.stringify(planned)); // the plan offers it no more than pop does
   // a requested review of an item that waits on another repository is not offered either: that item is named first
   run(here, NEW('reviewed app change', 'none'));
-  run(here, ['query', '--phase', '2', '--agent', 'zed']);
+  run(here, ['show', '2', '--agent', 'zed']);
   run(here, ['update', '2', '--claim', 'zed']);
   run(here, ['update', '2', '--request-review', 'any', '--note', 'n', '--by', 'zed']);
-  run(here, ['query', '--phase', '2', '--agent', 'tester']);
+  run(here, ['show', '2', '--agent', 'tester']);
   run(here, ['update', '2', '--set-depends-on', 'acme/lib#2', '--by', 'tester']);
   const rev = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'rev', '--json'], 3).stdout);
   assert.deepEqual([rev.action, rev.first?.[0]?.item], ['idle', 'acme/lib#2'], JSON.stringify(rev));
@@ -137,14 +137,14 @@ test('042: a dependency cycle through another repository, or on the item itself,
   const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x'];
   run(here, NEW('app item'));
   run(there, NEW('lib item'));
-  run(there, ['query', '--phase', '1', '--agent', 'tester']);
+  run(there, ['show', '1', '--agent', 'tester']);
   run(there, ['update', '1', '--set-depends-on', 'acme/app#1', '--by', 'tester']);
-  run(here, ['query', '--phase', '1', '--agent', 'tester']);
+  run(here, ['show', '1', '--agent', 'tester']);
   assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester'], 1).stdout, /dependency cycle through another repository's items back to acme\/app#1/);
   assert.match(run(here, ['update', '1', '--set-depends-on', 'acme/app#1', '--by', 'tester'], 1).stdout, /cycle/);
   // through a local item: app#2 depends on lib#1, which depends on app#1; app#1 -> app#2 closes the cycle
   run(here, ['new', '--name', 'app second', '--objective', 'o', '--summary', 's', '--depends-on', 'acme/lib#1', '--body', '## Definition of done\n\n- [ ] x']);
-  run(here, ['query', '--phase', '1', '--agent', 'tester']);
+  run(here, ['show', '1', '--agent', 'tester']);
   assert.match(run(here, ['update', '1', '--set-depends-on', '2', '--by', 'tester'], 1).stdout, /dependency cycle through another repository's items back to acme\/app#1/);
   // an archived item's dependencies are still edges
   run(there, ['archive', '1', '--force']);
@@ -168,13 +168,13 @@ test('042: two clones that each add one half of a cycle through another reposito
   run(there, NEW('lib item'));
   const home2 = join(t, 'home2');
   spawnSync('git', ['clone', '-q', join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), home2]);
-  run(there, ['query', '--phase', '1', '--agent', 'bob'], 0, { BACKLOG_HOME: home2 });
+  run(there, ['show', '1', '--agent', 'bob'], 0, { BACKLOG_HOME: home2 });
   // while tester's push is on its way, bob (the other clone) adds lib#1 -> app#1
   const hook = join(home, '.git', 'hooks', 'pre-push');
   const flag = join(t, 'hook-ran');
   writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${there}' && BACKLOG_HOME='${home2}' XDG_CONFIG_HOME='${join(t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 1 --set-depends-on acme/app#1 --by bob >/dev/null 2>&1\nexit 0\n`);
   chmodSync(hook, 0o755);
-  run(here, ['query', '--phase', '1', '--agent', 'tester']);
+  run(here, ['show', '1', '--agent', 'tester']);
   const r = run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester'], 3);
   assert.match(r.stdout + r.stderr, /dependency cycle through another repository's items back to 001-app-item/);
 });

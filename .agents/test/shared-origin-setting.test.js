@@ -32,20 +32,20 @@ test('the variable wins over the config key: with both set, the origin check use
   const f = fixture(t);
   writeFileSync(join(f.cons, '.smooth-backlog.json'), JSON.stringify({ backlog_origin_url: OTHER }));
   // the fixture env carries BACKLOG_ORIGIN_URL = acme/backlog-repo (matches the clone's origin); the key says other/else
-  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d });
+  const r = cli(['next'], { cwd: f.cons, tmp: f.d });
   assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 
 test('the config key works alone: with the variable unset, the key names the backlog repository', t => {
   const f = fixture(t);
   writeFileSync(join(f.cons, '.smooth-backlog.json'), JSON.stringify({ backlog_origin_url: KEY }));
-  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: '' } });
+  const r = cli(['next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: '' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 
 test('neither set, no BACKLOG_HOME and no record: the backlog is .backlog inside the repository, created with its config; the clone is not touched', t => {
   const f = fixture(t);
-  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: '', BACKLOG_HOME: '', HOME: join(f.d, 'user') } });
+  const r = cli(['next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_ORIGIN_URL: '', BACKLOG_HOME: '', HOME: join(f.d, 'user') } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /no backlog yet|no actionable item/);
   assert.deepEqual(JSON.parse(readFileSync(join(f.cons, '.backlog', 'config.json'), 'utf8')), { backlog_repository: '.backlog' });
@@ -65,7 +65,7 @@ test('neither set: backlog setup records .backlog inside the repository in .back
   assert.ok(existsSync(join(app, '.claude', 'skills', 'backlog', 'SKILL.md')), 'the skill copy was deployed');
   assert.doesNotMatch(r.stdout, /\/tmp\//, 'setup names no folder path');
   assert.equal(spawnSync('git', ['status', '--porcelain'], { cwd: app, encoding: 'utf8' }).stdout, '', 'the config and the skill copy are committed');
-  const q = cli(['query'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: '' } });
+  const q = cli(['list'], { cwd: app, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user'), BACKLOG_ORIGIN_URL: '' } });
   assert.equal(q.status, 0, q.stdout + q.stderr);
 });
 
@@ -99,7 +99,7 @@ test('a second setup --ask keeps the config backlog_origin_url', t => {
 
 test('the origin set and no clone anywhere: the missing-clone error names backlog setup and nothing is written inside the repository', t => {
   const f = fixture(t);
-  const r = cli(['query', '--next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user') } });
+  const r = cli(['next'], { cwd: f.cons, tmp: f.d, env: { BACKLOG_HOME: '', HOME: join(f.d, 'user') } });
   assert.equal(r.status, 4, r.stdout + r.stderr);
   assert.match(r.stderr, /configured but not cloned/);
   assert.match(r.stderr, /backlog setup/);
@@ -128,7 +128,7 @@ test('setup records the environment it ran with: the clone URL and the clone pat
   const cfg = JSON.parse(readFileSync(join(app, '.backlog', 'config.json'), 'utf8'));
   assert.equal(cfg.backlog_origin_url, fixtureEnv(f.d).BACKLOG_ORIGIN_URL, 'the clone URL from the environment is recorded');
   assert.equal(realpathSync(join(app, cfg.backlog_repository)), realpathSync(fixtureEnv(f.d).BACKLOG_HOME), 'the configured clone is the one BACKLOG_HOME named');
-  const later = cli(['query'], { cwd: app, tmp: f.d, env: { HOME: join(f.d, 'user'), BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: '' } });
+  const later = cli(['list'], { cwd: app, tmp: f.d, env: { HOME: join(f.d, 'user'), BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: '' } });
   assert.equal(later.status, 0, later.stdout + later.stderr); // the config alone finds the clone
   // the summary names every action, never a path
   for (const line of ['.backlog folder created', 'configuration written: backlog repository', 'committed and pushed']) assert.ok(r.stdout.includes(line), `${line}\n${r.stdout}`);

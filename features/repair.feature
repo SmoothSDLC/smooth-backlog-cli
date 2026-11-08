@@ -8,7 +8,7 @@ Feature: Repair - an item that cannot be read is named with its field and can be
 
   Scenario: an unreadable field is named and can be set again
     Given the status of item 1 is damaged in the backlog repository
-    When I run `backlog query`
+    When I run `backlog list`
     Then the command fails with exit code 2
     And the output contains "item 001-broken: the field status cannot be read"
     And the output contains "backlog update 001-broken --status <value>"
@@ -32,7 +32,7 @@ Feature: Repair - an item that cannot be read is named with its field and can be
   Scenario: every command of the backlog refuses while one item cannot be read
     Given an item "Fine" exists
     And the status of item 1 is damaged in the backlog repository
-    When I run `backlog query --phase 2 --json`
+    When I run `backlog show 2 --json`
     Then the command fails with exit code 2
     And the output contains "item 001-broken: the field status cannot be read"
     When I run `backlog new --name "More" --objective "o" --summary "s" --depends-on none`

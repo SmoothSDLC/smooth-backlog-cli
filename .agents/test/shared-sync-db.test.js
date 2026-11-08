@@ -113,7 +113,7 @@ test('two CLI writers creating different items in separate clones: both succeed 
   assert.deepEqual(index.read(dir).branches.main.map(e => e.slug), ['001-alpha-job', '002-beta-job'], 'the published index lists both items once');
 
   for (const w of [a, b]) { // both clones pull cleanly, are on origin/main and clean, and see both items
-    const q = cli(['query', '--all'], { cwd: w.cons, tmp: w.tmp });
+    const q = cli(['list', 'all-branches'], { cwd: w.cons, tmp: w.tmp });
     assert.equal(q.status, 0, q.stdout + q.stderr);
     assert.match(q.stdout, /001-alpha-job/); assert.match(q.stdout, /002-beta-job/);
     assert.equal(gitIn(w.home, 'status', '--porcelain'), '');
@@ -139,7 +139,7 @@ test('review P2: retrying a rolled-back creation takes the upstream number into 
 test('review P1: a cross-repository move racing another clone is ONE commit of the source and target folders: never the target pushed without the source', async t => {
   const [a, b, { bare }] = writers(t);
   for (const name of ['alpha job', 'gamma job']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
   const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
   await hold.held(); // b holds its (only) push: source and target changed, committed together
@@ -163,11 +163,11 @@ test('review P1: a cross-repository move racing another clone is ONE commit of t
   assert.ok(existsSync(join(verify, 'c', 'new', 'place', 'phases')));
 });
 
-for (const [title, args] of [['query', ['query', '--all']], ['new', NEW('beta job')]]) {
+for (const [title, args] of [['list', ['list', 'all-branches']], ['new', NEW('beta job')]]) {
   test(`review P1: ${title} after a pull whose autostash does not apply (exit 0, conflict markers) is refused: nothing ingests or pushes the markers`, t => {
     const [a, b, { bare }] = writers(t);
     assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-    assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+    assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
     const file = join(b.folder, 'phases', '001-alpha-job.md');
     writeFileSync(file, readFileSync(file, 'utf8').replace(/^summary: .*$/m, 'summary: "LOCAL EDIT"')); // an uncommitted edit of b
     assert.equal(cli(['update', '1', '--summary', 'REMOTE EDIT'], { cwd: a.cons, tmp: a.tmp }).status, 0); // upstream changes the same line
@@ -184,7 +184,7 @@ test('review P1: a number collision in the destination of a cross-repository mov
   const [a, b, { bare }] = writers(t);
   // gamma stays in phases/: if the move emptied the folder, git would carry a's new file along into the target (directory rename detection)
   for (const name of ['alpha job', 'gamma job']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0); // acme/demo 001-alpha-job, 002-gamma-job
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
   const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp }); // becomes new/place 001-alpha-job
   await hold.held();
@@ -208,7 +208,7 @@ test('review P1: a number collision in the destination of a cross-repository mov
 test('audit: a move that empties phases/ does not carry another clone\'s new file into the target (directory renames are off)', async t => {
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // the only item of acme/demo
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
   const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
   await hold.held();
@@ -228,7 +228,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
   const mover = process.env.BACKLOG_AGENT || configUser(a.cons); // cliAsync uses the inherited actor
   for (const name of ['alpha', 'gamma']) assert.equal(cli([...NEW(name), '--review-refs', 'references/review/code.md',
     '--estimate', '5', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
   const move = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
   await hold.held();
@@ -267,7 +267,7 @@ test('review P2: update records its published identity when an added item is ren
   const [a, b, { bare }] = writers(t);
   const agent = process.env.BACKLOG_AGENT || configUser(a.cons);
   assert.equal(cli(NEW('anchor'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const [anchor] = store.load(b.folder);
   store.write({ path: join(b.folder, 'phases/002-local.md'), fm: {
     ...anchor.fm, phase: '002-local', seq: 2, name: 'local', priority: 1,
@@ -297,8 +297,8 @@ async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv, afterSeed, seedEnv,
   const [a, b, { bare }] = writers(t);
   for (const args of seedArgs) { if (typeof args === 'function') { args(a, b); continue; } const r = cli(args, { cwd: a.cons, tmp: a.tmp, env: seedEnv }); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); }
   afterSeed?.(a);
-  if (readAs) assert.equal(cli(['query', '--all', '--agent', readAs], { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all', ...(readAs ? ['--agent', readAs] : [])], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  if (readAs) assert.equal(cli(['list', 'all-branches'], { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
   const second = cliAsync(bArgs, { cwd: b.cons, tmp: b.tmp, env: bEnv });
   await hold.held();
@@ -317,7 +317,7 @@ const clone = (t, bare) => {
 test('review P2: failed create, note and archive each roll back; successful retries retain events exactly once', t => {
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('anchor job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hook = join(bare, 'hooks', 'pre-receive');
   for (const args of [NEW('local job'), ['update', '2', '--note', 'LOCAL_ARCHIVE_EVIDENCE'], ['archive', '2', '--force']]) {
     const before = state(b.home);
@@ -353,13 +353,13 @@ test('audit t2: the same item changed by two clones: the second is refused (exit
 test('review (merge risk): a failed push is rolled back; a later command never publishes the failed note', async t => {
   const [a, b, { bare }] = writers(t);
   for (const n of ['one', 'two']) assert.equal(cli(NEW(n), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hook = join(bare, 'hooks', 'pre-receive');
   writeFileSync(hook, '#!/bin/sh\necho "rejected: origin down" >&2\nexit 1\n'); chmodSync(hook, 0o755);
   assert.equal(cli(['update', '1', '--append', 'first note'], { cwd: a.cons, tmp: a.tmp }).status, 3); // rolled back, never left unpublished
   rmSync(hook);
   assert.equal(cli(NEW('three'), { cwd: b.cons, tmp: b.tmp }).status, 0); // another clone pushes meanwhile
-  const q = cli(['query', '--all'], { cwd: a.cons, tmp: a.tmp }); // the leading pull rebases a's unpushed commit onto it
+  const q = cli(['list', 'all-branches'], { cwd: a.cons, tmp: a.tmp }); // the leading pull rebases a's unpushed commit onto it
   assert.equal(q.status, 0, q.stdout + q.stderr);
   assert.doesNotMatch(gitIn(a.home, 'branch', '--list'), /backlog-unmerged/);
   const w = cli(['update', '2', '--append', 'second note'], { cwd: a.cons, tmp: a.tmp });
@@ -428,7 +428,7 @@ for (const [name, args] of [
 test('publication: legacy two-commit move with destination-only conflict is refused; explicit drop and retry publishes both folders', async t => {
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('one'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const src = 'acme/demo/phases/001-one.md'; const dst = 'new/place/phases/001-one.md';
   mkdirSync(join(b.home, 'new', 'place', 'phases'), { recursive: true }); gitIn(b.home, 'mv', src, dst);
   gitIn(b.home, 'add', '-A'); gitIn(b.home, 'commit', '-qm', 'legacy cross-repository move');
@@ -468,7 +468,7 @@ test('publication: legacy two-commit move with destination-only conflict is refu
 test('publication: permanent failure after a push race removes renumbering and retains all incoming remote files', async t => {
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('anchor'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   writeFileSync(join(b.home, 'private.txt'), 'private staging'); gitIn(b.home, 'add', 'private.txt');
   const staged = gitIn(b.home, 'ls-files', '--stage', '--', 'private.txt');
   const hold = holdFirstPush(b);
@@ -526,14 +526,14 @@ test('review P1: publication refuses update --seq when another clone allocates t
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'the rejected sequence edit is rolled back');
   assert.deepEqual(store.load(b.folder).map(i => [i.fm.phase, i.fm.seq]), [['001-alpha', 1], ['002-beta', 2], ['003-gamma', 3]]);
-  const q = cli(['query', '--all', '--json'], { cwd: b.cons, tmp: b.tmp });
+  const q = cli(['list', 'all-branches', '--json'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(q.status, 0, q.stdout + q.stderr);
 });
 
 test('review P1: publication preflight rejecting an appended conflict marker restores starting files, database and staging', t => {
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('alpha'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const item = join(b.folder, 'phases', '001-alpha.md');
   writeFileSync(item, readFileSync(item, 'utf8') + '\nprior staged note\n');
   gitIn(b.home, 'add', 'acme/demo/phases/001-alpha.md');
@@ -610,9 +610,9 @@ test('publication graph: a claim is refused when its completed dependency reopen
     [COMPLETE('dependency'), [...COMPLETE('work'), '--depends-on', '1'], ['update', '1', '--claim', 'prod'],
      ['update', '1', '--request-review', 'any', '--note', 'evidence recorded in the seed'],
      ['update', '1', '--review', 'pass', '--by', 'rex', '--comments', 'ok per references/review/code.md'],
-     ['query', '--phase', '1', '--agent', 'prod'], ['update', '1', '--handoff', '2', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'prod'],
+     ['show', '1', '--agent', 'prod'], ['update', '1', '--handoff', '2', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'prod'],
      ['update', '1', '--accept-handoff', '2', '--checks', 'verified', '--by', 'lead'],
-     ['query', '--phase', '1', '--agent', 'prod'], ['update', '1', '--status', 'done', '--by', 'prod']], // prod's read and prod's write: the same explicit actor (the CI runner's USER differs)
+     ['show', '1', '--agent', 'prod'], ['update', '1', '--status', 'done', '--by', 'prod']], // prod's read and prod's write: the same explicit actor (the CI runner's USER differs)
     ['update', '1', '--status', 'pending', '--priority', '99'], ['update', '2', '--claim', 'amy'], { seedEnv: { TEAM_LEAD: 'lead' } });
   rejectedPublication(t, b, bare, result, /dependencies not done/);
 });
@@ -620,7 +620,7 @@ test('publication graph: a claim is refused when its completed dependency reopen
 test('publication identity: an upstream archived file cannot duplicate the slug of a written item', async t => {
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('alpha'), { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const hold = holdFirstPush(b);
   const second = cliAsync(['update', '1', '--append', 'rejected note'], { cwd: b.cons, tmp: b.tmp });
   await hold.held();
@@ -674,7 +674,7 @@ for (const force of [false, true]) test(`publication graph: concurrent team clai
 async function fileRace(t, seed, args, publish, env) {
   const [a, b, { bare }] = writers(t);
   for (const cmd of seed) assert.equal(cli(cmd, { cwd: a.cons, tmp: a.tmp }).status, 0);
-  assert.equal(cli(['query', '--all'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   if (args[0] === 'team') copyFileSync(join(a.home, 'teams.json'), join(b.home, 'teams.json')); // the team entries are local configuration of each clone
   const before = state(b.home);
   const hold = holdFirstPush(b);

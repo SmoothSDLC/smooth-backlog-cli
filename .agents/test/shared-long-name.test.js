@@ -27,10 +27,10 @@ test('047: update, replan, close and new work beside an item with a 250-byte fil
   const file = readdirSync(phases).find(n => n.startsWith('001-'));
   assert.ok(Buffer.byteLength(file) >= 245 && Buffer.byteLength(file) <= 255, `${file} is ${Buffer.byteLength(file)} bytes`);
   const slug = file.replace(/\.md$/, '');
-  run(['query', '--phase', slug, '--agent', 'tester']);
+  run(['show', slug, '--agent', 'tester']);
   run(['update', slug, '--note', 'a note', '--by', 'tester']);
   run(['update', '--replan', '2,1']);
-  run(['query', '--phase', slug, '--agent', 'tester']);
+  run(['show', slug, '--agent', 'tester']);
   run(['update', slug, '--status', 'done', '--by', 'tester']); // the close of an item without review_refs, with the reflow
   run(NEW('third item'));
   assert.deepEqual(readdirSync(phases).filter(n => n.endsWith('.tmp')), []); // no temporary file left

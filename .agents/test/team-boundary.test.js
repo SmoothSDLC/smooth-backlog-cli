@@ -47,14 +47,17 @@ test('a plain update takes none of the team flags and prints no notice of where 
   assert.equal(readFileSync(file(f, s), 'utf8'), before);
 });
 
-test('a plain query has no team view, no --agents, --scope or --lead', () => {
+test('a plain list has no team view, no --agents, --scope or --lead, and there is no plain query', () => {
   const f = fixture();
   plainItem(f);
   for (const flag of ['--claimable', '--reviewable', '--blocked', '--decisions', '--plan', '--wip', '--agents', '--scope', '--lead']) {
-    const r = run(f, ['query', flag, ...(['--agents', '--scope', '--lead'].includes(flag) ? ['x'] : [])]);
+    const r = run(f, ['list', flag, ...(['--agents', '--scope', '--lead'].includes(flag) ? ['x'] : [])]);
     assert.equal(r.status, 2, `${flag}: ${r.stdout}${r.stderr}`);
     assert.match(r.stderr, /unrecognized arguments/, flag);
   }
+  const query = run(f, ['query', '--claimable']);
+  assert.equal(query.status, 2);
+  assert.match(query.stderr, /query is not a backlog command/);
 });
 
 test('a plain new takes no --team and no --review-refs, and still takes the generic item options', () => {
@@ -73,7 +76,7 @@ test('a plain new takes no --team and no --review-refs, and still takes the gene
 test('a plain query of one item shows no missing-fields list; the team query does', () => {
   const f = fixture();
   const s = plainItem(f);
-  const plain = JSON.parse(run(f, ['query', '--phase', s]).stdout);
+  const plain = JSON.parse(run(f, ['show', s]).stdout);
   assert.equal('missing' in plain, false);
   const team = JSON.parse(run(f, ['team', 'query', '--team', 't1', '--phase', s]).stdout);
   assert.ok(Array.isArray(team.missing));

@@ -51,7 +51,7 @@ const ok = (f, slug, ...args) => {
   const last = args[args.length - 1];
   if (last && typeof last === 'object' && !Array.isArray(last)) extra = args.pop(); // a trailing { env } object
   const who = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
-  if (who) cli(['query', '--phase', slug, '--agent', who], { cwd: f.cons, tmp: f.t }); // an agent reads an item before it writes it again (seen.js)
+  if (who) cli(['show', slug, '--agent', who], { cwd: f.cons, tmp: f.t }); // an agent reads an item before it writes it again (seen.js)
   const r = cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...extra.env } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r;
@@ -310,7 +310,7 @@ test('pop with --scope all and the refinement_scope cap of backlog.scope', () =>
 test('--agents without --plan and --critical stay refused with pop', () => {
   const f = fixture();
   make(f, f.cons, 'x', []);
-  for (const args of [['query', '--agents', 'a,b'], ['team', 'pop', '--team', 't1', '--agent', 't', '--agents', 'a'], ['team', 'pop', '--team', 't1', '--agent', 't', '--critical']]) {
+  for (const args of [['list', '--agents', 'a,b'], ['team', 'pop', '--team', 't1', '--agent', 't', '--agents', 'a'], ['team', 'pop', '--team', 't1', '--agent', 't', '--critical']]) {
     const r = cli(args, { cwd: f.cons, tmp: f.t });
     assert.equal(r.status, 2, args.join(' '));
     assert.equal(r.stdout, '');

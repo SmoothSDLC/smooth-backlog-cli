@@ -56,7 +56,7 @@ function withAgent(rest, agent) {
 // a team without an entry in the configuration is refused with the text of the workflow
 const unconfigured = team => { process.stdout.write(`❌ ${loadWorkflow('team').refusals.team_not_configured.replace('<team>', team)}\n`); return 1; };
 
-// The team views of the plain query: the agent is passed on only when it was named, as the views behaved before.
+// The views of `backlog team query`: the agent is passed on only when it was named, as the views behaved before.
 async function query(rest, { team }, got) {
   if (!teamsConfig()[team]) return unconfigured(team);
   return (await import('./query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])]);

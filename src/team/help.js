@@ -15,7 +15,7 @@ Usage:
   backlog team workflow --show <name>
 
 Only these commands read the team's entry in the backlog configuration (teams.json at the root of the backlog: the lead, the members,
-the external reviewers and the review stages) and the flow it names. The plain commands know nothing of teams: they ignore the team environment and the team entries. --team and --agent
+the external reviewers and the review stages) and the flow it names. The user commands know nothing of teams: they ignore the team environment and the team entries. --team and --agent
 are required on pop, new and update; TEAM_NAME and BACKLOG_AGENT stand in for them, then the team and user of .backlog/config.json. A team
 without an entry is refused: "team <team> is not configured in the backlog configuration".
 
@@ -138,7 +138,7 @@ Usage:
 Adds an item that belongs to the team, to the backlog of this repository and branch (a session bound by TEAM_REPOSITORY and
 TEAM_BRANCH files it under that repository and branch). The item gets the next free item number, the team, the status new and the
 stage refining; a member refines it, and the team's review of the refinement passes before anyone claims it. A split of a team's
-item (--split-from) is made here too: a plain backlog new refuses it. Every option of backlog new works here (backlog new --help
+item (--split-from) is made here too: backlog new used outside a team refuses it. Every option of backlog new works here (backlog new --help
 has the item template); this command adds --review-refs. The agent is the writer of the item, as for every team command.
 
 ${SHARED}
@@ -218,7 +218,7 @@ Runs one team step on an item: --claim, --release, --waiting, --waiting-done, --
 --handoff, --accept-handoff, --reject-handoff, --reassign, --reassign-review, --refine-start, --refine-done,
 --request-refinement-review, --refinement-review, --request-decision, --decision, --wip-override, with the options of those steps.
 The field options of backlog update (--append, --note, --set-estimate, --set-depends-on, ...; backlog update --help) work here too and are
-checked against the team rules. The plain command refuses every change of a team's item, field edits included: this command is the one way to change one. A call takes at most one team step (--claim, --release, --request-review, --start-review, --review,
+checked against the team rules. A user command refuses every change of a team's item, field edits included: this command is the one way to change one. A call takes at most one team step (--claim, --release, --request-review, --start-review, --review,
 --close, --waiting, --waiting-done, --handoff, --accept-handoff, --reject-handoff). A team item is claimed only when its
 refinement review passed (stage ready); an item that lacks required fields is only refined; the team's review rules are met before
 the close. A team's item closes when the review rules of its team (teams.json) are met for the item's current work commit.
@@ -392,7 +392,7 @@ item). The view is one of the options below; --agent is the agent that asks (giv
 offered and the agent never reviews its own work). Without a view option it prints the full stack of the branch, as backlog list does.
 Each item shown also carries what the team rules say about it: missing (the team fields it lacks: review_refs, depends_on, estimate_min,
 definition_of_done; [] when complete; null when the item's file is gone or holds no item), the stage and the review state. A team without
-an entry is refused. The plain read commands (backlog list, show, next, history, changes) have none of the team views.
+an entry is refused. The user's read commands (backlog list, show, next, history, changes) have none of the team views.
 
 ${SHARED}
 

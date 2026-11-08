@@ -74,11 +74,13 @@ item to work, clears the recorded passes and keeps the finding in the item's rev
 builds are read as the new words and are not rewritten; their old `stage` and `review_state` fields are dropped when
 the item is next written.
 
-## Commands for people, commands for teams
+## Commands for the user, commands for agents
 
-There are two kinds of commands. The plain ones (`new`, `update`, `done`, `list`, `show`, `next`, `history`, `changes`, `fields`, `move`, `archive`, `import`, `clean`, `setup`, `upgrade`)
-know nothing of teams: they work on items without a team. A plain `update` refuses every change of an item that belongs to a team,
-and a plain `new --split-from` refuses a team's item: those go through `backlog team`. So do the plain commands that would change the
+The CLI has two personas. **The user** is a person using the CLI: the user commands enforce nothing, so a user may set any status or value, and it is the user's job to find the commands and flags that show an item whose value is not a default. A user who wants an enforced flow defines a custom team named `user` and uses the team commands. **The agents** are AI agents working in teams through `backlog team`: everything a team enforces comes from its team behaviour file, not from the CLI's code.
+
+There are two kinds of commands: the user's and the agents'. The user commands (`new`, `update`, `done`, `list`, `show`, `next`, `history`, `changes`, `fields`, `move`, `archive`, `import`, `clean`, `setup`, `upgrade`)
+know nothing of teams: they work on items without a team. `backlog update` refuses every change of an item that belongs to a team,
+and `backlog new --split-from` refuses a team's item: those go through `backlog team`. So do the user commands that would change the
 team state of an item (status, claim, review, refinement, dependencies, its place in the team's queue, its deletion): `done`, `update --replan`
 naming it, `archive` of a team item that is not closed (also with `--force`), `import --higher` and `clean` refuse it with one line, exit 1,
 and write nothing. `move`, `archive` of a closed team item and `archive done` only file or store an item and work on a team item
@@ -100,8 +102,8 @@ the team's entry), `new` (files an item of the team in stage refining, and split
 - **The status order** of a team's items is the flow's (see Statuses). **The item template** is `backlog fields`, and
   `backlog new --help` carries the same table.
 
-The team options are not options of the plain commands: the team steps of `backlog update`, the team views of `backlog team query` and
-`--team` and `--review-refs` of `backlog new` are refused as unrecognized arguments, and a team's item is refused by a plain `update`.
+The team options are not options of the user commands: the team steps of `backlog update`, the team views of `backlog team query` and
+`--team` and `--review-refs` of `backlog new` are refused as unrecognized arguments, and a team's item is refused by `backlog update`.
 `backlog pop` and `backlog work` are gone: `backlog team pop` replaces both.
 
 ## Where the data lives

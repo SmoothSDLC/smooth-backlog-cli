@@ -31,20 +31,20 @@ One backlog, one CLI. Compared with 1.0.1:
 - **The same data integrity in both storage locations.** Every command first updates the repository that holds the items from its origin (a read whose origin is unreachable answers with a warning, a write is refused), every change is pushed before the command exits, a rejected push is retried, and a write on a stale view is rejected and shows the item as it is now. Inside the repository the branch is pushed as it is, the user's own commits included; `"push-backlog-updates": false` in `.backlog/config.json` turns the push off.
 - **One status word per item.** A team's items follow one ordered list (`new` ... `review complete`, `closed`, `archived`,
   and `awaiting decision` for an owner question) defined by a file the CLI ships; the team steps move the item along it and
-  `--status` on a team item is refused by the plain `backlog update` (it names `backlog team update`) and by `backlog team update` (it names the steps that move the status). Outside a team the status is free text
+  `--status` on a team item is refused by `backlog update` (it names `backlog team update`) and by `backlog team update` (it names the steps that move the status). Outside a team the status is free text
   (`closed`, `done` and `archived` finish an item). Which review stages apply comes from the team's entry in
   `teams.json`; a team step for a team without an entry is refused. A review verdict is `complete` or `reject`
   (`pass` and `changes` stay accepted); a reject keeps the finding in the item's review history. Items written by
   earlier builds are read as the new words and drop `stage` and `review_state` when next written.
-- **Two kinds of commands.** The plain commands know nothing of teams. Everything that knows a team is under `backlog team`:
+- **Two kinds of commands.** The user commands know nothing of teams. Everything that knows a team is under `backlog team`:
   `pop` (the one next-action command by the agent's role in the team's entry; it marks the claim, the start of a refinement
   or of a review in one locked write and prints the whole item, and replaces `backlog pop` and `backlog work`),
-  `new` (files an item of a team), `update <item> --team <t> --agent <a> <step>` (the team steps; a plain `backlog update`
+  `new` (files an item of a team), `update <item> --team <t> --agent <a> <step>` (the team steps; `backlog update`
   refuses every change of an item that belongs to a team and names `backlog team update`), `query` (the claimable,
   reviewable, blocked, decisions, plan and wip views, and the read options of the reader), `define` and `workflow`. `--team` and `--agent` come from the flags, then
   `TEAM_NAME` and `BACKLOG_AGENT`, then the `team` and `user` of `.backlog/config.json`. `backlog next` prints the open item
   with the best priority whole (front matter and body) and skips nothing for team reasons.
-- **The plain commands refuse an item with a team when they would change its team state.** `done` (through `update`), `update --replan`
+- **The user commands refuse an item with a team when they would change its team state.** `done` (through `update`), `update --replan`
   naming a team item, `archive` of a team item that is not closed (`--force` does not change that), `import --higher` when the source has
   a team item (refused before anything is moved) and `clean` when a team item lies in its scope, archived ones included (refused before
   the question): one line on standard output, exit 1, nothing written; the line names `backlog team update` or says that no command
@@ -87,9 +87,9 @@ One backlog, one CLI. Compared with 1.0.1:
   `show`, `next`, `history`, `changes`, `fields`, `upgrade`, and under `backlog team` `pop`, `new`, `update`, `query`,
   `define` and `workflow`. `backlog update` changes an item that has no team (fields, body, status, priority, claim,
   release, close); `--replan` sets the order of the queue. The read command `query` of the earlier builds is gone from the
-  plain commands: `list` (the full stack of this branch, or `new|open|done|archive|branches|critical|all-branches`), `show
+  user commands: `list` (the full stack of this branch, or `new|open|done|archive|branches|critical|all-branches`), `show
   <item>[,<item>...]` (with `--agent`), `next` (`next all-branches`), `history [<item>]` and `changes [--agent]` each
-  do one thing; `--branch`, `--by-branch` and `--all` of the plain read commands are gone with it, and the read options of
+  do one thing; `--branch`, `--by-branch` and `--all` of the user's read commands are gone with it, and the read options of
   the reader (`--phase`, `--status`, `--events`, `--branch`, ...) are options of `backlog team query` only. `--json` prints the data itself, not an `{"ok","data"}` envelope.
 - **Many writers.** Every write records who made it (`BACKLOG_AGENT`, `--by`, `--claim`, `--agent`) and when. A
   write to an item that someone else changed since this agent last read it is refused (exit 5) until the agent reads

@@ -40,7 +40,7 @@ Usage:
 An item is its number (1) or its slug (001-fix-the-login-redirect). Priorities are ranks: P0 is next. Each branch has its
 own queue, which runs without gaps and is renumbered when work is added, moved or finished.
 
-An item that belongs to a team is changed by backlog team update only. A plain command that would change its team state (status,
+An item that belongs to a team is changed by backlog team update only. A user command that would change its team state (status,
 claim, review, refinement, dependencies, its place in the team's queue, its deletion) refuses it: update (every change), done,
 update --replan naming it, archive of one that is not closed (also with --force), import --higher and clean. A refusal is one line on
 standard output, exit 1, and nothing is written. move, archive of a closed team item and archive done only file or store an item and work

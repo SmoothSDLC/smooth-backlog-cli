@@ -219,13 +219,13 @@ test('refine-done is refused while a field or the definition of done is missing;
   no(f, ['update', c, '--refine-done', '--by', 'ann', '--note', 'x'], 'still missing definition_of_done'); // the event lines after the placeholder do not count
   no(f, ['update', c, '--request-review', 'any', '--note', 'x', '--by', 'ann'], 'before stage ready only its refinement steps run (--request-review refused)'); // only refinement steps
   no(f, ['update', c, '--claim', 'ann', '--force'], 'incomplete item, missing definition_of_done');
-  no(f, ['update', c, '--status', 'in_progress', '--by', 'ann'], 'use backlog team update'); // nothing but a refinement while incomplete
+  no(f, ['update', c, '--status', 'in_progress', '--by', 'ann'], 'backlog team update takes no --status'); // nothing but a refinement while incomplete
   no(f, ['update', c, '--append', 'some notes', '--by', 'ann'], '--append refused'); // text that is no definition of done
   up(f, c, '--append', '  ESTIMATE: 5 min, complexity low', '--by', 'ann'); // an estimate line (indented, too) is refinement, and no definition of done
   no(f, ['update', c, '--refine-done', '--by', 'ann', '--note', 'x'], 'still missing definition_of_done');
-  no(f, ['update', c, '--set-team', '', '--status', 'in_progress', '--by', 'ann'], 'use backlog team update'); // clearing the team does not lift the rule
+  no(f, ['update', c, '--set-team', '', '--status', 'in_progress', '--by', 'ann'], 'backlog team update takes no --status'); // clearing the team does not lift the rule
   no(f, ['update', c, '--set-team', ''], 'an item in stage refining keeps a team'); // nor on its own
-  no(f, ['update', c, '--set-team', 't9', '--status', 'in_progress', '--by', 'ann'], 'use backlog team update'); // another team in the same call: the rule reads the item as it was
+  no(f, ['update', c, '--set-team', 't9', '--status', 'in_progress', '--by', 'ann'], 'backlog team update takes no --status'); // another team in the same call: the rule reads the item as it was
   up(f, c, '--summary', 'a better summary', '--by', 'ann'); // the text fields are refinement
   up(f, c, '--append', DOD, '--by', 'ann');
   up(f, c, '--refine-done', '--by', 'ann', '--note', 'definition of done written');
@@ -236,13 +236,13 @@ test('a complete team item before stage ready takes only its refinement steps: n
   const f = fixture();
   const w = work(f);
   const c = make(f, 'complete child', '--split-from', w); // complete, in refining
-  no(f, ['update', c, '--status', 'in_progress'], 'use backlog team update');
+  no(f, ['update', c, '--status', 'in_progress'], 'backlog team update takes no --status');
   for (const [args, flag] of [[['--request-review', 'any', '--note', 'x'], '--request-review'],
     [['--close', '--summary', 'x', '--by', 'ann'], '--close'], [['--waiting', 'x', '--by', 'ann'], '--waiting']]) {
     no(f, ['update', c, ...args], `team t1 item in stage refining: before stage ready only its refinement steps run (${flag} refused)`);
   }
   up(f, c, '--refine-start', '--by', 'ann'); up(f, c, '--refine-done', '--by', 'ann', '--note', 'x');
-  no(f, ['update', c, '--status', 'done'], 'use backlog team update');
+  no(f, ['update', c, '--status', 'done'], 'backlog team update takes no --status');
   up(f, c, '--request-decision', 'Q?', '--by', 'ann');
   no(f, ['update', c, '--request-review', 'any', '--note', 'x'], 'item in stage review-hitl');
   up(f, c, '--note', 'notes and text fields stay open', '--summary', 'a better summary');

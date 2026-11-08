@@ -359,6 +359,9 @@ Options:
       and accepted (--handoff, then the lead's --accept-handoff); the refusal lists every open dependent, the state
       of its hand-off and the next command. An item without dependents closes and records handoffs: none. An item
       already done is not checked again.
+  --status STATUS
+      Refused: the status of a team item moves by the steps above (claim, request-review, start-review, review, close), never by a
+      value. The refusal names those steps and writes nothing.
   --dry-run
       Say what would change and change nothing: no file is written and nothing is committed.
 ${HELP_FLAG}

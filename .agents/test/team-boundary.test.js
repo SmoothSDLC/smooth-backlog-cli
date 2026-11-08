@@ -145,7 +145,8 @@ test('backlog team update runs the stage rule on every field flag: in stage refi
   assert.equal(readFileSync(file(f, s), 'utf8'), before, 'nothing was written');
   const st = asTeam(f, 'ann', [s, '--status', 'closed']);
   assert.equal(st.status, 1);
-  assert.match(st.stdout, OF_A_TEAM, 'a team item takes no --status through team update either');
+  assert.match(st.stdout, /backlog team update takes no --status: the status of a team item moves by its steps/, 'team update has its own refusal, not the plain-update line');
+  assert.doesNotMatch(st.stdout, OF_A_TEAM);
 });
 
 test('backlog team update runs the incomplete-item guard on every field flag: a member is refused, the lead may edit', () => {

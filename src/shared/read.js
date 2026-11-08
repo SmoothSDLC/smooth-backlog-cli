@@ -4,7 +4,7 @@
 import { BacklogError } from '../errors.js';
 import { run as read } from './query.js';
 
-const LIST = { new: ['--only', 'new'], open: ['--only', 'open'], done: ['--only', 'done'], archive: ['--only', 'archive'], branches: ['--branches'], critical: ['--critical'], 'all-branches': ['--all'] };
+export const LIST = { new: ['--only', 'new'], open: ['--only', 'open'], done: ['--only', 'done'], archive: ['--only', 'archive'], branches: ['--branches'], critical: ['--critical'], 'all-branches': ['--all'] };
 const refuse = message => { throw new BacklogError('INVALID_INPUT', message); };
 
 // positional arguments and the options of one command, refused when anything else is given

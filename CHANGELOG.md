@@ -31,7 +31,7 @@ One backlog, one CLI. Compared with 1.0.1:
 - **The same data integrity in both storage locations.** Every command first updates the repository that holds the items from its origin (a read whose origin is unreachable answers with a warning, a write is refused), every change is pushed before the command exits, a rejected push is retried, and a write on a stale view is rejected and shows the item as it is now. Inside the repository the branch is pushed as it is, the user's own commits included; `"push-backlog-updates": false` in `.backlog/config.json` turns the push off.
 - **One status word per item.** A team's items follow one ordered list (`new` ... `review complete`, `closed`, `archived`,
   and `awaiting decision` for an owner question) defined by a file the CLI ships; the team steps move the item along it and
-  `update --status` on a team item is refused (`use backlog team update`). Outside a team the status is free text
+  `--status` on a team item is refused by the plain `backlog update` (it names `backlog team update`) and by `backlog team update` (it names the steps that move the status). Outside a team the status is free text
   (`closed`, `done` and `archived` finish an item). Which review stages apply comes from the team's entry in
   `teams.json`; a team step for a team without an entry is refused. A review verdict is `complete` or `reject`
   (`pass` and `changes` stay accepted); a reject keeps the finding in the item's review history. Items written by

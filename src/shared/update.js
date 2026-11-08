@@ -25,8 +25,9 @@ const VALUE = [...SETTABLE, 'append', 'section', 'set-lines', 'add-line', 'remov
 const BOOL = ['dry-run', 'restore', 'top', 'close'];
 const CHOICES = { 'set-complexity': ['low', 'medium', 'high'], 'set-layer': ['1', '2', '3', '4', '5', 'process'], 'set-chunk': ['yes', 'no'], severity: ['normal', 'critical'] };
 
-// The one line for a team's item: a plain update refuses every change of it, and backlog team update refuses --status (its status moves by the steps).
+// The two lines for a team's item: a plain update refuses every change of it, and backlog team update refuses --status (its status moves by the steps).
 const OF_A_TEAM = 'use backlog team update: a team item is changed only there, and its status moves by its team steps';
+const NO_STATUS_FLAG = 'backlog team update takes no --status: the status of a team item moves by its steps (--claim, --request-review, --start-review, --review, --close)';
 const pyInt = s => (/^\s*[+-]?\d+\s*$/.test(s) ? Number(s) : null);
 // Python repr of a str, for the earlier scripts `{x!r}` and dict/list prints.
 function pyStr(s) {
@@ -220,7 +221,7 @@ async function change(a, folder, repo, team) {
   if (a.status !== undefined) {
     const outside = team?.refuseOutside(row); // a session bound to another repository or branch is told so first
     if (outside) return refuse(outside);
-    if (fm.team) return refuse(OF_A_TEAM);
+    if (fm.team) return refuse(team ? NO_STATUS_FLAG : OF_A_TEAM);
     a.status = normalise(a.status);
     if (a.status === 'archived') return refuse("--status 'archived': backlog archive moves a finished item to archive/");
   }

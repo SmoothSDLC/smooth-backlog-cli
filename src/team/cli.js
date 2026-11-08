@@ -16,7 +16,7 @@ import { strip } from '../shared/text.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
-const SUBS = ['pop', 'new', 'update', 'query', 'define', 'workflow'];
+export const SUBS = ['pop', 'new', 'update', 'query', 'define', 'workflow'];
 const say = text => process.stdout.write(`${redact(text)}\n`);
 
 // Takes --team and --agent out of argv (both forms); the rest is passed on in order.

@@ -43,7 +43,7 @@ test('--status done is refused on a team item: its status moves by the team step
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
   const r = asTeam(f, 'lead', [f.slug, '--status', 'done']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.ok(r.stdout.includes("use backlog team update: a team item is changed only there, and its status moves by its team steps"), r.stdout);
+  assert.ok(r.stdout.includes("backlog team update takes no --status: the status of a team item moves by its steps (--claim, --request-review, --start-review, --review, --close)"), r.stdout);
   assert.equal(status(f), 'in progress');
 });
 

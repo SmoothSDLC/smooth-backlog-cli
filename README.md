@@ -136,39 +136,6 @@ The same five rules hold wherever the items live:
 
 `backlog <command> --help` is the contract of each command; [COMMANDS.md](COMMANDS.md) holds the same text.
 
-### Aliases
-
-The command names of the first release still work; each runs the command set above (`backlog <alias> --help` prints the alias line and then the help of the command it runs):
-
-- `init [name]` runs `backlog setup`
-- `init clean [all-branches]` runs `a typed yes, then every item of the current branch (archive included) is removed as one published change, then backlog setup; init clean all-branches removes the items of every branch of the repository`
-- `list new` runs `backlog query --only new`
-- `list open` runs `backlog query --only open`
-- `list done` runs `backlog query --only done`
-- `list archive` runs `backlog query --only archive`
-- `list branch` runs `backlog query --branches`
-- `branch` runs `backlog query --branches`
-- `new <name> [--description D] [--state S] [--priority P]` runs `backlog new --name <name> --objective D --status S --priority P (--summary is the name unless given; state new = new, open = in progress, done = closed)`
-- `set <item> name|description|state|summary|priority|branch|commit|location <value>` runs `backlog update <item> --name|--objective|--status|--summary|--priority|--branch|--commit|--location <value>`
-- `priority <item> <position>` runs `backlog update <item> --priority <position>`
-- `priority <item>` runs `backlog query --phase <item>`
-- `done <item>` runs `backlog update <item> --status done`
-- `<item> done` runs `backlog update <item> --status done`
-- `move <item> <branch>` runs `backlog move <item> --to-branch <branch>`
-- `set <item> ac|tasks|outcomes|evidence|references|item-state-description|work_item_id <value> [--force]` runs `backlog update <item> --section <Heading> --set-lines <value> (the list is the section of that name in the item body)`
-- `add <item> <list> <entry> [--top]` runs `backlog update <item> --section <Heading> --add-line <entry> [--top]`
-- `replace <item> <list> <JSON-array>` runs `backlog update <item> --section <Heading> --set-lines <JSON-array>`
-- `remove <item> <list> <n>` runs `backlog update <item> --section <Heading> --remove-line <n>`
-- `priority <item> <list> <n> <position>` runs `backlog update <item> --section <Heading> --move-line <n>:<position>`
-- `new … --ac A --tasks J --outcomes J --evidence J --references J --item-state-description T --work_item_id W` runs `the same new with --body holding one section per given list (--ac is the section Definition of done; a JSON array becomes one line per entry)`
-- `import --branch <source> [--higher]` runs `for every open item of <source>, oldest first: backlog move <item> --to-branch <current branch>; with --higher then backlog update <item> --priority 0, newest first, so the imported items lead the queue in their order`
-- `archive done` runs `backlog archive <item> for every finished item of the current branch, oldest first`
-- `update, update check|auto|off|disable|<version>` runs `backlog upgrade [check|auto|off|disable|<version>] (the CLI self-update; update with an item or an option is the item command)`
-- `<item> set|priority|move …` runs `the same command with the item first (backlog 3 done)`
-- `<command> --ask | --headless (or BACKLOG_HEADLESS=1)` runs `the command without the switch: it is accepted and ignored (--ask still asks for the folder in setup and init)`
-- `query --pop, next --agent` runs `nothing: it is refused with a pointer to backlog team pop --team <team> --agent <name> (--dry-run only answers)`
-
-
 ## Development and verification
 
 ```sh

@@ -1,36 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { BacklogError } from './errors.js';
-import { aliasOf, plan, translate } from './shared/aliases.js';
 import { redact } from './shared/safety.js';
 const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-// One command set, wherever the item files live: setup here, everything else through the router. No arguments prints the help.
+// One command set, wherever the item files live: setup and upgrade here, everything else through the router. No arguments prints the help.
 export async function run() {
-  let argv = process.argv.slice(2);
+  const argv = process.argv.slice(2);
   try {
     if (argv[0] === '--version' || argv[0] === 'version') { process.stdout.write(`${packageInfo.version}\n`); return; }
     if (argv[0] === '--help' || argv[0] === 'help' || argv[0] === '-h') { process.stdout.write((await import('./help.js')).USAGE); return; }
     if (argv.length === 0) { process.stdout.write((await import('./help.js')).USAGE); return; } // no word: the top-level help
-    const { own } = await import('./shared/router.js');
-    const direct = own(argv); // a command that is also an alias row runs as itself, not as the alias
-    if (!direct && argv.includes('--help')) { // an alias prints its own line, then the help of the command it runs
-      const row = aliasOf(argv); const { HELP } = await import('./help.js');
-      if (row) { process.stdout.write(`backlog ${row.form} runs ${row.runs}\n${row.help ? `\n${HELP[row.help]}\n` : ''}`); return; }
-    }
-    const sequence = direct ? null : plan(argv); // import and archive done run several commands
-    if (sequence?.error) throw new BacklogError('INVALID_INPUT', sequence.error);
-    if (sequence) { process.exitCode = await (await import('./shared/sequence.js')).run(sequence); return; }
     if (argv[0] === 'upgrade') { // the self-update needs no backlog
       if (argv.includes('--help')) { process.stdout.write((await import('./help.js')).HELP.upgrade); return; }
       process.exitCode = await (await import('./upgrade.js')).run(argv.slice(1)); return;
     }
-    const alias = direct ? null : translate(argv); // the command names of the first release run the command set
-    if (alias?.error) throw new BacklogError('INVALID_INPUT', alias.error);
-    if (alias?.command === 'upgrade') { // the first release's update, update check, update 1.2.3
-      if (argv.includes('--help')) { process.stdout.write((await import('./help.js')).HELP.upgrade); return; }
-      process.exitCode = await (await import('./upgrade.js')).run(alias.argv); return;
-    }
-    if (alias) argv = [alias.command, ...alias.argv];
-    if (argv[0] === 'init-clean') { process.exitCode = await (await import('./shared/clean.js')).clean(argv.slice(1), 'init clean'); return; }
     if (argv[0] === 'setup') { process.exitCode = await (await import('./shared/setup.js')).run(argv.slice(1)); return; }
     let at = 0; while (argv[at] === '--json') at++; // a leading --json belongs to the command
     const named = argv[at] !== undefined && !argv[at].startsWith('-');

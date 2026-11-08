@@ -133,6 +133,7 @@ const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact
 const refuse = message => { say(`❌ ${message}`); return 1; }; // 's refusals: stdout, exit 1
 
 export async function run(argv, { team = null } = {}) {
+  if (!team && argv.length === 0) { process.stdout.write((await import('../help.js')).HELP.update); return 2; } // nothing named: the help of update, never an install (backlog upgrade is the self-update)
   try { return await update(argv, team); } catch (e) { return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); }
 }
 

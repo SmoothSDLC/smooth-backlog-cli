@@ -11,18 +11,6 @@ export const TABLE = {
   done: ['./done.js'], clean: ['./clean.js'], import: ['./import.js'],
 };
 
-// The commands that an alias row also spells (list open, done 3, import, archive done) are real commands first: main.js does not translate them.
-// A first-release switch (--ask, --headless) is dropped by the alias, so a call that carries one still goes to the alias.
-export function own(argv) {
-  const at = argv.findIndex(x => x !== '--json');
-  if (at < 0 || argv.some(x => x === '--ask' || x === '--headless')) return false;
-  const [head, word] = [argv[at], argv[at + 1]];
-  if (['show', 'history', 'changes', 'clean'].includes(head)) return true;
-  if (head === 'list') return word !== 'branch'; // list branch is the alias of list branches
-  if (head === 'archive') return word === 'done';
-  return head === 'done' || head === 'import';
-}
-
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 
 const load = async name => { const url = new URL(name, import.meta.url); return existsSync(url) ? import(url.href) : null; };

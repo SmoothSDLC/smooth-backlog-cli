@@ -538,16 +538,6 @@ test('a failed pull does not stop a read: it answers from the local copy with th
   assert.match(w.stderr, /^❌ backlog: could not update .* from origin\/main .*nothing was read or changed/s);
 });
 
-test('next --agent and query --pop are refused: the next action of an agent is backlog team pop', () => {
-  const f = fx();
-  for (const cmd of [['query', '--pop'], ['next']]) {
-    const n = cli([...cmd, '--agent', 'ann'], { cwd: f.cons, tmp: f.t });
-    assert.equal(n.status, 2, cmd.join(' '));
-    assert.equal(n.stdout, '');
-    assert.match(n.stderr, /--pop is a team command: use backlog team pop --team <team> --agent <name> \(--dry-run only answers\)/);
-  }
-});
-
 test('--only filters the listing query prints: new, open, done, archive', () => {
   const f = fx();
   const seqs = only => JSON.parse(view(f, ['--only', only, '--json']).stdout).phases.map(p => p.seq).sort();
@@ -631,15 +621,8 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
   }
 });
 
-test('query --pop is refused, --headless is accepted and ignored; query --plan still answers', () => {
+test('team query --plan answers or is idle, it is not an unknown flag', () => {
   const f = fx();
-  const pop = cli(['query', '--pop', '--agent', 'x'], { cwd: f.cons, tmp: f.t });
-  assert.equal(pop.status, 2);
-  assert.match(pop.stderr, /--pop is a team command/);
-  for (const args of [['query', '--headless'], ['team', 'query', '--team', 't1', '--headless', '--plan', '--json']]) {
-    const r = cli(args, { cwd: f.cons, tmp: f.t, env: { BACKLOG_HEADLESS: '1' } });
-    assert.ok([0, 3].includes(r.status), `${args.join(' ')}: ${r.stdout}${r.stderr}`);
-  }
   const plan = cli(['team', 'query', '--team', 't1', '--plan', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_NAME: '', BACKLOG_AGENT: 'lead' } });
-  assert.ok([0, 3].includes(plan.status), plan.stdout + plan.stderr); // the plan view answers or is idle, it is not an unknown flag
+  assert.ok([0, 3].includes(plan.status), plan.stdout + plan.stderr);
 });

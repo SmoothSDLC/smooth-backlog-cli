@@ -98,15 +98,15 @@ test('changes is query --changed: the first use sets the reference, the next rep
   assert.match(bad.stderr, /unrecognized arguments: extra/);
 });
 
-test('next all-branches is next --all: it finds the item of a branch other than the one checked out', () => {
+test('next all-branches finds the item of a branch other than the one checked out', () => {
   const f = build(true);
   assert.match(f.run('next').stdout, /no actionable item for acme\/demo, branch main/);
   const all = f.run('next', 'all-branches');
   assert.equal(all.status, 0, all.stderr);
   assert.match(all.stdout, /NEXT: .*001-feat/);
-  same(f, ['next', 'all-branches', '--json'], ['next', '--all', '--json']);
-  same(f, ['next', 'all-branches'], ['next', '--all']);
-  assert.equal(f.run('next', 'everything').status, 2); // a word next does not know is refused as before
+  assert.equal(JSON.parse(f.run('next', 'all-branches', '--json').stdout).slug, '001-feat');
+  assert.equal(f.run('next', '--all').status, 2); // the option is gone: all-branches is the word
+  assert.equal(f.run('next', 'everything').status, 2); // a word next does not know is refused
 });
 
 test('show, history, changes and next all-branches have their own help, with usage, options, exit codes and one example', () => {

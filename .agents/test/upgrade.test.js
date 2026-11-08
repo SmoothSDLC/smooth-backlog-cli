@@ -215,12 +215,14 @@ test('upgrade takes one of its words or a version, nothing else', async t => {
   const u = updater({ configPath: join(f.dir, 'user.json'), runner: () => { throw new Error('Unexpected npm'); }, notice: () => {} });
   for (const word of ['now', '1.2', 'latest', '1.2.3-beta.1']) await assert.rejects(u.command(word), /Use upgrade/, word);
 });
-test('backlog upgrade --help and the first-release update forms reach the self-update, not the item command', async () => {
+test('backlog upgrade --help reaches the self-update; update --help, with or without a self-update word, is the item command', async () => {
   const { spawnSync } = await import('node:child_process'); const { HELP } = await import('../../src/help.js');
   const bin = new URL('../../bin/backlog.js', import.meta.url).pathname;
-  for (const args of [['upgrade', '--help'], ['update', 'check', '--help'], ['update', '1.2.3', '--help']]) {
+  const up = spawnSync(process.execPath, [bin, 'upgrade', '--help'], { encoding: 'utf8' });
+  assert.equal(up.status, 0); assert.equal(up.stdout, HELP.upgrade);
+  for (const args of [['update', '--help'], ['update', 'check', '--help'], ['update', '1.2.3', '--help']]) {
     const p = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8' });
-    assert.equal(p.status, 0, args.join(' ')); assert.equal(p.stdout, HELP.upgrade, args.join(' '));
+    assert.equal(p.status, 0, args.join(' ')); assert.equal(p.stdout, HELP.update, args.join(' '));
   }
   const p = spawnSync(process.execPath, [bin, 'upgrade', 'now', 'again'], { encoding: 'utf8' });
   assert.equal(p.status, 2); assert.match(p.stderr, /takes one word/);

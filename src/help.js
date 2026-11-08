@@ -1,4 +1,3 @@
-import { ALIASES } from './shared/aliases.js';
 import { table as fieldsTable } from './shared/fields.js';
 import { SHARED, EXIT, HELP_FLAG } from './shared/help-parts.js';
 // Help text: USAGE is what `backlog --help` prints; HELP[command] is what `backlog <command> --help` prints
@@ -18,7 +17,7 @@ Usage:
   backlog show <item>[,<item>...] [--agent <name>] [--json]   One item whole: its row, front matter and body
   backlog history [<item>]                         The events of one item, or the latest 50 of the backlog
   backlog changes [--agent <name>] [--json]        Which items changed since your last use
-  backlog next [--all] [--branch <name>] [--json]  The next item of this repository and branch
+  backlog next [--json]                            The next item of this branch
   backlog next all-branches [--json]               The next item over every branch of this repository
   backlog done <item>                              Finish an item that has no team (backlog update <item> --status done)
   backlog query [options] [--json]                 The earlier read command; list, show, history, changes and next do what its options do
@@ -67,9 +66,6 @@ records who made it and when. A write to an item that someone else changed since
 
 Teams: the commands that know a team (pop, new, update, query, define, workflow) are under backlog team; backlog team --help describes
 them. The commands above know nothing of teams.
-
-Aliases (the command names of the first release still work; backlog <alias> --help shows what each runs):
-${ALIASES.map(a => `  backlog ${a.form}\n      runs ${a.runs}`).join('\n')}
 
 Exit codes: 0 success; 1 refused (the reason on standard output, ❌ ...); 2 invalid input or a failure; 3 idle (team pop:
 nothing to do now); 4 the configured backlog repository is not cloned (run backlog setup); 5 stale view.
@@ -163,7 +159,8 @@ Changes the item named by its number or slug. The item file is the source of tru
 records an event in the history of the item. Setting --status to
 closed completes the item (its completion time is set) and renumbers the rest of its branch's queue; so does --priority.
 Both are planning events, so look at the order again afterwards. The order is kept in the index of the folder, so a
-change of the order rewrites no other item. The item may be left out only together with --replan.
+change of the order rewrites no other item. The item may be left out only together with --replan. Called with nothing at all, the command prints this help and exits 2; it never
+installs a program version (backlog upgrade is the program's own update).
 The two retired classification keys of older items have no effect. An item that still carries them shows them until the CLI next writes that item; every write drops them.
 
 ${SHARED}
@@ -348,25 +345,20 @@ Example:
   backlog query --status --branch main
 `,
 
-  next: `backlog next — show the next actionable item of this repository and branch
+  next: `backlog next — show the next actionable item of this branch
 
 Usage:
-  backlog next [--all] [--branch <name>] [--json]
+  backlog next [--json]
   backlog next all-branches [--json]
 
 Prints the open item with the best priority on the branch that is checked out here, whole: its objective, summary and
-progress, then its front matter and its body. It is the same as backlog query --next and reads the backlog without changing it. When the queue is empty it says so
-(with --json it prints {}). Critical items are announced in a banner first. The other options of backlog query are described in backlog query --help.
-backlog next all-branches shows the next item over every branch (backlog next all-branches --help).
+progress, then its front matter and its body. It reads the backlog without changing it. When the queue is empty it says so
+(with --json it prints {}). Critical items are announced in a banner first.
+backlog next all-branches shows the next item over every branch of this repository (backlog next all-branches --help).
 
 ${SHARED}
 
 Options:
-  --all
-      Show the next item over every branch, not only the current one.
-  --branch BRANCH
-      The branch whose queue to show. The default is the branch that is checked out here; a detached HEAD needs
-      this option or --all.
   --json
       Print the item as machine-readable data.
 ${HELP_FLAG}
@@ -776,8 +768,7 @@ Usage:
   backlog upgrade disable        Turn the weekly check for a newer release off
   backlog upgrade <version>      Install exactly this release (for example 1.2.3) when it is newer than this one
 
-The first release's names work too: backlog update, backlog update check, auto, off, disable and backlog update 1.2.3 run
-this command. With an item or an option, backlog update is the item command.
+backlog update is the item command; it never installs a program version, and called with nothing it prints its own help.
 
 The program is replaced as a whole and only after the new one passed its own checks; a failed update leaves the installed
 program as it was. Only installs made with npm (global or into a user prefix) are updated; the command never asks for

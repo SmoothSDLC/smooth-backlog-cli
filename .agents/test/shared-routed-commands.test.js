@@ -1,6 +1,5 @@
-// Tests for the commands `backlog done`, `backlog clean`, `backlog import` and `backlog archive done`: each is a command of its own with its own help,
-// and each runs exactly what its first-release spelling ran. A spelling that carries --headless goes through the alias, so the same call
-// with and without it must give the same result. Local bare repositories only (shared-fixtures.js).
+// Tests for the commands `backlog done`, `backlog clean`, `backlog import` and `backlog archive done`: each is a command of its own with its own help.
+// Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -30,23 +29,16 @@ function build() {
   f.status = seq => { const r = f.any('show', String(seq)); return r.status === 0 ? JSON.parse(r.stdout).status : 'none'; };
   return f;
 }
-// the same call on two identical backlogs: through the command, and through the first-release spelling (a call with --headless goes through
-// the alias, which drops the switch; clean is init clean there)
-function alike(args, prepare = () => {}, { input } = {}) {
-  const old = args[0] === 'clean' ? ['init', ...args] : ['--headless', ...args];
-  const one = build(); const two = build();
-  prepare(one); prepare(two);
+// one call on a fresh backlog: the result of the command and the backlog it leaves
+function run(args, prepare = () => {}, { input } = {}) {
+  const one = build();
+  prepare(one);
   const a = input === undefined ? one.any(...args) : one.typed(input, ...args);
-  const b = input === undefined ? two.any(...old) : two.typed(input, ...old);
-  assert.equal(a.status, b.status, `${args.join(' ')}: exit ${a.stdout}${a.stderr} | ${b.stdout}${b.stderr}`);
-  assert.equal(a.stdout, b.stdout, `${args.join(' ')}: output`);
-  assert.equal(a.stderr, b.stderr, `${args.join(' ')}: error output`);
-  assert.deepEqual([one.queue(), [1, 2, 3].map(s => one.status(s))], [two.queue(), [1, 2, 3].map(s => two.status(s))], `${args.join(' ')}: result`);
   return { one, a };
 }
 
 test('done finishes the item like update --status done, passes the other arguments on, and needs an item', () => {
-  const { one, a } = alike(['done', '2']);
+  const { one, a } = run(['done', '2']);
   assert.equal(a.status, 0, a.stderr);
   assert.equal(one.status(2), 'closed');
   assert.deepEqual(one.queue(), [1, 3]);
@@ -72,7 +64,7 @@ test('done refuses an item that does not exist exactly as update does, and write
   assert.deepEqual(f.queue(), [1, 2, 3]);
 });
 
-test('clean asks first, removes the items of this branch after a yes, and is the first-release init clean', () => {
+test('clean asks first, removes the items of this branch after a yes', () => {
   const f = build();
   const no = f.typed('no', 'clean');
   assert.equal(no.status, 2);
@@ -85,8 +77,6 @@ test('clean asks first, removes the items of this branch after a yes, and is the
   assert.equal(yes.status, 0, yes.stdout + yes.stderr);
   assert.match(yes.stdout, /3 items removed from branch main/);
   assert.deepEqual(f.queue(), []);
-  alike(['clean'], () => {}, { input: 'yes' });
-  alike(['clean', 'all-branches'], () => {}, { input: 'yes' });
 });
 
 test('clean all-branches removes the items of every branch; a word it does not know is refused and names clean', () => {
@@ -102,16 +92,15 @@ test('clean all-branches removes the items of every branch; a word it does not k
   const bad = f.typed('yes', 'clean', 'everything');
   assert.equal(bad.status, 2);
   assert.match(bad.stderr, /unrecognized arguments: everything \(usage: clean \[all-branches\]\)/);
-  assert.match(f.typed('yes', 'init', 'clean', 'everything').stderr, /\(usage: init clean \[all-branches\]\)/); // the first-release spelling names itself
 });
 
 test('import brings the open items of another branch here, oldest first, and --higher puts them first', () => {
   const prepare = f => { f.run('move', '2', '--to-branch', 'feature'); f.run('move', '3', '--to-branch', 'feature'); };
-  const plain = alike(['import', '--branch', 'feature'], prepare);
+  const plain = run(['import', '--branch', 'feature'], prepare);
   assert.equal(plain.a.status, 0, plain.a.stderr);
   assert.match(plain.a.stdout, /imported 2 open item\(s\) of feature into main: 002-two, 003-three/);
   assert.deepEqual(plain.one.queue(), [1, 2, 3]);
-  const higher = alike(['import', '--branch', 'feature', '--higher'], prepare);
+  const higher = run(['import', '--branch', 'feature', '--higher'], prepare);
   assert.deepEqual(higher.one.queue(), [2, 3, 1]);
   assert.equal(higher.one.any('import', '--branch=feature').status, 0);
 });
@@ -132,7 +121,7 @@ test('import refuses a missing source, an unknown argument, --json and the curre
 
 test('archive done archives every finished item, oldest first, and leaves the open ones', () => {
   const prepare = f => { f.run('done', '1'); f.run('done', '2'); };
-  const { one, a } = alike(['archive', 'done'], prepare);
+  const { one, a } = run(['archive', 'done'], prepare);
   assert.equal(a.status, 0, a.stderr);
   assert.match(a.stdout, /archived 2 finished item\(s\): 001-one, 002-two/);
   assert.deepEqual(one.queue(), [3]);

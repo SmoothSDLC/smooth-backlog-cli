@@ -1,17 +1,11 @@
 // The read commands that are words of their own: backlog list [new|open|done|archive|branches|critical|all-branches], show, history, changes
 // and backlog next [all-branches]. Each is the one reader of query.js (the reader `backlog team query` also runs) with its word spelled as the option.
-// shortcut: list and next still pass an option they do not know to the reader, so the spellings that worked before work; they refuse it once the old spellings go.
+// list and next take their word and --json and nothing else: any other option or word is refused (the reader's other options belong to backlog team query).
 import { BacklogError } from '../errors.js';
 import { run as read } from './query.js';
 
 const LIST = { new: ['--only', 'new'], open: ['--only', 'open'], done: ['--only', 'done'], archive: ['--only', 'archive'], branches: ['--branches'], critical: ['--critical'], 'all-branches': ['--all'] };
 const refuse = message => { throw new BacklogError('INVALID_INPUT', message); };
-
-// The word after the leading --json switches: [word, everything else in order].
-function word(argv) {
-  let at = 0; while (argv[at] === '--json') at++;
-  return argv[at] !== undefined && !argv[at].startsWith('-') ? [argv[at], [...argv.slice(0, at), ...argv.slice(at + 1)]] : [undefined, argv];
-}
 
 // positional arguments and the options of one command, refused when anything else is given
 function take(argv, { value = [], bool = [], max = 1, name }) {
@@ -30,6 +24,8 @@ function take(argv, { value = [], bool = [], max = 1, name }) {
 }
 
 const USAGE = {
+  list: 'backlog list [new|open|done|archive|branches|critical|all-branches] [--json]',
+  next: 'backlog next [all-branches] [--json]',
   show: 'backlog show <item>[,<item>...] [--agent <name>] [--json]',
   history: 'backlog history [<item>]',
   changes: 'backlog changes [--agent <name>] [--json]',
@@ -37,12 +33,14 @@ const USAGE = {
 
 export async function run([command, ...argv]) {
   if (command === 'list') {
-    const [w, rest] = word(argv);
-    return w !== undefined && Object.hasOwn(LIST, w) ? read([...LIST[w], ...rest], { branchColumn: w === 'all-branches' }) : read(argv);
+    const { positional: [w], flags } = take(argv, { bool: ['json'], name: USAGE.list });
+    if (w !== undefined && !Object.hasOwn(LIST, w)) refuse(`unrecognized arguments: ${w} (usage: ${USAGE.list})`);
+    return read([...(w === undefined ? [] : LIST[w]), ...(flags.json ? ['--json'] : [])], { branchColumn: w === 'all-branches' });
   }
   if (command === 'next') {
-    const [w, rest] = word(argv);
-    return w === 'all-branches' ? read(['--next', '--all', ...rest]) : read(['--next', ...argv]);
+    const { positional: [w], flags } = take(argv, { bool: ['json'], name: USAGE.next });
+    if (w !== undefined && w !== 'all-branches') refuse(`unrecognized arguments: ${w} (usage: ${USAGE.next})`);
+    return read(['--next', ...(w === undefined ? [] : ['--all']), ...(flags.json ? ['--json'] : [])]);
   }
   if (command === 'show') { // the item whole, and what this agent has now read of it (the check of its next write)
     const { positional, flags } = take(argv, { value: ['agent'], bool: ['json'], name: USAGE.show });

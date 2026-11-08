@@ -8,7 +8,6 @@ import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 import { HELP, USAGE } from '../../src/help.js';
 import { teamHelp } from '../../src/team/help.js';
-import { ALIASES } from '../../src/shared/aliases.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -137,7 +136,8 @@ test('every command help has the sections Usage, Options and one Example that na
 
 test('backlog next --help lists the flags that apply to next', () => {
   const text = backlog('next', '--help').stdout;
-  for (const flag of ['all', 'branch', 'json']) assert.ok(block(text, flag), `--${flag}`);
+  for (const flag of ['json']) assert.ok(block(text, flag), `--${flag}`);
+  for (const flag of ['all', 'branch']) assert.equal(block(text, flag), undefined, `--${flag}`);
 });
 
 test('the help is written in plain sentences: no internal job numbers, script names or file references', () => {
@@ -150,7 +150,7 @@ test('backlog --help names every command and the storage setting, and is the sam
   for (const command of [...COMMANDS, 'list', 'setup']) assert.match(r.stdout, new RegExp(`^ {2}backlog ${command}( |$)`, 'm'), `${command} is missing`);
   assert.match(r.stdout, /backlog <command> --help/, 'how to get the help of one command');
   assert.match(r.stdout, /committed and pushed before the command exits/);
-  assert.doesNotMatch(r.stdout.replace(/\nAliases \([\s\S]*?\n\nExit codes/, '\nExit codes'), /mode|--use-backlog-repo|--use-local-repo|backlog init/); // the alias lines name init on purpose
+  assert.doesNotMatch(r.stdout, /mode|--use-backlog-repo|--use-local-repo|backlog init/);
   const inside = cli(['--help'], { cwd: cons, tmp: t, env: { BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: '', XDG_CONFIG_HOME: join(t, 'other-config') } });
   assert.equal(inside.stdout, r.stdout);
 });
@@ -200,22 +200,21 @@ test('query, next and team help: no headless option, no query --pop', () => {
   for (const command of ['query', 'next', 'team']) assert.doesNotMatch(ALL[command], /--pop\b|--headless|BACKLOG_HEADLESS|next --agent/, command);
 });
 
-test('every alias row is in backlog --help, in COMMANDS.md and in the skill reference', () => {
+test('backlog --help and COMMANDS.md name no alias, no first-release spelling and no earlier read command', () => {
   const docs = [USAGE, readFileSync(new URL('../../COMMANDS.md', import.meta.url), 'utf8'), readFileSync(new URL('../../templates/skills/backlog/references/commands.md', import.meta.url), 'utf8'), readFileSync(new URL('../../README.md', import.meta.url), 'utf8')];
-  for (const doc of docs) for (const row of ALIASES) { assert.ok(doc.includes(row.form), row.form); assert.ok(doc.includes(row.runs), row.runs); }
+  for (const doc of docs) assert.doesNotMatch(doc, /\balias|first release|backlog init\b|init clean|--headless|BACKLOG_HEADLESS/i);
 });
 
-test('<alias> --help prints the alias line and then the help of the command it runs', () => {
-  assert.equal(backlog('done', '--help').stdout.trimEnd(), HELP.done.trimEnd()); // done is a command of its own: its help, no alias line
-  const first = backlog('done', '--ask', '--help').stdout; // a call that carries the dropped switch still goes through the alias
-  assert.ok(first.startsWith('backlog done <item> runs backlog update <item> --status done\n'), first);
-  assert.ok(first.includes(HELP.update));
-  assert.ok(backlog('list', 'branch', '--help').stdout.startsWith('backlog list branch runs backlog query --branches\n')); // list open is a word of list now: it prints the help of list
-  assert.ok(backlog('3', 'set', '--help').stdout.includes(HELP.update));
-  const init = backlog('init', '--help').stdout;
-  assert.ok(init.startsWith('backlog init [name] runs backlog setup\n') && init.includes(HELP.setup));
-  assert.ok(backlog('init', 'clean', '--help').stdout.startsWith('backlog init clean [all-branches] runs '));
-  assert.equal(backlog('list', '--help').stdout.trimEnd(), HELP.list.trimEnd()); // list is a command of its own
+test('a command that is a word of its own prints its own help, with no alias line', () => {
+  assert.equal(backlog('done', '--help').stdout.trimEnd(), HELP.done.trimEnd());
+  assert.equal(backlog('list', '--help').stdout.trimEnd(), HELP.list.trimEnd());
+  assert.equal(backlog('list', 'branches', '--help').stdout.trimEnd(), HELP.list.trimEnd());
+  assert.equal(backlog('update', '--help').stdout.trimEnd(), HELP.update.trimEnd());
+  for (const args of [['init', '--help'], ['branch', '--help'], ['3', 'set', '--help']]) {
+    const r = backlog(...args);
+    assert.equal(r.status, 2, args.join(' '));
+    assert.match(r.stderr, /is not a backlog command/);
+  }
 });
 
 test('backlog team --help lists new, and backlog team new --help has the flags, the exit codes and one example', () => {

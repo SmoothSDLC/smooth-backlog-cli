@@ -100,15 +100,18 @@ test('list has its own help that names every word, and it is not the query help'
   assert.equal(f.run('list', 'open', '--help').stdout, r.stdout);
 });
 
-test('a word list does not know is refused as before, and the options of the reader still pass through', () => {
+test('a word list or next does not know is refused, and so is every option of the reader', () => {
   const f = build();
   const bad = f.run('list', 'frobnicate');
   assert.equal(bad.status, 2);
   assert.match(bad.stderr, /unrecognized arguments: frobnicate/);
   assert.equal(f.run('list', 'open', 'done').status, 2);
-  assert.equal(f.run('list', 'branch').stdout, f.run('query', '--branches').stdout); // the singular is still the alias row
-  same(f, ['list', '--branch', 'feature'], ['query', '--branch', 'feature']);
-  same(f, ['list', 'open', '--branch', 'feature'], ['query', '--only', 'open', '--branch', 'feature']);
+  for (const args of [['list', 'branch'], ['list', '--branch', 'feature'], ['list', 'open', '--branch', 'feature'], ['list', '--all'], ['list', '--phase', '1'], ['next', '--all'], ['next', '--branch', 'main'], ['next', '--agent', 'ann'], ['next', 'everything']]) {
+    const r = f.run(...args);
+    assert.equal(r.status, 2, args.join(' '));
+    assert.equal(r.stdout, '', args.join(' '));
+    assert.match(r.stderr, /unrecognized arguments: /, args.join(' '));
+  }
 });
 
 test('list and team query run the one reader', () => {

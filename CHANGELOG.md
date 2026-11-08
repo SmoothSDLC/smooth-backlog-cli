@@ -7,14 +7,18 @@ One backlog, one CLI. Compared with 1.0.1:
 - **Items are markdown files with front matter**, one per item, numbered and slugged (`001-fix-the-login-redirect`),
   with a history of events; the JSON manifest of 1.x is not read. A repository with a 1.x `.backlog/backlog_manifest.json`
   starts a new backlog; recreate the items you still need with `backlog new`.
-- **Every command name of 1.x still works**, as an alias of the one command set (`backlog --help` and COMMANDS.md list them
-  all). The list fields of 1.x (`ac`, `tasks`, `outcomes`, `evidence`, `references`) are sections of the item body:
-  `backlog update <item> --section "<Heading>"` with `--set-lines`, `--add-line` (`--top`), `--remove-line <n>` or
-  `--move-line <n>:<position>` edits one section and leaves every other byte alone, and `add`, `replace`, `remove` and
-  `priority <item> <list> <n> <position>` run it. `import --branch <source> [--higher]` brings the open items of another
-  branch here, `archive done` archives every finished item, and the CLI's own update is `backlog upgrade`
-  (`backlog update`, `update check|auto|off|disable` and `update <version>` run it; `update <item> …` stays the item
-  command). `init backup` is gone.
+- **No command name of 1.x is kept as an alias, and nothing is kept for backwards compatibility.** One command does one
+  thing; a wider scope is a word of the command (`list all-branches`, `next all-branches`, `clean all-branches`). The 1.x
+  behaviours that were worth keeping are commands of their own with their own help: `done <item>`, `clean`,
+  `import --branch <source> [--higher]`, `archive done`, `list new|open|done|archive|branches`, and the CLI's own update,
+  `backlog upgrade [check|auto|off|disable|<version>]`. `backlog update` is the item command only: called with nothing it
+  prints its own help (exit 2) and installs nothing. The list fields of 1.x (`ac`, `tasks`, `outcomes`, `evidence`,
+  `references`) are sections of the item body: `backlog update <item> --section "<Heading>"` with `--set-lines`,
+  `--add-line` (`--top`), `--remove-line <n>` or `--move-line <n>:<position>` edits one section and leaves every other
+  byte alone. `init`, `init clean`, `branch`, `set`, `priority`, `add`, `replace`, `remove`, the item-first word order
+  (`3 done`), `move <item> <branch>`, `new <name> --description --state`, `new --ac --tasks ...`, `--headless` and
+  `BACKLOG_HEADLESS` are gone: each answers "not a backlog command" or names the unknown option, and writes nothing.
+  `init backup` is gone.
 - **The order of the queue is a committed index.** Each repository folder holds one text file, `index.json`, that lists
   the items of every branch in order (P0 first), one entry per line. A change of the order changes that file and no
   item; two clones that changed it from one base are merged (each keeps its placement); the items no longer carry a
@@ -65,7 +69,7 @@ One backlog, one CLI. Compared with 1.0.1:
   naming any folder path.
 - **The command set:** `new`, `update`, `query` (`list` is the same), `next`, `pop`, `work`, `team pop`, `move`,
   `archive`, `setup`. `backlog update` changes an item (fields, body, status, priority, claim, release, review, close,
-  the team steps); `--replan` sets the order of the queue. Every first-release command name still works as an alias (see Aliases in COMMANDS.md); `--json` prints the data itself, not an `{"ok","data"}` envelope.
+  the team steps); `--replan` sets the order of the queue. `--json` prints the data itself, not an `{"ok","data"}` envelope.
 - **Many writers.** Every write records who made it (`BACKLOG_AGENT`, `--by`, `--claim`, `--agent`) and when. A
   write to an item that someone else changed since this agent last read it is refused (exit 5) until the agent reads
   it again. A named agent claims an item; a review is requested and recorded on the item.

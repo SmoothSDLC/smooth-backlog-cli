@@ -150,3 +150,15 @@ not be used as input to the new design.
 - Lead's reading, for the design to apply: the explicit location key wins; else a configured backlog repository folder; else
   `.backlog/teams.json`. A repository that is public must point the configuration at a private location, because the default would publish
   the team's rules (the information-security rule of the CLI repo); the design states this once and adds no mechanism for it.
+
+## Round 11 (owner, 2026-11-09): templates at setup, no effect on the entire backlog, migrate at setup
+- R23. `teams.json` is written by a person, so the example team templates must be available to that person: `backlog setup` puts them into the
+  repository's `.backlog` folder (the way it already deploys the skill copy, `src/shared/setup.js:124-134`). Only generic templates ship with
+  the CLI (the examples of the design: scrum, extreme programming, parallel work, single agent, and the catalogue of rule shapes); the
+  owner's team template stays in the backlog repository. The CLI still never reads a template (R5): it only copies them.
+- R24. Nothing a command does may affect the entire backlog. The scope of every command is the actionable repository's folder (and, where an
+  item says so, its branch). No command reads, writes, converts, renumbers or stops because of another repository's folder, except a
+  read-only reference to a single item of another repository. The design must audit every command and every chapter against this rule
+  (the numbers, the index, migrate, validate, clean, move, import, the commit and push of the backlog repository).
+- R25. `backlog setup` recommends running the migration as soon as the configuration defines a backlog folder, and the configuration records
+  when the backlog was migrated and the version of the CLI that last ran the migration.

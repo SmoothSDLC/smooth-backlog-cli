@@ -83,15 +83,19 @@ Binding. Each answer lists what it decides, the consequence for the spec, and wh
 - G-003, G-004 and similar gaps are not owner decisions: they are consequences of the pattern below. No question is asked about them.
 
 ## The pattern (owner direction, binding)
-- A team has two template files. The **team workflow template** holds the behaviour: statuses, steps, roles, review stages, rules,
-  conditions. The **team backlog item template** holds the fields of the team's items: every front matter field (and the structure
-  of the body, where the team wants one) that a rule of the workflow needs, with what each field is for and who may set it.
-- Every dynamic behaviour of a team is a field of the team backlog item template that a rule of the workflow template reads. A
-  required hand-off note, a required flag, a round counter, a size limit or a content pattern is a field with its type and limits, and a
-  rule that names the field. None of it is code in the CLI.
-- The only logic in the CLI is: read the workflow template; read the team backlog item template; check and enforce, on the team's
-  items, the fields and rules those templates define. User commands enforce nothing and treat unknown fields as data.
-- Consequence for 13-format-gaps.md: each gap is re-expressed as a field declaration plus a rule on that field; only a primitive that
+- A team has two template files with two different jobs.
+  - The **team workflow template** holds ALL dynamic behaviour: statuses, steps, roles, review stages, rules, conditions, who may do
+    what, what is required when, limits, patterns, round caps. Nothing dynamic lives anywhere else.
+  - The **team backlog item template** is only a data set template: the fields the team's items carry (name, type, description,
+    default, the allowed values of an enumerated field, the shape of a list entry) and, where the team wants one, the sections of the
+    body. It has no behaviour: no "required at", no "who may set", no "set by step", no limit, no check.
+  - The fields that impact a workflow exist in the item template; the workflow names them. A name in the workflow that the item
+    template does not declare is an error of the definition.
+- A required hand-off note, a flag, a round counter, a size limit or a content pattern is therefore two things: a declared field in
+  the item template (data), and a rule in the workflow template that names the field (behaviour).
+- The only logic in the CLI is: read the workflow template; read the team backlog item template; check and enforce on the team's items
+  what the workflow defines about the fields the item template declares. User commands enforce nothing and treat unknown fields as data.
+- Consequence for 13-format-gaps.md: each gap is re-expressed as a field declaration (item template, data) plus a rule in the workflow template (behaviour); only a primitive that
   no field declaration can express stays a gap.
 - Honest record: `backlog fields` (phase 6c, decision K) already prints one fixed item template that ships in the CLI; nothing
   written before this round says that a team has its own item template. This round creates that ruling.

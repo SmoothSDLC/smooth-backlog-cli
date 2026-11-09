@@ -856,7 +856,7 @@ inventory.tsv	INV-854	src/team/queue.js:200	BAKE-IN	language: the pop table (cha
 inventory.tsv	INV-855	src/team/queue.js:207	BAKE-IN	language: the pop table (chapter 03)	
 inventory.tsv	INV-856	src/team/queue.js:208	BAKE-IN	language: the pop table (chapter 03)	
 inventory.tsv	INV-857	src/team/queue.js:209	BAKE-IN	language: the pop table (chapter 03)	
-inventory.tsv	INV-858	src/team/queue.js:215	DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 states whether the owner's team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)	the item-less chunk action and chunk items of other folders
+inventory.tsv	INV-858	src/team/queue.js:215	SKIP	-	owner ruling R24: no command reads another repository folder for work; chunk work across repositories is not offered (chapter 04 section 9); the item-less chunk action goes with it
 inventory.tsv	INV-859	src/team/queue.js:235	BAKE-IN	language: the pop table (chapter 03)	
 inventory.tsv	INV-860	src/team/queue.js:238	BAKE-IN	language: the pop table (chapter 03)	
 inventory.tsv	INV-861	src/team/queue.js:254	BAKE-IN	machinery: the team queue is the index entries of the team's items (chapter 05)	
@@ -980,7 +980,7 @@ inventory.tsv	INV-978	src/team/views.js:17	BAKE-IN	machinery: the evaluator (cha
 inventory.tsv	INV-979	src/team/views.js:18	BAKE-IN	machinery: the evaluator (chapter 03)	
 inventory.tsv	INV-980	src/team/views.js:19	BAKE-IN	command: backlog team query filter <name> --json prints the whole items (chapter 04)	
 inventory.tsv	INV-981	src/team/views.js:29	BAKE-IN	machinery: path safety and secrecy (chapter 02)	
-inventory.tsv	INV-982	src/team/views.js:32	DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 states whether the owner's team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)	backlog.scope set the chunk scope across repository folders, which the pop table cannot state yet
+inventory.tsv	INV-982	src/team/views.js:32	SKIP	-	owner ruling R24: no command reads another repository folder for work; chunk work across repositories is not offered (chapter 04 section 9); backlog.scope is not read
 inventory.tsv	INV-983	src/team/views.js:39	BAKE-IN	language: filters; command: backlog team query filter <name> (chapter 04)	
 inventory.tsv	INV-984	src/team/views.js:55	BAKE-IN	machinery: the team queue is the index entries of the team's items (chapter 05)	
 inventory.tsv	INV-985	src/team/views.js:68	BAKE-IN	machinery: the team queue is the index entries of the team's items (chapter 05)	
@@ -1945,7 +1945,7 @@ gaps.tsv	S112	pop --agent <a> (next action of any agent over every item, no team
 13-format-gaps.md	G-006		BAKE-IN	language: function age (chapter 03)	pattern patterns/take-over-stale-review
 13-format-gaps.md	G-007		LAZY-LOAD	pattern: patterns/old-reviews-first	
 13-format-gaps.md	G-008		BAKE-IN	example: parallel/new-size-cap, scrum/refine-points-cap	
-13-format-gaps.md	G-009		SKIP	-	owner ruling R5: the CLI never reads a template and never writes the team file
+13-format-gaps.md	G-009		SKIP	-	owner rulings R5 and R23: the CLI never reads a template and never writes the team file; backlog setup only copies the generic templates into .backlog/team-templates (chapter 01 section 1.2)
 13-format-gaps.md	G-010		LAZY-LOAD	pattern: patterns/limit-top-level, patterns/limit-split	
 13-format-gaps.md	G-011		LAZY-LOAD	pattern: patterns/new-linked	
 13-format-gaps.md	G-012		BAKE-IN	example: parallel/new-child-parent-splitting, parallel/new-child	language: effect place before
@@ -2001,7 +2001,7 @@ review-b.md section 3	B3-62	src/team/pop.js:56	SKIP	-	owner ruling R15: the flag
 review-b.md section 3	B3-63	src/team/pop.js:58	SKIP	-	owner ruling R15: the flag wins, no refusal
 review-b.md section 3	B3-64	src/team/pop.js:63-66	BAKE-IN	machinery: pop exits 1 on a synchronisation failure (chapter 04)	
 review-b.md section 3	B3-66	src/team/pop.js:153	BAKE-IN	machinery: a detached HEAD with no branch given stops pop (chapter 01)	
-review-b.md section 3	B3-67	src/team/queue.js:215-221	DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 states whether the owner's team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)	
+review-b.md section 3	B3-67	src/team/queue.js:215-221	SKIP	-	owner ruling R24: no command reads another repository folder for work; chunk work across repositories is not offered (chapter 04 section 9)
 review-b.md section 3	B3-71	src/shared/plain-step.js:39	BAKE-IN	field: claimed_by and claimed_at of the built-in user item definition (chapter 02 section 4)	
 review-b.md section 3	B3-72	src/shared/done.js:10	BAKE-IN	field: backlog done writes closed (decision D-33; today done is stored as closed through normalise, finding F9)	
 review-b.md section 3	B3-73	src/shared/index.js:54-58	BAKE-IN	machinery: the migration builds the index of a folder without one from priority (chapter 06)	
@@ -2016,4 +2016,7 @@ review-b.md section 3	B3-74	src/shared/move.js:125-163, update.js:248, clean.js:
 00-owner-rulings.md	R20		BAKE-IN	machinery: every CLI-owned environment variable is prefixed SMOOTH_BACKLOG_CLI_, the two internal ones the inventory missed included (chapter 01 section 5)	
 00-owner-rulings.md	R21		BAKE-IN	machinery: the SHA in .backlog/config.json, the per-user record of the valid teams with the validated copy, 24 hours, validate refreshes, update only when valid (spike teams-load.test.mjs) (chapter 01 section 4)	
 00-owner-rulings.md	R22		BAKE-IN	machinery: the team file per repository and branch: the teams_file key, else <backlog repository>/<owner>/<name>/teams.json beside the folder index, else .backlog/teams.json; teams_file_sha in .backlog/config.json; the migration per repository folder (cases R22-01 to R22-05, spike teams-load.test.mjs) (chapter 01 section 1.1)	
+00-owner-rulings.md	R23		BAKE-IN	machinery: backlog setup copies the five generic templates into .backlog/team-templates, replaced on every setup as the skill copy; nothing reads them (spike setup.test.mjs) (chapter 01 section 1.2)	
+00-owner-rulings.md	R24		BAKE-IN	machinery: the scope of every command is the repository folder: audit table; foreign references unresolved instead of stopping, no cross-folder cycle walk, move between branches only, rebase when upstream changed only other folders, conflicts outside the folder stop without publishing (cases R24-01, R24-02) (chapter 04 section 9)	
+00-owner-rulings.md	R25		BAKE-IN	machinery: migrated_at and migrated_by_version written by the migration into .backlog/config.json; setup prints the advice for each state; no other command uses them (cases R25-01 to R25-04) (chapter 06 section 2.0)	
 00-owner-rulings.md	scope note		BAKE-IN	machinery: several teams at once: one clone per user serialises one machine; across machines the re-run with a random growing wait (measured with contention.mjs) (chapter 04 section 7)	

@@ -115,8 +115,32 @@ and the spike (`teams-load.mjs`, nine tests) apply it. The problems found, with 
 | R3-6 | `teams_file` may name any path, so a committed configuration can point the CLI at any readable file on the machine | the CLI only reads it and refuses a file that is a symbolic link; the trust boundary is the repository's own committed content, the same as its code. A public repository points `teams_file` at a private location (stated once, no mechanism) | chapter 01 section 1.1 |
 | R3-7 | branch-specific rules meet branch-independent numbers and index: with a separate backlog repository the item numbers and the index are one per repository folder for all branches | stated: the shared counter and index are unaffected by the rules a branch uses; a team command on an item of another branch uses the rules of the branch it runs in, and the pattern `scope-branch` keeps a session to its branch's items | chapter 01 section 1.1 |
 
+## Round 4: rulings R23 (templates at setup), R24 (nothing affects the entire backlog), R25 (the migration at setup)
+
+Context: R23 makes `backlog setup` copy the generic team templates (chapter 01 section 1.2); R25 makes the migration record itself in
+`.backlog/config.json` and `backlog setup` recommend it (chapter 06 section 2.0); R24 limits every command to the actionable repository's
+folder. The audit of every command and chapter against R24 is chapter 04 section 9; the violations it found, each with its evidence and fix:
+
+| id | violation of R24, with evidence | fix |
+|---|---|---|
+| R4-1 | round 3: a foreign dependency on a folder still in markdown stopped the command (chapter 06 section 2) | the reference reads as unresolved (a missing item) and validate reports it; nothing stops (case R24-01) |
+| R4-2 | a write of an `items` field refused a foreign `owner/name#seq` that did not exist in that folder (chapter 02 section 3, "as today") | a foreign reference is only checked to be well formed; existence is never checked on a write (case R24-02); validate reports it as unresolved |
+| R4-3 | today's publication walks other repositories' items for a dependency cycle (`foreignCycle`, `src/shared/sync.js:352`) and refuses a publication whose foreign reference does not resolve (`src/shared/sync.js:319`) | both removed; cycles and existence are checked inside the own folder only |
+| R4-4 | `backlog move --to-repository` writes a second folder and takes a number from its counter (`src/shared/move.js:108,134`) | `backlog move` moves between branches of the own folder only; the cross-repository form is removed (file a new item in the other repository, archive this one) |
+| R4-5 | chunk work offers items of other folders (`backlog.scope`, `src/team/views.js:25-44`), kept as a deferred gap in rounds 1 to 3 | not offered; the coverage rows move from DEFERRED to SKIP under R24 |
+| R4-6 | the re-run of a team command reset the whole clone to upstream (`git reset --hard`), which would discard a person's uncommitted change in another folder of the clone, and re-ran the command when only another folder had changed | `git reset --keep` (other paths keep their local changes), and no re-run when upstream changed nothing of the own folder or its team file: the commit is rebased as it is (spike test "upstream changed only another repository folder ...") |
+| R4-7 | a pull with rebase moves the whole clone, and a conflict outside the folder had no defined outcome | the command stages only its own folder's paths, so its commits cannot conflict outside it; a conflict outside the folder (only possible from a commit the CLI did not make) stops the command with nothing published and a text naming the path (chapter 04 section 9) |
+| R4-8 | `backlog team validate` checked "every item of the backlog" (chapter 08 section 7 heading) and round 2/3 migration texts seeded "every folder" | validate checks the own folder's items; the migration seeds only its own folder's counter |
+| R4-9 | the clone lock covers the whole clone | kept and stated: a git clone has one index and one working tree, so writes of different folders must take turns; the lock delays, never changes another folder |
+
+Templates (R23): five files ship in the CLI package's `templates/teams/` and land in `.backlog/team-templates/`; the skill copy's rule (remove
+and copy again on every setup) is reused, so an edited copy is replaced and a person copies a template to the team file before editing it;
+nothing reads them. Migration record (R25): `migrated_at` and `migrated_by_version`, written by the migration after each successful run;
+setup prints one of three lines; no other command uses them. No question is open.
+
 ## Spike size after the revision
 
 After round 2: `evaluator-spike/evaluator.mjs` 366 lines, `safe-regex.mjs` 108, `numbers.mjs` 72, `teams-load.mjs` 68 (after round 3), `contention.mjs`
 (a measurement, not a test) 48; tests: `evaluator.test.mjs` (every case of `rule-cases.json` plus the coverage check of examples),
-`numbers.test.mjs` (7 git scenarios), `teams-load.test.mjs` (9 scenarios of R21 and R22 after round 3).
+`numbers.test.mjs` (7 git scenarios), `teams-load.test.mjs` (9 scenarios of R21 and R22 after round 3); round 4 adds `setup.mjs` (templates and migration advice) with
+`setup.test.mjs` (3 tests) and one test of `numbers.test.mjs` (a commit rebased when upstream changed only another folder).

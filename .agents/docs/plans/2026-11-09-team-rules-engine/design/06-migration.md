@@ -39,12 +39,13 @@ to an item of that folder is defined in that repository's team file, while the f
 own team files, which this repository cannot read. Each repository that uses the backlog runs the migration once. `--team web` converts the
 folder and reports the fields of team `web`'s items; `--show-all` converts the folder and reports every team's items. On a folder already in
 JSON, the command converts nothing and only checks and reports (and unbinds items of teams without an entry, section 4.1, with
-`--show-all` only). A command that reads an item of another folder (a foreign dependency `owner/name#seq`) while that folder is still
-markdown stops: exit 2, `❌ backlog: the items of <owner>/<name> are markdown files; run backlog team migrate in that repository`.
+`--show-all` only). A reference to an item of another folder (a foreign dependency `owner/name#seq`) whose folder is still markdown, is
+unreadable or lacks the item reads as an unresolved reference, a missing item (chapter 03 section 4), and `backlog team validate` reports
+it; no command stops because of it (ruling R24).
 
 - `backlog team migrate --team <name> --dry-run` (or `--show-all --dry-run`) — prints, for the repository folder: the open and archived items
   converted, the items unbound (section 4.1), the split items linked (section 4.3), the folders whose order is built from `priority`
-  (section 4.4), the index entries whose status copy changes (section 4.6), the counter value of every folder (chapter 05 section 4), every
+  (section 4.4), the index entries whose status copy changes (section 4.6), the counter value of the folder (chapter 05 section 4), every
   case that would stop the migration (section 5), the lists of section 1 step 2, and the field report (section 2.1). Writes nothing.
 - `backlog team migrate --team <name>` (or `--show-all`) — converts, commits once (`backlog: migrate <n> items to JSON`) and pushes; prints
   the same summary with `✅`, then the field report.
@@ -54,6 +55,31 @@ markdown stops: exit 2, `❌ backlog: the items of <owner>/<name> are markdown f
 It reads no user identity. The commit is made by git's configured author; converted items keep their `updated` and `updated_by` values,
 and a field set by `--ask` is recorded with the resolved agent (`--agent`, else SMOOTH_BACKLOG_CLI_AGENT; `--ask` needs one, exit 2 as
 `backlog team update` does without it).
+
+### 2.0 The migration record and setup's advice (ruling R25)
+
+Context: ruling R25 asks `backlog setup` to recommend the migration as soon as the configuration defines a backlog folder, and the
+configuration to record when the backlog was migrated and the version of the CLI that last ran the migration.
+
+- **Two keys of `.backlog/config.json`**, written by `backlog team migrate` after every successful run that is not a dry run (and by
+  nothing else): `migrated_at`, the time of that run (ISO 8601 UTC, for example `2026-11-12T09:00:00Z`), and `migrated_by_version`, the
+  version of the CLI that ran it (the package version, for example `1.4.0`). Being keys of the actionable repository's configuration, they
+  describe that repository's folder only (ruling R24). The CLI writes them into the working tree; a person commits them, as for the SHA.
+- **What setup prints**, after the configuration lines, whenever the configuration defines a backlog folder (`backlog_repository`), which
+  is after every setup:
+  - never migrated (no `migrated_at`): `ℹ️  the backlog of this repository has not been migrated to JSON items: run backlog team migrate
+    --show-all --dry-run, then backlog team migrate --show-all` (case R25-01);
+  - migrated by an older version than the running one: `ℹ️  the backlog of this repository was last migrated on <migrated_at> by version
+    <migrated_by_version>; this is version <version>: run backlog team migrate --show-all --dry-run, then backlog team migrate --show-all`
+    (case R25-02);
+  - migrated by this version (or a later one): `ℹ️  the backlog of this repository was last migrated on <migrated_at> by version
+    <migrated_by_version>` (case R25-03).
+  The recommendation names `--show-all` because setup does not know which team the person works for; `--team <name>` works as well. Setup
+  never runs the migration.
+- **Other commands do nothing with the two keys.** No command refuses or warns because of them; a folder still in markdown stops commands
+  exactly as section 2 already says, whatever the keys say.
+
+Spike: `evaluator-spike/setup.mjs`, test "setup recommends the migration in each state of the two keys"; cases R25-01 to R25-04.
 
 ### 2.1 The field report (ruling R17)
 
@@ -100,7 +126,8 @@ text pattern of `backlog new --ask` (`src/shared/new.js:106`): exit 2,
 4. Build each JSON file with the mapping of chapter 02 section 5 and the rules of section 4.
 5. Check the whole folder before writing anything (section 5).
 6. Write every JSON file, remove every converted `.md` file, write the folder's `numbers.json` (chapter 05 section 4; its high-water mark
-   includes every number the folder's history ever held) and the folder's index, all through the journal; commit once; push.
+   includes every number the folder's history ever held) and the folder's index, all through the journal; commit once; push. Then write
+   `migrated_at` and `migrated_by_version` into `.backlog/config.json` (section 2.0).
 7. Print the field report (section 2.1); with `--ask`, run section 2.2.
 
 ## 4. Data issues of real backlogs
@@ -204,10 +231,10 @@ fails with a text that names the way forward, and nothing reads it. The toleranc
 The migration acts on files and git, so the evaluator spike does not run it (the counter seeding is spike test 7 of `numbers.test.mjs`).
 Scenarios for the BDD plan (entry plan Task 3), with fixtures built from the forms above: "an open item of a team with an entry", "an item of
 a team without an entry is unbound with the record", "an archived item of a team without an entry is unbound and otherwise unchanged",
-"no team file at the resolved location stops the migration, naming the path and the three ways", "an unreadable team file stops the migration", "the migration converts only the folder of its repository", "a foreign dependency on a folder still in markdown stops a command", "a teamless split item
+"no team file at the resolved location stops the migration, naming the path and the three ways", "an unreadable team file stops the migration", "the migration converts only the folder of its repository", "a foreign dependency on a folder still in markdown reads as unresolved and stops nothing", "a teamless split item
 gets its parent number", "two split lines: the first wins", "a split item whose parent is gone", "a folder without an index keeps its
 priority order", "absent created and updated_by", "an unreadable header stops the migration", "two items with one number stop the
-migration", "a shallow clone stops the migration", "every folder that ever held an item gets its counter", "a second run says nothing to
+migration", "a shallow clone stops the migration", "the folder gets its counter from its whole history", "a second run says nothing to
 migrate", "a second run after a team entry is removed unbinds its items", "a markdown item after the migration stops a command",
 "validate runs on a markdown backlog and checks the file only", "an entry in today's shape stops the migration and nothing is written",
 "migrate without a team or --show-all stops with the three-ways text", "the field report lists a missing, an invalid and an undeclared

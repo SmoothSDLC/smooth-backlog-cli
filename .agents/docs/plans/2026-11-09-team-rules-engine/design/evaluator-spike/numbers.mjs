@@ -33,10 +33,15 @@ export function allocate(cwd, folder, name) {
   return n;
 }
 
-// Team commands: when upstream moved, the local commit is dropped and the whole command runs again on the upstream files.
-export function publishByRerun(cwd, rerun) {
+// Team commands: when upstream changed the command's own folder, the local commit is dropped (git reset --keep: other paths of the clone
+// keep any local change) and the whole command runs again on the upstream files; when upstream changed only other folders, nothing the
+// command read changed (R24), so its commit is rebased and pushed as it is.
+export function publishByRerun(cwd, rerun, folder) {
   git(cwd, 'fetch', '-q');
-  if (Number(git(cwd, 'rev-list', '--count', 'HEAD..@{u}').trim())) { git(cwd, 'reset', '-q', '--hard', '@{u}'); rerun(); }
+  if (Number(git(cwd, 'rev-list', '--count', 'HEAD..@{u}').trim())) {
+    const touched = folder === undefined || git(cwd, 'diff', '--name-only', 'HEAD...@{u}', '--', folder).trim() !== '';
+    if (touched) { git(cwd, 'reset', '-q', '--keep', '@{u}'); rerun(); } else git(cwd, 'rebase', '-q', '@{u}');
+  }
   git(cwd, 'push', '-q');
 }
 
@@ -65,8 +70,5 @@ export function publishByRebase(cwd, folder) {
   git(cwd, 'push', '-q');
 }
 
-// The migration's seed for a folder: the high-water mark of the whole history, for every folder that ever held an item file.
-export function seed(cwd) {
-  const folders = new Set(git(cwd, 'log', '--all', '--format=', '--name-only', '--diff-filter=A').split('\n').map(l => /^([^/]+\/[^/]+)\/(?:phases|archive)\//.exec(l)?.[1]).filter(Boolean));
-  return Object.fromEntries([...folders].sort().map(f => [f, highWater(cwd, f)]));
-}
+// The migration's seed for its own folder (R24): the high-water mark of the folder's whole history, deleted item files included.
+export const seed = (cwd, folder) => highWater(cwd, folder);

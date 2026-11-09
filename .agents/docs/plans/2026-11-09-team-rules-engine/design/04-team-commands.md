@@ -95,9 +95,12 @@ JSON payloads are raw, as today. Whether every `--json` answer gets an envelope 
 Every command that writes takes the clone lock, pulls, loads the items, evaluates, writes the item files, the index and the counter
 through the journal (a failure puts every file back), commits and pushes (reference inventory groups DI-LOCK, DI-SYNC).
 
-**Team commands: one outcome when another agent published first.** When the push is refused because upstream moved, or the pull before it
-brings changes to a file the step writes, the CLI does not rebase the step's commit. It drops the local commit, resets the clone to
-upstream and runs the whole command again on the upstream files: it reads `teams.json` again, evaluates the step again, allocates the number
+**Team commands: one outcome when another agent published first.** When the push is refused because upstream moved, the CLI looks at what
+upstream changed. If upstream changed no file of the command's own repository folder (and not its team file), nothing the command read has
+changed (ruling R24: a command reads only its own folder, apart from read-only references to single items of other folders), so its commit
+is rebased onto upstream and pushed as it is (spike test "upstream changed only another repository folder ..."). If upstream changed its
+folder, the CLI does not rebase the step's commit. It drops the local commit with `git reset --keep` to upstream (paths outside the folder
+keep any local change of the clone) and runs the whole command again on the upstream files: it reads `teams.json` again, evaluates the step again, allocates the number
 again (chapter 05 section 3) and writes again. The command ends with the result of the last run: exit 0 when the table allows the step on
 the fresh items, exit 1 with the deciding rule's refusal when it does not (another agent claimed the item, a limit filled up). Between two
 runs it waits a random time below 50 ms x 2 to the power of the attempt (at most 3.2 s), so that writers that collided do not collide again
@@ -174,8 +177,32 @@ others refuse it as an unknown option (exit 2).
 | `backlog show <item>`, `backlog history [<item>]`, `backlog changes` | a team item answers as missing; its events are not listed | shown and listed with their team |
 | `backlog update <item> ...` (every flag, `--claim`, `--release`, `--close`, `--status`, `--append`, `--priority`, `--seq`, and `--set <field>=<value>`) | a team item answers as missing | allowed on a team item, with the history entry above. `--set <field>=<value>` is accepted only on a team item: it writes a field of the team's definition the user flags do not name (the value is stored as JSON when it parses as JSON, else as text). `--priority` moves the item among all entries of its branch |
 | `backlog update --replan`, `backlog done <item>` | team items are not touched | team items named are reordered or closed like any item |
-| `backlog move <item> ...`, `backlog archive <item>`, `backlog archive done`, `backlog import ...`, `backlog clean ...` | team items are never selected | team items are moved, archived, imported and cleaned like any item; a moved item gets a new number in its new folder as any item does |
+| `backlog move <item> ...`, `backlog archive <item>`, `backlog archive done`, `backlog import ...`, `backlog clean ...` | team items are never selected | team items are moved (between branches of the folder, section 9), archived, imported and cleaned like any item |
 | `backlog new --depends-on <item>`, `backlog new --split-from <item>` | a team item answers as missing | a team item may be named; the new item has no team |
 | `backlog fields`, `backlog setup`, `backlog upgrade` | no items | flag refused (exit 2) |
 
 `backlog fields` prints the built-in user item definition; a team's definition is `backlog team query rules`.
+
+## 9. The scope of a command: the actionable repository's folder (ruling R24)
+
+Context: ruling R24 says nothing a command does may affect the entire backlog. The scope of every command is the actionable repository's
+folder of the backlog (`<owner>/<name>`, and, where an item says so, its branch). No command reads, writes, converts, renumbers or stops
+because of another repository's folder, except a read-only reference to a single item of another repository. This section audits every
+command against the rule; `review-response.md` round 4 lists each violation found with its fix.
+
+| what | scope after this design |
+|---|---|
+| item files, `numbers.json`, `index.json` | one set per repository folder; a command writes only those of its own folder (chapter 05) |
+| `backlog team migrate` | converts only its own folder, with its own repository's team file (chapter 06 section 2); records the run in its own repository's `.backlog/config.json` (chapter 06 section 2.0) |
+| `backlog team validate` | the repository's team file and the items of its own folder (chapter 08 section 7) |
+| `backlog team new`, `update`, `pop`, `query` | the team's items of the own folder (`$team.items`, chapter 03 section 5); a foreign dependency `owner/name#seq` is read for that one item only, and an unresolved one (folder unreadable, still markdown, item absent) reads as a missing item and stops nothing (case R24-01); a foreign reference is never checked on a write (case R24-02) |
+| `backlog clean`, `backlog import`, `backlog archive`, `backlog update --show-all`, `backlog list --show-all` | the own folder only; `--show-all` adds the team items of the own folder, never other folders (chapter 04 section 8) |
+| `backlog move` | between branches of the own folder only. Moving an item to another repository's folder is removed: it wrote a second folder and took a number from that folder's counter. A person who wants the work in another repository files a new item there (`backlog new` run in that repository) and archives this one |
+| dependency checks at publication | references inside the own folder are checked for existence and cycles as today; a foreign reference is not followed: today's walk through other repositories' items for a cycle (`foreignCycle`, `src/shared/sync.js:352`) and the refusal of a publication whose foreign reference does not resolve (`src/shared/sync.js:319`) are removed |
+| chunk work across repositories (today's `backlog.scope`, offers from other folders) | not offered: it reads other folders' items for work (coverage rows of chunk work now SKIP under R24) |
+| the clone lock | one lock per clone, because a git clone has one index and one working tree: a command of one folder waits while a command of another folder writes. It delays, never changes another folder |
+| `git pull --rebase` of the backlog clone | brings every folder's upstream changes into the working tree; this is harmless because no command reads another folder's files (beyond single-item references) and the command's own commits touch only its folder, so they cannot conflict with another folder's changes. Staging names the folder's paths only (never `git add -A` of the clone) |
+| a conflict outside the folder | can only come from a commit the CLI did not make (a person's own unpushed commit in the clone). The command then publishes nothing: it aborts the rebase, keeps its own commit local and stops with exit 3, `❌ backlog: <path> outside <owner>/<name> conflicts with upstream; this command changes only its own folder: resolve the conflict in the backlog clone and run it again` |
+| the validated copy and the per-user record (chapter 01 section 4) | per team file, so per repository; no other repository's record is read or written |
+| `.backlog/config.json` | the actionable repository's own file only (the SHA, the migration record) |
+| the high-water mark of numbers (chapter 05 section 2) | reads the history of the own folder's paths only |

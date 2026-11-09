@@ -114,14 +114,14 @@ filter, `do`, `related` entry, `note`, `place` and quantifier.
 | a step that no rule can allow (only deny rules) | warning | `no rule allows the step <s>; it is always refused` |
 | a filter has a `when` that is a valid condition | error | as for rules |
 
-## 7. Items against their team (the whole backlog)
+## 7. Items against their team (the repository's folder)
 
 | check | severity | problem text (fix) |
 |---|---|---|
 | an item's `team` has no entry | error | `<path>: team <t> has no entry in teams.json` (add the entry back, or run backlog team migrate, which unbinds the items of teams without an entry with the record of chapter 06 section 4.1) |
 | an open item's field value is not among the field's `values` (for example after a status word was removed from the definition) | error | `<path>: status "refining" is not a value of status of team <t>` (add the value back, or move the item with a step) |
 | an item carries a field the definition does not declare | warning | `<path>: field <f> is not declared by the item definition of team <t>; rules cannot read it` |
-| an `item` or `items` field names no item (a deleted or cleaned item) | warning | `<path>: field depends_on names no item 99` (the item's other steps still work; a step that writes the field must drop the number) |
+| an `item` or `items` field names no item (a deleted or cleaned item), or a foreign `owner/name#seq` that does not resolve (its folder unreadable, still markdown, or without that item; ruling R24) | warning | `<path>: field depends_on names no item 99` (the item's other steps still work; a step that writes the field must drop the number) |
 | two items of one folder hold one number (after a merge of code branches, chapter 05 section 2) | error | `<owner>/<name>: number <n> is held by <slug a> and <slug b>` (the next writing command renumbers the newer one) |
 
 ## 8. Numbers

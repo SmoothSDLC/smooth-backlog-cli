@@ -10,8 +10,9 @@ definition inside it is chapter 02, the rule set chapter 03, and the checks of `
 ## 1. Who writes it, who reads it
 
 - **Written by** a person or an agent of the team, by hand or with its own tools, and committed and pushed with git like any other file of
-  the repository that holds it. The CLI never creates, rewrites, registers or migrates it (owner ruling R5). No CLI command takes a
-  template. The CLI writes only the file's SHA, into `.backlog/config.json` (R22, section 4).
+  the repository that holds it. The CLI never creates, rewrites, registers or migrates it (owner ruling R5). No CLI command reads a
+  template; `backlog setup` only copies the generic ones into the repository so that a person can start from one (section 1.2, R23). The
+  CLI writes only the file's SHA, into `.backlog/config.json` (R22, section 4).
 - **Read by** the team commands only (through the validated copy of section 4 while the record is fresh): `backlog team new`, `backlog team update`, `backlog team query`, `backlog team pop` (each reads the
   entry of its own team), `backlog team validate` and `backlog team migrate` (read the whole file; chapter 06). No user command opens the
   file (owner ruling R3).
@@ -63,6 +64,27 @@ items of the repository folder of the repository it runs in, with that repositor
 
 **Public repositories.** A public repository must point `teams_file` at a private location: the default would publish the team's rules with
 the code. The CLI adds no mechanism for this.
+
+### 1.2 Templates (owner ruling R23)
+
+Context: the team file is written by a person, so the example team files must be at hand where that person works. `backlog setup` (the
+user command that writes `.backlog/config.json` and deploys the skill copy, `src/shared/setup.js`) also copies the generic team templates
+into the repository, the way it deploys the skill copy (`src/shared/setup.js:124-134`).
+
+- **What ships.** The CLI package holds them in its `templates/teams/` folder: `scrum.json`, `extreme-programming.json`, `parallel.json`,
+  `single-agent.json` and `patterns.json`, the five example files of this design (`design/examples/`), each a complete, valid team file.
+  Only generic templates ship; the owner's own team template stays in its own repository.
+- **Where they land.** `.backlog/team-templates/` in the actionable repository, beside `.backlog/config.json`, whatever the location of
+  the backlog folder. Setup commits them with the configuration and the skill copy (`backlog: setup`) and pushes, as today.
+- **A second setup.** The skill copy's rule applies: the folder belongs to the CLI and is removed and copied again on every setup, after
+  the same symbolic-link check (`safeTree`). An edited copy is replaced and a file a person added to the folder is removed. A person
+  therefore never edits a template in place: they copy one to the team file (`.backlog/teams.json` by default, section 1.1) and edit it
+  there; setup never touches the team file.
+- **The message.** `✅ team templates copied to .backlog/team-templates: scrum, extreme-programming, parallel, single-agent, patterns; copy
+  one to the team file and edit it there`.
+- **Nothing reads them.** No command reads a template (R5): a team command reads only the team file of section 1.1.
+
+Spike: `evaluator-spike/setup.mjs`, tests "setup copies the five generic templates ..." and "a second setup replaces an edited copy ...".
 
 ## 2. Shape
 

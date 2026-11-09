@@ -258,9 +258,8 @@ wants one.
   record withdraws the acceptance with a `related` remove; a hand edit of the JSON file is outside what the CLI guarantees, as for any field.
 - **No people of another team**: today a refinement can be reviewed "by a member of team X". A team that wants this lists those persons in
   its own `people` with a role.
-- **No items of another repository folder in the pop table**: today's chunk work offers small items of other folders (`backlog.scope`). The
-  owner's team states in entry plan Task 6 whether it keeps chunk work; if it does, the pop table gains a `folders` key before the
-  implementation (Task 5). Until then this is a deferred gap with that blocker, recorded in the coverage file.
+- **No items of another repository folder in the pop table**: today's chunk work offers small items of other folders (`backlog.scope`).
+  Ruling R24 forbids a command to read another repository's folder for anything but a single-item reference, so this is not offered.
 - **No limit across teams and items without a team**: a team limits its own items; user items take no rule (decision D-18).
 
 ## 13. Size

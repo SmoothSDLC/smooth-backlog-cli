@@ -12,7 +12,7 @@ const B = 'BAKE-IN', L = 'LAZY-LOAD', S = 'SKIP', D = 'DEFERRED-WITH-EXPLICIT-BL
 const T8 = 'entry plan Task 8 (gap review of the branch backlog) files it as its own backlog item: a user-command feature, outside the rules engine';
 const T6 = 'entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI';
 const open = q => `owner question ${q} stays open in reference/08-owner-questions.md: a user-command question outside the rules engine`;
-const CHUNK = 'entry plan Task 6 states whether the owner\'s team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)';
+const CHUNK_SKIP = 'owner ruling R24: no command reads another repository folder for work; chunk work across repositories is not offered (chapter 04 section 9)';
 
 // ---- inventory.tsv: one terminal state per group (reference/01-inventory.md section 3 gives each group's rule)
 const MACH = (what, ch) => [B, `machinery: ${what} (chapter ${ch})`, ''];
@@ -30,7 +30,7 @@ const GROUP = {
   'DI-MACHINE': MACH('the evaluator', '03'), 'DI-CONCURRENCY': MACH('concurrency', '04'), 'DI-FINDINGS': MACH('index findings', '05'), 'DI-INPUT-IDENTITY': MACH('the writer of the stale guard is the agent for team commands and the user for user commands (R3b)', '04'),
   'CFG-TEAMS': MACH('team file reader at the location .backlog/config.json resolves (R22)', '01'), 'CFG-TEAMS-SILENT': MACH('an unreadable or invalid teams.json stops a team command (exit 2), never an empty file', '01'),
   'CFG-WORKFLOW-LOAD': [S, '-', 'owner ruling R5: no workflows.json and no shipped workflow; the rules are in teams.json'], 'SHIP-TEAMCACHE': [S, '-', 'owner rulings R1 and R5: the shipped workflow is deleted'],
-  'CFG-SCOPEFILE': [D, CHUNK, 'backlog.scope set the chunk scope across repository folders, which the pop table cannot state yet'],
+  'CFG-SCOPEFILE': [S, '-', `${CHUNK_SKIP}; backlog.scope is not read`],
   'CFG-WIPFILE': [B, 'example: parallel/claim-limit-person, parallel/claim-limit-team', 'wip-limits.json is no longer read; a limit is a count rule'],
   'ST-VOCAB': [B, 'field: status.values and status.final of the team item definition (chapter 02)', ''], 'ST-FINISHED': [B, 'field: status.final (chapter 02)', ''],
   'ST-SOLO': [S, '-', 'owner ruling R3: user items have no review'], 'ST-STAGERULES': [L, 'pattern: patterns/review-pass-peer, patterns/review-pass-outside, patterns/close-passes', ''],
@@ -92,7 +92,7 @@ const ROW = {
   'INV-704': [L, 'pattern: patterns/review-cites-document', 'the comments must cite a review document (test contains)'],
   'INV-784': MACH('pop exits 1 on a synchronisation failure, never 3 (idle)', '04'),
   'INV-798': MACH('a detached HEAD with no branch given stops new, update and pop (exit 2)', '01'),
-  'INV-858': [D, CHUNK, 'the item-less chunk action and chunk items of other folders'],
+  'INV-858': [S, '-', `${CHUNK_SKIP}; the item-less chunk action goes with it`],
   'INV-588': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body (a definition-of-done section, an ESTIMATE line)'],
   'INV-589': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body'],
   'INV-590': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body'],
@@ -137,7 +137,7 @@ const ONE = {
   'B3-46': [L, 'pattern: patterns/review-cites-document', ''], 'B3-55': [S, '-', 'owner ruling R15: the refusal is removed'], 'B3-60': [L, 'pattern: patterns/accept-input-reviewed', ''],
   'B3-61': [L, 'pattern: patterns/reject-input', ''], 'B3-62': [S, '-', 'owner ruling R15: the flag wins, no refusal'], 'B3-63': [S, '-', 'owner ruling R15: the flag wins, no refusal'],
   'B3-64': MACH('pop exits 1 on a synchronisation failure', '04'), 'B3-66': MACH('a detached HEAD with no branch given stops pop', '01'),
-  'B3-67': [D, CHUNK, ''], 'B3-71': [B, 'field: claimed_by and claimed_at of the built-in user item definition (chapter 02 section 4)', ''],
+  'B3-67': [S, '-', CHUNK_SKIP], 'B3-71': [B, 'field: claimed_by and claimed_at of the built-in user item definition (chapter 02 section 4)', ''],
   'B3-72': [B, 'field: backlog done writes closed (decision D-33; today done is stored as closed through normalise, finding F9)', ''],
   'B3-73': MACH('the migration builds the index of a folder without one from priority', '06'), 'B3-74': MACH('references to team items are hidden from user commands unless --show-all is given; with it they are seen and refusals may name them (R16)', '04'), 'CON-09': [D, T6, 'verdict words are the team\'s arguments'],
   'CON-10': [D, T6, 'already broken today; the binding step is a team rule (example parallel/adopt)'], 'CON-11': [D, T6, 'decisions are a filter of the team (pattern patterns/filter:decisions)'],
@@ -165,7 +165,7 @@ const ONE = {
   'G-001': [L, 'pattern: patterns/review-pass-peer, patterns/review-pass-outside', 'every stage is a status and the same rule shape'], 'G-002': [B, 'example: parallel/check-round-cap, scrum/review-cap', 'both options of the gap are ordinary rules; a team picks one'],
   'G-003': [B, 'example: parallel/hand-to-check-note, parallel/start-check-handoff', ''], 'G-004': [B, 'example: extreme-programming/integrate-needs-commit', 'language: regex'],
   'G-005': [L, 'pattern: patterns/blocked-by-decision', ''], 'G-006': [B, 'language: function age (chapter 03)', 'pattern patterns/take-over-stale-review'], 'G-007': [L, 'pattern: patterns/old-reviews-first', ''],
-  'G-008': [B, 'example: parallel/new-size-cap, scrum/refine-points-cap', ''], 'G-009': [S, '-', 'owner ruling R5: the CLI never reads a template and never writes the team file'],
+  'G-008': [B, 'example: parallel/new-size-cap, scrum/refine-points-cap', ''], 'G-009': [S, '-', 'owner rulings R5 and R23: the CLI never reads a template and never writes the team file; backlog setup only copies the generic templates into .backlog/team-templates (chapter 01 section 1.2)'],
   'G-010': [L, 'pattern: patterns/limit-top-level, patterns/limit-split', ''], 'G-011': [L, 'pattern: patterns/new-linked', ''], 'G-012': [B, 'example: parallel/new-child-parent-splitting, parallel/new-child', 'language: effect place before'],
   'G-013': MACH('the caller is the only actor; $caller.roles and roles_of for a named person', '03'), 'G-014': [L, 'pattern: patterns/start-review-fallback, patterns/unavailable', ''],
   'G-015': [S, '-', 'owner ruling R1: the CLI decides when a command runs; a timer is not a command, so timed actions stay with the scripts beside a team'],
@@ -218,12 +218,15 @@ const RULING = {
   R19a: MACH('SMOOTH_BACKLOG_CLI_TEAM_NAME set: every user command fails with the blanket text; help and version are not blocked (cases R19A-01, R19A-02)', '04 section 8'),
   R20: MACH('every CLI-owned environment variable is prefixed SMOOTH_BACKLOG_CLI_, the two internal ones the inventory missed included', '01 section 5'),
   R21: MACH('the SHA in .backlog/config.json, the per-user record of the valid teams with the validated copy, 24 hours, validate refreshes, update only when valid (spike teams-load.test.mjs)', '01 section 4'),
+  R23: MACH('backlog setup copies the five generic templates into .backlog/team-templates, replaced on every setup as the skill copy; nothing reads them (spike setup.test.mjs)', '01 section 1.2'),
+  R24: MACH('the scope of every command is the repository folder: audit table; foreign references unresolved instead of stopping, no cross-folder cycle walk, move between branches only, rebase when upstream changed only other folders, conflicts outside the folder stop without publishing (cases R24-01, R24-02)', '04 section 9'),
+  R25: MACH('migrated_at and migrated_by_version written by the migration into .backlog/config.json; setup prints the advice for each state; no other command uses them (cases R25-01 to R25-04)', '06 section 2.0'),
   R22: MACH('the team file per repository and branch: the teams_file key, else <backlog repository>/<owner>/<name>/teams.json beside the folder index, else .backlog/teams.json; teams_file_sha in .backlog/config.json; the migration per repository folder (cases R22-01 to R22-05, spike teams-load.test.mjs)', '01 section 1.1'),
   'scope note': MACH('several teams at once: one clone per user serialises one machine; across machines the re-run with a random growing wait (measured with contention.mjs)', '04 section 7'),
 };
 // the targets name decisions that exist
 const decisions = (readFileSync('decisions.md', 'utf8').match(/^## \d+\./gm) ?? []).length;
-for (const id of [...readFileSync('../00-owner-rulings.md', 'utf8').matchAll(/^- (R1[4-9]a?|R2[0-2])\./gm)].map(m => m[1])) add('00-owner-rulings.md', id, '', RULING[id] ?? (() => { throw new Error(`${id} unmapped`); })());
+for (const id of [...readFileSync('../00-owner-rulings.md', 'utf8').matchAll(/^- (R1[4-9]a?|R2[0-5])\./gm)].map(m => m[1])) add('00-owner-rulings.md', id, '', RULING[id] ?? (() => { throw new Error(`${id} unmapped`); })());
 if (/^## Scope note/m.test(readFileSync('../00-owner-rulings.md', 'utf8'))) add('00-owner-rulings.md', 'scope note', '', RULING['scope note']);
 const files = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 'single-agent', 'patterns'].map(n => [n, Object.values(JSON.parse(readFileSync(`examples/${n}.json`, 'utf8')))[0]]));
 const known = new Set(Object.entries(files).flatMap(([n, e]) => [...e.rules.table.map(r => r.id), ...e.rules.pop.map(o => o.id), ...Object.keys(e.rules.filters).map(v => `filter:${v}`)].map(id => `${n}/${id}`)));

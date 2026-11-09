@@ -10252,6 +10252,155 @@
     "exit": 2,
     "text": "no team file at /work/app/.backlog/teams.json; name one with the \"teams_file\" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the configuration names a backlog repository, else at .backlog/teams.json"
    }
+  },
+  {
+   "id": "R25-01",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "setup-advice",
+    "cfg": {
+     "backlog_repository": ".backlog"
+    },
+    "version": "1.4.0"
+   },
+   "expect": {
+    "exit": 0,
+    "text": "ℹ️  the backlog of this repository has not been migrated to JSON items: run backlog team migrate --show-all --dry-run, then backlog team migrate --show-all"
+   }
+  },
+  {
+   "id": "R25-02",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "setup-advice",
+    "cfg": {
+     "backlog_repository": ".backlog",
+     "migrated_at": "2026-11-12T09:00:00Z",
+     "migrated_by_version": "1.3.2"
+    },
+    "version": "1.4.0"
+   },
+   "expect": {
+    "exit": 0,
+    "text": "ℹ️  the backlog of this repository was last migrated on 2026-11-12T09:00:00Z by version 1.3.2; this is version 1.4.0: run backlog team migrate --show-all --dry-run, then backlog team migrate --show-all"
+   }
+  },
+  {
+   "id": "R25-03",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "setup-advice",
+    "cfg": {
+     "backlog_repository": ".backlog",
+     "migrated_at": "2026-11-12T09:00:00Z",
+     "migrated_by_version": "1.4.0"
+    },
+    "version": "1.4.0"
+   },
+   "expect": {
+    "exit": 0,
+    "text": "ℹ️  the backlog of this repository was last migrated on 2026-11-12T09:00:00Z by version 1.4.0"
+   }
+  },
+  {
+   "id": "R25-04",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "setup-advice",
+    "cfg": {},
+    "version": "1.4.0"
+   },
+   "expect": {
+    "exit": 0,
+    "text": null
+   }
+  },
+  {
+   "id": "R24-01",
+   "rule_set": "parallel",
+   "rule": "claim-dependencies",
+   "given": {
+    "items": [
+     {
+      "seq": 20,
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        "acme/lib#7"
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 20,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-dependencies",
+    "text": "item 20 waits for its dependencies (acme/lib#7) to close (rule claim-dependencies)"
+   }
+  },
+  {
+   "id": "R24-02",
+   "rule_set": "parallel",
+   "rule": "new-child",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "splitting"
+      }
+     }
+    ],
+    "last": 30
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "5",
+     "parent": "30",
+     "after": "acme/lib#99"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new-child",
+    "items": {
+     "31": {
+      "depends_on": [
+       "acme/lib#99"
+      ]
+     }
+    }
+   }
   }
  ]
 }

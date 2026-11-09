@@ -127,7 +127,7 @@ the team's. The CLI holds no status word of a team (owner ruling R1).
 | `time` | ISO 8601 UTC text | `$now`, or a text the rule gives | |
 | `person` | string | a key of `people`, or empty | `❌ backlog: field holder: "x" is not a person of the team (<names>)` (exit 2) |
 | `item` | number or null | an item number, or empty for null | when a step writes the field: the item exists in the repository folder (open or archived), else `❌ backlog: field parent of item 31: no item 99` (exit 2), and it is not the item itself (`an item cannot name itself`, case PAR-60) |
-| `items` | list of numbers or `owner/name#seq` texts | a comma-separated argument or a list | as for `item`, for each entry (case COD-12); a foreign `owner/name#seq` must exist in that folder, as today |
+| `items` | list of numbers or `owner/name#seq` texts | a comma-separated argument or a list | as for `item`, for each entry of this folder (case COD-12); a foreign `owner/name#seq` must only be well formed: whether that item exists is never checked on a write, because no command may stop because of another repository's folder (ruling R24); an unresolved one reads as a missing item and validate reports it |
 | `list` | list of strings | a comma-separated argument or a list | `values` for each entry |
 
 The reference check of `item` and `items` is today's referential integrity of dependencies (reference inventory group DI-REF), now applied

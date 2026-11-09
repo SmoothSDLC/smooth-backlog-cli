@@ -79,11 +79,23 @@ test('a shallow clone refuses to hand out a number', t => {
   assert.throws(() => allocate(join(root, 's'), F, 'x'), /shallow/);
 });
 
-test('the migration seeds every folder that ever held an item, from deleted files too', t => {
+test("the migration seeds its own folder from the folder's history, deleted files included, and reads no other folder", t => {
   const { a } = world(t);
   for (let n = 0; n < 3; n++) allocate(a, F, `x${n}`);
   allocate(a, 'acme/old', 'gone'); commit(a, 'items');
   git(a, 'rm', '-q', '-r', 'acme/old'); git(a, 'rm', '-q', `${F}/phases/003-x2.json`); commit(a, 'delete');
   unlinkSync(join(a, F, 'numbers.json')); commit(a, 'no counter yet');
-  assert.deepEqual(seed(a), { 'acme/app': 3, 'acme/old': 1 });
+  assert.equal(seed(a, F), 3);
+  assert.equal(seed(a, 'acme/old'), 1); // another repository's folder is seeded only when its own repository migrates
+});
+
+test('upstream changed only another repository folder: the team command is not run again, its commit is rebased (R24)', t => {
+  const { a, clone } = world(t);
+  const b = clone('b');
+  allocate(a, 'acme/other', 'theirs'); commit(a, 'other folder'); git(a, 'push', '-q');
+  allocate(b, F, 'mine'); commit(b, 'B 1');
+  let reran = false;
+  publishByRerun(b, () => { reran = true; }, F);
+  assert.equal(reran, false);
+  assert.deepEqual(items(b), [`${F}/phases/001-mine.json`]);
 });

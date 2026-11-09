@@ -26,7 +26,8 @@ Git keeps that fact even when the file, the counter or the commit's effect is un
 2. every value of `last` ever committed to `<owner>/<name>/numbers.json` in that history;
 3. the item files and `numbers.json` of the working tree (a number the command itself just wrote).
 
-**Allocation** (`backlog new`, `backlog team new`, `backlog move` into the folder, a renumbering): the high-water mark plus 1; the command
+**Allocation** (`backlog new`, `backlog team new`, a renumbering; `backlog move` now moves only between branches of one folder and keeps
+the number, chapter 04 section 9): the high-water mark plus 1; the command
 writes `numbers.json` as `{"last": <n>}` in the same change. `numbers.json` is a committed record of the last number so that a person sees
 it and validate can compare it; it is never trusted alone.
 
@@ -60,8 +61,9 @@ today's renumbering does for added files.
 Context: a number is handed out in a local clone and becomes final only when it is pushed. The rule that makes it unique is checked at the
 moment of publication, on the upstream state.
 
-- **Team commands** (`backlog team new`, `backlog team update`, `backlog team pop`) never rebase a local change: when upstream moved, the
-  local commit is dropped, the clone is reset to upstream and the whole command runs again on the upstream files (chapter 04 section 6).
+- **Team commands** (`backlog team new`, `backlog team update`, `backlog team pop`) never rebase a local change of a folder upstream also
+  changed: the local commit is dropped (`git reset --keep` to upstream) and the whole command runs again on the upstream files; when upstream
+  changed only other folders, the commit is rebased as it is (chapter 04 section 6). Either way the number is above the upstream mark.
   A re-run allocates from the upstream high-water mark, so a team creation can never collide.
 - **User commands** keep today's rebase. After the rebase, every item file the local unpublished commits added whose number is not above
   the upstream high-water mark (computed on the upstream ref only) is renumbered above it, whether or not a file holds the number now; the
@@ -79,8 +81,7 @@ moment of publication, on the upstream state.
   `❌ --seq <n> is not above the highest number ever used in <owner>/<name> (<mark>); numbers are never reused`.
 - **Archive, `backlog clean`, the `delete` effect** remove or move files and never lower the mark.
 - **Migration** (chapter 06) writes `numbers.json` for the repository folder it converts, with `last` = the folder's high-water mark from
-  the whole history, deleted item files included (spike test "the migration seeds every folder that ever held an item, from deleted files
-  too"; a folder whose items are all gone needs no record, because every allocation reads the history anyway); it refuses on a
+  the whole history, deleted item files included (spike test "the migration seeds its own folder from the folder's history ..."; a folder whose items are all gone needs no record, because every allocation reads the history anyway); it refuses on a
   shallow clone and its dry run names the refs whose history it read.
 
 ## 5. The index (structure unchanged)
@@ -115,6 +116,6 @@ learns an entry's owner from the item file it already loads.
 
 The spike proves sections 2 to 4 on real git (`node --test numbers.test.mjs`, 7 tests). The BDD plan (entry plan Task 3) adds, with the CLI
 itself: "two clones create an item at once" (both paths), "another clone published and cleaned a number before this push", "git revert of a
-creation", "a shallow clone refuses `backlog new`", "`--seq` below the mark is refused", "migrate seeds every folder from its history",
+creation", "a shallow clone refuses `backlog new`", "`--seq` below the mark is refused", "migrate seeds its folder from the folder's history",
 "a duplicate number after a code-branch merge is renumbered", "a user priority change leaves team entries in place", "a team's place effect
 leaves user entries in place".

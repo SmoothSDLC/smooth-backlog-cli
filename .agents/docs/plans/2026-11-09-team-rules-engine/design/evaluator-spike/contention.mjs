@@ -17,7 +17,7 @@ if (process.argv[2] === 'worker') {
   const attempts = [];
   for (let i = 0; i < Number(k); i++) {
     for (let n = 1; ; n++) {
-      git(cwd, 'fetch', '-q'); git(cwd, 'reset', '-q', '--hard', '@{u}');
+      git(cwd, 'fetch', '-q'); git(cwd, 'reset', '-q', '--keep', '@{u}');
       const seq = allocate(cwd, F, `${name}-${i}`);
       appendFileSync(join(cwd, F, 'index.json'), `${JSON.stringify({ seq, slug: `${seq}-${name}-${i}` })}\n`); // one shared file, as the index is
       git(cwd, 'add', '-A'); git(cwd, 'commit', '-q', '-m', `${name} ${i}`);

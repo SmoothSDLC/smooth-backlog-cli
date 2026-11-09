@@ -172,7 +172,7 @@ export function step(ctx) {
     if (!['item', 'items'].includes(entry.item[f].type)) continue;
     for (const s of asList(out.get(seq).fields[f])) {
       if (s === seq) throw new Refusal(`field ${f} of item ${seq}: an item cannot name itself`, 2);
-      if (find(ctx, s).missing) throw new Refusal(`field ${f} of item ${seq}: no item ${s}`, 2);
+      if (!FOREIGN.test(String(s)) && find(ctx, s).missing) throw new Refusal(`field ${f} of item ${seq}: no item ${s}`, 2); // another folder is never checked (R24)
     }
   }
   const p = d.do.place;

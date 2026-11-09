@@ -49,6 +49,12 @@ environment detail; the set says "the consumer repository" or "the team's topolo
 8. `08-owner-questions.md`: what the rulings decide (part 1) and the 17 open questions in the owner's decision format (part 2).
 9. `09-gap-resolution.md` + `gaps.tsv`: the 47 NARROWED/REMOVED rows of the impact analysis resolved.
 10. `10-review-log.md`: the 101 findings of the three reviews (`reviews/`) with their dispositions and the quality gates.
+11. `11-owner-answers.md`: the binding owner answers (rounds 1 and 2).
+12. `13-format-gaps.md`: the team behaviours the format cannot express yet, each with a proposed generic key or condition, the options
+    where there is a choice, and the decisions for the owner. (The inventory of the running team's behaviours that found them is
+    private and lives in that team's repository.)
+13. `templates/team.full.examples.md`: for every control of `templates/team.full.json` a description, an allow example and a deny
+    example with its refusal text, and (part B) every format feature the template does not use as a checked fragment.
 
 ## Tools (all paths relative to this folder)
 
@@ -57,6 +63,9 @@ environment detail; the set says "the consumer repository" or "the team's topolo
 - `tools/gen/`: `gen.py` (requirements of `03-spec.md` §10 and `features/` from `reqs_a..h.py` plus the revision overlay
   `reqs_rev4.py`/`rev4_*.py` and `valrows.py`), `gen01.py` (§2–§4 of 01), `gen04.py`, `gen05.py`, `gen06.py`, `gen07.py`. §1–§9 of
   `03-spec.md` are edited by hand.
+- `tools/examples.py <definition> [<entry>] [--features] [--by-key=<k>,..]`: writes the allow and deny examples of every control of a
+  definition; `templates/team.full.examples.md` is `python3 tools/examples.py templates/team.full.json templates/teams.example.json t1
+  --features --by-key=lead_busy` (part B fragments are checked with the schema interpreter and the semantic rules; exit 1 if one fails).
 - Quality gates: `tools/check_schemas.py` (python `jsonschema` and the reference interpreter `tools/validate_subset.py` on the templates
   and the negative examples), `tools/check_semantics.py` (V/E rules), `tools/convert_v1.py` (the conversion of an old definition),
   `tools/make_negatives.py` (writes `schema/negative/`), `tools/check_consistency.py` (ids and counts), `tools/gates.sh` (all of them).

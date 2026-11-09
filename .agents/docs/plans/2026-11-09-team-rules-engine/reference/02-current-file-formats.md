@@ -72,7 +72,7 @@ Top-level keys and what reads them (0 = no code reads it, F2):
 | `refusals` | 5 texts with `<placeholders>` | `team_not_configured`, `wrong_status`, `wrong_actor` |
 
 Real example: the file itself (134 lines) at `templates/workflows/team.json` of 174c76d; the example team's own copy is
-`<agent-skills>/team-lead/references/backlog-workflow.json` (topology), workflow `example-team`, stage `local` instead of `external`.
+`<agent-skills>/team-lead/references/backlog-workflow.json` (consuming repository), workflow `example-team`, stage `local` instead of `external`.
 
 **How it is read**: `src/shared/status.js` reads it with `readFileSync` + `JSON.parse` at module load — a malformed shipped file makes
 every command fail at start with the parse error (exit 2 from `main.js`). `src/team/workflow.js` puts it in the cache as `team`.

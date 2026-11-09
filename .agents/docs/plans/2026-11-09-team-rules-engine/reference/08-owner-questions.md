@@ -71,7 +71,7 @@ migrated and retired.
 - The team entry is generic: names in `people`, `lists`, `rules`, composition rules in the behaviour file (D-21).
 - No role, field, step or verdict name is fixed in the CLI; the shipped template names them (D-22 to D-25).
 - `backlog archive` writes no status; an archived item is recognised by its folder (D-26).
-- One cutover instead of a run-time bridge between old and new files (D-27); every topology commit moves the CLI pin (D-28).
+- One cutover instead of a run-time bridge between old and new files (D-27); every consuming-repository commit moves the CLI pin (D-28).
 - An old behaviour file converts to the shipped template plus its own names (D-29); every item is migrated once (D-30).
 - Exit codes 0, 1, 2, 3, 4, 5 with the configuration-command exception (D-31); an absent entry key is a read-time default (D-32).
 
@@ -309,7 +309,7 @@ network error is warned; the re-check intervals stay. Fewer false warnings, at m
 
 ## Q-16 — `backlog team migrate`: which behaviour file does the running team use afterwards?
 
-**Scenario.** The running team's entry in `teams.json` names no workflow; the team's topology repository keeps its own copy of the
+**Scenario.** The running team's entry in `teams.json` names no workflow; the team's consuming repository keeps its own copy of the
 definition under the name `example-team` (identical to the shipped one except that the first review stage is called `local` instead of
 `peer`). The owner runs `backlog team migrate` once.
 

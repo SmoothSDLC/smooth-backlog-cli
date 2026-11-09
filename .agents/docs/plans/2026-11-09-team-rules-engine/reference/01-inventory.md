@@ -280,7 +280,7 @@ Each group is one rule; the sites are the rows of `inventory.tsv` with the flag.
 - **F12. Dead code**: `needsReview`, `teamMembership`, `STOP_TEXT` in `src/team/team.js` have no caller.
 - **F13. `team update` on an item without a team runs the user edits and, in a team session, team guards** (incomplete-item rule, and the
   hand-off close gate for `--status closed`); there is no single rule for which door an unbound item has (REQ-112 decides).
-- **F14. the example team's authoritative definition** (`<agent-skills>/team-lead/references/backlog-workflow.json` in the topology repository,
+- **F14. the example team's authoritative definition** (`<agent-skills>/team-lead/references/backlog-workflow.json` in the consuming repository,
   workflow `example-team`, stages `peer` and `local`) differs from the shipped one and is not what the CLI enforces (F1).
 
 ## 6. Tests that assert CODE-origin behaviour with literals
@@ -316,7 +316,7 @@ The feature files hold 101 scenarios; the ones that assert CODE-origin team beha
 
 ## 7. Consumers that depend on a CODE rule
 
-`consumers.tsv` (22 rows; CON-15..CON-22 added in revision 4, R1-029, R3-012) lists every call or text in the topology repository (`<agent-skills>/team-lead`, `<agent-skills>/team-member`,
+`consumers.tsv` (22 rows; CON-15..CON-22 added in revision 4, R1-029, R3-012) lists every call or text in the consuming repository (`<agent-skills>/team-lead`, `<agent-skills>/team-member`,
 `tools/team`, `eval/team`) that depends on a CODE rule, with the change and the phase. Two calls are already broken at 174c76d
 (CON-10: `backlog update --set-team` and `backlog pop` in `<eval-tooling>/<run-script>`; CON-11: `--decisions` through the user reader in
 `tools/team/<keeper-script>`).

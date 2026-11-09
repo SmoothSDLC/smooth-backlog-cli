@@ -18,8 +18,8 @@ team file; user commands enforce nothing.
 - [ ] Task 3: BDD scenarios and the test plan, written before the code.
 - [ ] Task 4: Items migrate from markdown to JSON (CLI migrate command for items only, tests first).
 - [ ] Task 5: The evaluator and the `backlog team` commands on it; the old team code removed.
-- [ ] Task 6: The Cody team: template, item definition, rule set in the backlog repo; the team lead and member skills read it.
-- [ ] Task 7: Full-scope execution against the Cody rule set and several dummy teams (scrum, extreme programming, parallel work,
+- [ ] Task 6: The owner's team: template, item definition, rule set in the backlog repo; the team lead and member skills read it.
+- [ ] Task 7: Full-scope execution against the owner's team rule set and several dummy teams (scrum, extreme programming, parallel work,
   single-agent team, others).
 - [ ] Task 8: Gap review of the PR3 branch backlog and of the main backlog (superseded items to archive).
 - [ ] Task 9: Documentation, final verification, the one pull request (title and body shown in chat first).

@@ -79,6 +79,8 @@ migrated and retired.
 
 ## Q-04 — `backlog team update|pop|new|query`: do the session variables stay inputs?
 
+**ANSWERED: option A, and every input also as a flag on every team command (see 11-owner-answers.md).**
+
 **Scenario.** The team's run script starts an agent session with `TEAM_NAME=t1 TEAM_REPOSITORY=owner/app TEAM_BRANCH=main
 BACKLOG_AGENT=ann BACKLOG_SESSION=s-17` in its environment. The agent then runs `backlog team pop` without `--team` or `--agent`, and
 today the CLI answers for team `t1` and agent `ann`, offering only items of `owner/app` on `main`; `backlog team update 7 --claim bob`
@@ -103,6 +105,8 @@ dispatcher, the wake hook, the nightly and the run script (in one additive-then-
 **Recommendation: A**, because the behaviour already moves into the file and the variables only name the session (label REQ-911).
 
 ## Q-05 — Team behaviour files: implement or drop the keys that were declared but never enforced?
+
+**ANSWERED: the rules belong in the team template (location set in the backlog configuration); the CLI enforces generic keys only (see 11-owner-answers.md).**
 
 **Scenario.** The shipped definition and the team's copy declare that a refinement review rejected three times goes to an owner
 decision (`max_rounds: 3`, `after_max_rounds`), that an item awaiting a decision blocks its dependents (`blocks_dependents`) and that
@@ -326,6 +330,8 @@ rename in live data.
 
 ## Q-17 — `backlog team migrate`: what happens to items bound to teams that no longer exist?
 
+**ANSWERED: option A, plus a timestamped record in the item body (see 11-owner-answers.md).**
+
 **Scenario.** Twenty item files of the running backlog name seven teams that have no entry in `teams.json` (old proof runs and earlier
 teams); seven of them are in `phases/` with status `done`. Today `backlog team update 31 --set-team ""` answers `team <t> is not
 configured`, and `backlog update 31` answers that the item belongs to a team, so nothing can unbind them.
@@ -345,6 +351,8 @@ again`. Nothing is lost, but seven dead teams must be defined (each with a lead 
 
 ## Q-18 — `backlog team migrate`: may it rewrite archived items?
 
+**ANSWERED: option B, no rule applies to archived items (see 11-owner-answers.md).**
+
 **Scenario.** Twenty-four archived team items still carry the old fields `stage` and `review_state`. Archived items are read-only, and
 after the migration every command that meets old fields stops with "run backlog team migrate".
 
@@ -361,6 +369,8 @@ archived team items show old words for ever.
 **Recommendation: A** (label REQ-018).
 
 ## Q-19 — Split items without a team: team work or user items?
+
+**ANSWERED: option B, linked to the parent, not bound to its team (see 11-owner-answers.md).**
 
 **Scenario.** A lead split a team item with an earlier build and the slices were created without a team. Today `backlog team pop`
 offers such a slice to the session's team and the slice joins the team when a member claims it; 35 such slices sit in `phases/`.

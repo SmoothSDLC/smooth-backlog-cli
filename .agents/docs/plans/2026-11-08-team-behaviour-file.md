@@ -56,4 +56,4 @@
 
 ## Status
 
-Revision 4 (after three independent reviews). Open owner questions: Q-04 to Q-20 in 08-owner-questions.md; phases that depend on an answer are marked CONDITIONAL in the spec.
+Revision 4 (after three independent reviews) plus owner answers round 1 (11-owner-answers.md: Q-04, Q-05, Q-17, Q-18, Q-19 answered). Still open: Q-16 and Q-20; Q-06 to Q-15 stay conditional (08-owner-questions.md). The answers are propagated into the spec text in one pass after Q-16 and Q-20.

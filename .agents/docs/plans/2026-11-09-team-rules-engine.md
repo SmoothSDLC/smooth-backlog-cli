@@ -4,7 +4,7 @@
 or roles remains in CLI code.
 
 **Spec:** [2026-11-09-team-rules-engine/00-owner-rulings.md](2026-11-09-team-rules-engine/00-owner-rulings.md) (binding rulings).
-The design chapters are written next, from these rulings and from the raw facts of the CLI source and of the team skills, not from
+The command-by-command behaviour page is [2026-11-09-team-rules-engine/01-command-behaviour-matrix.md](2026-11-09-team-rules-engine/01-command-behaviour-matrix.md); the facts and gap lists of the earlier analysis are the coverage checklist in [2026-11-09-team-rules-engine/reference/](2026-11-09-team-rules-engine/reference/README.md). The design chapters are written next, from these rulings and from the raw facts of the CLI source and of the team skills, not from
 the replaced analysis.
 
 **Global Constraints:** public repo (nothing of the owner's internal factory); no alias, no backward compatibility (migrate or fail);

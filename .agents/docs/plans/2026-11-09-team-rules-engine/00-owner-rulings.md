@@ -21,8 +21,8 @@ not be used as input to the new design.
   migrates or fails, with no second format and no alias. The body holds the fields; a field definition decides what a field is.
 - R5. The team file (`teams.json` of the backlog folder) holds, per team: the people, the team's rule set and the team's item
   definition. The CLI only reads it. It never creates, rewrites, registers or migrates it, and it never reads a template.
-- R6. A template is a starting copy. The Cody workflow template becomes the default item definition and the default rule set of the
-  Cody team. A team, through its agents, edits its own definition in the team file to fit its workflow.
+- R6. A template is a starting copy. The workflow template of the owner's team becomes the default item definition and the default rule set of that
+  team. A team, through its agents, edits its own definition in the team file to fit its workflow.
 - R7. The item definition is data only: field names, types, descriptions, defaults, allowed values. All dynamic behaviour is in the
   rule set.
 - R8. The rule set is written with a coherent structure and field naming so that an agent or a human understands it without reading
@@ -33,7 +33,7 @@ not be used as input to the new design.
 - An update of an item of team X: read X's rule set and the item, and refuse the update unless it conforms to the rules.
 
 ## Carried forward from earlier rounds (still binding)
-- The lifecycle of a Cody card, its four review stages, the stage hand-off note and deploy not being a stage: see the owner rulings
+- The lifecycle of a card of the owner's team, its four review stages, the stage hand-off note and deploy not being a stage: see the owner rulings
   file in the backlog repo.
 - Team session inputs: TEAM_NAME, TEAM_REPOSITORY, TEAM_BRANCH, BACKLOG_AGENT, BACKLOG_SESSION stay inputs of the team commands, and
   every input is also an optional flag on every team command (order: flag, variable, configuration key).

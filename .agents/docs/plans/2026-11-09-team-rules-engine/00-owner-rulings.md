@@ -15,6 +15,12 @@ not be used as input to the new design.
   rounds, size caps and required notes are rules over fields in the same way.
 - R3. User commands (`backlog new`, `update`, `list`, ...) enforce nothing about flow, status words or team behaviour. The CLI ignores
   the team file unless a command runs under the `backlog team` hierarchy. Who the user is comes from the operating system user.
+- R3a (owner, 2026-11-09). User commands read and change only items that have no team. They ignore team items completely: a team
+  item is not listed, shown, counted, queued, moved, archived, imported, cleaned or changed by a user command, and a number that names
+  one answers as if no such item existed. Team items are reached only through `backlog team` commands.
+- R3b. Team commands never read the user identity (the operating system user or the configuration's user). The agent comes from
+  `--agent`, else BACKLOG_AGENT. The team comes from `--team`, else TEAM_NAME; the configuration's `team` key is dropped (decision of the
+  lead agent, reversible: one input fewer, no alias).
 
 ## Data
 - R4. Items are stored as JSON files. Every existing item (open and archived) migrates from markdown with a header to JSON; the CLI

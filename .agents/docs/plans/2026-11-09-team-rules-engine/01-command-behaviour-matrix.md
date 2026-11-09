@@ -15,13 +15,14 @@ Commands: `backlog new`, `backlog update`, `backlog update --replan`, `backlog d
 |---|---|---|
 | Reads the team file | Yes for items that carry a team: archive, clean, list and show, sequence, status and update import team code | Never |
 | Who is calling | The agent named by BACKLOG_AGENT, else the configuration's user (git user name, else the login name) | Same: this is the only place the user identity is read |
-| Enforces flow, status words or roles | Refuses every change of an item that has a team; knows the default status words | Nothing. Free-for-all: a status is stored as typed |
+| Which items | Every item; those with a team are listed and shown, and changing one is refused | Only items without a team. Items with a team are ignored completely: not listed, shown, counted, queued, moved, archived, imported, cleaned or changed, and a number that names one answers as if no such item existed |
+| Enforces flow, status words or roles | Refuses every change of an item that has a team; knows the default status words | Nothing. Free-for-all on its own items: a status is stored as typed |
 | Writes | Items, the index, the configuration (`setup`) | Items (JSON), the index, the configuration (`setup`) |
 | Concurrency | A write to an item that someone else changed since this caller last read it is refused (exit 5) | Unchanged |
 
-To confirm: today a user command refuses to change an item that has a team. The rulings say user commands enforce nothing and the
-CLI ignores the team file outside `backlog team`. Reading the item's own team field is not reading the team file, but refusing
-because of it is still a behaviour in the CLI. Target proposed here: no refusal.
+Decided (owner, 2026-11-09): user commands operate only on items without a team and ignore team items completely, instead of
+refusing them. To design: how the numbering and the queue (`index.json`) treat team items so that a number is never reused and the
+user queue holds only items without a team.
 
 ## Group 2: team commands (read the team file, enforce the rule set)
 Commands: `backlog team new`, `backlog team update`, `backlog team query`, `backlog team pop`, and the read-only `backlog team validate`.
@@ -31,12 +32,10 @@ Removed (they write the team file, which the CLI never does): `backlog team defi
 |---|---|---|
 | Reads the team file | Entry in `teams.json` plus a flow definition from `workflows.json` or the shipped one | Entry, rule set and item definition, all in `teams.json` |
 | Who is calling | `--agent`, else BACKLOG_AGENT, else the configuration's user | `--agent`, else BACKLOG_AGENT. Never the configuration's user |
-| Which team | `--team`, else TEAM_NAME, else the configuration's team | `--team`, else TEAM_NAME (the configuration's team key: to confirm) |
+| Which team | `--team`, else TEAM_NAME, else the configuration's team | `--team`, else TEAM_NAME. The configuration's team key is dropped (lead agent's decision, reversible) |
 | Session scope | TEAM_REPOSITORY and TEAM_BRANCH, with flags to be added | Inputs of the rules; flag, then variable |
 | Enforces | The shipped flow in code, plus the registered flow only for its vocabulary | The team's rule set, nothing else |
 | Writes | Items; registry files | Items only |
-
-To confirm: whether the configuration's `team` key stays as a default for `--team`.
 
 ## Commands that behave the same for both groups
 `backlog --help`, `backlog --version`, `backlog <command> --help`: read nothing, write nothing.

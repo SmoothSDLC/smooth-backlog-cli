@@ -74,11 +74,13 @@ listed by `backlog team validate` as a warning (chapter 08 section 7).
 ### 2.3 The body and the history
 
 - The body is free markdown. The `note` effect of a step appends `## <heading> (<agent>, <time>)` and the text; `backlog update --append`
-  appends for items without a team as today.
-- The history replaces today's `events` front-matter lines. Each entry: `at` (time), `by` (agent or user), `session` (BACKLOG_SESSION or
+  appends as today (on a team item only with `--show-all`, ruling R19).
+- The history replaces today's `events` front-matter lines. Each entry: `at` (time), `by` (agent or user), `session` (SMOOTH_BACKLOG_CLI_SESSION or
   empty), `step` (the team step, or the user command such as `update` or `done`), `changes` (each changed field with its value before
   and after; envelope keys too), `note` (the text of a `note` effect or of `--note`). `backlog history <item>` prints it for an item without
-  a team (for a team item it answers as for a number no item holds, R3a); `backlog team query <item>` prints it for an item of the team. Rules do not read the history: anything a rule needs is a field (owner ruling R2).
+  a team, and for a team item only with `--show-all` (otherwise it answers as for a number no item holds, R3a, R16); `backlog team query
+  <item>` prints it for an item of the team. A user command that changes a team item (with `--show-all`, R19) writes an entry whose `by`
+  is the user identity and whose note says `--show-all on an item of team <t>`. Rules do not read the history: anything a rule needs is a field (owner ruling R2).
 
 ### 2.4 Text form
 
@@ -131,8 +133,8 @@ the team's. The CLI holds no status word of a team (owner ruling R1).
 The reference check of `item` and `items` is today's referential integrity of dependencies (reference inventory group DI-REF), now applied
 by type to every such field, at the moment a step writes it. A number whose item was deleted later stays in the field, reads as a missing
 item, does not block the item's other steps, and is reported by validate. A team decides which of its fields are dependencies, children or
-a parent; the CLI only checks that the numbers name items. Whether a reference may cross between an item without a team and a team item is
-decision 3.
+a parent; the CLI only checks that the numbers name items. A reference may cross between an item without a team and a team item; a user
+command sees the team item at the other end only with `--show-all`, and otherwise reads it as missing (ruling R16, chapter 04 section 8).
 
 Field names are lowercase letters, digits, `-` and `_`, starting with a letter (validate, case VAL-19).
 

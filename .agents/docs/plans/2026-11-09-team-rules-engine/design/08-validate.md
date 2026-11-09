@@ -7,10 +7,16 @@ section 4), so a broken rule set is never used. This chapter lists every check a
 
 ## 1. The command
 
-- `backlog team validate` — scenario: a lead edited `teams.json` to add a review step; before committing it runs the command in its working
-  copy of the backlog repository. It checks every team of the file and every item of the backlog against its team.
-- `backlog team validate --json` — the same findings as a list, for a script or an agent.
-- Whether `--team <name>` (or TEAM_NAME, or the configuration's `team`) narrows it to one team, or is required, is decision 1.
+- `backlog team validate --team <name>` — scenario: a lead edited `teams.json` to add a review step; before committing and pushing it runs
+  `backlog team validate --team web` in its working copy of the backlog repository. Like every team command it needs a specific team
+  (`--team`, else SMOOTH_BACKLOG_CLI_TEAM_NAME, else the `team` key of `.backlog/config.json`; ruling R14). It always reads `teams.json` and
+  validates the whole file in full (the shape of the file and every entry: lead decision b of R21), prints the findings of the file's shape
+  and of the named team's entry and items, and exits 2 when any of those is an error.
+- `backlog team validate --show-all` — the same, printing every team's findings (a scenario: the owner checks the whole file before the
+  migration).
+- `--json` — the same findings as a list, for a script or an agent.
+- Every run refreshes the per-user validation record of chapter 01 section 4 (the SHA of what it read, the valid teams, now) when at least
+  one team is valid, so the next team commands use what was just validated. It writes nothing in the backlog (ruling R5).
 - On a backlog whose items are still markdown (before `backlog team migrate`), validate runs sections 3 to 6 on the file and prints
   `ℹ️  the items are markdown: run backlog team migrate, then validate checks them too`; sections 7 and 8 need JSON items (chapter 06
   section 1).
@@ -34,13 +40,22 @@ With `--json`: `[{"severity": "error", "team": "parallel", "path": "rules.table[
 people and item definition findings. The spike's `validate` returns exactly these keys (cases VAL-01 to VAL-12; the five example files
 validate clean, cases VAL-EX-*).
 
+**What ruling R18 asks of the validation, and where each part is.** Every required field: the keys of the file, an entry, `rules`, every
+field definition, rule, pop entry and filter (sections 3 to 6 and the schema of chapter 03 section 14; `rules` must hold `table`, `pop`
+and `filters`, each may be empty). The rules in their readable shape: one key per condition, known tests, functions and effects, closed
+references, names, the routing-table order (section 6). The item definition (section 5). The coherence of the two: no rule, pop entry or
+filter names a field, a value or a role the definition and the people lack (section 6). Every other check the CLI needs to use the file
+safely: the `regex` subset and its size limits, no nested quantifier, reserved argument names (section 6). There is no tolerance path: an
+entry in today's shape (`lead`, `members`, `review`) fails the schema like any other unknown key, and a failing entry is never used
+(chapter 01 section 4).
+
 ## 3. File and team names
 
 | check | severity | problem text (fix) |
 |---|---|---|
 | the file is valid JSON and an object | error | `teams.json is not JSON (<parser message, line and column>)` (correct the syntax at that place) |
 | each key is a team name | error | `<key> is not a team name: lowercase letters, digits, - _ and :, starting with a letter or digit` (rename the team) |
-| each entry has exactly `people`, `item`, `rules` | error | `<key> is not a key of a team entry (people, item, rules)` / `the entry has no <key>` |
+| each entry has exactly `people`, `item`, `rules`, and `rules` has exactly `table`, `pop`, `filters` | error | `<key> is not a key of a team entry (people, item, rules)` / `the entry has no <key>` |
 
 ## 4. People
 

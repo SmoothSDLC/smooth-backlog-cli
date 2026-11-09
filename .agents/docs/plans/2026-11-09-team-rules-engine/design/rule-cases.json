@@ -42,7 +42,7 @@
   "parallel/member-checks": "src/team/queue.js (review offers come before new work)",
   "parallel/member-claims": "src/team/queue.js (claim offer in priority order)",
   "parallel/lead-splits": "src/team/pop.js:1-5 (the lead's pop takes the team's work item)",
-  "patterns/scope-branch": "src/team/team.js:53 outsideTeam (TEAM_REPOSITORY and TEAM_BRANCH bind a session)",
+  "patterns/scope-branch": "src/team/team.js:53 outsideTeam (SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BACKLOG_CLI_TEAM_BRANCH bind a session)",
   "patterns/new-linked": "reference/13-format-gaps.md G-011 (a follow-up item that holds a gate item)",
   "patterns/new": "src/team/new.js:3",
   "patterns/edit-only-before-ready": "reference/01-inventory.md group RF-EDITS (which fields may change in which status)",
@@ -2102,7 +2102,7 @@
    },
    "expect": {
     "exit": 2,
-    "text": "a team command needs a team: give --team <name>, or set the TEAM_NAME variable, or set the \"team\" key in .backlog/config.json"
+    "text": "a team command needs a team: give --team <name>, or set the SMOOTH_BACKLOG_CLI_TEAM_NAME variable, or set the \"team\" key in .backlog/config.json"
    }
   },
   {
@@ -2115,7 +2115,7 @@
    "command": {
     "run": "resolve",
     "env": {
-     "TEAM_NAME": "from-variable"
+     "SMOOTH_BACKLOG_CLI_TEAM_NAME": "from-variable"
     },
     "config": {
      "team": "from-config"
@@ -2139,7 +2139,7 @@
      "team": "from-flag"
     },
     "env": {
-     "TEAM_NAME": "from-variable"
+     "SMOOTH_BACKLOG_CLI_TEAM_NAME": "from-variable"
     },
     "config": {
      "team": "from-config"
@@ -2185,7 +2185,7 @@
    },
    "expect": {
     "exit": 2,
-    "text": "this team command needs the agent: give --agent <name>, or set the BACKLOG_AGENT variable"
+    "text": "this team command needs the agent: give --agent <name>, or set the SMOOTH_BACKLOG_CLI_AGENT variable"
    }
   },
   {
@@ -2479,7 +2479,7 @@
    },
    "expect": {
     "exit": 2,
-    "text": "a team command needs a team: give --team <name>, or set the TEAM_NAME variable, or set the \"team\" key in .backlog/config.json"
+    "text": "a team command needs a team: give --team <name>, or set the SMOOTH_BACKLOG_CLI_TEAM_NAME variable, or set the \"team\" key in .backlog/config.json"
    }
   },
   {
@@ -9522,6 +9522,624 @@
       "path": "rules.table[1].when.regex",
       "rule": "q",
       "problem": "not a pattern the CLI runs (lookaround and flags are not supported (at character 1))"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R15-01",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "env": {
+     "SMOOTH_BACKLOG_CLI_AGENT": "member-1",
+     "SMOOTH_BACKLOG_CLI_TEAM_NAME": "web"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "team": "web",
+    "agent": "lead-1"
+   }
+  },
+  {
+   "id": "R15-02",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "pop",
+    "flags": {
+     "team": "other"
+    },
+    "env": {
+     "SMOOTH_BACKLOG_CLI_AGENT": "member-1",
+     "SMOOTH_BACKLOG_CLI_TEAM_NAME": "web"
+    },
+    "config": {
+     "team": "cfg"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "team": "other",
+    "agent": "member-1"
+   }
+  },
+  {
+   "id": "R15-03",
+   "rule_set": "parallel",
+   "rule": "abandon",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "env": {
+     "SMOOTH_BACKLOG_CLI_AGENT": "member-1"
+    },
+    "item": 50,
+    "step": "abandon",
+    "args": {
+     "reason": "not needed"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "abandon",
+    "items": {
+     "50": {
+      "status": "closed"
+     }
+    }
+   }
+  },
+  {
+   "id": "R14-01",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "new",
+    "flags": {
+     "show-all": true
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "--show-all acts over every team; backlog team new acts for one team: give --team <name> instead"
+   }
+  },
+  {
+   "id": "R14-02",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "update",
+    "flags": {
+     "show-all": true
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "--show-all acts over every team; backlog team update acts for one team: give --team <name> instead"
+   }
+  },
+  {
+   "id": "R14-03",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "pop",
+    "flags": {
+     "show-all": true
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "--show-all acts over every team; backlog team pop acts for one team: give --team <name> instead"
+   }
+  },
+  {
+   "id": "R14-04",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "query",
+    "flags": {
+     "show-all": true
+    },
+    "env": {
+     "SMOOTH_BACKLOG_CLI_TEAM_NAME": "web"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "all": true
+   }
+  },
+  {
+   "id": "R14-05",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "validate",
+    "flags": {
+     "show-all": true
+    },
+    "env": {
+     "SMOOTH_BACKLOG_CLI_TEAM_NAME": "web"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "all": true
+   }
+  },
+  {
+   "id": "R14-06",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "migrate",
+    "flags": {
+     "show-all": true
+    },
+    "env": {
+     "SMOOTH_BACKLOG_CLI_TEAM_NAME": "web"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "all": true
+   }
+  },
+  {
+   "id": "R14-07",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "validate",
+    "flags": {
+     "show-all": true,
+     "team": "web"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "--show-all acts over every team: give it or --team <name>, not both"
+   }
+  },
+  {
+   "id": "R14-08",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "migrate"
+   },
+   "expect": {
+    "exit": 2,
+    "text": "a team command needs a team: give --team <name>, or set the SMOOTH_BACKLOG_CLI_TEAM_NAME variable, or set the \"team\" key in .backlog/config.json"
+   }
+  },
+  {
+   "id": "R14-09",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "validate",
+    "config": {
+     "team": "web"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "team": "web",
+    "all": false
+   }
+  },
+  {
+   "id": "R19A-01",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 91,
+      "team": "",
+      "fields": {
+       "status": "pending"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-show",
+    "item": 91,
+    "env": {
+     "SMOOTH_BACKLOG_CLI_TEAM_NAME": "web"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "teams are not allowed to use user commands"
+   }
+  },
+  {
+   "id": "R19A-02",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 91,
+      "team": "",
+      "fields": {
+       "status": "pending"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-show",
+    "item": 91,
+    "config": {
+     "team": "web"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "item": 91
+   }
+  },
+  {
+   "id": "R16-01",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 90,
+      "team": "parallel",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-show",
+    "item": 90,
+    "show_all": true
+   },
+   "expect": {
+    "exit": 0,
+    "item": 90
+   }
+  },
+  {
+   "id": "R16-02",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 90,
+      "team": "parallel",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-ref",
+    "item": 90
+   },
+   "expect": {
+    "exit": 0,
+    "ref": {
+     "seq": 90,
+     "missing": true
+    }
+   }
+  },
+  {
+   "id": "R16-03",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 90,
+      "team": "parallel",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-ref",
+    "item": 90,
+    "show_all": true
+   },
+   "expect": {
+    "exit": 0,
+    "ref": {
+     "seq": 90,
+     "status": "ready"
+    }
+   }
+  },
+  {
+   "id": "R19-01",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 90,
+      "team": "parallel",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-set",
+    "item": 90,
+    "field": "holder",
+    "value": "member-3",
+    "user": "alice"
+   },
+   "expect": {
+    "exit": 1,
+    "text": "no phase '90'"
+   }
+  },
+  {
+   "id": "R19-02",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 90,
+      "team": "parallel",
+      "fields": {
+       "status": "ready",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-set",
+    "item": 90,
+    "field": "holder",
+    "value": "member-3",
+    "user": "alice",
+    "show_all": true
+   },
+   "expect": {
+    "exit": 0,
+    "fields": {
+     "holder": "member-3"
+    },
+    "history": [
+     {
+      "by": "alice",
+      "step": "update",
+      "changes": {
+       "holder": [
+        "member-1",
+        "member-3"
+       ]
+      },
+      "note": "--show-all on an item of team parallel"
+     }
+    ]
+   }
+  },
+  {
+   "id": "R17-01",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "raw": true,
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "pending",
+       "estimate": 30,
+       "holder": "",
+       "checker": "",
+       "parent": null,
+       "children": [],
+       "depends_on": [],
+       "handoff": "",
+       "rounds": 0
+      }
+     },
+     {
+      "seq": 2,
+      "fields": {
+       "status": "ready",
+       "holder": "",
+       "checker": "",
+       "parent": null,
+       "children": [],
+       "depends_on": [],
+       "handoff": "",
+       "rounds": 0,
+       "stage": "refined"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "migrate-check",
+    "flags": {
+     "team": "parallel"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "findings": [
+     "item 1: field status: \"pending\" is not one of new, splitting, ready, in progress, checking, passed, closed",
+     "item 2: field estimate is missing (number)",
+     "item 2: field stage is not declared by the item definition"
+    ]
+   }
+  },
+  {
+   "id": "R17-02",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "migrate-ask",
+    "flags": {
+     "team": "parallel"
+    },
+    "terminal": false
+   },
+   "expect": {
+    "exit": 2,
+    "text": "--ask needs a terminal (standard input and standard error); run backlog team migrate --team parallel without --ask for the report"
+   }
+  },
+  {
+   "id": "VAL-21",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "web": {
+      "lead": "lead-1",
+      "members": [
+       "m-1"
+      ],
+      "external_reviewers": [
+       "r-1"
+      ],
+      "review": []
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "lead",
+      "rule": null,
+      "problem": "lead is not a key of a team entry"
+     },
+     {
+      "path": "members",
+      "rule": null,
+      "problem": "members is not a key of a team entry"
+     },
+     {
+      "path": "external_reviewers",
+      "rule": null,
+      "problem": "external_reviewers is not a key of a team entry"
+     },
+     {
+      "path": "review",
+      "rule": null,
+      "problem": "review is not a key of a team entry"
+     },
+     {
+      "path": "people",
+      "rule": null,
+      "problem": "the entry has no people"
+     },
+     {
+      "path": "item",
+      "rule": null,
+      "problem": "the entry has no item"
+     },
+     {
+      "path": "rules",
+      "rule": null,
+      "problem": "the entry has no rules"
+     },
+     {
+      "path": "people",
+      "rule": null,
+      "problem": "the team has no person"
+     },
+     {
+      "path": "item.status",
+      "rule": null,
+      "problem": "the item definition has no status field with values"
      }
     ]
    }

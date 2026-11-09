@@ -12,7 +12,6 @@ const B = 'BAKE-IN', L = 'LAZY-LOAD', S = 'SKIP', D = 'DEFERRED-WITH-EXPLICIT-BL
 const T8 = 'entry plan Task 8 (gap review of the branch backlog) files it as its own backlog item: a user-command feature, outside the rules engine';
 const T6 = 'entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI';
 const open = q => `owner question ${q} stays open in reference/08-owner-questions.md: a user-command question outside the rules engine`;
-const DEC = n => `decision ${n} of design/decisions.md`;
 const CHUNK = 'entry plan Task 6 states whether the owner\'s team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)';
 
 // ---- inventory.tsv: one terminal state per group (reference/01-inventory.md section 3 gives each group's rule)
@@ -39,9 +38,9 @@ const GROUP = {
   'ST-NORMALISE': [S, '-', 'decision D-19: a user status is stored as typed; a team value is checked against the field values (chapter 02)'],
   'ST-CANSTEP': [B, 'language: the rule table, when on $item.status (chapter 03)', ''], 'ST-NEXT': [B, 'language: do.set.status (chapter 03)', ''], 'ST-VALIDATE': [B, 'command: backlog team validate (chapter 08)', ''],
   'ST-FILL': [B, 'language: {$...} placeholders in deny and say texts (chapter 03)', ''],
-  'BIND-TEXTS': [S, '-', 'owner ruling R3a: a user command never meets a team item, so it has no refusal text for one'],
-  'BIND-UPDATE': MACH('user commands see only items without a team (R3a)', '04'), 'BIND-REPLAN': MACH('user commands see only items without a team (R3a)', '04'), 'BIND-ARCHIVE': MACH('user commands see only items without a team (R3a)', '04'),
-  'BIND-IMPORT': MACH('user commands see only items without a team (R3a)', '04'), 'BIND-CLEAN': MACH('user commands see only items without a team (R3a)', '04'), 'BIND-SPLIT': MACH('user commands see only items without a team (R3a)', '04'),
+  'BIND-TEXTS': [S, '-', 'owner rulings R3a, R16, R19: without --show-all a user command never meets a team item, with it the item is allowed, so no refusal text remains'],
+  'BIND-UPDATE': MACH('user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19)', '04'), 'BIND-REPLAN': MACH('user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19)', '04'), 'BIND-ARCHIVE': MACH('user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19)', '04'),
+  'BIND-IMPORT': MACH('user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19)', '04'), 'BIND-CLEAN': MACH('user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19)', '04'), 'BIND-SPLIT': MACH('user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19)', '04'),
   'BIND-NOSTATUS': MACH('default refusal when no rule matches', '03'), 'BIND-ENTRYOF': MACH('a team command acts on the items of its team and on items without a team', '04'),
   'BIND-UNBOUND': [B, 'example: parallel/adopt, patterns/release-to-users', 'language: effect team; only a rule that binds an item without a team may change it (Q-19 answer B, chapter 03)'], 'BIND-CLOSESTATUS': [S, '-', 'no status step in code (R1)'],
   'PC-LISTWORDS': [B, 'field: default words of the built-in user item definition (decision D-33, chapter 02)', ''], 'PC-FINISHED': [B, 'field: default words of the built-in user item definition (decision D-33, chapter 02)', ''],
@@ -52,12 +51,12 @@ const GROUP = {
   'PC-DEPGATE': [S, '-', 'decision D-18: no dependency gate on user commands'], 'PC-SEAM': [S, '-', 'decision D-17: the user-command code has no team seam'],
   'PC-HOOKS': [S, '-', 'decision D-17: team commands own their code path'], 'PC-HELD': [S, '-', 'held is the user holder field only; team roles are not read by user commands'],
   'PC-FIELDDOCS': [B, 'field: the built-in user item definition documents data only (chapter 02)', ''], 'PC-ARCHIVE-WORD': MACH('archived is the folder (envelope key archived), no status is written', '02'),
-  'ENV-INPUT': MACH('session inputs: flag, then variable, then configuration key; $session.* references', '04'), 'ENV-LEAD': [S, '-', 'the lead is a role in people; TEAM_LEAD and --lead are not read'],
+  'ENV-INPUT': MACH('session inputs: flag, then variable, then configuration key; $session.* references', '04'), 'ENV-LEAD': [S, '-', 'the lead is a role in people; SMOOTH_BACKLOG_CLI_TEAM_LEAD and --lead are not read'],
   'ENV-STALE': [L, 'pattern: patterns/take-over-stale-review', 'the wait is a number in the rule (function age)'], 'ENV-OPS': MACH('operator inputs', '04'),
   'ENV-SOURCE': [D, open('Q-12'), ''], 'ENV-TESTSEAM': [S, '-', 'production code reads no test variable'],
   'RO-MEMBERS': MACH('people: name to roles; $caller.roles', '01'), 'RO-AUTHOR': [L, 'pattern: patterns/review-own-session', ''],
-  'RO-SAMEWORKER': [L, 'pattern: patterns/review-own-session, patterns/ended-session', 'a session is BACKLOG_SESSION ($session.id); the agent name stays stable'],
-  'RO-CALLER': [D, DEC(2), 'whether a flag that differs from BACKLOG_AGENT is refused; R3b fixes only the order of the inputs'], 'RO-ACTSAS': [S, '-', 'no acting-as: a step that names another person takes it as an argument its rules check (example extreme-programming/pair-needs-navigator)'],
+  'RO-SAMEWORKER': [L, 'pattern: patterns/review-own-session, patterns/ended-session', 'a session is SMOOTH_BACKLOG_CLI_SESSION ($session.id); the agent name stays stable'],
+  'RO-CALLER': [S, '-', 'owner ruling R15: a flag that differs from the variable is not refused; the caller is the resolved agent (chapter 01 section 5)'], 'RO-ACTSAS': [S, '-', 'no acting-as: a step that names another person takes it as an argument its rules check (example extreme-programming/pair-needs-navigator)'],
   'SC-SCOPE': [L, 'pattern: patterns/scope-branch', ''], 'SC-BRANCHBOUND': [L, 'pattern: patterns/scope-branch', ''], 'SC-INTEAM': MACH('a team command acts on the items of its team and on items without a team', '04'),
   'STEP-GATE': [B, 'language: the rule table and its deny texts (chapter 03)', ''], 'STEP-CLAIM': [B, 'example: parallel/claim, parallel/claim-not-ready', ''],
   'STEP-RELEASE': [B, 'example: parallel/release, parallel/release-who', ''], 'STEP-REASSIGN': [L, 'pattern: patterns/reassign', ''], 'STEP-WAIT': [L, 'pattern: patterns/wait, patterns/resume', ''],
@@ -122,31 +121,31 @@ const testState = r => {
 
 // ---- consumers.tsv, gaps.tsv, owner questions, format gaps, findings, earlier decisions: one row each
 const ONE = {
-  'CON-01': [D, T6, 'TEAM_LEAD is not read; the lead is a role in people'], 'CON-02': [D, T6, 'list --json no longer shows team items; the consumer reads backlog team query --json'],
+  'CON-01': [D, T6, 'SMOOTH_BACKLOG_CLI_TEAM_LEAD is not read; the lead is a role in people'], 'CON-02': [D, T6, 'list --json no longer shows team items; the consumer reads backlog team query --json'],
   'CON-03': [D, T6, 'plan entries are the team\'s step names from backlog team query plan'], 'CON-04': [D, T6, 'instruction texts come from the team\'s deny and say texts'],
-  'CON-05': [B, 'command: backlog team pop --json keeps the key action; idle exits 3 (chapter 04)', ''], 'CON-06': [D, T6, 'TEAM_LEAD fallback dropped'],
+  'CON-05': [B, 'command: backlog team pop --json keeps the key action; idle exits 3 (chapter 04)', ''], 'CON-06': [D, T6, 'SMOOTH_BACKLOG_CLI_TEAM_LEAD fallback dropped'],
   'CON-07': [D, T6, 'final values are status.final of the team item definition (backlog team query definition)'],
   'CON-08': [B, 'machinery: backlog archive of an item without a team needs no --force (decision D-19)', ''],
   // review-b.md section 3: sampled behaviours of today's code that the first version did not carry or named a wrong target for
-  'B3-3': MACH('an unknown team subcommand: exit 2 naming the six', '04'), 'B3-10': MACH('TEAM_REPOSITORY must be owner/name (exit 2)', '01'),
+  'B3-3': MACH('an unknown team subcommand: exit 2 naming the six', '04'), 'B3-10': MACH('SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY must be owner/name (exit 2)', '01'),
   'B3-11': MACH('a detached HEAD with no branch given stops new, update and pop', '01'),
   'B3-19': [D, 'entry plan Task 6: the owner\'s team writes the dependency rule for items migrated without hand-off records (a closed producer with no record)', 'expressible with any and empty on the producer\'s hand-off field'],
   'B3-20': [S, '-', 'no digest: the record is fields only the team\'s step writes, and a new record withdraws the acceptance (chapter 03 section 12)'],
   'B3-27': [B, 'language: owner/name#seq references are read across folders (chapter 03 section 5)', 'cases PAR-64, PAR-65'],
   'B3-30': [B, 'language: placeholders in a literal note text (chapter 03 section 8)', ''],
   'B3-41': [L, 'pattern: patterns/close-same-commit', 'commit equality, not a reading of commit subjects'],
-  'B3-46': [L, 'pattern: patterns/review-cites-document', ''], 'B3-55': [D, DEC(2), ''], 'B3-60': [L, 'pattern: patterns/accept-input-reviewed', ''],
-  'B3-61': [L, 'pattern: patterns/reject-input', ''], 'B3-62': [D, DEC(2), ''], 'B3-63': [D, DEC(2), ''],
+  'B3-46': [L, 'pattern: patterns/review-cites-document', ''], 'B3-55': [S, '-', 'owner ruling R15: the refusal is removed'], 'B3-60': [L, 'pattern: patterns/accept-input-reviewed', ''],
+  'B3-61': [L, 'pattern: patterns/reject-input', ''], 'B3-62': [S, '-', 'owner ruling R15: the flag wins, no refusal'], 'B3-63': [S, '-', 'owner ruling R15: the flag wins, no refusal'],
   'B3-64': MACH('pop exits 1 on a synchronisation failure', '04'), 'B3-66': MACH('a detached HEAD with no branch given stops pop', '01'),
   'B3-67': [D, CHUNK, ''], 'B3-71': [B, 'field: claimed_by and claimed_at of the built-in user item definition (chapter 02 section 4)', ''],
   'B3-72': [B, 'field: backlog done writes closed (decision D-33; today done is stored as closed through normalise, finding F9)', ''],
-  'B3-73': MACH('the migration builds the index of a folder without one from priority', '06'), 'B3-74': [D, DEC(3), ''], 'CON-09': [D, T6, 'verdict words are the team\'s arguments'],
+  'B3-73': MACH('the migration builds the index of a folder without one from priority', '06'), 'B3-74': MACH('references to team items are hidden from user commands unless --show-all is given; with it they are seen and refusals may name them (R16)', '04'), 'CON-09': [D, T6, 'verdict words are the team\'s arguments'],
   'CON-10': [D, T6, 'already broken today; the binding step is a team rule (example parallel/adopt)'], 'CON-11': [D, T6, 'decisions are a filter of the team (pattern patterns/filter:decisions)'],
   'CON-12': [D, T6, 'show the status value; final values from the team item definition'], 'CON-13': [D, T6, 'the team writes its rule set in teams.json; no workflow file is registered'],
   'CON-14': [D, T6, 'the skills point at backlog team query rules and backlog team validate; no rule text duplicated'], 'CON-15': [D, T6, 'final values from the team item definition'],
   'CON-16': [D, T6, 'a session-end marker is a team rule (pattern patterns/ended-session)'], 'CON-17': [D, T6, 'review_state is a field of the team, if the team keeps it'],
   'CON-18': [D, T6, 'status values of the team'], 'CON-19': [D, T6, 'team define is removed; the lead edits teams.json and runs backlog team validate'], 'CON-20': [D, T6, 'status values of the team'],
-  'CON-21': [D, T6, 'final values from the team item definition'], 'CON-22': [D, T6, 'TEAM_LEAD assertions dropped with the export'],
+  'CON-21': [D, T6, 'final values from the team item definition'], 'CON-22': [D, T6, 'SMOOTH_BACKLOG_CLI_TEAM_LEAD assertions dropped with the export'],
   // gaps.tsv
   S29b: [L, 'pattern: patterns/set-status-lead', 'without such a rule the step is refused by default'], S82: [L, 'pattern: patterns/ended-session', ''],
   S92: [B, 'command: backlog team query check <item> <step> names the rule that refuses (chapter 04)', ''],
@@ -155,7 +154,7 @@ const ONE = {
   L55: MACH('exit codes 0, 1, 2, 3, 5; an uncaught error exits 1', '04'), L27: MACH('new --ask exists', '04'), L51: MACH('update notice exists', '04'),
   L32: [D, open('Q-09'), ''], L53: [D, open('Q-10'), 'team commands keep raw JSON payloads until it is answered (chapter 04)'], L54: [D, open('Q-11'), ''], L57: [D, open('Q-12'), ''], L58: [D, open('Q-12'), ''], L59: [D, open('Q-13'), ''], S95: [D, open('Q-14'), ''],
   // owner questions of reference/08-owner-questions.md
-  'Q-04': MACH('session inputs stay; each is also a flag on every team command (answered A)', '04'), 'Q-05': [B, 'language: declared rules are ordinary evaluated rules (example parallel/check-round-cap)', 'answered: rules in the team\'s file, generic CLI'],
+  'Q-04': MACH('session inputs stay, prefixed SMOOTH_BACKLOG_CLI_ (R20); each is also a flag on every team command, the flag first (answered A, R15)', '01'), 'Q-05': [B, 'language: declared rules are ordinary evaluated rules (example parallel/check-round-cap)', 'answered: rules in the team\'s file, generic CLI'],
   'Q-06': [B, 'language: effect delete; a team deletes only by a rule of its own; numbers are never reused (chapter 03, 05)', ''], 'Q-07': [B, 'language: effect branch; user move never sees a team item (R3a)', 'a move to another repository folder is not offered: the item would need a new number there'],
   'Q-08': [B, 'example: parallel/abandon', ''], 'Q-09': [D, open('Q-09'), ''], 'Q-10': [D, open('Q-10'), ''], 'Q-11': [D, open('Q-11'), ''], 'Q-12': [D, open('Q-12'), ''], 'Q-13': [D, open('Q-13'), ''],
   'Q-14': [D, open('Q-14'), ''], 'Q-15': [D, open('Q-15'), ''], 'Q-16': [S, '-', 'owner rulings R5 and R6: no workflow registry; the team writes its rule set in teams.json and migrate converts items only'],
@@ -173,7 +172,7 @@ const ONE = {
   'G-016': [B, 'language: effect say (pattern patterns/request-review)', ''], 'G-017': [L, 'pattern: patterns/close-dependents-accepted', ''],
   // findings F1 to F14 of reference/01-inventory.md section 5
   F1: MACH('the team\'s rules in teams.json are the only enforcement', '03'), F2: [B, 'command: backlog team validate refuses unknown keys, so every key is evaluated (chapter 08)', ''], F3: [B, 'example: parallel/claim-limit-team', 'a limit is a rule that is evaluated'],
-  F4: [S, '-', 'the key is gone with the old entry'], F5: [B, 'language: function age with the number in the rule', ''], F6: [S, '-', 'TEAM_LEAD and --lead are not read'],
+  F4: [S, '-', 'the key is gone with the old entry'], F5: [B, 'language: function age with the number in the rule', ''], F6: [S, '-', 'SMOOTH_BACKLOG_CLI_TEAM_LEAD and --lead are not read'],
   F7: MACH('an unreadable teams.json stops a team command (exit 2)', '01'), F8: [S, '-', 'verdicts are arguments the team\'s rules read'], F9: [B, 'field: a user status is stored as typed (D-19)', ''],
   F10: MACH('user new writes only the built-in user fields', '02'), F11: [S, '-', 'decision D-18'], F12: [S, '-', 'dead code'], F13: MACH('only a rule that binds an item without a team may change it', '03'),
   F14: [S, '-', 'no shipped definition; the team\'s rule set in teams.json is the only one (R5)'],
@@ -208,8 +207,23 @@ for (const c of sampled.filter(c => /^(M|X)|\/ M/.test(c[4]))) add('review-b.md 
 
 // ---- checks: one row per input, allowed states, every named example or pattern rule exists
 const STATES = [B, L, S, D];
+// the owner rulings of rounds 5 to 8 (R14 to R21), one row each, and the scope note
+const RULING = {
+  R14: MACH('a specific team for every team command; --show-all accepted by query, validate and migrate, refused by new, update and pop (cases R14-01 to R14-09)', '01'),
+  R15: MACH('flag, then variable, then configuration; a differing flag is not refused; the consequence is stated once (cases R15-01 to R15-03)', '01'),
+  R16: MACH('user commands ignore team items and hide references to them unless --show-all is given; the flag is derived for every user command that selects or lists items (cases R16-01 to R16-03)', '04 section 8'),
+  R17: MACH('backlog team migrate reports every missing, invalid or undeclared field per item; --ask repairs one field at a time on a terminal (cases R17-01, R17-02)', '06 section 2'),
+  R18: MACH('a team whose entry fails validation takes no action; the migration needs every entry valid; the checks cover required keys, shape, definition, coherence (case VAL-21)', '01 section 4 and 08'),
+  R19: MACH('with --show-all a user command may set values on a team item, with a history entry by the user (cases R19-01, R19-02)', '04 section 8'),
+  R19a: MACH('SMOOTH_BACKLOG_CLI_TEAM_NAME set: every user command fails with the blanket text; help and version are not blocked (cases R19A-01, R19A-02)', '04 section 8'),
+  R20: MACH('every CLI-owned environment variable is prefixed SMOOTH_BACKLOG_CLI_, the two internal ones the inventory missed included', '01 section 5'),
+  R21: MACH('the per-user validation record and validated copy, 24 hours, validate refreshes, update only when valid (spike teams-load.test.mjs)', '01 section 4'),
+  'scope note': MACH('several teams at once: one clone per user serialises one machine; across machines the re-run with a random growing wait (measured with contention.mjs)', '04 section 7'),
+};
 // the targets name decisions that exist
 const decisions = (readFileSync('decisions.md', 'utf8').match(/^## \d+\./gm) ?? []).length;
+for (const id of [...readFileSync('../00-owner-rulings.md', 'utf8').matchAll(/^- (R1[4-9]a?|R2[01])\./gm)].map(m => m[1])) add('00-owner-rulings.md', id, '', RULING[id] ?? (() => { throw new Error(`${id} unmapped`); })());
+if (/^## Scope note/m.test(readFileSync('../00-owner-rulings.md', 'utf8'))) add('00-owner-rulings.md', 'scope note', '', RULING['scope note']);
 const files = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 'single-agent', 'patterns'].map(n => [n, Object.values(JSON.parse(readFileSync(`examples/${n}.json`, 'utf8')))[0]]));
 const known = new Set(Object.entries(files).flatMap(([n, e]) => [...e.rules.table.map(r => r.id), ...e.rules.pop.map(o => o.id), ...Object.keys(e.rules.filters).map(v => `filter:${v}`)].map(id => `${n}/${id}`)));
 const seen = new Set();

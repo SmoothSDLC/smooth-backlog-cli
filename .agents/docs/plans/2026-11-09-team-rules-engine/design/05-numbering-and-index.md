@@ -97,7 +97,8 @@ Context: one list per branch holds team items and user items together, in one pr
 learns an entry's owner from the item file it already loads.
 
 - **The user queue** of a branch is the index list of that branch without the entries whose item has a `team`. `backlog list`,
-  `backlog next` and every user command read this filtered list.
+  `backlog next` and every user command read this filtered list; with `--show-all` they read the whole list (ruling R16, chapter 04
+  section 8), and a reordering given `--show-all` moves the item among all entries of the branch.
 - **A team's queue** is the open entries of the session's repository folder whose item has that team, in list order, branch after branch in
   the order of the index's branch keys (one branch when the session names one, the usual case). `backlog team pop` and the filters walk it.
 - **Reordering keeps the other side's places.** A user reordering (`backlog update <item> --priority <n>`, `backlog update --replan`) moves

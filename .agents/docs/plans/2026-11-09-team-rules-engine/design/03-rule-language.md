@@ -4,7 +4,7 @@ Context: owner ruling R1 makes the CLI a rules evaluator for team behaviour: giv
 the team's rule set decides whether the command is allowed, what the new values are and which other items change. The rule set is the
 `rules` key of the team's entry in `teams.json` (chapter 01). It must be readable by an agent or a person without reading the evaluator
 (owner ruling R8), and its precedence is an ordered table in the manner of a network routing table (owner ruling R10). This chapter
-defines the language completely; the evaluator spike in `design/evaluator-spike/` implements it in about 250 lines and runs every case of
+defines the language completely; the evaluator spike in `design/evaluator-spike/` implements it in a few hundred lines and runs every case of
 `design/rule-cases.json` against it.
 
 ## 1. The three tables
@@ -104,7 +104,7 @@ A literal text that starts with `$` is written `{"text": "$5"}`.
 | `$arg.<name>` | the argument `--<name> <value>` of the command, as text (empty when not given) |
 | `$caller` | the agent of the command |
 | `$caller.roles` | the caller's roles from `people` |
-| `$session.id`, `$session.repository`, `$session.branch`, `$session.commit` | BACKLOG_SESSION, TEAM_REPOSITORY, TEAM_BRANCH (or their flags; chapter 01 section 5), and the HEAD commit of the working copy |
+| `$session.id`, `$session.repository`, `$session.branch`, `$session.commit` | SMOOTH_BACKLOG_CLI_SESSION, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY, SMOOTH_BACKLOG_CLI_TEAM_BRANCH (or their flags; chapter 01 section 5), and the HEAD commit of the working copy |
 | `$team.name` | the command's team |
 | `$team.items` | the numbers of every live (not archived) item of the team in the session's repository folder, closing statuses included (a `count` that wants open items says so in its `match`). Numbers are per folder (chapter 05), so the set stays in one folder |
 | `$now` | the time of the command, ISO 8601 UTC |
@@ -218,7 +218,7 @@ LAZY-LOAD. Each pattern is an ordinary rule a team copies and adapts.
 
 | pattern rule(s) | states | cases |
 |---|---|---|
-| `scope-branch` | a session works only on items of its branch (today TEAM_REPOSITORY and TEAM_BRANCH bind a session in code) | PAT-01 |
+| `scope-branch` | a session works only on items of its branch (today SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BACKLOG_CLI_TEAM_BRANCH bind a session in code) | PAT-01 |
 | `new-linked` | a step that files a follow-up item which holds a gate item (format gap G-011) | PAT-02 |
 | `edit`, `edit-only-before-ready` | which field may change in which status | PAT-04, PAT-05 |
 | `set-status-lead` | a status set directly, by the lead only | PAT-06, PAT-07 |
@@ -268,8 +268,9 @@ wants one.
 The spike (`design/evaluator-spike/`) is three modules of plain Node with no dependency: `evaluator.mjs` (references, tests, functions, the
 table walk, effects with typing and reference checks, `new`, `pop`, filters, the coded team and agent resolution, the user-command
 visibility check, and the validate checks the cases exercise, the schema included), `safe-regex.mjs` (the linear matcher) and `numbers.mjs`
-(the high-water mark on git). Its tests are every case of `design/rule-cases.json`, one check that every rule, pop entry and filter of every
-example has a case and a verification entry, and the git scenarios of `numbers.test.mjs`. The line counts are in the review response file;
+(the high-water mark on git), plus `teams-load.mjs` (the validation on load of chapter 01 section 4) and `contention.mjs` (the
+measurement of chapter 04 section 7). Its tests are every case of `design/rule-cases.json`, one check that every rule, pop entry and filter of every
+example has a case and a verification entry, the git scenarios of `numbers.test.mjs` and the scenarios of `teams-load.test.mjs`. The line counts are in the review response file;
 they measure the idea, not the implementation, which adds files, git publication, the journal, the index, the history and the remaining
 validate checks of chapter 08. Many spike lines are long; the implementation will be several times its size.
 

@@ -16,6 +16,7 @@ const KEYS = {
   do: ['set', 'add', 'remove', 'note', 'related', 'place', 'archive', 'delete', 'branch', 'team', 'say'],
   related: ['items', 'set', 'add', 'remove'], note: ['heading', 'text'], place: ['before', 'after'],
 };
+const LABEL = { entry: 'a team entry', rules: 'rules', field: 'a field definition', rule: 'a rule', pop: 'a pop entry', filter: 'a filter', do: 'an effect list', related: 'a related entry', note: 'a note', place: 'a place' };
 const NAMES = { caller: ['', 'roles'], session: ['id', 'repository', 'branch', 'commit'], team: ['name', 'items'], now: [''] };
 const RESERVED_ARGS = ['team', 'agent', 'session', 'repository', 'branch', 'json', 'dry-run', 'help', 'version'];
 const NAME = /^[a-z][a-z0-9_-]*$/;
@@ -208,21 +209,62 @@ export function pop(ctx) {
 
 export const filter = (ctx, name) => queue({ ...ctx, order: ctx.items.map(i => i.seq) }).filter(i => test(ctx.entry.rules.filters[name].when, { ...ctx, item: i })).map(i => i.seq);
 
-// Coded CLI behaviour: the team of a team command, and what a user command can see.
-export function resolveTeam({ flags = {}, env = {}, config = {} }) {
-  const team = flags.team || env.TEAM_NAME || config.team;
-  if (!team) throw new Refusal('a team command needs a team: give --team <name>, or set the TEAM_NAME variable, or set the "team" key in .backlog/config.json', 2);
-  return team;
+// ---- coded CLI behaviour: the inputs of a team command (R3b, R14, R15, R20), and the user commands (R3a, R16, R19, R19a)
+const V = name => `SMOOTH_BACKLOG_CLI_${name}`;
+export const SHOW_ALL = ['query', 'validate', 'migrate']; // the team commands that may act over every team; new, update and pop act on one item for one team
+export function resolveInputs({ command, flags = {}, env = {}, config = {} }) {
+  const agent = flags.agent || env[V('AGENT')] || ''; // the flag first, then the variable; a flag that differs from the variable wins (R15)
+  if (flags['show-all']) {
+    if (!SHOW_ALL.includes(command)) throw new Refusal(`--show-all acts over every team; backlog team ${command} acts for one team: give --team <name> instead`, 2);
+    if (flags.team) throw new Refusal('--show-all acts over every team: give it or --team <name>, not both', 2);
+    return { team: null, all: true, agent };
+  }
+  const team = flags.team || env[V('TEAM_NAME')] || config.team;
+  if (!team) throw new Refusal('a team command needs a team: give --team <name>, or set the SMOOTH_BACKLOG_CLI_TEAM_NAME variable, or set the "team" key in .backlog/config.json', 2);
+  if (!agent && ['new', 'update', 'pop'].includes(command)) throw new Refusal('this team command needs the agent: give --agent <name>, or set the SMOOTH_BACKLOG_CLI_AGENT variable', 2);
+  return { team, all: false, agent };
 }
+export const resolveTeam = ({ flags = {}, env = {}, config = {} }) => resolveInputs({ command: 'query', flags, env, config }).team;
 export const resolveAgent = ({ flags = {}, env = {} }) => {
-  const agent = flags.agent || env.BACKLOG_AGENT;
-  if (!agent) throw new Refusal('this team command needs the agent: give --agent <name>, or set the BACKLOG_AGENT variable', 2);
+  const agent = flags.agent || env[V('AGENT')];
+  if (!agent) throw new Refusal('this team command needs the agent: give --agent <name>, or set the SMOOTH_BACKLOG_CLI_AGENT variable', 2);
   return agent;
 };
-export function userShow(items, n) {
-  const item = items.find(i => i.seq === Number(n) && !i.team);
+// R19a: a session that names a team cannot run a user command at all (help and version are not user commands).
+export function userGuard(env = {}) { if (env[V('TEAM_NAME')]) throw new Refusal('teams are not allowed to use user commands', 2); }
+// R3a with R16: a team item is invisible to a user command unless --show-all is given; then it is shown like any item.
+export function userShow(items, n, { showAll = false, env = {} } = {}) {
+  userGuard(env);
+  const item = items.find(i => i.seq === Number(n) && (showAll || !i.team));
   if (!item) throw new Refusal(`no phase '${n}'`);
   return item;
+}
+// R19: with --show-all a user command may set values on a team item (no rule applies; the history names the user).
+// shortcut: the value is stored as JSON when it parses as JSON (a number, true, a list), else as text; the user command never reads teams.json.
+export function userSet(items, n, { field, value, user, showAll = false, env = {}, now }) {
+  const item = userShow(items, n, { showAll, env });
+  let v; try { v = JSON.parse(value); } catch { v = value; }
+  const before = item.fields[field];
+  return { ...item, fields: { ...item.fields, [field]: v }, history: [...(item.history ?? []), { at: now, by: user, step: 'update', changes: { [field]: [before ?? null, v] }, note: item.team ? `--show-all on an item of team ${item.team}` : '' }] };
+}
+// R16: a reference to a team item reads as missing for a user command, unless --show-all is given.
+export const userReference = (items, n, { showAll = false } = {}) => { const t = items.find(i => i.seq === Number(n)); return t && (showAll || !t.team) ? { seq: t.seq, status: t.fields.status } : { seq: Number(n), missing: true }; };
+
+// R17: every missing, invalid or undeclared field of a team's items, one line each (backlog team migrate reports them).
+export function itemFindings(entry, items) {
+  const out = [];
+  for (const it of items) {
+    for (const [f, def] of Object.entries(entry.item)) {
+      if (!(f in it.fields)) { out.push(`item ${it.seq}: field ${f} is missing (${def.type}${def.values ? `: ${def.values.join(', ')}` : ''})`); continue; }
+      try { typed(entry, f, it.fields[f]); } catch (e) { out.push(`item ${it.seq}: ${e.message}`); }
+    }
+    for (const f of Object.keys(it.fields)) if (!(f in entry.item)) out.push(`item ${it.seq}: field ${f} is not declared by the item definition`);
+  }
+  return out;
+}
+export function migrateAsk({ isTerminal, team }) {
+  if (!isTerminal) throw new Refusal(`--ask needs a terminal (standard input and standard error); run backlog team migrate --team ${team} without --ask for the report`, 2);
+  return true;
 }
 
 // ---- backlog team validate (the checks the cases exercise; chapter 08 lists all of them)
@@ -234,8 +276,10 @@ export function validate(file) {
   const out = [];
   const say = (team, path, rule, problem, fix) => out.push({ team, path, rule, problem, fix });
   for (const [team, e] of Object.entries(file)) {
-    const keys = (obj, kind, path, rule = null) => { if (obj && typeof obj === 'object' && !Array.isArray(obj)) for (const k of Object.keys(obj)) if (!KEYS[kind].includes(k)) say(team, `${path}.${k}`.replace(/^\./, ''), rule, `${k} is not a key of ${kind === 'do' ? 'an effect list' : `a ${kind}`}`, `did you mean ${closest(k, KEYS[kind])}? (${KEYS[kind].join(', ')})`); };
+    const keys = (obj, kind, path, rule = null) => { if (obj && typeof obj === 'object' && !Array.isArray(obj)) for (const k of Object.keys(obj)) if (!KEYS[kind].includes(k)) say(team, `${path}.${k}`.replace(/^\./, ''), rule, `${k} is not a key of ${LABEL[kind]}`, `did you mean ${closest(k, KEYS[kind])}? (${KEYS[kind].join(', ')})`); };
     keys(e, 'entry', ''); keys(e.rules, 'rules', 'rules');
+    for (const k of KEYS.entry) if (!e?.[k]) say(team, k, null, `the entry has no ${k}`, `add ${k} (chapter 01 section 2)`);
+    if (e?.rules) for (const k of KEYS.rules) if (!e.rules[k]) say(team, `rules.${k}`, null, `rules has no ${k}`, `add "${k}": ${k === 'filters' ? '{}' : '[]'}`);
     const roles = new Set(Object.values(e.people ?? {}).flat());
     if (!e.people || !Object.keys(e.people).length) say(team, 'people', null, 'the team has no person', 'add "people": {"<name>": ["<role>"]}');
     for (const [f, d] of Object.entries(e.item ?? {})) {

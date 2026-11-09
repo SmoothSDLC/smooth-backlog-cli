@@ -7,20 +7,21 @@ fixes the order of the cut-over, the command, the data issues of real backlogs a
 
 ## 1. The order of the cut-over
 
-Context: on a backlog that still holds markdown items, every command of the new release stops (section 2) except two, so the owner and
-the team can prepare the switch without a half-migrated backlog.
+Context: on a backlog that still holds markdown items, every command of the new release stops (section 2) except `backlog team validate`
+and `backlog team migrate`, so the owner and the teams can prepare the switch without a half-migrated backlog. Ruling R18 allows no
+backwards compatibility: a team entry still in today's shape is not read, it stops the migration.
 
-1. **The team rewrites its entry** in `teams.json` in the new shape (people, item definition, rule set; chapter 01) in its working copy of
-   the backlog repository, and checks it with `backlog team validate`. On a markdown backlog validate checks the file alone (chapter 08
-   sections 3 to 6) and says that the items are checked after the migration.
-2. **The owner previews** with `backlog team migrate --dry-run`. It lists, besides the conversion summary of section 2: every entry of
-   `teams.json` that is not in the new shape, with the number of open items bound to it; every open bound item whose `status` value its
-   team's new definition does not declare; every reference between an item without a team and a team item (decision 3); and the refs
-   whose history seeds the number counters.
-3. **The owner migrates** with `backlog team migrate`. Whether it refuses while an entry with open bound items is not in the new shape is
-   decision 4; the recommended answer is that it refuses, so no team item is left unreachable.
-4. **The team moves its values** with steps of its own rule set where its words changed (for example a lead-only step that sets `status`
-   from an argument, pattern `set-status-lead`), using the list of step 2. The CLI translates no word (ruling R1).
+1. **Each team rewrites its entry** in `teams.json` in the new shape (people, item definition, rule set; chapter 01) in its working copy of
+   the backlog repository, and checks it with `backlog team validate --team <name>`. On a markdown backlog validate checks the file alone
+   (chapter 08 sections 3 to 6) and says that the items are checked after the migration.
+2. **The owner previews** with `backlog team migrate --show-all --dry-run`. It lists the conversion summary of section 2, every entry of
+   `teams.json` that fails validation, every reference between an item without a team and a team item (hidden from user commands unless
+   `--show-all` is given, ruling R16), the refs whose history seeds the number counters, and the field report of section 2.1 for every team.
+3. **The owner migrates** with `backlog team migrate --show-all` (or `--team <name>`, section 2). Every entry of `teams.json` must pass
+   validation, or the migration takes no action (R18).
+4. **Each team repairs its items**: the report of section 2.1 lists every missing or invalid field; the team fixes them with
+   `backlog team migrate --team <name> --ask` on a terminal, or with steps of its own rule set (for example a lead-only step that sets
+   `status` from an argument, pattern `set-status-lead`). The CLI translates no word (ruling R1).
 
 ## 2. The command
 
@@ -28,32 +29,72 @@ Scenario: the owner upgrades the CLI; any other command on the backlog stops wit
 `❌ backlog: the items of <owner>/<name> are markdown files; run backlog team migrate once to convert every item to JSON` (exit 2). Only
 `backlog team validate`, `backlog team migrate`, `backlog --help`, `backlog --version` and `backlog upgrade` run on a markdown backlog.
 
-- `backlog team migrate --dry-run` — prints, per repository folder: the open and archived items converted, the items unbound (section 4.1),
-  the split items linked (section 4.3), the folders whose order is built from `priority` (section 4.4), the index entries whose status copy
-  changes (section 4.6), the counter value of every folder (chapter 05 section 4) and every case that would stop the migration (section 5),
-  then the lists of section 1 step 2. Writes nothing.
-- `backlog team migrate` — converts, commits once (`backlog: migrate <n> items to JSON`) and pushes; prints the same summary with `✅`. On a
-  backlog with no markdown item it applies only section 4.1 to JSON items whose team has no entry (so it can be run again after a team entry
-  is removed) and otherwise prints `ℹ️  nothing to migrate` and exits 0.
+Like every team command, the migration needs a specific team or `--show-all` (rulings R3b, R14). The two forms differ only in which team's
+items are checked against an item definition: **the conversion is always the whole backlog**, because ruling R4 allows no second format,
+so a backlog half in markdown and half in JSON can never exist. `--team web` converts every item and reports the fields of team `web`'s items;
+`--show-all` converts every item and reports every team's items. On a backlog already in JSON, the command converts nothing and only checks
+and reports (and unbinds items of teams without an entry, section 4.1, with `--show-all` only).
 
-Team and agent: the command acts on every repository folder and every item, team or not; whether it requires a team (ruling R3b reads as a
-requirement of every team command) is decision 1. It reads no user identity; the commit is made by git's configured author and the items
-keep their `updated` and `updated_by` values.
+- `backlog team migrate --team <name> --dry-run` (or `--show-all --dry-run`) — prints, per repository folder: the open and archived items
+  converted, the items unbound (section 4.1), the split items linked (section 4.3), the folders whose order is built from `priority`
+  (section 4.4), the index entries whose status copy changes (section 4.6), the counter value of every folder (chapter 05 section 4), every
+  case that would stop the migration (section 5), the lists of section 1 step 2, and the field report (section 2.1). Writes nothing.
+- `backlog team migrate --team <name>` (or `--show-all`) — converts, commits once (`backlog: migrate <n> items to JSON`) and pushes; prints
+  the same summary with `✅`, then the field report.
+- `backlog team migrate --team <name> --ask` — after the conversion (or on a JSON backlog), asks for each missing or invalid field of the
+  team's items, one field at a time (section 2.2).
+
+It reads no user identity. The commit is made by git's configured author; converted items keep their `updated` and `updated_by` values,
+and a field set by `--ask` is recorded with the resolved agent (`--agent`, else SMOOTH_BACKLOG_CLI_AGENT; `--ask` needs one, exit 2 as
+`backlog team update` does without it).
+
+### 2.1 The field report (ruling R17)
+
+Context: converted items keep their fields as stored, so a team's items may lack fields its new definition declares, or hold values it does
+not allow. By default the migration only reports them; it changes no field.
+
+For each item of the team (every team with `--show-all`), one line per problem, in item order, then a closing line:
+
+```
+item 1: field status: "pending" is not one of new, splitting, ready, in progress, checking, passed, closed
+item 2: field estimate is missing (number)
+item 2: field stage is not declared by the item definition
+ℹ️  3 problems in 2 items of team parallel; backlog team migrate --team parallel --ask repairs them one field at a time on a terminal
+```
+
+The checks are the type and allowed-value checks of chapter 02 section 3 for every declared field the item carries, "missing" for every
+declared field it lacks, and "not declared" for every field the definition does not name (case R17-01). Archived items are not checked (no
+rule applies to them). The report does not stop the migration and does not change the exit code.
+
+### 2.2 `--ask`: one field at a time, on a terminal
+
+On a terminal, `--ask` takes the report's problems in order and asks on standard error, for example
+`item 2, field estimate (number, Minutes of work, review included): `. The answer is checked like a written value (chapter 02 section 3); a
+wrong answer repeats the question with the reason; an empty answer leaves the field as it is; for an undeclared field the question is
+`item 2, field stage is not declared: remove it? (yes/no) `. The answers are written at the end in one commit, each item with a history entry
+(`step` `migrate --ask`, `by` the agent); the end of the input before the last question writes nothing (`no answer; nothing was changed`),
+as `backlog new --ask` does today. Without a terminal (standard input and standard error), `--ask` is refused before anything else, with the
+text pattern of `backlog new --ask` (`src/shared/new.js:106`): exit 2,
+`❌ backlog: --ask needs a terminal (standard input and standard error); run backlog team migrate --team <name> without --ask for the report`
+(case R17-02).
 
 ## 3. Order of work
 
 1. Take the clone lock, pull. Refuse on a shallow clone (chapter 05 section 2) and say which refs' history it reads (every ref the clone
    holds; the owner fetches the branches it wants counted first).
-2. Read `teams.json`. A missing or unreadable file, or one that is not a JSON object, stops the migration (section 5): the migration needs
-   the team names to know which items to unbind, and it never treats an unreadable file as "no team". A team that is gone on purpose is
-   removed from the file; an owner who wants every team item unbound writes `{}`.
+2. Load `teams.json` and validate the whole file in full (chapter 08 sections 3 to 6; the per-user record of chapter 01 section 4 is not
+   used: the migration always validates, as `backlog team validate` does). A missing or unreadable file, or any entry that fails, stops
+   the migration with no action (R18, section 5). The migration needs the team names to know which items to unbind, and an owner who wants
+   every team item unbound writes `{}`.
 3. For every `<owner>/<name>` folder: read every `.md` item file of `phases/` and of `archive/` (recursively) with today's front-matter
-   reader (`src/shared/frontmatter.js`, which survives only here); a file of `phases/` without a front-matter block is not an item and is left
-   alone, as today. Build the folder's order (section 4.4) before anything is dropped.
+   reader (`src/shared/frontmatter.js`, which survives only here, as the reader of the cut-over and not as a second format); a file of
+   `phases/` without a front-matter block is not an item and is left alone, as today. Build the folder's order (section 4.4) before anything
+   is dropped.
 4. Build each JSON file with the mapping of chapter 02 section 5 and the rules of section 4.
 5. Check the whole backlog before writing anything (section 5).
 6. Write every JSON file, remove every converted `.md` file, write `numbers.json` of every folder that ever held an item (chapter 05 section 4,
    folders without items today included) and the index of every folder, all through the journal; commit once; push.
+7. Print the field report (section 2.1); with `--ask`, run section 2.2.
 
 ## 4. Data issues of real backlogs
 
@@ -89,7 +130,7 @@ Owner question Q-19, answered B: an item without a `team` whose body carries a l
 gets `fields.parent` = the number of the item that slug names (looked up in the same folder, open or archived). When the body carries two
 such lines, the first wins and the summary lists the item. The parent is not changed: the migration knows no team field name for children.
 When the slug names no item, `parent` stays null and the summary lists the item. When the parent is a team item, the reference crosses from
-an item without a team to a team item, which decision 3 settles. A team that wants such an item binds it with a rule of its own (example
+an item without a team to a team item: the parent is kept, and user commands see it only with `--show-all` (ruling R16). A team that wants such an item binds it with a rule of its own (example
 rule `adopt`, case PAR-48).
 
 ### 4.4 The order of a folder without an index
@@ -118,7 +159,7 @@ then shows the stored word.
 
 ## 5. Failures (migrate or fail)
 
-The migration writes nothing when any of these holds, and lists every case found, each with the file and the reason (exit 2):
+The migration takes no action (no item, no file, nothing in the backlog) when any of these holds, and lists every case found, each with the file and the reason (exit 2):
 
 | case | text |
 |---|---|
@@ -128,13 +169,29 @@ The migration writes nothing when any of these holds, and lists every case found
 | two items hold one number | `<owner>/<name>: number <n> is held by <slug a> and <slug b>; give one of them a free number in markdown and run again` |
 | the JSON file name is taken | `<path>.json exists; remove it or rename it` |
 | a symbolic link in a folder | today's path safety text |
-| (decision 4, if answered A) an entry with open bound items is not in the new shape | `team <t> has <n> open items and its entry is not in the new shape; rewrite it and run backlog team validate first` |
+| an entry of `teams.json` fails validation (for example one still in today's shape) | `team <t> fails validation in teams.json; rewrite it and run backlog team validate --team <t> first` (R18) |
 
 After a successful migration every reader reads only `.json` items. A `.md` file with a front-matter block that appears in `phases/` or
 `archive/` later (a branch merged from before the migration) stops every command with the text of section 2, and `backlog team migrate`
 converts it.
 
-## 6. Scenarios for the BDD plan
+## 6. No compatibility path after the cut-over (ruling R18)
+
+Context: ruling R18 allows no backwards compatibility anywhere. The migration is the one moment old data is read; after it, every old form
+fails with a text that names the way forward, and nothing reads it. The tolerance paths of today's code and what replaces each:
+
+| today | after the cut-over |
+|---|---|
+| the markdown reader with both spellings of the header (`src/shared/frontmatter.js:259-298`) | used only inside `backlog team migrate`; any other command meeting a `.md` item stops (section 5) |
+| the translation of old status words, `stage` and `review_state` on every read (`src/shared/status.js:71-136`) | removed; the values stay fields as stored and the team moves them with its own steps (section 1) |
+| the write that drops retired keys (`src/shared/store.js:217-224`) | removed; the migration drops them once |
+| the order built from `priority` when a folder has no index (`src/shared/index.js:54-58`) | used only inside the migration (section 4.4) |
+| the root configuration file `.smooth-backlog.json` of earlier builds, still read (`src/shared/setup.js:16,24`) | not read: a repository that has it and no `.backlog/config.json` stops every command with exit 2, `❌ backlog: the backlog configuration is the old root file .smooth-backlog.json; move it to .backlog/config.json` |
+| a done producer without hand-off records satisfies a dependency edge (`src/team/handoff.js:53-57`) | no coded edge at all; a team that wants that reading writes it as a rule (entry plan Task 6) |
+| the environment variables without the prefix (TEAM_NAME, BACKLOG_AGENT, ...) | not read (ruling R20, no alias): a session that still sets only the old names has no team and no agent, and the command says so with the three-ways text |
+| a team entry in today's shape (`lead`, `members`, `review`) | fails validation; its team commands and the migration take no action |
+
+## 7. Scenarios for the BDD plan
 
 The migration acts on files and git, so the evaluator spike does not run it (the counter seeding is spike test 7 of `numbers.test.mjs`).
 Scenarios for the BDD plan (entry plan Task 3), with fixtures built from the forms above: "an open item of a team with an entry", "an item of
@@ -144,4 +201,7 @@ gets its parent number", "two split lines: the first wins", "a split item whose 
 priority order", "absent created and updated_by", "an unreadable header stops the migration", "two items with one number stop the
 migration", "a shallow clone stops the migration", "every folder that ever held an item gets its counter", "a second run says nothing to
 migrate", "a second run after a team entry is removed unbinds its items", "a markdown item after the migration stops a command",
-"validate runs on a markdown backlog and checks the file only".
+"validate runs on a markdown backlog and checks the file only", "an entry in today's shape stops the migration and nothing is written",
+"migrate without a team or --show-all stops with the three-ways text", "the field report lists a missing, an invalid and an undeclared
+field", "--ask on a terminal repairs one field and records it", "--ask without a terminal is refused", "a repository with only .smooth-backlog.json stops with the move text", "a session with only the
+unprefixed variables gets the three-ways text".

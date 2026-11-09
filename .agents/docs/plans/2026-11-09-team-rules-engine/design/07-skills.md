@@ -34,8 +34,10 @@ tell the agent what each field means; rule ids and deny texts tell it why it was
 
 ## 3. The lead
 
-- The lead changes the rules by editing `teams.json` in its working copy of the backlog repository, running `backlog team validate` until it
-  reports no error, then committing and pushing with git. The CLI never writes the file.
+- The lead changes the rules by editing `teams.json` in its working copy of the backlog repository, running
+  `backlog team validate --team <team>` until it reports no error, then committing and pushing with git. The CLI never writes the file.
+  Validating before the push matters twice: other machines read the change only when their 24-hour validation record expires (chapter 01
+  section 4), and an invalid entry found then stops every team command of the team on that machine with no action (ruling R18).
 - `backlog team query plan` shows what pop would offer each person; the lead uses it to see idle members and blocked work, and filters for
   the team's own lists (decisions, waiting items).
 - Splitting is a step and a creation: the lead's step that opens a split (in the parallel-work example `split-start`), then
@@ -43,6 +45,9 @@ tell the agent what each field means; rule ids and deny texts tell it why it was
   queue order.
 
 ## 4. What a skill must not do
+
+- Run a user command (`backlog list`, `backlog update`, ...) in a team session: with SMOOTH_BACKLOG_CLI_TEAM_NAME set every user command
+  stops with `❌ backlog: teams are not allowed to use user commands` (ruling R19a). Every read and write goes through `backlog team`.
 
 - Restate a rule ("the holder closes", "at most three in progress"): the rule is in the file; a restated copy drifts.
 - Read or write item files, `index.json`, `numbers.json` or `teams.json` directly (writing `teams.json` is the lead's edit described in
@@ -56,11 +61,13 @@ The "Team work" section of `templates/skills/backlog/SKILL.md` (lines 49 to 79 t
 `teams.json`; the commands of chapter 04 section 1 with their scenarios; the session loop of section 2; how to read a refusal; and a pointer
 to the example rule sets (shipped as documentation, never read by the CLI). The lines that describe today's per-step flags, `wip-limits.json`,
 `team define` and `team workflow` are removed. The "Working alone" section loses the sentence about user commands refusing team items
-(line 43 today): user commands no longer see team items.
+(line 43 today) and gains the rule that user commands see team items only with `--show-all` (chapter 04 section 8). The environment
+variables the skill names are the prefixed ones (ruling R20: SMOOTH_BACKLOG_CLI_TEAM_NAME, SMOOTH_BACKLOG_CLI_AGENT,
+SMOOTH_BACKLOG_CLI_SESSION, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY, SMOOTH_BACKLOG_CLI_TEAM_BRANCH).
 
 ## 6. The scripts and skills beside a team
 
-The consumer rows of `reference/consumers.tsv` (scripts that parse `list --json`, read status words, export TEAM_LEAD, call
+The consumer rows of `reference/consumers.tsv` (scripts that parse `list --json`, read status words, export SMOOTH_BACKLOG_CLI_TEAM_LEAD, call
 `team define`) change with the team's rule set in entry plan Task 6; `design/coverage.tsv` gives each its state and what it reads from the
 CLI afterwards. Two contracts stay as they are for them: `backlog team pop --json` keeps the key `action`, exits 3 when idle and only then,
 and exits 1 on a failure.

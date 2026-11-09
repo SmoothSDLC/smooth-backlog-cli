@@ -9,7 +9,7 @@ definition inside it is chapter 02, the rule set chapter 03, and the checks of `
 
 - **Written by** a person or an agent of the team, by hand or with its own tools, and committed and pushed with git like any other file
   of the backlog repository. The CLI never creates, rewrites, registers or migrates it (owner ruling R5). No CLI command takes a template.
-- **Read by** the team commands only: `backlog team new`, `backlog team update`, `backlog team query`, `backlog team pop` (each reads the
+- **Read by** the team commands only (through the validated copy of section 4 while the record is fresh): `backlog team new`, `backlog team update`, `backlog team query`, `backlog team pop` (each reads the
   entry of its own team) and `backlog team validate` (reads the whole file). `backlog team migrate` reads only the team names (chapter
   06). No user command opens the file (owner ruling R3).
 - **Files that are no longer read**: `workflows.json`, `wip-limits.json`, `backlog.scope` and the CLI's shipped `templates/workflows/team.json`.
@@ -62,40 +62,86 @@ the agent name of the command (section 5); `people` turns that name into roles a
   (case COD-10), so a typo in an agent name is refused by the team's own first rule.
 - A person field of an item (type `person`, chapter 02) only takes a name of `people` or the empty value.
 
-## 4. How a team command reads the file
+## 4. How a team command loads the file (validation on load, owner ruling R21)
 
-1. The command resolves its team (section 5) and reads `teams.json` once.
-2. A missing file, a file that is not JSON, or a value that is not an object: exit 2,
-   `❌ backlog: teams.json cannot be read (<reason>); fix it and run backlog team validate`. There is no silent empty default (today's
-   behaviour of reading such a file as empty is finding F7 of the reference inventory, removed).
-3. No entry for the team: exit 1, `❌ team <team> has no entry in teams.json (teams: <names>)`.
-4. The team's entry is checked with every check of chapter 08 that concerns that entry, the schema of chapter 03 section 14 included
-   (an unknown key, a condition with two keys). Any error: exit 2,
-   `❌ backlog: team <team> has <n> problem(s) in teams.json; run backlog team validate --team <team>`. A broken rule set is never
-   evaluated. Problems in other teams' entries do not stop this team (only `backlog team validate` reports them).
-5. The entry is used for the whole command; the file is not read again. A command that runs again on the upstream files (chapter 04
-   section 6) reads the file again, so a rule change published meanwhile applies.
+Context: owner ruling R18 says that a team command whose load of `teams.json` fails validation takes no action at all: it changes no item,
+no file and nothing in the backlog. Ruling R21 fixes how often the file is validated: once, then again only when the record of the last
+valid validation is missing or older than 24 hours. This section designs that procedure; chapter 08 lists the checks themselves.
+
+**The record.** It lives in the CLI's per-user configuration folder, the folder that already holds the per-user record of where a
+backlog is cloned (`$XDG_CONFIG_HOME`, else `~/.config`): `smooth-backlog-cli/teams-validation/<key>.json`, where `<key>` is the first 16
+hexadecimal characters of the SHA-256 of the backlog folder's absolute path, so two backlogs (or two clones of one) never share a record.
+It holds three values: `sha` (the SHA-256 of `teams.json` as validated), `valid_teams` (the names of the teams whose entries passed, as one
+comma-separated text) and `validated_at` (ISO 8601 UTC). Beside it, `<key>.teams.json` is the validated copy of the file. Both are
+written atomically (a temporary file renamed). This is outside every repository, so no repository's working tree changes (see
+`review-response.md`, round 2, finding R2-1, for why the SHA is not written into `.backlog/config.json`).
+
+**The procedure** (every team command except `backlog team validate`):
+
+1. Resolve the inputs (section 5).
+2. If the record exists, is less than 24 hours old, its copy's SHA equals the recorded `sha`, and it names the command's team in
+   `valid_teams` (for `--show-all`: it names every team of the copy), the command uses the copy and does not read `teams.json`.
+3. Otherwise it reads `teams.json` and validates the whole file (chapter 08 sections 3 to 6). When at least one team is valid, it writes
+   the copy and the record (the SHA of what it read, the valid teams, now); when none is, the record and the copy stay as they were (lead
+   decision c of R21: the record changes only after a valid validation). The CLI prints nothing about the record.
+4. A file that is missing, not JSON or not an object: exit 2, `❌ backlog: teams.json cannot be read (<reason>); fix it and run backlog
+   team validate --team <team>`. There is no silent empty default (finding F7 of the reference inventory, removed).
+5. No entry for the team: exit 1, `❌ team <team> has no entry in teams.json (teams: <names>)`.
+6. The team's entry fails validation: exit 2, `❌ backlog: team <team> fails validation in teams.json; run backlog team validate --team
+   <team>`; for `--show-all`, any team failing: `❌ backlog: teams.json fails validation for <teams>; run backlog team validate --show-all`.
+   Nothing is written. A team whose entry passes runs even when another team's entry fails: the record of R21 lists the valid teams one by
+   one, which only makes sense if validity is per team. The migration is the exception: it converts every item of every team, so every
+   entry must pass (chapter 06 section 3).
+7. The entry is used for the whole command. A command that runs again on the upstream files (chapter 04 section 6) loads again by the same
+   procedure, so within the 24 hours it uses the same copy.
+
+**Consequence (stated by the ruling, not a question):** within the 24 hours an edit of `teams.json` is not read by later commands of that
+user on that machine; a lead who changes the rules runs `backlog team validate`, which always validates in full and refreshes the record
+(lead decision b of R21), and the agents of other machines see the change when their own record expires or after their own validate. Two
+machines may therefore evaluate two versions of the rules for up to 24 hours. An invalid edit pushed by a lead stops each machine's team
+commands when that machine's record expires, possibly hours after the push; this is why chapter 07 makes the lead validate before pushing.
+
+When the configuration folder cannot be written (a read-only home in a sandbox), every command validates in full, silently. The optional
+environment variable for the record that lead decision a mentions is not designed: a command needs the file's content, not only its SHA,
+so a record without the copy cannot spare the read (`review-response.md`, round 2, finding R2-2). Spike: `evaluator-spike/teams-load.mjs`
+and its six tests.
 
 ## 5. Inputs of a team command (coded CLI behaviour)
 
-Context: owner ruling R3b fixes how a team command learns which team it acts for and who calls it; this is CLI behaviour, the same for
-every team. Each input is a flag on every team command, then an environment variable, then (for the team only) a configuration key.
+Context: owner rulings R3b, R14, R15 and R20 fix how a team command learns which team it acts for and who calls it; this is CLI behaviour,
+the same for every team. Each input is looked up as 1 the flag, 2 the environment variable, 3 the configuration file (for the team only).
+An explicit flag always wins, and a flag that differs from the variable is not refused (R15).
 
 | input | flag | variable | configuration | when absent |
 |---|---|---|---|---|
-| team | `--team <name>` | TEAM_NAME | the `team` key of `.backlog/config.json` | the command stops (below) |
-| agent | `--agent <name>` | BACKLOG_AGENT | none | `new`, `update`, `pop` stop with exit 2 `❌ backlog: this team command needs the agent: give --agent <name>, or set the BACKLOG_AGENT variable`; `query` answers without a caller (a `check` or a `plan` for one person needs it) |
-| session | `--session <id>` | BACKLOG_SESSION | none | `$session.id` is empty |
-| repository | `--repository <owner/name>` | TEAM_REPOSITORY | none | the repository of the working copy; `$session.repository`. A value that is not `owner/name` stops the command: exit 2, `❌ backlog: TEAM_REPOSITORY='<value>': expected owner/name` (today's check, `src/team/team.js:44`) |
-| branch | `--branch <name>` | TEAM_BRANCH | none | the current branch of the working copy; `$session.branch`. On a detached HEAD with no branch given, `new`, `update` and `pop` stop: exit 2, `❌ backlog: HEAD is detached: check out a branch, or give --branch <name> (TEAM_BRANCH)` (today `src/team/pop.js:153`); `query` and `validate` work |
+| team | `--team <name>` | SMOOTH_BACKLOG_CLI_TEAM_NAME | the `team` key of `.backlog/config.json` | the command stops (below), unless `--show-all` is given where it is accepted |
+| agent | `--agent <name>` | SMOOTH_BACKLOG_CLI_AGENT | none | `new`, `update`, `pop` stop with exit 2 `❌ backlog: this team command needs the agent: give --agent <name>, or set the SMOOTH_BACKLOG_CLI_AGENT variable`; `query`, `validate` and `migrate` (without `--ask`) work without a caller |
+| session | `--session <id>` | SMOOTH_BACKLOG_CLI_SESSION | none | `$session.id` is empty |
+| repository | `--repository <owner/name>` | SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY | none | the repository of the working copy; `$session.repository`. A value that is not `owner/name` stops the command: exit 2, `❌ backlog: SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY='<value>': expected owner/name` (today's check, `src/team/team.js:44`) |
+| branch | `--branch <name>` | SMOOTH_BACKLOG_CLI_TEAM_BRANCH | none | the current branch of the working copy; `$session.branch`. On a detached HEAD with no branch given, `new`, `update` and `pop` stop: exit 2, `❌ backlog: HEAD is detached: check out a branch, or give --branch <name> (SMOOTH_BACKLOG_CLI_TEAM_BRANCH)` (today `src/team/pop.js:153`); `query` and `validate` work |
 
 When no team is given by any of the three ways the command stops with exit 2 and exactly:
-`❌ backlog: a team command needs a team: give --team <name>, or set the TEAM_NAME variable, or set the "team" key in .backlog/config.json`
-(case COD-01; the `user` key of the configuration is never read by a team command, case COD-13). Team commands never read the
-operating system user or the `user` key of the configuration (R3b); the writer recorded in an item (`updated_by`, history `by`) is the
-agent. Whether `backlog team validate` and `backlog team migrate` also need a team is decision 1 of `decisions.md`. What happens when
-`--agent` or `--team` names someone other than BACKLOG_AGENT or TEAM_NAME (today a refusal, `src/team/pop.js:56,58`,
-`src/team/lifecycle.js:460`) is decision 2: ruling R3b fixes the order of the inputs, not whether a disagreement between them is refused.
+`❌ backlog: a team command needs a team: give --team <name>, or set the SMOOTH_BACKLOG_CLI_TEAM_NAME variable, or set the "team" key in .backlog/config.json`
+(cases COD-01, R14-08; the `user` key of the configuration is never read by a team command, case COD-13). This holds for every team
+command, `backlog team validate` and `backlog team migrate` included (R14). Team commands never read the operating system user or the
+`user` key of the configuration (R3b); the writer recorded in an item (`updated_by`, history `by`) is the agent.
+
+**`--show-all`** (R14) makes a command act over every team instead of one. It is accepted by `backlog team query` (its list form, `query
+<item>` and `query rules`), `backlog team validate` and `backlog team migrate`. It is refused by `backlog team new`, `backlog team update`
+and `backlog team pop`, which each act on one item for one team: exit 2, `❌ backlog: --show-all acts over every team; backlog team <command>
+acts for one team: give --team <name> instead` (cases R14-01 to R14-03). Given with `--team`: exit 2, `❌ backlog: --show-all acts over
+every team: give it or --team <name>, not both` (case R14-07). Given while SMOOTH_BACKLOG_CLI_TEAM_NAME is set, the flag wins (R15) and the
+variable is ignored (cases R14-04 to R14-06). The query forms that evaluate one team's rules (`query plan`, `query check`, `query filter`,
+`query steps`) refuse it like `new`.
+
+**Consequence of R15, stated once:** an agent input is a name, not a proof. A session whose SMOOTH_BACKLOG_CLI_AGENT names a member can
+run `backlog team update 50 abandon --agent lead-1 --reason "not needed"` and every rule that tests `$caller.roles` sees the lead (case
+R15-03). Role guards hold against mistakes, not against an agent that names someone else on purpose; the history records the name used.
+The refusals of today (`src/team/pop.js:56,58`, `src/team/lifecycle.js:460`) are removed.
+
+**Several teams on one machine** (scope note of the rulings): one process serves one team through its own SMOOTH_BACKLOG_CLI_TEAM_NAME, and a
+process that must act for another team names it with `--team`, which wins (R15). No variable name changes. What several teams writing one
+backlog repository at once cost is chapter 04 section 7.
 
 The repository and the branch only select which repository folder new items go to and what `$session.repository` and `$session.branch`
 are. Whether a session may act on an item of another branch is a rule of the team (pattern `scope-branch`), not CLI behaviour.

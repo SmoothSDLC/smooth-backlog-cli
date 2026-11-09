@@ -46,7 +46,7 @@ inventory.tsv	INV-044	src/shared/archive.js:82	BAKE-IN	machinery: command syntax
 inventory.tsv	INV-045	src/shared/archive.js:83	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-046	src/shared/archive.js:94	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-047	src/shared/archive.js:95	BAKE-IN	machinery: the archive folder; archived items take no step (chapter 04)	
-inventory.tsv	INV-048	src/shared/archive.js:99	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
+inventory.tsv	INV-048	src/shared/archive.js:99	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
 inventory.tsv	INV-049	src/shared/archive.js:100	SKIP	-	decision D-19: user archive never refuses because of the status
 inventory.tsv	INV-050	src/shared/archive.js:108	BAKE-IN	machinery: the archive folder; archived items take no step (chapter 04)	
 inventory.tsv	INV-051	src/shared/archive.js:112	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
@@ -55,11 +55,11 @@ inventory.tsv	INV-053	src/shared/archive.js:116	BAKE-IN	machinery: the archive f
 inventory.tsv	INV-054	src/shared/clean.js:14	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-055	src/shared/clean.js:27	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-056	src/shared/clean.js:30	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
-inventory.tsv	INV-057	src/shared/clean.js:35	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
-inventory.tsv	INV-058	src/shared/clean.js:36	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
-inventory.tsv	INV-059	src/shared/clean.js:37	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
+inventory.tsv	INV-057	src/shared/clean.js:35	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
+inventory.tsv	INV-058	src/shared/clean.js:36	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
+inventory.tsv	INV-059	src/shared/clean.js:37	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
 inventory.tsv	INV-060	src/shared/clean.js:38	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
-inventory.tsv	INV-061	src/shared/clean.js:54	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
+inventory.tsv	INV-061	src/shared/clean.js:54	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
 inventory.tsv	INV-062	src/shared/dependencies.js:17	BAKE-IN	machinery: referential integrity of item and items fields, by type (chapter 02)	
 inventory.tsv	INV-063	src/shared/dependencies.js:25	SKIP	-	owner ruling R4: no translation on read; backlog team migrate converts every item once
 inventory.tsv	INV-064	src/shared/dependencies.js:32	BAKE-IN	machinery: referential integrity of item and items fields, by type (chapter 02)	
@@ -165,7 +165,7 @@ inventory.tsv	INV-163	src/shared/new.js:161	BAKE-IN	machinery: command syntax; t
 inventory.tsv	INV-164	src/shared/new.js:162	SKIP	-	decision D-17: team commands own their code path
 inventory.tsv	INV-165	src/shared/new.js:163	LAZY-LOAD	pattern: patterns/scope-branch	
 inventory.tsv	INV-166	src/shared/new.js:167	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
-inventory.tsv	INV-167	src/shared/new.js:170	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
+inventory.tsv	INV-167	src/shared/new.js:170	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
 inventory.tsv	INV-168	src/shared/new.js:170	SKIP	-	decision D-17: team commands own their code path
 inventory.tsv	INV-169	src/shared/new.js:179	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-170	src/shared/new.js:183	BAKE-IN	command: backlog team new evaluates the step new (chapter 04)	
@@ -302,7 +302,7 @@ inventory.tsv	INV-300	src/shared/sequence.js:42	BAKE-IN	machinery: command synta
 inventory.tsv	INV-301	src/shared/sequence.js:43	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-302	src/shared/sequence.js:45	BAKE-IN	field: default words of the built-in user item definition (decision D-33, chapter 02)	
 inventory.tsv	INV-303	src/shared/sequence.js:47	BAKE-IN	field: default words of the built-in user item definition (decision D-33, chapter 02)	
-inventory.tsv	INV-304	src/shared/sequence.js:54	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
+inventory.tsv	INV-304	src/shared/sequence.js:54	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
 inventory.tsv	INV-305	src/shared/setup.js:15	BAKE-IN	machinery: storage location (chapter 02)	
 inventory.tsv	INV-306	src/shared/setup.js:16	BAKE-IN	machinery: storage location (chapter 02)	
 inventory.tsv	INV-307	src/shared/setup.js:17	BAKE-IN	machinery: storage location (chapter 02)	
@@ -421,11 +421,11 @@ inventory.tsv	INV-419	src/shared/sync.js:384	BAKE-IN	machinery: the step is eval
 inventory.tsv	INV-420	src/shared/sync.js:386	BAKE-IN	machinery: the step is evaluated again after the rebase, in place of the publish hook (chapter 04)	
 inventory.tsv	INV-421	src/shared/sync.js:450	BAKE-IN	machinery: publication; a team step is evaluated again on the rebased items (chapter 04)	
 inventory.tsv	INV-422	src/shared/sync.js:507	BAKE-IN	machinery: publication; a team step is evaluated again on the rebased items (chapter 04)	
-inventory.tsv	INV-423	src/shared/team-items.js:4	SKIP	-	owner ruling R3a: a user command never meets a team item, so it has no refusal text for one
-inventory.tsv	INV-424	src/shared/team-items.js:7	SKIP	-	owner ruling R3a: a user command never meets a team item, so it has no refusal text for one
-inventory.tsv	INV-425	src/shared/team-items.js:8	SKIP	-	owner ruling R3a: a user command never meets a team item, so it has no refusal text for one
-inventory.tsv	INV-426	src/shared/team-items.js:9	SKIP	-	owner ruling R3a: a user command never meets a team item, so it has no refusal text for one
-inventory.tsv	INV-427	src/shared/team-items.js:10	SKIP	-	owner ruling R3a: a user command never meets a team item, so it has no refusal text for one
+inventory.tsv	INV-423	src/shared/team-items.js:4	SKIP	-	owner rulings R3a, R16, R19: without --show-all a user command never meets a team item, with it the item is allowed, so no refusal text remains
+inventory.tsv	INV-424	src/shared/team-items.js:7	SKIP	-	owner rulings R3a, R16, R19: without --show-all a user command never meets a team item, with it the item is allowed, so no refusal text remains
+inventory.tsv	INV-425	src/shared/team-items.js:8	SKIP	-	owner rulings R3a, R16, R19: without --show-all a user command never meets a team item, with it the item is allowed, so no refusal text remains
+inventory.tsv	INV-426	src/shared/team-items.js:9	SKIP	-	owner rulings R3a, R16, R19: without --show-all a user command never meets a team item, with it the item is allowed, so no refusal text remains
+inventory.tsv	INV-427	src/shared/team-items.js:10	SKIP	-	owner rulings R3a, R16, R19: without --show-all a user command never meets a team item, with it the item is allowed, so no refusal text remains
 inventory.tsv	INV-428	src/shared/text.js:3	BAKE-IN	machinery: the markdown reader survives only inside backlog team migrate; items are JSON (chapter 06)	
 inventory.tsv	INV-429	src/shared/update.js:24	BAKE-IN	machinery: the JSON item envelope (chapter 02)	
 inventory.tsv	INV-430	src/shared/update.js:25	BAKE-IN	machinery: the JSON item envelope (chapter 02)	
@@ -441,15 +441,15 @@ inventory.tsv	INV-439	src/shared/update.js:134	BAKE-IN	machinery: command syntax
 inventory.tsv	INV-440	src/shared/update.js:136	SKIP	-	decision D-17: team commands own their code path
 inventory.tsv	INV-441	src/shared/update.js:147	SKIP	-	decision D-17: team commands own their code path
 inventory.tsv	INV-442	src/shared/update.js:165	BAKE-IN	machinery: referential integrity of item and items fields, by type (chapter 02)	
-inventory.tsv	INV-443	src/shared/update.js:194	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
-inventory.tsv	INV-444	src/shared/update.js:195	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
+inventory.tsv	INV-443	src/shared/update.js:194	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
+inventory.tsv	INV-444	src/shared/update.js:195	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
 inventory.tsv	INV-445	src/shared/update.js:199	SKIP	-	decision D-17: team commands own their code path
 inventory.tsv	INV-446	src/shared/update.js:200	LAZY-LOAD	pattern: patterns/scope-branch	
 inventory.tsv	INV-447	src/shared/update.js:210	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-448	src/shared/update.js:212	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-449	src/shared/update.js:213	BAKE-IN	machinery: the archive folder; archived items take no step (chapter 04)	
 inventory.tsv	INV-450	src/shared/update.js:217	SKIP	-	owner ruling R4: no translation on read; backlog team migrate converts every item once
-inventory.tsv	INV-451	src/shared/update.js:218	BAKE-IN	machinery: user commands see only items without a team (R3a) (chapter 04)	
+inventory.tsv	INV-451	src/shared/update.js:218	BAKE-IN	machinery: user commands see only items without a team unless --show-all is given; with it they may change team items (R3a, R16, R19) (chapter 04)	
 inventory.tsv	INV-452	src/shared/update.js:222	SKIP	-	decision D-17: team commands own their code path
 inventory.tsv	INV-453	src/shared/update.js:222	SKIP	-	decision D-20: the user refusals are deleted; the field writes stay as user defaults
 inventory.tsv	INV-454	src/shared/update.js:226	SKIP	-	decision D-17: team commands own their code path
@@ -736,8 +736,8 @@ inventory.tsv	INV-734	src/team/lifecycle.js:441	LAZY-LOAD	pattern: patterns/clai
 inventory.tsv	INV-735	src/team/lifecycle.js:450	BAKE-IN	machinery: one step per command: backlog team update <item> <step> (chapter 04)	
 inventory.tsv	INV-736	src/team/lifecycle.js:451	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-737	src/team/lifecycle.js:456	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
-inventory.tsv	INV-738	src/team/lifecycle.js:458	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	whether a flag that differs from BACKLOG_AGENT is refused; R3b fixes only the order of the inputs
-inventory.tsv	INV-739	src/team/lifecycle.js:460	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	whether a flag that differs from BACKLOG_AGENT is refused; R3b fixes only the order of the inputs
+inventory.tsv	INV-738	src/team/lifecycle.js:458	SKIP	-	owner ruling R15: a flag that differs from the variable is not refused; the caller is the resolved agent (chapter 01 section 5)
+inventory.tsv	INV-739	src/team/lifecycle.js:460	SKIP	-	owner ruling R15: a flag that differs from the variable is not refused; the caller is the resolved agent (chapter 01 section 5)
 inventory.tsv	INV-740	src/team/lifecycle.js:466	LAZY-LOAD	pattern: patterns/scope-branch	
 inventory.tsv	INV-741	src/team/lifecycle.js:469	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-742	src/team/lifecycle.js:470	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
@@ -771,15 +771,15 @@ inventory.tsv	INV-769	src/team/pop.js:19	BAKE-IN	machinery: command syntax; the 
 inventory.tsv	INV-770	src/team/pop.js:20	SKIP	-	production code reads no test variable
 inventory.tsv	INV-771	src/team/pop.js:21	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-772	src/team/pop.js:23	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
-inventory.tsv	INV-773	src/team/pop.js:25	SKIP	-	the lead is a role in people; TEAM_LEAD and --lead are not read
+inventory.tsv	INV-773	src/team/pop.js:25	SKIP	-	the lead is a role in people; SMOOTH_BACKLOG_CLI_TEAM_LEAD and --lead are not read
 inventory.tsv	INV-774	src/team/pop.js:26	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-775	src/team/pop.js:33	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-776	src/team/pop.js:35	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-777	src/team/pop.js:54	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
 inventory.tsv	INV-778	src/team/pop.js:55	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
 inventory.tsv	INV-779	src/team/pop.js:56	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
-inventory.tsv	INV-780	src/team/pop.js:58	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	whether a flag that differs from BACKLOG_AGENT is refused; R3b fixes only the order of the inputs
-inventory.tsv	INV-781	src/team/pop.js:59	SKIP	-	the lead is a role in people; TEAM_LEAD and --lead are not read
+inventory.tsv	INV-780	src/team/pop.js:58	SKIP	-	owner ruling R15: a flag that differs from the variable is not refused; the caller is the resolved agent (chapter 01 section 5)
+inventory.tsv	INV-781	src/team/pop.js:59	SKIP	-	the lead is a role in people; SMOOTH_BACKLOG_CLI_TEAM_LEAD and --lead are not read
 inventory.tsv	INV-782	src/team/pop.js:60	BAKE-IN	example: parallel/lead-splits	
 inventory.tsv	INV-783	src/team/pop.js:62	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
 inventory.tsv	INV-784	src/team/pop.js:66	BAKE-IN	machinery: pop exits 1 on a synchronisation failure, never 3 (idle) (chapter 04)	
@@ -809,7 +809,7 @@ inventory.tsv	INV-807	src/team/query.js:15	BAKE-IN	machinery: command syntax; th
 inventory.tsv	INV-808	src/team/query.js:25	BAKE-IN	example: parallel/filter:in-progress	command: backlog team query filter <name>
 inventory.tsv	INV-809	src/team/query.js:30	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when, which also reads the body)
 inventory.tsv	INV-810	src/team/queue.js:23	SKIP	-	pop runs the offered step through the evaluator itself; no internal flag
-inventory.tsv	INV-811	src/team/queue.js:24	SKIP	-	the lead is a role in people; TEAM_LEAD and --lead are not read
+inventory.tsv	INV-811	src/team/queue.js:24	SKIP	-	the lead is a role in people; SMOOTH_BACKLOG_CLI_TEAM_LEAD and --lead are not read
 inventory.tsv	INV-812	src/team/queue.js:25	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-813	src/team/queue.js:29	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-814	src/team/queue.js:45	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
@@ -895,7 +895,7 @@ inventory.tsv	INV-893	src/team/queue.js:355	BAKE-IN	machinery: command syntax; t
 inventory.tsv	INV-894	src/team/queue.js:361	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-895	src/team/queue.js:364	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-896	src/team/team.js:19	SKIP	-	owner ruling R4: no translation on read
-inventory.tsv	INV-897	src/team/team.js:21	SKIP	-	the lead is a role in people; TEAM_LEAD and --lead are not read
+inventory.tsv	INV-897	src/team/team.js:21	SKIP	-	the lead is a role in people; SMOOTH_BACKLOG_CLI_TEAM_LEAD and --lead are not read
 inventory.tsv	INV-898	src/team/team.js:25	BAKE-IN	machinery: the team queue is the index entries of the team's items (chapter 05)	
 inventory.tsv	INV-899	src/team/team.js:33	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
 inventory.tsv	INV-900	src/team/team.js:35	BAKE-IN	language: deny texts with placeholders, written by the team (chapter 03)	
@@ -923,9 +923,9 @@ inventory.tsv	INV-921	src/team/team.js:117	SKIP	-	dead code
 inventory.tsv	INV-922	src/team/team.js:119	SKIP	-	dead code
 inventory.tsv	INV-923	src/team/team.js:121	LAZY-LOAD	pattern: patterns/review-pass-peer, patterns/review-pass-outside	a refinement review is review stages over statuses, the same rule shape as a work review
 inventory.tsv	INV-924	src/team/team.js:129	LAZY-LOAD	pattern: patterns/review-own-session	
-inventory.tsv	INV-925	src/team/team.js:134	LAZY-LOAD	pattern: patterns/review-own-session, patterns/ended-session	a session is BACKLOG_SESSION ($session.id); the agent name stays stable
-inventory.tsv	INV-926	src/team/team.js:135	LAZY-LOAD	pattern: patterns/review-own-session, patterns/ended-session	a session is BACKLOG_SESSION ($session.id); the agent name stays stable
-inventory.tsv	INV-927	src/team/team.js:141	LAZY-LOAD	pattern: patterns/review-own-session, patterns/ended-session	a session is BACKLOG_SESSION ($session.id); the agent name stays stable
+inventory.tsv	INV-925	src/team/team.js:134	LAZY-LOAD	pattern: patterns/review-own-session, patterns/ended-session	a session is SMOOTH_BACKLOG_CLI_SESSION ($session.id); the agent name stays stable
+inventory.tsv	INV-926	src/team/team.js:135	LAZY-LOAD	pattern: patterns/review-own-session, patterns/ended-session	a session is SMOOTH_BACKLOG_CLI_SESSION ($session.id); the agent name stays stable
+inventory.tsv	INV-927	src/team/team.js:141	LAZY-LOAD	pattern: patterns/review-own-session, patterns/ended-session	a session is SMOOTH_BACKLOG_CLI_SESSION ($session.id); the agent name stays stable
 inventory.tsv	INV-928	src/team/team.js:147	LAZY-LOAD	pattern: patterns/take-over-stale-review	the wait is a number in the rule (function age)
 inventory.tsv	INV-929	src/team/team.js:152	LAZY-LOAD	pattern: patterns/take-over-stale-review	
 inventory.tsv	INV-930	src/team/team.js:158	LAZY-LOAD	pattern: patterns/accept-input-recorded	the texts are the deny texts of the team
@@ -1851,12 +1851,12 @@ tests.tsv	TST-816	workflow.test.js:51	SKIP	-	owner ruling R5: team define and te
 tests.tsv	TST-817	workflow.test.js:94	SKIP	-	owner ruling R5: team define and team workflow --file are removed; backlog team validate is tested by cases VAL-01 to VAL-12
 tests.tsv	TST-818	workflow.test.js:97	SKIP	-	owner ruling R5: team define and team workflow --file are removed; backlog team validate is tested by cases VAL-01 to VAL-12
 tests.tsv	TST-819	workflow.test.js:98	SKIP	-	owner ruling R5: team define and team workflow --file are removed; backlog team validate is tested by cases VAL-01 to VAL-12
-consumers.tsv	CON-01		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	TEAM_LEAD is not read; the lead is a role in people
+consumers.tsv	CON-01		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	SMOOTH_BACKLOG_CLI_TEAM_LEAD is not read; the lead is a role in people
 consumers.tsv	CON-02		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	list --json no longer shows team items; the consumer reads backlog team query --json
 consumers.tsv	CON-03		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	plan entries are the team's step names from backlog team query plan
 consumers.tsv	CON-04		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	instruction texts come from the team's deny and say texts
 consumers.tsv	CON-05		BAKE-IN	command: backlog team pop --json keeps the key action; idle exits 3 (chapter 04)	
-consumers.tsv	CON-06		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	TEAM_LEAD fallback dropped
+consumers.tsv	CON-06		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	SMOOTH_BACKLOG_CLI_TEAM_LEAD fallback dropped
 consumers.tsv	CON-07		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	final values are status.final of the team item definition (backlog team query definition)
 consumers.tsv	CON-08		BAKE-IN	machinery: backlog archive of an item without a team needs no --force (decision D-19)	
 consumers.tsv	CON-09		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	verdict words are the team's arguments
@@ -1872,7 +1872,7 @@ consumers.tsv	CON-18		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team
 consumers.tsv	CON-19		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	team define is removed; the lead edits teams.json and runs backlog team validate
 consumers.tsv	CON-20		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	status values of the team
 consumers.tsv	CON-21		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	final values from the team item definition
-consumers.tsv	CON-22		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	TEAM_LEAD assertions dropped with the export
+consumers.tsv	CON-22		DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI	SMOOTH_BACKLOG_CLI_TEAM_LEAD assertions dropped with the export
 gaps.tsv	L04	init <repo-name> (custom repository name in config)	SKIP	-	accepted loss under OWNER 20261107-AL proposal row 1
 gaps.tsv	L06	init backup [repo-name]	SKIP	-	accepted loss under OWNER 20261105-I
 gaps.tsv	L09	list open (only started items, state open)	BAKE-IN	field: default words of the built-in user item definition (decision D-33)	
@@ -1920,7 +1920,7 @@ gaps.tsv	S101	query --blocked (dependency waits of every item, team or not)	DEFE
 gaps.tsv	S102	query --decisions	SKIP	-	accepted loss under OWNER 20261107-AM (stages are team behaviour) and rule 2026-11-05
 gaps.tsv	S103	query --wip (overall, repository, branch, team, agent limits)	SKIP	-	accepted loss under D-18 (owner ruling on the user flow): no limits outside a team, so no user wip view
 gaps.tsv	S112	pop --agent <a> (next action of any agent over every item, no team needed)	SKIP	-	accepted loss under OWNER rule 2026-11-05 (backlog pop does not exist)
-08-owner-questions.md	Q-04		BAKE-IN	machinery: session inputs stay; each is also a flag on every team command (answered A) (chapter 04)	
+08-owner-questions.md	Q-04		BAKE-IN	machinery: session inputs stay, prefixed SMOOTH_BACKLOG_CLI_ (R20); each is also a flag on every team command, the flag first (answered A, R15) (chapter 01)	
 08-owner-questions.md	Q-05		BAKE-IN	language: declared rules are ordinary evaluated rules (example parallel/check-round-cap)	answered: rules in the team's file, generic CLI
 08-owner-questions.md	Q-06		BAKE-IN	language: effect delete; a team deletes only by a rule of its own; numbers are never reused (chapter 03, 05)	
 08-owner-questions.md	Q-07		BAKE-IN	language: effect branch; user move never sees a team item (R3a)	a move to another repository folder is not offered: the item would need a new number there
@@ -1959,7 +1959,7 @@ gaps.tsv	S112	pop --agent <a> (next action of any agent over every item, no team
 01-inventory.md	F3		BAKE-IN	example: parallel/claim-limit-team	a limit is a rule that is evaluated
 01-inventory.md	F4		SKIP	-	the key is gone with the old entry
 01-inventory.md	F5		BAKE-IN	language: function age with the number in the rule	
-01-inventory.md	F6		SKIP	-	TEAM_LEAD and --lead are not read
+01-inventory.md	F6		SKIP	-	SMOOTH_BACKLOG_CLI_TEAM_LEAD and --lead are not read
 01-inventory.md	F7		BAKE-IN	machinery: an unreadable teams.json stops a team command (exit 2) (chapter 01)	
 01-inventory.md	F8		SKIP	-	verdicts are arguments the team's rules read
 01-inventory.md	F9		BAKE-IN	field: a user status is stored as typed (D-19)	
@@ -1986,7 +1986,7 @@ gaps.tsv	S112	pop --agent <a> (next action of any agent over every item, no team
 08-owner-questions.md part 1	D-32		BAKE-IN	machinery: an absent field reads as its definition default (chapter 02)	
 08-owner-questions.md part 1	D-33		BAKE-IN	field: default words of the built-in user item definition	
 review-b.md section 3	B3-3	src/team/cli.js:85	BAKE-IN	machinery: an unknown team subcommand: exit 2 naming the six (chapter 04)	
-review-b.md section 3	B3-10	src/team/team.js:44	BAKE-IN	machinery: TEAM_REPOSITORY must be owner/name (exit 2) (chapter 01)	
+review-b.md section 3	B3-10	src/team/team.js:44	BAKE-IN	machinery: SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY must be owner/name (exit 2) (chapter 01)	
 review-b.md section 3	B3-11	src/team/team.js:49-50	BAKE-IN	machinery: a detached HEAD with no branch given stops new, update and pop (chapter 01)	
 review-b.md section 3	B3-19	src/team/team.js:64-71	DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6: the owner's team writes the dependency rule for items migrated without hand-off records (a closed producer with no record)	expressible with any and empty on the producer's hand-off field
 review-b.md section 3	B3-20	src/team/handoff.js:17-20,70-71	SKIP	-	no digest: the record is fields only the team's step writes, and a new record withdraws the acceptance (chapter 03 section 12)
@@ -1994,15 +1994,25 @@ review-b.md section 3	B3-27	src/team/lifecycle.js:100	BAKE-IN	language: owner/na
 review-b.md section 3	B3-30	src/team/lifecycle.js:111	BAKE-IN	language: placeholders in a literal note text (chapter 03 section 8)	
 review-b.md section 3	B3-41	src/team/lifecycle.js:280-299	LAZY-LOAD	pattern: patterns/close-same-commit	commit equality, not a reading of commit subjects
 review-b.md section 3	B3-46	src/team/lifecycle.js:350	LAZY-LOAD	pattern: patterns/review-cites-document	
-review-b.md section 3	B3-55	src/team/lifecycle.js:460	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	
+review-b.md section 3	B3-55	src/team/lifecycle.js:460	SKIP	-	owner ruling R15: the refusal is removed
 review-b.md section 3	B3-60	src/team/handoff-commands.js:62,64	LAZY-LOAD	pattern: patterns/accept-input-reviewed	
 review-b.md section 3	B3-61	src/team/handoff-commands.js:82-97	LAZY-LOAD	pattern: patterns/reject-input	
-review-b.md section 3	B3-62	src/team/pop.js:56	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	
-review-b.md section 3	B3-63	src/team/pop.js:58	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	
+review-b.md section 3	B3-62	src/team/pop.js:56	SKIP	-	owner ruling R15: the flag wins, no refusal
+review-b.md section 3	B3-63	src/team/pop.js:58	SKIP	-	owner ruling R15: the flag wins, no refusal
 review-b.md section 3	B3-64	src/team/pop.js:63-66	BAKE-IN	machinery: pop exits 1 on a synchronisation failure (chapter 04)	
 review-b.md section 3	B3-66	src/team/pop.js:153	BAKE-IN	machinery: a detached HEAD with no branch given stops pop (chapter 01)	
 review-b.md section 3	B3-67	src/team/queue.js:215-221	DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 states whether the owner's team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)	
 review-b.md section 3	B3-71	src/shared/plain-step.js:39	BAKE-IN	field: claimed_by and claimed_at of the built-in user item definition (chapter 02 section 4)	
 review-b.md section 3	B3-72	src/shared/done.js:10	BAKE-IN	field: backlog done writes closed (decision D-33; today done is stored as closed through normalise, finding F9)	
 review-b.md section 3	B3-73	src/shared/index.js:54-58	BAKE-IN	machinery: the migration builds the index of a folder without one from priority (chapter 06)	
-review-b.md section 3	B3-74	src/shared/move.js:125-163, update.js:248, clean.js:35-42	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 3 of design/decisions.md	
+review-b.md section 3	B3-74	src/shared/move.js:125-163, update.js:248, clean.js:35-42	BAKE-IN	machinery: references to team items are hidden from user commands unless --show-all is given; with it they are seen and refusals may name them (R16) (chapter 04)	
+00-owner-rulings.md	R14		BAKE-IN	machinery: a specific team for every team command; --show-all accepted by query, validate and migrate, refused by new, update and pop (cases R14-01 to R14-09) (chapter 01)	
+00-owner-rulings.md	R15		BAKE-IN	machinery: flag, then variable, then configuration; a differing flag is not refused; the consequence is stated once (cases R15-01 to R15-03) (chapter 01)	
+00-owner-rulings.md	R16		BAKE-IN	machinery: user commands ignore team items and hide references to them unless --show-all is given; the flag is derived for every user command that selects or lists items (cases R16-01 to R16-03) (chapter 04 section 8)	
+00-owner-rulings.md	R17		BAKE-IN	machinery: backlog team migrate reports every missing, invalid or undeclared field per item; --ask repairs one field at a time on a terminal (cases R17-01, R17-02) (chapter 06 section 2)	
+00-owner-rulings.md	R18		BAKE-IN	machinery: a team whose entry fails validation takes no action; the migration needs every entry valid; the checks cover required keys, shape, definition, coherence (case VAL-21) (chapter 01 section 4 and 08)	
+00-owner-rulings.md	R19		BAKE-IN	machinery: with --show-all a user command may set values on a team item, with a history entry by the user (cases R19-01, R19-02) (chapter 04 section 8)	
+00-owner-rulings.md	R19a		BAKE-IN	machinery: SMOOTH_BACKLOG_CLI_TEAM_NAME set: every user command fails with the blanket text; help and version are not blocked (cases R19A-01, R19A-02) (chapter 04 section 8)	
+00-owner-rulings.md	R20		BAKE-IN	machinery: every CLI-owned environment variable is prefixed SMOOTH_BACKLOG_CLI_, the two internal ones the inventory missed included (chapter 01 section 5)	
+00-owner-rulings.md	R21		BAKE-IN	machinery: the per-user validation record and validated copy, 24 hours, validate refreshes, update only when valid (spike teams-load.test.mjs) (chapter 01 section 4)	
+00-owner-rulings.md	scope note		BAKE-IN	machinery: several teams at once: one clone per user serialises one machine; across machines the re-run with a random growing wait (measured with contention.mjs) (chapter 04 section 7)	

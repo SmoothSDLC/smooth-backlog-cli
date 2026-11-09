@@ -104,3 +104,17 @@ Binding. Each answer lists what it decides, the consequence for the spec, and wh
 G-007 two offers with the time test, not an order key; G-015 timers stay outside the CLI in the scripts beside a team; the twelve
 single-fix gaps are carried as field declarations and rules; the limit verdict does not count as a round; the stage hand-off note is
 required on every stage-ending step.
+
+## Round 4: the CLI reads definitions, never templates, and never writes the team file (owner, binding)
+- Templates are starting points. The owner (or a lead, by hand or with a tool outside the CLI) copies a workflow definition and an item
+  definition from a template into the team file and edits them there. The CLI never reads a template.
+- The team file (`teams.json` of the backlog home; the owner writes "team.json") holds, per team, the people AND the team's workflow
+  definition AND the team's backlog item definition. The CLI is allowed only to read it. It never creates, rewrites, registers or
+  migrates the team file.
+- A new item for team X: the CLI reads the team file, finds team X and creates the item from X's item definition.
+- An update of an item of team X: the CLI reads X's workflow definition and the item itself and refuses the update unless it conforms
+  to the workflow. That is the whole pattern: a rule-set evaluation, nothing more.
+- Consequences: no separate `workflows.json`; no CLI command writes the team file, so `backlog team define`, `backlog team workflow
+  --file` and the `--template` form of define (G-009) are not built; `backlog team migrate` converts item files only, and the team file
+  is converted once outside the CLI; `backlog team validate` (read-only) stays. The `team_templates` configuration key is read by no
+  CLI code: it only records where the templates live for people and skills (reversible).

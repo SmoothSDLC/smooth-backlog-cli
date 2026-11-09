@@ -73,3 +73,17 @@ not be used as input to the new design.
 - Archived items migrate to JSON too: two formats would need two readers, and the owner's rule is migrate or fail.
 - Rule expressions are data interpreted by a small evaluator inside the CLI; the CLI never executes code found in the team file. A
   code-in-the-team-file design would let anyone who can push to the backlog repo run code in every user's CLI.
+
+## Round 5 (owner, 2026-11-09, answers to the design's decisions 1 to 3)
+- R14. R3b holds for every team command, `backlog team validate` and `backlog team migrate` included: a team command needs a specific team.
+  The one exception is the flag `--show-all`, which makes the command act over every team. Which team commands accept the flag is part of
+  the design (the interpretation is pending the owner's confirmation).
+- R15. Order of lookup for a team command's inputs: 1 the flag, 2 the environment variable, 3 the configuration file. An explicit flag
+  always wins and a flag that differs from the variable is not refused. The coded refusals of today (`src/team/pop.js:56,58`,
+  `src/team/lifecycle.js:460`) are removed, and the design's caller checks follow the resolved agent only.
+- R16. User commands ignore team items by default and show them only when `--show-all` is given. This replaces decision 3 (references
+  between user items and team items): by default a reference to a team item reads as missing; with the flag it is seen. The owner recalls an
+  earlier decision that the flag belongs on every similar command; no record of it was found (`git log -S"show-all"` over the CLI repo,
+  `src/`, the plans and the reference files: no hit; today only `--all` exists, on `query`/`list all-branches`, meaning every branch). The
+  design must derive the similar commands from the command matrix. Whether the flag also lets a user command change a team item is pending.
+- Pending: decision 4 (migration while a team's entry is in the old shape) is reopened by the owner's question on interactive validation.

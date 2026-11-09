@@ -1,20 +1,68 @@
 # 01 — The team file
 
 Context: a team is a group of agents that work one backlog together under rules they agree on. The CLI keeps those rules in one file,
-`teams.json`, at the root of the backlog folder (the folder that holds the `<owner>/<name>` repository folders, `index.json` of each
-folder and the item files). This chapter fixes what the file holds, who reads it and what the CLI does when it cannot use it. The item
+`teams.json`, which belongs to the actionable repository (the code repository the agents work in) and to its branch, as that
+repository's `.backlog/config.json` does (owner ruling R22): team behaviour may differ between repositories and between branches, and the
+design does not rely on a separate backlog repository existing. This chapter fixes where the file is, what it holds, who reads it and what
+the CLI does when it cannot use it. The item
 definition inside it is chapter 02, the rule set chapter 03, and the checks of `backlog team validate` chapter 08.
 
 ## 1. Who writes it, who reads it
 
-- **Written by** a person or an agent of the team, by hand or with its own tools, and committed and pushed with git like any other file
-  of the backlog repository. The CLI never creates, rewrites, registers or migrates it (owner ruling R5). No CLI command takes a template.
+- **Written by** a person or an agent of the team, by hand or with its own tools, and committed and pushed with git like any other file of
+  the repository that holds it. The CLI never creates, rewrites, registers or migrates it (owner ruling R5). No CLI command takes a
+  template. The CLI writes only the file's SHA, into `.backlog/config.json` (R22, section 4).
 - **Read by** the team commands only (through the validated copy of section 4 while the record is fresh): `backlog team new`, `backlog team update`, `backlog team query`, `backlog team pop` (each reads the
-  entry of its own team) and `backlog team validate` (reads the whole file). `backlog team migrate` reads only the team names (chapter
-  06). No user command opens the file (owner ruling R3).
+  entry of its own team), `backlog team validate` and `backlog team migrate` (read the whole file; chapter 06). No user command opens the
+  file (owner ruling R3).
 - **Files that are no longer read**: `workflows.json`, `wip-limits.json`, `backlog.scope` and the CLI's shipped `templates/workflows/team.json`.
   Their behaviour is now rules of a team (limits: chapter 03 section 8, scope: pattern `scope-branch`). The CLI leaves such files where
   they are and never mentions them; the team deletes them when it has moved their content into its rule set.
+
+### 1.1 Where the file is (owner ruling R22)
+
+Context: the actionable repository's `.backlog/config.json` (committed in every branch, created by `backlog setup` or by the first command)
+already names where the backlog folder is (key `backlog_repository`, a path relative to the repository, `.backlog` meaning inside it).
+Two keys are added beside it.
+
+| key of `.backlog/config.json` | value | written by |
+|---|---|---|
+| `teams_file` | the location of the team file: a path relative to the top of the actionable repository (like `backlog_repository`), or an absolute path | a person; the CLI never writes it |
+| `teams_file_sha` | the SHA-256 of the team file as last validated (section 4) | the CLI, on the first load when none is recorded and after every valid validation of a changed file; a person commits it |
+
+Below and in the other chapters, `teams.json` names the team file wherever this resolution puts it.
+
+**Resolution order** (cases R22-01 to R22-04):
+
+1. the `teams_file` key, when present: the file can live anywhere it names;
+2. else, when the backlog folder the CLI resolves lies outside the actionable repository (the configuration names a backlog repository
+   with `backlog_repository` or `backlog_origin_url`, or SMOOTH_BACKLOG_CLI_HOME names one): the root of the repository's own folder in it,
+   `<backlog folder>/<owner>/<name>/teams.json`, beside that folder's `index.json`, `numbers.json` and `phases/` (never the root of the
+   whole backlog repository, which holds the folders of many repositories);
+3. else `.backlog/teams.json` in the actionable repository.
+
+**Path safety** (today's rules of `src/shared/store.js`, applied to one more file): a relative path is resolved against the top of the
+actionable repository; the file itself must be a plain file, never a symbolic link (exit 2, `❌ backlog: <path> is a symbolic link; the
+team file must be a plain file`); when the resolved path lies inside the actionable repository or the backlog folder, no folder between that
+root and the file may be a symbolic link either (today's `assertNoSymlinks`). The CLI only reads it.
+
+**Missing file.** Every team command, `backlog team validate` and `backlog team migrate` included, stops with exit 2 and takes no action
+when no file is at the resolved location; the text names the resolved path and the three ways (case R22-05):
+`❌ backlog: no team file at <resolved path>; name one with the "teams_file" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the configuration names a backlog repository, else at .backlog/teams.json`
+
+**Branch specificity.** With the file inside the actionable repository (the default `.backlog/teams.json`, or a `teams_file` inside it),
+every branch has its own copy and its own `teams_file_sha`, so a branch can try new rules without touching the others. A team command uses
+the rules of the branch it runs in, also for an item of another branch (an item's `branch` is data; a team that wants each branch's items
+handled only under that branch's rules writes the pattern rule `scope-branch`). With the default inside a separate backlog repository the
+file is per repository, shared by all branches of the actionable repository, while each branch still records its own SHA; a team that
+wants per-branch rules then names a file inside the actionable repository with `teams_file`. The item numbers and the index (chapter 05)
+live in the backlog folder and are not branch-specific when the backlog folder is a separate repository: two branches with different rules
+share one number sequence and one index file per repository folder. With the backlog inside the actionable repository, the item files, the
+numbers and the index follow the branches as the team file does (chapter 05 section 2 states the limit at merges). The migration converts the
+items of the repository folder of the repository it runs in, with that repository's team file (chapter 06 section 2).
+
+**Public repositories.** A public repository must point `teams_file` at a private location: the default would publish the team's rules with
+the code. The CLI adds no mechanism for this.
 
 ## 2. Shape
 
@@ -68,43 +116,56 @@ Context: owner ruling R18 says that a team command whose load of `teams.json` fa
 no file and nothing in the backlog. Ruling R21 fixes how often the file is validated: once, then again only when the record of the last
 valid validation is missing or older than 24 hours. This section designs that procedure; chapter 08 lists the checks themselves.
 
-**The record.** It lives in the CLI's per-user configuration folder, the folder that already holds the per-user record of where a
-backlog is cloned (`$XDG_CONFIG_HOME`, else `~/.config`): `smooth-backlog-cli/teams-validation/<key>.json`, where `<key>` is the first 16
-hexadecimal characters of the SHA-256 of the backlog folder's absolute path, so two backlogs (or two clones of one) never share a record.
-It holds three values: `sha` (the SHA-256 of `teams.json` as validated), `valid_teams` (the names of the teams whose entries passed, as one
-comma-separated text) and `validated_at` (ISO 8601 UTC). Beside it, `<key>.teams.json` is the validated copy of the file. Both are
-written atomically (a temporary file renamed). This is outside every repository, so no repository's working tree changes (see
-`review-response.md`, round 2, finding R2-1, for why the SHA is not written into `.backlog/config.json`).
+**Where each value lives.** The SHA of the validated file is kept in the actionable repository's `.backlog/config.json`, key
+`teams_file_sha` (R22). The record of the last valid validation (the valid teams and its time) and the validated copy of the file live in the
+user's per-user state, the folder the CLI already uses for its per-user records (`$XDG_CONFIG_HOME`, else `~/.config`):
+`smooth-backlog-cli/teams-validation/<key>.json` and `<key>.teams.json`, where `<key>` is the first 16 hexadecimal characters of the
+SHA-256 of the team file's absolute path. They stay per user for two reasons: R21 says a command with a fresh record proceeds without
+reading the file, which needs the validated copy somewhere, and a date that changes every day would otherwise be a change of the committed
+configuration every day. The per-user record holds `sha` (of the copy), `valid_teams` (the names of the teams whose entries passed, as one
+comma-separated text) and `validated_at` (ISO 8601 UTC). Every write is atomic (a temporary file renamed).
 
 **The procedure** (every team command except `backlog team validate`):
 
 1. Resolve the inputs (section 5).
-2. If the record exists, is less than 24 hours old, its copy's SHA equals the recorded `sha`, and it names the command's team in
-   `valid_teams` (for `--show-all`: it names every team of the copy), the command uses the copy and does not read `teams.json`.
-3. Otherwise it reads `teams.json` and validates the whole file (chapter 08 sections 3 to 6). When at least one team is valid, it writes
-   the copy and the record (the SHA of what it read, the valid teams, now); when none is, the record and the copy stay as they were (lead
-   decision c of R21: the record changes only after a valid validation). The CLI prints nothing about the record.
-4. A file that is missing, not JSON or not an object: exit 2, `❌ backlog: teams.json cannot be read (<reason>); fix it and run backlog
-   team validate --team <team>`. There is no silent empty default (finding F7 of the reference inventory, removed).
-5. No entry for the team: exit 1, `❌ team <team> has no entry in teams.json (teams: <names>)`.
-6. The team's entry fails validation: exit 2, `❌ backlog: team <team> fails validation in teams.json; run backlog team validate --team
-   <team>`; for `--show-all`, any team failing: `❌ backlog: teams.json fails validation for <teams>; run backlog team validate --show-all`.
+2. Resolve the team file (section 1.1).
+3. If `teams_file_sha` is recorded in `.backlog/config.json`, the per-user record is less than 24 hours old, the record's `sha` and its
+   copy's SHA both equal `teams_file_sha`, and the record names the command's team in `valid_teams` (for `--show-all`: every team of the
+   copy), the command uses the copy and does not read the team file. A recorded SHA that differs from the record means the file changed
+   (another branch checked out, a pull, an edit committed with its SHA): the copy is not used (lead decision c of R21).
+4. Otherwise it reads the team file and validates the whole file (chapter 08 sections 3 to 6). When at least one team is valid, it writes
+   the copy and the per-user record (the SHA of what it read, the valid teams, now), and writes `teams_file_sha` into `.backlog/config.json`
+   when none is recorded or the recorded one differs; when no team is valid, nothing changes (lead decision c of R21: the SHA and the record
+   change only after a valid validation). The CLI prints nothing about the record or the SHA.
+5. No file at the resolved location: the text of section 1.1. A file that is not JSON or not an object: exit 2, `❌ backlog: <path> cannot be
+   read (<reason>); fix it and run backlog team validate --team <team>`. There is no silent empty default (finding F7 of the reference
+   inventory, removed).
+6. No entry for the team: exit 1, `❌ team <team> has no entry in <path> (teams: <names>)`.
+7. The team's entry fails validation: exit 2, `❌ backlog: team <team> fails validation in <path>; run backlog team validate --team
+   <team>`; for `--show-all`, any team failing: `❌ backlog: <path> fails validation for <teams>; run backlog team validate --show-all`.
    Nothing is written. A team whose entry passes runs even when another team's entry fails: the record of R21 lists the valid teams one by
    one, which only makes sense if validity is per team. The migration is the exception: it converts every item of every team, so every
    entry must pass (chapter 06 section 3).
-7. The entry is used for the whole command. A command that runs again on the upstream files (chapter 04 section 6) loads again by the same
+8. The entry is used for the whole command. A command that runs again on the upstream files (chapter 04 section 6) loads again by the same
    procedure, so within the 24 hours it uses the same copy.
 
-**Consequence (stated by the ruling, not a question):** within the 24 hours an edit of `teams.json` is not read by later commands of that
-user on that machine; a lead who changes the rules runs `backlog team validate`, which always validates in full and refreshes the record
-(lead decision b of R21), and the agents of other machines see the change when their own record expires or after their own validate. Two
-machines may therefore evaluate two versions of the rules for up to 24 hours. An invalid edit pushed by a lead stops each machine's team
-commands when that machine's record expires, possibly hours after the push; this is why chapter 07 makes the lead validate before pushing.
+**Consequences (stated, not questions).**
+- Within the 24 hours an edit of the team file that is not committed with its SHA is not read by later commands of that user; R21 says so.
+  An edit committed together with its new `teams_file_sha` is read at once by every checkout that pulls it, because the recorded SHA then
+  differs from the record (step 3).
+- The committed configuration changes in the working tree when the CLI writes the SHA: on the first team command of a repository whose
+  configuration records none, and whenever the team file changed without its SHA. The lead's habit that keeps every working tree clean:
+  edit the team file, run `backlog team validate --team <team>` (it validates in full, refreshes the record and writes the new SHA, lead
+  decision b of R21), commit both files together, push. Then every checkout finds the SHA it would write and writes nothing.
+- An invalid edit stops each team command of that team with no action as soon as its checkout reads the file (R18); validating before the
+  push (chapter 07) keeps it from reaching the agents.
+- A checkout that cannot be written (a read-only working tree, a sandbox) or a state folder that cannot be written: the command proceeds,
+  validating in full each time and writing nothing, silently.
+- The optional environment variable for the record that lead decision a mentions is not designed: a command needs the file's content, not
+  only a record, so a record without the copy cannot spare the read (`review-response.md`, round 2, finding R2-2).
 
-When the configuration folder cannot be written (a read-only home in a sandbox), every command validates in full, silently. The optional
-environment variable for the record that lead decision a mentions is not designed: a command needs the file's content, not only its SHA,
-so a record without the copy cannot spare the read (`review-response.md`, round 2, finding R2-2). Spike: `evaluator-spike/teams-load.mjs`
-and its six tests.
+Spike: `evaluator-spike/teams-load.mjs` and its nine tests (resolution order, missing file, symbolic link, the SHA written on the first
+load, a changed SHA forcing a validation, an invalid file changing nothing, validate writing the SHA, per-team validity, read-only checkout).
 
 ## 5. Inputs of a team command (coded CLI behaviour)
 
@@ -148,7 +209,7 @@ are. Whether a session may act on an item of another branch is a rule of the tea
 
 ## 6. Safety of a file anyone can push
 
-Context: anyone who can push to the backlog repository can change `teams.json`, and every team command of every agent then reads it.
+Context: anyone who can push to the repository that holds the team file can change it, and every team command of every agent then reads it.
 
 - The file is data. Rule expressions are interpreted by the evaluator of chapter 03; nothing in the file is executed, imported or
   passed to a shell (lead decision recorded in 00-owner-rulings.md).

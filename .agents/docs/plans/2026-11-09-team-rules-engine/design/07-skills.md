@@ -34,10 +34,12 @@ tell the agent what each field means; rule ids and deny texts tell it why it was
 
 ## 3. The lead
 
-- The lead changes the rules by editing `teams.json` in its working copy of the backlog repository, running
-  `backlog team validate --team <team>` until it reports no error, then committing and pushing with git. The CLI never writes the file.
-  Validating before the push matters twice: other machines read the change only when their 24-hour validation record expires (chapter 01
-  section 4), and an invalid entry found then stops every team command of the team on that machine with no action (ruling R18).
+- The lead changes the rules by editing the team file (chapter 01 section 1.1: `teams_file`, else the repository's folder in the backlog
+  repository, else `.backlog/teams.json`) in its working copy, running
+  `backlog team validate --team <team>` until it reports no error, then committing the team file together with the `teams_file_sha` key
+  validate wrote into `.backlog/config.json`, and pushing. The CLI never writes the team file.
+  Committing the SHA with the file lets every checkout that pulls it read the change at once and keeps their working trees clean (chapter
+  01 section 4); an invalid entry would stop every team command of the team with no action (ruling R18), so validation comes before the push.
 - `backlog team query plan` shows what pop would offer each person; the lead uses it to see idle members and blocked work, and filters for
   the team's own lists (decisions, waiting items).
 - Splitting is a step and a creation: the lead's step that opens a split (in the parallel-work example `split-start`), then

@@ -28,7 +28,7 @@ const GROUP = {
   'DI-HANDOFF-GRAPH': [S, '-', 'no coded hand-off graph: dependents are found with some/every over $team.items (pattern patterns/close-dependents-accepted)'],
   'DI-DEFINE-IO': [S, '-', 'owner ruling R5: the CLI never writes the team file'], 'DI-DEFINE-INUSE': [S, '-', 'owner rulings R5 and R6: no registration; a team edits its own rule set and the rules apply at each step'],
   'DI-MACHINE': MACH('the evaluator', '03'), 'DI-CONCURRENCY': MACH('concurrency', '04'), 'DI-FINDINGS': MACH('index findings', '05'), 'DI-INPUT-IDENTITY': MACH('the writer of the stale guard is the agent for team commands and the user for user commands (R3b)', '04'),
-  'CFG-TEAMS': MACH('teams.json reader', '01'), 'CFG-TEAMS-SILENT': MACH('an unreadable or invalid teams.json stops a team command (exit 2), never an empty file', '01'),
+  'CFG-TEAMS': MACH('team file reader at the location .backlog/config.json resolves (R22)', '01'), 'CFG-TEAMS-SILENT': MACH('an unreadable or invalid teams.json stops a team command (exit 2), never an empty file', '01'),
   'CFG-WORKFLOW-LOAD': [S, '-', 'owner ruling R5: no workflows.json and no shipped workflow; the rules are in teams.json'], 'SHIP-TEAMCACHE': [S, '-', 'owner rulings R1 and R5: the shipped workflow is deleted'],
   'CFG-SCOPEFILE': [D, CHUNK, 'backlog.scope set the chunk scope across repository folders, which the pop table cannot state yet'],
   'CFG-WIPFILE': [B, 'example: parallel/claim-limit-person, parallel/claim-limit-team', 'wip-limits.json is no longer read; a limit is a count rule'],
@@ -217,12 +217,13 @@ const RULING = {
   R19: MACH('with --show-all a user command may set values on a team item, with a history entry by the user (cases R19-01, R19-02)', '04 section 8'),
   R19a: MACH('SMOOTH_BACKLOG_CLI_TEAM_NAME set: every user command fails with the blanket text; help and version are not blocked (cases R19A-01, R19A-02)', '04 section 8'),
   R20: MACH('every CLI-owned environment variable is prefixed SMOOTH_BACKLOG_CLI_, the two internal ones the inventory missed included', '01 section 5'),
-  R21: MACH('the per-user validation record and validated copy, 24 hours, validate refreshes, update only when valid (spike teams-load.test.mjs)', '01 section 4'),
+  R21: MACH('the SHA in .backlog/config.json, the per-user record of the valid teams with the validated copy, 24 hours, validate refreshes, update only when valid (spike teams-load.test.mjs)', '01 section 4'),
+  R22: MACH('the team file per repository and branch: the teams_file key, else <backlog repository>/<owner>/<name>/teams.json beside the folder index, else .backlog/teams.json; teams_file_sha in .backlog/config.json; the migration per repository folder (cases R22-01 to R22-05, spike teams-load.test.mjs)', '01 section 1.1'),
   'scope note': MACH('several teams at once: one clone per user serialises one machine; across machines the re-run with a random growing wait (measured with contention.mjs)', '04 section 7'),
 };
 // the targets name decisions that exist
 const decisions = (readFileSync('decisions.md', 'utf8').match(/^## \d+\./gm) ?? []).length;
-for (const id of [...readFileSync('../00-owner-rulings.md', 'utf8').matchAll(/^- (R1[4-9]a?|R2[01])\./gm)].map(m => m[1])) add('00-owner-rulings.md', id, '', RULING[id] ?? (() => { throw new Error(`${id} unmapped`); })());
+for (const id of [...readFileSync('../00-owner-rulings.md', 'utf8').matchAll(/^- (R1[4-9]a?|R2[0-2])\./gm)].map(m => m[1])) add('00-owner-rulings.md', id, '', RULING[id] ?? (() => { throw new Error(`${id} unmapped`); })());
 if (/^## Scope note/m.test(readFileSync('../00-owner-rulings.md', 'utf8'))) add('00-owner-rulings.md', 'scope note', '', RULING['scope note']);
 const files = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 'single-agent', 'patterns'].map(n => [n, Object.values(JSON.parse(readFileSync(`examples/${n}.json`, 'utf8')))[0]]));
 const known = new Set(Object.entries(files).flatMap(([n, e]) => [...e.rules.table.map(r => r.id), ...e.rules.pop.map(o => o.id), ...Object.keys(e.rules.filters).map(v => `filter:${v}`)].map(id => `${n}/${id}`)));

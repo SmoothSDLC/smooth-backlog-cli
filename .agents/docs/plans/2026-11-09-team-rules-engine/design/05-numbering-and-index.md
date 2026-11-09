@@ -78,8 +78,9 @@ moment of publication, on the upstream state.
   mark; the item takes `n`. A lower number could be one a deleted item held. Text:
   `❌ --seq <n> is not above the highest number ever used in <owner>/<name> (<mark>); numbers are never reused`.
 - **Archive, `backlog clean`, the `delete` effect** remove or move files and never lower the mark.
-- **Migration** (chapter 06) writes `numbers.json` for every folder that held an item file at any point of the history, with `last` = the
-  folder's high-water mark (spike test "the migration seeds every folder that ever held an item, from deleted files too"); it refuses on a
+- **Migration** (chapter 06) writes `numbers.json` for the repository folder it converts, with `last` = the folder's high-water mark from
+  the whole history, deleted item files included (spike test "the migration seeds every folder that ever held an item, from deleted files
+  too"; a folder whose items are all gone needs no record, because every allocation reads the history anyway); it refuses on a
   shallow clone and its dry run names the refs whose history it read.
 
 ## 5. The index (structure unchanged)

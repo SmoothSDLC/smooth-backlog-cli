@@ -8,7 +8,7 @@ section 4), so a broken rule set is never used. This chapter lists every check a
 ## 1. The command
 
 - `backlog team validate --team <name>` — scenario: a lead edited `teams.json` to add a review step; before committing and pushing it runs
-  `backlog team validate --team web` in its working copy of the backlog repository. Like every team command it needs a specific team
+  `backlog team validate --team web` in its working copy of the repository that holds the team file (chapter 01 section 1.1). Like every team command it needs a specific team
   (`--team`, else SMOOTH_BACKLOG_CLI_TEAM_NAME, else the `team` key of `.backlog/config.json`; ruling R14). It always reads `teams.json` and
   validates the whole file in full (the shape of the file and every entry: lead decision b of R21), prints the findings of the file's shape
   and of the named team's entry and items, and exits 2 when any of those is an error.
@@ -16,7 +16,9 @@ section 4), so a broken rule set is never used. This chapter lists every check a
   migration).
 - `--json` — the same findings as a list, for a script or an agent.
 - Every run refreshes the per-user validation record of chapter 01 section 4 (the SHA of what it read, the valid teams, now) when at least
-  one team is valid, so the next team commands use what was just validated. It writes nothing in the backlog (ruling R5).
+  one team is valid, and writes the file's SHA into `.backlog/config.json` (key `teams_file_sha`) when it changed, so the lead commits the
+  SHA with the edit (ruling R22). It writes nothing else (ruling R5: the team file is only read).
+- No file at the resolved location: the text of chapter 01 section 1.1 (the resolved path and the three ways to define it), exit 2.
 - On a backlog whose items are still markdown (before `backlog team migrate`), validate runs sections 3 to 6 on the file and prints
   `ℹ️  the items are markdown: run backlog team migrate, then validate checks them too`; sections 7 and 8 need JSON items (chapter 06
   section 1).

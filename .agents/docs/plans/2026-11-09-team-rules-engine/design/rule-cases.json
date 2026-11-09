@@ -10143,6 +10143,115 @@
      }
     ]
    }
+  },
+  {
+   "id": "R22-01",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "teams-file",
+    "top": "/work/app",
+    "home": "/work/app/.backlog",
+    "repo": "local/repository",
+    "cfg": {
+     "backlog_repository": ".backlog"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "path": "/work/app/.backlog/teams.json",
+    "how": "the default .backlog/teams.json"
+   }
+  },
+  {
+   "id": "R22-02",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "teams-file",
+    "top": "/work/app",
+    "home": "/work/backlog",
+    "repo": "acme/app",
+    "cfg": {
+     "backlog_repository": "../backlog"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "path": "/work/backlog/acme/app/teams.json",
+    "how": "the configured backlog repository"
+   }
+  },
+  {
+   "id": "R22-03",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "teams-file",
+    "top": "/work/app",
+    "home": "/work/backlog",
+    "repo": "acme/app",
+    "cfg": {
+     "backlog_repository": "../backlog",
+     "teams_file": "../private/web-teams.json"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "path": "/work/private/web-teams.json",
+    "how": "the teams_file key"
+   }
+  },
+  {
+   "id": "R22-04",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "teams-file",
+    "top": "/work/app",
+    "home": "/work/app/.backlog",
+    "repo": "local/repository",
+    "cfg": {
+     "teams_file": "team/rules.json"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "path": "/work/app/team/rules.json",
+    "how": "the teams_file key"
+   }
+  },
+  {
+   "id": "R22-05",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "teams-file",
+    "top": "/work/app",
+    "home": "/work/app/.backlog",
+    "repo": "local/repository",
+    "cfg": {},
+    "missing": true
+   },
+   "expect": {
+    "exit": 2,
+    "text": "no team file at /work/app/.backlog/teams.json; name one with the \"teams_file\" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the configuration names a backlog repository, else at .backlog/teams.json"
+   }
   }
  ]
 }

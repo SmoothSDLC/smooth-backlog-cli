@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { missingText, teamsFile } from './teams-load.mjs';
 import { create, filter, itemFindings, migrateAsk, pop, Refusal, resolveAgent, resolveInputs, resolveTeam, step, userReference, userSet, userShow, validate } from './evaluator.mjs';
 
 const read = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
@@ -21,6 +22,7 @@ function run(c) {
   if (cmd.run === 'validate') { const f = validate(file); return { exit: f.length ? 2 : 0, findings: f.map(({ path, rule, problem }) => ({ path, rule, problem })) }; }
   if (cmd.run === 'resolve') return { exit: 0, team: resolveTeam(cmd) };
   if (cmd.run === 'inputs') return { exit: 0, ...resolveInputs(cmd) };
+  if (cmd.run === 'teams-file') { const f = teamsFile(cmd); return cmd.missing ? { exit: 2, text: missingText(f.path) } : { exit: 0, path: f.path, how: f.how }; }
   if (cmd.run === 'user-show') return { exit: 0, item: userShow(items(c.given), cmd.item, { showAll: cmd.show_all, env: cmd.env }).seq };
   if (cmd.run === 'user-ref') return { exit: 0, ref: userReference(items(c.given), cmd.item, { showAll: cmd.show_all }) };
   if (cmd.run === 'user-set') { const it = userSet(items(c.given), cmd.item, { field: cmd.field, value: cmd.value, user: cmd.user, showAll: cmd.show_all, env: cmd.env, now: NOW }); return { exit: 0, fields: it.fields, history: it.history.map(({ at, ...h }) => h) }; }
@@ -44,7 +46,7 @@ for (const c of cases) {
     try { got = run(c); } catch (e) { if (!(e instanceof Refusal)) throw e; got = { exit: e.exit, rule: e.rule, text: e.message }; }
     const want = c.expect;
     assert.equal(got.exit, want.exit, JSON.stringify(got));
-    for (const k of ['text', 'rule', 'action', 'item', 'entry', 'team', 'agent', 'all', 'ref', 'history', 'filter', 'findings', 'place', 'say', 'delete']) if (k in want) assert.deepEqual(got[k], want[k], k);
+    for (const k of ['text', 'rule', 'action', 'item', 'entry', 'team', 'agent', 'all', 'ref', 'history', 'path', 'how', 'filter', 'findings', 'place', 'say', 'delete']) if (k in want) assert.deepEqual(got[k], want[k], k);
     for (const [seq, fields] of Object.entries(want.items ?? {})) for (const [f, v] of Object.entries(fields)) assert.deepEqual(got.items.get(Number(seq)).fields[f], v, `item ${seq} field ${f}`);
     for (const seq of want.archived ?? []) assert.equal(got.items.get(seq).archived, true, `item ${seq} archived`);
     for (const [seq, t] of Object.entries(want.bound ?? {})) assert.equal(got.items.get(Number(seq)).team, t, `item ${seq} team`);

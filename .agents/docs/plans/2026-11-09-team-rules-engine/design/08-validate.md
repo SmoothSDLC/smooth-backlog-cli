@@ -11,6 +11,9 @@ section 4), so a broken rule set is never used. This chapter lists every check a
   copy of the backlog repository. It checks every team of the file and every item of the backlog against its team.
 - `backlog team validate --json` — the same findings as a list, for a script or an agent.
 - Whether `--team <name>` (or TEAM_NAME, or the configuration's `team`) narrows it to one team, or is required, is decision 1.
+- On a backlog whose items are still markdown (before `backlog team migrate`), validate runs sections 3 to 6 on the file and prints
+  `ℹ️  the items are markdown: run backlog team migrate, then validate checks them too`; sections 7 and 8 need JSON items (chapter 06
+  section 1).
 
 Exit 0 when there is no error (warnings may be printed), exit 2 when there is at least one error.
 
@@ -63,26 +66,32 @@ validate clean, cases VAL-EX-*).
 
 ## 6. Every rule, pop entry and filter
 
+The schema of chapter 03 section 14 comes first: every key of every object is one of its list, else an error naming the closest valid key
+(`wehn is not a key of a rule`, fix `did you mean when?`, case VAL-14). It runs on the entry, `rules`, every field, rule, pop entry,
+filter, `do`, `related` entry, `note`, `place` and quantifier.
+
 | check | severity | problem text (fix) |
 |---|---|---|
 | each rule has an `id`, unique in the team | error | `the rule has no id` / `the id <id> is used twice` |
 | `step` is a word, a list of words or `"*"`; a step word is not a CLI flag name | error | `step must be a word, a list of words or "*"` |
 | exactly one of `deny` and `do` | error | `a rule has exactly one outcome: deny or do` (case VAL-06) |
-| every key of a condition is a test of chapter 03 section 4, with the right form | error | `unknown test <k>` / `<k> takes a list of two values` |
+| a condition and a function have exactly one key | error | `a condition has exactly one key (found is, in)` (wrap several conditions in all; case VAL-13) |
+| the key of a condition is a test of chapter 03 section 4, with the right form | error | `unknown test <k>` (with the closest test) / `<k> takes a list of two values` |
 | every function is known and well formed | error | `unknown function <k>` |
+| field, step and argument names are lowercase letters, digits, `-` and `_`, starting with a letter | error | `a.b is not a field name: ...` (case VAL-19) |
 | `$item.<f>` and `$it.<f>` name a declared field or an envelope key | error | `$item.kids names no field of the item definition` (add it, or name one of ...; case VAL-02) |
-| `$it` only inside `every`, `some`, `count` | error | `$it.status is used outside every, some or count` (use $item) |
+| `$it` only inside `every`, `some`, `count` and a `related` entry | error | `$it.status is used outside every, some, count and related` (use $item; `$it` inside `related` is valid, case VAL-17) |
 | no `every`, `some`, `count` inside another | error | `every inside another every, some or count` (split the rule; case VAL-08) |
-| `$arg.<name>` is not a CLI flag name (team, agent, session, repository, branch, json, dry-run) | error | `--team belongs to the CLI; name the argument otherwise` |
-| an unknown reference root | error | `$foo.x is no reference (item, it, arg, caller, session, team, now)` |
+| `$arg.<name>` is not a CLI flag name (team, agent, session, repository, branch, json, dry-run, help, version) | error | `--help belongs to the CLI` (name the argument otherwise; case VAL-19) |
+| a reference is one of the closed list of chapter 03 section 5 | error | `$session.brnach is no reference` (use one of ...; case VAL-15) |
 | a role literal compared with `$caller.roles` or `roles_of` is held by some person | error | `no person has the role boss` (give a person the role, or use one of ...; case VAL-03) |
 | a literal compared with a field that has `values` is one of them | error | `doen is not a value of status (open, done)` (case VAL-04) |
-| `regex` pattern is a valid regular expression of at most 200 characters | error | `not a regular expression (<message>)` (case VAL-09) / `the pattern is longer than 200 characters` |
-| every effect is known; `set`, `add`, `remove` name declared fields; `add` and `remove` name list fields | error | `<f> is no field of the item definition` (case VAL-05) / `add needs a list field; <f> is <type>` |
+| a `regex` pattern compiles on the linear matcher of chapter 03 section 4.1 | error | `not a pattern the CLI runs (<the first unsupported construct and where>)` (cases VAL-09, VAL-20) / `the pattern is longer than 200 characters` / `the pattern is too large` |
+| every effect is known; `set`, `add`, `remove` name declared fields; `add` and `remove` name list fields; the same inside every `related` entry | error | `<f> is no field of the item definition` (cases VAL-05, VAL-16) / `add needs a list field; <f> is <type>` |
 | a literal written into a field has the type and is among its values | error | `shipped is not a value of status` (case VAL-12) |
 | `team` effect is `"$team.name"` or `""`; `archive` and `delete` are `true` | error | `the team effect binds only to $team.name or unbinds with ""` |
 | a placeholder in a text is a valid reference | error | `{$item.kids} in the deny text names no field` |
-| shadowing (chapter 03 section 3) | error | `rule <b> can never decide: rule <a> above it matches every case it matches` (move b above a, or narrow a; case VAL-01) |
+| shadowing (chapter 03 section 3): an earlier rule names every step of a later one and each of its clauses is a clause of the later rule, compared without regard to key order, an `in` covering an `is` of one of its values | error | `rule <b> can never decide: rule <a> above it matches every case it matches` (move b above a, or narrow a; cases VAL-01, VAL-18). Shadowing that only logic could prove (for example `>=` 3 above `>=` 5) is not found; the chapter 03 order rule still holds for it |
 | a pop entry names a step some rule names | error | `no rule names the step claim` (case VAL-07) |
 | an offered step whose allowing rules read an argument | warning | `pop cannot give --note to the step hand-to-check; the pop entry can only be refused` |
 | a step that no rule can allow (only deny rules) | warning | `no rule allows the step <s>; it is always refused` |
@@ -92,11 +101,19 @@ validate clean, cases VAL-EX-*).
 
 | check | severity | problem text (fix) |
 |---|---|---|
-| an item's `team` has no entry | error | `<path>: team <t> has no entry in teams.json` (add the entry, or unbind the item with a rule of another team) |
+| an item's `team` has no entry | error | `<path>: team <t> has no entry in teams.json` (add the entry back, or run backlog team migrate, which unbinds the items of teams without an entry with the record of chapter 06 section 4.1) |
 | an open item's field value is not among the field's `values` (for example after a status word was removed from the definition) | error | `<path>: status "refining" is not a value of status of team <t>` (add the value back, or move the item with a step) |
 | an item carries a field the definition does not declare | warning | `<path>: field <f> is not declared by the item definition of team <t>; rules cannot read it` |
-| an `item` or `items` field names no item | error | `<path>: field depends_on names no item 99` |
+| an `item` or `items` field names no item (a deleted or cleaned item) | warning | `<path>: field depends_on names no item 99` (the item's other steps still work; a step that writes the field must drop the number) |
+| two items of one folder hold one number (after a merge of code branches, chapter 05 section 2) | error | `<owner>/<name>: number <n> is held by <slug a> and <slug b>` (the next writing command renumbers the newer one) |
 
-Archived items are checked for none of these (no rule applies to them). These checks answer the earlier question of upgrading a
+## 8. Numbers
+
+| check | severity | problem text (fix) |
+|---|---|---|
+| `numbers.json` of a folder is below the folder's high-water mark (a lowered or reverted counter) | warning | `<owner>/<name>/numbers.json says <last>, but number <mark> was used in commit <sha>` (the next allocation uses the mark anyway; set last to <mark> to make the file say so) |
+| the clone is shallow | warning | `the clone is shallow: numbers are checked only against the history it holds` (git fetch --unshallow) |
+
+Archived items are checked for none of the item checks of section 7 (no rule applies to them). These checks answer the earlier question of upgrading a
 definition that items use (reference question Q-20): a team may change its definition at any time, and validate names every item the
 change leaves with a value the definition no longer allows.

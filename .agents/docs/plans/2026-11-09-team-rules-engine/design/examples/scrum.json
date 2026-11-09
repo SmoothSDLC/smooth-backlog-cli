@@ -8,49 +8,46 @@
       "master-1": ["scrum-master"]
     },
     "item": {
-      "status": { "type": "text", "default": "backlog", "values": ["backlog", "ready", "in progress", "in review", "done"], "final": ["done"], "description": "The column of the board." },
-      "points": { "type": "number", "default": 0, "description": "The story points the team gave the story." },
-      "acceptance": { "type": "text", "default": "", "description": "The acceptance criteria the product owner wrote." },
-      "sprint": { "type": "text", "default": "", "description": "The sprint the story is planned for." },
-      "holder": { "type": "person", "default": "", "description": "The developer working on the story." },
-      "reviewer": { "type": "person", "default": "", "description": "The developer reviewing the story." },
-      "review_rounds": { "type": "number", "default": 0, "description": "How many reviews rejected the story." }
+      "status": {"type": "text", "default": "backlog", "values": ["backlog", "ready", "in progress", "in review", "done"], "final": ["done"], "description": "The column of the board."},
+      "points": {"type": "number", "default": 0, "description": "The story points the team gave the story."},
+      "acceptance": {"type": "text", "default": "", "description": "The acceptance criteria the product owner wrote."},
+      "sprint": {"type": "text", "default": "", "description": "The sprint the story is planned for."},
+      "holder": {"type": "person", "default": "", "description": "The developer working on the story."},
+      "reviewer": {"type": "person", "default": "", "description": "The developer reviewing the story."},
+      "review_rounds": {"type": "number", "default": 0, "description": "How many reviews rejected the story."}
     },
     "rules": {
       "table": [
-        { "id": "new", "step": "new", "do": { "set": { "status": "backlog" } } },
-        { "id": "refine-owner-only", "step": "refine", "when": { "not": { "in": ["product-owner", "$caller.roles"] } }, "deny": "only the product owner refines a story" },
-        { "id": "refine-needs-acceptance", "step": "refine", "when": { "empty": "$arg.acceptance" }, "deny": "refine needs --acceptance \"<the acceptance criteria>\"" },
-        { "id": "refine-points-cap", "step": "refine", "when": { "not": { "in": ["$arg.points", ["1", "2", "3", "5", "8", "13"]] } }, "deny": "refine needs --points 1, 2, 3, 5, 8 or 13; split a larger story" },
-        { "id": "refine", "step": "refine", "when": { "is": ["$item.status", "backlog"] }, "do": { "set": { "status": "ready", "acceptance": "$arg.acceptance", "points": "$arg.points", "sprint": "$arg.sprint" } } },
-
-        { "id": "claim-developer-only", "step": "claim", "when": { "not": { "in": ["developer", "$caller.roles"] } }, "deny": "only a developer claims a story" },
-        { "id": "claim-not-ready", "step": "claim", "when": { "not": { "is": ["$item.status", "ready"] } }, "deny": "only a ready story is claimed (story {$item.seq} is {$item.status})" },
-        { "id": "claim-one-per-developer", "step": "claim", "when": { ">=": [ { "count": { "items": "$team.items", "match": { "all": [ { "is": ["$it.holder", "$caller"] }, { "in": ["$it.status", ["in progress", "in review"]] } ] } } }, 1 ] }, "deny": "{$caller} already has a story in progress or in review" },
-        { "id": "claim-team-limit", "step": "claim", "when": { ">=": [ { "count": { "items": "$team.items", "match": { "is": ["$it.status", "in progress"] } } }, 2 ] }, "deny": "the board allows 2 stories in progress" },
-        { "id": "claim", "step": "claim", "do": { "set": { "status": "in progress", "holder": "$caller" } } },
-
-        { "id": "request-review-holder", "step": "request-review", "when": { "not": { "is": ["$caller", "$item.holder"] } }, "deny": "only the holder ({$item.holder}) asks for the review" },
-        { "id": "request-review", "step": "request-review", "when": { "is": ["$item.status", "in progress"] }, "do": { "set": { "status": "in review", "reviewer": "" } } },
-
-        { "id": "review-not-own", "step": ["take-review", "review"], "when": { "is": ["$caller", "$item.holder"] }, "deny": "a developer does not review its own story" },
-        { "id": "take-review", "step": "take-review", "when": { "all": [ { "is": ["$item.status", "in review"] }, { "empty": "$item.reviewer" }, { "in": ["developer", "$caller.roles"] } ] }, "do": { "set": { "reviewer": "$caller" } } },
-        { "id": "review-who", "step": "review", "when": { "not": { "is": ["$caller", "$item.reviewer"] } }, "deny": "the reviewer of story {$item.seq} is {$item.reviewer}" },
-        { "id": "review-verdict", "step": "review", "when": { "not": { "in": ["$arg.verdict", ["pass", "reject"]] } }, "deny": "review needs --verdict pass or --verdict reject" },
-        { "id": "review-cap", "step": "review", "when": { "all": [ { "is": ["$arg.verdict", "reject"] }, { ">=": ["$item.review_rounds", 2] } ] }, "deny": "story {$item.seq} was rejected {$item.review_rounds} times; the scrum master takes it to the product owner (step escalate)" },
-        { "id": "review-reject", "step": "review", "when": { "is": ["$arg.verdict", "reject"] }, "do": { "set": { "status": "in progress", "reviewer": "", "review_rounds": { "plus": ["$item.review_rounds", 1] } }, "note": { "heading": "Review rejected", "text": "$arg.comments" } } },
-        { "id": "review-pass", "step": "review", "do": { "set": { "status": "done" }, "note": { "heading": "Review passed", "text": "$arg.comments" }, "place": "last" } },
-
-        { "id": "escalate", "step": "escalate", "when": { "all": [ { "in": ["scrum-master", "$caller.roles"] }, { ">=": ["$item.review_rounds", 2] } ] }, "do": { "set": { "status": "backlog", "holder": "", "reviewer": "", "review_rounds": 0 }, "note": { "heading": "Back to the product owner", "text": "$arg.note" } } },
-        { "id": "archive", "step": "archive", "when": { "all": [ { "in": ["product-owner", "$caller.roles"] }, { "is": ["$item.status", "done"] } ] }, "do": { "archive": true } }
+        {"id": "members-only", "step": "*", "when": {"empty": "$caller.roles"}, "deny": "{$caller} is not a person of team {$team.name}"},
+        {"id": "new", "step": "new", "do": {"set": {"status": "backlog"}}},
+        {"id": "refine-owner-only", "step": "refine", "when": {"not": {"in": ["product-owner", "$caller.roles"]}}, "deny": "only the product owner refines a story"},
+        {"id": "refine-needs-acceptance", "step": "refine", "when": {"empty": "$arg.acceptance"}, "deny": "refine needs --acceptance \"<the acceptance criteria>\""},
+        {"id": "refine-points-cap", "step": "refine", "when": {"not": {"in": ["$arg.points", ["1", "2", "3", "5", "8", "13"]]}}, "deny": "refine needs --points 1, 2, 3, 5, 8 or 13; split a larger story"},
+        {"id": "refine", "step": "refine", "when": {"is": ["$item.status", "backlog"]}, "do": {"set": {"status": "ready", "acceptance": "$arg.acceptance", "points": "$arg.points", "sprint": "$arg.sprint"}}},
+        {"id": "claim-developer-only", "step": "claim", "when": {"not": {"in": ["developer", "$caller.roles"]}}, "deny": "only a developer claims a story"},
+        {"id": "claim-not-ready", "step": "claim", "when": {"not": {"is": ["$item.status", "ready"]}}, "deny": "only a ready story is claimed (story {$item.seq} is {$item.status})"},
+        {"id": "claim-one-per-developer", "step": "claim", "when": {">=": [{"count": {"items": "$team.items", "match": {"all": [{"is": ["$it.holder", "$caller"]}, {"in": ["$it.status", ["in progress", "in review"]]}]}}}, 1]}, "deny": "{$caller} already has a story in progress or in review"},
+        {"id": "claim-team-limit", "step": "claim", "when": {">=": [{"count": {"items": "$team.items", "match": {"is": ["$it.status", "in progress"]}}}, 2]}, "deny": "the board allows 2 stories in progress"},
+        {"id": "claim", "step": "claim", "do": {"set": {"status": "in progress", "holder": "$caller"}}},
+        {"id": "request-review-holder", "step": "request-review", "when": {"not": {"is": ["$caller", "$item.holder"]}}, "deny": "only the holder ({$item.holder}) asks for the review"},
+        {"id": "request-review", "step": "request-review", "when": {"is": ["$item.status", "in progress"]}, "do": {"set": {"status": "in review", "reviewer": ""}}},
+        {"id": "review-not-own", "step": ["take-review", "review"], "when": {"is": ["$caller", "$item.holder"]}, "deny": "a developer does not review its own story"},
+        {"id": "take-review", "step": "take-review", "when": {"all": [{"is": ["$item.status", "in review"]}, {"empty": "$item.reviewer"}, {"in": ["developer", "$caller.roles"]}]}, "do": {"set": {"reviewer": "$caller"}}},
+        {"id": "review-who", "step": "review", "when": {"not": {"is": ["$caller", "$item.reviewer"]}}, "deny": "the reviewer of story {$item.seq} is {$item.reviewer}"},
+        {"id": "review-verdict", "step": "review", "when": {"not": {"in": ["$arg.verdict", ["pass", "reject"]]}}, "deny": "review needs --verdict pass or --verdict reject"},
+        {"id": "review-cap", "step": "review", "when": {"all": [{"is": ["$arg.verdict", "reject"]}, {">=": ["$item.review_rounds", 2]}]}, "deny": "story {$item.seq} was rejected {$item.review_rounds} times; the scrum master takes it to the product owner (step escalate)"},
+        {"id": "review-reject", "step": "review", "when": {"is": ["$arg.verdict", "reject"]}, "do": {"set": {"status": "in progress", "reviewer": "", "review_rounds": {"plus": ["$item.review_rounds", 1]}}, "note": {"heading": "Review rejected", "text": "$arg.comments"}}},
+        {"id": "review-pass", "step": "review", "do": {"set": {"status": "done"}, "note": {"heading": "Review passed", "text": "$arg.comments"}, "place": "last"}},
+        {"id": "escalate", "step": "escalate", "when": {"all": [{"in": ["scrum-master", "$caller.roles"]}, {">=": ["$item.review_rounds", 2]}]}, "do": {"set": {"status": "backlog", "holder": "", "reviewer": "", "review_rounds": 0}, "note": {"heading": "Back to the product owner", "text": "$arg.note"}}},
+        {"id": "archive", "step": "archive", "when": {"all": [{"in": ["product-owner", "$caller.roles"]}, {"is": ["$item.status", "done"]}]}, "do": {"archive": true}}
       ],
       "pop": [
-        { "id": "developer-reviews", "step": "take-review" },
-        { "id": "developer-claims", "step": "claim" }
+        {"id": "developer-reviews", "step": "take-review"},
+        {"id": "developer-claims", "step": "claim"}
       ],
       "filters": {
-        "board": { "description": "Every story that is not done.", "when": { "not": { "is": ["$item.status", "done"] } } },
-        "needs-review": { "description": "Stories waiting for a reviewer.", "when": { "all": [ { "is": ["$item.status", "in review"] }, { "empty": "$item.reviewer" } ] } }
+        "board": {"description": "Every story that is not done.", "when": {"not": {"is": ["$item.status", "done"]}}},
+        "needs-review": {"description": "Stories waiting for a reviewer.", "when": {"all": [{"is": ["$item.status", "in review"]}, {"empty": "$item.reviewer"}]}}
       }
     }
   }

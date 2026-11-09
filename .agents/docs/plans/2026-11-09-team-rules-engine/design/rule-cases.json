@@ -1,6 +1,6 @@
 {
  "format": "rule-cases/1",
- "description": "Cases for the team rules engine. Each case: a rule set (an example team file of design/examples, inline, or none for coded CLI behaviour), the items before, one command, and the expected result. The evaluator spike runs every case (design/evaluator-spike/evaluator.test.mjs); the BDD plan turns each into a scenario.",
+ "description": "Cases for the team rules engine. Each case: a rule set (an example team file of design/examples, an inline team file, or none for coded CLI behaviour), the items before, one command, and the expected result. The evaluator spike runs every case (design/evaluator-spike/evaluator.test.mjs); the BDD plan turns each into a scenario.",
  "verification": {
   "parallel/new-needs-estimate": "src/team/lifecycle.js:52 missingFields (estimate_min required on a team item); reference/13-format-gaps.md G-008",
   "parallel/new-size-cap": "reference/13-format-gaps.md G-008 (a numeric cap; no code today)",
@@ -132,7 +132,20 @@
   "single-agent/finish": "src/team/lifecycle.js:389 closeItem",
   "single-agent/archive": "src/shared/archive.js",
   "single-agent/next-item": "src/team/queue.js (the next item in priority order)",
-  "single-agent/filter:doing": "src/team/views.js (status view)"
+  "single-agent/filter:doing": "src/team/views.js (status view)",
+  "parallel/members-only": "src/team/team.js isTeamMember and src/team/lifecycle.js (a member acts in its team); a rule of the team now, not a coded check (review A finding M4)",
+  "scrum/members-only": "src/team/team.js isTeamMember and src/team/lifecycle.js (a member acts in its team); a rule of the team now, not a coded check (review A finding M4)",
+  "extreme-programming/members-only": "src/team/team.js isTeamMember and src/team/lifecycle.js (a member acts in its team); a rule of the team now, not a coded check (review A finding M4)",
+  "single-agent/members-only": "src/team/team.js isTeamMember and src/team/lifecycle.js (a member acts in its team); a rule of the team now, not a coded check (review A finding M4)",
+  "patterns/members-only": "src/team/team.js isTeamMember and src/team/lifecycle.js (a member acts in its team); a rule of the team now, not a coded check (review A finding M4)",
+  "patterns/close-same-commit": "src/team/lifecycle.js:280-299 (the review rules are met on the current work commit; new work after the pass needs a new review)",
+  "patterns/review-cites-document": "src/team/lifecycle.js:350 (the comments cite one of the item's review documents)",
+  "patterns/accept-input-reviewed": "src/team/handoff-commands.js:62-64 (accepted only after the producer's review passed, with a commit on record)",
+  "patterns/reject-input": "src/team/handoff-commands.js:82-97 (the lead rejects a hand-off with a reason)",
+  "patterns/dependencies-cap": "new: shows the function length; reference/13-format-gaps.md G-008 (a cap on a list)",
+  "patterns/remove-duplicate": "reference/08-owner-questions.md Q-06 option A (the lead deletes a duplicate with a reason); the number is never reused (chapter 05)",
+  "patterns/move-branch": "reference/08-owner-questions.md Q-07 option B (a recorded move of a team item)",
+  "patterns/release-to-users": "src/team/update.js:306-313 (--set-team with an empty value unbinds an item)"
  },
  "cases": [
   {
@@ -2296,7 +2309,7 @@
   {
    "id": "COD-10",
    "rule_set": "parallel",
-   "rule": null,
+   "rule": "members-only",
    "given": {
     "items": [
      {
@@ -2318,25 +2331,37 @@
    },
    "expect": {
     "exit": 1,
-    "rule": null,
-    "text": "stranger is not a person of team parallel (lead-1, member-1, member-2, member-3)"
+    "rule": "members-only",
+    "text": "stranger is not a person of team parallel (rule members-only)"
    }
   },
   {
    "id": "COD-11",
-   "rule_set": "parallel",
-   "rule": "new",
+   "rule_set": "patterns",
+   "rule": "edit",
    "given": {
-    "items": []
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "refining"
+      }
+     }
+    ]
    },
    "command": {
-    "run": "new",
+    "run": "update",
     "flags": {
      "agent": "member-1"
     },
+    "item": 1,
+    "step": "edit",
     "args": {
-     "name": "x",
      "estimate": "abc"
+    },
+    "session": {
+     "id": "s-1"
     }
    },
    "expect": {
@@ -5325,7 +5350,7 @@
    "expect": {
     "exit": 1,
     "rule": "request-review-needs-done-when",
-    "text": "item 1 has no definition of done (field done_when) (rule request-review-needs-done-when)"
+    "text": "item 1 has no definition of done (field done_when, or a ## Definition of done section in the body) (rule request-review-needs-done-when)"
    }
   },
   {
@@ -5814,7 +5839,8 @@
      "verdict": "pass"
     },
     "session": {
-     "id": "s-2"
+     "id": "s-2",
+     "commit": "abc1234"
     }
    },
    "expect": {
@@ -5823,7 +5849,8 @@
     "items": {
      "1": {
       "status": "outside review",
-      "passes": 1
+      "passes": 1,
+      "passed_commit": "abc1234"
      }
     }
    }
@@ -5912,7 +5939,8 @@
     "step": "record-handoff",
     "args": {
      "dependent": "1",
-     "note": "the parser exports parse(); run npm test"
+     "note": "the parser exports parse(); run npm test",
+     "commit": "abc1234"
     },
     "session": {
      "id": "s-1"
@@ -5925,7 +5953,8 @@
      "3": {
       "handoff_to": [
        1
-      ]
+      ],
+      "handoff_commit": "abc1234"
      },
      "1": {
       "accepted_inputs": []
@@ -5991,7 +6020,8 @@
        "status": "review complete",
        "handoff_to": [
         1
-       ]
+       ],
+       "handoff_commit": "abc1234"
       }
      },
      {
@@ -6079,7 +6109,8 @@
       "fields": {
        "status": "review complete",
        "holder": "member-1",
-       "passes": 2
+       "passes": 2,
+       "passed_commit": "abc1234"
       }
      },
      {
@@ -6103,7 +6134,8 @@
     "step": "close",
     "args": {},
     "session": {
-     "id": "s-1"
+     "id": "s-1",
+     "commit": "abc1234"
     }
    },
    "expect": {
@@ -6124,7 +6156,8 @@
       "fields": {
        "status": "review complete",
        "holder": "member-1",
-       "passes": 2
+       "passes": 2,
+       "passed_commit": "abc1234"
       }
      },
      {
@@ -6151,7 +6184,8 @@
     "step": "close",
     "args": {},
     "session": {
-     "id": "s-1"
+     "id": "s-1",
+     "commit": "abc1234"
     }
    },
    "expect": {
@@ -6957,7 +6991,7 @@
      {
       "path": "rules.table[0].when.regex",
       "rule": "r",
-      "problem": "not a regular expression (Invalid regular expression: /(/: Unterminated group)"
+      "problem": "not a pattern the CLI runs (a ( group is not closed (at character 2))"
      }
     ]
    }
@@ -7192,6 +7226,2304 @@
    "expect": {
     "exit": 0,
     "findings": []
+   }
+  },
+  {
+   "id": "SCR-29",
+   "rule_set": "scrum",
+   "rule": "members-only",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "stranger"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "members-only",
+    "text": "stranger is not a person of team scrum (rule members-only)"
+   }
+  },
+  {
+   "id": "XP-20",
+   "rule_set": "extreme-programming",
+   "rule": "members-only",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "stranger"
+    },
+    "args": {
+     "name": "x"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "members-only",
+    "text": "stranger is not a person of team xp (rule members-only)"
+   }
+  },
+  {
+   "id": "SOL-12",
+   "rule_set": "single-agent",
+   "rule": "members-only",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "solo",
+      "fields": {
+       "status": "todo"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "stranger"
+    },
+    "item": 1,
+    "step": "start",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "members-only",
+    "text": "stranger is not a person of team solo (rule members-only)"
+   }
+  },
+  {
+   "id": "PAT-47",
+   "rule_set": "patterns",
+   "rule": "members-only",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ],
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "stranger"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "members-only",
+    "text": "stranger is not a person of team patterns (rule members-only)"
+   }
+  },
+  {
+   "id": "PAR-56",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 40,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "stranger"
+    }
+   },
+   "expect": {
+    "exit": 3,
+    "action": "idle"
+   }
+  },
+  {
+   "id": "PAR-57",
+   "rule_set": "parallel",
+   "rule": "new-needs-estimate",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": " "
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-needs-estimate",
+    "text": "a new item needs --estimate <minutes> (rule new-needs-estimate)"
+   }
+  },
+  {
+   "id": "PAR-58",
+   "rule_set": "parallel",
+   "rule": "new-size-cap",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "60.9"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-size-cap",
+    "text": "an item is at most 60 minutes of work (got 60.9); split it (rule new-size-cap)"
+   }
+  },
+  {
+   "id": "PAR-59",
+   "rule_set": "parallel",
+   "rule": "new-size-cap",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "0x3C"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-size-cap",
+    "text": "an item is at most 60 minutes of work (got 0x3C); split it (rule new-size-cap)"
+   }
+  },
+  {
+   "id": "PAR-60",
+   "rule_set": "parallel",
+   "rule": "new-child",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "splitting"
+      }
+     }
+    ],
+    "last": 30
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "5",
+     "parent": "30",
+     "after": "31"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "field depends_on of item 31: an item cannot name itself"
+   }
+  },
+  {
+   "id": "PAR-61",
+   "rule_set": "parallel",
+   "rule": "release",
+   "given": {
+    "items": [
+     {
+      "seq": 41,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-2",
+       "depends_on": [
+        99
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 41,
+    "step": "release",
+    "args": {
+     "note": "x"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "release",
+    "items": {
+     "41": {
+      "status": "ready",
+      "holder": "",
+      "depends_on": [
+       99
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-62",
+   "rule_set": "parallel",
+   "rule": "claim-dependencies",
+   "given": {
+    "items": [
+     {
+      "seq": 20,
+      "fields": {
+       "status": "passed",
+       "holder": "member-1",
+       "depends_on": [
+        21
+       ]
+      }
+     },
+     {
+      "seq": 21,
+      "fields": {
+       "status": "checking"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 20,
+    "step": "close",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-dependencies",
+    "text": "item 20 waits for its dependencies (21) to close (rule claim-dependencies)"
+   }
+  },
+  {
+   "id": "PAR-63",
+   "rule_set": "parallel",
+   "rule": "wait-for-children",
+   "given": {
+    "items": [
+     {
+      "seq": 10,
+      "fields": {
+       "status": "ready",
+       "children": [
+        11
+       ]
+      }
+     },
+     {
+      "seq": 11,
+      "fields": {
+       "status": "ready",
+       "parent": 10
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 10,
+    "step": "abandon",
+    "args": {
+     "reason": "x"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "wait-for-children",
+    "text": "item 10 waits for its children (11) to close (rule wait-for-children)"
+   }
+  },
+  {
+   "id": "PAR-64",
+   "rule_set": "parallel",
+   "rule": "claim-dependencies",
+   "given": {
+    "items": [
+     {
+      "seq": 20,
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        "acme/lib#7"
+       ]
+      }
+     },
+     {
+      "seq": 7,
+      "team": "",
+      "repository": "acme/lib",
+      "fields": {
+       "status": "pending"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 20,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-dependencies",
+    "text": "item 20 waits for its dependencies (acme/lib#7) to close (rule claim-dependencies)"
+   }
+  },
+  {
+   "id": "PAR-65",
+   "rule_set": "parallel",
+   "rule": "claim",
+   "given": {
+    "items": [
+     {
+      "seq": 20,
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        "acme/lib#7"
+       ]
+      }
+     },
+     {
+      "seq": 7,
+      "team": "",
+      "repository": "acme/lib",
+      "fields": {
+       "status": "closed"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 20,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "claim",
+    "items": {
+     "20": {
+      "status": "in progress"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-66",
+   "rule_set": "parallel",
+   "rule": "check-reject",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x",
+       "checker": "member-2"
+      }
+     }
+    ],
+    "raw": true
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "check",
+    "args": {
+     "verdict": "reject",
+     "comments": "x"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "check-reject",
+    "items": {
+     "50": {
+      "rounds": 1
+     }
+    }
+   }
+  },
+  {
+   "id": "INL-01",
+   "rule_set": "inline",
+   "rule": "next",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "parent": {
+        "type": "item",
+        "default": null
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       },
+       "flag": {
+        "type": "boolean",
+        "default": false
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "start",
+         "step": "start",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ]
+         },
+         "do": {
+          "set": {
+           "status": "done"
+          },
+          "related": [
+           {
+            "items": "$item.parent",
+            "set": {
+             "status": "done"
+            }
+           }
+          ]
+         }
+        },
+        {
+         "id": "pick",
+         "step": "pick",
+         "when": {
+          "in": [
+           "$arg.dep",
+           "$item.deps"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "two-keys",
+         "step": "odd",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ],
+          "in": [
+           "a",
+           "$caller.roles"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "set-flag",
+         "step": "set-flag",
+         "do": {
+          "set": {
+           "flag": "$arg.v"
+          }
+         }
+        },
+        {
+         "id": "slow",
+         "step": "slow",
+         "when": {
+          "regex": [
+           "$arg.text",
+           "^(a+)+$"
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [
+        {
+         "id": "next",
+         "step": "start"
+        }
+       ],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open",
+       "parent": 9
+      }
+     },
+     {
+      "seq": 9,
+      "team": "t",
+      "archived": true,
+      "fields": {
+       "status": "open"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "a"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "start",
+    "item": 2,
+    "entry": "next"
+   }
+  },
+  {
+   "id": "INL-02",
+   "rule_set": "inline",
+   "rule": "pick",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "parent": {
+        "type": "item",
+        "default": null
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       },
+       "flag": {
+        "type": "boolean",
+        "default": false
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "start",
+         "step": "start",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ]
+         },
+         "do": {
+          "set": {
+           "status": "done"
+          },
+          "related": [
+           {
+            "items": "$item.parent",
+            "set": {
+             "status": "done"
+            }
+           }
+          ]
+         }
+        },
+        {
+         "id": "pick",
+         "step": "pick",
+         "when": {
+          "in": [
+           "$arg.dep",
+           "$item.deps"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "two-keys",
+         "step": "odd",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ],
+          "in": [
+           "a",
+           "$caller.roles"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "set-flag",
+         "step": "set-flag",
+         "do": {
+          "set": {
+           "flag": "$arg.v"
+          }
+         }
+        },
+        {
+         "id": "slow",
+         "step": "slow",
+         "when": {
+          "regex": [
+           "$arg.text",
+           "^(a+)+$"
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [
+        {
+         "id": "next",
+         "step": "start"
+        }
+       ],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open",
+       "deps": [
+        2
+       ]
+      }
+     },
+     {
+      "seq": 2,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "a"
+    },
+    "item": 1,
+    "step": "pick",
+    "args": {
+     "dep": "2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "pick"
+   }
+  },
+  {
+   "id": "INL-03",
+   "rule_set": "inline",
+   "rule": "two-keys",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "parent": {
+        "type": "item",
+        "default": null
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       },
+       "flag": {
+        "type": "boolean",
+        "default": false
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "start",
+         "step": "start",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ]
+         },
+         "do": {
+          "set": {
+           "status": "done"
+          },
+          "related": [
+           {
+            "items": "$item.parent",
+            "set": {
+             "status": "done"
+            }
+           }
+          ]
+         }
+        },
+        {
+         "id": "pick",
+         "step": "pick",
+         "when": {
+          "in": [
+           "$arg.dep",
+           "$item.deps"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "two-keys",
+         "step": "odd",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ],
+          "in": [
+           "a",
+           "$caller.roles"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "set-flag",
+         "step": "set-flag",
+         "do": {
+          "set": {
+           "flag": "$arg.v"
+          }
+         }
+        },
+        {
+         "id": "slow",
+         "step": "slow",
+         "when": {
+          "regex": [
+           "$arg.text",
+           "^(a+)+$"
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [
+        {
+         "id": "next",
+         "step": "start"
+        }
+       ],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "a"
+    },
+    "item": 1,
+    "step": "odd",
+    "args": {}
+   },
+   "expect": {
+    "exit": 2,
+    "text": "a condition has exactly one key (found is, in)"
+   }
+  },
+  {
+   "id": "INL-04",
+   "rule_set": "inline",
+   "rule": "set-flag",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "parent": {
+        "type": "item",
+        "default": null
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       },
+       "flag": {
+        "type": "boolean",
+        "default": false
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "start",
+         "step": "start",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ]
+         },
+         "do": {
+          "set": {
+           "status": "done"
+          },
+          "related": [
+           {
+            "items": "$item.parent",
+            "set": {
+             "status": "done"
+            }
+           }
+          ]
+         }
+        },
+        {
+         "id": "pick",
+         "step": "pick",
+         "when": {
+          "in": [
+           "$arg.dep",
+           "$item.deps"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "two-keys",
+         "step": "odd",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ],
+          "in": [
+           "a",
+           "$caller.roles"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "set-flag",
+         "step": "set-flag",
+         "do": {
+          "set": {
+           "flag": "$arg.v"
+          }
+         }
+        },
+        {
+         "id": "slow",
+         "step": "slow",
+         "when": {
+          "regex": [
+           "$arg.text",
+           "^(a+)+$"
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [
+        {
+         "id": "next",
+         "step": "start"
+        }
+       ],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "a"
+    },
+    "item": 1,
+    "step": "set-flag",
+    "args": {
+     "v": "ture"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "field flag: \"ture\" is not true or false"
+   }
+  },
+  {
+   "id": "INL-05",
+   "rule_set": "inline",
+   "rule": "slow",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "parent": {
+        "type": "item",
+        "default": null
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       },
+       "flag": {
+        "type": "boolean",
+        "default": false
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "start",
+         "step": "start",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ]
+         },
+         "do": {
+          "set": {
+           "status": "done"
+          },
+          "related": [
+           {
+            "items": "$item.parent",
+            "set": {
+             "status": "done"
+            }
+           }
+          ]
+         }
+        },
+        {
+         "id": "pick",
+         "step": "pick",
+         "when": {
+          "in": [
+           "$arg.dep",
+           "$item.deps"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "two-keys",
+         "step": "odd",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ],
+          "in": [
+           "a",
+           "$caller.roles"
+          ]
+         },
+         "do": {}
+        },
+        {
+         "id": "set-flag",
+         "step": "set-flag",
+         "do": {
+          "set": {
+           "flag": "$arg.v"
+          }
+         }
+        },
+        {
+         "id": "slow",
+         "step": "slow",
+         "when": {
+          "regex": [
+           "$arg.text",
+           "^(a+)+$"
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [
+        {
+         "id": "next",
+         "step": "start"
+        }
+       ],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "a"
+    },
+    "item": 1,
+    "step": "slow",
+    "args": {
+     "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team t allows the step slow on item 1",
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "PAT-48",
+   "rule_set": "patterns",
+   "rule": "close-same-commit",
+   "given": {
+    "items": [
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "review complete",
+       "holder": "member-1",
+       "passes": 2,
+       "passed_commit": "abc1234"
+      }
+     }
+    ],
+    "session": {
+     "id": "s-1",
+     "commit": "def5678"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 3,
+    "step": "close",
+    "args": {},
+    "session": {
+     "id": "s-1",
+     "commit": "def5678"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "close-same-commit",
+    "text": "the review passed commit abc1234; the work is now at def5678: ask for a new review (rule close-same-commit)"
+   }
+  },
+  {
+   "id": "PAT-49",
+   "rule_set": "patterns",
+   "rule": "review-cites-document",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "reviewer": "member-2",
+       "review_refs": [
+        "docs/review/api.md"
+       ]
+      }
+     }
+    ],
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "reject",
+     "comments": "F1: missing test"
+    },
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "review-cites-document",
+    "text": "the comments cite none of the review documents (docs/review/api.md) (rule review-cites-document)"
+   }
+  },
+  {
+   "id": "PAT-50",
+   "rule_set": "patterns",
+   "rule": "review-reject",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "reviewer": "member-2",
+       "review_refs": [
+        "docs/review/api.md"
+       ]
+      }
+     }
+    ],
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "reject",
+     "comments": "F1 (docs/review/api.md): missing test"
+    },
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "review-reject",
+    "items": {
+     "1": {
+      "status": "in progress"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-51",
+   "rule_set": "patterns",
+   "rule": "accept-input-reviewed",
+   "given": {
+    "items": [
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "handoff_to": [
+        1
+       ],
+       "handoff_commit": "abc1234"
+      }
+     },
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        3
+       ]
+      }
+     }
+    ],
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "accept-input",
+    "args": {
+     "producer": "3"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "accept-input-reviewed",
+    "text": "item 3 has not passed its review or names no commit for its hand-off (rule accept-input-reviewed)"
+   }
+  },
+  {
+   "id": "PAT-52",
+   "rule_set": "patterns",
+   "rule": "reject-input",
+   "given": {
+    "items": [
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "review complete",
+       "handoff_to": [
+        1
+       ]
+      }
+     },
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        3
+       ],
+       "accepted_inputs": [
+        3
+       ]
+      }
+     }
+    ],
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "reject-input",
+    "args": {
+     "producer": "3",
+     "reason": "the contract misses the error codes"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "reject-input",
+    "items": {
+     "1": {
+      "accepted_inputs": []
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-53",
+   "rule_set": "patterns",
+   "rule": "request-review",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "body": "# x\n\n## Definition of done\n\n- [ ] tests pass\n",
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ],
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "request-review",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "request-review",
+    "items": {
+     "1": {
+      "status": "peer review"
+     }
+    },
+    "say": "item 1 is in peer review; end this session now"
+   }
+  },
+  {
+   "id": "PAT-54",
+   "rule_set": "patterns",
+   "rule": "dependencies-cap",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+       ]
+      }
+     },
+     {
+      "seq": 2,
+      "team": "patterns",
+      "fields": {
+       "status": "closed"
+      }
+     },
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "closed"
+      }
+     },
+     {
+      "seq": 4,
+      "team": "patterns",
+      "fields": {
+       "status": "closed"
+      }
+     },
+     {
+      "seq": 5,
+      "team": "patterns",
+      "fields": {
+       "status": "closed"
+      }
+     },
+     {
+      "seq": 6,
+      "team": "patterns",
+      "fields": {
+       "status": "closed"
+      }
+     },
+     {
+      "seq": 7,
+      "team": "patterns",
+      "fields": {
+       "status": "closed"
+      }
+     }
+    ],
+    "session": {
+     "id": "s-3"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {},
+    "session": {
+     "id": "s-3"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "dependencies-cap",
+    "text": "item 1 has 2, 3, 4, 5, 6, 7 as dependencies; more than 5 means it should be split (rule dependencies-cap)"
+   }
+  },
+  {
+   "id": "PAT-55",
+   "rule_set": "patterns",
+   "rule": "remove-duplicate",
+   "given": {
+    "items": [
+     {
+      "seq": 4,
+      "team": "patterns",
+      "fields": {
+       "status": "new"
+      }
+     }
+    ],
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 4,
+    "step": "remove-duplicate",
+    "args": {
+     "reason": "duplicate of 3"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "remove-duplicate",
+    "items": {},
+    "delete": true
+   }
+  },
+  {
+   "id": "PAT-56",
+   "rule_set": "patterns",
+   "rule": "move-branch",
+   "given": {
+    "items": [
+     {
+      "seq": 4,
+      "team": "patterns",
+      "fields": {
+       "status": "new"
+      }
+     }
+    ],
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 4,
+    "step": "move-branch",
+    "args": {
+     "to": "release"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "move-branch",
+    "items": {},
+    "branch": {
+     "4": "release"
+    }
+   }
+  },
+  {
+   "id": "PAT-57",
+   "rule_set": "patterns",
+   "rule": "release-to-users",
+   "given": {
+    "items": [
+     {
+      "seq": 4,
+      "team": "patterns",
+      "fields": {
+       "status": "new"
+      }
+     }
+    ],
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 4,
+    "step": "release-to-users",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "release-to-users",
+    "items": {},
+    "bound": {
+     "4": ""
+    }
+   }
+  },
+  {
+   "id": "VAL-13",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "guard",
+         "step": "close",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ],
+          "in": [
+           "lead",
+           "$caller.roles"
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when",
+      "rule": "guard",
+      "problem": "a condition has exactly one key (found is, in)"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-14",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "close",
+         "step": "close",
+         "wehn": {
+          "in": [
+           "lead",
+           "$caller.roles"
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].wehn",
+      "rule": "close",
+      "problem": "wehn is not a key of a rule"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-15",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "when": {
+          "is": [
+           "$item.branch",
+           "$session.brnach"
+          ]
+         },
+         "deny": "x"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when.is[1]",
+      "rule": "r",
+      "problem": "$session.brnach is no reference"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-16",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "do": {
+          "related": [
+           {
+            "items": "$item.holder",
+            "set": {
+             "nosuch": "$it.status"
+            }
+           }
+          ]
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].do.related[0].set.nosuch",
+      "rule": "r",
+      "problem": "nosuch is no field of the item definition"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-17",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "do": {
+          "related": [
+           {
+            "items": "$item.holder",
+            "set": {
+             "holder": "$it.holder"
+            }
+           }
+          ]
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 0,
+    "findings": []
+   }
+  },
+  {
+   "id": "VAL-18",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "wide",
+         "step": "claim",
+         "when": {
+          "in": [
+           "$item.status",
+           [
+            "open",
+            "done"
+           ]
+          ]
+         },
+         "deny": "x"
+        },
+        {
+         "id": "narrow",
+         "step": "claim",
+         "when": {
+          "is": [
+           "$item.status",
+           "open"
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[1]",
+      "rule": "narrow",
+      "problem": "rule narrow can never decide: rule wide above it matches every case it matches"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-19",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open"
+        ],
+        "final": []
+       },
+       "a.b": {
+        "type": "text"
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "when": {
+          "empty": "$arg.help"
+         },
+         "deny": "x"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "item.a.b",
+      "rule": null,
+      "problem": "a.b is not a field name: lowercase letters, digits, - and _, starting with a letter"
+     },
+     {
+      "path": "rules.table[0].when.empty",
+      "rule": "r",
+      "problem": "--help belongs to the CLI"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-20",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "when": {
+          "regex": [
+           "$arg.note",
+           "^(a+)+$"
+          ]
+         },
+         "deny": "x"
+        },
+        {
+         "id": "q",
+         "step": "close",
+         "when": {
+          "regex": [
+           "$arg.note",
+           "(?=a)"
+          ]
+         },
+         "deny": "x"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[1].when.regex",
+      "rule": "q",
+      "problem": "not a pattern the CLI runs (lookaround and flags are not supported (at character 1))"
+     }
+    ]
    }
   }
  ]

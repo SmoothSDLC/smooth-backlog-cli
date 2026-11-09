@@ -8,20 +8,19 @@ const read = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
 const { cases, verification } = read('../rule-cases.json');
 const FILES = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 'single-agent', 'patterns'].map(n => [n, read(`../examples/${n}.json`)]));
 const NOW = '2026-11-09T12:00:00Z';
+const defaults = entry => Object.fromEntries(Object.entries(entry.item).map(([f, d]) => [f, d.default !== undefined ? d.default : ['items', 'list'].includes(d.type) ? [] : d.type === 'item' ? null : '']));
 
-// A case's items with the defaults of the team's item definition; team defaults to the rule set's team.
-function items(given, team, entry) {
-  return given.items.map(i => ({ seq: i.seq, slug: `${String(i.seq).padStart(3, '0')}-item`, name: i.name ?? `item ${i.seq}`, team: i.team ?? team,
-    repository: 'acme/app', branch: i.branch ?? 'main', archived: Boolean(i.archived),
-    fields: { ...(entry && (i.team ?? team) === team ? Object.fromEntries(Object.entries(entry.item).map(([f, d]) => [f, d.default ?? (['items', 'list'].includes(d.type) ? [] : d.type === 'item' ? null : '')])) : {}), ...i.fields } }));
-}
+// A case's items; an item of the rule set's team gets the definition's defaults unless the case is raw (it then proves D-32 in the evaluator).
+const items = (given, team, entry) => given.items.map(i => ({ seq: i.seq, slug: `${String(i.seq).padStart(3, '0')}-item`, name: i.name ?? `item ${i.seq}`, team: i.team ?? team,
+  repository: i.repository ?? 'acme/app', branch: i.branch ?? 'main', archived: Boolean(i.archived), body: i.body ?? '',
+  fields: { ...(entry && !given.raw && (i.team ?? team) === team ? defaults(entry) : {}), ...i.fields } }));
 
 function run(c) {
   const cmd = c.command;
-  if (cmd.run === 'validate') { const f = validate(c.rule_set === 'inline' ? c.given.team_file : FILES[c.rule_set]); return { exit: f.length ? 2 : 0, findings: f.map(({ path, rule, problem }) => ({ path, rule, problem })) }; }
+  const file = c.rule_set === 'inline' ? c.given.team_file : FILES[c.rule_set];
+  if (cmd.run === 'validate') { const f = validate(file); return { exit: f.length ? 2 : 0, findings: f.map(({ path, rule, problem }) => ({ path, rule, problem })) }; }
   if (cmd.run === 'resolve') return { exit: 0, team: resolveTeam(cmd) };
   if (cmd.run === 'user-show') return { exit: 0, item: userShow(items(c.given), cmd.item).seq };
-  const file = FILES[c.rule_set];
   const team = resolveTeam({ flags: { team: Object.keys(file)[0], ...cmd.flags } });
   const entry = file[team];
   const caller = resolveAgent(cmd);
@@ -30,20 +29,22 @@ function run(c) {
   if (cmd.run === 'pop') { const p = pop({ ...ctx, order: c.given.order ?? all.map(i => i.seq) }); return { exit: p.action === 'idle' ? 3 : 0, ...p }; }
   if (cmd.run === 'filter') return { exit: 0, filter: filter(ctx, cmd.step) };
   const state = { last: c.given.last ?? 0 };
-  const r = cmd.run === 'new' ? create(ctx, state) : step({ ...ctx, step: cmd.step, item: all.find(i => i.seq === cmd.item) });
-  return { exit: 0, rule: r.rule, place: r.place, say: r.say, items: r.items };
+  const r = cmd.run === 'new' ? create(ctx, state) : step({ ...ctx, step: cmd.step, item: all.find(i => i.seq === cmd.item && i.repository === 'acme/app') });
+  return { exit: 0, rule: r.rule, place: r.place, say: r.say, delete: r.delete, items: r.items };
 }
 
 for (const c of cases) {
   test(`${c.id}: ${c.rule ?? 'coded'} (${c.command.run}${c.command.step ? ` ${c.command.step}` : ''})`, () => {
-    let got;
+    let got; const t0 = Date.now();
     try { got = run(c); } catch (e) { if (!(e instanceof Refusal)) throw e; got = { exit: e.exit, rule: e.rule, text: e.message }; }
     const want = c.expect;
     assert.equal(got.exit, want.exit, JSON.stringify(got));
-    for (const k of ['text', 'rule', 'action', 'item', 'entry', 'team', 'filter', 'findings', 'place', 'say']) if (k in want) assert.deepEqual(got[k], want[k], k);
+    for (const k of ['text', 'rule', 'action', 'item', 'entry', 'team', 'filter', 'findings', 'place', 'say', 'delete']) if (k in want) assert.deepEqual(got[k], want[k], k);
     for (const [seq, fields] of Object.entries(want.items ?? {})) for (const [f, v] of Object.entries(fields)) assert.deepEqual(got.items.get(Number(seq)).fields[f], v, `item ${seq} field ${f}`);
     for (const seq of want.archived ?? []) assert.equal(got.items.get(seq).archived, true, `item ${seq} archived`);
     for (const [seq, t] of Object.entries(want.bound ?? {})) assert.equal(got.items.get(Number(seq)).team, t, `item ${seq} team`);
+    for (const [seq, b] of Object.entries(want.branch ?? {})) assert.equal(got.items.get(Number(seq)).branch, b, `item ${seq} branch`);
+    if (want.max_ms) assert.ok(Date.now() - t0 < want.max_ms, `took ${Date.now() - t0} ms`);
   });
 }
 

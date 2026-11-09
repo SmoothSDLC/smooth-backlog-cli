@@ -12,6 +12,8 @@ const B = 'BAKE-IN', L = 'LAZY-LOAD', S = 'SKIP', D = 'DEFERRED-WITH-EXPLICIT-BL
 const T8 = 'entry plan Task 8 (gap review of the branch backlog) files it as its own backlog item: a user-command feature, outside the rules engine';
 const T6 = 'entry plan Task 6 (the team rule set and the lead and member skills in the backlog repo) changes this consumer; chapter 07 fixes what it reads from the CLI';
 const open = q => `owner question ${q} stays open in reference/08-owner-questions.md: a user-command question outside the rules engine`;
+const DEC = n => `decision ${n} of design/decisions.md`;
+const CHUNK = 'entry plan Task 6 states whether the owner\'s team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)';
 
 // ---- inventory.tsv: one terminal state per group (reference/01-inventory.md section 3 gives each group's rule)
 const MACH = (what, ch) => [B, `machinery: ${what} (chapter ${ch})`, ''];
@@ -19,8 +21,8 @@ const GROUP = {
   'DI-ERR': MACH('exit codes 0, 1, 2, 3, 5', '04'), 'DI-CLI': MACH('command syntax', '04'), 'DI-SYNTAX': MACH('command syntax; the arguments of a team step are the $arg names its rules read', '04'),
   'DI-LOCK': MACH('one writer per clone', '04'), 'DI-UPGRADE': MACH('package upgrade', '04'), 'DI-SETUP': MACH('storage location', '02'), 'DI-STORE': MACH('JSON item store', '02'),
   'DI-SYNC': MACH('publication; a team step is evaluated again on the rebased items', '04'), 'DI-SAFETY': MACH('path safety and secrecy', '02'),
-  'DI-FM': MACH('the markdown reader survives only inside backlog team migrate; items are JSON', '06'), 'DI-STALE': MACH('stale-read guard', '04'), 'DI-REPAIR': MACH('unreadable JSON item repair', '02'),
-  'DI-INDEX': MACH('the index, structure unchanged', '05'), 'DI-HELP': MACH('help texts', '04'), 'DI-FIELDS': [B, 'field: backlog fields prints the built-in user item definition; backlog team query definition prints a team\'s (chapter 02)', ''],
+  'DI-FM': MACH('the markdown reader survives only inside backlog team migrate; items are JSON', '06'), 'DI-STALE': MACH('stale-read guard of user commands; team commands re-run on the upstream files instead (R1)', '04'), 'DI-REPAIR': MACH('unreadable JSON item repair', '02'),
+  'DI-INDEX': MACH('the index, structure unchanged', '05'), 'DI-HELP': MACH('help texts', '04'), 'DI-FIELDS': [B, 'field: backlog fields prints the built-in user item definition; backlog team query rules prints a team\'s (chapter 02)', ''],
   'DI-ITEMSCHEMA': MACH('the JSON item envelope', '02'), 'DI-REF': MACH('referential integrity of item and items fields, by type', '02'), 'DI-ARCHIVE': MACH('the archive folder; archived items take no step', '04'),
   'DI-IDENTITY-FIELD': MACH('seq and slug in the envelope', '02'), 'DI-PUBLISH-HOOK': MACH('the step is evaluated again after the rebase, in place of the publish hook', '04'), 'DI-GIT': [B, 'language: $session.commit (chapter 03)', ''],
   'DI-HANDOFF-FORMAT': [S, '-', 'no coded hand-off record: a team states hand-offs as fields, and a new record withdraws the acceptance with a related remove instead of a digest (pattern patterns/record-handoff)'],
@@ -29,7 +31,7 @@ const GROUP = {
   'DI-MACHINE': MACH('the evaluator', '03'), 'DI-CONCURRENCY': MACH('concurrency', '04'), 'DI-FINDINGS': MACH('index findings', '05'), 'DI-INPUT-IDENTITY': MACH('the writer of the stale guard is the agent for team commands and the user for user commands (R3b)', '04'),
   'CFG-TEAMS': MACH('teams.json reader', '01'), 'CFG-TEAMS-SILENT': MACH('an unreadable or invalid teams.json stops a team command (exit 2), never an empty file', '01'),
   'CFG-WORKFLOW-LOAD': [S, '-', 'owner ruling R5: no workflows.json and no shipped workflow; the rules are in teams.json'], 'SHIP-TEAMCACHE': [S, '-', 'owner rulings R1 and R5: the shipped workflow is deleted'],
-  'CFG-SCOPEFILE': [L, 'pattern: patterns/scope-branch', 'backlog.scope is no longer read; a scope is a rule on $session.repository and $session.branch'],
+  'CFG-SCOPEFILE': [D, CHUNK, 'backlog.scope set the chunk scope across repository folders, which the pop table cannot state yet'],
   'CFG-WIPFILE': [B, 'example: parallel/claim-limit-person, parallel/claim-limit-team', 'wip-limits.json is no longer read; a limit is a count rule'],
   'ST-VOCAB': [B, 'field: status.values and status.final of the team item definition (chapter 02)', ''], 'ST-FINISHED': [B, 'field: status.final (chapter 02)', ''],
   'ST-SOLO': [S, '-', 'owner ruling R3: user items have no review'], 'ST-STAGERULES': [L, 'pattern: patterns/review-pass-peer, patterns/review-pass-outside, patterns/close-passes', ''],
@@ -41,7 +43,7 @@ const GROUP = {
   'BIND-UPDATE': MACH('user commands see only items without a team (R3a)', '04'), 'BIND-REPLAN': MACH('user commands see only items without a team (R3a)', '04'), 'BIND-ARCHIVE': MACH('user commands see only items without a team (R3a)', '04'),
   'BIND-IMPORT': MACH('user commands see only items without a team (R3a)', '04'), 'BIND-CLEAN': MACH('user commands see only items without a team (R3a)', '04'), 'BIND-SPLIT': MACH('user commands see only items without a team (R3a)', '04'),
   'BIND-NOSTATUS': MACH('default refusal when no rule matches', '03'), 'BIND-ENTRYOF': MACH('a team command acts on the items of its team and on items without a team', '04'),
-  'BIND-UNBOUND': [B, 'example: parallel/adopt', 'language: effect team; only a rule that binds an item without a team may change it (chapter 03)'], 'BIND-CLOSESTATUS': [S, '-', 'no status step in code (R1)'],
+  'BIND-UNBOUND': [B, 'example: parallel/adopt, patterns/release-to-users', 'language: effect team; only a rule that binds an item without a team may change it (Q-19 answer B, chapter 03)'], 'BIND-CLOSESTATUS': [S, '-', 'no status step in code (R1)'],
   'PC-LISTWORDS': [B, 'field: default words of the built-in user item definition (decision D-33, chapter 02)', ''], 'PC-FINISHED': [B, 'field: default words of the built-in user item definition (decision D-33, chapter 02)', ''],
   'PC-DEFAULT': [B, 'field: default words of the built-in user item definition (decision D-33, chapter 02)', ''], 'PC-DONE': [B, 'field: default words of the built-in user item definition (decision D-33, chapter 02)', ''],
   'PC-SEVERITY': [B, 'field: severity of the built-in user item definition (chapter 02)', ''], 'PC-ARCHIVE-CLOSED': [S, '-', 'decision D-19: user archive never refuses because of the status'],
@@ -55,20 +57,20 @@ const GROUP = {
   'ENV-SOURCE': [D, open('Q-12'), ''], 'ENV-TESTSEAM': [S, '-', 'production code reads no test variable'],
   'RO-MEMBERS': MACH('people: name to roles; $caller.roles', '01'), 'RO-AUTHOR': [L, 'pattern: patterns/review-own-session', ''],
   'RO-SAMEWORKER': [L, 'pattern: patterns/review-own-session, patterns/ended-session', 'a session is BACKLOG_SESSION ($session.id); the agent name stays stable'],
-  'RO-CALLER': MACH('the caller is the one agent input; no acting-as flag', '04'), 'RO-ACTSAS': [S, '-', 'no acting-as: a step that names another person takes it as an argument its rules check (example extreme-programming/pair-needs-navigator)'],
+  'RO-CALLER': [D, DEC(2), 'whether a flag that differs from BACKLOG_AGENT is refused; R3b fixes only the order of the inputs'], 'RO-ACTSAS': [S, '-', 'no acting-as: a step that names another person takes it as an argument its rules check (example extreme-programming/pair-needs-navigator)'],
   'SC-SCOPE': [L, 'pattern: patterns/scope-branch', ''], 'SC-BRANCHBOUND': [L, 'pattern: patterns/scope-branch', ''], 'SC-INTEAM': MACH('a team command acts on the items of its team and on items without a team', '04'),
   'STEP-GATE': [B, 'language: the rule table and its deny texts (chapter 03)', ''], 'STEP-CLAIM': [B, 'example: parallel/claim, parallel/claim-not-ready', ''],
   'STEP-RELEASE': [B, 'example: parallel/release, parallel/release-who', ''], 'STEP-REASSIGN': [L, 'pattern: patterns/reassign', ''], 'STEP-WAIT': [L, 'pattern: patterns/wait, patterns/resume', ''],
   'STEP-RECHECK': MACH('the step is evaluated again on the rebased items', '04'), 'STEP-ACTIVE': [B, 'example: parallel/claim-limit-person', ''],
-  'HO-RECORD': [L, 'pattern: patterns/record-handoff', ''], 'HO-RECEIPT': [L, 'pattern: patterns/accept-input, patterns/accept-input-recorded', ''],
+  'HO-RECORD': [L, 'pattern: patterns/record-handoff', ''], 'HO-RECEIPT': [L, 'pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input', ''],
   'HO-EDGE': [L, 'pattern: patterns/claim-inputs-accepted', ''], 'HO-GATE': [L, 'pattern: patterns/claim-inputs-accepted, patterns/close-dependents-accepted', ''], 'HO-TEXTS': [L, 'pattern: patterns/accept-input-recorded', 'the texts are the deny texts of the team'],
   'RV-REQUEST': [B, 'example: parallel/hand-to-check, scrum/request-review', ''], 'RV-START': [B, 'example: parallel/start-check, scrum/take-review', ''],
-  'RV-REVIEW': [B, 'example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass', ''], 'RV-RULES': [L, 'pattern: patterns/close-passes, patterns/review-own-session', ''],
+  'RV-REVIEW': [B, 'example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass', ''], 'RV-RULES': [L, 'pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session', 'the commit rule compares the commit the review saw with the close\'s HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)'],
   'RV-REASSIGN': [L, 'pattern: patterns/take-over-stale-review', ''], 'RV-STALE': [L, 'pattern: patterns/take-over-stale-review', ''], 'RV-CLOSE': [B, 'example: parallel/close, parallel/close-holder', ''],
   'RV-HISTORY': MACH('every step appends a history entry; effect note', '02'), 'RV-NOTICE': [B, 'language: effect say (chapter 03)', ''], 'RV-VERDICTS': [B, 'example: parallel/check-verdict, scrum/review-verdict', ''],
   'RF-STEPS': [L, 'pattern: patterns/review-pass-peer, patterns/review-pass-outside', 'a refinement review is review stages over statuses, the same rule shape as a work review'],
   'RF-DECISION': [L, 'pattern: patterns/ask-decision, patterns/decide', ''], 'RF-EDITS': [L, 'pattern: patterns/edit, patterns/edit-only-before-ready', ''],
-  'RF-COMPLETE': [B, 'example: parallel/new-needs-estimate', 'other required fields are the same rule shape (pattern patterns/request-review-needs-done-when)'],
+  'RF-COMPLETE': [B, 'example: parallel/new-needs-estimate', 'other required fields are the same rule shape (pattern patterns/request-review-needs-done-when, which also reads the body)'],
   'RF-LEGACYSTAGE': [S, '-', 'owner ruling R4: no translation on read'], 'RF-JOIN': MACH('migrate keeps teamless split items as user items linked by parent (Q-19 answer B)', '06'),
   'RF-HOWTEXT': [B, 'language: deny texts with placeholders, written by the team (chapter 03)', ''],
   'WIP-LEVELS': [B, 'example: parallel/claim-limit-person, parallel/claim-limit-team', 'an overall limit across teams and user items is not stated: user items take no rule (D-18) and a team limits only its own items'],
@@ -84,6 +86,18 @@ const GROUP = {
   'DEF-DEFAULTWF': [S, '-', 'no workflow names (R5)'], 'HO-DEFAULTS': [S, '-', 'no coded hand-off record'], 'STEP-ONESTEP': MACH('one step per command: backlog team update <item> <step>', '04'),
   'Q-HOLDERFIELD': [B, 'language: the holder is a field the team names; conditions read it (chapter 03)', ''], 'Q-VIEWFIELDS': [B, 'command: backlog team query filter <name> --json prints the whole items (chapter 04)', ''],
   'Q-CLAIMNOW': [S, '-', 'pop runs the offered step through the evaluator itself; no internal flag'], 'Q-MARKTEXT': [S, '-', 'the pop entry names its step; no text test'],
+};
+
+// rows of a group whose behaviour differs from the group's (found by review B, section 3)
+const ROW = {
+  'INV-704': [L, 'pattern: patterns/review-cites-document', 'the comments must cite a review document (test contains)'],
+  'INV-784': MACH('pop exits 1 on a synchronisation failure, never 3 (idle)', '04'),
+  'INV-798': MACH('a detached HEAD with no branch given stops new, update and pop (exit 2)', '01'),
+  'INV-858': [D, CHUNK, 'the item-less chunk action and chunk items of other folders'],
+  'INV-588': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body (a definition-of-done section, an ESTIMATE line)'],
+  'INV-589': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body'],
+  'INV-590': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body'],
+  'INV-591': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body'],
 };
 
 // ---- tests.tsv: by disposition first, then by theme
@@ -112,7 +126,21 @@ const ONE = {
   'CON-03': [D, T6, 'plan entries are the team\'s step names from backlog team query plan'], 'CON-04': [D, T6, 'instruction texts come from the team\'s deny and say texts'],
   'CON-05': [B, 'command: backlog team pop --json keeps the key action; idle exits 3 (chapter 04)', ''], 'CON-06': [D, T6, 'TEAM_LEAD fallback dropped'],
   'CON-07': [D, T6, 'final values are status.final of the team item definition (backlog team query definition)'],
-  'CON-08': [B, 'machinery: backlog archive of an item without a team needs no --force (decision D-19)', ''], 'CON-09': [D, T6, 'verdict words are the team\'s arguments'],
+  'CON-08': [B, 'machinery: backlog archive of an item without a team needs no --force (decision D-19)', ''],
+  // review-b.md section 3: sampled behaviours of today's code that the first version did not carry or named a wrong target for
+  'B3-3': MACH('an unknown team subcommand: exit 2 naming the six', '04'), 'B3-10': MACH('TEAM_REPOSITORY must be owner/name (exit 2)', '01'),
+  'B3-11': MACH('a detached HEAD with no branch given stops new, update and pop', '01'),
+  'B3-19': [D, 'entry plan Task 6: the owner\'s team writes the dependency rule for items migrated without hand-off records (a closed producer with no record)', 'expressible with any and empty on the producer\'s hand-off field'],
+  'B3-20': [S, '-', 'no digest: the record is fields only the team\'s step writes, and a new record withdraws the acceptance (chapter 03 section 12)'],
+  'B3-27': [B, 'language: owner/name#seq references are read across folders (chapter 03 section 5)', 'cases PAR-64, PAR-65'],
+  'B3-30': [B, 'language: placeholders in a literal note text (chapter 03 section 8)', ''],
+  'B3-41': [L, 'pattern: patterns/close-same-commit', 'commit equality, not a reading of commit subjects'],
+  'B3-46': [L, 'pattern: patterns/review-cites-document', ''], 'B3-55': [D, DEC(2), ''], 'B3-60': [L, 'pattern: patterns/accept-input-reviewed', ''],
+  'B3-61': [L, 'pattern: patterns/reject-input', ''], 'B3-62': [D, DEC(2), ''], 'B3-63': [D, DEC(2), ''],
+  'B3-64': MACH('pop exits 1 on a synchronisation failure', '04'), 'B3-66': MACH('a detached HEAD with no branch given stops pop', '01'),
+  'B3-67': [D, CHUNK, ''], 'B3-71': [B, 'field: claimed_by and claimed_at of the built-in user item definition (chapter 02 section 4)', ''],
+  'B3-72': [B, 'field: backlog done writes closed (decision D-33; today done is stored as closed through normalise, finding F9)', ''],
+  'B3-73': MACH('the migration builds the index of a folder without one from priority', '06'), 'B3-74': [D, DEC(3), ''], 'CON-09': [D, T6, 'verdict words are the team\'s arguments'],
   'CON-10': [D, T6, 'already broken today; the binding step is a team rule (example parallel/adopt)'], 'CON-11': [D, T6, 'decisions are a filter of the team (pattern patterns/filter:decisions)'],
   'CON-12': [D, T6, 'show the status value; final values from the team item definition'], 'CON-13': [D, T6, 'the team writes its rule set in teams.json; no workflow file is registered'],
   'CON-14': [D, T6, 'the skills point at backlog team query rules and backlog team validate; no rule text duplicated'], 'CON-15': [D, T6, 'final values from the team item definition'],
@@ -161,7 +189,7 @@ const ONE = {
 // ---- the rows
 const rows = [];
 const add = (source, id, ref, [state, target, reason]) => rows.push({ source, id, ref, state, target, reason });
-const inv = tsv('inventory.tsv'); for (const r of inv) { if (!GROUP[r.group]) throw new Error(`inventory group ${r.group} unmapped`); add('inventory.tsv', r.id, r.site, GROUP[r.group]); }
+const inv = tsv('inventory.tsv'); for (const r of inv) { if (!GROUP[r.group]) throw new Error(`inventory group ${r.group} unmapped`); add('inventory.tsv', r.id, r.site, ROW[r.id] ?? GROUP[r.group]); }
 const tests = tsv('tests.tsv'); for (const r of tests) { r.file_line = r['file:line']; const s = testState(r); if (!s) throw new Error(`test ${r.id} unmapped`); add('tests.tsv', r.id, r.file_line, s); }
 const cons = tsv('consumers.tsv'); for (const r of cons) add('consumers.tsv', r.id, '', ONE[r.id] ?? (() => { throw new Error(`consumer ${r.id} unmapped`); })());
 // an accepted loss of gaps.tsv stays dropped under the ruling its resolution column cites
@@ -174,9 +202,14 @@ const part1 = md('08-owner-questions.md').split('## Part 2')[0];
 const dec = new Set(ids(part1, /\b(D-\d+)\b/g));
 for (const [, a, b] of part1.matchAll(/D-(\d+) to D-(\d+)/g)) for (let n = Number(a); n <= Number(b); n++) dec.add(`D-${n}`);
 for (const d of [...dec].sort((x, y) => Number(x.slice(2)) - Number(y.slice(2)))) add('08-owner-questions.md part 1', d, '', ONE[d] ?? (() => { throw new Error(`${d} unmapped`); })());
+// review B section 3: every sampled row whose verdict is M (missed) or X (wrong target)
+const sampled = readFileSync('review-b.md', 'utf8').split('## 3.')[1].split('\n## ')[0].split('\n').filter(l => /^\| \d+ \|/.test(l)).map(l => l.split('|').map(c => c.trim()));
+for (const c of sampled.filter(c => /^(M|X)|\/ M/.test(c[4]))) add('review-b.md section 3', `B3-${c[1]}`, c[2], ONE[`B3-${c[1]}`] ?? (() => { throw new Error(`B3-${c[1]} unmapped`); })());
 
 // ---- checks: one row per input, allowed states, every named example or pattern rule exists
 const STATES = [B, L, S, D];
+// the targets name decisions that exist
+const decisions = (readFileSync('decisions.md', 'utf8').match(/^## \d+\./gm) ?? []).length;
 const files = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 'single-agent', 'patterns'].map(n => [n, Object.values(JSON.parse(readFileSync(`examples/${n}.json`, 'utf8')))[0]]));
 const known = new Set(Object.entries(files).flatMap(([n, e]) => [...e.rules.table.map(r => r.id), ...e.rules.pop.map(o => o.id), ...Object.keys(e.rules.filters).map(v => `filter:${v}`)].map(id => `${n}/${id}`)));
 const seen = new Set();
@@ -185,6 +218,7 @@ for (const r of rows) {
   if (seen.has(key)) throw new Error(`${key} twice`); seen.add(key);
   if (!STATES.includes(r.state)) throw new Error(`${key}: state ${r.state}`);
   if ((r.state === S || r.state === D) && !(r.reason || r.target !== '-')) throw new Error(`${key}: no reason or blocker`);
+  for (const m of `${r.target} ${r.reason}`.matchAll(/decision (\d+) of design/g)) if (Number(m[1]) > decisions) throw new Error(`${key}: decision ${m[1]} does not exist`);
   for (const m of `${r.target} ${r.reason}`.matchAll(/\b((?:parallel|scrum|extreme-programming|single-agent|patterns)\/[a-z:-]+)/g)) if (!known.has(m[1])) throw new Error(`${key}: ${m[1]} is no rule of the examples`);
 }
 const inputs = { 'inventory.tsv': inv.length, 'tests.tsv': tests.length, 'consumers.tsv': cons.length, 'gaps.tsv': gaps.length };

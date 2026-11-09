@@ -1,24 +1,31 @@
 {
   "solo": {
-    "people": { "agent-1": ["worker"] },
+    "people": {
+      "agent-1": ["worker"]
+    },
     "item": {
-      "status": { "type": "text", "default": "todo", "values": ["todo", "doing", "done"], "final": ["done"], "description": "Where the item is." },
-      "estimate": { "type": "number", "default": 0, "description": "Minutes of work." },
-      "result": { "type": "text", "default": "", "description": "What was delivered." }
+      "status": {"type": "text", "default": "todo", "values": ["todo", "doing", "done"], "final": ["done"], "description": "Where the item is."},
+      "estimate": {"type": "number", "default": 0, "description": "Minutes of work."},
+      "result": {"type": "text", "default": "", "description": "What was delivered."}
     },
     "rules": {
       "table": [
-        { "id": "new-needs-estimate", "step": "new", "when": { "empty": "$arg.estimate" }, "deny": "a new item needs --estimate <minutes>" },
-        { "id": "new-size-cap", "step": "new", "when": { ">=": ["$arg.estimate", 121] }, "deny": "an item is at most 120 minutes of work (got {$arg.estimate}); split it" },
-        { "id": "new", "step": "new", "do": { "set": { "estimate": "$arg.estimate" } } },
-        { "id": "start-one-at-a-time", "step": "start", "when": { ">=": [ { "count": { "items": "$team.items", "match": { "is": ["$it.status", "doing"] } } }, 1 ] }, "deny": "finish the item in progress first" },
-        { "id": "start", "step": "start", "when": { "is": ["$item.status", "todo"] }, "do": { "set": { "status": "doing" } } },
-        { "id": "finish-needs-result", "step": "finish", "when": { "empty": "$arg.result" }, "deny": "finish needs --result \"<what was delivered>\"" },
-        { "id": "finish", "step": "finish", "when": { "is": ["$item.status", "doing"] }, "do": { "set": { "status": "done", "result": "$arg.result" }, "place": "last" } },
-        { "id": "archive", "step": "archive", "when": { "is": ["$item.status", "done"] }, "do": { "archive": true } }
+        {"id": "members-only", "step": "*", "when": {"empty": "$caller.roles"}, "deny": "{$caller} is not a person of team {$team.name}"},
+        {"id": "new-needs-estimate", "step": "new", "when": {"empty": "$arg.estimate"}, "deny": "a new item needs --estimate <minutes>"},
+        {"id": "new-size-cap", "step": "new", "when": {"not": {"<=": ["$arg.estimate", 120]}}, "deny": "an item is at most 120 minutes of work (got {$arg.estimate}); split it"},
+        {"id": "new", "step": "new", "do": {"set": {"estimate": "$arg.estimate"}}},
+        {"id": "start-one-at-a-time", "step": "start", "when": {">=": [{"count": {"items": "$team.items", "match": {"is": ["$it.status", "doing"]}}}, 1]}, "deny": "finish the item in progress first"},
+        {"id": "start", "step": "start", "when": {"is": ["$item.status", "todo"]}, "do": {"set": {"status": "doing"}}},
+        {"id": "finish-needs-result", "step": "finish", "when": {"empty": "$arg.result"}, "deny": "finish needs --result \"<what was delivered>\""},
+        {"id": "finish", "step": "finish", "when": {"is": ["$item.status", "doing"]}, "do": {"set": {"status": "done", "result": "$arg.result"}, "place": "last"}},
+        {"id": "archive", "step": "archive", "when": {"is": ["$item.status", "done"]}, "do": {"archive": true}}
       ],
-      "pop": [ { "id": "next-item", "step": "start" } ],
-      "filters": { "doing": { "description": "The item in progress.", "when": { "is": ["$item.status", "doing"] } } }
+      "pop": [
+        {"id": "next-item", "step": "start"}
+      ],
+      "filters": {
+        "doing": {"description": "The item in progress.", "when": {"is": ["$item.status", "doing"]}}
+      }
     }
   }
 }

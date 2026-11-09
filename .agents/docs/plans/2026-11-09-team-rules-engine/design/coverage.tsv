@@ -73,15 +73,15 @@ inventory.tsv	INV-071	src/shared/dependencies.js:90	BAKE-IN	example: parallel/cl
 inventory.tsv	INV-072	src/shared/dependencies.js:92	BAKE-IN	example: parallel/claim-dependencies	
 inventory.tsv	INV-073	src/shared/done.js:9	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-074	src/shared/done.js:10	BAKE-IN	field: default words of the built-in user item definition (decision D-33, chapter 02)	
-inventory.tsv	INV-075	src/shared/fields.js:4	BAKE-IN	field: backlog fields prints the built-in user item definition; backlog team query definition prints a team's (chapter 02)	
+inventory.tsv	INV-075	src/shared/fields.js:4	BAKE-IN	field: backlog fields prints the built-in user item definition; backlog team query rules prints a team's (chapter 02)	
 inventory.tsv	INV-076	src/shared/fields.js:20	BAKE-IN	field: the built-in user item definition documents data only (chapter 02)	
 inventory.tsv	INV-077	src/shared/fields.js:21	BAKE-IN	field: the built-in user item definition documents data only (chapter 02)	
 inventory.tsv	INV-078	src/shared/fields.js:22	BAKE-IN	field: the built-in user item definition documents data only (chapter 02)	
 inventory.tsv	INV-079	src/shared/fields.js:24	BAKE-IN	field: the built-in user item definition documents data only (chapter 02)	
-inventory.tsv	INV-080	src/shared/fields.js:25	BAKE-IN	field: backlog fields prints the built-in user item definition; backlog team query definition prints a team's (chapter 02)	
-inventory.tsv	INV-081	src/shared/fields.js:26	BAKE-IN	field: backlog fields prints the built-in user item definition; backlog team query definition prints a team's (chapter 02)	
+inventory.tsv	INV-080	src/shared/fields.js:25	BAKE-IN	field: backlog fields prints the built-in user item definition; backlog team query rules prints a team's (chapter 02)	
+inventory.tsv	INV-081	src/shared/fields.js:26	BAKE-IN	field: backlog fields prints the built-in user item definition; backlog team query rules prints a team's (chapter 02)	
 inventory.tsv	INV-082	src/shared/fields.js:28	BAKE-IN	field: the built-in user item definition documents data only (chapter 02)	
-inventory.tsv	INV-083	src/shared/fields.js:31	BAKE-IN	field: backlog fields prints the built-in user item definition; backlog team query definition prints a team's (chapter 02)	
+inventory.tsv	INV-083	src/shared/fields.js:31	BAKE-IN	field: backlog fields prints the built-in user item definition; backlog team query rules prints a team's (chapter 02)	
 inventory.tsv	INV-084	src/shared/fields.js:39	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-085	src/shared/frontmatter.js:15	BAKE-IN	machinery: the markdown reader survives only inside backlog team migrate; items are JSON (chapter 06)	
 inventory.tsv	INV-086	src/shared/frontmatter.js:16	BAKE-IN	machinery: the markdown reader survives only inside backlog team migrate; items are JSON (chapter 06)	
@@ -280,22 +280,22 @@ inventory.tsv	INV-278	src/shared/safety.js:93	BAKE-IN	machinery: path safety and
 inventory.tsv	INV-279	src/shared/safety.js:94	BAKE-IN	machinery: path safety and secrecy (chapter 02)	
 inventory.tsv	INV-280	src/shared/safety.js:111	BAKE-IN	machinery: path safety and secrecy (chapter 02)	
 inventory.tsv	INV-281	src/shared/seam.js:8	SKIP	-	decision D-17: the user-command code has no team seam
-inventory.tsv	INV-282	src/shared/seen.js:15	BAKE-IN	machinery: stale-read guard (chapter 04)	
+inventory.tsv	INV-282	src/shared/seen.js:15	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
 inventory.tsv	INV-283	src/shared/seen.js:21	BAKE-IN	machinery: the writer of the stale guard is the agent for team commands and the user for user commands (R3b) (chapter 04)	
-inventory.tsv	INV-284	src/shared/seen.js:46	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-285	src/shared/seen.js:51	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-286	src/shared/seen.js:56	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-287	src/shared/seen.js:82	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-288	src/shared/seen.js:89	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-289	src/shared/seen.js:126	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-290	src/shared/seen.js:127	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-291	src/shared/seen.js:145	BAKE-IN	machinery: stale-read guard (chapter 04)	
+inventory.tsv	INV-284	src/shared/seen.js:46	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-285	src/shared/seen.js:51	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-286	src/shared/seen.js:56	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-287	src/shared/seen.js:82	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-288	src/shared/seen.js:89	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-289	src/shared/seen.js:126	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-290	src/shared/seen.js:127	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-291	src/shared/seen.js:145	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
 inventory.tsv	INV-292	src/shared/seen.js:156	SKIP	-	held is the user holder field only; team roles are not read by user commands
 inventory.tsv	INV-293	src/shared/seen.js:159	SKIP	-	held is the user holder field only; team roles are not read by user commands
-inventory.tsv	INV-294	src/shared/seen.js:177	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-295	src/shared/seen.js:210	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-296	src/shared/seen.js:213	BAKE-IN	machinery: stale-read guard (chapter 04)	
-inventory.tsv	INV-297	src/shared/seen.js:239	BAKE-IN	machinery: stale-read guard (chapter 04)	
+inventory.tsv	INV-294	src/shared/seen.js:177	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-295	src/shared/seen.js:210	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-296	src/shared/seen.js:213	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
+inventory.tsv	INV-297	src/shared/seen.js:239	BAKE-IN	machinery: stale-read guard of user commands; team commands re-run on the upstream files instead (R1) (chapter 04)	
 inventory.tsv	INV-298	src/shared/sequence.js:10	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-299	src/shared/sequence.js:31	BAKE-IN	field: default words of the built-in user item definition (decision D-33, chapter 02)	
 inventory.tsv	INV-300	src/shared/sequence.js:42	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
@@ -552,26 +552,26 @@ inventory.tsv	INV-550	src/team/handoff-commands.js:39	LAZY-LOAD	pattern: pattern
 inventory.tsv	INV-551	src/team/handoff-commands.js:41	LAZY-LOAD	pattern: patterns/record-handoff	
 inventory.tsv	INV-552	src/team/handoff-commands.js:43	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
 inventory.tsv	INV-553	src/team/handoff-commands.js:43	SKIP	-	no coded hand-off record: a team states hand-offs as fields, and a new record withdraws the acceptance with a related remove instead of a digest (pattern patterns/record-handoff)
-inventory.tsv	INV-554	src/team/handoff-commands.js:56	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-555	src/team/handoff-commands.js:57	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-556	src/team/handoff-commands.js:58	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-557	src/team/handoff-commands.js:61	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-558	src/team/handoff-commands.js:62	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-559	src/team/handoff-commands.js:64	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-560	src/team/handoff-commands.js:67	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-561	src/team/handoff-commands.js:68	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-562	src/team/handoff-commands.js:84	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-563	src/team/handoff-commands.js:85	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-564	src/team/handoff-commands.js:86	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-565	src/team/handoff-commands.js:89	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-566	src/team/handoff-commands.js:95	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
+inventory.tsv	INV-554	src/team/handoff-commands.js:56	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-555	src/team/handoff-commands.js:57	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-556	src/team/handoff-commands.js:58	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-557	src/team/handoff-commands.js:61	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-558	src/team/handoff-commands.js:62	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-559	src/team/handoff-commands.js:64	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-560	src/team/handoff-commands.js:67	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-561	src/team/handoff-commands.js:68	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-562	src/team/handoff-commands.js:84	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-563	src/team/handoff-commands.js:85	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-564	src/team/handoff-commands.js:86	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-565	src/team/handoff-commands.js:89	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-566	src/team/handoff-commands.js:95	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
 inventory.tsv	INV-567	src/team/handoff.js:14	SKIP	-	no coded hand-off record: a team states hand-offs as fields, and a new record withdraws the acceptance with a related remove instead of a digest (pattern patterns/record-handoff)
 inventory.tsv	INV-568	src/team/handoff.js:24	SKIP	-	no coded hand-off record: a team states hand-offs as fields, and a new record withdraws the acceptance with a related remove instead of a digest (pattern patterns/record-handoff)
 inventory.tsv	INV-569	src/team/handoff.js:25	LAZY-LOAD	pattern: patterns/record-handoff	
 inventory.tsv	INV-570	src/team/handoff.js:26	LAZY-LOAD	pattern: patterns/record-handoff	
 inventory.tsv	INV-571	src/team/handoff.js:27	LAZY-LOAD	pattern: patterns/record-handoff	
 inventory.tsv	INV-572	src/team/handoff.js:34	SKIP	-	no coded hand-off record: a team states hand-offs as fields, and a new record withdraws the acceptance with a related remove instead of a digest (pattern patterns/record-handoff)
-inventory.tsv	INV-573	src/team/handoff.js:35	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
+inventory.tsv	INV-573	src/team/handoff.js:35	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
 inventory.tsv	INV-574	src/team/handoff.js:48	SKIP	-	no coded hand-off record: a team states hand-offs as fields, and a new record withdraws the acceptance with a related remove instead of a digest (pattern patterns/record-handoff)
 inventory.tsv	INV-575	src/team/handoff.js:58	LAZY-LOAD	pattern: patterns/claim-inputs-accepted	
 inventory.tsv	INV-576	src/team/handoff.js:62	LAZY-LOAD	pattern: patterns/claim-inputs-accepted	
@@ -586,10 +586,10 @@ inventory.tsv	INV-584	src/team/lifecycle.js:21	BAKE-IN	language: the rule table 
 inventory.tsv	INV-585	src/team/lifecycle.js:24	BAKE-IN	machinery: every step appends a history entry; effect note (chapter 02)	
 inventory.tsv	INV-586	src/team/lifecycle.js:26	BAKE-IN	example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass	
 inventory.tsv	INV-587	src/team/lifecycle.js:33	BAKE-IN	machinery: every step appends a history entry; effect note (chapter 02)	
-inventory.tsv	INV-588	src/team/lifecycle.js:42	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when)
-inventory.tsv	INV-589	src/team/lifecycle.js:52	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when)
-inventory.tsv	INV-590	src/team/lifecycle.js:55	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when)
-inventory.tsv	INV-591	src/team/lifecycle.js:56	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when)
+inventory.tsv	INV-588	src/team/lifecycle.js:42	LAZY-LOAD	pattern: patterns/request-review-needs-done-when	a rule reads $item.body (a definition-of-done section, an ESTIMATE line)
+inventory.tsv	INV-589	src/team/lifecycle.js:52	LAZY-LOAD	pattern: patterns/request-review-needs-done-when	a rule reads $item.body
+inventory.tsv	INV-590	src/team/lifecycle.js:55	LAZY-LOAD	pattern: patterns/request-review-needs-done-when	a rule reads $item.body
+inventory.tsv	INV-591	src/team/lifecycle.js:56	LAZY-LOAD	pattern: patterns/request-review-needs-done-when	a rule reads $item.body
 inventory.tsv	INV-592	src/team/lifecycle.js:61	SKIP	-	owner ruling R4: no translation on read
 inventory.tsv	INV-593	src/team/lifecycle.js:65	SKIP	-	owner ruling R4: no translation on read
 inventory.tsv	INV-594	src/team/lifecycle.js:68	BAKE-IN	example: parallel/claim, parallel/claim-not-ready	
@@ -671,18 +671,18 @@ inventory.tsv	INV-669	src/team/lifecycle.js:240	LAZY-LOAD	pattern: patterns/take
 inventory.tsv	INV-670	src/team/lifecycle.js:246	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
 inventory.tsv	INV-671	src/team/lifecycle.js:249	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
 inventory.tsv	INV-672	src/team/lifecycle.js:254	BAKE-IN	language: $session.commit (chapter 03)	
-inventory.tsv	INV-673	src/team/lifecycle.js:277	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-674	src/team/lifecycle.js:278	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-675	src/team/lifecycle.js:279	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-676	src/team/lifecycle.js:280	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-677	src/team/lifecycle.js:284	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-678	src/team/lifecycle.js:289	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-679	src/team/lifecycle.js:290	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-680	src/team/lifecycle.js:292	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-681	src/team/lifecycle.js:293	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-682	src/team/lifecycle.js:295	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-683	src/team/lifecycle.js:296	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
-inventory.tsv	INV-684	src/team/lifecycle.js:299	LAZY-LOAD	pattern: patterns/close-passes, patterns/review-own-session	
+inventory.tsv	INV-673	src/team/lifecycle.js:277	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-674	src/team/lifecycle.js:278	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-675	src/team/lifecycle.js:279	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-676	src/team/lifecycle.js:280	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-677	src/team/lifecycle.js:284	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-678	src/team/lifecycle.js:289	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-679	src/team/lifecycle.js:290	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-680	src/team/lifecycle.js:292	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-681	src/team/lifecycle.js:293	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-682	src/team/lifecycle.js:295	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-683	src/team/lifecycle.js:296	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
+inventory.tsv	INV-684	src/team/lifecycle.js:299	LAZY-LOAD	pattern: patterns/close-passes, patterns/close-same-commit, patterns/review-own-session	the commit rule compares the commit the review saw with the close's HEAD; a reading of commit subjects in git history is not offered (chapter 03 section 12)
 inventory.tsv	INV-685	src/team/lifecycle.js:305	BAKE-IN	example: parallel/hand-to-check, scrum/request-review	
 inventory.tsv	INV-686	src/team/lifecycle.js:306	BAKE-IN	example: parallel/hand-to-check, scrum/request-review	
 inventory.tsv	INV-687	src/team/lifecycle.js:309	BAKE-IN	example: parallel/hand-to-check, scrum/request-review	
@@ -702,7 +702,7 @@ inventory.tsv	INV-700	src/team/lifecycle.js:337	BAKE-IN	example: parallel/start-
 inventory.tsv	INV-701	src/team/lifecycle.js:345	BAKE-IN	example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass	
 inventory.tsv	INV-702	src/team/lifecycle.js:346	BAKE-IN	example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass	
 inventory.tsv	INV-703	src/team/lifecycle.js:347	BAKE-IN	example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass	
-inventory.tsv	INV-704	src/team/lifecycle.js:350	BAKE-IN	example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass	
+inventory.tsv	INV-704	src/team/lifecycle.js:350	LAZY-LOAD	pattern: patterns/review-cites-document	the comments must cite a review document (test contains)
 inventory.tsv	INV-705	src/team/lifecycle.js:352	BAKE-IN	example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass	
 inventory.tsv	INV-706	src/team/lifecycle.js:353	BAKE-IN	example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass	
 inventory.tsv	INV-707	src/team/lifecycle.js:354	BAKE-IN	example: parallel/check-reject, parallel/check-pass, scrum/review-reject, scrum/review-pass	
@@ -735,17 +735,17 @@ inventory.tsv	INV-733	src/team/lifecycle.js:439	LAZY-LOAD	pattern: patterns/clai
 inventory.tsv	INV-734	src/team/lifecycle.js:441	LAZY-LOAD	pattern: patterns/claim-inputs-accepted, patterns/close-dependents-accepted	
 inventory.tsv	INV-735	src/team/lifecycle.js:450	BAKE-IN	machinery: one step per command: backlog team update <item> <step> (chapter 04)	
 inventory.tsv	INV-736	src/team/lifecycle.js:451	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
-inventory.tsv	INV-737	src/team/lifecycle.js:456	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-738	src/team/lifecycle.js:458	BAKE-IN	machinery: the caller is the one agent input; no acting-as flag (chapter 04)	
-inventory.tsv	INV-739	src/team/lifecycle.js:460	BAKE-IN	machinery: the caller is the one agent input; no acting-as flag (chapter 04)	
+inventory.tsv	INV-737	src/team/lifecycle.js:456	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-738	src/team/lifecycle.js:458	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	whether a flag that differs from BACKLOG_AGENT is refused; R3b fixes only the order of the inputs
+inventory.tsv	INV-739	src/team/lifecycle.js:460	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	whether a flag that differs from BACKLOG_AGENT is refused; R3b fixes only the order of the inputs
 inventory.tsv	INV-740	src/team/lifecycle.js:466	LAZY-LOAD	pattern: patterns/scope-branch	
 inventory.tsv	INV-741	src/team/lifecycle.js:469	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-742	src/team/lifecycle.js:470	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-743	src/team/lifecycle.js:473	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-744	src/team/lifecycle.js:474	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-745	src/team/lifecycle.js:479	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
-inventory.tsv	INV-746	src/team/lifecycle.js:480	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when)
-inventory.tsv	INV-747	src/team/lifecycle.js:481	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when)
+inventory.tsv	INV-746	src/team/lifecycle.js:480	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when, which also reads the body)
+inventory.tsv	INV-747	src/team/lifecycle.js:481	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when, which also reads the body)
 inventory.tsv	INV-748	src/team/lifecycle.js:487	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-749	src/team/lifecycle.js:490	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-750	src/team/lifecycle.js:492	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
@@ -753,13 +753,13 @@ inventory.tsv	INV-751	src/team/lifecycle.js:500	LAZY-LOAD	pattern: patterns/edit
 inventory.tsv	INV-752	src/team/lifecycle.js:501	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-753	src/team/lifecycle.js:503	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-754	src/team/lifecycle.js:504	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
-inventory.tsv	INV-755	src/team/lifecycle.js:508	BAKE-IN	example: parallel/adopt	language: effect team; only a rule that binds an item without a team may change it (chapter 03)
+inventory.tsv	INV-755	src/team/lifecycle.js:508	BAKE-IN	example: parallel/adopt, patterns/release-to-users	language: effect team; only a rule that binds an item without a team may change it (Q-19 answer B, chapter 03)
 inventory.tsv	INV-756	src/team/lifecycle.js:513	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-757	src/team/lifecycle.js:515	LAZY-LOAD	pattern: patterns/edit, patterns/edit-only-before-ready	
 inventory.tsv	INV-758	src/team/lifecycle.js:524	BAKE-IN	machinery: the evaluator (chapter 03)	
 inventory.tsv	INV-759	src/team/lifecycle.js:540	BAKE-IN	machinery: the evaluator (chapter 03)	
-inventory.tsv	INV-760	src/team/lifecycle.js:541	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
-inventory.tsv	INV-761	src/team/lifecycle.js:542	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded	
+inventory.tsv	INV-760	src/team/lifecycle.js:541	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
+inventory.tsv	INV-761	src/team/lifecycle.js:542	LAZY-LOAD	pattern: patterns/accept-input, patterns/accept-input-recorded, patterns/accept-input-reviewed, patterns/reject-input	
 inventory.tsv	INV-762	src/team/lifecycle.js:549	BAKE-IN	machinery: the evaluator (chapter 03)	
 inventory.tsv	INV-763	src/team/lifecycle.js:556	BAKE-IN	machinery: the evaluator (chapter 03)	
 inventory.tsv	INV-764	src/team/lifecycle.js:568	BAKE-IN	language: effect say (chapter 03)	
@@ -778,11 +778,11 @@ inventory.tsv	INV-776	src/team/pop.js:35	BAKE-IN	machinery: command syntax; the 
 inventory.tsv	INV-777	src/team/pop.js:54	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
 inventory.tsv	INV-778	src/team/pop.js:55	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
 inventory.tsv	INV-779	src/team/pop.js:56	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
-inventory.tsv	INV-780	src/team/pop.js:58	BAKE-IN	machinery: the caller is the one agent input; no acting-as flag (chapter 04)	
+inventory.tsv	INV-780	src/team/pop.js:58	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	whether a flag that differs from BACKLOG_AGENT is refused; R3b fixes only the order of the inputs
 inventory.tsv	INV-781	src/team/pop.js:59	SKIP	-	the lead is a role in people; TEAM_LEAD and --lead are not read
 inventory.tsv	INV-782	src/team/pop.js:60	BAKE-IN	example: parallel/lead-splits	
 inventory.tsv	INV-783	src/team/pop.js:62	BAKE-IN	machinery: session inputs: flag, then variable, then configuration key; $session.* references (chapter 04)	
-inventory.tsv	INV-784	src/team/pop.js:66	BAKE-IN	machinery: publication; a team step is evaluated again on the rebased items (chapter 04)	
+inventory.tsv	INV-784	src/team/pop.js:66	BAKE-IN	machinery: pop exits 1 on a synchronisation failure, never 3 (idle) (chapter 04)	
 inventory.tsv	INV-785	src/team/pop.js:71	SKIP	-	pop runs the offered step through the evaluator itself; no internal flag
 inventory.tsv	INV-786	src/team/pop.js:84	SKIP	-	the pop entry names its step; no text test
 inventory.tsv	INV-787	src/team/pop.js:85	SKIP	-	the pop entry names its step; no text test
@@ -796,7 +796,7 @@ inventory.tsv	INV-794	src/team/pop.js:144	BAKE-IN	example: parallel/lead-splits
 inventory.tsv	INV-795	src/team/pop.js:146	BAKE-IN	example: parallel/lead-splits	
 inventory.tsv	INV-796	src/team/pop.js:148	BAKE-IN	example: parallel/lead-splits	
 inventory.tsv	INV-797	src/team/pop.js:149	BAKE-IN	example: parallel/lead-splits	
-inventory.tsv	INV-798	src/team/pop.js:153	BAKE-IN	example: parallel/lead-splits	
+inventory.tsv	INV-798	src/team/pop.js:153	BAKE-IN	machinery: a detached HEAD with no branch given stops new, update and pop (exit 2) (chapter 01)	
 inventory.tsv	INV-799	src/team/pop.js:162	BAKE-IN	example: parallel/lead-splits	
 inventory.tsv	INV-800	src/team/pop.js:167	BAKE-IN	example: parallel/lead-splits	
 inventory.tsv	INV-801	src/team/pop.js:168	BAKE-IN	example: parallel/lead-splits	
@@ -807,7 +807,7 @@ inventory.tsv	INV-805	src/team/pop.js:198	BAKE-IN	example: parallel/lead-splits
 inventory.tsv	INV-806	src/team/pop.js:199	BAKE-IN	example: parallel/lead-splits	
 inventory.tsv	INV-807	src/team/query.js:15	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
 inventory.tsv	INV-808	src/team/query.js:25	BAKE-IN	example: parallel/filter:in-progress	command: backlog team query filter <name>
-inventory.tsv	INV-809	src/team/query.js:30	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when)
+inventory.tsv	INV-809	src/team/query.js:30	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when, which also reads the body)
 inventory.tsv	INV-810	src/team/queue.js:23	SKIP	-	pop runs the offered step through the evaluator itself; no internal flag
 inventory.tsv	INV-811	src/team/queue.js:24	SKIP	-	the lead is a role in people; TEAM_LEAD and --lead are not read
 inventory.tsv	INV-812	src/team/queue.js:25	BAKE-IN	machinery: command syntax; the arguments of a team step are the $arg names its rules read (chapter 04)	
@@ -856,7 +856,7 @@ inventory.tsv	INV-854	src/team/queue.js:200	BAKE-IN	language: the pop table (cha
 inventory.tsv	INV-855	src/team/queue.js:207	BAKE-IN	language: the pop table (chapter 03)	
 inventory.tsv	INV-856	src/team/queue.js:208	BAKE-IN	language: the pop table (chapter 03)	
 inventory.tsv	INV-857	src/team/queue.js:209	BAKE-IN	language: the pop table (chapter 03)	
-inventory.tsv	INV-858	src/team/queue.js:215	BAKE-IN	language: the pop table (chapter 03)	
+inventory.tsv	INV-858	src/team/queue.js:215	DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 states whether the owner's team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)	the item-less chunk action and chunk items of other folders
 inventory.tsv	INV-859	src/team/queue.js:235	BAKE-IN	language: the pop table (chapter 03)	
 inventory.tsv	INV-860	src/team/queue.js:238	BAKE-IN	language: the pop table (chapter 03)	
 inventory.tsv	INV-861	src/team/queue.js:254	BAKE-IN	machinery: the team queue is the index entries of the team's items (chapter 05)	
@@ -960,7 +960,7 @@ inventory.tsv	INV-958	src/team/update.js:40	BAKE-IN	example: parallel/check-verd
 inventory.tsv	INV-959	src/team/update.js:42	BAKE-IN	example: parallel/check-verdict, scrum/review-verdict	
 inventory.tsv	INV-960	src/team/update.js:46	BAKE-IN	machinery: the step is evaluated again on the rebased items (chapter 04)	
 inventory.tsv	INV-961	src/team/update.js:47	SKIP	-	no coded start on an item without a team
-inventory.tsv	INV-962	src/team/update.js:48	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when)
+inventory.tsv	INV-962	src/team/update.js:48	BAKE-IN	example: parallel/new-needs-estimate	other required fields are the same rule shape (pattern patterns/request-review-needs-done-when, which also reads the body)
 inventory.tsv	INV-963	src/team/update.js:48	SKIP	-	owner ruling R4: no translation on read; backlog team migrate converts every item once
 inventory.tsv	INV-964	src/team/update.js:54	LAZY-LOAD	pattern: patterns/lift-limit, patterns/limit-top-level	
 inventory.tsv	INV-965	src/team/update.js:57	LAZY-LOAD	pattern: patterns/lift-limit, patterns/limit-top-level	
@@ -980,7 +980,7 @@ inventory.tsv	INV-978	src/team/views.js:17	BAKE-IN	machinery: the evaluator (cha
 inventory.tsv	INV-979	src/team/views.js:18	BAKE-IN	machinery: the evaluator (chapter 03)	
 inventory.tsv	INV-980	src/team/views.js:19	BAKE-IN	command: backlog team query filter <name> --json prints the whole items (chapter 04)	
 inventory.tsv	INV-981	src/team/views.js:29	BAKE-IN	machinery: path safety and secrecy (chapter 02)	
-inventory.tsv	INV-982	src/team/views.js:32	LAZY-LOAD	pattern: patterns/scope-branch	backlog.scope is no longer read; a scope is a rule on $session.repository and $session.branch
+inventory.tsv	INV-982	src/team/views.js:32	DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 states whether the owner's team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)	backlog.scope set the chunk scope across repository folders, which the pop table cannot state yet
 inventory.tsv	INV-983	src/team/views.js:39	BAKE-IN	language: filters; command: backlog team query filter <name> (chapter 04)	
 inventory.tsv	INV-984	src/team/views.js:55	BAKE-IN	machinery: the team queue is the index entries of the team's items (chapter 05)	
 inventory.tsv	INV-985	src/team/views.js:68	BAKE-IN	machinery: the team queue is the index entries of the team's items (chapter 05)	
@@ -1985,3 +1985,24 @@ gaps.tsv	S112	pop --agent <a> (next action of any agent over every item, no team
 08-owner-questions.md part 1	D-31		BAKE-IN	machinery: exit codes (chapter 04)	
 08-owner-questions.md part 1	D-32		BAKE-IN	machinery: an absent field reads as its definition default (chapter 02)	
 08-owner-questions.md part 1	D-33		BAKE-IN	field: default words of the built-in user item definition	
+review-b.md section 3	B3-3	src/team/cli.js:85	BAKE-IN	machinery: an unknown team subcommand: exit 2 naming the six (chapter 04)	
+review-b.md section 3	B3-10	src/team/team.js:44	BAKE-IN	machinery: TEAM_REPOSITORY must be owner/name (exit 2) (chapter 01)	
+review-b.md section 3	B3-11	src/team/team.js:49-50	BAKE-IN	machinery: a detached HEAD with no branch given stops new, update and pop (chapter 01)	
+review-b.md section 3	B3-19	src/team/team.js:64-71	DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6: the owner's team writes the dependency rule for items migrated without hand-off records (a closed producer with no record)	expressible with any and empty on the producer's hand-off field
+review-b.md section 3	B3-20	src/team/handoff.js:17-20,70-71	SKIP	-	no digest: the record is fields only the team's step writes, and a new record withdraws the acceptance (chapter 03 section 12)
+review-b.md section 3	B3-27	src/team/lifecycle.js:100	BAKE-IN	language: owner/name#seq references are read across folders (chapter 03 section 5)	cases PAR-64, PAR-65
+review-b.md section 3	B3-30	src/team/lifecycle.js:111	BAKE-IN	language: placeholders in a literal note text (chapter 03 section 8)	
+review-b.md section 3	B3-41	src/team/lifecycle.js:280-299	LAZY-LOAD	pattern: patterns/close-same-commit	commit equality, not a reading of commit subjects
+review-b.md section 3	B3-46	src/team/lifecycle.js:350	LAZY-LOAD	pattern: patterns/review-cites-document	
+review-b.md section 3	B3-55	src/team/lifecycle.js:460	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	
+review-b.md section 3	B3-60	src/team/handoff-commands.js:62,64	LAZY-LOAD	pattern: patterns/accept-input-reviewed	
+review-b.md section 3	B3-61	src/team/handoff-commands.js:82-97	LAZY-LOAD	pattern: patterns/reject-input	
+review-b.md section 3	B3-62	src/team/pop.js:56	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	
+review-b.md section 3	B3-63	src/team/pop.js:58	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 2 of design/decisions.md	
+review-b.md section 3	B3-64	src/team/pop.js:63-66	BAKE-IN	machinery: pop exits 1 on a synchronisation failure (chapter 04)	
+review-b.md section 3	B3-66	src/team/pop.js:153	BAKE-IN	machinery: a detached HEAD with no branch given stops pop (chapter 01)	
+review-b.md section 3	B3-67	src/team/queue.js:215-221	DEFERRED-WITH-EXPLICIT-BLOCKER	entry plan Task 6 states whether the owner's team keeps chunk work across repository folders; if it does, the pop table gains a folders key before Task 5 (chapter 03 section 12)	
+review-b.md section 3	B3-71	src/shared/plain-step.js:39	BAKE-IN	field: claimed_by and claimed_at of the built-in user item definition (chapter 02 section 4)	
+review-b.md section 3	B3-72	src/shared/done.js:10	BAKE-IN	field: backlog done writes closed (decision D-33; today done is stored as closed through normalise, finding F9)	
+review-b.md section 3	B3-73	src/shared/index.js:54-58	BAKE-IN	machinery: the migration builds the index of a folder without one from priority (chapter 06)	
+review-b.md section 3	B3-74	src/shared/move.js:125-163, update.js:248, clean.js:35-42	DEFERRED-WITH-EXPLICIT-BLOCKER	decision 3 of design/decisions.md	

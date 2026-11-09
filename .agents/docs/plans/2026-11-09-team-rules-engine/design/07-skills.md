@@ -23,7 +23,8 @@ tell the agent what each field means; rule ids and deny texts tell it why it was
 
 ## 2. The session loop of a member
 
-1. `backlog team pop --json`. Idle (exit 3): nothing to do now; the skill's own wait behaviour applies.
+1. `backlog team pop --json`. Idle (exit 3): nothing to do now; the skill's own wait behaviour applies. Exit 1 is a failure (for example
+   the backlog could not be synchronised), never idle: the skill reports it and does not treat it as "no work".
 2. Do the work the step stands for (the step name and the item's fields say what; the team's descriptions explain them).
 3. Take the next step with `backlog team update <item> <step> --<arg> <value>`, for example
    `backlog team update 42 hand-to-check --note "parser done; run the unit tests"`.
@@ -61,4 +62,5 @@ to the example rule sets (shipped as documentation, never read by the CLI). The 
 
 The consumer rows of `reference/consumers.tsv` (scripts that parse `list --json`, read status words, export TEAM_LEAD, call
 `team define`) change with the team's rule set in entry plan Task 6; `design/coverage.tsv` gives each its state and what it reads from the
-CLI afterwards. Two contracts stay as they are for them: `backlog team pop --json` keeps the key `action` and exits 3 when idle.
+CLI afterwards. Two contracts stay as they are for them: `backlog team pop --json` keeps the key `action`, exits 3 when idle and only then,
+and exits 1 on a failure.

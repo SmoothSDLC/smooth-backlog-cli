@@ -56,8 +56,10 @@ the agent name of the command (section 5); `people` turns that name into roles a
   several roles; a role may be held by several persons. Role words are the team's own words: the CLI attaches no meaning to any of them.
 - A rule reads the caller's roles as `$caller.roles` and the roles of a person named in an argument as `{"roles_of": "$arg.to"}`
   (chapter 03 section 5).
-- **Coded check** (machinery, not a rule): the agent of a team command must be a key of `people`; otherwise the command stops with
-  exit 1 and `❌ <agent> is not a person of team <team> (<names of people>)`. A typo in an agent name therefore never acts.
+- Whether an agent that is not in `people` may act is a rule of the team, not CLI behaviour: no ruling restricts it, and a team may want
+  an observer or a shared tool. Every example rule set starts with the rule
+  `{"id": "members-only", "step": "*", "when": {"empty": "$caller.roles"}, "deny": "{$caller} is not a person of team {$team.name}"}`
+  (case COD-10), so a typo in an agent name is refused by the team's own first rule.
 - A person field of an item (type `person`, chapter 02) only takes a name of `people` or the empty value.
 
 ## 4. How a team command reads the file
@@ -67,11 +69,12 @@ the agent name of the command (section 5); `people` turns that name into roles a
    `❌ backlog: teams.json cannot be read (<reason>); fix it and run backlog team validate`. There is no silent empty default (today's
    behaviour of reading such a file as empty is finding F7 of the reference inventory, removed).
 3. No entry for the team: exit 1, `❌ team <team> has no entry in teams.json (teams: <names>)`.
-4. The team's entry is checked with every check of chapter 08 that concerns that entry. Any error: exit 2,
+4. The team's entry is checked with every check of chapter 08 that concerns that entry, the schema of chapter 03 section 14 included
+   (an unknown key, a condition with two keys). Any error: exit 2,
    `❌ backlog: team <team> has <n> problem(s) in teams.json; run backlog team validate --team <team>`. A broken rule set is never
    evaluated. Problems in other teams' entries do not stop this team (only `backlog team validate` reports them).
-5. The entry is used for the whole command; the file is not read again. A step that is evaluated a second time after a rebase
-   (chapter 04 section 6) reads the file again from the rebased tree, so a rule change published meanwhile applies.
+5. The entry is used for the whole command; the file is not read again. A command that runs again on the upstream files (chapter 04
+   section 6) reads the file again, so a rule change published meanwhile applies.
 
 ## 5. Inputs of a team command (coded CLI behaviour)
 
@@ -83,14 +86,16 @@ every team. Each input is a flag on every team command, then an environment vari
 | team | `--team <name>` | TEAM_NAME | the `team` key of `.backlog/config.json` | the command stops (below) |
 | agent | `--agent <name>` | BACKLOG_AGENT | none | `new`, `update`, `pop` stop with exit 2 `❌ backlog: this team command needs the agent: give --agent <name>, or set the BACKLOG_AGENT variable`; `query` answers without a caller (a `check` or a `plan` for one person needs it) |
 | session | `--session <id>` | BACKLOG_SESSION | none | `$session.id` is empty |
-| repository | `--repository <owner/name>` | TEAM_REPOSITORY | none | the repository of the working copy; `$session.repository` |
-| branch | `--branch <name>` | TEAM_BRANCH | none | the current branch of the working copy; `$session.branch` |
+| repository | `--repository <owner/name>` | TEAM_REPOSITORY | none | the repository of the working copy; `$session.repository`. A value that is not `owner/name` stops the command: exit 2, `❌ backlog: TEAM_REPOSITORY='<value>': expected owner/name` (today's check, `src/team/team.js:44`) |
+| branch | `--branch <name>` | TEAM_BRANCH | none | the current branch of the working copy; `$session.branch`. On a detached HEAD with no branch given, `new`, `update` and `pop` stop: exit 2, `❌ backlog: HEAD is detached: check out a branch, or give --branch <name> (TEAM_BRANCH)` (today `src/team/pop.js:153`); `query` and `validate` work |
 
 When no team is given by any of the three ways the command stops with exit 2 and exactly:
 `❌ backlog: a team command needs a team: give --team <name>, or set the TEAM_NAME variable, or set the "team" key in .backlog/config.json`
 (case COD-01; the `user` key of the configuration is never read by a team command, case COD-13). Team commands never read the
 operating system user or the `user` key of the configuration (R3b); the writer recorded in an item (`updated_by`, history `by`) is the
-agent. Whether `backlog team validate` and `backlog team migrate` also need a team is decision 1 of `decisions.md`.
+agent. Whether `backlog team validate` and `backlog team migrate` also need a team is decision 1 of `decisions.md`. What happens when
+`--agent` or `--team` names someone other than BACKLOG_AGENT or TEAM_NAME (today a refusal, `src/team/pop.js:56,58`,
+`src/team/lifecycle.js:460`) is decision 2: ruling R3b fixes the order of the inputs, not whether a disagreement between them is refused.
 
 The repository and the branch only select which repository folder new items go to and what `$session.repository` and `$session.branch`
 are. Whether a session may act on an item of another branch is a rule of the team (pattern `scope-branch`), not CLI behaviour.
@@ -103,7 +108,15 @@ Context: anyone who can push to the backlog repository can change `teams.json`, 
   passed to a shell (lead decision recorded in 00-owner-rulings.md).
 - Evaluation is bounded: a condition reads at most one hop of related items (no `every`, `some` or `count` inside another), there are no
   loops and no recursion, and a step changes at most the item and the items its `related` effects name.
-- The one construct with a cost that depends on its input is the regular expression of `regex`. A pattern is at most 200 characters
-  and the tested text at most 10 000 characters; a longer pattern is a validate error, a longer text is cut before the test. The risk
-  that remains is a slow command, never code execution.
-- A team command writes only items of its own team and items without a team that a rule binds to it (chapter 03 section 8).
+- The one construct whose cost depends on a pattern is the `regex` test. It runs on a linear-time matcher built into the CLI (chapter 03
+  section 4.1), never on JavaScript's backtracking engine: the time is at most the text length times the size of the compiled pattern,
+  whatever the pattern. A pattern is at most 200 characters and compiles to at most 5000 instructions, a counted repetition is at most 100,
+  and the tested text is cut at 10 000 characters; constructs outside the subset (back-references, lookaround, flags, lazy quantifiers) are
+  a validate error. The pattern `^(a+)+$` that makes a backtracking engine run for hours on 40 characters runs in milliseconds on 5000
+  (case INL-05).
+- Cost that grows with the backlog: a `count` over `$team.items` is evaluated for every item pop tries, so pop is quadratic in the team's
+  open items in the worst case. With hundreds of open items per team this stays well under a second; the implementation measures it on
+  the BDD fixtures and caches a count within one command if it is not.
+- A team command writes only items of its own team and items without a team that a rule binds to it (chapter 03 section 8). Every key of
+  the entry is checked against the schema (chapter 03 section 14), so a misspelled key cannot silently turn a guarded rule into an
+  unguarded one.

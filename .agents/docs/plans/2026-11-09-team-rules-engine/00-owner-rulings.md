@@ -86,4 +86,22 @@ not be used as input to the new design.
   earlier decision that the flag belongs on every similar command; no record of it was found (`git log -S"show-all"` over the CLI repo,
   `src/`, the plans and the reference files: no hit; today only `--all` exists, on `query`/`list all-branches`, meaning every branch). The
   design must derive the similar commands from the command matrix. Whether the flag also lets a user command change a team item is pending.
-- Pending: decision 4 (migration while a team's entry is in the old shape) is reopened by the owner's question on interactive validation.
+
+## Round 6 (owner, 2026-11-09, answers to the questions on migration validation and `--show-all`)
+- R17. `backlog team migrate` checks each item against the team's item definition and by default only REPORTS every missing or invalid
+  field. It tells the user that the flag `--ask` gives interactive remediation, one field at a time, run by the CLI (on a terminal only,
+  as `backlog new --ask` does today).
+- R18. No backwards compatibility, anywhere. When a team command loads `teams.json` and the file fails validation, the command takes no
+  action: it changes no item, no file and nothing in the backlog. This holds for `backlog team migrate` too: a team whose entry is not in
+  the new shape stops the migration (the former option A of decision 4). Validation of the team file covers every required field, the
+  rules in their readable shape, the item definition, and the coherence of the two (a rule never names a field the definition lacks), plus
+  every other check the CLI needs to use the file safely. The owner proposes a SHA of `teams.json` recorded in the backlog configuration:
+  validation runs once, and each later load only compares the SHA. Where the SHA is stored, who writes it, and whether it is per file or per
+  team entry are design points to bring back as decisions (facts: `.backlog/config.json` is committed in each consuming repository, while
+  `teams.json` is in the backlog repository and shared; ruling R5 says `backlog team validate` is read-only).
+- R19. A user command can set values on an item that has a team (a safety hatch for a team that no longer exists, for archiving, or for a
+  change of owner outside the team's enforcement). It needs `--show-all` (the reading is pending confirmation). This replaces the part of
+  R3a that forbids user commands to change a team item, and answers question 3 of round 5 with "show and change".
+- R19a. When the TEAM_NAME variable is set, every user command fails (guard against an agent using the wrong command by accident or trying
+  to get around the team commands). The text is a blanket failure with no instruction for the agent: teams are not allowed to use user
+  commands. Which commands are "all user commands" (for example `--help`, `--version`) is pending confirmation.

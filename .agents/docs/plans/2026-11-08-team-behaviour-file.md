@@ -56,4 +56,4 @@
 
 ## Status
 
-Revision 4 (after three independent reviews) plus owner answers round 1 (11-owner-answers.md: Q-04, Q-05, Q-17, Q-18, Q-19 answered). Still open: Q-16 and Q-20; Q-06 to Q-15 stay conditional (08-owner-questions.md). The answers are propagated into the spec text in one pass after Q-16 and Q-20.
+Revision 4 plus owner answers rounds 1 and 2 (11-owner-answers.md: Q-04, Q-05, Q-16, Q-17, Q-18, Q-19 answered, Q-20 closed). Round 2 ordered the Cody template and the topology behaviour inventory (12, 13). Q-06 to Q-15 stay conditional (08-owner-questions.md).

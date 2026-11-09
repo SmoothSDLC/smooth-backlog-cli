@@ -46,3 +46,30 @@ Binding. Each answer lists what it decides, the consequence for the spec, and wh
 ## Still open
 - Q-16 and Q-20 (reworded in chat, answers pending).
 - Q-06..Q-15 stay conditional.
+
+# Owner answers, 2026-11-08 (round 2)
+
+## Template content (binding)
+- The team template is a full example of every team behaviour the format can support: for each behaviour and control an explicit
+  example, with the allow case and the deny case (and the refusal text). The package ships such a full reference example.
+- The Cody team has a Cody team behaviour template, kept in the team's backlog repository at the location the backlog configuration
+  names (see round 1, `team_templates`). It encodes every behaviour that the team-lead skill, the team-member skill and the team
+  behaviour methods of the topology repository define today (statuses, steps, roles, review stages, queue order, limits, refusals,
+  escalations, timing). Nothing the skills say about how a card moves may stay only in skill prose.
+- The topology skills (team lead, team member, and the scripts that run them) are updated to read that template to learn the expected
+  behaviour at each stage of the backlog workflow (execution phase 7c-5).
+
+## Q-16 — answered by the round 1 statements
+- Decision: the running team keeps its own definition, converted (D-12): no stage rename, no switch to the package's example. The
+  converted file becomes the starting point of the Cody template above (option B of the question).
+
+## Q-20 — closed, not needed
+- Reason (owner): no team runs during the deployment; teams start afterwards on the updated skills and the new settings, so no
+  running team can hold a card the new definition does not describe.
+- Decision: REQ-020 stays "unchanged": `backlog team workflow --file` keeps today's refusal for a definition that open items use.
+  No upgrade path is built in this effort.
+
+## Work ordered by round 2
+- Inventory of every behaviour in the topology team-lead, team-member and team-behaviour sources, each mapped to the format
+  (expressible or gap): `12-topology-behaviour-inventory.md` and `.tsv`; format gaps with proposals: `13-format-gaps.md`.
+- Draft of the Cody template in the team's backlog repository; update of the package's full reference example.

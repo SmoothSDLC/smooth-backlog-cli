@@ -121,3 +121,19 @@ not be used as input to the new design.
   SMOOTH_BACKLOG_CLI_TEAM_NAME, and a process that must name another team uses `--team` (R15, flag first), so no change of variable names is
   needed. The design agent checks this, and reports what several teams writing one backlog repository at once cost (the number counter,
   the index, lost pushes, chapter 04 section 6), without changing any flag.
+
+## Round 8 (owner, 2026-11-09): the validation procedure and `--show-all`
+- R19 is confirmed as written: a user command given `--show-all` may set values on an item that has a team. Nothing is pending on it.
+- R21. Validation of `teams.json` on load follows the owner's procedure, written in the owner's words of the earlier answer: the first time a
+  team command runs and no record of a recent valid validation exists, it reads `teams.json` from disk, validates it, records the SHA of the
+  file in the backlog configuration when none is recorded (or compares the file's SHA with the recorded one when there is), and records the
+  validation (the valid teams as a comma separated list and the date of the last validation). While that record exists and is less than
+  24 hours old, a command proceeds without reading the file; after that, or with no record, the file is read and validated again. The CLI
+  stays silent about the cache. Decisions taken by the lead agent with their logic (reversible): (a) a program cannot set an environment
+  variable in its parent shell, so the record is kept where a later command can read it, a local state file outside every repository, and the
+  record may also be supplied by an environment variable with the R20 prefix; (b) `backlog team validate` always validates in full and
+  refreshes the record; (c) a SHA that differs from the recorded one means the file changed: the file is validated in full again, and the SHA
+  and the record are updated only when it is valid. Consequence the design must state, not a question: within the 24 hours an edit to
+  `teams.json` is not read by later commands.
+- Question numbers: from now on every question carries its round and the date (for example "2026-11-09 round 9, question 1") so that no
+  number repeats across rounds.

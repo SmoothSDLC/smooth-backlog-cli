@@ -114,3 +114,10 @@ not be used as input to the new design.
   _ORIGIN_URL, _LOCK_WAIT_MS, _PRIVATE_DENYLIST. Standard system variables (HOME, USER, XDG_CONFIG_HOME, GIT_CONFIG_COUNT, npm_execpath)
   are not owned by the CLI and keep their names. Every earlier ruling and design text that names TEAM_NAME, BACKLOG_AGENT and the others
   reads as the prefixed name from now on.
+
+## Scope note (owner, 2026-11-09): several teams running at once
+- The owner's factory can run up to three teams at once. Solving it is not required. If the design agent finds a simple solution it enters the
+  scope; any solution that needs a redesign of flags is out of scope. The lead's reading: one process serves one team through its own
+  SMOOTH_BACKLOG_CLI_TEAM_NAME, and a process that must name another team uses `--team` (R15, flag first), so no change of variable names is
+  needed. The design agent checks this, and reports what several teams writing one backlog repository at once cost (the number counter,
+  the index, lost pushes, chapter 04 section 6), without changing any flag.

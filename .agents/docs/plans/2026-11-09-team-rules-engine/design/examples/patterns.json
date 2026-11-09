@@ -1,0 +1,89 @@
+{
+  "patterns": {
+    "people": {
+      "lead-1": ["lead"],
+      "member-1": ["member"],
+      "member-2": ["member"],
+      "outside-1": ["outside-reviewer"],
+      "outside-2": ["second-outside-reviewer"]
+    },
+    "item": {
+      "status": { "type": "text", "default": "new", "values": ["new", "refining", "ready", "in progress", "waiting", "deciding", "peer review", "outside review", "review complete", "closed"], "final": ["closed"], "description": "Where the item is." },
+      "holder": { "type": "person", "default": "", "description": "Who works on the item." },
+      "reviewer": { "type": "person", "default": "", "description": "Who reviews the current stage." },
+      "estimate": { "type": "number", "default": 0, "description": "Minutes of work." },
+      "done_when": { "type": "text", "default": "", "description": "The definition of done." },
+      "parent": { "type": "item", "default": null, "description": "The item this one was split from." },
+      "depends_on": { "type": "items", "default": [], "description": "Items whose output this one needs." },
+      "handoff_to": { "type": "items", "default": [], "description": "Dependents this item recorded a hand-off for." },
+      "accepted_inputs": { "type": "items", "default": [], "description": "Dependencies whose hand-off the lead accepted for this item." },
+      "passes": { "type": "number", "default": 0, "description": "Review stages passed." },
+      "review_requested": { "type": "time", "default": "", "description": "When the review was asked for." },
+      "review_started": { "type": "time", "default": "", "description": "When the reviewer started." },
+      "wait_on": { "type": "text", "default": "", "description": "What the holder waits for." },
+      "decision_from": { "type": "text", "default": "", "description": "The status to return to after a decision." },
+      "question": { "type": "text", "default": "", "description": "The open question." },
+      "override": { "type": "text", "default": "", "description": "Why the lead lifted the limit for this item." },
+      "sessions": { "type": "list", "default": [], "description": "Every session that worked on the item." },
+      "ended_sessions": { "type": "list", "default": [], "description": "Sessions that ended on this item." },
+      "first_unavailable": { "type": "boolean", "default": false, "description": "The first outside reviewer said it cannot review." }
+    },
+    "rules": {
+      "table": [
+        { "id": "scope-branch", "step": "*", "when": { "all": [ { "not": { "empty": "$session.branch" } }, { "not": { "is": ["$item.branch", "$session.branch"] } } ] }, "deny": "item {$item.seq} is on branch {$item.branch}; this session works on {$session.branch}" },
+        { "id": "new-linked", "step": "new", "when": { "not": { "empty": "$arg.gate" } }, "do": { "set": { "status": "deciding", "question": "$arg.question" }, "related": [ { "items": "$arg.gate", "add": { "depends_on": "$item.seq" } } ] } },
+        { "id": "new", "step": "new", "do": { "set": { "done_when": "$arg.done_when" } } },
+
+        { "id": "edit-only-before-ready", "step": "edit", "when": { "not": { "in": ["$item.status", ["new", "refining"]] } }, "deny": "the estimate is changed only before the item is ready (item {$item.seq} is {$item.status})" },
+        { "id": "edit", "step": "edit", "do": { "set": { "estimate": "$arg.estimate" } } },
+        { "id": "set-status-lead", "step": "set-status", "when": { "in": ["lead", "$caller.roles"] }, "do": { "set": { "status": "$arg.to" }, "note": { "heading": "Status set by the lead", "text": "$arg.reason" } } },
+
+        { "id": "ended-session", "step": "claim", "when": { "some": { "items": "$team.items", "match": { "in": ["$session.id", "$it.ended_sessions"] } } }, "deny": "session {$session.id} has ended; a fresh session takes the next item" },
+        { "id": "claim-inputs-accepted", "step": "claim", "when": { "some": { "items": "$item.depends_on", "match": { "not": { "in": ["$it.seq", "$item.accepted_inputs"] } } } }, "deny": "item {$item.seq} needs an accepted hand-off from each of {$item.depends_on} (accepted: {$item.accepted_inputs})" },
+        { "id": "limit-top-level", "step": "claim", "when": { "all": [ { "empty": "$item.parent" }, { "empty": "$item.override" }, { ">=": [ { "count": { "items": "$team.items", "match": { "all": [ { "empty": "$it.parent" }, { "is": ["$it.status", "in progress"] } ] } } }, 2 ] } ] }, "deny": "2 top-level items are in progress; the lead may lift the limit for this item (step lift-limit)" },
+        { "id": "limit-split", "step": "claim", "when": { "all": [ { "not": { "empty": "$item.parent" } }, { ">=": [ { "count": { "items": "$team.items", "match": { "all": [ { "not": { "empty": "$it.parent" } }, { "is": ["$it.status", "in progress"] } ] } } }, 5 ] } ] }, "deny": "5 split items are in progress" },
+        { "id": "claim", "step": "claim", "when": { "is": ["$item.status", "ready"] }, "do": { "set": { "status": "in progress", "holder": "$caller" }, "add": { "sessions": "$session.id" } } },
+        { "id": "lift-limit", "step": "lift-limit", "when": { "all": [ { "in": ["lead", "$caller.roles"] }, { "not": { "empty": "$arg.reason" } } ] }, "do": { "set": { "override": "$arg.reason" } } },
+        { "id": "reassign", "step": "reassign", "when": { "all": [ { "in": ["lead", "$caller.roles"] }, { "in": ["member", { "roles_of": "$arg.to" }] }, { "not": { "empty": "$arg.reason" } } ] }, "do": { "set": { "holder": "$arg.to" }, "note": { "heading": "Reassigned", "text": "$arg.reason" } } },
+
+        { "id": "wait", "step": "wait", "when": { "all": [ { "is": ["$caller", "$item.holder"] }, { "is": ["$item.status", "in progress"] }, { "not": { "empty": "$arg.on" } } ] }, "do": { "set": { "status": "waiting", "wait_on": "$arg.on" } } },
+        { "id": "resume", "step": "resume", "when": { "all": [ { "is": ["$caller", "$item.holder"] }, { "is": ["$item.status", "waiting"] } ] }, "do": { "set": { "status": "in progress", "wait_on": "" } } },
+
+        { "id": "ask-decision", "step": "ask-decision", "when": { "all": [ { "in": ["$item.status", ["refining", "in progress"]] }, { "not": { "empty": "$arg.question" } } ] }, "do": { "set": { "status": "deciding", "decision_from": "$item.status", "question": "$arg.question" } } },
+        { "id": "decide", "step": "decide", "when": { "all": [ { "in": ["lead", "$caller.roles"] }, { "is": ["$item.status", "deciding"] }, { "not": { "empty": "$item.decision_from" } } ] }, "do": { "set": { "status": "$item.decision_from", "decision_from": "", "question": "" }, "note": { "heading": "Decision", "text": "$arg.answer" } } },
+
+        { "id": "blocked-by-decision", "step": ["request-review", "close"], "when": { "some": { "items": "$item.depends_on", "match": { "is": ["$it.status", "deciding"] } } }, "deny": "item {$item.seq} depends on an item that waits for a decision" },
+        { "id": "request-review-needs-done-when", "step": "request-review", "when": { "empty": "$item.done_when" }, "deny": "item {$item.seq} has no definition of done (field done_when)" },
+        { "id": "request-review", "step": "request-review", "when": { "all": [ { "is": ["$caller", "$item.holder"] }, { "is": ["$item.status", "in progress"] } ] }, "do": { "set": { "status": "peer review", "reviewer": "", "review_requested": "$now" }, "say": "item {$item.seq} is in peer review; end this session now" } },
+
+        { "id": "review-own-session", "step": ["start-review", "review"], "when": { "in": ["$session.id", "$item.sessions"] }, "deny": "session {$session.id} worked on item {$item.seq}; another session reviews it" },
+        { "id": "start-review-peer", "step": "start-review", "when": { "all": [ { "is": ["$item.status", "peer review"] }, { "empty": "$item.reviewer" }, { "in": ["member", "$caller.roles"] } ] }, "do": { "set": { "reviewer": "$caller", "review_started": "$now" } } },
+        { "id": "start-review-outside", "step": "start-review", "when": { "all": [ { "is": ["$item.status", "outside review"] }, { "empty": "$item.reviewer" }, { "in": ["outside-reviewer", "$caller.roles"] } ] }, "do": { "set": { "reviewer": "$caller", "review_started": "$now" } } },
+        { "id": "start-review-fallback", "step": "start-review", "when": { "all": [ { "is": ["$item.status", "outside review"] }, { "empty": "$item.reviewer" }, { "in": ["second-outside-reviewer", "$caller.roles"] }, { "is": ["$item.first_unavailable", true] } ] }, "do": { "set": { "reviewer": "$caller", "review_started": "$now" } } },
+        { "id": "unavailable", "step": "unavailable", "when": { "all": [ { "is": ["$item.status", "outside review"] }, { "in": ["outside-reviewer", "$caller.roles"] } ] }, "do": { "set": { "first_unavailable": true, "reviewer": "" } } },
+        { "id": "take-over-stale-review", "step": "take-over-review", "when": { "all": [ { "in": ["lead", "$caller.roles"] }, { ">=": [ { "age": "$item.review_started" }, 1200 ] } ] }, "do": { "set": { "reviewer": "" }, "note": { "heading": "Stale review handed on", "text": "$arg.reason" } } },
+        { "id": "review-who", "step": "review", "when": { "not": { "is": ["$caller", "$item.reviewer"] } }, "deny": "the reviewer of item {$item.seq} is {$item.reviewer}" },
+        { "id": "review-reject", "step": "review", "when": { "is": ["$arg.verdict", "reject"] }, "do": { "set": { "status": "in progress", "reviewer": "", "passes": 0 }, "note": { "heading": "Review rejected", "text": "$arg.comments" } } },
+        { "id": "review-pass-peer", "step": "review", "when": { "all": [ { "is": ["$arg.verdict", "pass"] }, { "is": ["$item.status", "peer review"] } ] }, "do": { "set": { "status": "outside review", "reviewer": "", "passes": { "plus": ["$item.passes", 1] } } } },
+        { "id": "review-pass-outside", "step": "review", "when": { "all": [ { "is": ["$arg.verdict", "pass"] }, { "is": ["$item.status", "outside review"] } ] }, "do": { "set": { "status": "review complete", "reviewer": "", "passes": { "plus": ["$item.passes", 1] } } } },
+
+        { "id": "record-handoff", "step": "record-handoff", "when": { "all": [ { "is": ["$caller", "$item.holder"] }, { "not": { "empty": "$arg.dependent" } }, { "not": { "empty": "$arg.note" } } ] }, "do": { "add": { "handoff_to": "$arg.dependent" }, "note": { "heading": "Hand-off", "text": "$arg.note" }, "related": [ { "items": "$arg.dependent", "remove": { "accepted_inputs": "$item.seq" } } ] } },
+        { "id": "accept-input-recorded", "step": "accept-input", "when": { "not": { "every": { "items": "$arg.producer", "match": { "in": ["$item.seq", "$it.handoff_to"] } } } }, "deny": "item {$arg.producer} recorded no hand-off for item {$item.seq}" },
+        { "id": "accept-input", "step": "accept-input", "when": { "in": ["lead", "$caller.roles"] }, "do": { "add": { "accepted_inputs": "$arg.producer" } } },
+
+        { "id": "close-passes", "step": "close", "when": { "<=": ["$item.passes", 1] }, "deny": "item {$item.seq} passed {$item.passes} of 2 review stages" },
+        { "id": "close-dependents-accepted", "step": "close", "when": { "some": { "items": "$team.items", "match": { "all": [ { "in": ["$item.seq", "$it.depends_on"] }, { "not": { "in": ["$item.seq", "$it.accepted_inputs"] } } ] } } }, "deny": "a dependent of item {$item.seq} has not accepted its hand-off" },
+        { "id": "close", "step": "close", "when": { "all": [ { "is": ["$caller", "$item.holder"] }, { "is": ["$item.status", "review complete"] } ] }, "do": { "set": { "status": "closed" }, "add": { "ended_sessions": "$session.id" } } }
+      ],
+      "pop": [
+        { "id": "old-reviews-first", "step": "start-review", "when": { ">=": [ { "age": "$item.review_requested" }, 600 ] } },
+        { "id": "own-work", "step": "claim" },
+        { "id": "reviews", "step": "start-review" }
+      ],
+      "filters": {
+        "decisions": { "description": "Items waiting for a decision, with the question.", "when": { "is": ["$item.status", "deciding"] } },
+        "stale-reviews": { "description": "Reviews started more than 20 minutes ago.", "when": { ">=": [ { "age": "$item.review_started" }, 1200 ] } }
+      }
+    }
+  }
+}

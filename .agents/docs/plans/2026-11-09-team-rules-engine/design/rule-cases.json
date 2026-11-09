@@ -1,0 +1,7198 @@
+{
+ "format": "rule-cases/1",
+ "description": "Cases for the team rules engine. Each case: a rule set (an example team file of design/examples, inline, or none for coded CLI behaviour), the items before, one command, and the expected result. The evaluator spike runs every case (design/evaluator-spike/evaluator.test.mjs); the BDD plan turns each into a scenario.",
+ "verification": {
+  "parallel/new-needs-estimate": "src/team/lifecycle.js:52 missingFields (estimate_min required on a team item); reference/13-format-gaps.md G-008",
+  "parallel/new-size-cap": "reference/13-format-gaps.md G-008 (a numeric cap; no code today)",
+  "parallel/new-child-parent-splitting": "src/shared/new.js:158-170 (split-from reads the parent); reference/13-format-gaps.md G-012 (rules on splitting)",
+  "parallel/new-child": "src/shared/new.js:206 (a split logs an event on the parent); owner ruling R2 (the step that creates a child updates the parent)",
+  "parallel/new": "src/team/new.js:3 (a team item starts in the team's first status)",
+  "parallel/split-lead-only": "templates/skills/backlog/SKILL.md:61 (the lead splits its team's work item)",
+  "parallel/split-start": "src/team/pop.js:1-5 (the lead's work item is taken to be split)",
+  "parallel/split-done-needs-children": "owner ruling R2 (children are fields); new",
+  "parallel/split-done": "owner ruling R2; new",
+  "parallel/wait-for-children": "owner ruling R2 (no work or close until children close); src/team/queue.js:113 (the lead's work item waits while the split items are worked)",
+  "parallel/claim-not-ready": "src/team/lifecycle.js:93 (claimed only when its refinement passed)",
+  "parallel/claim-dependencies": "src/team/lifecycle.js:99-100 and src/shared/dependencies.js:80-92 (claim refused while a dependency is not finished)",
+  "parallel/claim-lead": "src/team/lifecycle.js:81 (the lead never claims an item of its team's split)",
+  "parallel/claim-limit-person": "src/team/team.js:85-89 claimRefusal (one active item per agent)",
+  "parallel/claim-limit-team": "src/team/wip.js:16 wipRefusal (team level limit)",
+  "parallel/claim": "src/team/lifecycle.js:110 (claim writes the status and the holder)",
+  "parallel/release-who": "src/team/lifecycle.js:200 release (the holder or the lead)",
+  "parallel/release": "src/team/lifecycle.js:200 release",
+  "parallel/hand-to-check-holder": "src/team/lifecycle.js:304 requestReview (the holder asks for review)",
+  "parallel/hand-to-check-note": "src/team/lifecycle.js:305 (request-review needs --note)",
+  "parallel/hand-to-check": "src/team/lifecycle.js:304-327 requestReview",
+  "parallel/check-not-own": "src/team/lifecycle.js:331,347 NO_SELF_REVIEW",
+  "parallel/start-check-handoff": "reference/13-format-gaps.md G-003 option B (the receiving stage checks the hand-off note)",
+  "parallel/start-check": "src/team/lifecycle.js:329 startReview (marks the reviewer)",
+  "parallel/check-who": "src/team/team.js:152 reviewOpenTo (the reviewer who started it)",
+  "parallel/check-verdict": "src/team/update.js:40 (verdict choices complete, reject)",
+  "parallel/check-comments": "src/team/lifecycle.js:165 (a verdict needs --comments)",
+  "parallel/check-round-cap": "reference/13-format-gaps.md G-002 option A; reference/01-inventory.md F2 (max_rounds declared, never enforced)",
+  "parallel/check-reject": "src/team/lifecycle.js:344 review (reject returns the work)",
+  "parallel/check-pass": "src/team/lifecycle.js:344 review (pass)",
+  "parallel/close-holder": "src/team/lifecycle.js:396-397 (only the claimer closes, else the lead)",
+  "parallel/close": "src/team/lifecycle.js:389 closeItem",
+  "parallel/archive": "src/shared/archive.js (archive of a closed item); owner ruling: archived items are subject to no rule",
+  "parallel/adopt": "reference/08-owner-questions.md Q-19 answer B (a lead binds a teamless item to the team)",
+  "parallel/abandon": "reference/08-owner-questions.md Q-08 option A",
+  "parallel/filter:waiting": "src/team/views.js (blocked view)",
+  "parallel/filter:in-progress": "src/team/wip.js:26 (the work-in-progress view)",
+  "parallel/member-checks": "src/team/queue.js (review offers come before new work)",
+  "parallel/member-claims": "src/team/queue.js (claim offer in priority order)",
+  "parallel/lead-splits": "src/team/pop.js:1-5 (the lead's pop takes the team's work item)",
+  "patterns/scope-branch": "src/team/team.js:53 outsideTeam (TEAM_REPOSITORY and TEAM_BRANCH bind a session)",
+  "patterns/new-linked": "reference/13-format-gaps.md G-011 (a follow-up item that holds a gate item)",
+  "patterns/new": "src/team/new.js:3",
+  "patterns/edit-only-before-ready": "reference/01-inventory.md group RF-EDITS (which fields may change in which status)",
+  "patterns/edit": "src/shared/update.js:24 SETTABLE (field edits)",
+  "patterns/set-status-lead": "reference/gaps.tsv S29b (a team item's status set directly only if the team allows it)",
+  "patterns/ended-session": "reference/gaps.tsv S82 (a session that handed off its item takes no new work)",
+  "patterns/claim-inputs-accepted": "src/team/team.js:252 undoneDependencies with the hand-off rule (a dependent waits for the lead's acceptance)",
+  "patterns/limit-top-level": "reference/13-format-gaps.md G-010 (named limits) and src/team/update.js:51-58 (the lead's override)",
+  "patterns/limit-split": "reference/13-format-gaps.md G-010",
+  "patterns/claim": "src/team/lifecycle.js:110 (claim; the session joins the authors)",
+  "patterns/lift-limit": "src/team/update.js:51-58 wip-override (lead only, with a reason)",
+  "patterns/reassign": "src/team/lifecycle.js:217 reassign (lead only, with a reason)",
+  "patterns/wait": "src/team/lifecycle.js:376 waiting",
+  "patterns/resume": "src/team/lifecycle.js:384 waitingDone",
+  "patterns/ask-decision": "src/team/lifecycle.js:177 requestDecision",
+  "patterns/decide": "src/team/lifecycle.js:187 decision",
+  "patterns/blocked-by-decision": "reference/13-format-gaps.md G-005 (blocks_dependents)",
+  "patterns/request-review-needs-done-when": "src/team/lifecycle.js:52 missingFields (definition of done)",
+  "patterns/request-review": "src/team/lifecycle.js:304 requestReview; reference/13-format-gaps.md G-016 (an instruction after the step)",
+  "patterns/review-own-session": "src/team/team.js:129 isReviewAuthor (per session)",
+  "patterns/start-review-peer": "src/team/lifecycle.js:329 startReview",
+  "patterns/start-review-outside": "src/team/workflow.js:37 canStep (the external stage takes the external reviewers)",
+  "patterns/start-review-fallback": "reference/13-format-gaps.md G-014 (an ordered reviewer fallback)",
+  "patterns/unavailable": "reference/13-format-gaps.md G-014",
+  "patterns/take-over-stale-review": "src/team/team.js:147 staleReview and src/team/lifecycle.js:233 reassignReview",
+  "patterns/review-who": "src/team/team.js:152 reviewOpenTo",
+  "patterns/review-reject": "src/team/lifecycle.js:344 review",
+  "patterns/review-pass-peer": "src/team/workflow.js:54 next (the next review stage); reference/13-format-gaps.md G-001",
+  "patterns/review-pass-outside": "src/team/workflow.js:54 next (after the last stage)",
+  "patterns/record-handoff": "src/team/handoff-commands.js:26 recordHandoff (a re-record invalidates the acceptance)",
+  "patterns/accept-input-recorded": "src/team/handoff-commands.js:54 acceptHandoff (only a recorded hand-off is accepted)",
+  "patterns/accept-input": "src/team/handoff-commands.js:54 acceptHandoff (lead only)",
+  "patterns/close-passes": "src/team/lifecycle.js:288 reviewRefusal (the review rules are met before the close)",
+  "patterns/close-dependents-accepted": "src/team/handoff-close.js:18 closeGate (the producer closes after every hand-off is accepted)",
+  "patterns/close": "src/team/lifecycle.js:389 closeItem; src/team/update.js ender (the close ends the session)",
+  "patterns/old-reviews-first": "reference/13-format-gaps.md G-007 option B (two offers)",
+  "patterns/own-work": "src/team/queue.js (claim offer)",
+  "patterns/reviews": "src/team/queue.js (review offer)",
+  "patterns/filter:decisions": "src/team/views.js (decisions view)",
+  "patterns/filter:stale-reviews": "src/team/team.js:147 staleReview; src/team/views.js",
+  "scrum/new": "src/team/new.js:3 (a team item starts in the team's first status)",
+  "scrum/refine-owner-only": "src/team/lifecycle.js:129 (who refines is a role rule); new for this role name",
+  "scrum/refine-needs-acceptance": "src/shared/new.js:67 hasDefinitionOfDone and src/team/lifecycle.js:52 missingFields (definition of done required)",
+  "scrum/refine-points-cap": "reference/13-format-gaps.md G-008 (a value range as a size cap)",
+  "scrum/refine": "src/team/lifecycle.js:140 refineDone (refined, then ready)",
+  "scrum/claim-developer-only": "src/team/queue.js and reference/02-current-file-formats.md review_only (a role that is never offered a claim)",
+  "scrum/claim-not-ready": "src/team/lifecycle.js:93 (claimed only when ready)",
+  "scrum/claim-one-per-developer": "src/team/team.js:85-89 claimRefusal (one active item; an item in review does not count there: this example counts it, a team choice)",
+  "scrum/claim-team-limit": "src/team/wip.js:16 wipRefusal (team level limit)",
+  "scrum/claim": "src/team/lifecycle.js:110",
+  "scrum/request-review-holder": "src/team/lifecycle.js:304 requestReview",
+  "scrum/request-review": "src/team/lifecycle.js:304-327 requestReview",
+  "scrum/review-not-own": "src/team/lifecycle.js:331,347 NO_SELF_REVIEW",
+  "scrum/take-review": "src/team/lifecycle.js:329 startReview",
+  "scrum/review-who": "src/team/team.js:152 reviewOpenTo",
+  "scrum/review-verdict": "src/team/update.js:40 (verdict choices)",
+  "scrum/review-cap": "reference/13-format-gaps.md G-002 option B (the cap sends the item to a decision step); reference/01-inventory.md F2",
+  "scrum/review-reject": "src/team/lifecycle.js:344 review",
+  "scrum/review-pass": "src/team/lifecycle.js:344 review",
+  "scrum/escalate": "src/team/lifecycle.js:177 requestDecision and lifecycle.js:187 decision (an item goes back to refinement on a decision)",
+  "scrum/archive": "src/shared/archive.js (archive of a finished item)",
+  "scrum/developer-reviews": "src/team/queue.js (review offers before new work)",
+  "scrum/developer-claims": "src/team/queue.js (claim offer in priority order)",
+  "scrum/filter:board": "src/team/views.js (status view)",
+  "scrum/filter:needs-review": "src/team/views.js (reviewable view)",
+  "extreme-programming/new-customer-only": "new: a role that alone files items",
+  "extreme-programming/new": "src/team/new.js:3",
+  "extreme-programming/test-first-needs-test": "src/team/lifecycle.js:143 (a step needs its note); reference/13-format-gaps.md G-004 (content rules)",
+  "extreme-programming/write-test": "new: a status before work that records a reference",
+  "extreme-programming/pair-test-first": "src/team/workflow.js:37 canStep (a step starts only from listed statuses)",
+  "extreme-programming/pair-needs-navigator": "src/team/lifecycle.js:233-237 reassignReview (the named agent must be eligible and not the author)",
+  "extreme-programming/pair-one-at-a-time": "src/team/team.js:85-89 claimRefusal (one active item per agent)",
+  "extreme-programming/pair": "src/team/lifecycle.js:110 (a claim writes the holders)",
+  "extreme-programming/integrate-pair-only": "src/team/lifecycle.js:396-397 (only the holder closes)",
+  "extreme-programming/integrate-needs-commit": "reference/13-format-gaps.md G-004 (a pattern on an argument); src/team/handoff-commands.js (a commit argument)",
+  "extreme-programming/integrate": "src/team/lifecycle.js:389 closeItem",
+  "extreme-programming/accept": "src/team/lifecycle.js:396 (the owner closes on a decision)",
+  "extreme-programming/archive": "src/shared/archive.js",
+  "extreme-programming/filter:to-pair": "src/team/views.js (claimable view)",
+  "extreme-programming/filter:to-accept": "src/team/views.js (decisions view)",
+  "single-agent/new-needs-estimate": "src/team/lifecycle.js:52 missingFields (estimate required)",
+  "single-agent/new-size-cap": "reference/13-format-gaps.md G-008",
+  "single-agent/new": "src/team/new.js:3",
+  "single-agent/start-one-at-a-time": "src/team/team.js:85-89 claimRefusal",
+  "single-agent/start": "src/team/lifecycle.js:110",
+  "single-agent/finish-needs-result": "src/team/lifecycle.js:390 (close needs --summary)",
+  "single-agent/finish": "src/team/lifecycle.js:389 closeItem",
+  "single-agent/archive": "src/shared/archive.js",
+  "single-agent/next-item": "src/team/queue.js (the next item in priority order)",
+  "single-agent/filter:doing": "src/team/views.js (status view)"
+ },
+ "cases": [
+  {
+   "id": "PAR-01",
+   "rule_set": "parallel",
+   "rule": "wait-for-children",
+   "given": {
+    "items": [
+     {
+      "seq": 10,
+      "fields": {
+       "status": "ready",
+       "children": [
+        11,
+        12
+       ]
+      }
+     },
+     {
+      "seq": 11,
+      "fields": {
+       "status": "closed",
+       "parent": 10
+      }
+     },
+     {
+      "seq": 12,
+      "fields": {
+       "status": "in progress",
+       "parent": 10,
+       "holder": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 10,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "wait-for-children",
+    "text": "item 10 waits for its children (11, 12) to close (rule wait-for-children)"
+   }
+  },
+  {
+   "id": "PAR-02",
+   "rule_set": "parallel",
+   "rule": "claim",
+   "given": {
+    "items": [
+     {
+      "seq": 10,
+      "fields": {
+       "status": "ready",
+       "children": [
+        11,
+        12
+       ]
+      }
+     },
+     {
+      "seq": 11,
+      "fields": {
+       "status": "closed",
+       "parent": 10
+      }
+     },
+     {
+      "seq": 12,
+      "fields": {
+       "status": "closed",
+       "parent": 10
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 10,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "claim",
+    "items": {
+     "10": {
+      "status": "in progress",
+      "holder": "member-1"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-03",
+   "rule_set": "parallel",
+   "rule": "wait-for-children",
+   "given": {
+    "items": [
+     {
+      "seq": 10,
+      "fields": {
+       "status": "passed",
+       "holder": "member-1",
+       "children": [
+        11,
+        12
+       ]
+      }
+     },
+     {
+      "seq": 11,
+      "fields": {
+       "status": "closed",
+       "parent": 10
+      }
+     },
+     {
+      "seq": 12,
+      "fields": {
+       "status": "in progress",
+       "parent": 10,
+       "holder": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 10,
+    "step": "close",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "wait-for-children",
+    "text": "item 10 waits for its children (11, 12) to close (rule wait-for-children)"
+   }
+  },
+  {
+   "id": "PAR-04",
+   "rule_set": "parallel",
+   "rule": "close",
+   "given": {
+    "items": [
+     {
+      "seq": 10,
+      "fields": {
+       "status": "passed",
+       "holder": "member-1",
+       "children": [
+        11,
+        12
+       ]
+      }
+     },
+     {
+      "seq": 11,
+      "fields": {
+       "status": "closed",
+       "parent": 10
+      }
+     },
+     {
+      "seq": 12,
+      "fields": {
+       "status": "closed",
+       "parent": 10
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 10,
+    "step": "close",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "close",
+    "items": {
+     "10": {
+      "status": "closed"
+     }
+    },
+    "place": "last"
+   }
+  },
+  {
+   "id": "PAR-05",
+   "rule_set": "parallel",
+   "rule": "claim-dependencies",
+   "given": {
+    "items": [
+     {
+      "seq": 20,
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        21
+       ]
+      }
+     },
+     {
+      "seq": 21,
+      "fields": {
+       "status": "checking"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 20,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-dependencies",
+    "text": "item 20 waits for its dependencies (21) to close (rule claim-dependencies)"
+   }
+  },
+  {
+   "id": "PAR-06",
+   "rule_set": "parallel",
+   "rule": "claim",
+   "given": {
+    "items": [
+     {
+      "seq": 20,
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        21
+       ]
+      }
+     },
+     {
+      "seq": 21,
+      "archived": true,
+      "fields": {
+       "status": "checking"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 20,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "claim",
+    "items": {
+     "20": {
+      "status": "in progress"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-07",
+   "rule_set": "parallel",
+   "rule": "new-child",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "splitting"
+      }
+     }
+    ],
+    "last": 30
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "child a",
+     "estimate": "30",
+     "parent": "30"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new-child",
+    "items": {
+     "31": {
+      "status": "ready",
+      "parent": 30,
+      "estimate": 30,
+      "depends_on": []
+     },
+     "30": {
+      "children": [
+       31
+      ]
+     }
+    },
+    "place": {
+     "before": "30"
+    }
+   }
+  },
+  {
+   "id": "PAR-08",
+   "rule_set": "parallel",
+   "rule": "new-child-parent-splitting",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "new"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "child a",
+     "estimate": "30",
+     "parent": "30"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-child-parent-splitting",
+    "text": "children are added only to an item in status splitting (item 30) (rule new-child-parent-splitting)"
+   }
+  },
+  {
+   "id": "PAR-09",
+   "rule_set": "parallel",
+   "rule": "new-child",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "splitting",
+       "children": [
+        31
+       ]
+      }
+     },
+     {
+      "seq": 31,
+      "fields": {
+       "status": "ready",
+       "parent": 30
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "child b",
+     "estimate": "20",
+     "parent": "30",
+     "after": "31"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new-child",
+    "items": {
+     "32": {
+      "depends_on": [
+       31
+      ],
+      "parent": 30
+     },
+     "30": {
+      "children": [
+       31,
+       32
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-10",
+   "rule_set": "parallel",
+   "rule": "new-needs-estimate",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "x"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-needs-estimate",
+    "text": "a new item needs --estimate <minutes> (rule new-needs-estimate)"
+   }
+  },
+  {
+   "id": "PAR-11",
+   "rule_set": "parallel",
+   "rule": "new-size-cap",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "90"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-size-cap",
+    "text": "an item is at most 60 minutes of work (got 90); split it (rule new-size-cap)"
+   }
+  },
+  {
+   "id": "PAR-12",
+   "rule_set": "parallel",
+   "rule": "new",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "member-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "45"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new",
+    "items": {
+     "1": {
+      "status": "new",
+      "estimate": 45
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-13",
+   "rule_set": "parallel",
+   "rule": "new-child-parent-splitting",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "10",
+     "parent": "99"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-child-parent-splitting",
+    "text": "children are added only to an item in status splitting (item 99) (rule new-child-parent-splitting)"
+   }
+  },
+  {
+   "id": "PAR-14",
+   "rule_set": "parallel",
+   "rule": "split-lead-only",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "new"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 30,
+    "step": "split-start",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "split-lead-only",
+    "text": "only the lead splits an item (rule split-lead-only)"
+   }
+  },
+  {
+   "id": "PAR-15",
+   "rule_set": "parallel",
+   "rule": "split-start",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "new"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 30,
+    "step": "split-start",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "split-start",
+    "items": {
+     "30": {
+      "status": "splitting"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-16",
+   "rule_set": "parallel",
+   "rule": "split-done-needs-children",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "splitting"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 30,
+    "step": "split-done",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "split-done-needs-children",
+    "text": "item 30 has no child yet; add one with backlog team new --parent 30 (rule split-done-needs-children)"
+   }
+  },
+  {
+   "id": "PAR-17",
+   "rule_set": "parallel",
+   "rule": "split-done",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "splitting",
+       "children": [
+        31
+       ]
+      }
+     },
+     {
+      "seq": 31,
+      "fields": {
+       "status": "ready",
+       "parent": 30
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 30,
+    "step": "split-done",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "split-done",
+    "items": {
+     "30": {
+      "status": "ready"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-18",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 30,
+    "step": "split-start",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team parallel allows the step split-start on item 30"
+   }
+  },
+  {
+   "id": "PAR-19",
+   "rule_set": "parallel",
+   "rule": "claim-not-ready",
+   "given": {
+    "items": [
+     {
+      "seq": 40,
+      "fields": {
+       "status": "new"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 40,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-not-ready",
+    "text": "only a ready item is claimed (item 40 is new) (rule claim-not-ready)"
+   }
+  },
+  {
+   "id": "PAR-20",
+   "rule_set": "parallel",
+   "rule": "claim-lead",
+   "given": {
+    "items": [
+     {
+      "seq": 40,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 40,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-lead",
+    "text": "the lead does not claim work; a member does (rule claim-lead)"
+   }
+  },
+  {
+   "id": "PAR-21",
+   "rule_set": "parallel",
+   "rule": "claim-limit-person",
+   "given": {
+    "items": [
+     {
+      "seq": 40,
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 41,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 40,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-limit-person",
+    "text": "member-1 already works on an item; finish or release it first (rule claim-limit-person)"
+   }
+  },
+  {
+   "id": "PAR-22",
+   "rule_set": "parallel",
+   "rule": "claim-limit-team",
+   "given": {
+    "items": [
+     {
+      "seq": 40,
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 41,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-2"
+      }
+     },
+     {
+      "seq": 42,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-3"
+      }
+     },
+     {
+      "seq": 43,
+      "fields": {
+       "status": "in progress"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 40,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-limit-team",
+    "text": "the team already has 3 items in progress (rule claim-limit-team)"
+   }
+  },
+  {
+   "id": "PAR-23",
+   "rule_set": "parallel",
+   "rule": "wait-for-children",
+   "given": {
+    "items": [
+     {
+      "seq": 40,
+      "fields": {
+       "status": "new",
+       "children": [
+        44
+       ]
+      }
+     },
+     {
+      "seq": 44,
+      "fields": {
+       "status": "ready",
+       "parent": 40
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 40,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "wait-for-children",
+    "text": "item 40 waits for its children (44) to close (rule wait-for-children)"
+   }
+  },
+  {
+   "id": "PAR-24",
+   "rule_set": "parallel",
+   "rule": "release-who",
+   "given": {
+    "items": [
+     {
+      "seq": 41,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-3"
+    },
+    "item": 41,
+    "step": "release",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "release-who",
+    "text": "only the holder (member-2) or the lead releases item 41 (rule release-who)"
+   }
+  },
+  {
+   "id": "PAR-25",
+   "rule_set": "parallel",
+   "rule": "release",
+   "given": {
+    "items": [
+     {
+      "seq": 41,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 41,
+    "step": "release",
+    "args": {
+     "note": "member-2 is away"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "release",
+    "items": {
+     "41": {
+      "status": "ready",
+      "holder": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-26",
+   "rule_set": "parallel",
+   "rule": "hand-to-check-holder",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "hand-to-check",
+    "args": {
+     "note": "done"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "hand-to-check-holder",
+    "text": "only the holder (member-1) hands item 50 to the check (rule hand-to-check-holder)"
+   }
+  },
+  {
+   "id": "PAR-27",
+   "rule_set": "parallel",
+   "rule": "hand-to-check-note",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 50,
+    "step": "hand-to-check",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "hand-to-check-note",
+    "text": "hand-to-check needs --note \"<what was done, why, and what the checker needs>\" (rule hand-to-check-note)"
+   }
+  },
+  {
+   "id": "PAR-28",
+   "rule_set": "parallel",
+   "rule": "hand-to-check",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 50,
+    "step": "hand-to-check",
+    "args": {
+     "note": "parser done; run the unit tests"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "hand-to-check",
+    "items": {
+     "50": {
+      "status": "checking",
+      "handoff": "parser done; run the unit tests",
+      "checker": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-29",
+   "rule_set": "parallel",
+   "rule": "check-not-own",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 50,
+    "step": "start-check",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "check-not-own",
+    "text": "member-1 cannot check its own work (rule check-not-own)"
+   }
+  },
+  {
+   "id": "PAR-30",
+   "rule_set": "parallel",
+   "rule": "start-check-handoff",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "start-check",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "start-check-handoff",
+    "text": "item 50 has no hand-off note from the stage that ended; the holder writes it with hand-to-check --note (rule start-check-handoff)"
+   }
+  },
+  {
+   "id": "PAR-31",
+   "rule_set": "parallel",
+   "rule": "start-check",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "start-check",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "start-check",
+    "items": {
+     "50": {
+      "checker": "member-2"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-32",
+   "rule_set": "parallel",
+   "rule": "check-who",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x",
+       "checker": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-3"
+    },
+    "item": 50,
+    "step": "check",
+    "args": {
+     "verdict": "pass",
+     "comments": "fine"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "check-who",
+    "text": "the checker of item 50 is member-2; start the check first (rule check-who)"
+   }
+  },
+  {
+   "id": "PAR-33",
+   "rule_set": "parallel",
+   "rule": "check-verdict",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x",
+       "checker": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "check",
+    "args": {
+     "comments": "fine"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "check-verdict",
+    "text": "check needs --verdict pass or --verdict reject (rule check-verdict)"
+   }
+  },
+  {
+   "id": "PAR-34",
+   "rule_set": "parallel",
+   "rule": "check-comments",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x",
+       "checker": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "check",
+    "args": {
+     "verdict": "pass"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "check-comments",
+    "text": "check needs --comments \"<the findings>\" (rule check-comments)"
+   }
+  },
+  {
+   "id": "PAR-35",
+   "rule_set": "parallel",
+   "rule": "check-round-cap",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x",
+       "checker": "member-2",
+       "rounds": 2
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "check",
+    "args": {
+     "verdict": "reject",
+     "comments": "still failing"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "check-round-cap",
+    "text": "item 50 was rejected 2 times; the lead records the next verdict (rule check-round-cap)"
+   }
+  },
+  {
+   "id": "PAR-36",
+   "rule_set": "parallel",
+   "rule": "check-reject",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x",
+       "checker": "member-2",
+       "rounds": 2
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 50,
+    "step": "check",
+    "args": {
+     "verdict": "reject",
+     "comments": "third round"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "check-reject",
+    "items": {
+     "50": {
+      "status": "in progress",
+      "rounds": 3,
+      "handoff": "",
+      "checker": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-37",
+   "rule_set": "parallel",
+   "rule": "check-reject",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x",
+       "checker": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "check",
+    "args": {
+     "verdict": "reject",
+     "comments": "test 3 fails"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "check-reject",
+    "items": {
+     "50": {
+      "status": "in progress",
+      "rounds": 1,
+      "handoff": "",
+      "checker": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-38",
+   "rule_set": "parallel",
+   "rule": "check-pass",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-1",
+       "handoff": "x",
+       "checker": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "check",
+    "args": {
+     "verdict": "pass",
+     "comments": "all green"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "check-pass",
+    "items": {
+     "50": {
+      "status": "passed",
+      "handoff": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-39",
+   "rule_set": "parallel",
+   "rule": "close-holder",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "passed",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 50,
+    "step": "close",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "close-holder",
+    "text": "only the holder (member-1) closes item 50 (rule close-holder)"
+   }
+  },
+  {
+   "id": "PAR-40",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 50,
+    "step": "close",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team parallel allows the step close on item 50"
+   }
+  },
+  {
+   "id": "PAR-41",
+   "rule_set": "parallel",
+   "rule": "archive",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "closed"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 50,
+    "step": "archive",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "archive",
+    "items": {
+     "50": {
+      "status": "closed"
+     }
+    },
+    "archived": [
+     50
+    ]
+   }
+  },
+  {
+   "id": "PAR-42",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "closed"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 50,
+    "step": "archive",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team parallel allows the step archive on item 50"
+   }
+  },
+  {
+   "id": "PAR-43",
+   "rule_set": "parallel",
+   "rule": "abandon",
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 50,
+    "step": "abandon",
+    "args": {
+     "reason": "superseded by 51"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "abandon",
+    "items": {
+     "50": {
+      "status": "closed",
+      "holder": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAR-44",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "in progress"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 50,
+    "step": "abandon",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team parallel allows the step abandon on item 50"
+   }
+  },
+  {
+   "id": "PAR-45",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 60,
+      "archived": true,
+      "fields": {
+       "status": "closed"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 60,
+    "step": "archive",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "item 60 is archived; archived items take no step"
+   }
+  },
+  {
+   "id": "PAR-46",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 61,
+      "team": "other",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 61,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "item 61 belongs to team other; team parallel acts only on its own items and on items without a team"
+   }
+  },
+  {
+   "id": "PAR-47",
+   "rule_set": "parallel",
+   "rule": "claim",
+   "given": {
+    "items": [
+     {
+      "seq": 62,
+      "team": "",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 62,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim",
+    "text": "item 62 belongs to no team; only a rule that binds it to team parallel may change it (rule claim does not)"
+   }
+  },
+  {
+   "id": "PAR-48",
+   "rule_set": "parallel",
+   "rule": "adopt",
+   "given": {
+    "items": [
+     {
+      "seq": 63,
+      "team": "",
+      "fields": {
+       "status": "pending"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 63,
+    "step": "adopt",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "adopt",
+    "items": {
+     "63": {
+      "status": "new",
+      "children": []
+     }
+    },
+    "bound": {
+     "63": "parallel"
+    }
+   }
+  },
+  {
+   "id": "PAR-49",
+   "rule_set": "parallel",
+   "rule": "member-checks",
+   "given": {
+    "items": [
+     {
+      "seq": 70,
+      "fields": {
+       "status": "checking",
+       "holder": "member-2",
+       "handoff": "x"
+      }
+     },
+     {
+      "seq": 71,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "member-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "start-check",
+    "item": 70,
+    "entry": "member-checks"
+   }
+  },
+  {
+   "id": "PAR-50",
+   "rule_set": "parallel",
+   "rule": "member-claims",
+   "given": {
+    "items": [
+     {
+      "seq": 70,
+      "fields": {
+       "status": "checking",
+       "holder": "member-2",
+       "handoff": "x"
+      }
+     },
+     {
+      "seq": 71,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "member-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "claim",
+    "item": 71,
+    "entry": "member-claims"
+   }
+  },
+  {
+   "id": "PAR-51",
+   "rule_set": "parallel",
+   "rule": "lead-splits",
+   "given": {
+    "items": [
+     {
+      "seq": 72,
+      "fields": {
+       "status": "new"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "lead-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "split-start",
+    "item": 72,
+    "entry": "lead-splits"
+   }
+  },
+  {
+   "id": "PAR-52",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 73,
+      "fields": {
+       "status": "closed"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "member-1"
+    }
+   },
+   "expect": {
+    "exit": 3,
+    "action": "idle"
+   }
+  },
+  {
+   "id": "PAR-53",
+   "rule_set": "parallel",
+   "rule": "member-claims",
+   "given": {
+    "items": [
+     {
+      "seq": 74,
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 75,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ],
+    "order": [
+     75,
+     74
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "member-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "claim",
+    "item": 75,
+    "entry": "member-claims"
+   }
+  },
+  {
+   "id": "PAR-55",
+   "rule_set": "parallel",
+   "rule": "filter:in-progress",
+   "given": {
+    "items": [
+     {
+      "seq": 83,
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     },
+     {
+      "seq": 84,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "filter",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "step": "in-progress"
+   },
+   "expect": {
+    "exit": 0,
+    "filter": [
+     83
+    ]
+   }
+  },
+  {
+   "id": "PAR-54",
+   "rule_set": "parallel",
+   "rule": "filter:waiting",
+   "given": {
+    "items": [
+     {
+      "seq": 80,
+      "fields": {
+       "status": "ready",
+       "children": [
+        81
+       ]
+      }
+     },
+     {
+      "seq": 81,
+      "fields": {
+       "status": "ready",
+       "parent": 80
+      }
+     },
+     {
+      "seq": 82,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "filter",
+    "flags": {
+     "agent": "member-1"
+    },
+    "step": "waiting"
+   },
+   "expect": {
+    "exit": 0,
+    "filter": [
+     80
+    ]
+   }
+  },
+  {
+   "id": "COD-01",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "resolve"
+   },
+   "expect": {
+    "exit": 2,
+    "text": "a team command needs a team: give --team <name>, or set the TEAM_NAME variable, or set the \"team\" key in .backlog/config.json"
+   }
+  },
+  {
+   "id": "COD-02",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "resolve",
+    "env": {
+     "TEAM_NAME": "from-variable"
+    },
+    "config": {
+     "team": "from-config"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "team": "from-variable"
+   }
+  },
+  {
+   "id": "COD-03",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "resolve",
+    "flags": {
+     "team": "from-flag"
+    },
+    "env": {
+     "TEAM_NAME": "from-variable"
+    },
+    "config": {
+     "team": "from-config"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "team": "from-flag"
+   }
+  },
+  {
+   "id": "COD-04",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "resolve",
+    "config": {
+     "team": "from-config"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "team": "from-config"
+   }
+  },
+  {
+   "id": "COD-05",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {},
+    "args": {
+     "name": "x",
+     "estimate": "5"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "this team command needs the agent: give --agent <name>, or set the BACKLOG_AGENT variable"
+   }
+  },
+  {
+   "id": "COD-06",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 90,
+      "team": "parallel",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-show",
+    "item": 90
+   },
+   "expect": {
+    "exit": 1,
+    "text": "no phase '90'"
+   }
+  },
+  {
+   "id": "COD-07",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 91,
+      "team": "",
+      "fields": {
+       "status": "pending"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-show",
+    "item": 91
+   },
+   "expect": {
+    "exit": 0,
+    "item": 91
+   }
+  },
+  {
+   "id": "COD-08",
+   "rule_set": "parallel",
+   "rule": "new",
+   "given": {
+    "items": [
+     {
+      "seq": 12,
+      "fields": {
+       "status": "new"
+      }
+     }
+    ],
+    "last": 100
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "member-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "5"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new",
+    "items": {
+     "101": {
+      "status": "new"
+     }
+    }
+   }
+  },
+  {
+   "id": "COD-09",
+   "rule_set": "parallel",
+   "rule": "new",
+   "given": {
+    "items": [
+     {
+      "seq": 12,
+      "fields": {
+       "status": "new"
+      }
+     }
+    ],
+    "last": 5
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "member-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "5"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new",
+    "items": {
+     "13": {
+      "status": "new"
+     }
+    }
+   }
+  },
+  {
+   "id": "COD-10",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 40,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "stranger"
+    },
+    "item": 40,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "stranger is not a person of team parallel (lead-1, member-1, member-2, member-3)"
+   }
+  },
+  {
+   "id": "COD-11",
+   "rule_set": "parallel",
+   "rule": "new",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "member-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "abc"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "field estimate: \"abc\" is not a number"
+   }
+  },
+  {
+   "id": "COD-12",
+   "rule_set": "parallel",
+   "rule": "new-child",
+   "given": {
+    "items": [
+     {
+      "seq": 30,
+      "fields": {
+       "status": "splitting"
+      }
+     }
+    ],
+    "last": 30
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "5",
+     "parent": "30",
+     "after": "99"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "field depends_on of item 31: no item 99"
+   }
+  },
+  {
+   "id": "COD-14",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 40,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 40,
+    "step": "claim",
+    "args": {
+     "colour": "red"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "the step claim of team parallel takes no --colour (it takes: no argument)"
+   }
+  },
+  {
+   "id": "COD-15",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 50,
+      "fields": {
+       "status": "checking",
+       "holder": "member-2",
+       "checker": "member-1",
+       "handoff": "x"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 50,
+    "step": "check",
+    "args": {
+     "verdikt": "pass"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "the step check of team parallel takes no --verdikt (it takes: --comments, --verdict)"
+   }
+  },
+  {
+   "id": "COD-13",
+   "rule_set": null,
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "resolve",
+    "config": {
+     "user": "someone"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "a team command needs a team: give --team <name>, or set the TEAM_NAME variable, or set the \"team\" key in .backlog/config.json"
+   }
+  },
+  {
+   "id": "SCR-01",
+   "rule_set": "scrum",
+   "rule": "new",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "args": {
+     "name": "login"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new",
+    "items": {
+     "1": {
+      "status": "backlog"
+     }
+    }
+   }
+  },
+  {
+   "id": "SCR-02",
+   "rule_set": "scrum",
+   "rule": "refine-owner-only",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "backlog"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "item": 1,
+    "step": "refine",
+    "args": {
+     "acceptance": "a",
+     "points": "3"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "refine-owner-only",
+    "text": "only the product owner refines a story (rule refine-owner-only)"
+   }
+  },
+  {
+   "id": "SCR-03",
+   "rule_set": "scrum",
+   "rule": "refine-needs-acceptance",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "backlog"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "owner-1"
+    },
+    "item": 1,
+    "step": "refine",
+    "args": {
+     "points": "3"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "refine-needs-acceptance",
+    "text": "refine needs --acceptance \"<the acceptance criteria>\" (rule refine-needs-acceptance)"
+   }
+  },
+  {
+   "id": "SCR-04",
+   "rule_set": "scrum",
+   "rule": "refine-points-cap",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "backlog"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "owner-1"
+    },
+    "item": 1,
+    "step": "refine",
+    "args": {
+     "acceptance": "a",
+     "points": "21"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "refine-points-cap",
+    "text": "refine needs --points 1, 2, 3, 5, 8 or 13; split a larger story (rule refine-points-cap)"
+   }
+  },
+  {
+   "id": "SCR-05",
+   "rule_set": "scrum",
+   "rule": "refine",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "backlog"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "owner-1"
+    },
+    "item": 1,
+    "step": "refine",
+    "args": {
+     "acceptance": "user can log in",
+     "points": "5",
+     "sprint": "s1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "refine",
+    "items": {
+     "1": {
+      "status": "ready",
+      "points": 5,
+      "acceptance": "user can log in",
+      "sprint": "s1"
+     }
+    }
+   }
+  },
+  {
+   "id": "SCR-06",
+   "rule_set": "scrum",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "owner-1"
+    },
+    "item": 1,
+    "step": "refine",
+    "args": {
+     "acceptance": "a",
+     "points": "3"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team scrum allows the step refine on item 1"
+   }
+  },
+  {
+   "id": "SCR-07",
+   "rule_set": "scrum",
+   "rule": "claim-developer-only",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "owner-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-developer-only",
+    "text": "only a developer claims a story (rule claim-developer-only)"
+   }
+  },
+  {
+   "id": "SCR-08",
+   "rule_set": "scrum",
+   "rule": "claim-not-ready",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "backlog"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-not-ready",
+    "text": "only a ready story is claimed (story 1 is backlog) (rule claim-not-ready)"
+   }
+  },
+  {
+   "id": "SCR-09",
+   "rule_set": "scrum",
+   "rule": "claim-one-per-developer",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 2,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-one-per-developer",
+    "text": "dev-1 already has a story in progress or in review (rule claim-one-per-developer)"
+   }
+  },
+  {
+   "id": "SCR-10",
+   "rule_set": "scrum",
+   "rule": "claim-team-limit",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 2,
+      "fields": {
+       "status": "in progress",
+       "holder": "dev-2"
+      }
+     },
+     {
+      "seq": 3,
+      "fields": {
+       "status": "in progress",
+       "holder": "dev-3"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-team-limit",
+    "text": "the board allows 2 stories in progress (rule claim-team-limit)"
+   }
+  },
+  {
+   "id": "SCR-11",
+   "rule_set": "scrum",
+   "rule": "claim",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "claim",
+    "items": {
+     "1": {
+      "status": "in progress",
+      "holder": "dev-1"
+     }
+    }
+   }
+  },
+  {
+   "id": "SCR-12",
+   "rule_set": "scrum",
+   "rule": "request-review-holder",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in progress",
+       "holder": "dev-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-2"
+    },
+    "item": 1,
+    "step": "request-review",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "request-review-holder",
+    "text": "only the holder (dev-1) asks for the review (rule request-review-holder)"
+   }
+  },
+  {
+   "id": "SCR-13",
+   "rule_set": "scrum",
+   "rule": "request-review",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in progress",
+       "holder": "dev-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "item": 1,
+    "step": "request-review",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "request-review",
+    "items": {
+     "1": {
+      "status": "in review",
+      "reviewer": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "SCR-14",
+   "rule_set": "scrum",
+   "rule": "review-not-own",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "item": 1,
+    "step": "take-review",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "review-not-own",
+    "text": "a developer does not review its own story (rule review-not-own)"
+   }
+  },
+  {
+   "id": "SCR-15",
+   "rule_set": "scrum",
+   "rule": "take-review",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-2"
+    },
+    "item": 1,
+    "step": "take-review",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "take-review",
+    "items": {
+     "1": {
+      "reviewer": "dev-2"
+     }
+    }
+   }
+  },
+  {
+   "id": "SCR-16",
+   "rule_set": "scrum",
+   "rule": "review-who",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1",
+       "reviewer": "dev-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-3"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "pass"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "review-who",
+    "text": "the reviewer of story 1 is dev-2 (rule review-who)"
+   }
+  },
+  {
+   "id": "SCR-17",
+   "rule_set": "scrum",
+   "rule": "review-verdict",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1",
+       "reviewer": "dev-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-2"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "review-verdict",
+    "text": "review needs --verdict pass or --verdict reject (rule review-verdict)"
+   }
+  },
+  {
+   "id": "SCR-18",
+   "rule_set": "scrum",
+   "rule": "review-cap",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1",
+       "reviewer": "dev-2",
+       "review_rounds": 2
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-2"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "reject",
+     "comments": "x"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "review-cap",
+    "text": "story 1 was rejected 2 times; the scrum master takes it to the product owner (step escalate) (rule review-cap)"
+   }
+  },
+  {
+   "id": "SCR-19",
+   "rule_set": "scrum",
+   "rule": "review-reject",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1",
+       "reviewer": "dev-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-2"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "reject",
+     "comments": "missing test"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "review-reject",
+    "items": {
+     "1": {
+      "status": "in progress",
+      "reviewer": "",
+      "review_rounds": 1
+     }
+    }
+   }
+  },
+  {
+   "id": "SCR-20",
+   "rule_set": "scrum",
+   "rule": "review-pass",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1",
+       "reviewer": "dev-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "dev-2"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "pass",
+     "comments": "ok"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "review-pass",
+    "items": {
+     "1": {
+      "status": "done"
+     }
+    },
+    "place": "last"
+   }
+  },
+  {
+   "id": "SCR-21",
+   "rule_set": "scrum",
+   "rule": "escalate",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in progress",
+       "holder": "dev-1",
+       "review_rounds": 2
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "master-1"
+    },
+    "item": 1,
+    "step": "escalate",
+    "args": {
+     "note": "acceptance unclear"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "escalate",
+    "items": {
+     "1": {
+      "status": "backlog",
+      "holder": "",
+      "reviewer": "",
+      "review_rounds": 0
+     }
+    }
+   }
+  },
+  {
+   "id": "SCR-22",
+   "rule_set": "scrum",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in progress",
+       "holder": "dev-1",
+       "review_rounds": 1
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "master-1"
+    },
+    "item": 1,
+    "step": "escalate",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team scrum allows the step escalate on item 1"
+   }
+  },
+  {
+   "id": "SCR-23",
+   "rule_set": "scrum",
+   "rule": "archive",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "done"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "owner-1"
+    },
+    "item": 1,
+    "step": "archive",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "archive",
+    "items": {},
+    "archived": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "SCR-24",
+   "rule_set": "scrum",
+   "rule": "developer-reviews",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1"
+      }
+     },
+     {
+      "seq": 2,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "dev-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "take-review",
+    "item": 1,
+    "entry": "developer-reviews"
+   }
+  },
+  {
+   "id": "SCR-28",
+   "rule_set": "scrum",
+   "rule": "developer-claims",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1",
+       "reviewer": "dev-2"
+      }
+     },
+     {
+      "seq": 2,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "dev-3"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "claim",
+    "item": 2,
+    "entry": "developer-claims"
+   }
+  },
+  {
+   "id": "SCR-25",
+   "rule_set": "scrum",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1"
+      }
+     },
+     {
+      "seq": 2,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "dev-1"
+    }
+   },
+   "expect": {
+    "exit": 3,
+    "action": "idle"
+   }
+  },
+  {
+   "id": "SCR-27",
+   "rule_set": "scrum",
+   "rule": "filter:board",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "done"
+      }
+     },
+     {
+      "seq": 2,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "filter",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "step": "board"
+   },
+   "expect": {
+    "exit": 0,
+    "filter": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "SCR-26",
+   "rule_set": "scrum",
+   "rule": "filter:needs-review",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-1"
+      }
+     },
+     {
+      "seq": 2,
+      "fields": {
+       "status": "in review",
+       "holder": "dev-2",
+       "reviewer": "dev-1"
+      }
+     },
+     {
+      "seq": 3,
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "filter",
+    "flags": {
+     "agent": "dev-1"
+    },
+    "step": "needs-review"
+   },
+   "expect": {
+    "exit": 0,
+    "filter": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "XP-01",
+   "rule_set": "extreme-programming",
+   "rule": "new-customer-only",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "args": {
+     "name": "report"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-customer-only",
+    "text": "the customer writes the stories (rule new-customer-only)"
+   }
+  },
+  {
+   "id": "XP-02",
+   "rule_set": "extreme-programming",
+   "rule": "new",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "customer-1"
+    },
+    "args": {
+     "name": "report"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new",
+    "items": {
+     "1": {
+      "status": "story"
+     }
+    }
+   }
+  },
+  {
+   "id": "XP-03",
+   "rule_set": "extreme-programming",
+   "rule": "test-first-needs-test",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "story"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "item": 5,
+    "step": "write-test",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "test-first-needs-test",
+    "text": "write-test needs --test \"<the failing test>\" (rule test-first-needs-test)"
+   }
+  },
+  {
+   "id": "XP-04",
+   "rule_set": "extreme-programming",
+   "rule": "write-test",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "story"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "item": 5,
+    "step": "write-test",
+    "args": {
+     "test": "test/report.test.js: totals"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "write-test",
+    "items": {
+     "5": {
+      "status": "test written",
+      "test_ref": "test/report.test.js: totals"
+     }
+    }
+   }
+  },
+  {
+   "id": "XP-05",
+   "rule_set": "extreme-programming",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "story"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "customer-1"
+    },
+    "item": 5,
+    "step": "write-test",
+    "args": {
+     "test": "t"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team xp allows the step write-test on item 5"
+   }
+  },
+  {
+   "id": "XP-06",
+   "rule_set": "extreme-programming",
+   "rule": "pair-test-first",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "story"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "item": 5,
+    "step": "pair",
+    "args": {
+     "navigator": "prog-2"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "pair-test-first",
+    "text": "a pair starts only after the failing test (story 5 is story) (rule pair-test-first)"
+   }
+  },
+  {
+   "id": "XP-07",
+   "rule_set": "extreme-programming",
+   "rule": "pair-needs-navigator",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "test written"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "item": 5,
+    "step": "pair",
+    "args": {
+     "navigator": "customer-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "pair-needs-navigator",
+    "text": "pair needs --navigator <another programmer> (rule pair-needs-navigator)"
+   }
+  },
+  {
+   "id": "XP-08",
+   "rule_set": "extreme-programming",
+   "rule": "pair-needs-navigator",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "test written"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "item": 5,
+    "step": "pair",
+    "args": {
+     "navigator": "prog-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "pair-needs-navigator",
+    "text": "pair needs --navigator <another programmer> (rule pair-needs-navigator)"
+   }
+  },
+  {
+   "id": "XP-09",
+   "rule_set": "extreme-programming",
+   "rule": "pair-one-at-a-time",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "test written"
+      }
+     },
+     {
+      "seq": 6,
+      "team": "xp",
+      "fields": {
+       "status": "pairing",
+       "driver": "prog-3",
+       "navigator": "prog-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "item": 5,
+    "step": "pair",
+    "args": {
+     "navigator": "prog-2"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "pair-one-at-a-time",
+    "text": "prog-1 or prog-2 is already in a pair (rule pair-one-at-a-time)"
+   }
+  },
+  {
+   "id": "XP-10",
+   "rule_set": "extreme-programming",
+   "rule": "pair",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "test written"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "item": 5,
+    "step": "pair",
+    "args": {
+     "navigator": "prog-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "pair",
+    "items": {
+     "5": {
+      "status": "pairing",
+      "driver": "prog-1",
+      "navigator": "prog-2"
+     }
+    }
+   }
+  },
+  {
+   "id": "XP-11",
+   "rule_set": "extreme-programming",
+   "rule": "integrate-pair-only",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "pairing",
+       "driver": "prog-1",
+       "navigator": "prog-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-3"
+    },
+    "item": 5,
+    "step": "integrate",
+    "args": {
+     "commit": "abc1234"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "integrate-pair-only",
+    "text": "only the pair (prog-1, prog-2) integrates story 5 (rule integrate-pair-only)"
+   }
+  },
+  {
+   "id": "XP-12",
+   "rule_set": "extreme-programming",
+   "rule": "integrate-needs-commit",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "pairing",
+       "driver": "prog-1",
+       "navigator": "prog-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-2"
+    },
+    "item": 5,
+    "step": "integrate",
+    "args": {
+     "commit": "abc"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "integrate-needs-commit",
+    "text": "integrate needs --commit <the integrated commit> (rule integrate-needs-commit)"
+   }
+  },
+  {
+   "id": "XP-13",
+   "rule_set": "extreme-programming",
+   "rule": "integrate",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "pairing",
+       "driver": "prog-1",
+       "navigator": "prog-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-2"
+    },
+    "item": 5,
+    "step": "integrate",
+    "args": {
+     "commit": "abc1234"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "integrate",
+    "items": {
+     "5": {
+      "status": "integrated",
+      "integration": "abc1234"
+     }
+    }
+   }
+  },
+  {
+   "id": "XP-14",
+   "rule_set": "extreme-programming",
+   "rule": "accept",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "integrated"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "customer-1"
+    },
+    "item": 5,
+    "step": "accept",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "accept",
+    "items": {
+     "5": {
+      "status": "accepted"
+     }
+    },
+    "place": "last"
+   }
+  },
+  {
+   "id": "XP-15",
+   "rule_set": "extreme-programming",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "integrated"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "item": 5,
+    "step": "accept",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team xp allows the step accept on item 5"
+   }
+  },
+  {
+   "id": "XP-16",
+   "rule_set": "extreme-programming",
+   "rule": "archive",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "accepted"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "item": 5,
+    "step": "archive",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "archive",
+    "items": {},
+    "archived": [
+     5
+    ]
+   }
+  },
+  {
+   "id": "XP-17",
+   "rule_set": "extreme-programming",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "test written"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "prog-1"
+    }
+   },
+   "expect": {
+    "exit": 3,
+    "action": "idle"
+   }
+  },
+  {
+   "id": "XP-19",
+   "rule_set": "extreme-programming",
+   "rule": "filter:to-accept",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "integrated"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "filter",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "step": "to-accept"
+   },
+   "expect": {
+    "exit": 0,
+    "filter": [
+     5
+    ]
+   }
+  },
+  {
+   "id": "XP-18",
+   "rule_set": "extreme-programming",
+   "rule": "filter:to-pair",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "xp",
+      "fields": {
+       "status": "test written"
+      }
+     },
+     {
+      "seq": 6,
+      "team": "xp",
+      "fields": {
+       "status": "story"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "filter",
+    "flags": {
+     "agent": "prog-1"
+    },
+    "step": "to-pair"
+   },
+   "expect": {
+    "exit": 0,
+    "filter": [
+     5
+    ]
+   }
+  },
+  {
+   "id": "SOL-01",
+   "rule_set": "single-agent",
+   "rule": "new-needs-estimate",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "agent-1"
+    },
+    "args": {
+     "name": "x"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-needs-estimate",
+    "text": "a new item needs --estimate <minutes> (rule new-needs-estimate)"
+   }
+  },
+  {
+   "id": "SOL-02",
+   "rule_set": "single-agent",
+   "rule": "new-size-cap",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "agent-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "150"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "new-size-cap",
+    "text": "an item is at most 120 minutes of work (got 150); split it (rule new-size-cap)"
+   }
+  },
+  {
+   "id": "SOL-03",
+   "rule_set": "single-agent",
+   "rule": "new",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "agent-1"
+    },
+    "args": {
+     "name": "x",
+     "estimate": "30"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new",
+    "items": {
+     "1": {
+      "status": "todo",
+      "estimate": 30
+     }
+    }
+   }
+  },
+  {
+   "id": "SOL-04",
+   "rule_set": "single-agent",
+   "rule": "start-one-at-a-time",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "solo",
+      "fields": {
+       "status": "todo"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "solo",
+      "fields": {
+       "status": "doing"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "agent-1"
+    },
+    "item": 1,
+    "step": "start",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "start-one-at-a-time",
+    "text": "finish the item in progress first (rule start-one-at-a-time)"
+   }
+  },
+  {
+   "id": "SOL-05",
+   "rule_set": "single-agent",
+   "rule": "start",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "solo",
+      "fields": {
+       "status": "todo"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "agent-1"
+    },
+    "item": 1,
+    "step": "start",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "start",
+    "items": {
+     "1": {
+      "status": "doing"
+     }
+    }
+   }
+  },
+  {
+   "id": "SOL-06",
+   "rule_set": "single-agent",
+   "rule": "finish-needs-result",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "solo",
+      "fields": {
+       "status": "doing"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "agent-1"
+    },
+    "item": 1,
+    "step": "finish",
+    "args": {}
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "finish-needs-result",
+    "text": "finish needs --result \"<what was delivered>\" (rule finish-needs-result)"
+   }
+  },
+  {
+   "id": "SOL-07",
+   "rule_set": "single-agent",
+   "rule": "finish",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "solo",
+      "fields": {
+       "status": "doing"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "agent-1"
+    },
+    "item": 1,
+    "step": "finish",
+    "args": {
+     "result": "report page live"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "finish",
+    "items": {
+     "1": {
+      "status": "done",
+      "result": "report page live"
+     }
+    },
+    "place": "last"
+   }
+  },
+  {
+   "id": "SOL-08",
+   "rule_set": "single-agent",
+   "rule": "archive",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "solo",
+      "fields": {
+       "status": "done"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "agent-1"
+    },
+    "item": 1,
+    "step": "archive",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "archive",
+    "items": {},
+    "archived": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "SOL-09",
+   "rule_set": "single-agent",
+   "rule": "next-item",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "solo",
+      "fields": {
+       "status": "done"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "solo",
+      "fields": {
+       "status": "todo"
+      }
+     },
+     {
+      "seq": 3,
+      "team": "solo",
+      "fields": {
+       "status": "todo"
+      }
+     }
+    ],
+    "order": [
+     1,
+     3,
+     2
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "agent-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "start",
+    "item": 3,
+    "entry": "next-item"
+   }
+  },
+  {
+   "id": "SOL-10",
+   "rule_set": "single-agent",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "solo",
+      "fields": {
+       "status": "doing"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "solo",
+      "fields": {
+       "status": "todo"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "agent-1"
+    }
+   },
+   "expect": {
+    "exit": 3,
+    "action": "idle"
+   }
+  },
+  {
+   "id": "SOL-11",
+   "rule_set": "single-agent",
+   "rule": "filter:doing",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "solo",
+      "fields": {
+       "status": "doing"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "solo",
+      "fields": {
+       "status": "todo"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "filter",
+    "flags": {
+     "agent": "agent-1"
+    },
+    "step": "doing"
+   },
+   "expect": {
+    "exit": 0,
+    "filter": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "PAT-01",
+   "rule_set": "patterns",
+   "rule": "scope-branch",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "branch": "feature",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "scope-branch",
+    "text": "item 1 is on branch feature; this session works on main (rule scope-branch)"
+   }
+  },
+  {
+   "id": "PAT-02",
+   "rule_set": "patterns",
+   "rule": "new-linked",
+   "given": {
+    "items": [
+     {
+      "seq": 5,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "member-1"
+    },
+    "args": {
+     "name": "gap",
+     "gate": "5",
+     "question": "keep the old flag?"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new-linked",
+    "items": {
+     "6": {
+      "status": "deciding",
+      "question": "keep the old flag?"
+     },
+     "5": {
+      "depends_on": [
+       6
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-03",
+   "rule_set": "patterns",
+   "rule": "new",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "new",
+    "flags": {
+     "agent": "member-1"
+    },
+    "args": {
+     "name": "x",
+     "done_when": "tests pass"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "new",
+    "items": {
+     "1": {
+      "status": "new",
+      "done_when": "tests pass"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-04",
+   "rule_set": "patterns",
+   "rule": "edit-only-before-ready",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "edit",
+    "args": {
+     "estimate": "30"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "edit-only-before-ready",
+    "text": "the estimate is changed only before the item is ready (item 1 is ready) (rule edit-only-before-ready)"
+   }
+  },
+  {
+   "id": "PAT-05",
+   "rule_set": "patterns",
+   "rule": "edit",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "refining"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "edit",
+    "args": {
+     "estimate": "30"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "edit",
+    "items": {
+     "1": {
+      "estimate": 30
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-06",
+   "rule_set": "patterns",
+   "rule": "set-status-lead",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "new"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "set-status",
+    "args": {
+     "to": "ready",
+     "reason": "refined in the planning call"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "set-status-lead",
+    "items": {
+     "1": {
+      "status": "ready"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-07",
+   "rule_set": "patterns",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "new"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "set-status",
+    "args": {
+     "to": "ready"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team patterns allows the step set-status on item 1"
+   }
+  },
+  {
+   "id": "PAT-08",
+   "rule_set": "patterns",
+   "rule": "ended-session",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "patterns",
+      "fields": {
+       "status": "closed",
+       "ended_sessions": [
+        "s-1"
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "ended-session",
+    "text": "session s-1 has ended; a fresh session takes the next item (rule ended-session)"
+   }
+  },
+  {
+   "id": "PAT-09",
+   "rule_set": "patterns",
+   "rule": "claim-inputs-accepted",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        3
+       ]
+      }
+     },
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "closed"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "claim-inputs-accepted",
+    "text": "item 1 needs an accepted hand-off from each of 3 (accepted: ) (rule claim-inputs-accepted)"
+   }
+  },
+  {
+   "id": "PAT-10",
+   "rule_set": "patterns",
+   "rule": "claim",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        3
+       ],
+       "accepted_inputs": [
+        3
+       ]
+      }
+     },
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "closed"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "claim",
+    "items": {
+     "1": {
+      "status": "in progress",
+      "holder": "member-1",
+      "sessions": [
+       "s-2"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-11",
+   "rule_set": "patterns",
+   "rule": "limit-top-level",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress"
+      }
+     },
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "limit-top-level",
+    "text": "2 top-level items are in progress; the lead may lift the limit for this item (step lift-limit) (rule limit-top-level)"
+   }
+  },
+  {
+   "id": "PAT-12",
+   "rule_set": "patterns",
+   "rule": "claim",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "override": "release blocker"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress"
+      }
+     },
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "claim",
+    "items": {
+     "1": {
+      "status": "in progress"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-13",
+   "rule_set": "patterns",
+   "rule": "limit-split",
+   "given": {
+    "items": [
+     {
+      "seq": 9,
+      "team": "patterns",
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "parent": 9
+      }
+     },
+     {
+      "seq": 10,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "parent": 9
+      }
+     },
+     {
+      "seq": 11,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "parent": 9
+      }
+     },
+     {
+      "seq": 12,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "parent": 9
+      }
+     },
+     {
+      "seq": 13,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "parent": 9
+      }
+     },
+     {
+      "seq": 14,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "parent": 9
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "claim",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "limit-split",
+    "text": "5 split items are in progress (rule limit-split)"
+   }
+  },
+  {
+   "id": "PAT-14",
+   "rule_set": "patterns",
+   "rule": "lift-limit",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "lift-limit",
+    "args": {
+     "reason": "release blocker"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "lift-limit",
+    "items": {
+     "1": {
+      "override": "release blocker"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-15",
+   "rule_set": "patterns",
+   "rule": "reassign",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "reassign",
+    "args": {
+     "to": "member-2",
+     "reason": "member-1 is away"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "reassign",
+    "items": {
+     "1": {
+      "holder": "member-2"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-16",
+   "rule_set": "patterns",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "reassign",
+    "args": {
+     "to": "outside-1",
+     "reason": "x"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team patterns allows the step reassign on item 1"
+   }
+  },
+  {
+   "id": "PAT-17",
+   "rule_set": "patterns",
+   "rule": "wait",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "wait",
+    "args": {
+     "on": "the deploy run"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "wait",
+    "items": {
+     "1": {
+      "status": "waiting",
+      "wait_on": "the deploy run"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-18",
+   "rule_set": "patterns",
+   "rule": "resume",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "waiting",
+       "holder": "member-1",
+       "wait_on": "the deploy run"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "resume",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "resume",
+    "items": {
+     "1": {
+      "status": "in progress",
+      "wait_on": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-19",
+   "rule_set": "patterns",
+   "rule": "ask-decision",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "ask-decision",
+    "args": {
+     "question": "which API version?"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "ask-decision",
+    "items": {
+     "1": {
+      "status": "deciding",
+      "decision_from": "in progress"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-20",
+   "rule_set": "patterns",
+   "rule": "decide",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "deciding",
+       "decision_from": "in progress",
+       "question": "which API version?"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "decide",
+    "args": {
+     "answer": "version 2"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "decide",
+    "items": {
+     "1": {
+      "status": "in progress",
+      "decision_from": "",
+      "question": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-21",
+   "rule_set": "patterns",
+   "rule": "blocked-by-decision",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1",
+       "done_when": "x",
+       "depends_on": [
+        3
+       ]
+      }
+     },
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "deciding"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "request-review",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "blocked-by-decision",
+    "text": "item 1 depends on an item that waits for a decision (rule blocked-by-decision)"
+   }
+  },
+  {
+   "id": "PAT-22",
+   "rule_set": "patterns",
+   "rule": "request-review-needs-done-when",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "request-review",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "request-review-needs-done-when",
+    "text": "item 1 has no definition of done (field done_when) (rule request-review-needs-done-when)"
+   }
+  },
+  {
+   "id": "PAT-23",
+   "rule_set": "patterns",
+   "rule": "request-review",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "in progress",
+       "holder": "member-1",
+       "done_when": "x"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "request-review",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "request-review",
+    "items": {
+     "1": {
+      "status": "peer review",
+      "review_requested": "2026-11-09T12:00:00Z"
+     }
+    },
+    "say": "item 1 is in peer review; end this session now"
+   }
+  },
+  {
+   "id": "PAT-24",
+   "rule_set": "patterns",
+   "rule": "review-own-session",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 1,
+    "step": "start-review",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "review-own-session",
+    "text": "session s-1 worked on item 1; another session reviews it (rule review-own-session)"
+   }
+  },
+  {
+   "id": "PAT-25",
+   "rule_set": "patterns",
+   "rule": "start-review-peer",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 1,
+    "step": "start-review",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "start-review-peer",
+    "items": {
+     "1": {
+      "reviewer": "member-2",
+      "review_started": "2026-11-09T12:00:00Z"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-26",
+   "rule_set": "patterns",
+   "rule": "start-review-outside",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "outside review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "outside-1"
+    },
+    "item": 1,
+    "step": "start-review",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "start-review-outside",
+    "items": {
+     "1": {
+      "reviewer": "outside-1"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-27",
+   "rule_set": "patterns",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "outside review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "outside-2"
+    },
+    "item": 1,
+    "step": "start-review",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team patterns allows the step start-review on item 1"
+   }
+  },
+  {
+   "id": "PAT-28",
+   "rule_set": "patterns",
+   "rule": "unavailable",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "outside review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "reviewer": "outside-1"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "outside-1"
+    },
+    "item": 1,
+    "step": "unavailable",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "unavailable",
+    "items": {
+     "1": {
+      "first_unavailable": true,
+      "reviewer": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-29",
+   "rule_set": "patterns",
+   "rule": "start-review-fallback",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "outside review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "first_unavailable": true
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "outside-2"
+    },
+    "item": 1,
+    "step": "start-review",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "start-review-fallback",
+    "items": {
+     "1": {
+      "reviewer": "outside-2"
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-30",
+   "rule_set": "patterns",
+   "rule": "take-over-stale-review",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "reviewer": "member-2",
+       "review_started": "2026-11-09T11:30:00Z"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "take-over-review",
+    "args": {
+     "reason": "no verdict after 30 minutes"
+    },
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "take-over-stale-review",
+    "items": {
+     "1": {
+      "reviewer": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-31",
+   "rule_set": "patterns",
+   "rule": null,
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "reviewer": "member-2",
+       "review_started": "2026-11-09T11:50:00Z"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "take-over-review",
+    "args": {},
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": null,
+    "text": "no rule of team patterns allows the step take-over-review on item 1"
+   }
+  },
+  {
+   "id": "PAT-32",
+   "rule_set": "patterns",
+   "rule": "review-who",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "reviewer": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "pass"
+    },
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "review-who",
+    "text": "the reviewer of item 1 is member-2 (rule review-who)"
+   }
+  },
+  {
+   "id": "PAT-33",
+   "rule_set": "patterns",
+   "rule": "review-reject",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "reviewer": "member-2",
+       "passes": 1
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "reject",
+     "comments": "F1: missing test"
+    },
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "review-reject",
+    "items": {
+     "1": {
+      "status": "in progress",
+      "passes": 0,
+      "reviewer": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-34",
+   "rule_set": "patterns",
+   "rule": "review-pass-peer",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "reviewer": "member-2"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-2"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "pass"
+    },
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "review-pass-peer",
+    "items": {
+     "1": {
+      "status": "outside review",
+      "passes": 1
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-35",
+   "rule_set": "patterns",
+   "rule": "review-pass-outside",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "outside review",
+       "holder": "member-1",
+       "sessions": [
+        "s-1"
+       ],
+       "reviewer": "outside-1",
+       "passes": 1
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "outside-1"
+    },
+    "item": 1,
+    "step": "review",
+    "args": {
+     "verdict": "pass"
+    },
+    "session": {
+     "id": "s-2"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "review-pass-outside",
+    "items": {
+     "1": {
+      "status": "review complete",
+      "passes": 2
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-36",
+   "rule_set": "patterns",
+   "rule": "record-handoff",
+   "given": {
+    "items": [
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "review complete",
+       "holder": "member-1"
+      }
+     },
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        3
+       ],
+       "accepted_inputs": [
+        3
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 3,
+    "step": "record-handoff",
+    "args": {
+     "dependent": "1",
+     "note": "the parser exports parse(); run npm test"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "record-handoff",
+    "items": {
+     "3": {
+      "handoff_to": [
+       1
+      ]
+     },
+     "1": {
+      "accepted_inputs": []
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-37",
+   "rule_set": "patterns",
+   "rule": "accept-input-recorded",
+   "given": {
+    "items": [
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "review complete"
+      }
+     },
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        3
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "accept-input",
+    "args": {
+     "producer": "3"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "accept-input-recorded",
+    "text": "item 3 recorded no hand-off for item 1 (rule accept-input-recorded)"
+   }
+  },
+  {
+   "id": "PAT-38",
+   "rule_set": "patterns",
+   "rule": "accept-input",
+   "given": {
+    "items": [
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "review complete",
+       "handoff_to": [
+        1
+       ]
+      }
+     },
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        3
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "item": 1,
+    "step": "accept-input",
+    "args": {
+     "producer": "3"
+    },
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "accept-input",
+    "items": {
+     "1": {
+      "accepted_inputs": [
+       3
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-39",
+   "rule_set": "patterns",
+   "rule": "close-passes",
+   "given": {
+    "items": [
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "review complete",
+       "holder": "member-1",
+       "passes": 1
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 3,
+    "step": "close",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "close-passes",
+    "text": "item 3 passed 1 of 2 review stages (rule close-passes)"
+   }
+  },
+  {
+   "id": "PAT-40",
+   "rule_set": "patterns",
+   "rule": "close-dependents-accepted",
+   "given": {
+    "items": [
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "review complete",
+       "holder": "member-1",
+       "passes": 2
+      }
+     },
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        3
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 3,
+    "step": "close",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 1,
+    "rule": "close-dependents-accepted",
+    "text": "a dependent of item 3 has not accepted its hand-off (rule close-dependents-accepted)"
+   }
+  },
+  {
+   "id": "PAT-41",
+   "rule_set": "patterns",
+   "rule": "close",
+   "given": {
+    "items": [
+     {
+      "seq": 3,
+      "team": "patterns",
+      "fields": {
+       "status": "review complete",
+       "holder": "member-1",
+       "passes": 2
+      }
+     },
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready",
+       "depends_on": [
+        3
+       ],
+       "accepted_inputs": [
+        3
+       ]
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "member-1"
+    },
+    "item": 3,
+    "step": "close",
+    "args": {},
+    "session": {
+     "id": "s-1"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "close",
+    "items": {
+     "3": {
+      "status": "closed",
+      "ended_sessions": [
+       "s-1"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "PAT-42",
+   "rule_set": "patterns",
+   "rule": "old-reviews-first",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "review_requested": "2026-11-09T11:40:00Z"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "member-2"
+    },
+    "session": {
+     "id": "s-9"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "start-review",
+    "item": 2,
+    "entry": "old-reviews-first"
+   }
+  },
+  {
+   "id": "PAT-43",
+   "rule_set": "patterns",
+   "rule": "own-work",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "ready"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "review_requested": "2026-11-09T11:55:00Z"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "member-2"
+    },
+    "session": {
+     "id": "s-9"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "claim",
+    "item": 1,
+    "entry": "own-work"
+   }
+  },
+  {
+   "id": "PAT-44",
+   "rule_set": "patterns",
+   "rule": "reviews",
+   "given": {
+    "items": [
+     {
+      "seq": 2,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "holder": "member-1",
+       "review_requested": "2026-11-09T11:55:00Z"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "member-2"
+    },
+    "session": {
+     "id": "s-9"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "action": "start-review",
+    "item": 2,
+    "entry": "reviews"
+   }
+  },
+  {
+   "id": "PAT-45",
+   "rule_set": "patterns",
+   "rule": "filter:decisions",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "deciding"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "patterns",
+      "fields": {
+       "status": "ready"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "filter",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "step": "decisions"
+   },
+   "expect": {
+    "exit": 0,
+    "filter": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "PAT-46",
+   "rule_set": "patterns",
+   "rule": "filter:stale-reviews",
+   "given": {
+    "items": [
+     {
+      "seq": 1,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "review_started": "2026-11-09T11:30:00Z"
+      }
+     },
+     {
+      "seq": 2,
+      "team": "patterns",
+      "fields": {
+       "status": "peer review",
+       "review_started": "2026-11-09T11:59:00Z"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "filter",
+    "flags": {
+     "agent": "lead-1"
+    },
+    "step": "stale-reviews"
+   },
+   "expect": {
+    "exit": 0,
+    "filter": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "VAL-01",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "take",
+         "step": "claim",
+         "do": {
+          "set": {
+           "holder": "$caller"
+          }
+         }
+        },
+        {
+         "id": "only-open",
+         "step": "claim",
+         "when": {
+          "is": [
+           "$item.status",
+           "done"
+          ]
+         },
+         "deny": "x"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[1]",
+      "rule": "only-open",
+      "problem": "rule only-open can never decide: rule take above it matches every case it matches"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-02",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "when": {
+          "empty": "$item.kids"
+         },
+         "deny": "x"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when.empty",
+      "rule": "r",
+      "problem": "$item.kids names no field of the item definition"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-03",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "when": {
+          "in": [
+           "boss",
+           "$caller.roles"
+          ]
+         },
+         "deny": "x"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when.in",
+      "rule": "r",
+      "problem": "no person has the role boss"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-04",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "when": {
+          "is": [
+           "$item.status",
+           "doen"
+          ]
+         },
+         "deny": "x"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when.is",
+      "rule": "r",
+      "problem": "doen is not a value of status (open, done)"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-05",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "do": {
+          "set": {
+           "closer": "$caller"
+          }
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].do.set.closer",
+      "rule": "r",
+      "problem": "closer is no field of the item definition"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-06",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "deny": "x",
+         "do": {}
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0]",
+      "rule": "r",
+      "problem": "a rule has exactly one outcome: deny or do"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-07",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "do": {}
+        }
+       ],
+       "pop": [
+        {
+         "id": "o",
+         "step": "claim"
+        }
+       ],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.pop[0]",
+      "rule": "o",
+      "problem": "no rule names the step claim"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-08",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "when": {
+          "some": {
+           "items": "$item.holder",
+           "match": {
+            "every": {
+             "items": "$it.holder",
+             "match": {
+              "empty": "$it.holder"
+             }
+            }
+           }
+          }
+         },
+         "deny": "x"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when.some.match.every",
+      "rule": "r",
+      "problem": "every inside another every, some or count"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-09",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "when": {
+          "regex": [
+           "$arg.note",
+           "("
+          ]
+         },
+         "deny": "x"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when.regex",
+      "rule": "r",
+      "problem": "not a regular expression (Invalid regular expression: /(/: Unterminated group)"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-10",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "holder": {
+        "type": "person"
+       }
+      },
+      "rules": {
+       "table": [],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "item.status",
+      "rule": null,
+      "problem": "the item definition has no status field with values"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-11",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open"
+        ]
+       },
+       "seq": {
+        "type": "number"
+       }
+      },
+      "rules": {
+       "table": [],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "item.seq",
+      "rule": null,
+      "problem": "seq is a key every item has already"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-12",
+   "rule_set": "inline",
+   "rule": null,
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ],
+        "default": "open"
+       },
+       "holder": {
+        "type": "person",
+        "default": ""
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "close",
+         "do": {
+          "set": {
+           "status": "shipped"
+          }
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].do.set.status",
+      "rule": "r",
+      "problem": "shipped is not a value of status"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-EX-parallel",
+   "rule_set": "parallel",
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 0,
+    "findings": []
+   }
+  },
+  {
+   "id": "VAL-EX-scrum",
+   "rule_set": "scrum",
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 0,
+    "findings": []
+   }
+  },
+  {
+   "id": "VAL-EX-extreme-programming",
+   "rule_set": "extreme-programming",
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 0,
+    "findings": []
+   }
+  },
+  {
+   "id": "VAL-EX-single-agent",
+   "rule_set": "single-agent",
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 0,
+    "findings": []
+   }
+  },
+  {
+   "id": "VAL-EX-patterns",
+   "rule_set": "patterns",
+   "rule": null,
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 0,
+    "findings": []
+   }
+  }
+ ]
+}

@@ -6,7 +6,7 @@ Every plan of this repository, newest work first. Plans are named `YYYY-MM-DD-<n
 
 | Plan | Status | What it is |
 |---|---|---|
-| [2026-11-08-team-behaviour-file.md](2026-11-08-team-behaviour-file.md) | active | Every behaviour a team enforces comes only from the team behaviour file; analysis, specification and phases in [its folder](2026-11-08-team-behaviour-file/). |
+| [2026-11-09-team-rules-engine.md](2026-11-09-team-rules-engine.md) | active | The CLI evaluates a team's rule set over JSON items; all team behaviour is in the team file. The earlier 2026-11-08 analysis was replaced and removed (last in git at commit a507443). |
 | [2026-11-04-pr3-simplification-log.md](2026-11-04-pr3-simplification-log.md) | active | Decision log and ledger of the whole PR #3 simplification: phase table, owner decisions and rules, outcome and lessons per phase. |
 | [2026-11-04-simplification-plan.md](2026-11-04-simplification-plan.md) | active | The simplification plan behind PR #3: one backlog, one CLI, the same commands wherever the item files live. |
 | [2026-11-04-phase-8-documentation.md](2026-11-04-phase-8-documentation.md) | active | Phase 8: every document describes the one CLI; the review records are complete; `.agents/docs` removed except the plans. |

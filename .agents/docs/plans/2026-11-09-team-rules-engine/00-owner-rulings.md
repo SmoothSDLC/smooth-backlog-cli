@@ -104,4 +104,13 @@ not be used as input to the new design.
   R3a that forbids user commands to change a team item, and answers question 3 of round 5 with "show and change".
 - R19a. When the TEAM_NAME variable is set, every user command fails (guard against an agent using the wrong command by accident or trying
   to get around the team commands). The text is a blanket failure with no instruction for the agent: teams are not allowed to use user
-  commands. Which commands are "all user commands" (for example `--help`, `--version`) is pending confirmation.
+  commands. The owner did not ask to block `--help` or `--version`; the failure text only gives no instruction. Reading: top-level help and version are not blocked (pending confirmation for the help of a single user command).
+
+## Round 7 (owner, 2026-11-09)
+- R20. Every environment variable the CLI owns is prefixed `SMOOTH_BACKLOG_CLI_`, because generic names such as TEAM_NAME are used by other
+  applications. No alias for the old names (no backwards compatibility, R18). Inventory of `src/` (2026-11-09): TEAM_NAME, TEAM_REPOSITORY,
+  TEAM_BRANCH, TEAM_LEAD, BACKLOG_AGENT, BACKLOG_SESSION, BACKLOG_HOME, BACKLOG_ORIGIN_URL, BACKLOG_LOCK_WAIT_MS; the test guard reads
+  BACKLOG_PRIVATE_DENYLIST. New names: SMOOTH_BACKLOG_CLI_TEAM_NAME, _TEAM_REPOSITORY, _TEAM_BRANCH, _TEAM_LEAD, _AGENT, _SESSION, _HOME,
+  _ORIGIN_URL, _LOCK_WAIT_MS, _PRIVATE_DENYLIST. Standard system variables (HOME, USER, XDG_CONFIG_HOME, GIT_CONFIG_COUNT, npm_execpath)
+  are not owned by the CLI and keep their names. Every earlier ruling and design text that names TEAM_NAME, BACKLOG_AGENT and the others
+  reads as the prefixed name from now on.

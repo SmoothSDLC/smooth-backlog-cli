@@ -73,3 +73,30 @@ Binding. Each answer lists what it decides, the consequence for the spec, and wh
 - Inventory of every behaviour in the topology team-lead, team-member and team-behaviour sources, each mapped to the format
   (expressible or gap): `12-topology-behaviour-inventory.md` and `.tsv`; format gaps with proposals: `13-format-gaps.md`.
 - Draft of the team template in the team's backlog repository; update of the package's full reference example.
+
+# Owner answers, 2026-11-08 (round 3)
+
+## Decisions on the format gaps of 13-format-gaps.md
+- Review stage names: accepted as proposed (role-descriptive, never a team name).
+- G-001: option A. All review stages, refinement and work, are defined the same way in the team workflow template. The CLI has no
+  enforcement of any stage except through that template.
+- G-003, G-004 and similar gaps are not owner decisions: they are consequences of the pattern below. No question is asked about them.
+
+## The pattern (owner direction, binding)
+- A team has two template files. The **team workflow template** holds the behaviour: statuses, steps, roles, review stages, rules,
+  conditions. The **team backlog item template** holds the fields of the team's items: every front matter field (and the structure
+  of the body, where the team wants one) that a rule of the workflow needs, with what each field is for and who may set it.
+- Every dynamic behaviour of a team is a field of the team backlog item template that a rule of the workflow template reads. A
+  required hand-off note, a required flag, a round counter, a size limit or a content pattern is a field with its type and limits, and a
+  rule that names the field. None of it is code in the CLI.
+- The only logic in the CLI is: read the workflow template; read the team backlog item template; check and enforce, on the team's
+  items, the fields and rules those templates define. User commands enforce nothing and treat unknown fields as data.
+- Consequence for 13-format-gaps.md: each gap is re-expressed as a field declaration plus a rule on that field; only a primitive that
+  no field declaration can express stays a gap.
+- Honest record: `backlog fields` (phase 6c, decision K) already prints one fixed item template that ships in the CLI; nothing
+  written before this round says that a team has its own item template. This round creates that ruling.
+
+## Taken without a question (reversible on the owner's word)
+G-007 two offers with the time test, not an order key; G-015 timers stay outside the CLI in the scripts beside a team; the twelve
+single-fix gaps are carried as field declarations and rules; the limit verdict does not count as a round; the stage hand-off note is
+required on every stage-ending step.

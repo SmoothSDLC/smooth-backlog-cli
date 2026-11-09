@@ -56,6 +56,6 @@
 - [ ] PH-14 — User features from the gap resolution (decision AR and the USER-FEATURE rows)
 - [ ] PH-15 — Conditional requirements once answered
 
-## Status
+Revision 4 plus owner answers rounds 1 to 3 (11-owner-answers.md). Round 3 set the pattern: a team workflow template plus a team backlog item template; the CLI only reads both and enforces. Chapters 12 (private inventory) and 13 (format gaps) exist; chapters 03 to 06 are updated in the next pass. Q-06 to Q-15 stay conditional (08-owner-questions.md).
 
 Revision 4 plus owner answers rounds 1 and 2 (11-owner-answers.md: Q-04, Q-05, Q-16, Q-17, Q-18, Q-19 answered, Q-20 closed). Round 2 ordered the running team's template and the inventory of its behaviours (both kept in the team's private repository) and the format gaps (13-format-gaps.md, generic). Q-06 to Q-15 stay conditional (08-owner-questions.md).

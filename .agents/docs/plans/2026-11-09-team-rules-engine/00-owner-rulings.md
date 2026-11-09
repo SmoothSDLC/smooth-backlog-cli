@@ -19,8 +19,9 @@ not be used as input to the new design.
   item is not listed, shown, counted, queued, moved, archived, imported, cleaned or changed by a user command, and a number that names
   one answers as if no such item existed. Team items are reached only through `backlog team` commands.
 - R3b. Team commands never read the user identity (the operating system user or the configuration's user). The agent comes from
-  `--agent`, else BACKLOG_AGENT. The team comes from `--team`, else TEAM_NAME; the configuration's `team` key is dropped (decision of the
-  lead agent, reversible: one input fewer, no alias).
+  `--agent`, else BACKLOG_AGENT. The team comes from `--team`, else the TEAM_NAME variable, else the `team` key of
+  `.backlog/config.json` (owner, 2026-11-09). When none of the three is set the command stops with an error that names all three ways
+  to define the team. This is coded CLI behaviour, not a rule of a team.
 
 ## Data
 - R4. Items are stored as JSON files. Every existing item (open and archived) migrates from markdown with a header to JSON; the CLI
@@ -33,6 +34,16 @@ not be used as input to the new design.
   rule set.
 - R8. The rule set is written with a coherent structure and field naming so that an agent or a human understands it without reading
   the evaluator. The team lead and team member skills use the same rule set directly.
+
+## Rules and their checking (owner, 2026-11-09)
+- R9. The earlier analysis is a guide and a coverage checklist, not a source to copy one to one: it was not written to produce rules.
+  Each rule is independently verified against the code and the skills and created on its own, with test cases that prove the rule is
+  structured correctly.
+- R10. The hierarchy of the rules is part of the rule set, in the manner of the rules of a network routing table: an ordered table
+  with a defined precedence. The design defines the precedence (order, specificity, default).
+- R11. A command checks the team file: `backlog team validate`. The team file is written by a person or an agent, so the check is a
+  feedback loop. It gives useful feedback per rule (where the problem is, which rule, why, what would fix it), not only valid or not
+  valid, and it covers the whole file: the people, the item definition and every rule.
 
 ## New item and update, in one sentence each
 - A new item for team X: read the team file, find X, create the item from X's item definition and the creation rules.

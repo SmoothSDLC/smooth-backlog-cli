@@ -32,7 +32,7 @@ Removed (they write the team file, which the CLI never does): `backlog team defi
 |---|---|---|
 | Reads the team file | Entry in `teams.json` plus a flow definition from `workflows.json` or the shipped one | Entry, rule set and item definition, all in `teams.json` |
 | Who is calling | `--agent`, else BACKLOG_AGENT, else the configuration's user | `--agent`, else BACKLOG_AGENT. Never the configuration's user |
-| Which team | `--team`, else TEAM_NAME, else the configuration's team | `--team`, else TEAM_NAME. The configuration's team key is dropped (lead agent's decision, reversible) |
+| Which team | `--team`, else TEAM_NAME, else the configuration's team | `--team`, else TEAM_NAME, else the `team` key of `.backlog/config.json`; none set: error naming the three ways (owner, 2026-11-09) |
 | Session scope | TEAM_REPOSITORY and TEAM_BRANCH, with flags to be added | Inputs of the rules; flag, then variable |
 | Enforces | The shipped flow in code, plus the registered flow only for its vocabulary | The team's rule set, nothing else |
 | Writes | Items; registry files | Items only |

@@ -480,12 +480,12 @@ every instruction text of the template and the pop results stay equal". Add the 
 **What is wrong.** Two topology dependencies on CODE rules are missing:
 1. `<agent-skills>/team-member/tests/test_review_refs.py:34` treats `("closed","done","archived")` as finished on `list all-branches
    --json` rows (ST-FINISHED / PC-FINISHED).
-2. `<agent-skills>/team-lead/scripts/dispatcher.py:13`, `:196`–`:247` write and read the hand-off marker
+2. `<agent-skills>/team-lead/scripts/<runner-script>:13`, `:196`–`:247` write and read the hand-off marker
    `<team>/handoff/<agent>.json` "written by backlog team update at --request-review and --close", a CLI behaviour removed with S82.
    REQ-114 makes it a file switch that the template leaves off.
 
-**Change to the spec.** Add CON-15 (finished words from the definition, PH-11) and CON-16 (the marker stays the dispatcher's own; with
-`session.block_after_end` on, the dispatcher may drop it; PH-4), and update `01-inventory.md` §7.
+**Change to the spec.** Add CON-15 (finished words from the definition, PH-11) and CON-16 (the marker stays the team runner's own; with
+`session.block_after_end` on, the team runner may drop it; PH-4), and update `01-inventory.md` §7.
 
 ### R1-030 | MINOR | REQ-906, DI-FIELDS; code `shared/fields.js:21`, `:24`, `:28`
 

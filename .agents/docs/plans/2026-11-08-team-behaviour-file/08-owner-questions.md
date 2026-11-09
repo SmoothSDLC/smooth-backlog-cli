@@ -95,12 +95,12 @@ gap. These variables do not choose the backlog; they say who and where the sessi
 may take identity from the environment.
 
 **Option A — keep them as documented session inputs.** The five variables stay inputs of the team commands (flag first, then variable,
-then the configuration key), and the help documents each one. The run script, the dispatcher, the wake hook and the nightly keep
+then the configuration key), and the help documents each one. The run script, the team runner, the wake hook and the scheduled job keep
 working unchanged; the cost is an input that is invisible on the command line.
 
 **Option B — flags only.** Every team command takes `--team`, `--agent`, `--session`, `--scope-repository` and `--scope-branch`, and the
 variables and the configuration fallback are not read. Every input is visible on the command line, at the cost of changing the
-dispatcher, the wake hook, the nightly and the run script (in one additive-then-removal pair) and longer command lines in every skill.
+team runner, the wake hook, the scheduled job and the run script (in one additive-then-removal pair) and longer command lines in every skill.
 
 **Recommendation: A**, because the behaviour already moves into the file and the variables only name the session (label REQ-911).
 
@@ -206,7 +206,7 @@ the field) and is refused without a terminal. A user editing by hand is guided a
 ## Q-10 — Every `--json` output: wrapped in an envelope or raw?
 
 **Scenario.** A script runs `backlog list --json`. Today it receives the raw array of rows; the first release returned
-`{"ok": true, "data": [...]}`. The dispatcher, the wake hook and the nightly parse the raw form.
+`{"ok": true, "data": [...]}`. The team runner, the wake hook and the scheduled job parse the raw form.
 
 **Today.** Raw payloads (the envelope was removed although an earlier owner answer said "keep all").
 

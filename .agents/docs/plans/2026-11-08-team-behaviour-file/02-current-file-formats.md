@@ -22,7 +22,7 @@ help page of its own; `backlog team define --help` and `backlog team workflow --
 **Real example** (the live backlog repository, read only):
 
 ```json
-{ "t-live": { "lead": "lead-a", "members": ["member-a", "member-b", "member-c", "member-d", "member-e"], "external_reviewers": ["codex", "claude"], "review": [] } }
+{ "t-live": { "lead": "lead-a", "members": ["member-a", "member-b", "member-c", "member-d", "member-e"], "external_reviewers": ["reviewer-a", "reviewer-b"], "review": [] } }
 ```
 
 **How it is read**: `teamsConfig()` (`src/team/team.js`) parses `<home>/teams.json` once per process after `setTeamsHome(home)`

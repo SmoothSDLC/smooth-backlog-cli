@@ -264,7 +264,7 @@ Each group is one rule; the sites are the rows of `inventory.tsv` with the flag.
   it): it can only be set by editing `teams.json` by hand.
 - **F5. The review stale time is `BACKLOG_REVIEW_STALE_SECONDS` (default 1200)**, an environment variable; the file's
   `stale_after_seconds: 1200` is not read.
-- **F6. `TEAM_LEAD` (environment) and `--lead` override the entry's lead** (`teamLead`), and the dispatcher sets `TEAM_LEAD`.
+- **F6. `TEAM_LEAD` (environment) and `--lead` override the entry's lead** (`teamLead`), and the team runner sets `TEAM_LEAD`.
 - **F7. An unreadable `teams.json`, `workflows.json` or `wip-limits.json` is read as empty** (a warning for two of them, nothing for the
   registry): no team, no workflow, no limit — a silent default.
 - **F8. The verdict `limit` of `--refinement-review` is accepted and acts as `reject`** (it is no verdict of the shipped definition).
@@ -318,5 +318,5 @@ The feature files hold 101 scenarios; the ones that assert CODE-origin team beha
 
 `consumers.tsv` (22 rows; CON-15..CON-22 added in revision 4, R1-029, R3-012) lists every call or text in the topology repository (`<agent-skills>/team-lead`, `<agent-skills>/team-member`,
 `tools/team`, `eval/team`) that depends on a CODE rule, with the change and the phase. Two calls are already broken at 174c76d
-(CON-10: `backlog update --set-team` and `backlog pop` in `<eval-tooling>/run-team.sh`; CON-11: `--decisions` through the user reader in
-`tools/team/team-keeper`).
+(CON-10: `backlog update --set-team` and `backlog pop` in `<eval-tooling>/<run-script>`; CON-11: `--decisions` through the user reader in
+`tools/team/<keeper-script>`).

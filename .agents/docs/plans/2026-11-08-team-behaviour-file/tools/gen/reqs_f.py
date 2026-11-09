@@ -82,7 +82,7 @@ R('REQ-803','The lead\'s work item','PH-8',['Q-LEADWORK'],
  [('the lead takes the work item with team pop',W+'  And item 1 has the front-matter fields `{"team":"t1","status":"new","review_refs":["d.md"],"depends_on":[],"estimate_min":5,"branch":"main"}`\n  And item 1 has a definition of done in its body\nWhen I run `backlog team pop --team t1 --agent lead`\nThen the command succeeds\n  And item 1 has claimed_by "lead"')],
  [('engine-conformance.test.js','lead pop tests','shared-team-lead-pop','same results')],F)
 R('REQ-804','team query --plan from queue.plan','PH-8',['Q-PLAN','Q-REVIEWONLY'],
- 'Plan passes in order with the assignment strategies of §4.7; the JSON keys stay (D-16); the dispatcher\'s action names come from the template.',
+ 'Plan passes in order with the assignment strategies of §4.7; the JSON keys stay (D-16); the team runner\'s action names come from the template.',
  'queue.js plan() is code.',
  ['The 10 plan tests pass over the template.'],
  [('the plan gives a claim to a free member',W+'  And item 1 has the front-matter fields `{"team":"t1","status":"ready",'+FULL+',"branch":"main"}`\n  And item 1 has a definition of done in its body\nWhen I run `backlog team query --team t1 --agent lead --plan --json`\nThen the output contains "\\"action\\": \\"claim\\""')],

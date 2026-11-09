@@ -32,7 +32,7 @@ Answers to the three reviews in `reviews/` (R1: 33 findings, R2: 42, R3: 26; tot
 | R1-026 | MINOR | ACCEPTED | REQ-802 (no --claim-now, no command outside a team); group Q-CLAIMNOW (pop.js:71, queue.js:23,168,171); §9 R29. |
 | R1-027 | MINOR | ACCEPTED-MODIFIED | D-20/REQ-909: --by recorded, no name special; plain-step.js:50,52 in PC-STEP (DELETED refusals). Differs: decided by the owner ruling instead of an option list. |
 | R1-028 | MINOR | ACCEPTED | REQ-802 criterion 2 (texts changed, results equal); group Q-MARKTEXT (pop.js:84,85). |
-| R1-029 | MINOR | ACCEPTED | consumers.tsv CON-15 (test_review_refs.py:34), CON-16 (dispatcher hand-off marker); 06 consumer order. |
+| R1-029 | MINOR | ACCEPTED | consumers.tsv CON-15 (test_review_refs.py:34), CON-16 (team runner hand-off marker); 06 consumer order. |
 | R1-030 | MINOR | ACCEPTED | REQ-902 field table data only; group PC-FIELDDOCS (fields.js:20-28). |
 | R1-031 | MINOR | ACCEPTED | §4.5 rows waiting.cleared_by_note and waiting.record. |
 | R1-032 | MINOR | ACCEPTED | §3 input row for .backlog/config.json team/user; REQ-911; Q-04 scenario. |

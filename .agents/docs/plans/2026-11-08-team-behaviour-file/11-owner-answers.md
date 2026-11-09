@@ -12,12 +12,12 @@ Binding. Each answer lists what it decides, the consequence for the spec, and wh
   Test consequence: one test per command that each flag alone, each variable alone and flag-over-variable give the same session.
 
 ## Q-05 — keys declared but never enforced: the rules belong in the team's template
-- Decision (owner): these rules are team rules. They are written in the team template of the team (for the Cody team, the Cody team
+- Decision (owner): these rules are team rules. They are written in the team template of the team (for the team, the team
   template files kept in that team's backlog repository), not decided by the CLI. A new team lead creates a team from that template and
   gets the expected default rules.
 - Reading applied (logic): the CLI enforces whatever the team behaviour file defines and nothing else. So the format keeps
   `max_rounds`/`after_max_rounds`, `blocks_dependents` and the "older than" queue test as generic, enforceable keys; the CLI contains
-  no value for any of them; the Cody template sets the values the team declared. This replaces D-15 (keys dropped) and makes
+  no value for any of them; the team template sets the values the team declared. This replaces D-15 (keys dropped) and makes
   Q-05 option B the design, with the values supplied only by the template.
 - New requirement, template location: the location of team templates is a key of `.backlog/config.json` (name proposed:
   `team_templates`, a folder; relative to the backlog folder). The CLI package ships only a generic example team, not a team's
@@ -52,7 +52,7 @@ Binding. Each answer lists what it decides, the consequence for the spec, and wh
 ## Template content (binding)
 - The team template is a full example of every team behaviour the format can support: for each behaviour and control an explicit
   example, with the allow case and the deny case (and the refusal text). The package ships such a full reference example.
-- The Cody team has a Cody team behaviour template, kept in the team's backlog repository at the location the backlog configuration
+- The team has a team behaviour template, kept in the team's backlog repository at the location the backlog configuration
   names (see round 1, `team_templates`). It encodes every behaviour that the team-lead skill, the team-member skill and the team
   behaviour methods of the topology repository define today (statuses, steps, roles, review stages, queue order, limits, refusals,
   escalations, timing). Nothing the skills say about how a card moves may stay only in skill prose.
@@ -61,7 +61,7 @@ Binding. Each answer lists what it decides, the consequence for the spec, and wh
 
 ## Q-16 — answered by the round 1 statements
 - Decision: the running team keeps its own definition, converted (D-12): no stage rename, no switch to the package's example. The
-  converted file becomes the starting point of the Cody template above (option B of the question).
+  converted file becomes the starting point of the team template above (option B of the question).
 
 ## Q-20 — closed, not needed
 - Reason (owner): no team runs during the deployment; teams start afterwards on the updated skills and the new settings, so no
@@ -72,4 +72,4 @@ Binding. Each answer lists what it decides, the consequence for the spec, and wh
 ## Work ordered by round 2
 - Inventory of every behaviour in the topology team-lead, team-member and team-behaviour sources, each mapped to the format
   (expressible or gap): `12-topology-behaviour-inventory.md` and `.tsv`; format gaps with proposals: `13-format-gaps.md`.
-- Draft of the Cody template in the team's backlog repository; update of the package's full reference example.
+- Draft of the team template in the team's backlog repository; update of the package's full reference example.

@@ -176,8 +176,8 @@ Severity: **BLOCKER** = the phase plan cannot be executed as written (a test can
 
 - **Location.** REQ-011 (3) ("every item of the home"); D-10 ("every command that meets old data fails with the migrate message");
   `03-spec.md` §8 ("read-only archived items").
-- **What is wrong.** The live backlog holds 24 bound item files with old keys under `archive/phases/` (teams `claude`,
-  `t-old`, `t-live`, `pr1-wfproof-*`), two of them with an open word (`in_progress`, `pending`) inside `archive/`. If the
+- **What is wrong.** The live backlog holds 24 bound item files with old keys under `archive/phases/` (teams `team-a`,
+  `t-old`, `t-live`, `team-b, team-c`), two of them with an open word (`in_progress`, `pending`) inside `archive/`. If the
   migration skips them, D-10 makes `show`, `history`, `list` of archived items and `import` fail for ever; if it rewrites them, it
   breaks the read-only rule of §8 without saying so.
 - **Severity.** MAJOR.
@@ -187,12 +187,12 @@ Severity: **BLOCKER** = the phase plan cannot be executed as written (a test can
 ## R3-009 — Items bound to a team that has no entry: migration result and port behaviour undefined
 
 - **Location.** REQ-011 (3); REQ-006; §7 binding port; D-08.
-- **What is wrong.** The live backlog has 20 item files bound to teams that have no entry in `teams.json`: `claude` 4,
-  `t-old` 4, `pr1-wfproof-20261028-01` 4, `pr1-wfproof-20261028-02` 4, `cli-035` 2, `refine-2026-10-30-consumer-docs-0221` 1,
-  `refine-2026-10-30-smooth-backlog-cli-0253` 1; seven of them sit in `phases/` with status `done`. (1) The migration computes
+- **What is wrong.** The live backlog has 20 item files bound to teams that have no entry in `teams.json`: `team-a` 4,
+  `t-old` 4, `team-b` 4, `team-c` 4, `team-d` 2, `team-e` 1,
+  `team-f` 1; seven of them sit in `phases/` with status `done`. (1) The migration computes
   `statusOf(fm, null)` for them, but afterwards they have no definition, so "a finished word of its definition" (§7
-  `archive-finished`/`archive-unfinished`) is undefined and `archive done` (owner) and the nightly's `archive --force`
-  (`tools/team/nightly_lib.py:147`) have no defined answer. (2) The port text for "files valid, but the item's team has no entry" is
+  `archive-finished`/`archive-unfinished`) is undefined and `archive done` (owner) and the scheduled job's `archive --force`
+  (`tools/team/<scheduled job-lib>:147`) have no defined answer. (2) The port text for "files valid, but the item's team has no entry" is
   missing (REQ-006 covers only missing or invalid files). (3) They cannot be unbound through the CLI: `team update --set-team ""`
   needs the team to be configured (fixed text `team <team> is not configured`), and plain `update` refuses a bound item.
 - **Severity.** MAJOR.
@@ -248,12 +248,12 @@ Severity: **BLOCKER** = the phase plan cannot be executed as written (a test can
   2. `<monitoring-tools>/dashboard.py:167-175` reads `review_state` and the words `done`, `in_progress` (backlog.db rows and
      front matter).
   3. `<monitoring-tools>/idle_gap.py:70` reads `review_state == 'in_review'`.
-  4. `tools/team/nightly_lib.py:31` `DONE = ('done','archived')` and `:141` (same class as CON-07; the nightly's end items are bound,
+  4. `tools/team/<scheduled job-lib>:31` `DONE = ('done','archived')` and `:141` (same class as CON-07; the scheduled job's end items are bound,
      e.g. live items 054 and 147, and show `closed`).
   5. `<agent-skills>/team-lead/SKILL.md:28` makes the lead run `backlog team define --file` with a schema-1 input
      (`{"name","lead","members","external_reviewers","review":[]}`) at every team start; it breaks at PH-11 step 3, but CON-14 is PH-12.
   6. `tools/team/test_team_names.py:60` and `<eval-tooling>/test_prepare_pr1_bootstrap.py:48` assert `TEAM_LEAD` strings in
-     `run-team.sh`/`launch.sh`; the PH-2 topology commit that drops `TEAM_LEAD` (CON-10) turns them red.
+     `<run-script>`/`launch.sh`; the PH-2 topology commit that drops `TEAM_LEAD` (CON-10) turns them red.
 - **Severity.** MAJOR.
 - **Exact change.** Add CON-15..CON-20 with these file:line references; phase: 1–4 "before the live migration (PH-11 step 2)"; 5
   "PH-11 step 2 (schema-2 define input, possible from PH-1 per R3-005)"; 6 "PH-2 step 1, same commit".
@@ -262,7 +262,7 @@ Severity: **BLOCKER** = the phase plan cannot be executed as written (a test can
 
 - **Location.** `06` PH-10 ("src/shared/status.js deleted"), PH-11 steps 2–3; CON-02, CON-07, CON-12.
 - **What is wrong.** `list --json` rows carry `review_state` from the lifted front matter (`src/shared/query.js:292-293`). Deleting
-  `status.js` in PH-10 removes `lift`, so `review_state` becomes `""` in every row from PH-10 on, and `dispatcher.py:151-158` stops
+  `status.js` in PH-10 removes `lift`, so `review_state` becomes `""` in every row from PH-10 on, and `<runner-script>:151-158` stops
   seeing items in review until PH-11 step 2. Independently, the live migration (PH-11 step 2) rewrites the item files, so the readers
   of R3-012 items 1–3 and CON-12 break at that data change, not at the step-3 CLI commit. Reading the status words already works at
   `174c76d` (the lifted rows carry `ready for review`, `reviewing`, `external review`), so these consumer changes do not depend on any
@@ -349,7 +349,7 @@ Severity: **BLOCKER** = the phase plan cannot be executed as written (a test can
   | PH-5 | edits.js, completeness.js new; team/new.js, shared/new.js 225 | 11 | T-REFINE 25 | 12 | ok |
   | PH-6 | limits.js new; wip.js, wip-limits.js 71, move.js 168, update.js 352, plain-step.js | 8 | T-WIP 9 | 7 | ok |
   | PH-7 | conditions.js, dependencies.js 93, plain-step.js | 2 | T-DEPS 7 | 1 | merge into PH-6 |
-  | PH-8 | engine/queue.js new; queue.js 367 and views.js 134 deleted, pop.js 201 rewritten; team-keeper | 9 | T-QUEUE 64 | 6 | **too large** |
+  | PH-8 | engine/queue.js new; queue.js 367 and views.js 134 deleted, pop.js 201 rewritten; <keeper-script> | 9 | T-QUEUE 64 | 6 | **too large** |
   | PH-9 | binding.js new; update, done, archive, sequence, clean, new; team-items.js, seam.js deleted | 10 | T-BINDING 48 + the 173 unbound calls (D-06) | 8 | **too large** |
   | PH-10 | 12 plain files + setup | 6 | T-PLAINCONV 11 | 4 | ok, plus R3-017 |
   | PH-11 | files.js, migrate.js new; workflow.js, status.js deleted; 5 topology files; live data | 22 | T-LEGACY 11 + T-FILE 27 | 12 | **too large** |
@@ -435,14 +435,14 @@ Severity: **BLOCKER** = the phase plan cannot be executed as written (a test can
 - **Exact change.** Run the conformance tests once against the registered template; one test proves that the bridge and the registered
   file give the same definition object. State the expected gate time in 06.
 
-## R3-022 — CON-04 says "flags unchanged", but the dispatcher already names a flag the CLI does not have
+## R3-022 — CON-04 says "flags unchanged", but the team runner already names a flag the CLI does not have
 
-- **Location.** `consumers.tsv` CON-04; `<agent-skills>/team-lead/scripts/dispatcher.py:189`.
-- **What is wrong.** The dispatcher's text tells the lead to run `--claim <agent> --ignore-dependency-lock "<reason>"`; no file under
+- **Location.** `consumers.tsv` CON-04; `<agent-skills>/team-lead/scripts/<runner-script>:189`.
+- **What is wrong.** The team runner's text tells the lead to run `--claim <agent> --ignore-dependency-lock "<reason>"`; no file under
   `src/` of `174c76d` knows `--ignore-dependency-lock`, and the step catalogue (§4.6) has no such step.
 - **Severity.** MINOR.
 - **Exact change.** CON-04: "already broken at 174c76d (`--ignore-dependency-lock` does not exist); remove the clause from the
-  dispatcher text in the first topology commit".
+  team runner text in the first topology commit".
 
 ## R3-023 — The migration tests must never resolve the live home
 
@@ -481,9 +481,9 @@ Severity: **BLOCKER** = the phase plan cannot be executed as written (a test can
 - **Location.** `06` PH-0..PH-14.
 - **What is wrong / found.** Walking the phases against the live consumers with the fixes above applied: PH-0 none; PH-1 none (the
   template equals today's shipped rules for the live team, whose entry has no `workflow`); PH-2 none live (the live entry's lead `lead-a`
-  equals the `TEAM_LEAD` the dispatcher sets, `dispatcher.py:348`; `wake_hook.py:87` passes `--agent`, not `--lead`), but the topology
+  equals the `TEAM_LEAD` the team runner sets, `<runner-script>:348`; `<wake-hook>:87` passes `--agent`, not `--lead`), but the topology
   tests of R3-012 item 6; PH-3/PH-4 none beyond R3-022; PH-6 (Q-03 A) only the stale text `SKILL.md:38`; PH-8 none (CON-11
-  `team-keeper:135` is already broken); PH-9 none live (the probe's 173 unbound calls are tests); PH-10 `dispatcher.py:151-158` unless
+  `<keeper-script>:135` is already broken); PH-9 none live (the probe's 173 unbound calls are tests); PH-10 `<runner-script>:151-158` unless
   R3-013 is applied; PH-11 step 2 the readers of R3-012 items 1–4 and CON-12, PH-11 step 3 `SKILL.md:28` (R3-012 item 5). Without R3-003
   every topology deploy in the list downgrades the CLI.
 - **Severity.** MINOR (the walk; the individual breaks are R3-003, R3-012, R3-013).

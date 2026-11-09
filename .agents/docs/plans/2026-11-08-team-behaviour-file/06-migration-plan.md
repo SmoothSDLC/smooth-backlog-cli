@@ -40,11 +40,11 @@
 
 ## PH-2b — Topology readers off the derived fields and TEAM_LEAD (consumer commit before the cutover)
 
-- **Scope.** One topology commit on pr2/topology-after-pr1, deployed with the pin of D-28: CON-01, CON-02, CON-06, CON-07, CON-10, CON-12, CON-15, CON-17, CON-18, CON-20..CON-22 (read status words, never `review_state`; finished words from the definition; no `TEAM_LEAD`; the `--ignore-dependency-lock` clause removed from the dispatcher text; the topology tests that assert `TEAM_LEAD` strings changed in the same commit). Reading status words already works at 174c76d, so this commit depends on no CLI phase (R3-012, R3-013, R3-022).
+- **Scope.** One topology commit on pr2/topology-after-pr1, deployed with the pin of D-28: CON-01, CON-02, CON-06, CON-07, CON-10, CON-12, CON-15, CON-17, CON-18, CON-20..CON-22 (read status words, never `review_state`; finished words from the definition; no `TEAM_LEAD`; the `--ignore-dependency-lock` clause removed from the team runner text; the topology tests that assert `TEAM_LEAD` strings changed in the same commit). Reading status words already works at 174c76d, so this commit depends on no CLI phase (R3-012, R3-013, R3-022).
 - **Requirements.** none
 - **Tests first.** per answered question
 - **Scenarios.** none
-- **Files.** topology repository: dispatcher.py, wake_hook.py, run-team.sh, status-dashboard.py, nightly_lib.py, monitoring/*.py, team-member tests, <deploy-tooling>/backlog-cli.pin
+- **Files.** topology repository: <runner-script>, <wake-hook>, <run-script>, <dashboard-script>, <scheduled job-lib>, monitoring/*.py, team-member tests, <deploy-tooling>/backlog-cli.pin
 - **Risk.** Medium: the live team readers change; each reader keeps working on today's CLI output.
 - **Rollback.** Revert the topology commit (pin moves back with it).
 
@@ -190,11 +190,11 @@
 
 ## PH-10d — Lead pop and the work item
 
-- **Scope.** Lead offers, `try_each`, `when_team`, `busy_when` (R3-015 items 2–4, §9 R25–R27); team-keeper fixed to call `team query --decisions` (CON-11).
+- **Scope.** Lead offers, `try_each`, `when_team`, `busy_when` (R3-015 items 2–4, §9 R25–R27); <keeper-script> fixed to call `team query --decisions` (CON-11).
 - **Requirements.** REQ-803
 - **Tests first.** T-803-1
 - **Scenarios.** S-803-1
-- **Files.** src/engine/queue.js, src/team/pop.js; topology: tools/team/team-keeper
+- **Files.** src/engine/queue.js, src/team/pop.js; topology: tools/team/<keeper-script>
 - **Risk.** High.
 - **Rollback.** Revert.
 
@@ -235,7 +235,7 @@
 - **Tests first.** T-902-1, T-902-2, T-902-3, T-902-4, T-902-5, T-908-1, T-909-1, T-928-1
 - **Scenarios.** S-902-1, S-902-2, S-908-1, S-908-2, S-908-3, S-908-4, S-909-1, S-909-2, S-928-1
 - **Files.** src/shared/{status,defaults,index,store,query,read,archive,move,new,update,plain-step,done,sequence,seen,fields}.js, .agents/scripts/verify-published-package.mjs
-- **Risk.** Medium: visible change for the nightly (archive) and the readers of list --json (done in PH-2b).
+- **Risk.** Medium: visible change for the scheduled job (archive) and the readers of list --json (done in PH-2b).
 - **Rollback.** Revert.
 
 ## PH-13 — Documentation and help from the schema; 7c-3 resumes
@@ -284,8 +284,8 @@
 | PH-3c (after the migration) | CON-13, CON-14, CON-19 | they register or define in schema 2, which only the cutover CLI accepts |
 | PH-7 | CON-09, CON-16 | the review notices and the session end move to the definition |
 | PH-10c | CON-03, CON-05 | pop actions keep their names in the template |
-| PH-10d | CON-11 | team-keeper calls the decisions view |
-| PH-12 | CON-08 | the nightly archive keeps working: archive refuses nothing |
+| PH-10d | CON-11 | <keeper-script> calls the decisions view |
+| PH-12 | CON-08 | the scheduled job archive keeps working: archive refuses nothing |
 | PH-13 | CON-14 (skill texts) | documentation |
 
 ## Live calls per phase (R3-026)
@@ -294,11 +294,11 @@
 |---|---|---|
 | PH-0, PH-1, PH-2a | none | — |
 | PH-2b | none (the topology change is additive; the pin keeps the live CLI) | D-28 |
-| PH-3a–PH-3c | every team command during the window (the team is stopped); after it: dispatcher.py:151-158, monitoring readers, nightly_lib.py:31,141, team-lead SKILL.md:28 | PH-2b, PH-3c |
-| PH-4a–PH-9 | none (the template equals the shipped rules; the live entry's lead equals the lead the dispatcher used) | conformance suite |
-| PH-10a–PH-10d | team-keeper:135 (already broken at 174c76d) | CON-11 in PH-10d |
+| PH-3a–PH-3c | every team command during the window (the team is stopped); after it: <runner-script>:151-158, monitoring readers, <scheduled job-lib>:31,141, team-lead SKILL.md:28 | PH-2b, PH-3c |
+| PH-4a–PH-9 | none (the template equals the shipped rules; the live entry's lead equals the lead the team runner used) | conformance suite |
+| PH-10a–PH-10d | <keeper-script>:135 (already broken at 174c76d) | CON-11 in PH-10d |
 | PH-11a–PH-11c | none live (the 173 routed calls were tests, fixed in PH-2a) | PH-2a |
-| PH-12 | the nightly's `archive --force` keeps working (archive refuses nothing) | D-19 |
+| PH-12 | the scheduled job's `archive --force` keeps working (archive refuses nothing) | D-19 |
 
 ## How 7c-3 and 7c-4 fit
 

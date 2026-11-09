@@ -137,3 +137,16 @@ not be used as input to the new design.
   `teams.json` is not read by later commands.
 - Question numbers: from now on every question carries its round and the date (for example "2026-11-09 round 9, question 1") so that no
   number repeats across rounds.
+
+## Round 10 (owner, 2026-11-09): where `teams.json` lives
+- R22. `teams.json` is repo-specific and branch-specific, like the backlog configuration: team behaviour may differ between repositories and
+  between branches, and the design must not rely on a separate backlog repository existing. The location is defined in the repository's
+  `.backlog/config.json` (the actionable repository, committed in every branch), and the SHA of the file (R21) is kept there too. Default
+  when the configuration does not define a location: `.backlog/teams.json` in the actionable repository; but when the configuration
+  defines a backlog repository folder, the default is the root of that repository's folder in the backlog repository
+  (`<backlog repository>/<owner>/<name>/teams.json`). The file can also live anywhere else the configuration names. This replaces the earlier
+  design's single `teams.json` at the root of the whole backlog repository, and supersedes the lead decision that placed the SHA in the
+  per-user configuration folder. The CLI still only reads `teams.json` (R5); it writes the SHA into `.backlog/config.json`.
+- Lead's reading, for the design to apply: the explicit location key wins; else a configured backlog repository folder; else
+  `.backlog/teams.json`. A repository that is public must point the configuration at a private location, because the default would publish
+  the team's rules (the information-security rule of the CLI repo); the design states this once and adds no mechanism for it.

@@ -39,11 +39,11 @@ not be used as input to the new design.
 - R12. An item number is unique and never reused, as with an issue number on GitHub: not after the item is archived, deleted or
   cleaned, and not at any size of backlog (tens of thousands of items are normal). A number identifies an item; it is not its priority.
 - R13. Priority is separate from the number. The order of the queue is kept in a JSON index file in the backlog folder that holds, for
-  each branch, the items in priority order with their number, slug and summary (and title). The index is data, committed with the items.
+  each branch, the items in priority order with their number, slug and title. The index is data, committed with the items. Owner ruling 2026-11-09: the existing index structure stays as it is; a summary is not required in the index.
 - Facts of the branch today (checked 2026-11-09): the index exists (`index.json`, per branch an ordered list of number, slug, title,
-  status; position in the list is the priority). It has no summary. A new number is 1 plus the highest number among the items present, so
+  status; position in the list is the priority). That structure is accepted as is. A new number is 1 plus the highest number among the items present, so
   deleting the newest item (for example `backlog clean`) would hand its number out again: R12 is not guaranteed today. The design must
-  close both gaps; team items and user items share the one number sequence.
+  close the gap in number reuse (a persistent never-reused counter); team items and user items share the one number sequence.
 
 ## Rules and their checking (owner, 2026-11-09)
 - R9. The earlier analysis is a guide and a coverage checklist, not a source to copy one to one: it was not written to produce rules.

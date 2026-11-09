@@ -21,8 +21,9 @@ Commands: `backlog new`, `backlog update`, `backlog update --replan`, `backlog d
 | Concurrency | A write to an item that someone else changed since this caller last read it is refused (exit 5) | Unchanged |
 
 Decided (owner, 2026-11-09): user commands operate only on items without a team and ignore team items completely, instead of
-refusing them. To design: how the numbering and the queue (`index.json`) treat team items so that a number is never reused and the
-user queue holds only items without a team.
+refusing them. Numbers and priority: owner requirement R12 and R13 in 00-owner-rulings.md (numbers never reused and shared by user and team items;
+priority kept separately in the index). To design: which index entries belong to the user queue (only items without a team) and which
+to the team's queue.
 
 ## Group 2: team commands (read the team file, enforce the rule set)
 Commands: `backlog team new`, `backlog team update`, `backlog team query`, `backlog team pop`, and the read-only `backlog team validate`.

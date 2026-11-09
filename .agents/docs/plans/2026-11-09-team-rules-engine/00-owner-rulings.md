@@ -35,6 +35,16 @@ not be used as input to the new design.
 - R8. The rule set is written with a coherent structure and field naming so that an agent or a human understands it without reading
   the evaluator. The team lead and team member skills use the same rule set directly.
 
+## Numbers, priority and the index (owner, 2026-11-09; standing requirement, restated)
+- R12. An item number is unique and never reused, as with an issue number on GitHub: not after the item is archived, deleted or
+  cleaned, and not at any size of backlog (tens of thousands of items are normal). A number identifies an item; it is not its priority.
+- R13. Priority is separate from the number. The order of the queue is kept in a JSON index file in the backlog folder that holds, for
+  each branch, the items in priority order with their number, slug and summary (and title). The index is data, committed with the items.
+- Facts of the branch today (checked 2026-11-09): the index exists (`index.json`, per branch an ordered list of number, slug, title,
+  status; position in the list is the priority). It has no summary. A new number is 1 plus the highest number among the items present, so
+  deleting the newest item (for example `backlog clean`) would hand its number out again: R12 is not guaranteed today. The design must
+  close both gaps; team items and user items share the one number sequence.
+
 ## Rules and their checking (owner, 2026-11-09)
 - R9. The earlier analysis is a guide and a coverage checklist, not a source to copy one to one: it was not written to produce rules.
   Each rule is independently verified against the code and the skills and created on its own, with test cases that prove the rule is

@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, readItem, itemSlugs, itemNames, slugOfName, GIT_IDENTITY, writeUnreadableItem, UNREADABLE_ITEM_MESSAGE } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, readItem, itemSlugs, itemNames, slugOfName, GIT_IDENTITY, writeUnreadableItem, UNREADABLE_ITEM_MESSAGE, ENVELOPE } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
@@ -194,7 +194,7 @@ test('team.js: the team entry names the members in order and the review-only one
 function seed(f) {
   const put = (seq, name, extra) => store.write({
     path: itemPath(f.folder, `${String(seq).padStart(3, '0')}-${name}`),
-    fm: { phase: `${String(seq).padStart(3, '0')}-${name}`, seq, name, status: 'pending', priority: seq - 1, depends_on: [], claimed_by: '', ...extra },
+    fm: { ...ENVELOPE, phase: `${String(seq).padStart(3, '0')}-${name}`, seq, name, status: 'pending', priority: seq - 1, depends_on: [], claimed_by: '', ...extra },
     body: '\n',
   }, f.folder);
   return { put };

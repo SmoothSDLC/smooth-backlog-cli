@@ -128,12 +128,12 @@ step(/^the order is kept in the items, as an earlier release did$/, w => {
   const repo = w.backlogRepo();
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'earlier release'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
 });
-// An item damaged by a hand edit or a bad merge, committed and pushed to the repository that holds the items: its status line is cut open.
-step(/^the status of item (\d+) is damaged in the backlog repository$/, (w, n) => {
+// An item damaged by a hand edit or a bad merge, committed and pushed to the repository that holds the items: its name holds a value of the wrong type.
+step(/^the name of item (\d+) is damaged in the backlog repository$/, (w, n) => {
   const dir = w.folder();
   const name = itemNames(dir).find(f => f.startsWith(String(n).padStart(3, '0')));
   const p = itemPath(dir, slugOfName(name));
-  damageItem(p, 'status');
+  damageItem(p, 'name');
   const repo = w.backlogRepo();
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'damaged'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
 });

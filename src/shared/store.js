@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
 import { asChild, locked } from '../storage.js';
-import { dumpItem as dump, eventLine, hasFrontMatter, isItemName, itemFileName, itemSlug, parseItem as parse, readItemFile, readItemText, replaceItemFrontMatter as replaceFrontMatter } from './item-file.js';
+import { dumpItem as dump, eventLine, hasFrontMatter, isItemName, itemFileName, itemSlug, parseItem as parse, readItemFile, readItemText } from './item-file.js';
 import { repoIdFromUrl } from './safety.js';
 import * as index from './index.js';
 import { actor, created, guarded } from './seen.js';
@@ -222,7 +222,7 @@ export function recoverJournal(home) {
 const RETIRED_KEYS = [['work', 'class'].join('_'), ['review', 'classes'].join('_'), 'priority'];
 const LEGACY_KEYS = ['stage', 'review_state']; // the word in status says what these said; an item that carries a word does not write them
 
-export function write(item, root, { frontMatterOnly = false } = {}) {
+export function write(item, root) {
   item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k) && !(LEGACY_KEYS.includes(k) && (dropsLegacy(item.fm) || derivedKeys(item.fm).has(k))))) };
   const inferred = /^(.*?)[/\\](?:phases|archive)[/\\]/.exec(item.path)?.[1];
   const base = root ?? (inferred || dirname(item.path));
@@ -231,7 +231,7 @@ export function write(item, root, { frontMatterOnly = false } = {}) {
   index.seed(base);
   if (!existsSync(item.path)) created(base, relative(base, item.path));
   note(item.path);
-  atomicWrite(item.path, frontMatterOnly ? replaceFrontMatter(readItemText(item.path), item.fm) : dump(item.fm, item.body));
+  atomicWrite(item.path, dump(item.fm, item.body));
 }
 
 // A text file of the repository folder that is no item (the index): the same checks, journal and atomic write as an item.
@@ -242,29 +242,19 @@ export function writeText(path, text, root) {
   atomicWrite(path, text);
 }
 
-// phases/*.md, then archive/**/*.md. path is folder-relative with '/'.
-// The phases/*.md files without a front matter block: left alone by every command, reported by query.
-export function bareFiles(dir) {
-  assertFolder(dir);
-  let names;
-  try { names = readdirSync(join(dir, 'phases')).filter(isItemName).sort(); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
-  return names.filter(n => !hasFrontMatter(readItemText(join(dir, 'phases', n)))).map(n => `phases/${n}`);
-}
-
-// The fields `backlog update <item> --<field> <value>` can set again when an item cannot be read.
-const OPTION_OF = { title: 'name' }; // the stored key title is set again with --name
+// The fields `backlog update <item> --<field> <value>` can set again when an item cannot be read (a key of a valid JSON file that holds a wrong type).
 export const REPAIRABLE = ['status', 'commit', 'location', 'summary', 'name', 'objective', 'seq', 'size_score'];
 
-// An item whose front matter cannot be read, after the latest version was pulled: the refusal every command of the folder gives (exit 2) names the
-// item (never its path), the field the codec could not read, and the two ways out.
+// An item that cannot be read, after the latest version was pulled: the refusal every command of the folder gives (exit 2) names the
+// item (never its path), the key the codec could not read, and the way out: --restore, and for a valid JSON file with one wrongly typed key also --<key>.
 function readItem(path, text) {
   try { return parse(text); } catch (e) {
     const slug = itemSlug(path);
-    const reason = String(e.message).replace(/^front matter /, '');
-    const restore = `restore the item's previous version with backlog update ${slug} --restore`;
+    const reason = String(e.message).replace(/^item file:? /, '').replace(/\s+/g, ' '); // one line
+    const restore = `Restore the item's previous version with backlog update ${slug} --restore`;
     const message = e.field === undefined
-      ? `item ${slug}: the item has no readable header (${reason}). ${restore[0].toUpperCase()}${restore.slice(1)}`
-      : `item ${slug}: the field ${e.field} cannot be read (${reason}). ${REPAIRABLE.includes(OPTION_OF[e.field] ?? e.field) ? `Fix it with backlog update ${slug} --${OPTION_OF[e.field] ?? e.field} <value>, or ${restore}` : `${restore[0].toUpperCase()}${restore.slice(1)}`}`;
+      ? `item ${slug}: the file ${reason}. ${restore}`
+      : `item ${slug}: the key ${e.field} cannot be read (${reason.startsWith(`${e.field} `) ? reason.slice(e.field.length + 1) : reason}). ${REPAIRABLE.includes(e.field) ? `Fix it with backlog update ${slug} --${e.field} <value>, or ${restore[0].toLowerCase()}${restore.slice(1)}` : restore}`;
     throw Object.assign(new BacklogError('UNREADABLE_ITEM', message, 2), { unreadable: { slug, path, key: e.field } });
   }
 }
@@ -276,7 +266,8 @@ export function unreadable(dir) {
 
 export function load(dir) {
   assertFolder(dir);
-  const items = [];
+  const files = [];
+  const markdown = [];
   const walk = (rel, deep) => {
     assertNoSymlinks(dir, join(dir, rel));
     let entries;
@@ -286,17 +277,22 @@ export function load(dir) {
       if (e.isSymbolicLink()) assertNoSymlinks(dir, join(dir, path));
       if (e.isDirectory() && deep) walk(path, deep);
       else if (e.isFile() && numberOf(e.name) > MAX_SEQ) throw tooBig(e.name); // an item file named with a number above the bound stops every command of the folder
-      else if (e.isFile() && isItemName(e.name)) {
-        const text = readItemText(join(dir, path));
-        const sha256 = createHash('sha256').update(text).digest('hex'); //
-        if (rel === 'phases' && !hasFrontMatter(text)) continue; // a README or a stray note in phases/ is not an item: ranking it would rewrite it as an empty one (see bareFiles)
-        items.push({ path, ...lifted(readItem(path, text)), sha256, sha: sha256 });
-      }
+      else if (e.isFile() && isItemName(e.name)) files.push(path);
+      else if (e.isFile() && e.name.endsWith('.md')) markdown.push(path);
     }
   };
   walk('phases', false);
   walk('archive', true);
-  return items;
+  // a folder of markdown items stops before any item is read; a .md file without a header (a README) is no item
+  if (markdown.some(path => hasFrontMatter(readItemText(join(dir, path))))) {
+    const name = resolve(dir).split(sep).slice(-2).join('/');
+    throw Object.assign(new BacklogError('MARKDOWN_ITEMS', `the items of ${name} are markdown files; run backlog team migrate once to convert every item to JSON`, 2), { markdown: dir });
+  }
+  return files.map(path => {
+    const text = readItemText(join(dir, path));
+    const sha256 = createHash('sha256').update(text).digest('hex'); //
+    return { path, ...lifted(readItem(path, text)), sha256, sha: sha256 };
+  });
 }
 
 // The highest number the folder ever held: its history (every ref, merge commits included), every value numbers.json ever had, the item files
@@ -396,14 +392,14 @@ export function findings(dir) {
 
 //
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-export { eventLine, itemFileName, itemSlug, parseEvent } from './item-file.js'; // the event record of an item's history is written by item-file.js
+export { eventLine, itemFileName, itemSlug, parseEvent, storedFm } from './item-file.js'; // the event record of an item's history is written by item-file.js
 // Appends one event line to the item file's `events` list. The file is re-read first (the command may have written it a moment ago).
 export function addEvent(folder, path, { event, branch = '', commitSha = '', note = '' }) {
   const abs = join(folder, path);
   const { fm, body } = readItemFile(abs);
   const line = eventLine({ ts: now(), event, branch, commitSha, note });
   fm.events = [...asList(fm.events), line];
-  write({ path: abs, fm, body }, folder, { frontMatterOnly: true }); // keeps the body, BOM and line endings as they are
+  write({ path: abs, fm, body }, folder);
   return line;
 }
 // the one way an item write marks itself: when, and by whom (see seen.js)

@@ -3,7 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, env, itemPath, GIT_IDENTITY } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, env, itemPath, GIT_IDENTITY, ENVELOPE } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
@@ -46,7 +46,7 @@ export function numberClash(f) {
   gitIn(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), other);
   const put = (dir, slug) => store.write({
     path: itemPath(dir, slug),
-    fm: { phase: slug, seq: 8, name: slug, status: 'pending', repository: 'acme/demo', branch: 'main', priority: 40, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' },
+    fm: { ...ENVELOPE, phase: slug, seq: 8, name: slug, status: 'pending', repository: 'acme/demo', branch: 'main', priority: 40, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' },
     body: `\n# Phase 008\n\n${slug}\n`,
   }, dir);
   put(join(other, 'acme', 'demo'), '008-remote');

@@ -215,8 +215,8 @@ Options:
       Replace the item by its previous version: its content at the commit before the last one that changed it (the last
       committed content when the file has a local edit). An item with no earlier version is refused, and so is an earlier
       version that cannot be read either. A restored item records a restored event. This is the way out for an item
-      that cannot be read, next to setting the unreadable field again (backlog update <item> --<field> <value>, for
-      status, commit, location, summary, name, objective, seq or size_score). It takes no other option.
+      that cannot be read, next to setting a wrongly typed key of a file that is valid JSON again (backlog update <item> --<key> <value>,
+      for name or seq). It takes no other option.
   --append APPEND
       Append this text to the body of the item.
   --section HEADING

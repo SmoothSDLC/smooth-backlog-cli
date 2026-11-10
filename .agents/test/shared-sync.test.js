@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { archivedRel, BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, GIT_IDENTITY, itemName, itemPath, itemRel, sharedBacklog, archivedPath, itemNames, slugOfName, changeItem, readItem } from './shared-fixtures.js';
+import { archivedRel, BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, GIT_IDENTITY, itemName, itemPath, itemRel, sharedBacklog, archivedPath, itemNames, slugOfName, changeItem, readItem, ENVELOPE } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -36,7 +36,7 @@ function putItem(folder, seq, name, extra = {}) {
   const phase = `${pad(seq)}-${name}`;
   store.write({
     path: itemPath(folder, phase),
-    fm: { phase, seq, name, status: 'pending', repository: 'acme/demo', branch: 'main', ...extra },
+    fm: { ...ENVELOPE, phase, seq, name, status: 'pending', repository: 'acme/demo', branch: 'main', ...extra },
     body: `\n# Phase ${pad(seq)} — ${name}\n\n**Objective:** x\n`,
   });
   return phase;
@@ -152,8 +152,8 @@ test('renumber: the later pusher gets nextSeq in file name, phase, seq and headi
 
 test('renumber: skips numbers already taken', async t => {
   const f = fixture(t);
-  store.write({ path: archivedPath(f.folder, '001-old', 'phases'), fm: { phase: '001-old', seq: 1, name: 'old', status: 'archived' }, body: 'b\n' });
-  store.write({ path: itemPath(f.folder, '002-two'), fm: { phase: '002-two', seq: 2, name: 'two', status: 'pending' }, body: 'b\n' });
+  store.write({ path: archivedPath(f.folder, '001-old', 'phases'), fm: { ...ENVELOPE, phase: '001-old', seq: 1, name: 'old', status: 'archived' }, body: 'b\n' });
+  store.write({ path: itemPath(f.folder, '002-two'), fm: { ...ENVELOPE, phase: '002-two', seq: 2, name: 'two', status: 'pending' }, body: 'b\n' });
   await sync.commitSettled(f.home, f.folder, 'seed');
   await sync.pull(f.home2);
   putItem(f.folder, 3, 'gamma'); await sync.commitSettled(f.home, f.folder, 'gamma'); // 3 is taken on the bare
@@ -164,7 +164,7 @@ test('renumber: skips numbers already taken', async t => {
 
 test('renumber: a stale creation that collides only with an ARCHIVED item is renumbered', async t => {
   const f = fixture(t);
-  store.write({ path: archivedPath(f.folder, '001-old', 'phases'), fm: { phase: '001-old', seq: 1, name: 'old', status: 'archived' }, body: 'b\n' });
+  store.write({ path: archivedPath(f.folder, '001-old', 'phases'), fm: { ...ENVELOPE, phase: '001-old', seq: 1, name: 'old', status: 'archived' }, body: 'b\n' });
   await sync.commitSettled(f.home, f.folder, 'archive old'); // home2 was cloned before this
   putItem(f.folder2, 1, 'delta'); // the stale clone picked 1
   const { result, out } = await captureStdout(() => sync.commitSettled(f.home2, f.folder2, 'new delta'));
@@ -259,7 +259,7 @@ test('renumber: a failing git mv, or a failing git add of the renamed file, is a
 
 test('add/add: two clones create the same numbered file name with different bodies; both reach the bare, the later one renumbered', async t => {
   const f = fixture(t);
-  const make = (folder, body) => store.write({ path: itemPath(folder, '001-alpha'), fm: { phase: '001-alpha', seq: 1, name: 'alpha', status: 'pending', repository: 'acme/demo', branch: 'main' }, body });
+  const make = (folder, body) => store.write({ path: itemPath(folder, '001-alpha'), fm: { ...ENVELOPE, phase: '001-alpha', seq: 1, name: 'alpha', status: 'pending', repository: 'acme/demo', branch: 'main' }, body });
   make(f.folder, '\n# Phase 001 — alpha\n\nfirst body\n');
   make(f.folder2, '\n# Phase 001 — alpha\n\nsecond body\n');
   await sync.commitSettled(f.home, f.folder, 'new alpha');
@@ -344,7 +344,7 @@ test('pull and commit refuse an outstanding local commit, even a repairable sequ
 // Review fixes (second review).
 test('add/add: several conflicting additions whose front matter differs are all repaired (markers in another file do not stop the numbering)', async t => {
   const f = fixture(t);
-  const make = (folder, seq, name, objective) => store.write({ path: itemPath(folder, `${pad(seq)}-${name}`), fm: { phase: `${pad(seq)}-${name}`, seq, name, objective, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: `\n# Phase ${pad(seq)} — ${name}\n` });
+  const make = (folder, seq, name, objective) => store.write({ path: itemPath(folder, `${pad(seq)}-${name}`), fm: { ...ENVELOPE, phase: `${pad(seq)}-${name}`, seq, name, objective, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: `\n# Phase ${pad(seq)} — ${name}\n` });
   for (const [folder, who] of [[f.folder, 'first'], [f.folder2, 'second']]) { make(folder, 1, 'alpha', `${who} alpha`); make(folder, 2, 'beta', `${who} beta`); }
   await sync.commitSettled(f.home, f.folder, 'new alpha and beta');
   const { out } = await captureStdout(() => sync.commitSettled(f.home2, f.folder2, 'new alpha and beta again'));

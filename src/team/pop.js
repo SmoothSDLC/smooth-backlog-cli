@@ -5,11 +5,10 @@
 // and the whole item is printed. Every step is a run of this CLI, so every rule of `team update` applies unchanged.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { storedFm } from '../shared/frontmatter.js';
 import * as index from '../shared/index.js';
 import { caller, isSplitSlice, missingFields } from './lifecycle.js';
 import { redact } from '../shared/safety.js';
-import { folder as repoFolder, itemFileName, load, repoId, resolveHome } from '../shared/store.js';
+import { folder as repoFolder, itemFileName, load, repoId, resolveHome, storedFm } from '../shared/store.js';
 import { gitBranch, heldBy, teamLead, teamScope, teamStep, undoneDependencies } from './team.js';
 import { strip } from '../shared/text.js';
 import { isOpen } from '../shared/status.js';

@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
-import { hasFrontMatter, itemSlug, readItemText } from './item-file.js';
+import { itemSlug } from './item-file.js';
 import { itemSelector } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
@@ -198,7 +198,7 @@ export function rows(folder, items = store.load(folder)) {
   const { idx } = reconcile(current(folder, items), items);
   const position = new Map(Object.values(idx.branches).flatMap(l => l.map((e, n) => [e.slug, n])));
   const at = store.now();
-  const list = items.filter(i => i.path.startsWith('phases/') || hasFrontMatter(readItemText(join(folder, i.path)))).map((i, n) => {
+  const list = items.map((i, n) => {
     const fm = i.fm; const v = (k, d) => (k in fm ? fm[k] : d);
     return {
       id: n + 1, handoff_id: 1, slug: slugOf(i), seq: num(v('seq', 0)), name: txt(v('name', '')), objective: txt(v('objective', '')), summary: txt(v('summary', '')),

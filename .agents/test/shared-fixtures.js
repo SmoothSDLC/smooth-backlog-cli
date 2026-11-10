@@ -6,7 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renam
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dump, dumpItem, itemFileName, itemSlug, isItemName, parse, parseItem } from '../../src/shared/item-file.js';
+import { dumpItem, itemFileName, itemSlug, isItemName, parseItem } from '../../src/shared/item-file.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
@@ -211,6 +211,9 @@ export function teamMembers(home, team, members) {
   writeFileSync(file, JSON.stringify({ ...all, [team]: { ...all[team], members } }));
 }
 
+// the keys the item file requires, for a test that writes an item through store.write with only the keys it is about
+export const ENVELOPE = { repository: '', branch: '', updated: '2026-10-01T00:00:00Z' };
+
 // ---- item files: the tests reach an item file only through these helpers, so the file name and the codec are named in one place ----
 // the path of an open item (<repository folder>/phases/<name>)
 export const itemPath = (dir, slug) => join(dir, 'phases', itemFileName(slug));
@@ -231,9 +234,9 @@ export const itemSlugs = (dir, sub = 'phases') => itemNames(dir, sub).map(slugOf
 // the item of a file on disk: { fm, body } (the header values and the body)
 export const readItem = path => parseItem(readFileSync(path, 'utf8'));
 // the item of a file on disk with its header keys as the file stores them ({ fm, body }): for a test of the stored spellings
-export const readStored = path => parse(readFileSync(path, 'utf8'));
+export const readStored = path => parseItem(readFileSync(path, 'utf8'));
 // writes an item file whose header keys are exactly the ones given (no earlier name is turned into its new one): for a test of the stored spellings
-export function writeStored(path, fm, body) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, dump(fm, body)); }
+export function writeStored(path, fm, body) { writeItem(path, fm, body); }
 // the regular-expression source that matches a text literally (for an expectation that names an item path)
 export const reEscape = text => String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // the item of a text (for the text of an item that git shows): { fm, body }
@@ -245,7 +248,12 @@ export const readItemFileText = path => readFileSync(path, 'utf8');
 // the text of a whole item built from header values and a body, as the CLI writes it
 export const itemText = (fm, body) => dumpItem(fm, body);
 // writes a whole item file (creating the folder) from header values and a body
-export function writeItem(path, fm, body) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, itemText(fm, body)); }
+// A key the file format requires and the header lacks is filled (the number and slug from the file name, the others empty), so that a test names only what it is about.
+export function writeItem(path, fm, body) {
+  const slug = itemSlug(path);
+  const full = { seq: Number(/^\d+/.exec(slug)?.[0] ?? 0), phase: slug, name: '', repository: '', branch: '', updated: '', ...fm };
+  mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, itemText(full, body));
+}
 // rewrites an item file with changed header values (an object merged over the old ones; a value undefined removes the key) and/or a changed body (a string)
 export function changeItem(path, { fm = {}, body } = {}) {
   const item = readItem(path); const next = { ...item.fm, ...fm };
@@ -255,16 +263,16 @@ export function changeItem(path, { fm = {}, body } = {}) {
 
 // ---- items a test damages or makes by hand: how an unreadable key looks is known only here (the format of the day) ----
 // The keys of these helpers are spelled as the file spells them (title, not name).
-// makes one header value of an item file unreadable (the other keys stay readable)
-export function damageItem(path, key) { writeFileSync(path, readFileSync(path, 'utf8').replace(new RegExp(`^${reEscape(key)}: .*$`, 'm'), `${key}: "cut`)); }
-// whether the header value of an item file is still unreadable as damageItem made it
-export const isDamagedItem = (path, key) => new RegExp(`^${reEscape(key)}: "cut`, 'm').test(readFileSync(path, 'utf8'));
+// makes one key of an item file unreadable: the file stays valid JSON and the key holds a value of the wrong type (only a key of the envelope can be unreadable)
+export function damageItem(path, key) { const doc = JSON.parse(readFileSync(path, 'utf8')); doc[key] = ['cut']; writeFileSync(path, `${JSON.stringify(doc, null, 2)}\n`); }
+// whether the key of an item file is still unreadable as damageItem made it
+export const isDamagedItem = (path, key) => JSON.stringify(JSON.parse(readFileSync(path, 'utf8'))[key]) === '["cut"]';
 // writes an item file whose header keys are exactly the ones given (see writeStored), then damages the keys named
 export function writeDamagedItem(path, fm, keys, body) { writeStored(path, fm, body); for (const k of keys) damageItem(path, k); }
-// writes a file in an item's place whose header cannot be read at all (no key can be named)
-// the message of an item whose header cannot be read (the markdown reader's sentence today)
-export const UNREADABLE_ITEM_MESSAGE = /not a 'key: value' pair/;
-export function writeUnreadableItem(path, body = '') { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, `---\nnot a pair\n---\n${body}`); }
+// writes a file in an item's place that is not JSON at all (no key can be named)
+// the message of an item whose file cannot be read at all
+export const UNREADABLE_ITEM_MESSAGE = /the file is not valid JSON/;
+export function writeUnreadableItem(path, body = '') { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, `not json\n${body}`); }
 // the file as an editor that adds a byte order mark saves it
 export const bomItem = path => writeFileSync(path, `\uFEFF${readFileSync(path, 'utf8')}`);
 // the file with other line endings

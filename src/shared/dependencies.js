@@ -40,17 +40,20 @@ export function foreignItem(folder, id) {
   if (!SAFE.test(m[1]) || !SAFE.test(m[2])) return null;
   const other = join(dirname(dirname(resolve(folder))), m[1], m[2]);
   if (!existsSync(other)) return null;
-  const hits = load(other).filter(i => Number(i.fm.seq) === Number(m[3]));
+  let items;
+  try { items = load(other); } catch (e) { if (e.markdown) return null; throw e; } // a folder of markdown items reads as no such item
+  const hits = items.filter(i => Number(i.fm.seq) === Number(m[3]));
   const it = hits.find(i => i.fm.status !== 'archived') ?? hits[0];
   return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || itemSlug(it.path), status: it.fm.status ?? 'pending', fm: it.fm } : null;
 }
 // does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
 // to it? Returns the reference that closes the cycle, or null. Local entries are read in the folder they are written in.
 // cache: repository -> its items, shared by the calls of one check (a publication checks every changed item)
+const loaded = dir => { try { return load(dir); } catch (e) { if (e.markdown) return []; throw e; } }; // a folder of markdown items holds no item that can be read
 export function foreignCycle(folder, repoId, seq, deps, cache = new Map()) {
   const home = dirname(dirname(resolve(folder)));
   const self = `${repoId}#${Number(seq)}`;
-  const items = repo => { if (!cache.has(repo)) { const dir = join(home, ...repo.split('/')); cache.set(repo, existsSync(dir) ? load(dir) : []); } return cache.get(repo); };
+  const items = repo => { if (!cache.has(repo)) { const dir = join(home, ...repo.split('/')); cache.set(repo, existsSync(dir) ? loaded(dir) : []); } return cache.get(repo); };
   const nodeOf = (repo, d) => {
     const s = String(d ?? '').trim();
     const m = FOREIGN.exec(s);

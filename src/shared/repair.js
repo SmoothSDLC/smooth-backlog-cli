@@ -1,30 +1,23 @@
-// An item that cannot be read: `backlog update <item> --<field> <value>` sets the broken field again in the raw text of the item,
-// `backlog update <item> --restore` brings back the item's previous version. Every other command of the folder refuses (store.load).
+// An item that cannot be read: `backlog update <item> --<key> <value>` sets the wrongly typed key of a valid JSON file again,
+// `backlog update <item> --restore` brings back the item's previous version (the only way out for a file that is not JSON).
+// Every other command of the folder refuses (store.load).
 import { join } from 'node:path';
 import { say, refuse } from './archive.js';
-import { dump, parse, readItemText, splitBom } from './item-file.js';
+import { dumpItem, parseItem, readItemText } from './item-file.js';
 import { git, itemSelector } from './safety.js';
 import * as store from './store.js';
 import { normalise } from './status.js';
 
 const INTEGERS = ['seq', 'size_score'];
+const ENVELOPE_KEYS = ['seq', 'name', 'repository', 'branch', 'created', 'updated', 'updated_by', 'team'];
 
-// text with the top-level `key:` line of its front matter (and the lines that continue it) replaced by `key: value`, or added.
+// text of a valid JSON item with the key set to value (an envelope key at the top, any other key under "fields"); the text is
+// written in the form of the codec when that can read it, else as plain JSON (the caller checks the folder again).
 export function setField(text, key, value) {
-  const [bom, source] = splitBom(text);
-  const m = /^---(\r\n?|\n)([\s\S]*?)((?:\r\n?|\n)---(?:\r\n?|\n|$))/.exec(source);
-  if (!m) throw new Error('the item has no front matter block');
-  const [, nl, header, close] = m;
-  const lines = header.split(/\r\n?|\n/);
-  const line = dump({ [key]: value }, '').split('\n')[1];
-  const at = lines.findIndex(l => l.startsWith(`${key}:`));
-  if (at < 0) lines.push(line);
-  else {
-    let end = at + 1;
-    while (end < lines.length && !/^[A-Za-z0-9][A-Za-z0-9_-]*:/.test(lines[end])) end += 1; // the value runs to the next key
-    lines.splice(at, end - at, line);
-  }
-  return bom + source.slice(0, 3) + nl + lines.join(nl) + close + source.slice(m[0].length);
+  const doc = JSON.parse(text);
+  if (ENVELOPE_KEYS.includes(key)) doc[key] = value;
+  else { if (doc.fields === null || typeof doc.fields !== 'object' || Array.isArray(doc.fields)) doc.fields = {}; doc.fields[key] = value; }
+  try { const { fm, body } = parseItem(JSON.stringify(doc)); return dumpItem(fm, body); } catch { return `${JSON.stringify(doc, null, 2)}\n`; }
 }
 
 // bad: the refusal store.unreadable gave. Resolves the exit code of a finished command (restore), or undefined once the fields are set again
@@ -33,7 +26,7 @@ export async function repairUnreadable(a, folder, bad) {
   const { slug, path } = bad.unreadable;
   const sel = a.phase !== undefined ? itemSelector(a.phase) : null;
   const named = sel && (sel.slug === slug || (sel.number !== undefined && sel.number === Number(/^\d+/.exec(slug)?.[0])));
-  const fields = store.REPAIRABLE.filter(k => a[k] !== undefined);
+  const fields = bad.unreadable.key === undefined ? [] : store.REPAIRABLE.filter(k => a[k] !== undefined); // a file that is not JSON offers only --restore
   if (!named || a['dry-run'] || !(a.restore || fields.length)) throw bad;
   const abs = join(folder, path);
   if (a.restore) {
@@ -43,7 +36,7 @@ export async function repairUnreadable(a, folder, bad) {
     const from = log[dirty ? 0 : 1];
     if (!from) return refuse('the item has no earlier version');
     const old = (await git(['show', `${from}:./${path}`], folder)).stdout;
-    try { parse(old); } catch { return refuse(`the earlier version of ${slug} cannot be read either`); }
+    try { parseItem(old); } catch { return refuse(`the earlier version of ${slug} cannot be read either`); }
     store.writeText(abs, old, folder);
     store.addEvent(folder, path, { event: 'restored', note: `restored ${slug} to its version of ${from.slice(0, 7)}` });
     store.reflow(folder);
@@ -56,7 +49,7 @@ export async function repairUnreadable(a, folder, bad) {
     const value = INTEGERS.includes(key) ? (/^\s*[+-]?\d+\s*$/.test(a[key]) ? Number(a[key]) : null) : a[key];
     if (value === null) return refuse(`--${key} ${a[key]}: a whole number is needed`);
     if (key === 'status' && !normalise(value)) return refuse('--status needs a word');
-    text = setField(text, key === 'name' && !/^name:/m.test(text) ? 'title' : key, key === 'status' ? normalise(value) : value); // an earlier file keeps its name key until it is written
+    text = setField(text, key, key === 'status' ? normalise(value) : value);
   }
   store.writeText(abs, text, folder);
   const still = store.unreadable(folder);

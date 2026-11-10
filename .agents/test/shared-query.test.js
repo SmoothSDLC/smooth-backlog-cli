@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, reEscape, changeItem, readHeader } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, reEscape, changeItem, readHeader, ENVELOPE } from './shared-fixtures.js';
 import { defaultUser } from '../../src/shared/setup.js';
 import * as store from '../../src/shared/store.js';
 
@@ -48,7 +48,7 @@ function build(withFindings) {
   if (withFindings) {
     const item = (seq, name, extra) => store.write({
       path: itemPath(f.folder, `${String(seq).padStart(3, '0')}-${name}`),
-      fm: { phase: `${String(seq).padStart(3, '0')}-${name}`, seq, name, objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, repository: 'acme/demo', branch: 'main', commit: 'abc1234', location: '', ...extra },
+      fm: { ...ENVELOPE, phase: `${String(seq).padStart(3, '0')}-${name}`, seq, name, objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, repository: 'acme/demo', branch: 'main', commit: 'abc1234', location: '', ...extra },
       body: `\n# Phase ${seq}\n`,
     });
     item(store.nextSeq(f.folder), 'foreign', { repository: 'other/thing' });

@@ -111,7 +111,7 @@ async function archive(a, rows, { repo, folder, guard }) {
   if ((await git(['mv', '--', from, to], folder)).code) { // archive.py:39-49: a file git does not track yet moves plainly
     try { renameSync(src, join(folder, to)); } catch { return refuse(`could not archive ${row.slug}: the file move failed`); }
   }
-  store.write({ path: join(folder, to), fm: { ...fm, status: 'archived' } }, folder, { frontMatterOnly: true });
+  store.write({ path: join(folder, to), fm: { ...fm, status: 'archived' } }, folder);
   // archiving removes an item from the backlog -> planning event: it leaves the index and the remainder re-densifies to 0..M-1
   store.addEvent(folder, to, { event: 'archived', branch: row.branch, commitSha: row.commit_sha, note: `${row.slug} -> ${to}` });
   const order = store.reflow(folder, { branches: [row.branch] });

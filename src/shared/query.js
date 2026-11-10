@@ -65,7 +65,6 @@ function findings(rows, repo) {
 function findingLines(f, repo) {
   return [
     ...f.foreign.map(r => `⚠️  CRITICAL: ${r.path} says repository ${r.repository} but is in the folder of ${repo}; it is out of the queue. Move it: backlog move ${r.slug} --to-repository`),
-    ...(f.bare ?? []).map(p => `⚠️  ${p} has no front matter block; it is not an item, is out of the queue and is never rewritten. Add the front matter or move the file out of phases/`),
     ...f.untagged.map(r => `⚠️  item ${r.slug} records no repository or branch; it is out of the queue until its repository and branch are filled in`),
   ];
 }
@@ -170,8 +169,6 @@ async function query(argv, team, branchColumn) {
     const { handoff: h, rows, items } = index.rows(folder);
     const critical = () => index.open(rows).filter(r => r.severity === 'critical');
     const bad = findings(rows.filter(r => r.status != null && r.status !== 'archived'), repo);
-    const bare = store.bareFiles(folder);
-    if (bare.length) bad.bare = bare; // only when there is one: the --json findings keep the earlier scripts three keys
     const excluded = new Set(Object.values(bad).flat().map(r => r.id));
     const lines = findingLines(bad, repo);
     if (!a.json && lines.length && (a.next || !plain)) lines.forEach(say); // findings lead the queue views only

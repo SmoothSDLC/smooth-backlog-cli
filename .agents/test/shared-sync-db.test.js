@@ -7,7 +7,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSyn
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape, changeItem, itemOfText } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape, changeItem, itemOfText, ENVELOPE } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
@@ -128,7 +128,7 @@ test('review P2: retrying a rolled-back creation takes the upstream number into 
   assert.notEqual(cli(NEW('beta job'), { cwd: b.cons, tmp: b.tmp }).status, 0); // committed locally with its db, push refused
   rmSync(hook);
   // the other clone pushes the same number as a file only
-  store.write({ path: itemPath(a.folder, '001-alpha-job'), fm: { phase: '001-alpha-job', seq: 1, name: 'alpha job', status: 'pending', repository: 'acme/demo', branch: 'main', priority: 0, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' }, body: '\n# Phase 001\n' }, a.folder);
+  store.write({ path: itemPath(a.folder, '001-alpha-job'), fm: { ...ENVELOPE, phase: '001-alpha-job', seq: 1, name: 'alpha job', status: 'pending', repository: 'acme/demo', branch: 'main', priority: 0, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' }, body: '\n# Phase 001\n' }, a.folder);
   gitIn(a.home, 'add', `acme/demo/${itemRel('001-alpha-job')}`); gitIn(a.home, 'commit', '-q', '-m', 'alpha'); gitIn(a.home, 'push', '-q');
   assert.equal(cli(NEW('beta job'), { cwd: b.cons, tmp: b.tmp }).status, 0); // a fresh command allocates 002 after pulling alpha
   const r = cli(['update', '2', '--note', 'after the renumbering'], { cwd: b.cons, tmp: b.tmp });
@@ -270,7 +270,7 @@ test('review P2: update records its published identity when an added item is ren
   assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const [anchor] = store.load(b.folder);
   store.write({ path: itemPath(b.folder, '002-local'), fm: {
-    ...anchor.fm, phase: '002-local', seq: 2, name: 'local', priority: 1,
+    ...ENVELOPE, ...anchor.fm, phase: '002-local', seq: 2, name: 'local', priority: 1,
     review_refs: ['references/review/code.md'], estimate_min: 5,
   }, body: '\n## Definition of done\n- [ ] x\n' }, b.folder);
   const hold = holdFirstPush(b);
@@ -689,7 +689,7 @@ async function fileRace(t, seed, args, publish, env) {
 
 test('publication identity: an upstream archived sequence colliding with an existing assignment is refused', async t => {
   const { b, bare, result } = await fileRace(t, [NEW('alpha')], ['update', '1', '--seq', '5'], a => {
-    store.write({ path: archivedPath(a.folder, '005-other'), fm: { phase: '005-other', seq: 5, status: 'archived' }, body: '\narchived\n' }, a.folder);
+    store.write({ path: archivedPath(a.folder, '005-other'), fm: { ...ENVELOPE, phase: '005-other', seq: 5, status: 'archived' }, body: '\narchived\n' }, a.folder);
   });
   rejectedPublication(t, b, bare, result, /seq.*5.*005-other/);
 });

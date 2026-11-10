@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, itemPath, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, itemPath, sharedBacklog, ENVELOPE } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import { assertInside, validateHome } from '../../src/shared/safety.js';
@@ -38,7 +38,7 @@ const ok = (f, args) => { const r = run(f, args); assert.equal(r.status, 0, `${a
 test('store and index: load, write and rows work when the folder is reached through a symlinked parent', t => {
   const f = linked(t);
   const path = itemPath(f.folder, '001-a');
-  store.write({ path, fm: { phase: '001-a', seq: 1, name: 'a', status: 'pending' }, body: 'x\n' });
+  store.write({ path, fm: { ...ENVELOPE, phase: '001-a', seq: 1, name: 'a', status: 'pending' }, body: 'x\n' });
   assert.equal(store.load(f.folder).length, 1);
   assert.equal(index.rows(f.folder).rows.length, 1);
 });

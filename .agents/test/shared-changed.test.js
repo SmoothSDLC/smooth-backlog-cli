@@ -9,7 +9,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { archivedRel, cli, consumer, itemPath, itemRel, sharedBacklog, readItem, GIT_IDENTITY } from './shared-fixtures.js';
+import { archivedRel, cli, consumer, itemPath, itemRel, sharedBacklog, readItem, GIT_IDENTITY, ENVELOPE } from './shared-fixtures.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
 
@@ -35,7 +35,7 @@ function seed(items = ['alpha', 'beta', 'gamma']) {
   items.forEach((name, i) => store.write({
     path: itemPath(folder, `${String(i + 1).padStart(3, '0')}-${name}`),
     fm: {
-      phase: `${String(i + 1).padStart(3, '0')}-${name}`, seq: i + 1, name: `Name ${name}`, objective: `obj ${name}`, summary: `sum ${name}`, status: 'pending', severity: 'normal',
+      ...ENVELOPE, phase: `${String(i + 1).padStart(3, '0')}-${name}`, seq: i + 1, name: `Name ${name}`, objective: `obj ${name}`, summary: `sum ${name}`, status: 'pending', severity: 'normal',
       priority: i, repository: 'acme/demo', branch: 'main', commit: '', location: '', created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z',
       depends_on: [], claimed_by: '', claimed_at: '',
     },

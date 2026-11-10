@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, cli, consumer, env, itemName, itemPath, itemRel, ORIGIN_URL, sharedBacklog, archivedRel, archivedPath, readItem as parsedItem, itemNames, slugOfName, reEscape, writeItem } from './shared-fixtures.js';
+import { BACKLOG_NAME, cli, consumer, env, itemName, itemPath, itemRel, ORIGIN_URL, sharedBacklog, archivedRel, archivedPath, readItem as parsedItem, itemNames, slugOfName, reEscape, writeItem, ENVELOPE } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
@@ -217,8 +217,8 @@ test('undoOnThrow puts back only what the command wrote: a file that appears mea
   const mine = itemPath(folder, '001-mine'); const pulled = itemPath(folder, '002-pulled'); const edited = itemPath(folder, '003-edited');
   writeItem(edited, { phase: '003-edited', seq: 3 }, 'old\n');
   await assert.rejects(store.undoOnThrow(folder, async () => {
-    store.write({ path: mine, fm: { phase: '001-mine', seq: 1 }, body: 'x\n' }, folder);
-    store.write({ path: edited, fm: { phase: '003-edited', seq: 3 }, body: 'new\n' }, folder);
+    store.write({ path: mine, fm: { ...ENVELOPE, phase: '001-mine', seq: 1 }, body: 'x\n' }, folder);
+    store.write({ path: edited, fm: { ...ENVELOPE, phase: '003-edited', seq: 3 }, body: 'new\n' }, folder);
     writeFileSync(pulled, 'pulled by someone else\n');
     throw new Error('boom');
   }), /boom/);

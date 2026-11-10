@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, createdSlug, GIT_IDENTITY, itemName, itemPath, itemRel, reEscape, sharedBacklog, writeItem } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, createdSlug, GIT_IDENTITY, itemName, itemPath, itemRel, reEscape, sharedBacklog, writeItem, ENVELOPE } from './shared-fixtures.js';
 import { itemFileName } from '../../src/shared/item-file.js';
 import { highWater, MAX_SEQ, numberOf, record, seed } from '../../src/shared/numbers.js';
 import * as store from '../../src/shared/store.js';
@@ -334,7 +334,7 @@ async function create(home, folder, name, { dropRecord = false } = {}) {
   const n = store.nextSeq(folder);
   const phase = `${pad(n)}-${name}`;
   record(folder, n);
-  store.write({ path: itemPath(folder, phase), fm: { phase, seq: n, name, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: `\n# Phase ${pad(n)} — ${name}\n\n**Objective:** x\n` }, folder);
+  store.write({ path: itemPath(folder, phase), fm: { ...ENVELOPE, phase, seq: n, name, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: `\n# Phase ${pad(n)} — ${name}\n\n**Objective:** x\n` }, folder);
   if (dropRecord) unlinkSync(join(folder, 'numbers.json')); // the creation deletes the record
   return sync.commitSettled(home, folder, `new ${name}`);
 }

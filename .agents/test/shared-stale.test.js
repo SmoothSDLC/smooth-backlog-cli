@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, readItem, readHeader, changeItem, writeItem, itemNames, slugOfName, GIT_IDENTITY } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, readItem, readHeader, changeItem, writeItem, itemNames, slugOfName, GIT_IDENTITY, ENVELOPE } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
@@ -33,7 +33,7 @@ function seed(items = ['alpha', 'beta', 'gamma'], repo = 'demo') {
   items.forEach((name, i) => store.write({
     path: itemPath(folder, `${String(i + 1).padStart(3, '0')}-${name}`),
     fm: {
-      phase: `${String(i + 1).padStart(3, '0')}-${name}`, seq: i + 1, name: `Name ${name}`, objective: `obj ${name}`, summary: `sum ${name}`, status: 'pending', severity: 'normal',
+      ...ENVELOPE, phase: `${String(i + 1).padStart(3, '0')}-${name}`, seq: i + 1, name: `Name ${name}`, objective: `obj ${name}`, summary: `sum ${name}`, status: 'pending', severity: 'normal',
       priority: i, repository: `acme/${repo}`, branch: 'main', commit: '', location: '', created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z',
       depends_on: [], claimed_by: '', claimed_at: '',
     },
@@ -153,7 +153,7 @@ test('a move never replaces a file of the target that holds the file name', () =
   const f = seed(['temp', 'beta'], 'dest');
   const src = consumer(f.t, 'acme', 'demo', 'main');
   const sfolder = join(f.home, 'acme', 'demo');
-  store.write({ path: itemPath(sfolder, '001-beta'), fm: { phase: '001-beta', seq: 1, name: 'Source beta', objective: 'src', summary: 's', status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: '', location: '', created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z', depends_on: [], claimed_by: '', claimed_at: '' }, body: '\n# Phase 1\n\nSOURCE BODY\n' }, sfolder);
+  store.write({ path: itemPath(sfolder, '001-beta'), fm: { ...ENVELOPE, phase: '001-beta', seq: 1, name: 'Source beta', objective: 'src', summary: 's', status: 'pending', severity: 'normal', priority: 0, repository: 'acme/demo', branch: 'main', commit: '', location: '', created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z', depends_on: [], claimed_by: '', claimed_at: '' }, body: '\n# Phase 1\n\nSOURCE BODY\n' }, sfolder);
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'src'); git(f.home, 'push', '-q');
   const dest = consumer(f.t, 'acme', 'dest', 'main');
   assert.equal(run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd: dest }).status, 0);

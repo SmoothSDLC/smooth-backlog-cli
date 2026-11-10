@@ -12,6 +12,7 @@ import { assertInside, git as run, redact } from './safety.js';
 import { ITEM_EXT, ITEM_EXT_PATTERN, ITEM_PATH, itemSlug, itemSlugOfGitPath, parseItem as parse, readItemText } from './item-file.js';
 import * as index from './index.js';
 import { actor, primarySlug, publicationGuard, staleError, staleViews } from './seen.js';
+import { counterText, NUMBER_FILE, record as recordNumber } from './numbers.js';
 import * as store from './store.js';
 import { asList } from './text.js';
 import { foreignCycle, foreignItem, isForeign } from './dependencies.js';
@@ -227,7 +228,9 @@ async function renumberFiles(home, t, stream, added) {
     await must(home, ['mv', `${name}/${path}`, `${name}/${target}`], `move ${path} to ${target}`);
     store.write({ path: join(folder, target), ...retagged(mine, next) });
     store.addEvent(folder, target, { event: 'renumbered', branch: mine.fm.branch || '', note: `${pad(old)} -> ${pad(next)}` });
-    await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
+    const counter = existsSync(join(folder, NUMBER_FILE)); // a folder that keeps a number record: it follows the new number
+    if (counter) recordNumber(folder, next);
+    await must(home, ['add', '--', lit(`${name}/${target}`), ...(counter ? [lit(`${name}/${NUMBER_FILE}`)] : [])], `stage ${target}`);
     const r = await commitOnly(home, [lit(name)], t.mine === false ? ['-m', 'backlog: renumbered'] : ['--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
@@ -260,15 +263,17 @@ async function repairConflicts(home, t, folders, names, renumbered) {
       }
       if (!stages.size) return false;
       const orders = new Set(); // the indexes both sides changed
+      const counters = new Set(); // the number records both sides changed
       for (const [path, st] of stages) {
         if (['23', '123'].includes(st) && names.some(name => path === `${name}/index.json`)) { orders.add(path); continue; } // merged below, once the renumbering is known
+        if (['23', '123'].includes(st) && names.some(name => path === `${name}/${NUMBER_FILE}`)) { counters.add(path); continue; } // the larger value wins, below
         if (!['23', '123'].includes(st) || !itemFile(t).test(path) || nameOf(path) < 0) return false;
         if (st !== '23') return false; // a real edit of one item by both clones cannot be merged by number
       }
       // Every upstream file is restored before a number is allocated: nextSeq loads all items, and a file still holding conflict markers would not parse.
       const mines = new Map();
       for (const path of stages.keys()) {
-        if (orders.has(path)) continue;
+        if (orders.has(path) || counters.has(path)) continue;
 
         mines.set(path, parse((await must(home, ['show', `:3:${path}`], `read ${path}`)).stdout));
         await must(home, ['checkout', '--ours', '--', lit(path)], `keep upstream ${path}`);
@@ -287,6 +292,18 @@ async function repairConflicts(home, t, folders, names, renumbered) {
         const was = String(mine.fm.phase || itemSlugOfGitPath(rel));
         moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
         written.add(`${name}/${target}`);
+      }
+      const lastOf = async (path, n) => { const r = await g(home, ['show', `:${n}:${path}`]); try { return r.code ? 0 : Number(JSON.parse(r.stdout).last) || 0; } catch { return 0; } }; // one side of a conflicted record
+      for (const name of new Set(moves.map(m => m.folder))) { // numbers.json holds the larger of both sides and the numbers given out here
+        const path = `${name}/${NUMBER_FILE}`;
+        const own = Math.max(...moves.filter(m => m.folder === name).map(m => m.next));
+        if (counters.has(path)) writeFileSync(join(home, path), counterText(Math.max(own, await lastOf(path, 2), await lastOf(path, 3)))); else if (existsSync(join(home, path))) recordNumber(join(home, name), own); else continue;
+        await must(home, ['add', '--', lit(path)], `stage ${path}`);
+        counters.delete(path);
+      }
+      for (const path of counters) { // a conflicted record of a folder that renumbered nothing
+        writeFileSync(join(home, path), counterText(Math.max(await lastOf(path, 2), await lastOf(path, 3))));
+        await must(home, ['add', '--', lit(path)], `stage ${path}`);
       }
       for (const path of orders) { // upstream's order, with what the local side did to it done again
         const side = async n => { const r = await g(home, ['show', `:${n}:${path}`]); return r.code ? { branches: {} } : JSON.parse(r.stdout); };

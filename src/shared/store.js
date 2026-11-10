@@ -14,6 +14,7 @@ import { repoIdFromUrl } from './safety.js';
 import * as index from './index.js';
 import { actor, created, guarded } from './seen.js';
 import { CONFIG, configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
+import { highWater, numberOf, MAX_SEQ, tooBig } from './numbers.js';
 import { seam } from './seam.js';
 import { asList } from './text.js';
 import { lifted } from './status.js';
@@ -107,7 +108,7 @@ export function cloneLocked(home, fn) {
   }, { wait: Number(process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS) > 0 ? Number(process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS) : 120000, takeOver: true });
 }
 
-function git(args, cwd) {
+export function git(args, cwd) {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
   return { stdout: String(p.stdout || ''), code: p.status ?? 1 };
 }
@@ -282,6 +283,7 @@ export function load(dir) {
       const path = `${rel}/${e.name}`;
       if (e.isSymbolicLink()) assertNoSymlinks(dir, join(dir, path));
       if (e.isDirectory() && deep) walk(path, deep);
+      else if (e.isFile() && numberOf(e.name) > MAX_SEQ) throw tooBig(e.name); // an item file named with a number above the bound stops every command of the folder
       else if (e.isFile() && isItemName(e.name)) {
         const text = readItemText(join(dir, path));
         const sha256 = createHash('sha256').update(text).digest('hex'); //
@@ -295,9 +297,15 @@ export function load(dir) {
   return items;
 }
 
-// 1 + max(seq of phases/ and archive/): the item files alone number the items.
+// The highest number the folder ever held: its history (every ref, merge commits included), every value numbers.json ever had, the item files
+// present and their seq (numbers.js). A number is never handed out at or below it.
+export function mark(dir) {
+  return Math.max(highWater(dir), ...load(dir).map(i => Number(i.fm.seq) || 0));
+}
+
+// The next number: one above the mark. Deleting, cleaning or archiving the newest item never gives its number again.
 export function nextSeq(dir) {
-  return Math.max(0, ...load(dir).map(i => Number(i.fm.seq) || 0)) + 1;
+  return mark(dir) + 1;
 }
 
 // nextSeq whose file name `<seq><tail>` (tail: '-name.md') is also free in phases/ and archive/: update --seq can leave a low number unused while

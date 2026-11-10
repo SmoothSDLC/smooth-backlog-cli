@@ -19,6 +19,7 @@ import { seam } from './seam.js';
 import { asList, rstrip, strip } from './text.js';
 import { foreignCycle, foreignItem, isForeign } from './dependencies.js';
 import { OF_A_TEAM, REPLAN_TEAM } from './team-items.js';
+import { record as recordNumber } from './numbers.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'section', 'set-lines', 'add-line', 'remove-line', 'move-line', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'severity', 'by', 'claim', 'release', 'reason'];
@@ -228,6 +229,7 @@ async function change(a, folder, repo, team) {
     a.status = normalise(a.status);
     if (a.status === 'archived') return refuse("--status 'archived': backlog archive moves a finished item to archive/");
   }
+  let seqTaken = null; // a --seq above the mark: numbers.json follows it
   let moveTarget = null; // --priority is a move-to-rank, applied via reflow (stays dense)
   for (const k of SETTABLE) {
     const v = a[k];
@@ -246,6 +248,9 @@ async function change(a, folder, repo, team) {
       if (held) return refuse(`--seq ${n} is already item ${held}; the number must stay unique`);
       const by = store.load(folder).filter(i => i.fm.phase !== row.slug && asList(i.fm.depends_on).some(d => d === row.slug || (/^\d+$/.test(String(d)) && Number(d) === Number(row.seq)))).map(i => i.fm.phase ?? i.path);
       if (by.length) return refuse(`${by.join(', ')} depend${by.length > 1 ? '' : 's'} on ${row.slug}, which a new number would leave them pointing at nothing; clear or repoint them first: update <dependent> --set-depends-on <ids|none>`);
+      const high = store.mark(folder);
+      if (n <= high) return refuse(`--seq ${n} is not above the highest number ever used in ${repo} (${high}); numbers are never reused`);
+      seqTaken = n;
     }
     if (k === 'priority') { moveTarget = n; continue; }
     fm[k] = k === 'seq' || k === 'size_score' ? n : v;
@@ -310,6 +315,7 @@ async function change(a, folder, repo, team) {
     return 0;
   }
 
+  if (seqTaken !== null) recordNumber(folder, seqTaken);
   store.write({ path, fm, body }, folder);
   a.wrote = { slug: row.slug, path: row.path };
   store.addEvent(folder, row.path, {

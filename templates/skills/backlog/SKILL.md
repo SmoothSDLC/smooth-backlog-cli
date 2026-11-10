@@ -80,7 +80,7 @@ SMOOTH_BACKLOG_CLI_AGENT stand in); the step flags below are taken with `backlog
 
 ## Gotchas
 
-- An item is its number (or slug); priorities are ranks that move when the queue changes.
+- An item is its number (or slug); priorities are ranks that move when the queue changes. A number is unique and never reused: a new item gets one above the highest number the repository's backlog ever used, so deleting, cleaning or archiving items never frees one, and `backlog update <item> --seq <n>` is refused unless `n` is above that mark. `numbers.json` in the repository's folder records the last number and is committed with the item. A shallow clone cannot prove a number unused: `backlog new` refuses it (exit 2, `git fetch --unshallow`).
 - Every command that changes an item records who (SMOOTH_BACKLOG_CLI_AGENT, else `--by`/`--claim`, else the user) and when.
 - Exit codes: 0 success, 1 refused (the reason on standard output, ❌), 2 invalid input or a failure, 3 idle (team
   pop), 4 the configured backlog repository is not cloned (`backlog setup`), 5 stale view (read the item again).

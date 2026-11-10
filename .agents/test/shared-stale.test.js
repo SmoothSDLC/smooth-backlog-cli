@@ -157,7 +157,7 @@ test('a move never replaces an item of the target that holds the file name, even
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'src'); git(f.home, 'push', '-q');
   const dest = consumer(f.t, 'acme', 'dest', 'main');
   assert.equal(run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd: dest }).status, 0);
-  assert.equal(run(f, f.home, ['update', '2', '--seq', '1'], { cwd: dest }).status, 0);
+  assert.equal(run(f, f.home, ['update', '2', '--seq', '1'], { cwd: dest }).status, 1); // a number at or below the highest ever used is refused: numbers are never reused
   const m = run(f, f.home, ['move', '001-beta', '--to-repository', 'acme/dest'], { cwd: src });
   assert.equal(m.status, 0, m.stderr + m.stdout);
   const files = itemNames(join(f.home, 'acme', 'dest'));
@@ -194,7 +194,7 @@ test('nextSeqFor never returns a number whose file name is held, also by a file 
   mkdirSync(join(folder, 'phases'), { recursive: true });
   writeFileSync(itemPath(folder, '001-x'), 'a note, not an item\n');
   assert.equal(store.nextSeqFor(folder, itemName('-x')), 2);
-  assert.equal(store.nextSeqFor(folder, itemName('-y')), 1);
+  assert.equal(store.nextSeqFor(folder, itemName('-y')), 2); // the file's name holds its number: the highest number ever used is 1
 });
 
 test('the creator of an item has seen it: another writer\'s change is refused on her next update', () => {

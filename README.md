@@ -49,7 +49,7 @@ backlog update 1 --status closed                # or: --close --summary "what wa
 backlog archive 1
 ```
 
-Items are selected by their number (`1`) or slug (`001-fix-the-login-redirect`). `--json` on `list`, `show`, `next` and `changes` prints machine-readable output for agents.
+Items are selected by their number (`1`) or slug (`001-fix-the-login-redirect`). A number is unique and never reused, like an issue number: a new item gets one above the highest number the repository's backlog ever used (read from its git history, every branch included, and from `numbers.json` beside `index.json`, which is committed with the item), so deleting, cleaning or archiving an item never frees its number. `backlog update <item> --seq <n>` is refused unless `n` is above that number. A shallow clone cannot prove a number unused, so `backlog new` refuses it (exit 2) until `git fetch --unshallow`. An item file whose name carries a number above one billion cannot be read and stops the commands of its folder until it is renamed or removed. `--json` on `list`, `show`, `next` and `changes` prints machine-readable output for agents.
 
 ## Working with Git and coding agents
 

@@ -95,7 +95,9 @@ Usage:
   backlog new --name <text> --depends-on <items|none> [options]
   backlog new --split-from <item> --depends-on <items|none> [options]
 
-Adds or splits an item. The item gets the next free item number, is added to the backlog of this repository in the
+Adds or splits an item. The item gets the next item number: one above the highest number the repository's backlog ever used (its
+history, every branch, and a number record committed with the item), so a number of a deleted, cleaned or archived item is never
+handed out again. A shallow clone refuses (exit 2): run git fetch --unshallow. The item is added to the backlog of this repository in the
 backlog repository, and the whole backlog is renumbered so that the priorities run from 0 without gaps. An item is
 named by its number or by its slug, for example 018-help-text, and the output names it the same way.
 The item belongs to the branch that is checked out in the repository you run the command in.
@@ -205,7 +207,8 @@ Options:
   --objective OBJECTIVE
       Replace the objective of the item.
   --seq SEQ
-      Set the item number to this integer.
+      Set the item number to this integer. Refused unless it is above the highest number ever used in the repository's backlog (numbers
+      are never reused); the item then takes it and the number record follows.
   --size_score SIZE_SCORE
       Set the size score of the item, an integer.
   --restore
@@ -496,7 +499,7 @@ Usage:
 
 Asks "Type yes to continue" on standard error and reads the answer from standard input. Any other answer, or none, changes nothing and
 exits 2. After a yes it removes every item file of the branch checked out here, archived items included, as one published change, and
-the order of the other branches stays as it was. The removed items stay in the history of the backlog repository. Then it runs backlog
+the order of the other branches stays as it was. The removed items stay in the history of the backlog repository, and their numbers are never handed out again. Then it runs backlog
 setup again (the configuration and the copies of the skill). It prints how many items were removed. With the word all-branches it removes the
 items of every branch of this repository instead. When nothing is there to remove it says "0 items removed". No command deletes an item that
 belongs to a team: when one lies in the scope (archived ones included), the command refuses before it asks (exit 1, nothing removed) and
@@ -598,7 +601,7 @@ Usage:
 Moves backlog items. With --to-branch the item now belongs to that branch of this repository. With
 --all-open-of-branch every open item of one branch moves to another branch, for example after the branch was
 merged. With --to-repository an item that names another repository goes to the folder of that repository in the
-backlog repository; without a value it goes to the repository the item names, under a new item number there.
+backlog repository; without a value it goes to the repository the item names, under a new item number there (one above the highest number the target ever used).
 Every move is recorded as an event in the history of the item. An item that belongs to a team is moved like any other: the move files it
 (its branch or repository, its place at the end of the queue there) and changes nothing of its team state (status, claim, review).
 

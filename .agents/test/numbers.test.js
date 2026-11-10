@@ -1,0 +1,289 @@
+// Tests of src/shared/numbers.js and of the commands that hand out numbers: an item number is never handed out twice (owner ruling R12).
+// Real temporary git repositories only (the same shape the sync tests use).
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { highWater, MAX_SEQ, record, seed } from '../../src/shared/numbers.js';
+import * as store from '../../src/shared/store.js';
+import * as sync from '../../src/shared/sync.js';
+
+const git = (cwd, ...args) => {
+  const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
+  if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
+  return p.stdout;
+};
+const F = 'acme/demo';
+const pad = n => String(n).padStart(3, '0');
+
+// ---- the library, on a plain repository
+
+function repo(t) {
+  const dir = mkdtempSync(join(tmpdir(), 'numbers-test-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  git(dir, 'init', '-q', '-b', 'main', '.');
+  git(dir, 'commit', '-q', '--allow-empty', '-m', 'base');
+  return dir;
+}
+const commit = (cwd, message) => { git(cwd, 'add', '-A'); git(cwd, 'commit', '-q', '-m', message); };
+// What a creation writes: the next file and numbers.json.
+function allocate(cwd, folder, name) {
+  const n = highWater(join(cwd, folder)) + 1;
+  mkdirSync(join(cwd, folder, 'phases'), { recursive: true });
+  writeFileSync(join(cwd, folder, 'phases', `${pad(n)}-${name}.md`), `---\nseq: ${n}\n---\n`);
+  writeFileSync(join(cwd, folder, 'numbers.json'), `${JSON.stringify({ last: n })}\n`);
+  return n;
+}
+
+test('deleting the newest item does not give its number again', t => {
+  const a = repo(t);
+  allocate(a, F, 'one'); allocate(a, F, 'two'); commit(a, 'two items');
+  git(a, 'rm', '-q', `${F}/phases/002-two.md`); commit(a, 'clean');
+  git(a, 'rm', '-q', `${F}/numbers.json`); commit(a, 'no counter');
+  assert.equal(allocate(a, F, 'three'), 3);
+});
+
+test('a reverted creation and a lowered or deleted counter do not give the number again', t => {
+  const a = repo(t);
+  allocate(a, F, 'one'); commit(a, 'one');
+  allocate(a, F, 'two'); commit(a, 'two');
+  git(a, 'revert', '--no-edit', 'HEAD');
+  assert.equal(highWater(join(a, F)), 2, 'the reverted commit stays in the history');
+  writeFileSync(join(a, F, 'numbers.json'), '{"last": 0}\n'); commit(a, 'lowered by hand');
+  unlinkSync(join(a, F, 'numbers.json')); commit(a, 'deleted');
+  assert.equal(allocate(a, F, 'three'), 3);
+});
+
+test('a number that exists only in a merge commit is never handed out again', t => {
+  const a = repo(t);
+  allocate(a, F, 'one'); commit(a, 'one');
+  git(a, 'checkout', '-q', '-b', 'side'); writeFileSync(join(a, 'side.txt'), 'x'); commit(a, 'side');
+  git(a, 'checkout', '-q', 'main'); writeFileSync(join(a, 'main.txt'), 'y'); commit(a, 'main');
+  git(a, 'merge', '-q', '--no-ff', '--no-commit', 'side');
+  writeFileSync(join(a, F, 'phases', '005-merged.md'), '---\nseq: 5\n---\n'); git(a, 'add', '-A'); git(a, 'commit', '-q', '-m', 'merge with a new item');
+  git(a, 'rm', '-q', `${F}/phases/005-merged.md`); commit(a, 'clean 5');
+  assert.equal(highWater(join(a, F)), 5);
+  assert.equal(allocate(a, F, 'next'), 6);
+});
+
+test('a number held only by another branch is part of the mark', t => {
+  const a = repo(t);
+  allocate(a, F, 'one'); commit(a, 'one');
+  git(a, 'checkout', '-q', '-b', 'side'); allocate(a, F, 'two'); commit(a, 'two on the side');
+  git(a, 'checkout', '-q', 'main');
+  assert.equal(highWater(join(a, F)), 2);
+});
+
+test('a file-name number above the bound is an unreadable item, and never part of the mark once removed', t => {
+  const a = repo(t);
+  allocate(a, F, 'one'); commit(a, 'one');
+  const odd = join(a, F, 'phases', '9007199254740993-odd.md');
+  writeFileSync(odd, '---\nseq: 1\n---\n'); commit(a, 'planted');
+  assert.throws(() => highWater(join(a, F)), e => e.exitCode === 2 && /9007199254740993-odd\.md/.test(e.message) && /above 1000000000/.test(e.message));
+  assert.throws(() => store.load(join(a, F)), e => e.exitCode === 2 && /above 1000000000/.test(e.message), 'every command that reads the folder stops');
+  git(a, 'rm', '-q', `${F}/phases/9007199254740993-odd.md`); commit(a, 'removed');
+  assert.equal(highWater(join(a, F)), 1, 'ignored in the history');
+  assert.equal(MAX_SEQ, 1e9);
+  writeFileSync(join(a, F, 'phases', `${MAX_SEQ}-edge.md`), '---\nseq: 1\n---\n'); // exactly the bound is allowed
+  assert.equal(highWater(join(a, F)), MAX_SEQ);
+});
+
+test('the item file pattern accepts .json names too', t => {
+  const a = repo(t);
+  mkdirSync(join(a, F, 'phases'), { recursive: true });
+  writeFileSync(join(a, F, 'phases', '007-x.json'), '{}\n'); commit(a, 'a json item');
+  git(a, 'rm', '-q', `${F}/phases/007-x.json`); commit(a, 'gone');
+  assert.equal(highWater(join(a, F)), 7);
+});
+
+test('a shallow clone refuses to hand out a number, with exit 2; a full clone does not', t => {
+  const a = repo(t);
+  allocate(a, F, 'one'); commit(a, 'one'); allocate(a, F, 'two'); commit(a, 'two');
+  const dir = mkdtempSync(join(tmpdir(), 'numbers-shallow-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  git(dir, 'clone', '-q', '--depth', '1', `file://${a}`, 's');
+  assert.throws(() => highWater(join(dir, 's', F)), e => e.exitCode === 2 && e.message === 'the backlog clone is shallow, so numbers cannot be proven unused: run git fetch --unshallow');
+  git(join(dir, 's'), 'fetch', '-q', '--unshallow');
+  assert.equal(highWater(join(dir, 's', F)), 2);
+});
+
+test("the seed of a folder comes from the folder's whole history, deleted files included, and reads no other folder", t => {
+  const a = repo(t);
+  allocate(a, 'acme/old', 'gone'); allocate(a, 'acme/old', 'gone2'); commit(a, 'items of another folder');
+  allocate(a, F, 'x'); allocate(a, F, 'x2'); allocate(a, F, 'x3'); commit(a, 'items');
+  git(a, 'rm', '-q', '-r', 'acme/old'); git(a, 'rm', '-q', `${F}/phases/003-x3.md`); commit(a, 'delete');
+  unlinkSync(join(a, F, 'numbers.json')); commit(a, 'no counter yet');
+  assert.equal(seed(join(a, F)), 3);
+  assert.equal(seed(join(a, 'acme/old')), 2);
+  assert.equal(seed(join(a, 'acme/never')), 0, 'a folder the history never held');
+});
+
+test('an unreadable numbers.json in the working tree stops, it is not trusted or ignored', t => {
+  const a = repo(t);
+  allocate(a, F, 'one'); commit(a, 'one');
+  writeFileSync(join(a, F, 'numbers.json'), 'not json');
+  assert.throws(() => highWater(join(a, F)), e => e.exitCode === 2 && /numbers\.json cannot be read/.test(e.message));
+});
+
+// ---- the commands
+
+function fixture(t) {
+  const dir = mkdtempSync(join(tmpdir(), 'numbers-cmd-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const [k, v] of Object.entries(GIT_IDENTITY)) { const old = process.env[k]; process.env[k] = v; t.after(() => { if (old === undefined) delete process.env[k]; else process.env[k] = old; }); }
+  const home = sharedBacklog(dir);
+  const cons = consumer(dir, 'acme', 'demo', 'main');
+  mkdirSync(join(dir, 'config', 'smooth-backlog-cli'), { recursive: true });
+  return { dir, home, cons, folder: join(home, 'acme', 'demo'), bare: join(dir, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`) };
+}
+const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
+const make = (f, name) => { const r = cli(NEW(name), { cwd: f.cons, tmp: f.dir }); assert.equal(r.status, 0, r.stdout + r.stderr); return createdSlug(r.stdout); };
+const lastOf = folder => JSON.parse(readFileSync(join(folder, 'numbers.json'), 'utf8')).last;
+
+test('backlog new writes numbers.json, and it is in the same commit as the new item (a separate backlog clone)', t => {
+  const f = fixture(t);
+  assert.equal(make(f, 'alpha'), '001-alpha');
+  assert.equal(lastOf(f.folder), 1);
+  const files = git(f.home, 'show', '--name-only', '--format=', 'HEAD').trim().split('\n');
+  assert.ok(files.includes('acme/demo/phases/001-alpha.md') && files.includes('acme/demo/numbers.json') && files.includes('acme/demo/index.json'), files.join(','));
+  assert.equal(make(f, 'beta'), '002-beta');
+  assert.equal(lastOf(f.folder), 2);
+  assert.ok(git(f.home, 'show', '--name-only', '--format=', 'HEAD').split('\n').includes('acme/demo/numbers.json'));
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD').trim(), '0', 'pushed');
+});
+
+test('backlog new in a backlog inside the repository: numbers.json is in the same commit as the item', t => {
+  const tmp = mkdtempSync(join(tmpdir(), 'numbers-inside-'));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const cwd = consumer(tmp, 'acme', 'demo', 'main');
+  const env = { ...GIT_IDENTITY, XDG_CONFIG_HOME: join(tmp, 'config'), HOME: join(tmp, 'userhome'), SMOOTH_BACKLOG_CLI_ORIGIN_URL: '', SMOOTH_BACKLOG_CLI_HOME: '' };
+  mkdirSync(env.HOME, { recursive: true });
+  const run = args => { const r = cli(args, { cwd, env }); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
+  run(NEW('alpha'));
+  const files = git(cwd, 'show', '--name-only', '--format=', 'HEAD').trim().split('\n');
+  assert.ok(files.includes('.backlog/local/repository/phases/001-alpha.md') && files.includes('.backlog/local/repository/numbers.json'), files.join(','));
+  const dir = join(cwd, '.backlog', 'local', 'repository');
+  git(cwd, 'rm', '-q', '.backlog/local/repository/phases/001-alpha.md'); git(cwd, 'commit', '-q', '-m', 'the newest item is deleted');
+  assert.equal(createdSlug(run(NEW('beta')).stdout), '002-beta', 'the deleted number is not handed out again');
+  assert.equal(lastOf(dir), 2);
+  assert.ok(git(cwd, 'show', '--name-only', '--format=', 'HEAD').split('\n').includes('.backlog/local/repository/numbers.json'));
+});
+
+test('backlog new after the newest item was deleted and committed, or after backlog clean, gets a new number', t => {
+  const f = fixture(t);
+  make(f, 'alpha'); make(f, 'beta');
+  git(f.home, 'rm', '-q', 'acme/demo/phases/002-beta.md'); git(f.home, 'commit', '-q', '-m', 'delete the newest item'); git(f.home, 'push', '-q');
+  assert.equal(make(f, 'gamma'), '003-gamma');
+  const clean = cli(['clean'], { cwd: f.cons, tmp: f.dir, input: 'yes\n' });
+  assert.equal(clean.status, 0, clean.stdout + clean.stderr);
+  assert.equal(store.load(f.folder).length, 0);
+  assert.equal(make(f, 'delta'), '004-delta');
+  assert.equal(lastOf(f.folder), 4);
+});
+
+test('deleting numbers.json and lowering it by hand do not give a number again', t => {
+  const f = fixture(t);
+  make(f, 'alpha'); make(f, 'beta');
+  writeFileSync(join(f.folder, 'numbers.json'), '{"last": 0}\n');
+  git(f.home, 'rm', '-q', 'acme/demo/phases/002-beta.md'); git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'by hand'); git(f.home, 'push', '-q');
+  assert.equal(make(f, 'gamma'), '003-gamma');
+  unlinkSync(join(f.folder, 'numbers.json'));
+  git(f.home, 'rm', '-q', 'acme/demo/phases/003-gamma.md'); git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'by hand again'); git(f.home, 'push', '-q');
+  assert.equal(make(f, 'delta'), '004-delta');
+});
+
+test('backlog new in a shallow clone is refused with exit 2 and changes nothing', t => {
+  const f = fixture(t);
+  make(f, 'alpha');
+  const shallow = join(f.dir, 'shallow-home');
+  git(f.dir, 'clone', '-q', '--depth', '1', `file://${f.bare}`, shallow);
+  const r = cli(NEW('beta'), { cwd: f.cons, tmp: f.dir, env: { SMOOTH_BACKLOG_CLI_HOME: shallow } });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /❌ backlog: the backlog clone is shallow, so numbers cannot be proven unused: run git fetch --unshallow/);
+  assert.equal(git(shallow, 'status', '--porcelain'), '');
+  assert.equal(cli(['list'], { cwd: f.cons, tmp: f.dir, env: { SMOOTH_BACKLOG_CLI_HOME: shallow } }).status, 0, 'reading still works');
+});
+
+test('update --seq: a number at or below the mark is refused, one above it works and numbers.json follows', t => {
+  const f = fixture(t);
+  make(f, 'alpha'); make(f, 'beta');
+  git(f.home, 'rm', '-q', 'acme/demo/phases/002-beta.md'); git(f.home, 'commit', '-q', '-m', 'delete the newest item'); git(f.home, 'push', '-q');
+  for (const n of [1, 2]) {
+    const r = cli(['update', '001-alpha', '--seq', String(n)], { cwd: f.cons, tmp: f.dir, plain: true });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    if (n === 2) assert.match(r.stdout, /❌ --seq 2 is not above the highest number ever used in acme\/demo \(2\); numbers are never reused/, 'the deleted number is below the mark');
+  }
+  assert.equal(store.load(f.folder)[0].fm.seq, 1);
+  const ok = cli(['update', '001-alpha', '--seq', '9'], { cwd: f.cons, tmp: f.dir, plain: true });
+  assert.equal(ok.status, 0, ok.stdout + ok.stderr);
+  assert.equal(store.load(f.folder)[0].fm.seq, 9);
+  assert.equal(lastOf(f.folder), 9);
+  assert.ok(git(f.home, 'show', '--name-only', '--format=', 'HEAD').split('\n').includes('acme/demo/numbers.json'), 'in the same commit');
+  assert.equal(make(f, 'gamma'), '010-gamma');
+});
+
+test('a second repository folder in the same backlog does not influence the first one', t => {
+  const f = fixture(t);
+  const other = consumer(f.dir, 'acme', 'other', 'main');
+  make(f, 'alpha');
+  for (const n of ['one', 'two', 'three']) assert.equal(cli(NEW(n), { cwd: other, tmp: f.dir }).status, 0);
+  assert.equal(lastOf(join(f.home, 'acme', 'other')), 3);
+  assert.equal(make(f, 'beta'), '002-beta');
+  assert.equal(lastOf(f.folder), 2);
+  const first = cli(NEW('four'), { cwd: other, tmp: f.dir });
+  assert.match(first.stdout, /004-four/);
+});
+
+test('backlog move to another repository takes the next number of the target and records it there', t => {
+  const f = fixture(t);
+  const other = consumer(f.dir, 'acme', 'other', 'main');
+  make(f, 'alpha'); make(f, 'beta');
+  assert.equal(cli(NEW('theirs'), { cwd: other, tmp: f.dir }).status, 0);
+  const moved = cli(['move', '002-beta', '--to-repository', 'acme/other'], { cwd: f.cons, tmp: f.dir });
+  assert.equal(moved.status, 0, moved.stdout + moved.stderr);
+  const target = join(f.home, 'acme', 'other');
+  assert.ok(existsSync(join(target, 'phases', '002-beta.md')));
+  assert.equal(lastOf(target), 2);
+  assert.equal(lastOf(f.folder), 2, 'the source keeps its mark');
+  assert.equal(make(f, 'gamma'), '003-gamma', 'the number the moved item left is not handed out again');
+});
+
+test('a failed creation leaves numbers.json as it was', t => {
+  const f = fixture(t);
+  make(f, 'alpha');
+  const before = readFileSync(join(f.folder, 'numbers.json'), 'utf8');
+  const r = cli([...NEW('beta'), '--depends-on', 'nothing-like-this'], { cwd: f.cons, tmp: f.dir });
+  assert.notEqual(r.status, 0);
+  assert.equal(readFileSync(join(f.folder, 'numbers.json'), 'utf8'), before);
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+});
+
+// A creation as the commands make it (item, numbers.json), published through the same commit path, so two clones can create at once.
+async function create(home, folder, name) {
+  const n = store.nextSeq(folder);
+  const phase = `${pad(n)}-${name}`;
+  record(folder, n);
+  store.write({ path: join(folder, 'phases', `${phase}.md`), fm: { phase, seq: n, name, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: `\n# Phase ${pad(n)} — ${name}\n\n**Objective:** x\n` }, folder);
+  return sync.commitSettled(home, folder, `new ${name}`);
+}
+
+for (const [title, firsts] of [['with the same counter', ['alpha']], ['with different counters', ['alpha', 'gamma']]]) {
+  test(`two clones create at once ${title}: the later one is renumbered above and numbers.json holds the larger value`, async t => {
+    const f = fixture(t);
+    const home2 = join(f.dir, 'home2');
+    git(f.dir, 'clone', '-q', f.bare, home2);
+    const folder2 = join(home2, 'acme', 'demo');
+    for (const name of firsts) await create(f.home, f.folder, name);
+    await create(home2, folder2, 'beta'); // this clone has not seen the others' commits
+    git(f.home, 'pull', '-q');
+    const names = store.load(f.folder).map(i => i.fm.phase).sort();
+    assert.equal(new Set(names.map(n => n.slice(0, 3))).size, names.length, `unique numbers: ${names}`);
+    assert.equal(names.length, firsts.length + 1);
+    assert.equal(lastOf(f.folder), firsts.length + 1);
+    assert.equal(store.nextSeq(f.folder), firsts.length + 2);
+  });
+}

@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { die, pyStr, refuse, say, usage, valueLike, withBacklog } from './archive.js';
 import { itemFileName, readItemFile } from './item-file.js';
+import { record as recordNumber } from './numbers.js';
 import { find } from './index.js';
 import { isOpen } from './status.js';
 import { assertInside, git, redact } from './safety.js';
@@ -138,6 +139,7 @@ async function move(a, rows, ctx) {
   const copy = join(tdir, 'phases', itemFileName(slug));
   // all or nothing: a throw anywhere below restores both backlogs (items and indexes)
   await store.undoOnThrow(tdir, async () => {
+    recordNumber(tdir, seq); // the number is recorded in the target's numbers.json, committed with the item
     store.write({ path: copy, fm, body }, tdir);
     store.note(src);
     rmSync(src);

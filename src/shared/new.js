@@ -10,6 +10,7 @@ import { actor, check, recordWrites } from './seen.js';
 import { configUser } from './setup.js';
 import { assertInside, git, redact, slugify } from './safety.js';
 import { addEvent, branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, undoOnThrow, write } from './store.js';
+import { record as recordNumber } from './numbers.js';
 import { commitSettled, pull } from './sync.js';
 import { normalise } from './status.js';
 import { seam } from './seam.js';
@@ -199,6 +200,7 @@ async function create(argv, { home, folder, repo, scope, team }) {
     if (a.dryRun) { process.stdout.write(`ℹ️  [dry-run] would create phase ${slug} (seq ${seq})\n`); return 0; }
     // nothing is committed yet: a failed run must not leave its file or its place in the index for the next command to push (beyond python parity)
     await undoOnThrow(folder, async () => {
+      recordNumber(folder, seq); // numbers.json: committed with the item
       write({ path, fm, body: parts.join('\n') }, folder);
       // planning event: the new item at its insertion rank (the end without one) in the index of its branch
       order = reflow(folder, { slug, target: priority, branches: [fm.branch] });

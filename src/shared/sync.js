@@ -12,7 +12,7 @@ import { assertInside, git as run, redact } from './safety.js';
 import { ITEM_EXT, ITEM_EXT_PATTERN, ITEM_PATH, itemSlug, itemSlugOfGitPath, parseItem as parse, readItemText } from './item-file.js';
 import * as index from './index.js';
 import { actor, primarySlug, publicationGuard, staleError, staleViews } from './seen.js';
-import { counterText, NUMBER_FILE, record as recordNumber } from './numbers.js';
+import { counterText, highWater, NUMBER_FILE, numberOf, record as recordNumber } from './numbers.js';
 import * as store from './store.js';
 import { asList } from './text.js';
 import { foreignCycle, foreignItem, isForeign } from './dependencies.js';
@@ -104,6 +104,7 @@ async function snapshot(home) {
 
 // Resolves to true when it committed. amend: the command's own commit is HEAD (a stack of the user's commits is never squashed).
 async function foldIn(home, t, lits, subject, amend) {
+  if (!lits.length) return false;
   if (t.clone && Number((await g(home, ['rev-list', '--count', `${t.ref}..HEAD`])).stdout.trim()) > 1) await refuseUnpublished(home, t); // never squash a stack with a partial folder list
   if (!(await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) return false;
   const r = await commitOnly(home, lits, amend ? ['--amend', '--no-edit'] : ['-m', subject]);
@@ -199,8 +200,9 @@ async function remapLocal(home, t, moves, files, baseRef, skip) {
 }
 const changedBy = async (home, range) => (await g(home, ['diff', '-z', '--no-renames', '--name-only', ...range])).stdout.split('\0').filter(Boolean);
 
-// Files the unpushed commits added to any <owner>/<name>/phases or archive folder, renumbered when their
-// seq is already held by another file of the folder: git mv, phase/seq keys, body heading, amend.
+// Files the unpushed commits added to any <owner>/<name>/phases or archive folder, renumbered when their seq is not above the upstream
+// high-water mark (a number upstream published and deleted again is as taken as one it still holds) or is held by another file of the folder:
+// git mv, phase/seq keys, body heading, amend. An item the commits only moved (archived: its file is also deleted from another place) keeps its number.
 async function renumber(home, t, stream) {
   const added = (await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=A', t.cmp, 'HEAD']))
     .stdout.split('\0').filter(f => itemFile(t).test(f));
@@ -217,12 +219,18 @@ async function renumber(home, t, stream) {
 
 async function renumberFiles(home, t, stream, added) {
   const out = []; const moves = [];
+  const gone = new Set((await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=D', t.cmp, 'HEAD'])).stdout.split('\0').filter(f => itemFile(t).test(f))
+    .map(f => `${f.slice(t.prefix.length).split('/').slice(0, 2).join('/')}:${numberOf(posix.basename(f))}`));
+  const marks = new Map(); // the upstream mark of each folder, read from the upstream ref only
+  const upstreamMark = (name, folder) => { if (!marks.has(name)) marks.set(name, t.exists ? highWater(folder, { refs: [t.ref], tree: false }) : 0); return marks.get(name); };
   for (const file of added) {
     const [owner, repo, ...rest] = file.slice(t.prefix.length).split('/'); const name = `${t.prefix}${owner}/${repo}`; const path = rest.join('/');
     const folder = join(home, name);
     const items = store.load(folder);
     const mine = items.find(i => i.path === path);
-    if (!mine || !items.some(i => i !== mine && Number(i.fm.seq) === Number(mine.fm.seq))) continue;
+    if (!mine) continue;
+    const low = Number(mine.fm.seq) <= upstreamMark(name, folder) && !gone.has(`${owner}/${repo}:${numberOf(posix.basename(path))}`);
+    if (!low && !items.some(i => i !== mine && Number(i.fm.seq) === Number(mine.fm.seq))) continue;
     const old = Number(mine.fm.seq); const next = store.nextSeqFor(folder, posix.basename(path).replace(/^\d+/, ''));
     const target = targetOf(path, next);
     await must(home, ['mv', `${name}/${path}`, `${name}/${target}`], `move ${path} to ${target}`);
@@ -231,7 +239,7 @@ async function renumberFiles(home, t, stream, added) {
     const counter = existsSync(join(folder, NUMBER_FILE)); // a folder that keeps a number record: it follows the new number
     if (counter) recordNumber(folder, next);
     await must(home, ['add', '--', lit(`${name}/${target}`), ...(counter ? [lit(`${name}/${NUMBER_FILE}`)] : [])], `stage ${target}`);
-    const r = await commitOnly(home, [lit(name)], t.mine === false ? ['-m', 'backlog: renumbered'] : ['--amend', '--no-edit']);
+    const r = await commitOnly(home, [lit(`${name}/${path}`), lit(`${name}/${target}`), ...(counter ? [lit(`${name}/${NUMBER_FILE}`)] : [])], t.mine === false ? ['-m', 'backlog: renumbered'] : ['--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
     out.push(pairOf(old, next, folder));
@@ -241,8 +249,7 @@ async function renumberFiles(home, t, stream, added) {
   if (moves.length) { // the local dependents of the renumbered items follow them
     const touched = await remapLocal(home, t, moves, await changedBy(home, [t.cmp, 'HEAD']), t.cmp, new Set());
     if (touched.length) {
-      const lits = [...new Set(touched.map(f => f.slice(t.prefix.length).split('/').slice(0, 2).join('/')))].map(f => lit(t.prefix + f));
-      const r = await commitOnly(home, lits, t.mine === false ? ['-m', 'backlog: renumbered'] : ['--amend', '--no-edit']);
+      const r = await commitOnly(home, touched.map(lit), t.mine === false ? ['-m', 'backlog: renumbered'] : ['--amend', '--no-edit']);
       if (r.code) throw new BacklogError('SYNC_FAILED', `could not update the references to renumbered items in ${home} (${r.stderr.slice(0, 300)})`, 3);
     }
   }
@@ -421,8 +428,31 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
   // a configuration file of the backlog root is committed with the folders but holds no items to check
   const isFile = f => existsSync(f) && lstatSync(f).isFile();
   const dirs = list.filter(f => !isFile(f)); const dirNames = names.filter((_, i) => !isFile(list[i]));
-  // the backlog repository: the item folders. The user's repository: the whole .backlog folder (its configuration is committed with the items), nothing else
-  const lits = t.clone ? names.map(lit) : [lit(t.prefix.slice(0, -1))];
+  // What a command stages and commits: the files it was given, and of each folder its item files, index.json and numbers.json that changed. Never the folder
+  // root, the team file, the templates or .backlog/config.json, and never a pattern: a draft of a lead lying in the folder is not carried along.
+  const files = list.map(isFile);
+  const owned = async () => {
+    const out = new Set(); const gone = new Set(); // gone: a deletion already staged, which add has no path for
+    for (let i = 0; i < names.length; i++) {
+      if (files[i]) { out.add(names[i]); continue; }
+      const rows = paths(await must(home, ['status', '--porcelain', '-z', '-uall', '--no-renames', '--', lit(names[i])], 'list the changes of the folder'));
+      for (const row of rows) {
+        const path = row.slice(3); const rest = path.slice(names[i].length + 1);
+        if (ITEM_PATH.test(rest) || rest === 'index.json' || rest === NUMBER_FILE) { out.add(path); if (row.startsWith('D ')) gone.add(path); }
+      }
+    }
+    if (!t.clone) { // the first use of a backlog inside the repository writes its configuration itself: only while it is not tracked yet (its creation); an edit of the committed file, such as the SHA, is a person's and never staged
+      for (const row of paths(await must(home, ['status', '--porcelain', '-z', '--', ...['config.json', '.gitignore'].map(f => lit(t.prefix + f))], 'list the new configuration'))) {
+        if (row.startsWith('?? ')) out.add(row.slice(3));
+      }
+    }
+    return { lits: [...out].map(lit), adds: [...out].filter(p => !gone.has(p)).map(lit) };
+  };
+  const stage = async () => { // add -A with no path would stage everything
+    const { lits, adds } = await owned();
+    if (adds.length) await must(home, ['add', '-A', '--', ...adds], `stage ${names.join(', ')}`);
+    return lits;
+  };
   const subject = t.clone ? `${names.join(', ')}: ${message}` : `backlog: ${message}`;
   const inBacklog = path => path.startsWith(t.prefix);
   return locked(lockFile(backlogHome), async () => {
@@ -460,9 +490,9 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
     let mine = false; // the command's own commit is HEAD
     try {
       await refuseConflicts(home, t); // a rejected mutation must restore its starting files too
-      await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
-      // scoped to the folders: work staged elsewhere in the backlog clone is neither committed nor pushed
-      if ((await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
+      const lits = await stage();
+      // scoped to the owned files: work staged elsewhere in the backlog clone is neither committed nor pushed
+      if (lits.length && (await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
         const c = await commitOnly(home, lits, ['-m', subject]);
         if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
         mine = true;
@@ -504,8 +534,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
             settled = renumbered.length;
             await reconcile(fresh);
             await staleCheck(); // reconciliation can add more incidental writes to the guard
-            await must(home, ['add', '-A', '--', ...lits], `stage ${names.join(', ')}`);
-            mine = await foldIn(home, t, lits, subject, mine) || mine;
+            mine = await foldIn(home, t, await stage(), subject, mine) || mine;
           }
           await validatePublication(home, t, dirs, dirNames, claims, renumbered);
           await restoreStaging(saved.staged.filter(p => !own(p)));

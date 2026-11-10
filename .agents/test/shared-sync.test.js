@@ -275,12 +275,14 @@ test('add/add: two clones create the same numbered file name with different bodi
   assert.equal(existsSync(join(f.home2, '.git', 'rebase-merge')) || existsSync(join(f.home2, '.git', 'rebase-apply')), false);
 });
 
-test('add/add: a conflict on anything else still aborts the rebase and exits 3', async t => {
+test('a conflict on anything else (one item changed by both clones) still aborts the rebase and exits 3', async t => {
   const f = fixture(t);
-  mkdirSync(f.folder2, { recursive: true }); mkdirSync(f.folder, { recursive: true });
-  writeFileSync(join(f.folder, 'README'), 'a\n'); writeFileSync(join(f.folder2, 'README'), 'b\n');
+  putItem(f.folder, 1, 'alpha');
   await sync.commitSettled(f.home, f.folder, 'a');
-  await rejects3(sync.commitSettled(f.home2, f.folder2, 'b'), /change was not published[\s\S]*rolled back/);
+  git(f.home2, 'pull', '-q');
+  for (const [folder, word] of [[f.folder, 'ten'], [f.folder2, 'twenty']]) store.write({ path: itemPath(folder, '001-alpha'), fm: { ...store.load(folder)[0].fm }, body: `\n# Phase 001 — alpha\n\n${word}\n` });
+  await sync.commitSettled(f.home, f.folder, 'a2');
+  await rejects3(sync.commitSettled(f.home2, f.folder2, 'b2'), /change was not published[\s\S]*rolled back/);
   assert.equal(existsSync(join(f.home2, '.git', 'rebase-merge')) || existsSync(join(f.home2, '.git', 'rebase-apply')), false);
 });
 
@@ -552,4 +554,19 @@ test('two clones share the items through git alone: no database travels', t => {
   writeFileSync(stale, 'stale');
   assert.equal(run(['list'], f.home).status, 0);
   assert.equal(readFileSync(stale, 'utf8'), 'stale');
+});
+
+test('a command stages only its item files, index.json and numbers.json: a changed team file, a template and a stray file of the folder stay out of the commit', async t => {
+  const f = fixture(t);
+  putItem(f.folder, 1, 'alpha');
+  writeFileSync(join(f.folder, 'teams.json'), '{}\n'); mkdirSync(join(f.folder, 'team-templates'), { recursive: true }); writeFileSync(join(f.folder, 'team-templates', 'x.txt'), 'x\n');
+  git(f.home, 'add', '-Af'); git(f.home, 'commit', '-q', '-m', 'the lead committed a team file'); git(f.home, 'push', '-q');
+  writeFileSync(join(f.folder, 'teams.json'), '{"draft":true}\n'); writeFileSync(join(f.folder, 'team-templates', 'x.txt'), 'y\n'); writeFileSync(join(f.folder, 'stray.json'), '{}\n');
+  putItem(f.folder, 2, 'beta');
+  await sync.commitSettled(f.home, f.folder, 'new beta');
+  const files = git(f.home, 'show', '--name-only', '--format=', 'HEAD').split('\n').filter(Boolean);
+  assert.ok(files.includes(`acme/demo/${itemRel('002-beta')}`), files.join(','));
+  assert.ok(files.every(x => /(phases\/.+|index\.json|numbers\.json)$/.test(x)), `only owned paths: ${files.join(',')}`);
+  assert.equal(readFileSync(join(f.folder, 'teams.json'), 'utf8'), '{"draft":true}\n', 'the draft is untouched');
+  assert.deepEqual(git(f.home, 'status', '--porcelain', '--untracked-files=all').split('\n').map(l => l.trim().split(' ').pop()).sort(), ['acme/demo/stray.json', 'acme/demo/team-templates/x.txt', 'acme/demo/teams.json']);
 });

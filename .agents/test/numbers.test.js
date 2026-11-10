@@ -390,3 +390,54 @@ test('a floor taken at the bound is refused: no number above the bound is handed
   assert.throws(() => store.nextSeqFor(join(a, F), itemName('-x'), MAX_SEQ), e => e.exitCode === 2, 'exit 2');
   assert.throws(() => store.nextSeqFor(join(a, F), itemName('-x'), MAX_SEQ), /no number left/);
 });
+
+// ---- publication above the upstream mark (B04)
+
+test('another clone published a number and deleted its item: this clone pushing an item with that number ends above the upstream mark', async t => {
+  const f = fixture(t);
+  const home2 = join(f.dir, 'home2');
+  git(f.dir, 'clone', '-q', f.bare, home2);
+  const folder2 = join(home2, 'acme', 'demo');
+  await create(home2, folder2, 'alpha'); // 001, published ...
+  git(home2, 'rm', '-q', `acme/demo/${itemRel('001-alpha')}`); git(home2, 'commit', '-q', '-m', 'alpha is deleted'); git(home2, 'push', '-q'); // ... and deleted
+  await create(f.home, f.folder, 'beta'); // this clone has seen nothing: it picked 001 as well
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD').trim(), '0', 'pushed');
+  assert.deepEqual(store.load(f.folder).map(i => i.fm.phase), ['002-beta'], 'beta is above the upstream mark');
+  assert.ok(existsSync(itemPath(f.folder, '002-beta')) && !existsSync(itemPath(f.folder, '001-beta')));
+  assert.match(readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), /# Phase 002/);
+  assert.equal(lastOf(f.folder), 2);
+});
+
+test('two clones create at once through backlog new: the later push is renumbered above the first, and both items stay', t => {
+  const f = fixture(t);
+  const home2 = join(f.dir, 'home2');
+  git(f.dir, 'clone', '-q', f.bare, home2);
+  const env2 = { ...GIT_IDENTITY, XDG_CONFIG_HOME: join(f.dir, 'config'), HOME: join(f.dir, 'userhome'), SMOOTH_BACKLOG_CLI_HOME: home2 };
+  mkdirSync(env2.HOME, { recursive: true });
+  // the other clone creates and publishes while this clone's push is on its way: its pre-push hook runs the other clone's backlog new, once
+  const bin = join(process.cwd(), 'bin', 'backlog.js');
+  const mark = join(f.dir, 'hook-ran');
+  const hook = join(f.home, '.git', 'hooks', 'pre-push');
+  writeFileSync(hook, `#!/bin/sh\n[ -e '${mark}' ] && exit 0\ntouch '${mark}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX\ncd '${f.cons}' && SMOOTH_BACKLOG_CLI_HOME='${home2}' XDG_CONFIG_HOME='${env2.XDG_CONFIG_HOME}' HOME='${env2.HOME}' '${process.execPath}' '${bin}' new --name beta --objective o --summary s --depends-on none >'${mark}.out' 2>&1 || exit 1\n`);
+  chmodSync(hook, 0o755);
+  const r = cli(NEW('alpha'), { cwd: f.cons, tmp: f.dir });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(existsSync(mark), 'the other clone created during the push');
+  git(f.home, 'pull', '-q');
+  assert.deepEqual(store.load(f.folder).map(i => i.fm.phase).sort(), ['001-beta', '002-alpha']);
+  assert.equal(lastOf(f.folder), 2);
+  assert.match(r.stdout, /002-alpha/, 'the printed slug is the final one');
+});
+
+test('an uncommitted team file in the folder is not committed by the next backlog new', t => {
+  const f = fixture(t);
+  make(f, 'alpha');
+  writeFileSync(join(f.home, '.git', 'info', 'exclude'), ''); // the fixture hides the team file of the clone root; this draft is in the folder and nothing hides it
+  writeFileSync(join(f.folder, 'teams.json'), '{"draft": true}\n');
+  make(f, 'beta');
+  const files = git(f.home, 'show', '--name-only', '--format=', 'HEAD').trim().split('\n');
+  assert.ok(files.includes(`acme/demo/${itemRel('002-beta')}`), files.join(','));
+  assert.ok(!files.some(x => x.endsWith('teams.json')), files.join(','));
+  assert.ok(git(f.home, 'status', '--porcelain', '--untracked-files=all').includes('teams.json'), 'the draft is still there, untouched');
+  assert.equal(readFileSync(join(f.folder, 'teams.json'), 'utf8'), '{"draft": true}\n');
+});

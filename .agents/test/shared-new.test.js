@@ -182,13 +182,15 @@ test('a number two clones picked at once: the later push is renumbered, rescanne
   const other = join(f.dir, 'other');
   git(f.dir, 'clone', '-q', f.bare, other);
   // while this clone commits, the other one pushes an item with the same number
+  const bravo = join(f.dir, 'bravo-item');
+  writeItem(bravo, { phase: '001-bravo', seq: 1, name: 'Bravo', status: 'pending', repository: 'acme/demo', branch: 'main' }, '\n# Phase 001 — Bravo\n');
   const hook = join(f.home, '.git', 'hooks', 'pre-commit');
   writeFileSync(hook, `#!/bin/sh
 [ -e "${f.dir}/hooked" ] && exit 0
 touch "${f.dir}/hooked"
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
 mkdir -p "${other}/acme/demo/phases"
-printf -- '---\\nphase: 001-bravo\\nseq: 1\\nname: Bravo\\nstatus: pending\\nrepository: acme/demo\\nbranch: main\\n---\\n\\n# Phase 001 — Bravo\\n' > "${other}/acme/demo/${itemRel('001-bravo')}"
+cp "${bravo}" "${other}/acme/demo/${itemRel('001-bravo')}"
 git -C "${other}" add -A && git -C "${other}" commit -q -m bravo && git -C "${other}" push -q
 `);
   chmodSync(hook, 0o755);

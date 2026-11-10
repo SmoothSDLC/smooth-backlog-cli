@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, cli, consumer, env, itemName, itemPath, itemRel, ORIGIN_URL, sharedBacklog, archivedRel, archivedPath, readItem as parsedItem, itemNames, slugOfName, reEscape, writeItem, itemText } from './shared-fixtures.js';
+import { BACKLOG_NAME, cli, consumer, env, itemName, itemPath, itemRel, ORIGIN_URL, sharedBacklog, archivedRel, archivedPath, readItem as parsedItem, itemNames, slugOfName, reEscape, writeItem } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
@@ -129,7 +129,10 @@ test('write: atomic, mode 0o600, parent folders created, no temp file left, key 
   assert.equal(statSync(abs).mode & 0o777, 0o600);
   assert.deepEqual(readdirSync(dirname(abs)), [itemName('009-new')]);
   store.write({ path: abs, fm: { ...parsed.fm, status: 'in_progress' }, body: parsed.body });
-  assert.equal(readFileSync(abs, 'utf8'), itemText({ ...parsed.fm, status: 'in_progress' }, parsed.body));
+  const again = parsedItem(abs);
+  assert.deepEqual(again.fm, { ...parsed.fm, status: 'in_progress' });
+  assert.deepEqual(Object.keys(again.fm), Object.keys(parsed.fm));
+  assert.equal(again.body, parsed.body);
   putItem(dirname(dirname(abs)), item(8, { phase: '008-old' }));
   store.write({ path: join(dirname(abs), itemName('008-old')), fm: parsedItem(join(dirname(abs), itemName('008-old'))).fm, body: 'x\n' });
   assert.equal(Object.hasOwn(parsedItem(join(dirname(abs), itemName('008-old'))).fm, 'priority'), false, 'a write drops the legacy rank');

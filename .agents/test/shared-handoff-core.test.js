@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import * as handoff from '../../src/team/handoff.js';
 import { foreignItem } from '../../src/shared/dependencies.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
-import { itemPath, writeItem, itemText, writeUnreadableItem } from './shared-fixtures.js';
+import { itemPath, writeItem, itemText, writeUnreadableItem, UNREADABLE_ITEM_MESSAGE } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -218,7 +218,7 @@ test('059.1: dependentsOf propagates a load error of a sibling repository folder
   item(home, 'acme', 'app', { seq: 6, phase: '006-dep', status: 'pending', depends_on: [5] });
   mkdirSync(join(home, 'acme', 'lib', 'phases'), { recursive: true });
   writeUnreadableItem(itemPath(join(home, 'acme', 'lib'), '004-broken'), 'body\n');
-  assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), /item 004-broken: the item has no readable header \(line 1 is not a 'key: value' pair/, 'a folder that cannot be loaded propagates, so its dependents cannot be missed');
+  assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), new RegExp(`item 004-broken: the item has no readable header \\(line 1 is ${UNREADABLE_ITEM_MESSAGE.source}`), 'a folder that cannot be loaded propagates, so its dependents cannot be missed');
 });
 
 test('059.1: the zero-padded foreign spelling resolves through the item 042 pattern (dependencies.js foreignItem)', () => {

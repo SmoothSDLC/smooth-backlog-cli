@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, readItem, itemSlugs, itemNames, slugOfName, GIT_IDENTITY, writeUnreadableItem } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, readItem, itemSlugs, itemNames, slugOfName, GIT_IDENTITY, writeUnreadableItem, UNREADABLE_ITEM_MESSAGE } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
@@ -223,7 +223,7 @@ test('a holder whose item file has malformed front matter still blocks a second 
   assert.equal(update(f, [a, '--claim', 'ann']).status, 0);
   const held = itemPath(f.folder, a);
   writeUnreadableItem(held); // the held item's header can no longer be read
-  assert.throws(() => team.heldItems(f.folder, 'ann'), /not a 'key: value' pair/);
+  assert.throws(() => team.heldItems(f.folder, 'ann'), UNREADABLE_ITEM_MESSAGE);
   const files = () => itemSlugs(f.folder).map(s => readFileSync(itemPath(f.folder, s), 'utf8'));
   const before = files();
   const out = update(f, [b, '--claim', 'ann']);

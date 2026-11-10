@@ -262,6 +262,8 @@ export const isDamagedItem = (path, key) => new RegExp(`^${reEscape(key)}: "cut`
 // writes an item file whose header keys are exactly the ones given (see writeStored), then damages the keys named
 export function writeDamagedItem(path, fm, keys, body) { writeStored(path, fm, body); for (const k of keys) damageItem(path, k); }
 // writes a file in an item's place whose header cannot be read at all (no key can be named)
+// the message of an item whose header cannot be read (the markdown reader's sentence today)
+export const UNREADABLE_ITEM_MESSAGE = /not a 'key: value' pair/;
 export function writeUnreadableItem(path, body = '') { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, `---\nnot a pair\n---\n${body}`); }
 // the file as an editor that adds a byte order mark saves it
 export const bomItem = path => writeFileSync(path, `\uFEFF${readFileSync(path, 'utf8')}`);

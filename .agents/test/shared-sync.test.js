@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { archivedRel, BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, GIT_IDENTITY, itemName, itemPath, itemRel, sharedBacklog, archivedPath, itemNames, slugOfName } from './shared-fixtures.js';
+import { archivedRel, BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, GIT_IDENTITY, itemName, itemPath, itemRel, sharedBacklog, archivedPath, itemNames, slugOfName, changeItem, readItem } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -350,7 +350,7 @@ test('pull: refusing an old commit preserves its unstaged working edit', async t
   putItem(f.folder, 1, 'beta');
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'acme/demo: new beta');
   const file = itemPath(f.folder, '001-beta');
-  writeFileSync(file, readFileSync(file, 'utf8') + '\nworking edit, not yet committed\n');
+  changeItem(file, { body: readItem(file).body + '\nworking edit, not yet committed\n' });
   const before = readFileSync(file, 'utf8'); const index = git(f.home, 'ls-files', '--stage');
   await rejects3(sync.pull(f.home), /unpublished commits/);
   assert.equal(readFileSync(file, 'utf8'), before);

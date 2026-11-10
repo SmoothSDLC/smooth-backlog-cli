@@ -91,8 +91,8 @@ test('test_item_without_team_fields_keeps_working: an item written before team w
   assert.ok(!q(f, '--blocked').includes(s) && !q(f, '--claimable').includes(s)); // in progress, and of no team
   ok(f, s, '--status', 'pending');
   assert.ok(!q(f, '--claimable').includes(s)); // an item of no team is in no team's view
-  const text = readFileSync(path, 'utf8');
-  assert.ok(text.includes('a note added the old way') && !OLD.some(k => text.includes(`\n${k}:`)));
+  const stored = readStored(path);
+  assert.ok(stored.body.includes('a note added the old way') && !OLD.some(k => Object.hasOwn(stored.fm, k)));
   run(f, 'show', [s, '--agent', 'smooth']); // the actor re-reads
   ok(f, s, '--status', 'done', '--by', 'smooth'); // read and write run as the same explicit actor (the CI runner's USER differs)
 });

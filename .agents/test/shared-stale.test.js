@@ -187,7 +187,7 @@ test('a change in the same second by the same writer name is still a change: the
   run(f, f.home, ['show', '001-alpha', '--agent', 'amy']); // the first read publishes the index of the legacy folder
   git(f.home2, 'pull', '-q', '--rebase');
   const file = itemPath(f.folder2, '001-alpha');
-  writeFileSync(file, readFileSync(file, 'utf8') + '\nedited elsewhere, updated and updated_by untouched\n');
+  changeItem(file, { body: readItem(file).body + '\nedited elsewhere, updated and updated_by untouched\n' });
   git(f.home2, 'add', '-A'); git(f.home2, 'commit', '-q', '-m', 'edit'); git(f.home2, 'push', '-q');
   const a = run(f, f.home, ['update', '1', '--append', 'amy', '--by', 'amy']);
   assert.equal(a.status, 5, a.stderr + a.stdout);
@@ -247,7 +247,7 @@ test('review P2: exact agent names keep independent views despite slash, space a
   for (const [first, second] of [['team/alice', 'team_alice'], ['team alice', 'team_alice'], ['é', '_'], ['é', 'ø']]) {
     writeFileSync(file, original);
     seen.view(first, f.folder, 'acme/demo', { slug: '001-alpha', path });
-    writeFileSync(file, original + '\nchanged after first read\n');
+    changeItem(file, { body: readItem(file).body + '\nchanged after first read\n' });
     seen.view(second, f.folder, 'acme/demo', { slug: '001-alpha', path });
     assert.throws(() => seen.check(f.folder, 'acme/demo', first, '001-alpha', path), e => e.code === 'STALE_ITEM', `${first} must keep its stale view after ${second} reads`);
     assert.doesNotThrow(() => seen.check(f.folder, 'acme/demo', second, '001-alpha', path));
@@ -269,7 +269,7 @@ test('review P2: published write views follow chained renumberings only in their
   const cache = JSON.parse(readFileSync(viewCache(f.home, 'amy'), 'utf8'));
   assert.equal(cache['acme/demo/001-alpha'].path, itemRel('001-alpha'), 'the source number is unchanged');
   assert.equal(cache['new/place/003-alpha'].path, path, 'the destination uses its final number and retains its directory');
-  writeFileSync(join(target, path), readFileSync(join(target, path), 'utf8') + '\nanother writer\n');
+  changeItem(join(target, path), { body: readItem(join(target, path)).body + '\nanother writer\n' });
   assert.throws(() => seen.check(target, 'new/place', 'amy', '003-alpha', path), { exitCode: 5 });
 });
 

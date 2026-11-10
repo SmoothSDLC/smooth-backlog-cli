@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dump, parse } from '../../src/shared/frontmatter.js';
+import { parse } from '../../src/shared/frontmatter.js';
 import { step } from '../support/gherkin.js';
-import { itemNames, itemPath, slugOfName } from '../../.agents/test/shared-fixtures.js';
+import { itemNames, itemPath, slugOfName, writeItem } from '../../.agents/test/shared-fixtures.js';
 
 // `backlog ...` with shell-like splitting: double quotes group words, \" is a quote inside them
 export const split = s => (s.match(/"(?:[^"\\]|\\.)*"|\S+/g) ?? []).map(t => t.startsWith('"') ? t.slice(1, -1).replace(/\\"/g, '"').replace(/\\n/g, '\n') : t);
@@ -124,7 +124,7 @@ step(/^the queue is (\d+(?:, \d+)*)$/, (w, list) => {
 step(/^the order is kept in the items, as an earlier release did$/, w => {
   const dir = w.folder();
   const names = itemNames(dir);
-  names.forEach((n, i) => { const p = itemPath(dir, slugOfName(n)); const doc = readStored(p); writeFileSync(p, dump({ ...doc.fm, priority: names.length - 1 - i }, doc.body)); });
+  names.forEach((n, i) => { const p = itemPath(dir, slugOfName(n)); const doc = readStored(p); writeItem(p, { ...doc.fm, priority: names.length - 1 - i }, doc.body); });
   rmSync(join(dir, 'index.json'), { force: true });
   const repo = w.backlogRepo();
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'earlier release'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');

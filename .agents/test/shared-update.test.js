@@ -7,10 +7,10 @@ import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, rmSync, w
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedPath, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedPath, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY, writeItem } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
-import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 import { editSection } from '../../src/shared/update.js';
 
@@ -91,7 +91,7 @@ test('a folder whose items carry the rank of an earlier build gets its index at 
   for (const [n, rank] of [['001-alpha', 3], ['002-beta', 1], ['003-gamma', 2], ['004-delta', 0], ['005-epsilon', 4], ['006-zeta', 5]]) { // the ranks an earlier build wrote
     const p = itemPath(f.folder, n);
     const doc = readItem(p);
-    writeFileSync(p, dump({ ...doc.fm, priority: rank }, doc.body));
+    writeItem(p, { ...doc.fm, priority: rank }, doc.body);
   }
   rmSync(join(f.folder, 'index.json'), { force: true }); // the fixture's writes made one; an earlier build had none
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'legacy ranks'); git(f.home, 'push', '-q');

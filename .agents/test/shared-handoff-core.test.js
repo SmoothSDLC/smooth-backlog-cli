@@ -9,8 +9,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as handoff from '../../src/team/handoff.js';
 import { foreignItem } from '../../src/shared/dependencies.js';
-import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
-import { itemPath } from './shared-fixtures.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { itemPath, writeItem, itemText } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -24,7 +24,7 @@ function store() {
 const item = (home, owner, name, fm) => {
   const dir = join(home, owner, name);
   mkdirSync(join(dir, 'phases'), { recursive: true });
-  writeFileSync(itemPath(dir, `${String(fm.seq).padStart(3, '0')}-x`), dump(fm, '## Definition of done\n\n- [ ] x\n'));
+  writeItem(itemPath(dir, `${String(fm.seq).padStart(3, '0')}-x`), fm, '## Definition of done\n\n- [ ] x\n');
 };
 
 const COMMIT = 'a'.repeat(40);
@@ -84,7 +84,7 @@ test('059.1: encode and decodeList move records between memory and the stored fr
   assert.deepEqual(handoff.decodeList([rec]), [rec], 'in-memory objects pass through unchanged');
   assert.throws(() => handoff.decodeList('not json'), 'a string that is not none and no JSON is a clear error');
   assert.throws(() => handoff.decodeList(5), 'anything else is a clear error');
-  const text = dump({ seq: 5, phase: '005-x', status: 'done', depends_on: [], handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(rcpt)] }, '## Definition of done\n\n- [ ] x\n');
+  const text = itemText({ seq: 5, phase: '005-x', status: 'done', depends_on: [], handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(rcpt)] }, '## Definition of done\n\n- [ ] x\n');
   const back = parse(text).fm;
   assert.deepEqual(handoff.decodeList(back.handoffs), [rec], 'the stored form survives a round-trip through the real front-matter codec');
   assert.deepEqual(handoff.decodeList(back.handoff_receipts), [rcpt]);
@@ -132,7 +132,7 @@ test('059.1: edgeState tells a present but empty handoffs key from an absent key
   assert.equal(handoff.satisfied(st({ status: 'done', handoffs: null })), false, 'and it does not satisfy the edge');
   assert.equal(st({ status: 'pending', handoffs: null }), 'missing');
   assert.equal(st({ status: 'done' }), 'legacy', 'the legacy mark stays reserved for an absent key');
-  const back = parse(dump({ status: 'done', handoffs: null }, '## Definition of done\n\n- [ ] x\n')).fm;
+  const back = parse(itemText({ status: 'done', handoffs: null }, '## Definition of done\n\n- [ ] x\n')).fm;
   assert.equal(back.handoffs, null, 'the codec stores a present empty key as null, distinct from an absent key');
   assert.equal(handoff.edgeState(back, '64'), 'missing', 'the stored form of a present but empty key is missing, not legacy');
 });
@@ -225,7 +225,7 @@ test('059.1: the zero-padded foreign spelling resolves through the item 042 patt
   const home = store();
   const other = join(home, 'acme', 'lib');
   mkdirSync(join(other, 'phases'), { recursive: true });
-  writeFileSync(itemPath(other, '004-x'), dump({ seq: 4, phase: '004-x', status: 'pending', depends_on: [] }, '## Definition of done\n\n- [ ] x\n'));
+  writeItem(itemPath(other, '004-x'), { seq: 4, phase: '004-x', status: 'pending', depends_on: [] }, '## Definition of done\n\n- [ ] x\n');
   const hit = foreignItem(join(home, 'acme', 'app'), 'acme/lib#04');
   assert.equal(hit?.seq, 4, 'owner/name#04 names the item with seq 4, compared numerically');
 });

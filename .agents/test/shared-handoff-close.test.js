@@ -4,13 +4,12 @@
 // Fixtures are written in the stored form: handoffs and handoff_receipts hold the compact JSON strings encode makes.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as handoff from '../../src/team/handoff.js';
 import { closeGate } from '../../src/team/handoff-close.js';
-import { dump } from '../../src/shared/frontmatter.js';
-import { itemPath, readItem } from './shared-fixtures.js';
+import { itemPath, readItem, writeItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -28,7 +27,7 @@ const SLUG = '005-producer';
 const make = (f, owner, name, fm) => {
   const dir = join(f.home, owner, name);
   mkdirSync(join(dir, 'phases'), { recursive: true });
-  writeFileSync(itemPath(dir, fm.phase), dump(fm, '## Definition of done\n\n- [ ] x\n'));
+  writeItem(itemPath(dir, fm.phase), fm, '## Definition of done\n\n- [ ] x\n');
 };
 const gate = (f, fm) => closeGate({ fm, folder: f.folder, repo: REPO, slug: SLUG });
 

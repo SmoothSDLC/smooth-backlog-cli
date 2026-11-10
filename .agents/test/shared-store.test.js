@@ -8,8 +8,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, cli, consumer, env, itemName, itemPath, itemRel, ORIGIN_URL, sharedBacklog, archivedRel, archivedPath, readItem as parsedItem, itemNames, slugOfName, reEscape } from './shared-fixtures.js';
-import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
+import { BACKLOG_NAME, cli, consumer, env, itemName, itemPath, itemRel, ORIGIN_URL, sharedBacklog, archivedRel, archivedPath, readItem as parsedItem, itemNames, slugOfName, reEscape, writeItem } from './shared-fixtures.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
@@ -37,7 +37,7 @@ const item = (n, extra = {}) => ({
 // An item file as it is: store.write would drop the rank an earlier build kept in the item, and these tests place such items.
 function putItem(folder, fm, rel = itemRel(fm.phase)) {
   mkdirSync(dirname(join(folder, rel)), { recursive: true });
-  writeFileSync(join(folder, rel), dump(fm, `Body ${fm.phase}.\n`));
+  writeItem(join(folder, rel), fm, `Body ${fm.phase}.\n`);
 }
 
 // ---------------------------------------------------------------- resolveHome

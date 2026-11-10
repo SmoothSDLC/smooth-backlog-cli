@@ -6,8 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
-import { dump } from '../../src/shared/frontmatter.js';
+import { cli, consumer, itemPath, sharedBacklog, readItem, writeItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -51,7 +50,7 @@ test('--status done on an old teamless item without review_refs closes it withou
   const f = fixture('old item without review_refs', []);
   const { fm, body } = readItem(f.file); // as an old item looks: none of the team keys (depends_on is not one)
   for (const k of ['work_class', 'review_classes', 'claimed_by', 'claimed_at', 'review_state', 'reviewer']) delete fm[k];
-  writeFileSync(f.file, dump(fm, body));
+  writeItem(f.file, fm, body);
   const r = update(f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(status(f), 'closed');

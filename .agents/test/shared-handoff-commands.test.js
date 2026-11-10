@@ -6,13 +6,13 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as store from '../../src/shared/store.js';
 import * as handoff from '../../src/team/handoff.js';
-import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, itemPath, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
+import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { cli, consumer, itemPath, sharedBacklog, GIT_IDENTITY, writeItem, itemText } from './shared-fixtures.js';
 import { recordHandoff, acceptHandoff, rejectHandoff } from '../../src/team/handoff-commands.js';
 
 const dirs = [];
@@ -96,7 +96,7 @@ test('059.2: recordHandoff records the hand-off for a real dependent, in the sto
   assert.ok(r.text.includes(`SOURCE_COMMIT: ${RECORD.commit} ; BRANCH: ${p.ctx.fm.branch}`), r.text);
   assert.ok(r.text.includes('PRODUCER_AGENT: agent-a ; SESSION: session-59/wt-68'), r.text);
   // the stored form survives the real front-matter codec
-  const back = parse(dump({ ...p.ctx.fm, ...r.fm }, p.ctx.body + r.text)).fm;
+  const back = parse(itemText({ ...p.ctx.fm, ...r.fm }, p.ctx.body + r.text)).fm;
   assert.deepEqual(handoff.decodeList(back.handoffs), [rec]);
 });
 
@@ -113,7 +113,7 @@ test('059.2: recordHandoff turns handoffs: none into a list when the producer re
   const p = pair(f);
   const it = item(f, 1);
   // the same stored form the CLI writes for a closed producer without dependents
-  writeFileSync(itemPath(f.folder, p.producer), dump({ ...it.fm, handoffs: 'none' }, it.body));
+  writeItem(itemPath(f.folder, p.producer), { ...it.fm, handoffs: 'none' }, it.body);
   const r = recordHandoff(ctxOf(f, 1), { dependent: '2', ...RECORD });
   assert.ok(!r.refuse, r.refuse);
   assert.ok(Array.isArray(r.fm.handoffs), 'none becomes a list, it is not written back as the string none');
@@ -210,7 +210,7 @@ test('059.2: the acceptance receipt records the reviewer, the verdict and the ha
   assert.equal(r.text, handoff.receiptBlock(rcpt, 'acme/demo#1')
     + `REVIEWER: ${rcpt.reviewer} ; VERDICT: ${rcpt.verdict} ; HANDOFF_COMMIT: ${rcpt.commit}\n`, r.text);
   // the stored form survives the real front-matter codec
-  const back = parse(dump({ ...ctx.fm, ...rec.fm, ...r.fm }, ctx.body + rec.text + r.text)).fm;
+  const back = parse(itemText({ ...ctx.fm, ...rec.fm, ...r.fm }, ctx.body + rec.text + r.text)).fm;
   assert.deepEqual(handoff.decodeList(back.handoff_receipts), [rcpt]);
 });
 
@@ -299,7 +299,7 @@ test('059.2: the stored form of the records and the receipts round-trips through
   const acc = acceptHandoff({ ...p.ctx, fm: fm0 }, { dependent: '2', checks: 'npm test: 0 failures', by: 'lead', lead: 'lead' });
   assert.ok(!acc.refuse, acc.refuse);
   const final = { ...fm0, ...acc.fm };
-  const back = parse(dump(final, p.ctx.body + rec.text + acc.text)).fm;
+  const back = parse(itemText(final, p.ctx.body + rec.text + acc.text)).fm;
   assert.deepEqual(handoff.decodeList(back.handoffs), handoff.decodeList(final.handoffs), 'the records survive the codec round-trip');
   assert.deepEqual(handoff.decodeList(back.handoff_receipts), handoff.decodeList(final.handoff_receipts), 'the receipts survive the codec round-trip');
 });

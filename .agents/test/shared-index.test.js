@@ -4,10 +4,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, mkdirSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { dump } from '../../src/shared/frontmatter.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
-import { itemPath, itemRel } from './shared-fixtures.js';
+import { itemPath, itemRel, writeItem } from './shared-fixtures.js';
 
 function folder(t) {
   const home = mkdtempSync(join(tmpdir(), 'index-test-'));
@@ -17,7 +16,7 @@ function folder(t) {
   return dir;
 }
 // An item file as an earlier build wrote it, rank included (store.write drops the rank).
-const put = (dir, n, extra = {}) => writeFileSync(itemPath(dir, `00${n}-i${n}`), dump({ phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', repository: 'acme/demo', branch: 'main', ...extra }, `Body ${n}.\n`));
+const put = (dir, n, extra = {}) => writeItem(itemPath(dir, `00${n}-i${n}`), { phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', repository: 'acme/demo', branch: 'main', ...extra }, `Body ${n}.\n`);
 const slugs = (dir, branch = 'main') => index.read(dir).branches[branch].map(e => e.slug);
 
 test('read: a folder without an index has no branches', t => {

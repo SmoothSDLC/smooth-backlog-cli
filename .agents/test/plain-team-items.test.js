@@ -7,11 +7,10 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem, archivedPath, GIT_IDENTITY } from './shared-fixtures.js';
-import { dump } from '../../src/shared/frontmatter.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem, archivedPath, GIT_IDENTITY, writeItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -46,7 +45,7 @@ function build() {
     if (closed) { // a team item closes by its team steps; the file is set here, as a closed item looks
       const file = itemPath(join(home, 'acme', 'demo'), slug);
       const { fm, body } = readItem(file);
-      writeFileSync(file, dump({ ...fm, status: 'closed', completed: '2026-01-02T00:00:00Z' }, body));
+      writeItem(file, { ...fm, status: 'closed', completed: '2026-01-02T00:00:00Z' }, body);
       git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'closed item'); git(home, 'push', '-q');
     }
     return slug;

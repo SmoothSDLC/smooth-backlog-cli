@@ -7,7 +7,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSyn
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape, changeItem } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape, changeItem, itemOfText } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
@@ -243,7 +243,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
   assert.equal(moved.status, 0, moved.stdout + moved.stderr);
   assert.match(moved.stdout, /renumbered 001 -> 002/);
   const path = `new/place/${itemRel('002-alpha')}`;
-  assert.match(gitIn(bare, 'show', `main:${path}`), /phase: "002-alpha"/);
+  assert.equal(itemOfText(gitIn(bare, 'show', `main:${path}`)).fm.phase, '002-alpha');
   assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
 
   const changed = cli(['update', '002-alpha', '--summary', 'remote summary', '--by', 'other-writer'], {
@@ -258,7 +258,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
   assert.equal(stale.status, 5, stale.stdout + stale.stderr);
   assert.match(stale.stderr, /item 002-alpha was changed by other-writer .* after you last read it/);
   assert.equal(gitIn(bare, 'rev-parse', 'main'), head, 'the stale write published nothing');
-  assert.match(gitIn(bare, 'show', `main:${path}`), /summary: "remote summary"/);
+  assert.equal(itemOfText(gitIn(bare, 'show', `main:${path}`)).fm.summary, 'remote summary');
   assert.equal(gitIn(b.home, 'status', '--porcelain', '--untracked-files=no'), '');
   assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
 });

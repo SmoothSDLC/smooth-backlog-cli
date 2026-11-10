@@ -53,7 +53,7 @@ test('audit t4: a done item can be neither claimed nor released back into the qu
     assert.match(out(r), /finished item cannot be (claimed|released)/);
   }
   const file = itemPath(s.folder, '001-alpha-job');
-  assert.equal(readHeader(file, 'status'), 'done'); assert.doesNotMatch(readFileSync(file, 'utf8'), /owner: amy/);
+  assert.equal(readHeader(file, 'status'), 'done'); assert.ok(![readHeader(file, 'owner'), readHeader(file, 'claimed_by')].includes('amy'));
 });
 
 test('audit: update --status refuses archived (backlog archive moves a finished item), takes any other word of a plain item', t => {

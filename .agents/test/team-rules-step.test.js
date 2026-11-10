@@ -109,9 +109,9 @@ test('malformed rules are refused (exit 2) and name the rule', () => {
   for (const k of ['set', 'add', 'remove']) for (const bad of [[], 'x', null]) rule(() => go([{ id: 'x', step: 's', do: { [k]: bad } }], 's'), 2, new RegExp(`${k} must be an object`), 'x');
 });
 
-test('an effect not implemented yet is refused (exit 2) through the one SUPPORTED list', () => {
-  assert.deepEqual(SUPPORTED, ['set', 'add', 'remove']);
-  for (const k of EFFECTS.filter(k => !SUPPORTED.includes(k))) rule(() => go([{ id: 'x', step: 's', do: { [k]: k === 'say' ? 'hi' : true } }], 's'), 2, new RegExp(`^effect ${k} is not supported yet`), 'x');
+test('every effect of the language is supported; a name outside it is refused (exit 2)', () => {
+  assert.deepEqual(SUPPORTED, EFFECTS);
+  rule(() => go([{ id: 'x', step: 's', do: { frobnicate: true } }], 's'), 2, /^rule x: frobnicate is not an effect$/, 'x');
 });
 
 test('typed person: only own keys of people ("constructor" is no person)', () => {
@@ -149,8 +149,9 @@ test('first match decides: an earlier rule whose when fails is skipped; step as 
   rule(() => go(table, 'other'), 1, /^star \(rule c\)$/, 'c');
 });
 
-test('an item without a team that a rule binds takes the defaults; the binding effect itself waits for B08c', () => {
-  rule(() => go([{ id: 'adopt', step: 's', do: { team: 't', set: { cost: 1 } } }], 's', {}, [item(1, { cost: undefined }, { team: '', fields: {} })]), 2, /effect team is not supported yet/, 'adopt');
+test('an item without a team that a rule binds takes the defaults and the team', () => {
+  const r = go([{ id: 'adopt', step: 's', do: { team: 't', set: { cost: 1 } } }], 's', {}, [item(1, { cost: undefined }, { team: '', fields: {} })]);
+  assert.equal(r.items.get(1).team, 't'); assert.equal(r.items.get(1).fields.cost, 1); assert.equal(r.items.get(1).fields.status, 'open');
 });
 
 test('remove of an absent value changes nothing; add of a foreign entry keeps it; a dangling number stays and other steps work', () => {

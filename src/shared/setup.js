@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { atomicWrite } from '../storage.js';
 import { BacklogError } from '../errors.js';
 import { adapters, safeTree, templateRoot } from '../integrations.js';
@@ -17,6 +17,8 @@ export const CONFIG = '.backlog/config.json'; // the repository's backlog config
 export const LEGACY_CONFIG = '.smooth-backlog.json'; // written at the repository root by earlier builds: still read
 export const ORIGIN_KEY = 'backlog_origin_url';
 export const NEUTRAL_NAME = 'backlog-repo';
+export const TEMPLATE_DIR = '.backlog/team-templates'; // the generic team templates, copied from templates/teams on every setup
+const TEMPLATES = ['scrum', 'extreme-programming', 'parallel', 'single-agent', 'patterns'];
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 export const topOf = cwd => { const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
@@ -104,6 +106,7 @@ export async function run(argv) {
     try { await safePath(top, detect); await safeTree(top, target); } catch (e) { return die(`${a.destination}: ${e.message} (a symbolic link on the way: nothing changed)`); }
     targets.push({ target, destination: a.destination });
   }
+  try { await safeTree(top, join(top, TEMPLATE_DIR)); } catch (e) { return die(`${TEMPLATE_DIR}: ${e.message.split(`${top}${sep}`).join('')} (a symbolic link on the way: nothing changed)`); }
   const kept = configuredHome(top);
   // the backlog folder: SMOOTH_BACKLOG_CLI_HOME when set, else the configured one, else beside the repository when a clone URL is set,
   // else inside the repository
@@ -150,9 +153,13 @@ export async function run(argv) {
     deployed.push(destination);
   }
   say(deployed.length ? `✅ skill deployed to ${deployed.map(d => d.split('/')[0]).join(', ')}` : 'ℹ️  no agent folder (.agents, .claude, .github, .qwen) here: no skill copy deployed');
-  // setup is a change to the repository: committed on the current branch (the config and the skill copies only) and pushed
+  // the team templates belong to the CLI like the skill copy: the folder is replaced on every setup (an edited copy and a file added there are lost)
+  rmSync(join(top, TEMPLATE_DIR), { recursive: true, force: true });
+  cpSync(join(templateRoot, 'teams'), join(top, TEMPLATE_DIR), { recursive: true });
+  say(`✅ team templates copied to ${TEMPLATE_DIR}: ${TEMPLATES.join(', ')}; copy one to the team file and edit it there`);
+  // setup is a change to the repository: committed on the current branch (the config, the team templates and the skill copies only) and pushed
   const git = args => spawnSync('git', args, { cwd: top, encoding: 'utf8' });
-  const wrote = ['.backlog/config.json', '.backlog/.gitignore', ...deployed];
+  const wrote = ['.backlog/config.json', '.backlog/.gitignore', TEMPLATE_DIR, ...deployed]; // the templates are committed here and only here: no other command stages them
   git(['add', '-A', '--', ...wrote]);
   if (git(['diff', '--cached', '--quiet', '--', ...wrote]).status) {
     const c = git(['commit', '-q', '--only', '-m', 'backlog: setup', '--', ...wrote]);

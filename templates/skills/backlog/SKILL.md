@@ -24,6 +24,7 @@ in a backlog repository shared by many); it changes no command, and every change
 When the `backlog` command is missing, run `bash <this skill folder>/scripts/install-backlog-cli.sh` from inside the
 repository: it installs or updates the CLI and runs `backlog setup`. The CLI updates itself with `backlog upgrade`
 (`check`, `auto`, `off`, `disable` or a version); `backlog update` is the item command and never installs anything.
+Setup also copies the generic team templates to `.backlog/team-templates` (replaced on every setup; nothing reads them): a person copies one to the team file and edits it there, so an agent never edits a template in place.
 A person at a terminal may see one warning line on standard error (`backlog: Version <x> is available; run backlog upgrade.`) about once a
 week: it is the update notice, not an error, and it never appears when standard error is not a terminal or changes a command's output or
 exit code; `backlog upgrade disable` turns the weekly check off, `backlog upgrade off` turns automatic updates off.

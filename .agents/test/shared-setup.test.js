@@ -4,7 +4,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -114,4 +114,48 @@ test('setup records the user (the git user name, else the login name) and an emp
   const made = named.run(named.app, ['new', '--name', 'mine', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x']);
   assert.equal(made.status, 0, made.stdout + made.stderr);
   assert.equal(readHeader(itemPath(join(named.t, 'consumer', BACKLOG_NAME, 'acme', 'app'), '001-mine'), 'owner'), 'Grace');
+});
+
+const SHIPPED = fileURLToPath(new URL('../../templates/teams/', import.meta.url));
+const FIVE = ['extreme-programming.json', 'parallel.json', 'patterns.json', 'scrum.json', 'single-agent.json'];
+
+test('setup copies the five generic templates into .backlog/team-templates, says so and commits them', () => {
+  const { app, run } = fixture();
+  const r = run(app, ['setup']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /✅ team templates copied to \.backlog\/team-templates: scrum, extreme-programming, parallel, single-agent, patterns; copy one to the team file and edit it there\n/);
+  assert.deepEqual(readdirSync(join(app, '.backlog', 'team-templates')).sort(), FIVE);
+  assert.equal(readFileSync(join(app, '.backlog', 'team-templates', 'scrum.json'), 'utf8'), readFileSync(join(SHIPPED, 'scrum.json'), 'utf8'));
+  const tracked = spawnSync('git', ['-C', app, 'ls-files', '.backlog/team-templates'], { encoding: 'utf8' }).stdout.split('\n').filter(Boolean);
+  assert.deepEqual(tracked.map(f => f.split('/').pop()).sort(), FIVE);
+  assert.equal(spawnSync('git', ['-C', app, 'status', '--porcelain'], { encoding: 'utf8' }).stdout, '');
+});
+
+test('a second setup replaces an edited copy and removes a file the person added there, as for the skill copy', () => {
+  const { app, run } = fixture();
+  assert.equal(run(app, ['setup']).status, 0);
+  const dir = join(app, '.backlog', 'team-templates');
+  writeFileSync(join(dir, 'scrum.json'), '{"edited": true}');
+  writeFileSync(join(dir, 'my-team.json'), '{}');
+  const r = run(app, ['setup']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(readFileSync(join(dir, 'scrum.json'), 'utf8'), readFileSync(join(SHIPPED, 'scrum.json'), 'utf8'));
+  assert.ok(!readdirSync(dir).includes('my-team.json'));
+  assert.equal(spawnSync('git', ['-C', app, 'status', '--porcelain'], { encoding: 'utf8' }).stdout, '');
+});
+
+test('a symbolic link as the templates folder stops setup with exit 2, naming the path relative to the repository, and changes nothing', () => {
+  const { t, app, run } = fixture();
+  mkdirSync(join(app, '.backlog'));
+  const outside = join(t, 'elsewhere');
+  mkdirSync(outside);
+  symlinkSync(outside, join(app, '.backlog', 'team-templates'));
+  const before = head(app);
+  const r = run(app, ['setup']);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /\.backlog\/team-templates: Symlink destination is unsupported: \.backlog\/team-templates\./);
+  assert.ok(!r.stderr.includes(t), 'no absolute path');
+  assert.deepEqual(readdirSync(outside), []);
+  assert.equal(head(app), before);
+  assert.ok(!existsSync(join(app, '.backlog', 'config.json')));
 });

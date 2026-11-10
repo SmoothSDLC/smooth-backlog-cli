@@ -687,8 +687,13 @@ Run inside the git repository to set up. The command:
      (SMOOTH_BACKLOG_CLI_HOME, SMOOTH_BACKLOG_CLI_ORIGIN_URL — the clone URL is recorded as backlog_origin_url, so later runs need no
      variable); otherwise keeps it. A write keeps the file's other keys;
   4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's;
-  5. commits and pushes what it wrote (the configuration and the skill copies) on the current branch, and prints a
-     summary of every action: the .backlog folder, the configuration, the skill copies, the commit. No path is printed.
+  5. replaces .backlog/team-templates with this release's generic team templates (scrum, extreme-programming, parallel,
+     single-agent, patterns), so that a person can copy one to the team file and edit it there; no command reads a
+     template, and an edited copy or a file added to that folder is lost at the next setup. A symbolic link anywhere on the
+     way to a skill copy or to the folder is refused (exit 2, naming the path relative to the repository, nothing changed);
+  6. commits and pushes what it wrote (the configuration, the team templates and the skill copies) on the current branch,
+     and prints a summary of every action: the .backlog folder, the configuration, the team templates, the skill copies,
+     the commit. No path is printed.
 
 Every command finds the backlog folder in this order: SMOOTH_BACKLOG_CLI_HOME, the repository's configuration (.backlog/config.json,
 backlog_repository: a path relative to the repository; .backlog means inside it; the root file .smooth-backlog.json of
@@ -698,7 +703,7 @@ them names one, the backlog is .backlog inside the repository, created with its 
 configured folder that is missing is refused (exit 4) naming backlog setup. A .backlog/config.json that exists but is not a JSON
 object (a trailing comma, a half-written edit) stops every command that reads the repository's configuration, setup included, with exit 2 and writes nothing; a missing file is an
 empty configuration; backlog upgrade, --help and --version do not read it and still work. setup commits and pushes what it wrote
-(the configuration and the skill copies) on the current branch. Both locations are updated from their origin before every command and pushed after every change; nothing is written
+(the configuration, the team templates and the skill copies) on the current branch. Both locations are updated from their origin before every command and pushed after every change; nothing is written
 into the repository being set up by that. Inside the repository, every change is committed on the current branch, with
 the backlog's paths only, and the branch is pushed to origin under the same name, the user's own commits included; the
 command then prints "<id> - <name> committed; all pending branch changes pushed". A branch the origin does not have yet

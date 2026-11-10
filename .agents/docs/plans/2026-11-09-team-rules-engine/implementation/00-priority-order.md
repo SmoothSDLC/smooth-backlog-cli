@@ -214,6 +214,9 @@ batch after which the installed CLI would behave differently for an existing con
 **B05. The item-file seam.**
 - Goal: every read and write of an item file goes through one module (load, write, the event record), so that B06 changes one module.
   No behaviour changes: no test changes except imports.
+  Done in two steps: the reads and the codec, then (B05b, after the review) the item file names and the extension, which about thirty
+  sites spelled out. What stays outside the module for B06: the body layout (headings, sections, the header delimiters) and one import
+  of the team code that a boundary test pins.
 - Rulings and chapters: preparation of R4; chapter 02 section 2.4.
 - Target files: a new src/shared/item-file.js; callers that read item files directly today: src/shared/store.js, src/shared/new.js,
   src/shared/update.js, src/shared/archive.js, src/shared/move.js, src/shared/repair.js, src/shared/dependencies.js, src/shared/query.js,

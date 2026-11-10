@@ -245,7 +245,7 @@ batch after which the installed CLI would behave differently for an existing con
   - **B06e, the history** (chapter 02 section 2.3): an entry per write with the changed values before and after; `backlog history`.
   - **B06f, a number that two items hold** is refused (chapter 05 section 2).
 - Goal: items are written and read as JSON files (the envelope, the fields, the body, the history, the fixed key order and text form);
-  today's events become history entries; the built-in definition of items without a team (claimed_by and claimed_at kept, parent,
+  today's events become history entries; the built-in definition of items without a team (the holder as owner and owned_since, per the owner decision of 2026-11-06 that renamed claimed_by and claimed_at; parent,
   size_score, `backlog done` writes closed, `backlog new` no longer writes review_state and reviewer, `backlog archive` writes no status
   word, undeclared fields kept and shown, the `review_state` column of `backlog list --json` kept with the stored value, the body template
   of a new user item kept, `backlog new --force` removed); `backlog fields` prints that definition; the conflict guard looks for `*.json`;

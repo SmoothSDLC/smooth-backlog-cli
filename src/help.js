@@ -581,7 +581,8 @@ Usage:
 
 Prints the built-in definition of an item without a team, one line per key, with five columns: the key the item file carries, its
 type (with the words a text field is meant to hold), its default, who sets it, and what it means. The keys every item file carries
-(seq, slug, name, repository, branch, created, updated, updated_by) come first, then the fields. It reads nothing and changes nothing.
+(seq, slug, name, repository, branch, created, updated, updated_by) come first, then the fields; the item file also holds the containers
+fields, body and history, which are not rows of this table. It reads nothing and changes nothing.
 
 ${SHARED}
 

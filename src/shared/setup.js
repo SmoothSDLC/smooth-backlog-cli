@@ -8,6 +8,7 @@ import { userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { atomicWrite } from '../storage.js';
+import { BacklogError } from '../errors.js';
 import { adapters, safeTree, templateRoot } from '../integrations.js';
 import { safePath } from '../storage.js';
 import { redact, repoIdFromUrl } from './safety.js';
@@ -20,11 +21,27 @@ const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 export const topOf = cwd => { const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
 // The repository's backlog configuration: .backlog/config.json, else the root file of earlier builds; {} when there is none.
+// The reader returns every key of the file, the team-file keys teams_file, teams_file_sha, migrated_at and migrated_by_version
+// included, and a writer that rewrites the file starts from this object, so no key is lost. A .backlog/config.json that EXISTS but is
+// not a JSON object stops with exit 2 (BacklogError): it is never read as empty and never replaced by the root file. A missing one
+// is an empty configuration.
 export function readConfig(top) {
-  for (const file of [CONFIG, LEGACY_CONFIG]) {
-    try { const cfg = JSON.parse(readFileSync(join(top, file), 'utf8')); if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return cfg; } catch { /* next */ }
+  let text = null;
+  try { text = readFileSync(join(top, CONFIG), 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw unreadable(e.message); }
+  if (text !== null) {
+    let cfg;
+    try { cfg = JSON.parse(text); } catch (e) { throw unreadable(e.message); }
+    if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw unreadable('it is not a JSON object');
+    return cfg;
   }
+  try { const cfg = JSON.parse(readFileSync(join(top, LEGACY_CONFIG), 'utf8')); if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return cfg; } catch { /* none */ }
   return {};
+}
+const unreadable = reason => new BacklogError('CONFIG_UNREADABLE', `${CONFIG} cannot be read (${reason}); fix it: no command runs and nothing is written while it cannot be read`, 2);
+// The stop for every command before it reads or writes anything: throws when the repository's configuration cannot be read.
+export function assertConfigReadable(cwd = process.cwd()) {
+  const top = topOf(cwd);
+  if (top) readConfig(top);
 }
 // The backlog folder a repository's config names, or null (no config, or one that names no path).
 export function configuredHome(cwd = process.cwd()) {
@@ -68,6 +85,7 @@ export const originFolderName = cwd => originSetting(cwd).name || NEUTRAL_NAME;
 
 export async function run(argv) {
   if (argv.includes('--help')) { const h = (await import('../help.js')).HELP?.setup; if (h) { process.stdout.write(h.endsWith('\n') ? h : `${h}\n`); return 0; } }
+  assertConfigReadable(); // an unreadable configuration stops setup before anything changes
   const ask = argv.includes('--ask');
   const other = argv.filter(x => x !== '--ask');
   if (other.length) return die(`setup takes only --ask (got ${other.join(' ')})`);

@@ -101,7 +101,9 @@ backlog_repository: a path relative to the repository; .backlog means inside it;
 earlier builds is still read), the per-user file <name>/home under the config folder ($XDG_CONFIG_HOME, else
 ~/.config; without the clone-URL setting, the only such file there), ~/git/<name> when a clone URL is set. When none of
 them names one, the backlog is .backlog inside the repository, created with its configuration on first use. A
-configured folder that is missing is refused (exit 4) naming backlog setup. setup commits and pushes what it wrote
+configured folder that is missing is refused (exit 4) naming backlog setup. A .backlog/config.json that exists but is not a JSON
+object (a trailing comma, a half-written edit) stops every command, setup included, with exit 2 and writes nothing; a missing file is an
+empty configuration. setup commits and pushes what it wrote
 (the configuration and the skill copies) on the current branch. Both locations are updated from their origin before every command and pushed after every change; nothing is written
 into the repository being set up by that. Inside the repository, every change is committed on the current branch, with
 the backlog's paths only, and the branch is pushed to origin under the same name, the user's own commits included; the

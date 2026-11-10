@@ -4,6 +4,7 @@
 
 One backlog, one CLI. Compared with 1.0.1:
 
+- **A configuration file that cannot be read stops every command.** A `.backlog/config.json` that exists but is not a JSON object (a trailing comma, a half-written edit, an array) stops every command, `setup` included, with exit 2 and `❌ backlog: .backlog/config.json cannot be read (<reason>); fix it: no command runs and nothing is written while it cannot be read`; nothing writes over the file. A missing file is an empty configuration. `--help` and `--version` still work. A `.backlog/config.json` that cannot be read is no longer treated as empty, and the root file `.smooth-backlog.json` of earlier builds no longer stands in for it. When `backlog setup` rewrites the file it keeps every other key with its value.
 - **Breaking: every environment variable the CLI owns carries the prefix `SMOOTH_BACKLOG_CLI_`, and the old names are not read.**
   There is no alias, no fallback and no deprecation period: a session that still sets an old name is simply not seen. The
   fourteen renames: `TEAM_NAME`, `TEAM_REPOSITORY`, `TEAM_BRANCH`, `TEAM_LEAD` become `SMOOTH_BACKLOG_CLI_TEAM_NAME`,

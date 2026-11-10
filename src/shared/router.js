@@ -1,6 +1,7 @@
 // The command router: every command but setup. run returns the exit code; a failure prints one ❌ line on stderr.
 import { existsSync } from 'node:fs';
 import { redact } from './safety.js';
+import { assertConfigReadable } from './setup.js';
 import { resolveHome } from './store.js';
 
 // command -> [module relative to this file, ...arguments put in front of the user's argv]
@@ -25,6 +26,7 @@ export async function run(command, argv, { table = TABLE, help } = {}) {
     const text = team ? team[`team ${argv[0]}`] ?? team.team : base?.[`${command} ${argv[0]}`] ?? base?.[command]; // a command with a word of its own (list open) may have its own text
     if (text) { process.stdout.write(text.endsWith('\n') ? text : `${text}\n`); return 0; }
   }
+  assertConfigReadable(); // a configuration that exists but cannot be read stops every command before anything is read or written
   const { ask } = resolveHome(); // the storage location: a missing configured clone is refused here, before the command runs
   if (ask) return die(ask.text, ask.code);
   const [spec, ...lead] = table[command];

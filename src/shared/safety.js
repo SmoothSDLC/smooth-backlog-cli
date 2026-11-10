@@ -60,7 +60,7 @@ export async function validateHome(path, expected, defaultHome, setting) {
 // to one dash, dash-trimmed, "phase" when nothing is left. Never contains / or..
 // because no other character class survives.
 export function slugify(text) {
-  return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/, '') || 'phase';
+  return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'phase';
 }
 
 // A phase by its NUMBER (the NNN of its file name) or by its slug — never by the

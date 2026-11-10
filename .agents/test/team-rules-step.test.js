@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Refusal } from '../../src/team/rules/expression.js';
-import { EFFECTS, SUPPORTED, decide, step, stepArgs, typed } from '../../src/team/rules/step.js';
+import { decide, step, stepArgs, typed } from '../../src/team/rules/step.js';
 
 const def = { status: { type: 'text', default: 'open', values: ['open', 'done'] }, owner: { type: 'person' }, estimate: { type: 'number', default: 0 }, flag: { type: 'boolean', default: false },
   parent: { type: 'item', default: null }, deps: { type: 'items', default: [] }, tags: { type: 'list', default: [] } };
@@ -109,8 +109,7 @@ test('malformed rules are refused (exit 2) and name the rule', () => {
   for (const k of ['set', 'add', 'remove']) for (const bad of [[], 'x', null]) rule(() => go([{ id: 'x', step: 's', do: { [k]: bad } }], 's'), 2, new RegExp(`${k} must be an object`), 'x');
 });
 
-test('every effect of the language is supported; a name outside it is refused (exit 2)', () => {
-  assert.deepEqual(SUPPORTED, EFFECTS);
+test('an effect name outside the language is refused (exit 2)', () => {
   rule(() => go([{ id: 'x', step: 's', do: { frobnicate: true } }], 's'), 2, /^rule x: frobnicate is not an effect$/, 'x');
 });
 

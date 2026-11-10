@@ -54,6 +54,9 @@ test('slugify: lowercase, runs of non-alphanumerics to one dash, no / or .., fal
   assert.equal(slugify(''), 'phase');
   assert.equal(slugify('   '), 'phase');
   assert.equal(slugify('...---'), 'phase');
+  assert.equal(slugify('-a-'), 'a');
+  assert.equal(slugify('Ünï'), 'n');
+  assert.equal(slugify('--x--y--'), 'x-y');
   for (const s of ['My Item', 'a;rm -rf x', 'A1 b2 C3', 'x/../y']) {
     const out = slugify(s);
     assert.match(out, /^[a-z0-9-]*$/, `slugify(${JSON.stringify(s)}) = ${out}`);

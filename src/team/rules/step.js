@@ -4,9 +4,8 @@
 import { slugify } from '../../shared/safety.js';
 import { FOREIGN, LIST, Refusal, asList, defaultOf, fill, find, get, num, related, same, stepMatches, test, value } from './expression.js';
 
-// Every effect a rule may write, and the ones this evaluator runs (the case harness reads SUPPORTED).
+// Every effect a rule may write; this evaluator runs all of them.
 export const EFFECTS = ['set', 'add', 'remove', 'note', 'related', 'place', 'archive', 'delete', 'branch', 'team', 'say'];
-export const SUPPORTED = [...EFFECTS];
 const isObj = o => o !== null && typeof o === 'object' && !Array.isArray(o);
 
 // The first matching rule decides; no match is the coded refusal. A matching rule that is malformed is a wrong rule file (exit 2).
@@ -18,11 +17,11 @@ export function decide(ctx) {
     if (!isObj(r.do)) throw new Refusal(`rule ${r.id}: do must be an object`, 2, r.id);
     for (const k of Object.keys(r.do)) {
       if (!EFFECTS.includes(k)) throw new Refusal(`rule ${r.id}: ${k} is not an effect`, 2, r.id);
-      if (!SUPPORTED.includes(k)) throw new Refusal(`effect ${k} is not supported yet (rule ${r.id})`, 2, r.id);
       const x = r.do[k]; const bad = why => { throw new Refusal(`rule ${r.id}: ${k} ${why}`, 2, r.id); };
       if (['set', 'add', 'remove'].includes(k) && !isObj(x)) bad('must be an object');
       if (k === 'note' && !(isObj(x) && typeof x.heading === 'string' && 'text' in x)) bad('must be an object with a heading text and a text');
       if (k === 'related' && !(Array.isArray(x) && x.every(e => isObj(e) && 'items' in e))) bad('must be a list of objects, each with items');
+      if (k === 'related') for (const e of x) for (const key of Object.keys(e)) if (!['items', 'set', 'add', 'remove'].includes(key)) bad(`entry has the key ${key}, which is not items, set, add or remove`);
       if (k === 'say' && typeof x !== 'string') bad('must be a text');
       if (k === 'place' && !(x === 'first' || x === 'last' || (isObj(x) && Object.keys(x).length === 1 && ['before', 'after'].includes(Object.keys(x)[0])))) bad('must be "first", "last", {"before": n} or {"after": n}');
     }
@@ -89,15 +88,18 @@ export function step(ctx) {
   if (!d.allowed) throw new Refusal(`${d.text}${d.rule ? ` (rule ${d.rule})` : ''}`, 1, d.rule);
   if (d.do.team !== undefined && ![ctx.team, ''].includes(value(d.do.team, ctx))) throw new Refusal(`rule ${d.rule}: the team effect binds only to team ${ctx.team} or unbinds with ""; it never moves an item to another team`, 2, d.rule);
   if (!item.team && (d.do.team === undefined || value(d.do.team, ctx) !== ctx.team)) throw new Refusal(`item ${item.seq} belongs to no team; only a rule that binds it to team ${ctx.team} may change it (rule ${d.rule} does not)`, 1, d.rule);
+  const to = d.do.branch === undefined ? '' : value(d.do.branch, ctx);
+  if (d.do.branch !== undefined && (typeof to !== 'string' || to === '')) throw new Refusal(`the branch to move to is empty (rule ${d.rule})`, 1, d.rule);
   const own = changes(d.do, ctx, item);
   const others = (d.do.related ?? []).flatMap(r => related(r.items, ctx).map(it => [it, changes(r, ctx, it)]));
   const next = change(entry, !item.team ? { ...item, fields: { ...Object.fromEntries(Object.entries(entry.item).map(([f, def]) => [f, defaultOf(def)])), ...item.fields } } : item, own, ctx.session.repository);
   if (d.do.team !== undefined) next.team = value(d.do.team, ctx);
-  if (d.do.branch !== undefined) next.branch = String(value(d.do.branch, ctx));
+  if (d.do.branch !== undefined) next.branch = to;
   if (d.do.archive === true) next.archived = true;
   const out = new Map([[item.seq, next]]);
   const written = new Map([[item.seq, own.map(([, f]) => f)]]);
   for (const [it, list] of others) {
+    if (it.seq === item.seq) throw new Refusal(`an item cannot be related to itself (rule ${d.rule})`, 1, d.rule);
     if (it.missing) throw new Refusal(`item ${it.seq} does not exist (rule ${d.rule})`, 1, d.rule);
     if (it.team !== ctx.team || it.archived || it.repository !== ctx.session.repository) throw new Refusal(`item ${it.seq} is not an open item of team ${ctx.team} in ${ctx.session.repository}; rule ${d.rule} cannot change it`, 1, d.rule);
     out.set(it.seq, change(entry, out.get(it.seq) ?? it, list, ctx.session.repository));

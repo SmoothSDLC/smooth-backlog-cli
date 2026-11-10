@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Refusal, defaultOf } from '../../src/team/rules/expression.js';
-import { SUPPORTED, create, step } from '../../src/team/rules/step.js';
+import { EFFECTS, create, step } from '../../src/team/rules/step.js';
 
 const read = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
 const { cases } = read('./fixtures/team-rules/rule-cases.json');
@@ -11,9 +11,8 @@ const NOW = '2026-11-09T12:00:00Z';
 
 // What this harness supports; a case outside it is left to the part that adds it, and the count below says how many run.
 const RUN_KINDS = ['update', 'new'];
-const EFFECTS = SUPPORTED;
 const EXPECTED = ['exit', 'text', 'rule', 'items', 'max_ms', 'place', 'say', 'delete', 'archived', 'bound', 'branch'];
-// The plan counts 180; the one case of a new without an agent tests the agent text of the input resolution, which is not the evaluator's.
+// 179 cases run: the cases file holds 180 runnable ones, and COD-05 (a new without an agent) tests the agent text of the input resolution, which is not the evaluator's.
 const RUN_COUNT = 179;
 const LEFT_OUT = ['COD-05'];
 

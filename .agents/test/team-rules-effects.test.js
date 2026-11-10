@@ -22,9 +22,9 @@ test('note returns heading, filled text and author; a reference text is read as 
 });
 
 test('related changes the other items in one change and lists the before and after of each', () => {
-  const r = go(one({ set: { status: 'done' }, related: [{ items: '$arg.on', add: { deps: '$item.seq' } }] }), 's', { on: '2' }, undefined);
-  assert.deepEqual(r.items.get(2).fields.deps, [1]); assert.deepEqual(r.items.get(1).fields.deps, []);
-  assert.deepEqual(r.changes.get(2), { deps: [[], [1]] }); assert.deepEqual(r.changes.get(1), { status: ['open', 'done'] });
+  const r = go(one({ set: { status: 'done' }, related: [{ items: '$arg.on', add: { deps: '$item.seq' } }] }), 's', { on: '2' }, [item(1), item(2, { deps: [5] }), item(5)]);
+  assert.deepEqual(r.items.get(2).fields.deps, [5, 1]); assert.deepEqual(r.items.get(1).fields.deps, []);
+  assert.deepEqual(r.changes.get(2), { deps: [[5], [5, 1]] }); assert.deepEqual(r.changes.get(1), { status: ['open', 'done'] });
 });
 
 test('related: the unbinding removes, a second entry on the same item builds on the first, a missing, foreign-team, archived or other-folder item is refused naming it', () => {
@@ -89,4 +89,35 @@ test('new: the item takes the number it is given, the slug of the name, the defa
   assert.equal(c.items.length, 2);
   refuses(() => create(ctx([{ id: 'n', step: 'new', deny: 'no' }], 'new', { name: 'a' }), 7), 1, /^no \(rule n\)$/);
   refuses(() => create(ctx(one({ set: { status: 'a' } }), 'new', { name: 'a', extra: 'b' }), 7), 2, /takes no --extra/);
+});
+
+test('branch: a value the caller did not give, an empty text or a non-text value is refused (exit 1) and names the rule', () => {
+  for (const b of ['$arg.to', '', 5, null, true]) refuses(() => go(one({ branch: b }), 's'), 1, /^the branch to move to is empty \(rule x\)$/);
+});
+
+test('related: a key other than items, set, add and remove is refused (exit 2) naming it; an item cannot be related to itself (exit 1)', () => {
+  refuses(() => go(one({ related: [{ items: [2], put: { status: 'a' } }] }), 's'), 2, /^rule x: related entry has the key put, which is not items, set, add or remove$/);
+  refuses(() => go(one({ related: [{ items: [1], set: { status: 'a' } }] }), 's'), 1, /^an item cannot be related to itself \(rule x\)$/);
+});
+
+test('related: an item given in the foreign form of another folder is never the item of this folder, even when that number exists here: it is refused as missing', () => {
+  refuses(() => go(one({ related: [{ items: ['acme/other#9'], add: { deps: 1 } }] }), 's'), 1, /^item 9 does not exist \(rule x\)$/);
+  refuses(() => go(one({ related: [{ items: ['acme/other#2'], add: { deps: 1 } }] }), 's'), 1, /^item 2 does not exist \(rule x\)$/);
+});
+
+test('say with an empty text is an empty text; team takes its value from an argument; delete and archive together with set', () => {
+  assert.equal(go(one({ say: '' }), 's').say, null);
+  assert.equal(go(one({ team: '$arg.t' }), 's', { t: '' }, undefined).items.get(1).team, '');
+  assert.equal(go(one({ team: '$arg.t' }), 's', { t: 't' }, undefined).items.get(1).team, 't');
+  refuses(() => go(one({ team: '$arg.t' }), 's', { t: 'u' }, undefined), 2, /binds only to team t/);
+  const r = go(one({ set: { status: 'z' }, archive: true, delete: true }), 's');
+  assert.equal(r.items.get(1).archived, true); assert.equal(r.items.get(1).fields.status, 'z'); assert.equal(r.delete, true);
+  assert.deepEqual(r.changes.get(1), { status: ['open', 'z'], archived: [false, true] });
+});
+
+test('new: a name with no letter or digit gives the slug "phase"; a number of 1000 or more is not cut; an empty name is refused by the caller before the evaluator, which then gives the slug "phase"', () => {
+  const slug = (name, n) => create(ctx([{ id: 'n', step: 'new', do: {} }], 'new', { name }, []), n).items.get(n).slug;
+  assert.equal(slug('!!!', 3), '003-phase');
+  assert.equal(slug('x', 1000), '1000-x'); assert.equal(slug('x', 1234), '1234-x');
+  assert.equal(slug('', 2), '002-phase');
 });

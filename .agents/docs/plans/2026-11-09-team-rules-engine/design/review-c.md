@@ -96,10 +96,10 @@ the stage names of the internal team's workflow (row CON-13), and the rules its 
 placeholders but the behaviour is intact. `../reference/01-inventory.md:319-325` repeats the consumer paths. `../00-owner-rulings.md:63-64`
 states the internal team's card lifecycle has four review stages and a stage hand-off note, and `:119` that the factory runs up to three
 teams at once. Outside this plan folder, ten files under `.agents/docs/` at HEAD (analysis, handoffs, dependency-handoffs,
-`backlog-impacts.md`) still contain the internal names of the review brief, and `../00-owner-rulings.md:5` sends readers to commit a507443,
+`backlog-impacts.md`) still contain the internal names of the review brief, and `../00-owner-rulings.md:5` sends readers to commit the commit of the removed analysis,
 which holds more. Fix: move `consumers.tsv`, the consumer section of `01-inventory.md` and the internal specifics of the rulings to the
 backlog repo, leaving a generic line ("22 consumer call sites in a private repository change with entry plan Task 6"); scrub or move the
-ten `.agents/docs/` files; drop the pointer to a507443.
+ten `.agents/docs/` files; drop the pointer to the commit of the removed analysis.
 
 ### Medium
 

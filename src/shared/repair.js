@@ -45,6 +45,7 @@ export async function repairUnreadable(a, folder, bad) {
     return 0;
   }
   let text = readItemText(abs);
+  if (bad.unreadable.key === 'seq') a.seqRepaired = true;
   for (const key of fields) {
     const value = INTEGERS.includes(key) ? (/^\s*[+-]?\d+\s*$/.test(a[key]) ? Number(a[key]) : null) : a[key];
     if (value === null) return refuse(`--${key} ${a[key]}: a whole number is needed`);

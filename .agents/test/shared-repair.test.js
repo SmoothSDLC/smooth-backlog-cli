@@ -103,10 +103,28 @@ test('restore: an unreadable item that was committed unreadable has no earlier v
   assert.ok(isDamagedItem(w.file, 'name'), 'and changes nothing');
 });
 
+test('--seq with the number of the item\'s own file name repairs an unreadable seq, with --name in one command, and exits 0', t => {
+  const w = world(t);
+  assert.equal(w.run(...NEW).status, 0);
+  damageItem(w.file, 'name'); damageItem(w.file, 'seq');
+  w.publish('damaged');
+  const r = w.run('update', '001-alpha-job', '--name', 'alpha job', '--seq', '1');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const { fm } = readItem(w.file);
+  assert.deepEqual([fm.name, fm.seq], ['alpha job', 1]);
+  assert.equal(w.run('show', '1').status, 0);
+});
+
+test('--seq on a healthy item with its own number is still refused', t => {
+  const w = world(t);
+  assert.equal(w.run(...NEW).status, 0);
+  assert.equal(w.run('update', '1', '--seq', '1').status, 1);
+});
+
 // Only name and seq can be unreadable and repaired (the other repairable keys live under fields, which hold any value). The repair of seq is
 // followed by the check of --seq, which counts the repaired file's own number, so a command with --seq repairs on disk and then refuses.
-for (const n of [1, 2]) {
-  test(`--seq ${n} with --name repairs both unreadable keys on disk, then refuses: not above the highest number ever used`, t => {
+for (const n of [2, 3]) {
+  test(`--seq ${n} with --name repairs both unreadable keys on disk, then refuses a number that is not the item's own: not above the highest number ever used`, t => {
     const w = world(t);
     assert.equal(w.run(...NEW).status, 0);
     damageItem(w.file, 'name'); damageItem(w.file, 'seq');

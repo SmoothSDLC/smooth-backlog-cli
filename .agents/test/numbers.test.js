@@ -441,3 +441,81 @@ test('an uncommitted team file in the folder is not committed by the next backlo
   assert.ok(git(f.home, 'status', '--porcelain', '--untracked-files=all').includes('teams.json'), 'the draft is still there, untouched');
   assert.equal(readFileSync(join(f.folder, 'teams.json'), 'utf8'), '{"draft": true}\n');
 });
+
+// ---- the review of B04: a backlog inside the code repository, the user's index, the first-use exception
+
+// A code repository whose backlog is .backlog inside it; `run` fails the test unless the command succeeds.
+function inside(t) {
+  const tmp = mkdtempSync(join(tmpdir(), 'numbers-code-'));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const cwd = consumer(tmp, 'acme', 'demo', 'main');
+  const env = { ...GIT_IDENTITY, XDG_CONFIG_HOME: join(tmp, 'config'), HOME: join(tmp, 'userhome'), SMOOTH_BACKLOG_CLI_ORIGIN_URL: '', SMOOTH_BACKLOG_CLI_HOME: '' };
+  mkdirSync(env.HOME, { recursive: true });
+  const run = (args, at = cwd) => { const r = cli(args, { cwd: at, env, plain: true }); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
+  return { tmp, cwd, run, dir: join(cwd, '.backlog', 'local', 'repository') };
+}
+const headFiles = cwd => git(cwd, 'show', '--name-only', '--format=', 'HEAD').trim().split('\n');
+const porcelain = cwd => git(cwd, 'status', '--porcelain', '--untracked-files=all').split('\n').filter(Boolean).filter(l => !l.includes('.state')).sort();
+
+test('archive in a depth-1 clone of the code repository publishes: the mark is not read for an item that only moved', t => {
+  const f = inside(t);
+  f.run(NEW('alpha'));
+  const shallow = join(f.tmp, 'shallow'); git(f.tmp, 'clone', '-q', '--depth', '1', `file://${git(f.cwd, 'remote', 'get-url', 'origin').trim()}`, shallow);
+  f.run(['archive', '1', '--force'], shallow);
+  assert.ok(existsSync(join(shallow, '.backlog', 'local', 'repository', 'archive')), 'archived');
+  assert.equal(git(shallow, 'rev-list', '--count', 'origin/main..HEAD').trim(), '0', 'published');
+});
+
+for (const [label, setup] of [
+  ['the team file', cwd => { writeFileSync(join(cwd, '.backlog', 'teams.json'), '{"draft": true}\n'); return '.backlog/teams.json'; }],
+  ['a template', cwd => { const x = join(cwd, '.backlog', 'local', 'repository', 'team-templates', 'x.txt'); mkdirSync(join(x, '..'), { recursive: true }); writeFileSync(x, 'x\n'); commit(cwd, 'a template'); writeFileSync(x, 'y\n'); return '.backlog/local/repository/team-templates/x.txt'; }],
+  ['a committed .backlog/config.json', cwd => { const c = join(cwd, '.backlog', 'config.json'); writeFileSync(c, `${readFileSync(c, 'utf8').trimEnd().replace(/}$/, ', "sha": "1"}')}\n`); return '.backlog/config.json'; }],
+]) {
+  test(`code repository: ${label} left in the working tree is not committed by backlog new, and stays as it was`, t => {
+    const f = inside(t);
+    f.run(NEW('alpha')); if (label.includes('config')) git(f.cwd, 'push', '-q');
+    const path = setup(f.cwd);
+    const before = readFileSync(join(f.cwd, path), 'utf8');
+    const status = porcelain(f.cwd);
+    f.run(NEW('beta'));
+    assert.ok(!headFiles(f.cwd).includes(path), headFiles(f.cwd).join(','));
+    assert.equal(readFileSync(join(f.cwd, path), 'utf8'), before);
+    assert.deepEqual(porcelain(f.cwd), status);
+  });
+}
+
+test('a file the user staged under the folder (team file, template, config.json) is still staged as it was after backlog new, in both backlog locations', t => {
+  const f = fixture(t);
+  make(f, 'alpha');
+  writeFileSync(join(f.folder, 'extra.json'), '{}\n'); git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'extra'); git(f.home, 'push', '-q');
+  writeFileSync(join(f.folder, 'extra.json'), '{"edit": 1}\n'); git(f.home, 'add', 'acme/demo/extra.json');
+  make(f, 'beta');
+  assert.equal(git(f.home, 'status', '--porcelain').trim(), 'M  acme/demo/extra.json', 'a separate backlog clone');
+  const c = inside(t);
+  c.run(NEW('alpha'));
+  const cfg = join(c.cwd, '.backlog', 'config.json'); git(c.cwd, 'push', '-q');
+  writeFileSync(cfg, `${readFileSync(cfg, 'utf8').trimEnd().replace(/}$/, ', "sha": "1"}')}\n`); git(c.cwd, 'add', '.backlog/config.json');
+  c.run(NEW('beta'));
+  assert.equal(git(c.cwd, 'status', '--porcelain').split('\n').filter(l => !l.includes('.state')).join('').trim(), 'M  .backlog/config.json', 'the backlog inside the code repository');
+  assert.ok(!headFiles(c.cwd).includes('.backlog/config.json'));
+});
+
+test('first use: a hand-written .backlog/config.json beside it stays uncommitted; the one the store wrote is committed with the first item', t => {
+  const f = inside(t);
+  mkdirSync(join(f.cwd, '.backlog'), { recursive: true });
+  writeFileSync(join(f.cwd, '.backlog', 'config.json'), '{"backlog_repository": ".backlog", "user": "lead"}\n'); // a lead's draft
+  f.run(NEW('alpha'));
+  assert.ok(!headFiles(f.cwd).includes('.backlog/config.json'), headFiles(f.cwd).join(','));
+  assert.ok(porcelain(f.cwd).some(l => l.endsWith('.backlog/config.json')), 'still untracked');
+  const g = inside(t);
+  g.run(NEW('alpha'));
+  assert.ok(headFiles(g.cwd).includes('.backlog/config.json') && headFiles(g.cwd).includes('.backlog/.gitignore'), headFiles(g.cwd).join(','));
+});
+
+test('first use: a hand-written .backlog/.gitignore stays uncommitted', t => {
+  const f = inside(t);
+  mkdirSync(join(f.cwd, '.backlog'), { recursive: true });
+  writeFileSync(join(f.cwd, '.backlog', '.gitignore'), '.state/\nscratch/\n');
+  f.run(NEW('alpha'));
+  assert.ok(!headFiles(f.cwd).includes('.backlog/.gitignore'), headFiles(f.cwd).join(','));
+});

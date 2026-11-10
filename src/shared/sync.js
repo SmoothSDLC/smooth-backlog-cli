@@ -229,7 +229,7 @@ async function renumberFiles(home, t, stream, added) {
     const items = store.load(folder);
     const mine = items.find(i => i.path === path);
     if (!mine) continue;
-    const low = Number(mine.fm.seq) <= upstreamMark(name, folder) && !gone.has(`${owner}/${repo}:${numberOf(posix.basename(path))}`);
+    const low = !gone.has(`${owner}/${repo}:${numberOf(posix.basename(path))}`) && Number(mine.fm.seq) <= upstreamMark(name, folder); // a moved item keeps its number: the mark (which a shallow clone cannot give) is read only for an added one
     if (!low && !items.some(i => i !== mine && Number(i.fm.seq) === Number(mine.fm.seq))) continue;
     const old = Number(mine.fm.seq); const next = store.nextSeqFor(folder, posix.basename(path).replace(/^\d+/, ''));
     const target = targetOf(path, next);
@@ -443,18 +443,22 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
     }
     if (!t.clone) { // the first use of a backlog inside the repository writes its configuration itself: only while it is not tracked yet (its creation); an edit of the committed file, such as the SHA, is a person's and never staged
       for (const row of paths(await must(home, ['status', '--porcelain', '-z', '--', ...['config.json', '.gitignore'].map(f => lit(t.prefix + f))], 'list the new configuration'))) {
-        if (row.startsWith('?? ')) out.add(row.slice(3));
+        const file = row.slice(3);
+        // only what the store wrote itself on first use: a hand-written file of the same name (a lead's draft) is never committed
+        if (row.startsWith('?? ') && readFileSync(join(home, file), 'utf8') === (file.endsWith('config.json') ? store.FIRST_USE_CONFIG : store.FIRST_USE_IGNORE)) out.add(file);
       }
     }
     return { lits: [...out].map(lit), adds: [...out].filter(p => !gone.has(p)).map(lit) };
   };
   const stage = async () => { // add -A with no path would stage everything
     const { lits, adds } = await owned();
+    for (const l of lits) committed.add(l.slice(':(literal)'.length));
     if (adds.length) await must(home, ['add', '-A', '--', ...adds], `stage ${names.join(', ')}`);
     return lits;
   };
   const subject = t.clone ? `${names.join(', ')}: ${message}` : `backlog: ${message}`;
   const inBacklog = path => path.startsWith(t.prefix);
+  const committed = new Set(); // every path any staging of this command took
   return locked(lockFile(backlogHome), async () => {
     if (t.clone) await refuseUnpublished(home, t); // the user's own repository has its own unpushed commits: they are pushed with the change
     const saved = starting.get(resolve(home)) ?? await snapshot(home);
@@ -537,7 +541,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
             mine = await foldIn(home, t, await stage(), subject, mine) || mine;
           }
           await validatePublication(home, t, dirs, dirNames, claims, renumbered);
-          await restoreStaging(saved.staged.filter(p => !own(p)));
+          await restoreStaging(saved.staged.filter(p => !committed.has(p)));
           if (t.push && t.remote === false && mine) { // the first release's behaviour is kept: the commit stays, the exit code says it was not published
             throw Object.assign(new BacklogError('SYNC_FAILED', `The change was not published from ${home} (no origin remote); it is committed on this branch: add the origin and push, then continue`, 3), { keep: true });
           }

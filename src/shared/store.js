@@ -30,6 +30,8 @@ const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'
 // backlog is .backlog inside the repository, created with its config on first use (the owner's intended default; environment
 // variables override the configuration). A folder inside the repository keeps the lock, views and journal in its .state
 // (ignored by git); a folder elsewhere must exist (a missing clone is returned tagged ask, never cloned here).
+export const FIRST_USE_CONFIG = `${JSON.stringify({ backlog_repository: '.backlog' }, null, 2)}\n`; // what the first use writes; only a file with exactly this content is committed with the first item
+export const FIRST_USE_IGNORE = '.state/\n';
 export function resolveHome() {
   const setting = originSetting();
   const name = setting.name || NEUTRAL_NAME;
@@ -48,7 +50,7 @@ export function resolveHome() {
     if (!top) return { home: null, remote: false, ask: { code: 2, text: 'run this from inside a git repository (the repository whose backlog you want)' } };
     home = join(top, '.backlog');
     mkdirSync(join(home, '.state'), { recursive: true });
-    if (!existsSync(join(top, CONFIG))) writeFileSync(join(top, CONFIG), `${JSON.stringify({ backlog_repository: '.backlog' }, null, 2)}\n`);
+    if (!existsSync(join(top, CONFIG))) writeFileSync(join(top, CONFIG), FIRST_USE_CONFIG);
   }
   if (home) { // a folder inside the repository: the items are committed with it
     const top = topOf(process.cwd());
@@ -56,7 +58,7 @@ export function resolveHome() {
     if (top && !relative(top, abs).startsWith('..') && !isAbsolute(relative(top, abs))) {
       insideRepo = true;
       mkdirSync(join(abs, '.state'), { recursive: true });
-      if (!existsSync(join(abs, '.gitignore'))) writeFileSync(join(abs, '.gitignore'), '.state/\n');
+      if (!existsSync(join(abs, '.gitignore'))) writeFileSync(join(abs, '.gitignore'), FIRST_USE_IGNORE);
       return { home: abs, remote: false, ask: null };
     }
   }

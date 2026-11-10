@@ -275,6 +275,14 @@ test('add/add: two clones create the same numbered file name with different bodi
   assert.equal(existsSync(join(f.home2, '.git', 'rebase-merge')) || existsSync(join(f.home2, '.git', 'rebase-apply')), false);
 });
 
+test('add/add: a conflict on anything else (a file the caller names, changed differently by two clones) still aborts the rebase and exits 3', async t => {
+  const f = fixture(t);
+  writeFileSync(join(f.home, 'notes.json'), '{"a":1}\n'); writeFileSync(join(f.home2, 'notes.json'), '{"b":2}\n');
+  await sync.commit(f.home, join(f.home, 'notes.json'), 'a');
+  await rejects3(sync.commit(f.home2, join(f.home2, 'notes.json'), 'b'), /change was not published[\s\S]*rolled back/);
+  assert.equal(existsSync(join(f.home2, '.git', 'rebase-merge')) || existsSync(join(f.home2, '.git', 'rebase-apply')), false);
+});
+
 test('a conflict on anything else (one item changed by both clones) still aborts the rebase and exits 3', async t => {
   const f = fixture(t);
   putItem(f.folder, 1, 'alpha');

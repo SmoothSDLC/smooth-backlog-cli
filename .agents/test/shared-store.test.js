@@ -42,15 +42,15 @@ function putItem(folder, fm, rel = `phases/${fm.phase}.md`) {
 
 // ---------------------------------------------------------------- resolveHome
 
-test('resolveHome: BACKLOG_HOME > home record > the default ~/git/<name>; a configured but missing clone is tagged exit 4 naming backlog setup, never cloned', t => {
+test('resolveHome: SMOOTH_BACKLOG_CLI_HOME > home record > the default ~/git/<name>; a configured but missing clone is tagged exit 4 naming backlog setup, never cloned', t => {
   const d = scratch(t);
   const homeA = join(d, 'homeA'); const homeB = join(d, 'homeB');
   mkdirSync(homeA); mkdirSync(homeB);
   mkdirSync(join(d, 'config', BACKLOG_NAME), { recursive: true });
   // item 091: the folder names derive from the setting; the test pins the setting explicitly
-  withEnv(t, { HOME: join(d, 'home'), XDG_CONFIG_HOME: join(d, 'config'), BACKLOG_HOME: homeA, BACKLOG_ORIGIN_URL: ORIGIN_URL });
+  withEnv(t, { HOME: join(d, 'home'), XDG_CONFIG_HOME: join(d, 'config'), SMOOTH_BACKLOG_CLI_HOME: homeA, SMOOTH_BACKLOG_CLI_ORIGIN_URL: ORIGIN_URL });
   assert.deepEqual(store.resolveHome(), { home: realpathSync(homeA), remote: true, ask: null });
-  delete process.env.BACKLOG_HOME;
+  delete process.env.SMOOTH_BACKLOG_CLI_HOME;
   writeFileSync(join(d, 'config', BACKLOG_NAME, 'home'), `${homeB}\n`);
   assert.deepEqual(store.resolveHome(), { home: realpathSync(homeB), remote: true, ask: null });
   rmSync(join(d, 'config', BACKLOG_NAME, 'home'));

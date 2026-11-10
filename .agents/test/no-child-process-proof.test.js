@@ -2,7 +2,7 @@
 // A test-only module (no-child-process-preload.cjs) is preloaded into the CLI child through
 // NODE_OPTIONS=--require: it wraps the child_process functions spawn, spawnSync, exec, execFile,
 // execSync and fork and records every call, so no executable - a name on the PATH, an absolute
-// path or a detached child - can escape the assertion. With BACKLOG_RUN_HOOK unset, no
+// path or a detached child - can escape the assertion. With SMOOTH_BACKLOG_CLI_RUN_HOOK unset, no
 // call executes the recorder: a command that needs no backlog folder starts no child process, one on a backlog repository starts only its
 // git calls. With the variable set, a positive control proves the preload catches the one
 // recorder call (<hook> record backlog.js). The PATH-fake tests of
@@ -34,11 +34,11 @@ function sharedFixture(t, prefix) {
   return { dir, home, cons };
 }
 
-test('no child process: --version, BACKLOG_RUN_HOOK unset - the CLI starts none', t => {
+test('no child process: --version, SMOOTH_BACKLOG_CLI_RUN_HOOK unset - the CLI starts none', t => {
   const f = fixture(t);
   const log = join(f.dir, 'calls.jsonl');
   const env = { ...f.env, NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log };
-  delete env.BACKLOG_RUN_HOOK;
+  delete env.SMOOTH_BACKLOG_CLI_RUN_HOOK;
   const p = f.raw(['--version'], { env });
   assert.equal(p.status, 0, p.stderr || p.stdout);
   assert.deepEqual(calls(log), [], `child processes the CLI started although the recorder variable is unset: ${JSON.stringify(calls(log))}`);
@@ -50,7 +50,7 @@ test('no child process: --version, the recorder variable set - the preload catch
   const out = join(f.dir, 'record-out.txt');
   const log = join(f.dir, 'calls.jsonl');
   writeFileSync(stub, STUB, { mode: 0o755 });
-  const env = { ...f.env, NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log, BACKLOG_RUN_HOOK: stub, RECORD_OUT: out };
+  const env = { ...f.env, NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log, SMOOTH_BACKLOG_CLI_RUN_HOOK: stub, RECORD_OUT: out };
   const p = f.raw(['--version'], { env });
   assert.equal(p.status, 0, p.stderr || p.stdout);
   const rec = calls(log);
@@ -62,7 +62,7 @@ test('no child process: --version, the recorder variable set - the preload catch
   assert.equal(readFileSync(out, 'utf8').trim(), 'record backlog.js 0', 'the recorded child actually ran the recorder');
 });
 
-test('no child process: a backlog repository, BACKLOG_RUN_HOOK unset - the only child processes are git', t => {
+test('no child process: a backlog repository, SMOOTH_BACKLOG_CLI_RUN_HOOK unset - the only child processes are git', t => {
   const f = sharedFixture(t, 'proof-shared-unset-');
   const log = join(f.dir, 'calls.jsonl');
   const r = cli(['new', '--name', 'Proof item', '--summary', 's', '--depends-on', 'none'], {
@@ -85,7 +85,7 @@ test('no child process: a backlog repository, the recorder variable set - the re
   const r = cli(['new', '--name', 'Proof item', '--summary', 's', '--depends-on', 'none'], {
     cwd: f.cons,
     tmp: f.dir,
-    env: { NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log, BACKLOG_RUN_HOOK: stub, RECORD_OUT: out },
+    env: { NODE_OPTIONS: `--require ${PRELOAD}`, BACKLOG_CHILD_CALLS_FILE: log, SMOOTH_BACKLOG_CLI_RUN_HOOK: stub, RECORD_OUT: out },
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const rec = calls(log);

@@ -1,5 +1,5 @@
 // `backlog team <pop|new|update|query|define|workflow> --team <name> --agent <name>`: the only commands that know a team. The team
-// comes from --team, else TEAM_NAME, else the repository configuration's `team`; the agent from --agent (--by), else BACKLOG_AGENT,
+// comes from --team, else SMOOTH_BACKLOG_CLI_TEAM_NAME, else the repository configuration's `team`; the agent from --agent (--by), else SMOOTH_BACKLOG_CLI_AGENT,
 // else the configuration's `user`. The team's entry in the backlog configuration (teams.json) governs every step.
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -36,10 +36,10 @@ export function split(argv) {
 export function resolve(got, { agentOptional = false } = {}) {
   const top = topOf(process.cwd());
   const cfg = top ? readConfig(top) : {};
-  const team = got.team || strip(process.env.TEAM_NAME || '') || strip(String(cfg.team ?? ''));
-  const agent = got.agent || strip(process.env.BACKLOG_AGENT || '') || strip(String(cfg.user ?? ''));
-  if (!team) throw new Error('a team command needs --team <name> (or TEAM_NAME, or a team in .backlog/config.json)');
-  if (!agent && !agentOptional) throw new Error('a team command needs --agent <name> (or BACKLOG_AGENT, or a user in .backlog/config.json)');
+  const team = got.team || strip(process.env.SMOOTH_BACKLOG_CLI_TEAM_NAME || '') || strip(String(cfg.team ?? ''));
+  const agent = got.agent || strip(process.env.SMOOTH_BACKLOG_CLI_AGENT || '') || strip(String(cfg.user ?? ''));
+  if (!team) throw new Error('a team command needs --team <name> (or SMOOTH_BACKLOG_CLI_TEAM_NAME, or a team in .backlog/config.json)');
+  if (!agent && !agentOptional) throw new Error('a team command needs --agent <name> (or SMOOTH_BACKLOG_CLI_AGENT, or a user in .backlog/config.json)');
   return { team, agent };
 }
 

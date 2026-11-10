@@ -79,7 +79,7 @@ test('backlog at a terminal checks once and warns; with standard error piped it 
   const calls = join(dir, 'npm-calls');
   writeFileSync(join(fakes, 'npm'), '#!/bin/sh\necho "$@" >> "$NPM_CALLS"\ncase "$1" in config) echo https://npm.pkg.github.com;; view) echo \'["0.0.0","9.9.9"]\';; esac\n');
   chmodSync(join(fakes, 'npm'), 0o755);
-  const environment = { ...process.env, ...env(dir), BACKLOG_AGENT: 'driver-notice', NPM_CALLS: calls, PATH: `${fakes}:${process.env.PATH}` };
+  const environment = { ...process.env, ...env(dir), SMOOTH_BACKLOG_CLI_AGENT: 'driver-notice', NPM_CALLS: calls, PATH: `${fakes}:${process.env.PATH}` };
   const config = join(dir, 'config', 'smooth-backlog-cli', 'config.json');
   const piped = cli(['list'], { cwd: cons, tmp: dir, env: { NPM_CALLS: calls, PATH: environment.PATH } });
   assert.equal(piped.status, 0, piped.stdout + piped.stderr);
@@ -105,7 +105,7 @@ test('a registry that takes five seconds delays the command by the time limit at
   writeFileSync(join(fakes, 'npm'), '#!/bin/sh\nexec sleep 5\n');
   chmodSync(join(fakes, 'npm'), 0o755);
   const from = Date.now();
-  const r = spawnSync('script', ['-qec', `'${process.execPath}' '${bin}' list`, '/dev/null'], { cwd: cons, env: { ...process.env, ...env(dir), BACKLOG_AGENT: 'driver-notice', PATH: `${fakes}:${process.env.PATH}` }, encoding: 'utf8', input: '' });
+  const r = spawnSync('script', ['-qec', `'${process.execPath}' '${bin}' list`, '/dev/null'], { cwd: cons, env: { ...process.env, ...env(dir), SMOOTH_BACKLOG_CLI_AGENT: 'driver-notice', PATH: `${fakes}:${process.env.PATH}` }, encoding: 'utf8', input: '' });
   const took = Date.now() - from;
   if (r.status !== 0 && !r.stdout) return t.skip('no pseudo-terminal here');
   assert.equal(r.status, 0, r.stdout + r.stderr);

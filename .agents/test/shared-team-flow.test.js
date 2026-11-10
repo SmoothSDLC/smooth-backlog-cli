@@ -1,5 +1,5 @@
 // The team workflow end to end through the CLI only, one numbered step per backlog step of a team lead and its members.
-// Each step runs the command an agent runs, as that agent (BACKLOG_AGENT), and checks what it does. The teams and their
+// Each step runs the command an agent runs, as that agent (SMOOTH_BACKLOG_CLI_AGENT), and checks what it does. The teams and their
 // review rules are the teams.json of the backlog folder; local bare repositories only.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,9 +25,9 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     t1: { lead: 'lead', members: ['ann', 'bob', 'zed'], review: [{ team: 't1', count: 1 }, { team: 'reviewers', count: 1 }], refinement_review: [{ team: 'reviewers', count: 1 }] },
     reviewers: { lead: 'rex', members: ['rex', 'ria'] },
   }));
-  const TEAM = { TEAM_NAME: 't1', TEAM_LEAD: 'lead', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const TEAM = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
   const as = (agent, args, want = 0, envExtra = {}) => {
-    const env = { ...TEAM, BACKLOG_AGENT: agent, BACKLOG_SESSION: '', ...envExtra };
+    const env = { ...TEAM, SMOOTH_BACKLOG_CLI_AGENT: agent, SMOOTH_BACKLOG_CLI_SESSION: '', ...envExtra };
     if (args[0] === 'update') cli(['show', args[1], '--agent', agent], { cwd: cons, tmp: t, env }); // read before the write
     const r = cli(args, { cwd: cons, tmp: t, env });
     assert.ok([].concat(want).includes(r.status), `${agent}: backlog ${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);

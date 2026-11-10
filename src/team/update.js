@@ -50,7 +50,7 @@ export const hooks = {
   fieldsBefore(a, { fm, folder, repo, slug, changes }) {
     if (a['wip-override'] !== undefined) { // the lead lifts the team and agent limits for this item, with a recorded reason
       const who = a.by || caller();
-      if (caller() && caller() !== who) return `${slug}: you are ${caller()} (BACKLOG_AGENT): a member acts only as itself, not as ${who}`;
+      if (caller() && caller() !== who) return `${slug}: you are ${caller()} (SMOOTH_BACKLOG_CLI_AGENT): a member acts only as itself, not as ${who}`;
       if (who !== teamLead()) return `${slug}: only the team lead (${teamLead()}) lifts the team and agent work-in-progress limits for an item (got ${who || 'nobody'}; --by <lead>)`;
       const reason = strip(a['wip-override']);
       if (!reason) return `${slug}: --wip-override needs the reason`;

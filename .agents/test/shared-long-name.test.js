@@ -18,7 +18,7 @@ test('047: update, replan, close and new work beside an item with a 250-byte fil
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  const run = args => { const r = cli(args, { cwd: cons, tmp: t, env: { BACKLOG_AGENT: 'tester' } }); assert.equal(r.status, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`); return r; };
+  const run = args => { const r = cli(args, { cwd: cons, tmp: t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'tester' } }); assert.equal(r.status, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`); return r; };
   const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds'];
   const long = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ').slice(0, 242); // slug 242 + "001-" + ".md" = 249-250 bytes
   run(NEW(long));

@@ -18,7 +18,7 @@ test('046: --severity changes the field, is published with an event, and refuses
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  const run = args => cli(args, { cwd: cons, tmp: t, env: { BACKLOG_AGENT: 'tester' } });
+  const run = args => cli(args, { cwd: cons, tmp: t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'tester' } });
   const made = run(['new', '--name', 'loud item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--severity', 'critical', '--body', '## Definition of done\n\n- [ ] it holds']);
   assert.equal(made.status, 0, made.stdout + made.stderr);
   const file = join(home, 'acme', 'demo', 'phases', '001-loud-item.md');
@@ -43,9 +43,9 @@ test('046: --severity is a field edit: refused on another team\'s item like any 
   sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  const run = (args, env = {}) => cli(args, { cwd: cons, tmp: t, env: { BACKLOG_AGENT: 'tester', TEAM_LEAD: 'lead', ...env } });
+  const run = (args, env = {}) => cli(args, { cwd: cons, tmp: t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'tester', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', ...env } });
   assert.equal(run(['new', '--name', 'other team item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds', '--team', 't2']).status, 0);
   run(['show', '1', '--agent', 'tester']);
-  const r = run(['update', '1', '--severity', 'critical', '--by', 'tester'], { TEAM_NAME: 't1' });
+  const r = run(['update', '1', '--severity', 'critical', '--by', 'tester'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' });
   assert.equal(r.status, 1, r.stdout + r.stderr); // another team's item
 });

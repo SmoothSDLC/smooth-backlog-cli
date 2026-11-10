@@ -28,29 +28,29 @@ function fixture() {
 
 test('025: the waiting agent is told which agent holds the checkout and since when', async () => {
   const f = fixture();
-  const was = process.env.BACKLOG_AGENT;
-  process.env.BACKLOG_AGENT = 'amy@t1';
+  const was = process.env.SMOOTH_BACKLOG_CLI_AGENT;
+  process.env.SMOOTH_BACKLOG_CLI_AGENT = 'amy@t1';
   let refused;
   try {
     await store.cloneLocked(f.home, async () => {
-      refused = cli(['update', '1', '--note', 'n', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400', BACKLOG_AGENT: 'bob' } });
+      refused = cli(['update', '1', '--note', 'n', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '400', SMOOTH_BACKLOG_CLI_AGENT: 'bob' } });
     });
-  } finally { if (was === undefined) delete process.env.BACKLOG_AGENT; else process.env.BACKLOG_AGENT = was; }
+  } finally { if (was === undefined) delete process.env.SMOOTH_BACKLOG_CLI_AGENT; else process.env.SMOOTH_BACKLOG_CLI_AGENT = was; }
   assert.equal(refused.status, 1, refused.stdout + refused.stderr);
   assert.match(refused.stderr, /locked by another process \(agent amy@t1, pid \d+, .*since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\)/);
 });
 
-test('025: the record names the --by agent of the holder when it has no BACKLOG_AGENT', async () => {
+test('025: the record names the --by agent of the holder when it has no SMOOTH_BACKLOG_CLI_AGENT', async () => {
   const f = fixture();
-  const [was, argv] = [process.env.BACKLOG_AGENT, process.argv];
-  delete process.env.BACKLOG_AGENT;
+  const [was, argv] = [process.env.SMOOTH_BACKLOG_CLI_AGENT, process.argv];
+  delete process.env.SMOOTH_BACKLOG_CLI_AGENT;
   process.argv = [...argv, '--by', 'zoe'];
   let refused;
   try {
     await store.cloneLocked(f.home, async () => {
-      refused = cli(['update', '1', '--note', 'n', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400' } });
+      refused = cli(['update', '1', '--note', 'n', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '400' } });
     });
-  } finally { process.argv = argv; if (was !== undefined) process.env.BACKLOG_AGENT = was; }
+  } finally { process.argv = argv; if (was !== undefined) process.env.SMOOTH_BACKLOG_CLI_AGENT = was; }
   assert.match(refused.stderr, /locked by another process \(agent zoe, pid \d+/);
 });
 
@@ -69,8 +69,8 @@ test('025: two agents writing different items at once both succeed, and both cha
   const f = fixture();
   let a, b; const ended = new Set();
   await store.cloneLocked(f.home, async () => { // both start while the checkout is held: each must wait for it
-    a = cliAsync(['update', '1', '--append', 'from amy', '--by', 'amy'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: 'amy' } });
-    b = cliAsync(['update', '2', '--append', 'from bob', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: 'bob' } });
+    a = cliAsync(['update', '1', '--append', 'from amy', '--by', 'amy'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'amy' } });
+    b = cliAsync(['update', '2', '--append', 'from bob', '--by', 'bob'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'bob' } });
     a.done.then(() => ended.add('a')); b.done.then(() => ended.add('b'));
     await new Promise(res => setTimeout(res, 2000));
     assert.equal(ended.size, 0, 'neither writer goes past a held checkout');
@@ -89,7 +89,7 @@ test('025: a dead parent whose child still works, or a takeover whose owner stil
   const lock = join(f.home, '.git', 'smooth-backlog-cli-run.lock');
   const marker = `${lock}.takeover`;
   const dead = spawnSync(process.execPath, ['-e', '0']).pid; // a pid that was alive a moment ago and is not now
-  const wait = { BACKLOG_LOCK_WAIT_MS: '600' };
+  const wait = { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '600' };
   writeFileSync(lock, JSON.stringify({ pid: dead, host: hostname(), command: 'pop', child: process.pid }));
   const child = cli(['update', '1', '--append', 'x', '--by', 'amy'], { cwd: f.cons, tmp: f.t, env: wait });
   assert.equal(child.status, 1, child.stdout + child.stderr);

@@ -514,7 +514,7 @@ test('a read view pulls first: an item pushed from another clone is shown, and n
   const f = build(false);
   const home2 = join(f.t, 'home2');
   git(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), home2);
-  const r = cli(['new', '--name', 'Pushed', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_HOME: realpathSync(home2) } });
+  const r = cli(['new', '--name', 'Pushed', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_HOME: realpathSync(home2) } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const before = git(f.home, 'rev-parse', 'HEAD');
   const n = cli(['list', '--json'], { cwd: f.cons, tmp: f.t });
@@ -627,6 +627,6 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
 
 test('team query --plan answers or is idle, it is not an unknown flag', () => {
   const f = fx();
-  const plan = cli(['team', 'query', '--team', 't1', '--plan', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_NAME: '', BACKLOG_AGENT: 'lead' } });
+  const plan = cli(['team', 'query', '--team', 't1', '--plan', '--json'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_NAME: '', SMOOTH_BACKLOG_CLI_AGENT: 'lead' } });
   assert.ok([0, 3].includes(plan.status), plan.stdout + plan.stderr);
 });

@@ -23,8 +23,8 @@ function fixture() {
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', `Body of ${name}.\n\n${DOD}`];
-const LEAD = { TEAM_LEAD: 'lead' };
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, BACKLOG_AGENT: env.TEAM_LEAD ?? 'lead', ...env } }); // the caller is the lead unless the test names another agent
+const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' };
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, SMOOTH_BACKLOG_CLI_AGENT: env.SMOOTH_BACKLOG_CLI_TEAM_LEAD ?? 'lead', ...env } }); // the caller is the lead unless the test names another agent
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 // another team takes an item: the one place a refining slice changes team, written to the file the way an earlier build left it
@@ -64,8 +64,8 @@ test('team pop records the continuation claim when the lead\'s earlier session h
   const f = fixture();
   const s = make(f, 'continuation work item'); ok(f, ['update', s, '--set-team', 't1']);
   ok(f, ['show', s, '--agent', 'zed:01']);
-  ok(f, ['update', s, '--claim', 'zed:01'], { TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
-  const p = pop(f, { TEAM_LEAD: 'zed:02' }, '--team', 't1');
+  ok(f, ['update', s, '--claim', 'zed:01'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
+  const p = pop(f, { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'zed:02' }, '--team', 't1');
   assert.deepEqual([p.action, p.item, p.status], ['continue', s, 0]);
   assert.equal(fm(f, s).claimed_by, 'zed:02', 'the continuation records the new session as the holder');
   assert.deepEqual(fm(f, s).session_authors, ['zed:01', 'zed:02'], 'the earlier session stays in the list');
@@ -76,8 +76,8 @@ test('team pop exits 1 when the continuation claim is handed back before the fin
   const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
   const s = make(f, 'handed back work item'); ok(f, ['update', s, '--set-team', 't1']);
   ok(f, ['show', s, '--agent', 'zed:01']);
-  ok(f, ['update', s, '--claim', 'zed:01'], { TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
-  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: 'zed:02', BACKLOG_TEST_SELF: wrap, HAND_BACK_AFTER_CLAIM: '1', HAND_BACK_TO: 'zed:01' });
+  ok(f, ['update', s, '--claim', 'zed:01'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
+  const r = run(f, ['team', 'pop', '--team', 't1'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'zed:02', SMOOTH_BACKLOG_CLI_TEST_SELF: wrap, HAND_BACK_AFTER_CLAIM: '1', HAND_BACK_TO: 'zed:01' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /changed before team pop could show it/);
   assert.equal(r.stdout, '', 'no success output: the item is not presented as held');
@@ -89,8 +89,8 @@ test('team pop exits 1 when the held item is reassigned to another session of th
   const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
   const s = make(f, 'exact holder work item'); ok(f, ['update', s, '--set-team', 't1']);
   ok(f, ['show', s, '--agent', 'zed:02']);
-  ok(f, ['update', s, '--claim', 'zed:02'], { TEAM_LEAD: 'zed:02' }); // the lead's own session holds it: the call makes no claim
-  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: 'zed:02', BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'reassigned'),
+  ok(f, ['update', s, '--claim', 'zed:02'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'zed:02' }); // the lead's own session holds it: the call makes no claim
+  const r = run(f, ['team', 'pop', '--team', 't1'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'zed:02', SMOOTH_BACKLOG_CLI_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'reassigned'),
     REASSIGN_ON_READ: s, REASSIGN_TO: 'zed:03', REASSIGN_BY: 'zed:02' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /changed before team pop could show it/);
@@ -103,10 +103,10 @@ test('team pop exits 1 when the continuation claim is refused; the earlier sessi
   const dep = make(f, 'open dependency');
   const s = make(f, 'refused continuation item'); ok(f, ['update', s, '--set-team', 't1']);
   ok(f, ['show', s, '--agent', 'zed:01']);
-  ok(f, ['update', s, '--claim', 'zed:01'], { TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
+  ok(f, ['update', s, '--claim', 'zed:01'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'zed:01' }); // the lead's earlier session holds it (only the lead's own claim takes an unrefined work item)
   ok(f, ['show', s, '--agent', 'zed:01']);
   ok(f, ['update', s, '--set-depends-on', dep.split('-')[0], '--by', 'zed:01']); // an undone dependency: the continuation claim is refused
-  const r = run(f, ['team', 'pop', '--team', 't1'], { TEAM_LEAD: 'zed:02' });
+  const r = run(f, ['team', 'pop', '--team', 't1'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'zed:02' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /the continuation claim of .* was not recorded.*dependencies not done/);
   assert.equal(r.stdout, '', 'no success output: the item is not presented as held');
@@ -134,8 +134,8 @@ test('team pop: only the lead, only its team, only itself', () => {
   for (const [args, env, text] of [
     [['team', 'pop'], {}, /needs --team/],
     [['team'], {}, /needs a subcommand/],
-    [['team', 'pop', '--team', 't1'], { TEAM_NAME: 't2' }, /team t2 \(TEAM_NAME\), not t1/],
-    [['team', 'pop', '--team', 't1', '--agent', 'ann'], { TEAM_NAME: 't1', BACKLOG_AGENT: 'bob' }, /you are bob/],
+    [['team', 'pop', '--team', 't1'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't2' }, /team t2 \(SMOOTH_BACKLOG_CLI_TEAM_NAME\), not t1/],
+    [['team', 'pop', '--team', 't1', '--agent', 'ann'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_AGENT: 'bob' }, /you are bob/],
     [['team', 'pop', '--team', 't1', '--bogus'], {}, /unrecognized arguments: --bogus/],
   ]) {
     const r = run(f, args, env);
@@ -180,7 +180,7 @@ test('query --phase --json names the team fields an item lacks', () => {
   assert.deepEqual(JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--phase', bare, '--json']).stdout).missing, b.missing);
 });
 
-// A wrapper of the CLI for team pop's children (BACKLOG_TEST_SELF): FAIL_ON='<args prefix>' fails that call with FAIL_RC and
+// A wrapper of the CLI for team pop's children (SMOOTH_BACKLOG_CLI_TEST_SELF): FAIL_ON='<args prefix>' fails that call with FAIL_RC and
 // FAIL_ERR; MOVE_AFTER_CLAIM=<branch> makes the read after a successful claim show the item on another branch;
 // HAND_BACK_AFTER_CLAIM makes another writer reassign the item to HAND_BACK_TO right after a successful claim.
 const WRAP = `import { spawnSync } from 'node:child_process'; import { existsSync, writeFileSync } from 'node:fs';
@@ -191,7 +191,7 @@ const isQuery = args[0] === 'team' && args[1] === 'query'; // its reads are team
 if (e.FAIL_ON && args.join(' ').startsWith(e.FAIL_ON)) { process.stderr.write(e.FAIL_ERR + '\\n'); process.exit(Number(e.FAIL_RC)); }
 if (e.CLEAR_ON_READ && isQuery && args.includes('--phase') && !existsSync(e.MOVE_MARK + '.cleared')) {
   writeFileSync(e.MOVE_MARK + '.cleared', '1'); // another agent takes the item out of the team just before the lead reads it
-  spawnSync(process.execPath, [bin, 'team', 'update', args[args.indexOf('--phase') + 1], '--set-team', '', '--team', 't1', '--agent', 'other'], { env: { ...e, BACKLOG_AGENT: 'other', TEAM_NAME: '' } });
+  spawnSync(process.execPath, [bin, 'team', 'update', args[args.indexOf('--phase') + 1], '--set-team', '', '--team', 't1', '--agent', 'other'], { env: { ...e, SMOOTH_BACKLOG_CLI_AGENT: 'other', SMOOTH_BACKLOG_CLI_TEAM_NAME: '' } });
 }
 if (e.REASSIGN_ON_READ && isQuery && args[args.indexOf('--phase') + 1] === e.REASSIGN_ON_READ && !existsSync(e.MOVE_MARK + '.reassigned')) {
   writeFileSync(e.MOVE_MARK + '.reassigned', '1'); // another writer hands the item to another session of the same card just before the lead reads it
@@ -216,7 +216,7 @@ test('team pop: an update error, a failed synchronisation and a scope change are
   const f = fixture();
   const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
   const s = make(f, 'work item'); ok(f, ['update', s, '--set-team', 't1']);
-  const seam = extra => ({ BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'moved'), ...extra });
+  const seam = extra => ({ SMOOTH_BACKLOG_CLI_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'moved'), ...extra });
   for (const [extra, text] of [
     [{ FAIL_ON: `team update ${s} --team t1 --agent lead --claim`, FAIL_RC: '1', FAIL_ERR: '❌ backlog: disk full' }, /team pop stopped: ❌ backlog: disk full/],
     [{ FAIL_ON: 'team query --team t1 --agent lead --status', FAIL_RC: '3', FAIL_ERR: 'could not synchronise the backlog clone' }, /team pop stopped: could not synchronise/],
@@ -233,7 +233,7 @@ test('team pop: the claim itself refuses another team\'s item in a team session'
   const f = fixture();
   const s = make(f, 'their work item'); ok(f, ['update', s, '--set-team', 't2']);
   ok(f, ['show', s, '--agent', 'lead']);
-  const r = run(f, ['update', s, '--claim', 'lead'], { TEAM_NAME: 't1' });
+  const r = run(f, ['update', s, '--claim', 'lead'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' });
   assert.equal(r.status, 1); assert.match(r.stdout, /belongs to team t2, not to this session's team t1/);
 });
 
@@ -249,7 +249,7 @@ test('an item without depends_on names it', () => {
 test('in a team session a claim takes only an item of the session\'s team in its repository', () => {
   const f = fixture();
   const free = make(f, 'no team item'); ok(f, ['show', free, '--agent', 'lead']);
-  const r = run(f, ['update', free, '--claim', 'lead'], { TEAM_NAME: 't1' });
+  const r = run(f, ['update', free, '--claim', 'lead'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' });
   assert.equal(r.status, 1); assert.match(r.stdout, /belongs to no team; this session's team t1/);
   ok(f, ['update', free, '--claim', 'lead']); // outside a team session the claim is as before
 });
@@ -258,7 +258,7 @@ test('team pop: an item taken out of the team before the read is skipped, never 
   const f = fixture();
   const wrap = join(f.t, 'wrap.mjs'); writeFileSync(wrap, WRAP);
   const s = make(f, 'work item'); ok(f, ['update', s, '--set-team', 't1']);
-  const p = pop(f, { BACKLOG_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'm'), CLEAR_ON_READ: '1' }, '--team', 't1');
+  const p = pop(f, { SMOOTH_BACKLOG_CLI_TEST_SELF: wrap, MOVE_MARK: join(f.t, 'm'), CLEAR_ON_READ: '1' }, '--team', 't1');
   assert.deepEqual([p.action, p.status, fm(f, s).team ?? '', fm(f, s).claimed_by], ['idle', 3, '', '']);
   assert.match(p.skipped[0].reason, /changed since it was listed/);
   spawnSync('git', ['checkout', '-q', '--detach'], { cwd: f.cons });

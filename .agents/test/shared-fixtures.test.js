@@ -17,7 +17,7 @@ test('shared fixtures: a new phase lands on the local bare and the real backlog 
   const repo = consumer(tmp, 'backlog-test', 'consumer', 'main');
   const bare = join(tmp, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
   assert.ok(existsSync(join(home, '.git')), 'the shared clone is a git repository');
-  assert.ok(env(tmp).BACKLOG_HOME.startsWith(tmp), 'BACKLOG_HOME stays inside the test temp dir');
+  assert.ok(env(tmp).SMOOTH_BACKLOG_CLI_HOME.startsWith(tmp), 'SMOOTH_BACKLOG_CLI_HOME stays inside the test temp dir');
 
   const realHome = join(homedir(), 'git', BACKLOG_NAME);
   const realHead = () => spawnSync('git', ['-C', realHome, 'log', '-1', '--format=%H'], { encoding: 'utf8' }).stdout.trim();

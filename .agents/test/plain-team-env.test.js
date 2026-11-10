@@ -1,4 +1,4 @@
-// The plain commands ignore the team environment (TEAM_NAME, TEAM_REPOSITORY, TEAM_BRANCH, TEAM_LEAD) and the team configuration file:
+// The plain commands ignore the team environment (SMOOTH_BACKLOG_CLI_TEAM_NAME, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY, SMOOTH_BACKLOG_CLI_TEAM_BRANCH, SMOOTH_BACKLOG_CLI_TEAM_LEAD) and the team configuration file:
 // a session bound to another repository and branch still creates, edits, reads, archives, moves and orders every item. Only `backlog team`
 // reads them. Local bare repositories, items made with the CLI.
 import test, { after } from 'node:test';
@@ -10,7 +10,7 @@ import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
-const BOUND = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/other', TEAM_BRANCH: 'nowhere', TEAM_LEAD: 'lead' };
+const BOUND = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/other', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'nowhere', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' };
 
 function fixture() {
   const t = mkdtempSync(join(tmpdir(), 'plain-env-'));
@@ -77,6 +77,6 @@ test('an unreadable team configuration warns under backlog team and nowhere else
     assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
     assert.doesNotMatch(r.stderr, /no JSON/, `${args[0]} does not read the team configuration`);
   }
-  const team = cli(['team', 'query', '--team', 't1'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: 'ann' }, plain: true });
+  const team = cli(['team', 'query', '--team', 't1'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'ann' }, plain: true });
   assert.match(team.stderr, /teams\.json cannot be read or is no JSON/);
 });

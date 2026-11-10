@@ -22,7 +22,7 @@ import { derivedKeys, dropsLegacy, isOpen } from './status.js';
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //
 
-// The one storage setting: the folder that holds the items. Named by BACKLOG_HOME, by the repository's configuration
+// The one storage setting: the folder that holds the items. Named by SMOOTH_BACKLOG_CLI_HOME, by the repository's configuration
 // (.backlog/config.json, backlog_repository: a path relative to the repository; ".backlog" means inside it; the root file of
 // earlier builds is still read), or by the per-user record $XDG_CONFIG_HOME/<name>/home (<name> from the clone-URL setting;
 // without the setting, the only record there); with a clone URL and nothing else, ~/git/<name>. Nothing named anywhere: the
@@ -32,14 +32,14 @@ const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'
 export function resolveHome() {
   const setting = originSetting();
   const name = setting.name || NEUTRAL_NAME;
-  let home = process.env.BACKLOG_HOME;
+  let home = process.env.SMOOTH_BACKLOG_CLI_HOME;
   if (!home) home = configuredHome() ?? undefined; // the repository's .smooth-backlog.json comes before the per-user record
   if (!home) {
     const records = (() => { try { return readdirSync(configDir()).filter(d => existsSync(join(configDir(), d, 'home'))); } catch { return []; } })();
     const chosen = setting.name ? (records.includes(name) ? name : null) : (records.length === 1 ? records[0] : null);
     if (chosen) { try { home = readFileSync(join(configDir(), chosen, 'home'), 'utf8').trim(); } catch { /* unreadable record */ } }
     else if (!setting.url && records.length > 1) {
-      return { home: null, remote: true, ask: { code: 4, text: `two backlog records (${records.join(', ')}) and no setting name one of them: run backlog setup in this repository, or set BACKLOG_HOME` } };
+      return { home: null, remote: true, ask: { code: 4, text: `two backlog records (${records.join(', ')}) and no setting name one of them: run backlog setup in this repository, or set SMOOTH_BACKLOG_CLI_HOME` } };
     }
   }
   if (!home && !setting.url) { // nothing configured anywhere: the backlog is .backlog inside the repository, created with its config
@@ -92,19 +92,19 @@ export function folder(home, repoId) {
 // a child its holder runs and waits for, which is given lockEnv(home) (pop --claim-now runs update).
 const held = new Set();
 const lockPath = home => join(stateDir(home), 'smooth-backlog-cli-run.lock');
-export const lockEnv = home => ({ BACKLOG_RUN_LOCK_HELD: `${lockPath(home)}:${process.pid}` });
+export const lockEnv = home => ({ SMOOTH_BACKLOG_CLI_RUN_LOCK_HELD: `${lockPath(home)}:${process.pid}` });
 export function cloneLocked(home, fn) {
   const path = lockPath(home);
   if (held.has(path)) return guarded(fn);
   // a child its holder runs and waits for (pop --claim-now's update) names itself in the record while it works, so a
   // parent killed meanwhile leaves a live holder, never a lock to take over
-  if (process.env.BACKLOG_RUN_LOCK_HELD === `${path}:${process.ppid}`) return asChild(path, () => guarded(fn));
-  // a normal update (pull, write, push over the network) can take a while: a command behind it waits, 120 s unless BACKLOG_LOCK_WAIT_MS says otherwise
+  if (process.env.SMOOTH_BACKLOG_CLI_RUN_LOCK_HELD === `${path}:${process.ppid}`) return asChild(path, () => guarded(fn));
+  // a normal update (pull, write, push over the network) can take a while: a command behind it waits, 120 s unless SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS says otherwise
   return locked(path, async () => {
     held.add(path);
     recoverJournal(home); // a killed predecessor's half-done change goes first
     try { return await guarded(fn); } finally { held.delete(path); }
-  }, { wait: Number(process.env.BACKLOG_LOCK_WAIT_MS) > 0 ? Number(process.env.BACKLOG_LOCK_WAIT_MS) : 120000, takeOver: true });
+  }, { wait: Number(process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS) > 0 ? Number(process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS) : 120000, takeOver: true });
 }
 
 function git(args, cwd) {

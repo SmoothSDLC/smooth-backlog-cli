@@ -1,6 +1,6 @@
 // Shared test fixtures for the shared-backlog-repository mode (cli-parity job 1).
 // Tests run against local bare repositories only: origins under <tmp>/origins,
-// clones under <tmp>, with BACKLOG_HOME and XDG_CONFIG_HOME inside the test's
+// clones under <tmp>, with SMOOTH_BACKLOG_CLI_HOME and XDG_CONFIG_HOME inside the test's
 // temp dir - never the real backlog repository or ~/.config.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
@@ -86,18 +86,18 @@ export function consumer(tmp, owner, name, branch = 'main') {
   return dest;
 }
 
-// The environment every child process must run under: BACKLOG_HOME points at the
+// The environment every child process must run under: SMOOTH_BACKLOG_CLI_HOME points at the
 // fixture's local clone, XDG_CONFIG_HOME at a temp config dir, git identity set,
-// no terminal prompts. Throws when the resulting BACKLOG_HOME is outside tmp.
+// no terminal prompts. Throws when the resulting SMOOTH_BACKLOG_CLI_HOME is outside tmp.
 export function env(tmp) {
   const raw = String(tmp ?? '');
   const t = resolve(raw);
   const home = join(t, 'home');
   if (!raw || !isAbsolute(raw) || !home.startsWith(t + sep)) {
-    throw new Error(`BACKLOG_HOME ${home} is outside tmp ${raw || '<empty>'}`);
+    throw new Error(`SMOOTH_BACKLOG_CLI_HOME ${home} is outside tmp ${raw || '<empty>'}`);
   }
   // item 091: the shared backlog repository's setting - the variable the CLI must use in the tests
-  return { ...GIT_IDENTITY, BACKLOG_HOME: home, XDG_CONFIG_HOME: join(t, 'config'), BACKLOG_ORIGIN_URL: ORIGIN_URL };
+  return { ...GIT_IDENTITY, SMOOTH_BACKLOG_CLI_HOME: home, XDG_CONFIG_HOME: join(t, 'config'), SMOOTH_BACKLOG_CLI_ORIGIN_URL: ORIGIN_URL };
 }
 
 let calls = 0;
@@ -109,18 +109,18 @@ let calls = 0;
 // opts.plain keeps the command plain, for the tests of the plain commands; opts.team makes an update a team step (a close with its hand-off gate).
 const flagsOf = args => args.map(String).filter(a => a.startsWith('--')).map(a => a.slice(2).split('=')[0]);
 const valueOf = (args, flag) => { const i = args.indexOf(`--${flag}`); return i >= 0 ? args[i + 1] : undefined; };
-// A session of a team (TEAM_NAME), a --team, a --set-team or a flag only a team has makes the command a team command.
+// A session of a team (SMOOTH_BACKLOG_CLI_TEAM_NAME), a --team, a --set-team or a flag only a team has makes the command a team command.
 function teamSpelling(args, env, opts) {
   const flags = flagsOf(args);
   const has = list => flags.some(f => list.includes(f));
-  const session = Boolean(env.TEAM_NAME || env.TEAM_REPOSITORY || env.TEAM_BRANCH) || has(['team', 'set-team']);
+  const session = Boolean(env.SMOOTH_BACKLOG_CLI_TEAM_NAME || env.SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY || env.SMOOTH_BACKLOG_CLI_TEAM_BRANCH) || has(['team', 'set-team']);
   if (args[0] === 'update') return session || (opts.team && !has(['claim', 'release'])) || has([...TEAM_VALUE, ...TEAM_BOOL]);
-  if (args[0] === 'new') return session || has(['review-refs']) || ['TEAM_REPOSITORY', 'TEAM_BRANCH'].some(k => env[k]);
+  if (args[0] === 'new') return session || has(['review-refs']) || ['SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY', 'SMOOTH_BACKLOG_CLI_TEAM_BRANCH'].some(k => env[k]);
   return false;
 }
 // The team and the holder of the item a command names (its front matter), read from the files: no command runs, so nothing is pulled or refreshed.
 function infoOf(item, opts) {
-  const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.BACKLOG_HOME;
+  const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.SMOOTH_BACKLOG_CLI_HOME;
   if (!home || !existsSync(home)) return {};
   for (const owner of readdirSync(home)) for (const name of existsSync(join(home, owner)) && statSync(join(home, owner)).isDirectory() ? readdirSync(join(home, owner)) : []) {
     const dir = join(home, owner, name, 'phases');
@@ -135,8 +135,8 @@ function infoOf(item, opts) {
 }
 // a team a test names without configuring it gets an empty entry, so that its steps can run
 function neutralTeam(e, name = 'neutral') {
-  if (!e.BACKLOG_HOME) return name;
-  const file = join(e.BACKLOG_HOME, 'teams.json');
+  if (!e.SMOOTH_BACKLOG_CLI_HOME) return name;
+  const file = join(e.SMOOTH_BACKLOG_CLI_HOME, 'teams.json');
   let cfg = {}; try { cfg = JSON.parse(readFileSync(file, 'utf8')); } catch { /* none yet */ }
   if (!cfg[name]) { cfg[name] = {}; writeFileSync(file, JSON.stringify(cfg)); }
   return name;
@@ -148,27 +148,27 @@ export function cli(args = [], opts = {}) {
   const itemTeam = info.team;
   if (!opts.plain && (itemTeam || teamSpelling(args, sessionEnv, opts))) {
     // a team session acts only as itself: the agent a command names (--by, --claim, --release, --agent) is the session's
-    const agent = ['by', 'claim', 'release', 'agent'].map(f => valueOf(args, f)).find(Boolean) || opts.env?.BACKLOG_AGENT || (args[0] === 'update' && info.holder) || `driver-${++calls}`;
-    // a session of a team acts as its BACKLOG_AGENT; outside one, the agent a command names acts
-    const via = { ...opts.env, BACKLOG_AGENT: sessionEnv.TEAM_NAME ? opts.env?.BACKLOG_AGENT || agent : agent };
+    const agent = ['by', 'claim', 'release', 'agent'].map(f => valueOf(args, f)).find(Boolean) || opts.env?.SMOOTH_BACKLOG_CLI_AGENT || (args[0] === 'update' && info.holder) || `driver-${++calls}`;
+    // a session of a team acts as its SMOOTH_BACKLOG_CLI_AGENT; outside one, the agent a command names acts
+    const via = { ...opts.env, SMOOTH_BACKLOG_CLI_AGENT: sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME ? opts.env?.SMOOTH_BACKLOG_CLI_AGENT || agent : agent };
     // `backlog team new` makes only team items (--team, or a split in a team session). Any other creation here is the plain command: a team's work item, or an item that names
     // review documents, which a team step then gives it
-    if (args[0] === 'new' && !itemTeam && !flagsOf(args).includes('team') && !(sessionEnv.TEAM_NAME && flagsOf(args).includes('split-from'))) {
+    if (args[0] === 'new' && !itemTeam && !flagsOf(args).includes('team') && !(sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME && flagsOf(args).includes('split-from'))) {
       const at = args.indexOf('--review-refs');
       const made = cli(at < 0 ? args : args.filter((_, i) => i !== at && i !== at + 1), { ...opts, env: via, plain: true });
       if (made.status !== 0 || at < 0) return made;
-      const set = cli(['team', 'update', createdSlug(made.stdout), ...(sessionEnv.TEAM_NAME ? [] : ['--team', neutralTeam(sessionEnv)]), '--set-review-refs', args[at + 1]], { ...opts, env: via, plain: true });
+      const set = cli(['team', 'update', createdSlug(made.stdout), ...(sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME ? [] : ['--team', neutralTeam(sessionEnv)]), '--set-review-refs', args[at + 1]], { ...opts, env: via, plain: true });
       return set.status === 0 ? made : set;
     }
     // an item without a team is stepped by a session of no particular team: a neutral entry stands in for it
-    const teamFlag = !sessionEnv.TEAM_NAME && !flagsOf(args).includes('team') && (valueOf(args, 'set-team') ? neutralTeam(sessionEnv, valueOf(args, 'set-team')) : itemTeam || neutralTeam(sessionEnv));
+    const teamFlag = !sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME && !flagsOf(args).includes('team') && (valueOf(args, 'set-team') ? neutralTeam(sessionEnv, valueOf(args, 'set-team')) : itemTeam || neutralTeam(sessionEnv));
     return cli(['team', ...args, ...(teamFlag ? ['--team', teamFlag] : [])], { ...opts, env: via, plain: true });
   }
   const bin = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'));
   const p = spawnSync(process.execPath, [bin, ...args], {
     cwd: opts.cwd,
-    // a team command names its agent with --agent, which a session agent would have to equal; any other command without a named agent is a different writer each time (BACKLOG_AGENT, else USER, would make every call one agent with one stale view)
-    env: { ...process.env, BACKLOG_AGENT: args[0] === 'team' ? '' : `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
+    // a team command names its agent with --agent, which a session agent would have to equal; any other command without a named agent is a different writer each time (SMOOTH_BACKLOG_CLI_AGENT, else USER, would make every call one agent with one stale view)
+    env: { ...process.env, SMOOTH_BACKLOG_CLI_AGENT: args[0] === 'team' ? '' : `driver-${++calls}`, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env },
     input: opts.input ?? '', // standard input: nothing unless the test types an answer
     encoding: 'utf8',
     timeout: opts.timeout ?? 60000,
@@ -178,9 +178,9 @@ export function cli(args = [], opts = {}) {
   return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr };
 }
 
-// Creates a team's item with `backlog team new <args>`: the team from --team (or TEAM_NAME), the agent from --agent, else the session's BACKLOG_AGENT, else a driver of its own.
+// Creates a team's item with `backlog team new <args>`: the team from --team (or SMOOTH_BACKLOG_CLI_TEAM_NAME), the agent from --agent, else the session's SMOOTH_BACKLOG_CLI_AGENT, else a driver of its own.
 export function teamNew(args = [], opts = {}) {
-  const agent = valueOf(args, 'agent') ? [] : ['--agent', opts.env?.BACKLOG_AGENT || `driver-${++calls}`];
+  const agent = valueOf(args, 'agent') ? [] : ['--agent', opts.env?.SMOOTH_BACKLOG_CLI_AGENT || `driver-${++calls}`];
   return cli(['team', 'new', ...args, ...agent], { ...opts, plain: true });
 }
 
@@ -194,7 +194,7 @@ export const createdSlug = stdout => {
 // Puts a created item into team `team`, ready to be claimed: `backlog new --team` starts in refinement, and the
 // team views and `backlog team pop` reach only the items of their team.
 export function intoTeam(slug, opts, team = 't1', status = 'ready') { // status '': the team only, the item stays unrefined and incomplete
-  const r = cli(['team', 'update', slug, '--team', team, '--agent', opts.agent ?? 'lead', '--set-team', team, ...(status ? ['--status', status] : [])], { ...opts, env: { ...opts.env, BACKLOG_AGENT: '' } }); // opts.env: the caller's own session, so its view
+  const r = cli(['team', 'update', slug, '--team', team, '--agent', opts.agent ?? 'lead', '--set-team', team, ...(status ? ['--status', status] : [])], { ...opts, env: { ...opts.env, SMOOTH_BACKLOG_CLI_AGENT: '' } }); // opts.env: the caller's own session, so its view
   if (r.status !== 0) throw new Error(`intoTeam ${slug}: ${r.stdout}${r.stderr}`);
   const file = status === 'ready' && infoOf(slug, opts).file; // the item is refined: it carries the stage a refined item has
   if (file) { const text = readFileSync(file, 'utf8'); if (!/^stage:/m.test(text)) writeFileSync(file, text.replace(/^team: .*$/m, m => `${m}\nstage: ready\nrefiner: ${opts.agent ?? 'lead'}`)); }

@@ -14,8 +14,8 @@ const output = r => `${r.stdout}\n${r.stderr}`;
 step(/^a repository with a backlog$/, () => {}); // the world made it: a git repository with an origin, and the storage location
 // "this repository": the id the plain commands give the repository (a team session is bound to it)
 step(/^the environment (\w+) is "([^"]*)"$/, (w, key, value) => { w.agentEnv[key] = value === 'this repository' ? (w.location === 'local' ? 'local/repository' : 'acme/demo') : value; });
-step(/^I act as agent "([^"]+)"$/, (w, name) => { w.agentEnv.BACKLOG_AGENT = name; });
-step(/^I act as a person$/, w => { delete w.agentEnv.BACKLOG_AGENT; });
+step(/^I act as agent "([^"]+)"$/, (w, name) => { w.agentEnv.SMOOTH_BACKLOG_CLI_AGENT = name; });
+step(/^I act as a person$/, w => { delete w.agentEnv.SMOOTH_BACKLOG_CLI_AGENT; });
 step(/^a team "([^"]+)" with lead "([^"]+)" and members "([^"]*)"$/, (w, team, lead, members) => w.configureTeam(team, { lead, members: members.split(',').map(x => x.trim()).filter(Boolean) }));
 step(/^team "([^"]+)" work needs (\d+) pass(?:es)? by "([^"]+)"(?: and (\d+) pass(?:es)? by "([^"]+)")?$/, (w, team, n1, t1, n2, t2) => {
   const review = [{ team: t1, count: Number(n1) }]; if (t2) review.push({ team: t2, count: Number(n2) });
@@ -26,7 +26,7 @@ step(/^team "([^"]+)" has the external reviewers "([^"]+)"$/, (w, team, who) => 
 step(/^team "([^"]+)" refinements are reviewed by "([^"]+)"$/, (w, team, by) => w.configureTeam(team, { refinement_review: [{ team: by, count: 1 }] }));
 // in the backlog repository the team configuration is a committed file at its root (the fixture keeps its own copy out of git)
 step(/^the team configuration is a committed file$/, w => {
-  if (!w.env.BACKLOG_HOME) return; // inside the repository it is created and committed by the command
+  if (!w.env.SMOOTH_BACKLOG_CLI_HOME) return; // inside the repository it is created and committed by the command
   w.gitIn(w.home(), 'add', '-f', 'teams.json'); w.gitIn(w.home(), 'commit', '-q', '-m', 'teams'); w.gitIn(w.home(), 'push', '-q');
 });
 // a team or flow definition given as JSON text goes through the command, from a file outside the repository
@@ -36,7 +36,7 @@ step(/^I define the (team|workflow) from the JSON `(.+)`$/, (w, kind, json) => {
 });
 step(/^another checkout sees team "([^"]+)" with lead "([^"]+)"$/, (w, team, lead) => {
   const r = w.runOther(['list', '--json']); assert.equal(r.status, 0, output(r)); // the read pulls the published configuration
-  const file = join(w.other(), w.env.BACKLOG_HOME ? '' : '.backlog', 'teams.json');
+  const file = join(w.other(), w.env.SMOOTH_BACKLOG_CLI_HOME ? '' : '.backlog', 'teams.json');
   assert.equal(JSON.parse(readFileSync(file, 'utf8'))[team]?.lead, lead, readFileSync(file, 'utf8'));
 });
 // the repository that holds the items: the backlog repository clone, or the repository itself when the items live inside it
@@ -66,7 +66,7 @@ step(/^I have read item (\S+)$/, (w, item) => { const r = command(w, `backlog sh
 // the second checkout of the same backlog (see world.other)
 step(/^another checkout runs `(.+)`$/, (w, text) => {
   const args = split(text); assert.equal(args.shift(), 'backlog');
-  const by = args.indexOf('--by'); const env = by >= 0 ? { BACKLOG_AGENT: args[by + 1] } : {};
+  const by = args.indexOf('--by'); const env = by >= 0 ? { SMOOTH_BACKLOG_CLI_AGENT: args[by + 1] } : {};
   const r = w.runOther(args, { env }); assert.equal(r.status, 0, `the other checkout failed: ${output(r)}`);
 });
 step(/^another checkout sees item (\S+) with status "([^"]*)"$/, (w, item, status) => {
@@ -83,10 +83,10 @@ const raceWith = (w, change) => {
   const marker = join(w.tmp, 'raced');
   const other = w.other();
   const bin = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
-  const env = w.env.BACKLOG_HOME ? `BACKLOG_HOME='${other}' ` : '';
-  const cwd = w.env.BACKLOG_HOME ? w.repo : other;
+  const env = w.env.SMOOTH_BACKLOG_CLI_HOME ? `SMOOTH_BACKLOG_CLI_HOME='${other}' ` : '';
+  const cwd = w.env.SMOOTH_BACKLOG_CLI_HOME ? w.repo : other;
   mkdirSync(hooks, { recursive: true });
-  writeFileSync(join(hooks, 'pre-push'), `#!/bin/sh\n[ -e '${marker}' ] && exit 0\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX\ntouch '${marker}'\ncd '${cwd}' && ${env}BACKLOG_AGENT=racer '${process.execPath}' '${bin}' update ${change} >/dev/null 2>&1\nexit 0\n`, { mode: 0o755 });
+  writeFileSync(join(hooks, 'pre-push'), `#!/bin/sh\n[ -e '${marker}' ] && exit 0\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX\ntouch '${marker}'\ncd '${cwd}' && ${env}SMOOTH_BACKLOG_CLI_AGENT=racer '${process.execPath}' '${bin}' update ${change} >/dev/null 2>&1\nexit 0\n`, { mode: 0o755 });
 };
 step(/^the origin will receive another checkout's change just before my push$/, w => raceWith(w, '1 --note raced'));
 step(/^the origin will receive another checkout's rank change of item 2 just before my push$/, w => raceWith(w, '2 --priority 0'));
@@ -106,16 +106,16 @@ step(/^the JSON output has (\d+) items?$/, (w, n) => { const v = JSON.parse(w.la
 
 // item facts, read back through the CLI
 const read = (w, item) => {
-  const r = w.run(['show', item, '--json'], { env: { BACKLOG_AGENT: 'reader' } });
+  const r = w.run(['show', item, '--json'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'reader' } });
   assert.equal(r.status, 0, `cannot read item ${item}: ${output(r)}`);
   const v = JSON.parse(r.stdout); return { ...v, ...(v.front_matter ?? {}) };
 };
 step(/^item (\S+) has (\w+) "([^"]*)"$/, (w, item, field, value) => { const v = read(w, item); assert.equal(String(v[field] ?? ''), value, `${field} of ${item}: ${JSON.stringify(v[field])}`); });
 step(/^item (\S+) has (\w+) (\d+)$/, (w, item, field, value) => { const v = read(w, item); assert.equal(Number(v[field]), Number(value), `${field} of ${item}: ${JSON.stringify(v[field])}`); });
 step(/^item (\S+) body contains "([^"]*)"$/, (w, item, text) => { const v = read(w, item); assert.ok(String(v.body ?? '').includes(text), `body of ${item}:\n${v.body}`); });
-step(/^item (\S+) does not exist$/, (w, item) => { const r = w.run(['show', item, '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.notEqual(r.status, 0, `item ${item} exists: ${r.stdout}`); });
+step(/^item (\S+) does not exist$/, (w, item) => { const r = w.run(['show', item, '--json'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'reader' } }); assert.notEqual(r.status, 0, `item ${item} exists: ${r.stdout}`); });
 step(/^the queue is (\d+(?:, \d+)*)$/, (w, list) => {
-  const r = w.run(['list', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r));
+  const r = w.run(['list', '--json'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r));
   const open = (JSON.parse(r.stdout).phases ?? []).filter(p => !['closed', 'done', 'archived'].includes(p.status)).sort((a, b) => a.priority - b.priority).map(p => String(p.seq));
   assert.deepEqual(open, list.split(', '), r.stdout);
 });
@@ -138,4 +138,4 @@ step(/^the status of item (\d+) is damaged in the backlog repository$/, (w, n) =
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'damaged'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
 });
 step(/^the backlog has an index$/, w => assert.ok(existsSync(join(w.folder(), 'index.json')), 'no index file in the backlog folder'));
-step(/^the queue is empty$/, w => { const r = w.run(['list', '--json'], { env: { BACKLOG_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r)); assert.deepEqual((JSON.parse(r.stdout).phases ?? []).filter(p => !['closed', 'done', 'archived'].includes(p.status)), [], r.stdout); });
+step(/^the queue is empty$/, w => { const r = w.run(['list', '--json'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'reader' } }); assert.equal(r.status, 0, output(r)); assert.deepEqual((JSON.parse(r.stdout).phases ?? []).filter(p => !['closed', 'done', 'archived'].includes(p.status)), [], r.stdout); });

@@ -22,8 +22,8 @@ function fixture() {
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD];
-const plainRun = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, plain: true, env: { TEAM_LEAD: 'lead', BACKLOG_AGENT: 'ann' } });
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, notices: true, env: { TEAM_LEAD: 'lead', BACKLOG_AGENT: '', ...env } }); // every command here names its agent; a session agent (BACKLOG_AGENT) would have to be the same one
+const plainRun = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, plain: true, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_AGENT: 'ann' } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, notices: true, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_AGENT: '', ...env } }); // every command here names its agent; a session agent (SMOOTH_BACKLOG_CLI_AGENT) would have to be the same one
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 // a refined, ready item of team t1
 function ready(f) {
@@ -39,7 +39,7 @@ test('team update claims for the agent; --team is required', () => {
   const f = fixture();
   const s = ready(f);
   run(f, ['show', s, '--agent', 'zz']);
-  const missing = run(f, ['team', 'update', s, '--agent', 'ann', '--claim'], { TEAM_NAME: '' });
+  const missing = run(f, ['team', 'update', s, '--agent', 'ann', '--claim'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: '' });
   assert.equal(missing.status, 2); assert.match(missing.stderr, /--team/);
   assert.equal(fm(f, s).status, 'ready');
   run(f, ['show', s, '--agent', 'ann']);
@@ -167,7 +167,7 @@ test('the team views run under team query; the plain query does not know them; a
 });
 
 // ---- backlog team pop: one next-action command by role
-const pop = (f, agent, ...args) => run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json', ...args], { BACKLOG_AGENT: '' });
+const pop = (f, agent, ...args) => run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json', ...args], { SMOOTH_BACKLOG_CLI_AGENT: '' });
 
 test('team pop: the lead claims the work item and sees it whole, then a member has nothing to take; pop and work are not commands', () => {
   const f = fixture();
@@ -224,7 +224,7 @@ test('team pop and team update reach only the items of --team: an item of no tea
   assert.equal(idle.status, 0, idle.stdout + idle.stderr);
   assert.deepEqual([JSON.parse(idle.stdout).action, JSON.parse(idle.stdout).item, fm(f, plain).claimed_by], ['chunk', null, '']);
   run(f, ['show', plain, '--agent', 'ann']);
-  const r = run(f, ['team', 'update', plain, '--team', 't1', '--agent', 'ann', '--claim'], { TEAM_NAME: '' });
+  const r = run(f, ['team', 'update', plain, '--team', 't1', '--agent', 'ann', '--claim'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: '' });
   assert.equal(r.status, 1); assert.match(r.stdout, /belongs to no team; this session's team t1 claims only its own team's items/);
   assert.equal(fm(f, plain).claimed_by, '');
 });

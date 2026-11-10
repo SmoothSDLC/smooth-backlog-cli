@@ -55,7 +55,7 @@ changes no command: the repository's .backlog folder holds the configuration
 the current branch and pushed to origin together with the rest of the branch: the user's own commits go with the
 change; use a backlog repository if the branch must not be pushed yet; "push-backlog-updates": false in the
 configuration turns every push off); the configuration can name a clone of a backlog repository shared by many
-repositories and people instead (BACKLOG_ORIGIN_URL names it; BACKLOG_HOME may point at the clone). Environment
+repositories and people instead (SMOOTH_BACKLOG_CLI_ORIGIN_URL names it; SMOOTH_BACKLOG_CLI_HOME may point at the clone). Environment
 variables override the configuration.
 
 The items and the index are the data, and the CLI keeps no copy of them: the order of the queue of each branch is kept in
@@ -65,7 +65,7 @@ has read stay in the clone's state folder. When an item file cannot be read afte
 refuses (exit 2) and names the item and the field that cannot be read; backlog update <item> --<field> <value> sets the
 field again, and backlog update <item> --restore brings back the item's previous version.
 
-Who: BACKLOG_AGENT names the agent running the command (--by, --claim and --agent name one explicitly); every change
+Who: SMOOTH_BACKLOG_CLI_AGENT names the agent running the command (--by, --claim and --agent name one explicitly); every change
 records who made it and when. A write to an item that someone else changed since this agent last read it is refused
 (exit 5) until the agent reads it again (backlog show <item> --agent <you>).
 
@@ -252,7 +252,7 @@ Options:
   --reason REASON
       With --close --by owner: the owner's decision, written into the closing entry.
   --by AGENT
-      The agent that closes the item (--close). The default is the agent named by BACKLOG_AGENT.
+      The agent that closes the item (--close). The default is the agent named by SMOOTH_BACKLOG_CLI_AGENT.
   --set-depends-on IDS
       Replace the depends_on of the item, as item numbers or slugs, owner/name#seq for an item of another repository, or
       the word none. The command refuses when a named item is not in this backlog, or not in the backlog repository. A
@@ -366,7 +366,7 @@ Prints the item given by number or slug as JSON: the row of the item (number, sl
 its front_matter and its body. Several items given as a comma-separated list are printed as a JSON array, one object each, in the order given. The
 command refuses (exit 1) when one of them does not exist, and then prints none of them. A file that cannot be read or parsed fails the command, as every
 read does. The command never changes an item. The agent that shows an item has read it: its next write of that item is refused (exit 5) when somebody
-else changed the item since, and the refusal says to show it again. The agent is --agent, else BACKLOG_AGENT.
+else changed the item since, and the refusal says to show it again. The agent is --agent, else SMOOTH_BACKLOG_CLI_AGENT.
 
 ${SHARED}
 
@@ -431,7 +431,7 @@ ${SHARED}
 
 Options:
   --agent AGENT
-      The agent whose last use is the reference. The default is BACKLOG_AGENT, else the user.
+      The agent whose last use is the reference. The default is SMOOTH_BACKLOG_CLI_AGENT, else the user.
   --json
       Print machine-readable output.
 ${HELP_FLAG}
@@ -664,8 +664,8 @@ Usage:
   backlog setup [--ask]
 
 Run inside the git repository to set up. The command:
-  1. finds the backlog folder: BACKLOG_HOME when the variable is set; else the one the repository's configuration
-     names; else, when a clone URL is set (the environment variable BACKLOG_ORIGIN_URL, then the backlog_origin_url
+  1. finds the backlog folder: SMOOTH_BACKLOG_CLI_HOME when the variable is set; else the one the repository's configuration
+     names; else, when a clone URL is set (the environment variable SMOOTH_BACKLOG_CLI_ORIGIN_URL, then the backlog_origin_url
      key of the configuration),
      ../<name> beside the repository (<name> from the URL); else .backlog inside the repository. With --ask it asks for
      the path, showing that default;
@@ -675,13 +675,13 @@ Run inside the git repository to set up. The command:
   3. creates the repository's .backlog folder (the configuration lives there; inside it the items too, by default) and
      writes .backlog/config.json {"backlog_repository": "<path relative to the repository>"} (".backlog" for the
      folder inside it) when there is no configuration yet, with --ask, or when the environment names the location
-     (BACKLOG_HOME, BACKLOG_ORIGIN_URL — the clone URL is recorded as backlog_origin_url, so later runs need no
+     (SMOOTH_BACKLOG_CLI_HOME, SMOOTH_BACKLOG_CLI_ORIGIN_URL — the clone URL is recorded as backlog_origin_url, so later runs need no
      variable); otherwise keeps it. A write keeps the file's other keys;
   4. replaces the backlog skill in every agent folder present (.agents, .claude, .github, .qwen) with this release's;
   5. commits and pushes what it wrote (the configuration and the skill copies) on the current branch, and prints a
      summary of every action: the .backlog folder, the configuration, the skill copies, the commit. No path is printed.
 
-Every command finds the backlog folder in this order: BACKLOG_HOME, the repository's configuration (.backlog/config.json,
+Every command finds the backlog folder in this order: SMOOTH_BACKLOG_CLI_HOME, the repository's configuration (.backlog/config.json,
 backlog_repository: a path relative to the repository; .backlog means inside it; the root file .smooth-backlog.json of
 earlier builds is still read), the per-user file <name>/home under the config folder ($XDG_CONFIG_HOME, else
 ~/.config; without the clone-URL setting, the only such file there), ~/git/<name> when a clone URL is set. When none of

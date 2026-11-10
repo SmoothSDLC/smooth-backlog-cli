@@ -72,7 +72,7 @@ export function claim({ fm, folder, repo, body = '' }, agent, { force } = {}) {
   // A plain teamless item (no split marker) stays outside the session's team.
   if (teamName() && !fm.team && fm.repository === repo && isSplitSlice(body)) fm.team = teamName();
   // the design: the lead never claims a split item; the team runner claims the team's work item (no stage) for it
-  // a team session (TEAM_NAME) claims only what pop offers it: an item of its own team in its repository (any
+  // a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME) claims only what pop offers it: an item of its own team in its repository (any
   // item without another team elsewhere). Checked inside the locked write, so team pop's scope is the claim's precondition.
   if (teamName() && !offeredTo(fm, fm.repository, repo)) {
     reject(fm.team ? `the item belongs to team ${fm.team}, not to this session's team ${teamName()}`
@@ -147,7 +147,7 @@ export function refineDone({ fm }, by, note) {
 }
 
 export function requestRefinementReview({ fm }, by) {
-  if (!by || by !== teamLead()) reject(`--request-refinement-review --by <the team lead>: the lead (${teamLead() || 'none configured'}; TEAM_LEAD) sends a refined item to the refinement review (got ${by || 'none'})`);
+  if (!by || by !== teamLead()) reject(`--request-refinement-review --by <the team lead>: the lead (${teamLead() || 'none configured'}; SMOOTH_BACKLOG_CLI_TEAM_LEAD) sends a refined item to the refinement review (got ${by || 'none'})`);
   if (fm.stage !== 'refined') reject(`only a refined item goes to the refinement review (stage ${fm.stage || 'none'})`);
   gate('request-refinement-review', fm, by);
   const t = now();
@@ -215,7 +215,7 @@ export function release({ fm }, agent, { by, reason } = {}) {
 
 // the team lead takes an item from one agent and gives it to another, with the reason.
 export function reassign({ fm }, agent, { by, reason } = {}) {
-  if (!by || by !== teamLead()) reject(`--reassign --by <the team lead>: only the lead (${teamLead()}; TEAM_LEAD) gives one agent's item to another (got ${by || 'none'})`);
+  if (!by || by !== teamLead()) reject(`--reassign --by <the team lead>: only the lead (${teamLead()}; SMOOTH_BACKLOG_CLI_TEAM_LEAD) gives one agent's item to another (got ${by || 'none'})`);
   if (!strip(reason || '')) reject('--reassign needs --reason "<why>"');
   if (isFinished(fm.status)) reject(`status is ${fm.status}; a finished item is not reassigned`);
   const from = fm.claimed_by || '';
@@ -231,7 +231,7 @@ export function reassign({ fm }, agent, { by, reason } = {}) {
 
 // the team lead hands a review on from its reviewer (a stale one, say) to another agent, with the reason.
 export function reassignReview({ fm }, agent, { by, reason } = {}) {
-  if (!by || by !== teamLead()) reject(`--reassign-review --by <the team lead>: only the lead (${teamLead()}; TEAM_LEAD) hands a review on (got ${by || 'none'})`);
+  if (!by || by !== teamLead()) reject(`--reassign-review --by <the team lead>: only the lead (${teamLead()}; SMOOTH_BACKLOG_CLI_TEAM_LEAD) hands a review on (got ${by || 'none'})`);
   if (!strip(reason || '')) reject('--reassign-review needs --reason "<why>"');
   if (!['requested', 'in_review'].includes(fm.review_state)) reject(`no review is requested (review_state ${fm.review_state || 'none'})`);
   if (isReviewAuthor(fm, agent)) reject(NO_SELF_REVIEW(agent));
@@ -241,12 +241,12 @@ export function reassignReview({ fm }, agent, { by, reason } = {}) {
   return { event: 'review_reassigned', text: `## Review reassigned by ${by} from ${from || 'nobody'} to ${agent} at ${t}\n\n${reason}` };
 }
 
-// In a team session (TEAM_NAME set) the caller is BACKLOG_AGENT and acts only as itself. Outside a team session the caller
+// In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set) the caller is SMOOTH_BACKLOG_CLI_AGENT and acts only as itself. Outside a team session the caller
 // is not known and the named agent is taken as given.
-export const caller = () => (teamName() ? strip(process.env.BACKLOG_AGENT || '') : '');
+export const caller = () => (teamName() ? strip(process.env.SMOOTH_BACKLOG_CLI_AGENT || '') : '');
 
-// The session of the caller: BACKLOG_SESSION, else the agent name (BACKLOG_AGENT); '' when nothing names it.
-export const callerSession = () => strip(process.env.BACKLOG_SESSION || process.env.BACKLOG_AGENT || '');
+// The session of the caller: SMOOTH_BACKLOG_CLI_SESSION, else the agent name (SMOOTH_BACKLOG_CLI_AGENT); '' when nothing names it.
+export const callerSession = () => strip(process.env.SMOOTH_BACKLOG_CLI_SESSION || process.env.SMOOTH_BACKLOG_CLI_AGENT || '');
 
 // The item's work commit at the time of the check: the working repository's HEAD. A commit of new work after a pass moves
 // HEAD, so passes recorded for the older commit no longer count and the review runs again; the item's commit field records
@@ -457,7 +457,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   }
   if (me && actions.length && me !== teamLead()) {
     const as = (ACTS_AS[actions[0]] ?? (x => x.by))(a, fm);
-    if (as && as !== me) return { refuse: `${slug}: you are ${me} (BACKLOG_AGENT): a member acts only as itself, not as ${as}; only the team lead (${teamLead()}) takes or gives another agent's work (${teamStep('<item>', '<lead>', '--reassign <agent> --reason "<why>"')})` };
+    if (as && as !== me) return { refuse: `${slug}: you are ${me} (SMOOTH_BACKLOG_CLI_AGENT): a member acts only as itself, not as ${as}; only the team lead (${teamLead()}) takes or gives another agent's work (${teamStep('<item>', '<lead>', '--reassign <agent> --reason "<why>"')})` };
   }
   const note = a.note ?? '';
   // Beyond the earlier scripts: a field, --set-* or body edit is a change too.
@@ -491,7 +491,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
     const work = [...steps.filter(k => !REFINEMENT_STEPS.includes(k) && k !== 'claim' && !(k === 'close' && ownerClose)).map(k => `--${k}`), ...given.filter(k => k === 'status').map(k => `--${k}`)]; // a claim has its own gate (claim)
     if (work.length) return { refuse: `${slug}: team ${before.team} item in stage ${before.stage}: before stage ready only its refinement steps run (${work.join(', ')} refused)` };
   }
-  // outside the refinement stages only the lead refines an incomplete item of its team (a member known by BACKLOG_AGENT
+  // outside the refinement stages only the lead refines an incomplete item of its team (a member known by SMOOTH_BACKLOG_CLI_AGENT
   // changes nothing on it)
   const who = me || a.by; // the team-session caller, else the agent named by --by
   // the DAG is the lead's (refine-and-split: the lead links the split items), so --set-depends-on is no refinement edit
@@ -503,7 +503,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
   if (incomplete.length && (before.team || teamScope().repo) && !refining && who && who !== teamLead() && !ownerClose && (actions.length || strip(note) || given.length || a.append || a.section || Object.keys(a).some(k => k.startsWith('set-')))) {
     return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: only the team lead (${teamLead()}) refines it, not ${who}` };
   }
-  // The team rules hold for team work only: an item of a team, or a session bound to a team (TEAM_NAME, TEAM_REPOSITORY). An item
+  // The team rules hold for team work only: an item of a team, or a session bound to a team (SMOOTH_BACKLOG_CLI_TEAM_NAME, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY). An item
   // without a team, worked outside a team session, is claimed, reviewed, worked and closed without them.
   const teamwork = Boolean(before.team || fm.team || teamScope().repo || teamName());
   if (incomplete.length && teamwork && (teamScope().repo || steps.length || refining)) { // team work: an incomplete item is only refined

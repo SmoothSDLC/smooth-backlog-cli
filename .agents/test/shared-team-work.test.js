@@ -28,10 +28,10 @@ function fixture() {
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', `Body of ${name}.\n\n${DOD}`];
-const LEAD = { TEAM_LEAD: 'lead' };
+const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' };
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  const o = { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...LEAD, ...env } };
+  const o = { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', ...LEAD, ...env } };
   const actor = reader(args);
   if (args[0] === 'update') cli(['show', args[1], ...(actor ? ['--agent', actor] : [])], o); // read before the write, as the acting agent or the env actor (seen.js)
   if (args[0] === 'new') { const i = args.indexOf('--split-from'); if (i > -1) cli(['show', args[i + 1]], o); } // the split reads the parent's refinement state; the env actor's view of it must be fresh (seen.js)
@@ -41,14 +41,14 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
-const work = (f, agent, env, ...args) => { const r = run(f, ['team', 'pop', '--team', env?.TEAM_NAME || 't1', '--agent', agent, '--json', ...args], env?.TEAM_NAME ? { BACKLOG_AGENT: agent, ...env } : env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
+const work = (f, agent, env, ...args) => { const r = run(f, ['team', 'pop', '--team', env?.SMOOTH_BACKLOG_CLI_TEAM_NAME || 't1', '--agent', agent, '--json', ...args], env?.SMOOTH_BACKLOG_CLI_TEAM_NAME ? { SMOOTH_BACKLOG_CLI_AGENT: agent, ...env } : env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
 const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => ok(f, ['update', slug, ...a]));
 // an item of team t1, refined: the team pop reaches only the items of its team
 const inT1 = (f, slug) => { ok(f, ['update', slug, '--set-team', 't1']); refined(f, slug); return slug; };
 // an item of team t1, ready to be claimed
 const inTeam = (f, slug, status = 'ready') => intoTeam(slug, { cwd: f.cons, tmp: f.t, env: LEAD }, 't3', status);
-const TM = agent => ({ TEAM_NAME: 't1', BACKLOG_AGENT: agent }); // a team session of the agent
+const TM = agent => ({ SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_AGENT: agent }); // a team session of the agent
 const STOP = /🛑 (\S+): END THE SESSION NOW\. Reply with text only and make no further tool call/;
 
 test('query --phase shows the whole item: the row, every front matter field and the body', () => {
@@ -78,16 +78,16 @@ test('backlog work: the next action marked as the agent\'s (claim, refinement st
   ok(f, ['update', parent, '--set-team', 't1']);
   ok(f, ['update', parent, '--claim', 'lead']); // the lead holds its work item; unclaimed, a member would be offered its refinement first
   const child = make(f, 'child', '--split-from', parent);
-  w = work(f, 'ann', { TEAM_NAME: 't1' });
+  w = work(f, 'ann', { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' });
   assert.deepEqual([w.action, w.item, w.marked, fm(f, child).refiner], ['refine', child, '--refine-start --agent ann', 'ann']);
   assert.ok(w.instruction.startsWith('you started refining it: complete its team fields') && !w.instruction.includes('--refine-start'), w.instruction);
-  const text = run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann'], { TEAM_NAME: 't1' });
+  const text = run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' });
   assert.equal(text.status, 0, text.stderr);
   assert.ok(text.stdout.startsWith(`refine ${child}\n`) && text.stdout.includes(`--- item ${child}: front matter ---\n`) && text.stdout.includes('refiner: ann')
     && text.stdout.includes(`--- item ${child}: body ---\n`), text.stdout); // the refinement in progress: no new mark
-  const idle = work(f, 'nobody', { TEAM_NAME: 't2' });
+  const idle = work(f, 'nobody', { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't2' });
   assert.deepEqual([idle.action, idle.status, idle.front_matter], ['chunk', 0, null]); // nothing of its team: chunk work, no item
-  const r = run(f, ['team', 'pop'], { BACKLOG_AGENT: '', TEAM_NAME: '' });
+  const r = run(f, ['team', 'pop'], { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_TEAM_NAME: '' });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /needs --team/);
 });
@@ -114,7 +114,7 @@ test('the hand-off to review, a changes verdict and a close end the agent\'s ses
   ok(f, ['update', c, '--claim', 'bob', '--force']); // bob holds two active items
   r = ok(f, ['update', b, '--request-review', 'any', '--note', 'commit ghi', '--by', 'bob']);
   assert.equal(STOP.exec(r.stdout)?.[1], 'bob'); // every hand-off ends the session (c being active only spares the lock)
-  const d = createdSlug(cli(['new', '--name', "the lead's item", '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--complexity', 'low', '--body', `Body.\n\n${DOD}`], { cwd: f.cons, tmp: f.t, plain: true, env: { BACKLOG_AGENT: 'lead' } }).stdout); // an item of no team
+  const d = createdSlug(cli(['new', '--name', "the lead's item", '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--complexity', 'low', '--body', `Body.\n\n${DOD}`], { cwd: f.cons, tmp: f.t, plain: true, env: { SMOOTH_BACKLOG_CLI_AGENT: 'lead' } }).stdout); // an item of no team
   ok(f, ['update', d, '--set-review-refs', 'references/review/code.md', '--by', 'lead']); // a review is asked for a complete item
   ok(f, ['update', d, '--claim', 'lead']);
   r = ok(f, ['update', d, '--request-review', 'any', '--note', 'x', '--by', 'lead']);
@@ -125,7 +125,7 @@ test('in a team session a member acts only as itself; only the lead reassigns or
   const f = fixture();
   const job = make(f, 'held job'); ok(f, ['update', job, '--set-team', 't1']); refined(f, job);
   const BOB = TM('bob'); const ANN = TM('ann'); const LEADS = TM('lead');
-  no(f, ['update', job, '--claim', 'ann'], 'you are bob (BACKLOG_AGENT): a member acts only as itself, not as ann', BOB);
+  no(f, ['update', job, '--claim', 'ann'], 'you are bob (SMOOTH_BACKLOG_CLI_AGENT): a member acts only as itself, not as ann', BOB);
   ok(f, ['update', job, '--claim', 'ann'], ANN);
   no(f, ['update', job, '--release', 'ann'], 'not as ann', BOB);
   no(f, ['update', job, '--close', '--summary', 'x'], 'only the claimer (ann) closes it', BOB); // closing ann's item: `team update` acts as the session's agent, bob
@@ -154,7 +154,7 @@ test('a member never takes over another agent\'s stale review; the lead hands it
   ok(f, ['update', job, '--claim', 'bob']);
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']);
   ok(f, ['update', job, '--start-review', '--by', 'zed']);
-  const STALE = { BACKLOG_REVIEW_STALE_SECONDS: '-1' };
+  const STALE = { SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS: '-1' };
   no(f, ['update', job, '--start-review', '--by', 'ann'], 'the review is stale: the team lead hands it on', STALE);
   assert.notEqual(work(f, 'ann', STALE).action, 'review');
   const p = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json'], STALE).stdout);
@@ -197,7 +197,7 @@ test('only the claimer closes its item, else the team lead; the close-now line n
 
 test("the lead never claims, waits without polling while its team works, keeps its close and rework, and closes the work item when every item is done", () => {
   const f = fixture();
-  const T = { TEAM_NAME: 't1' };
+  const T = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' };
   const w = make(f, 'team work item');
   ok(f, ['update', w, '--set-team', 't1']);
   ok(f, ['update', w, '--claim', 'lead']);
@@ -229,12 +229,12 @@ test("the lead never claims, waits without polling while its team works, keeps i
 
 test('backlog team new files an item of its team in stage refining, in a team session or not; a plain new makes an item of no team', () => {
   const f = fixture();
-  const team = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const team = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
   const base = ['new', '--name', 'x', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--body', DOD];
   const mine = r => fm(f, createdSlug(r.stdout));
   assert.deepEqual([mine(ok(f, [...base, '--team', 't1'], team)).team, mine(ok(f, [...base, '--team', 't1', '--name', 'y'], team)).status], ['t1', 'new']);
   assert.equal(mine(ok(f, [...base, '--name', 'z'])).team, undefined); // outside a team session, and with no --team, the plain command: an item of no team
-  assert.equal(mine(ok(f, [...base, '--name', 'w'], { TEAM_REPOSITORY: 'acme/demo' })).team, undefined); // TEAM_REPOSITORY alone: the plain command ignores it
+  assert.equal(mine(ok(f, [...base, '--name', 'w'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo' })).team, undefined); // SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY alone: the plain command ignores it
 });
 
 test('the claimer never reviews its own item; a reviewed item finishes only through --close; an unclaimed team item is closed by the lead', () => {
@@ -262,7 +262,7 @@ test('the claimer never reviews its own item; a reviewed item finishes only thro
 
 test("the lead's close and rework are never hidden by its team's refinement review or a stale review", () => {
   const f = fixture();
-  const T = { TEAM_NAME: 't1' };
+  const T = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' };
   const w = make(f, 'team work item');
   ok(f, ['update', w, '--set-team', 't1']);
   ok(f, ['update', w, '--claim', 'lead']);
@@ -286,7 +286,7 @@ test('the lead waits while only an incomplete item of its team is open', () => {
   ok(f, ['update', w, '--claim', 'lead']);
   const half = NEW('incomplete child').filter((x, i, all) => x !== '--estimate' && all[i - 1] !== '--estimate');
   ok(f, ['new', ...half, '--team', 't1']); // no estimate: incomplete, never dispatched to a member
-  const p = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json'], { TEAM_NAME: 't1' }).stdout);
+  const p = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }).stdout);
   assert.notDeepEqual([p.action, p.item], ['continue', w], p.instruction); // its team's work is open: no busy continue
 });
 
@@ -304,7 +304,7 @@ test('a refinement in progress is active work; an unclaimed hand-off ends the ca
   ok(f, ['update', x, '--request-review', 'any', '--note', 'x', '--by', 'zed']);
   ok(f, ['update', x, '--review', 'pass', '--by', 'ann', '--comments', 'ok per references/review/code.md']);
   const u = make(f, 'unclaimed item');
-  const r = ok(f, ['update', u, '--request-review', 'any', '--note', 'y', '--by', 'ann'], { BACKLOG_AGENT: 'ann' });
+  const r = ok(f, ['update', u, '--request-review', 'any', '--note', 'y', '--by', 'ann'], { SMOOTH_BACKLOG_CLI_AGENT: 'ann' });
   assert.equal(STOP.exec(r.stdout)?.[1], 'ann');
 });
 
@@ -323,7 +323,7 @@ test('a member acts only as itself on an unclaimed item; a request outside a tea
   ok(f, ['update', w, '--set-team', 't1']);
   ok(f, ['update', w, '--claim', 'lead']);
   make(f, 'chunk item', '--chunk');
-  const p = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json'], { TEAM_NAME: 't1' }).stdout);
+  const p = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }).stdout);
   assert.notEqual(p.action, 'chunk', p.instruction); // its team works on inc: the lead waits
 });
 
@@ -344,7 +344,7 @@ test('an unclaimed team item names who asks for its review, who then never revie
   ok(f, ['update', job, '--claim', 'bob']);
   ok(f, ['update', job, '--waiting', 'a run', '--by', 'bob']);
   ok(f, ['update', inTeam(f, make(f, 'other branch work')), '--claim', 'bob', '--force']); // active work
-  const p = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'bob', '--json'], { TEAM_NAME: 't1' }).stdout);
+  const p = JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'bob', '--json'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }).stdout);
   assert.notEqual(p.item, c, p.instruction);
 });
 
@@ -364,7 +364,7 @@ test('backlog work answers only for the team caller itself', () => {
   ok(f, ['update', x, '--claim', 'zed']);
   const r = run(f, ['team', 'pop', '--team', 't1', '--agent', 'zed', '--json'], TM('bob'));
   assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /you are bob \(BACKLOG_AGENT\): team pop answers only for yourself, not for zed/);
+  assert.match(r.stderr, /you are bob \(SMOOTH_BACKLOG_CLI_AGENT\): team pop answers only for yourself, not for zed/);
 });
 
 test("the lead asking for the review of a member's item ends no session and locks nobody", () => {

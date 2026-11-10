@@ -12,8 +12,8 @@ function world(t) {
   const tmp = mkdtempSync(join(tmpdir(), 'backlog-location-'));
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
   const repo = consumer(tmp, 'acme', 'demo', 'main');
-  // no BACKLOG_HOME, no BACKLOG_ORIGIN_URL: `backlog setup` records .backlog inside the repository as the storage location
-  const env = { ...GIT_IDENTITY, XDG_CONFIG_HOME: join(tmp, 'config'), HOME: join(tmp, 'userhome'), BACKLOG_ORIGIN_URL: '', BACKLOG_HOME: '' };
+  // no SMOOTH_BACKLOG_CLI_HOME, no SMOOTH_BACKLOG_CLI_ORIGIN_URL: `backlog setup` records .backlog inside the repository as the storage location
+  const env = { ...GIT_IDENTITY, XDG_CONFIG_HOME: join(tmp, 'config'), HOME: join(tmp, 'userhome'), SMOOTH_BACKLOG_CLI_ORIGIN_URL: '', SMOOTH_BACKLOG_CLI_HOME: '' };
   mkdirSync(env.HOME, { recursive: true });
   const run = (args, extra = {}) => cli(args, { cwd: extra.cwd ?? repo, env: { ...env, ...extra.env } });
   const setup = (cwd = repo) => { const r = run(['setup'], { cwd }); if (r.status !== 0) throw new Error(r.stdout + r.stderr); return r; };
@@ -125,7 +125,7 @@ test('outside a git repository nothing is created and the error says so', t => {
 
 test('a configured backlog repository that is not cloned is an error naming backlog setup, not a silent fallback', t => {
   const { repo, run } = world(t);
-  const r = run(['list'], { env: { BACKLOG_ORIGIN_URL: ORIGIN_URL } });
+  const r = run(['list'], { env: { SMOOTH_BACKLOG_CLI_ORIGIN_URL: ORIGIN_URL } });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /backlog setup/);
   assert.ok(!existsSync(join(repo, '.backlog')), 'nothing was created inside the repository');
@@ -155,7 +155,7 @@ test('the per-user record is found without the origin setting when it is the onl
 function clone2(t, w) {
   const dir = join(w.tmp, 'other');
   spawnSync('git', ['clone', '-q', git(w.repo, 'remote', 'get-url', 'origin'), dir], { encoding: 'utf8' });
-  return { dir, run: (args, extra = {}) => w.run(args, { cwd: dir, env: { BACKLOG_AGENT: 'other', ...extra.env } }) };
+  return { dir, run: (args, extra = {}) => w.run(args, { cwd: dir, env: { SMOOTH_BACKLOG_CLI_AGENT: 'other', ...extra.env } }) };
 }
 
 test('inside the repository every command pulls first: a change published from another clone is read without a manual pull', t => {

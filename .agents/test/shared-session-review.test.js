@@ -40,16 +40,16 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  // BACKLOG_SESSION stays out: these tests pin the agent-name rules, not the author-session rule (item 088),
+  // SMOOTH_BACKLOG_CLI_SESSION stays out: these tests pin the agent-name rules, not the author-session rule (item 088),
   // which a session id inherited from the running shell would apply to the session names
-  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', BACKLOG_SESSION: '', ...env } };
+  const o = { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_SESSION: '', ...env } };
   if (args[0] === 'update' && reader(args)) cli(['show', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text) => { const r = run(f, args); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 // team: the item belongs to t1, which team pop and the team views need to reach it
-const make = (f, team = true) => { const slug = ok(f, ['new', ...NEW('review session')]).stdout.split('created phase ')[1].split(' ')[0]; return team ? intoTeam(slug, { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', BACKLOG_SESSION: '' } }) : slug; };
+const make = (f, team = true) => { const slug = ok(f, ['new', ...NEW('review session')]).stdout.split('created phase ')[1].split(' ')[0]; return team ? intoTeam(slug, { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_SESSION: '' } }) : slug; };
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
 // the setup of every test: the building session claims and asks for the review
 const setup = (f, team = true) => { const s = make(f, team); ok(f, ['update', s, '--claim', A1]); ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]); return s; };
@@ -154,12 +154,12 @@ test('082: query --plan offers the requested review to the new session of the ca
 test('082: in a team session the author session is the session name, not the team name', () => {
   const f = fixture();
   const s = make(f);
-  ok(f, ['update', s, '--claim', A1], { BACKLOG_AGENT: A1 }); // a team session, no session id
+  ok(f, ['update', s, '--claim', A1], { SMOOTH_BACKLOG_CLI_AGENT: A1 }); // a team session, no session id
   assert.equal(itemFm(f, s).author_session, A1, 'the claim records the session name as the author session, not the team name');
-  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1], { BACKLOG_AGENT: A1 });
-  // a fresh session of the same team: a different session name, the same team in BACKLOG_AGENT
-  ok(f, ['update', s, '--start-review', '--by', B1], { BACKLOG_AGENT: B1 });
-  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', 'fine per references/review/code.md'], { BACKLOG_AGENT: B1 });
+  ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1], { SMOOTH_BACKLOG_CLI_AGENT: A1 });
+  // a fresh session of the same team: a different session name, the same team in SMOOTH_BACKLOG_CLI_AGENT
+  ok(f, ['update', s, '--start-review', '--by', B1], { SMOOTH_BACKLOG_CLI_AGENT: B1 });
+  ok(f, ['update', s, '--review', 'pass', '--by', B1, '--comments', 'fine per references/review/code.md'], { SMOOTH_BACKLOG_CLI_AGENT: B1 });
   assert.equal(itemFm(f, s).review_state, 'passed', 'the verdict of a fresh session of the same team is accepted');
 });
 
@@ -219,7 +219,7 @@ test('082: a legacy item keeps its original author in session_authors across eve
     ['a team pop continuation claim', (f, s) => {
       // the lead's own work item carries no stage (the team's split items do): the pop continues it
       const file = join(f.folder, 'phases', `${s}.md`); writeFileSync(file, readFileSync(file, 'utf8').replace(/^(stage|refiner): .*\n/mg, ''));
-      const p = run(f, ['team', 'pop', '--team', 't1', '--json'], { TEAM_LEAD: A2, BACKLOG_AGENT: A2 });
+      const p = run(f, ['team', 'pop', '--team', 't1', '--json'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: A2, SMOOTH_BACKLOG_CLI_AGENT: A2 });
       assert.equal(p.status, 0, p.stdout + p.stderr);
       return [A1, A2];
     }, (f, s) => { ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A2]); refuse(f, s, A1); }],

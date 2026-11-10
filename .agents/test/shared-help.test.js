@@ -150,7 +150,7 @@ test('backlog --help names every command and the storage setting, and is the sam
   assert.match(r.stdout, /backlog <command> --help/, 'how to get the help of one command');
   assert.match(r.stdout, /committed and pushed before the command exits/);
   assert.doesNotMatch(r.stdout, /mode|--use-backlog-repo|--use-local-repo|backlog init/);
-  const inside = cli(['--help'], { cwd: cons, tmp: t, env: { BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: '', XDG_CONFIG_HOME: join(t, 'other-config') } });
+  const inside = cli(['--help'], { cwd: cons, tmp: t, env: { SMOOTH_BACKLOG_CLI_HOME: '', SMOOTH_BACKLOG_CLI_ORIGIN_URL: '', XDG_CONFIG_HOME: join(t, 'other-config') } });
   assert.equal(inside.stdout, r.stdout);
 });
 

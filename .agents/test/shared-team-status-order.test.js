@@ -30,8 +30,8 @@ function fixture(prefix = 'team-stages-') {
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
-const LEAD = { TEAM_LEAD: 'lead' }; // ann, bob and zed are plain members
-const T1 = { TEAM_NAME: 't1' };
+const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' }; // ann, bob and zed are plain members
+const T1 = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' };
 // an agent reads an item before it writes it again (the stale-view guard of seen.js): the agent named by --by, --claim or --release
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
@@ -110,7 +110,7 @@ test('the default entry reviews in both stages; a reject at the external stage r
   assert.equal(after.review_history.length, 2);
   assert.match(after.review_history[0], /^\S+ peer complete bob \S*: /);
   assert.match(after.review_history[1], /^\S+ external reject xia \S*: references\/review\/code.md: the edge case is missing$/);
-  assert.ok(pop(f, 'ann', { ...T1, BACKLOG_AGENT: 'ann' }).instruction.length > 0); // in a team session team pop answers only for the agent itself
+  assert.ok(pop(f, 'ann', { ...T1, SMOOTH_BACKLOG_CLI_AGENT: 'ann' }).instruction.length > 0); // in a team session team pop answers only for the agent itself
 });
 
 test('--review pass and changes are synonyms and the printed line says the canonical word; an unknown verdict is refused naming both words', () => {

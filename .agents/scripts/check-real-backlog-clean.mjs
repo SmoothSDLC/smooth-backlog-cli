@@ -2,7 +2,7 @@
 // 097 (slice B of 050): the shared-store clean guard.
 // Proves that a wrapped command (default: npm test) leaves the shared backlog store's git status and
 // HEAD unchanged. The store is found by the CLI's own discovery (resolveHome in src/shared/store.js):
-// BACKLOG_HOME, then the repository's .smooth-backlog.json, then the per-user record, then ~/git/<name>.
+// SMOOTH_BACKLOG_CLI_HOME, then the repository's .smooth-backlog.json, then the per-user record, then ~/git/<name>.
 // No path of the store is committed in this script; the resolved folder is printed at run time.
 //
 // Usage: node .agents/scripts/check-real-backlog-clean.mjs [-- <command>]
@@ -20,7 +20,7 @@ const USAGE = 'Usage: node .agents/scripts/check-real-backlog-clean.mjs [-- <com
   + 'Runs <command> (default: npm test) exactly once and proves the shared backlog store is left clean:\n'
   + 'it records the store git status and HEAD before the run, refuses to start on a store that is not\n'
   + 'clean, and reports any change of status or HEAD during the run as a changed store. The store is\n'
-  + 'found by the CLI own discovery (BACKLOG_HOME, the repository config, the per-user record,\n'
+  + 'found by the CLI own discovery (SMOOTH_BACKLOG_CLI_HOME, the repository config, the per-user record,\n'
   + '~/git/<name>). Run it while no other session writes to the store. The final stdout line is one\n'
   + 'JSON object; the exit code is 0 only when the store is unchanged and the command exited 0.';
 

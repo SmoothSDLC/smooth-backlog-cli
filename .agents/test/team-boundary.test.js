@@ -24,12 +24,12 @@ function fixture() {
 }
 const DOD = '## Definition of done\n\n- [ ] the check holds';
 const BASE = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', DOD];
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, plain: true, env: { BACKLOG_AGENT: '', ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, plain: true, env: { SMOOTH_BACKLOG_CLI_AGENT: '', ...env } });
 const file = (f, slug) => join(f.folder, 'phases', `${slug}.md`);
 const fm = (f, slug) => parse(readFileSync(file(f, slug), 'utf8')).fm;
 const plainItem = (f, name = 'plain item') => createdSlug(run(f, ['new', ...BASE(name)]).stdout);
 const teamItem = (f, name = 'team item') => {
-  const r = teamNew([...BASE(name), '--team', 't1', '--review-refs', 'references/review/code.md', '--estimate', '5'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '' } });
+  const r = teamNew([...BASE(name), '--team', 't1', '--review-refs', 'references/review/code.md', '--estimate', '5'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return createdSlug(r.stdout);
 };
@@ -105,7 +105,7 @@ const FIELD_FLAGS = [
 ];
 const PLAIN_ONLY = [['status', ['--status', 'closed']], ['branch', ['--branch', 'other']], ['seq', ['--seq', '9']], ['claim', ['--claim', 'ann']], ['release', ['--release', 'ann']],
   ['close', ['--close', '--summary', 'done', '--by', 'ann']], ['dry-run', ['--dry-run', '--note', 'x']]];
-const asTeam = (f, agent, args) => cli(['team', 'update', ...args, '--team', 't1', '--agent', agent], { cwd: f.cons, tmp: f.t, plain: true, env: { BACKLOG_AGENT: '' } });
+const asTeam = (f, agent, args) => cli(['team', 'update', ...args, '--team', 't1', '--agent', agent], { cwd: f.cons, tmp: f.t, plain: true, env: { SMOOTH_BACKLOG_CLI_AGENT: '' } });
 
 test('a plain update refuses every field flag and step on a team item, with one line naming backlog team update, and writes nothing', () => {
   const f = fixture();
@@ -204,7 +204,7 @@ test('a plain new does not split a team item', () => {
 
 test('backlog team new needs a team and an agent, refuses a team without an entry, and files the item under its team in its first status', () => {
   const f = fixture();
-  const fresh = (...args) => cli(['team', 'new', ...args], { cwd: f.cons, tmp: f.t, plain: true, env: { BACKLOG_AGENT: '' } });
+  const fresh = (...args) => cli(['team', 'new', ...args], { cwd: f.cons, tmp: f.t, plain: true, env: { SMOOTH_BACKLOG_CLI_AGENT: '' } });
   const refs = ['--review-refs', 'references/review/code.md', '--estimate', '5'];
   const noTeam = fresh(...BASE('x'), '--agent', 'lead');
   assert.equal(noTeam.status, 2, noTeam.stdout + noTeam.stderr);
@@ -242,7 +242,7 @@ test('a team item is created, claimed and read through the team spellings', () =
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src');
 const files = root => readdirSync(root).flatMap(n => { const p = join(root, n); return statSync(p).isDirectory() ? files(p) : p.endsWith('.js') ? [p] : []; });
 const importsOf = text => [...text.matchAll(/(?:import|export)\s[^'"`;]*?from\s*['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map(m => m[1] ?? m[2]).filter(p => p.startsWith('.'));
-const NAMES = /TEAM_NAME|TEAM_REPOSITORY|TEAM_BRANCH|TEAM_LEAD|teams\.json/;
+const NAMES = /SMOOTH_BACKLOG_CLI_TEAM_NAME|SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY|SMOOTH_BACKLOG_CLI_TEAM_BRANCH|SMOOTH_BACKLOG_CLI_TEAM_LEAD|teams\.json/;
 // the modules outside src/team/ that the team code may import
 const SHARED = ['errors.js', 'storage.js', 'shared/dependencies.js', 'shared/frontmatter.js', 'shared/help-parts.js', 'shared/index.js', 'shared/new.js', 'shared/query.js', 'shared/safety.js', 'shared/seam.js',
   'shared/seen.js', 'shared/setup.js', 'shared/status.js', 'shared/store.js', 'shared/sync.js', 'shared/text.js', 'shared/update.js', 'shared/wip-limits.js'];
@@ -276,7 +276,7 @@ test('the guard finds a plain command reading a team variable, a team import, an
   const copy = join(t, 'src');
   cpSync(SRC, copy, { recursive: true });
   assert.deepEqual(breaches(copy), []);
-  appendFileSync(join(copy, 'shared', 'store.js'), "\nexport const leaked = process.env.TEAM_NAME;\n");
+  appendFileSync(join(copy, 'shared', 'store.js'), "\nexport const leaked = process.env.SMOOTH_BACKLOG_CLI_TEAM_NAME;\n");
   appendFileSync(join(copy, 'shared', 'move.js'), "\nimport { teamName } from '../team/team.js';\n");
   appendFileSync(join(copy, 'team', 'pop.js'), "\nimport { move } from '../shared/move.js';\n");
   const found = breaches(copy);

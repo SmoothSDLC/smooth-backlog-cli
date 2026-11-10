@@ -1,6 +1,6 @@
 // `backlog setup [--ask]` chooses where a repository's backlog lives and deploys the CLI's skill. See HELP.setup.
 // The config is .backlog/config.json, committed: {"backlog_repository": P} with P relative to the repository (portable;
-// ".backlog" = inside it), and optionally backlog_origin_url, the clone URL (the environment variable BACKLOG_ORIGIN_URL
+// ".backlog" = inside it), and optionally backlog_origin_url, the clone URL (the environment variable SMOOTH_BACKLOG_CLI_ORIGIN_URL
 // wins). The root file .smooth-backlog.json of earlier builds is still read. The agent folders: .agents, .claude, .github, .qwen.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
@@ -45,10 +45,10 @@ export function configUser(cwd = process.cwd()) {
   const u = top ? readConfig(top).user : undefined;
   return typeof u === 'string' && u.trim() ? u.trim() : defaultUser(cwd);
 }
-// The shared backlog repository's clone URL: the environment variable BACKLOG_ORIGIN_URL first, then the
+// The shared backlog repository's clone URL: the environment variable SMOOTH_BACKLOG_CLI_ORIGIN_URL first, then the
 // backlog_origin_url key of the repository's configuration; '' when neither is set (no built-in default).
 export function originUrl(cwd = process.cwd()) {
-  const v = (process.env.BACKLOG_ORIGIN_URL || '').trim();
+  const v = (process.env.SMOOTH_BACKLOG_CLI_ORIGIN_URL || '').trim();
   if (v) return v;
   const top = topOf(cwd);
   if (!top) return '';
@@ -84,9 +84,9 @@ export async function run(argv) {
     targets.push({ target, destination: a.destination });
   }
   const kept = configuredHome(top);
-  // the backlog folder: BACKLOG_HOME when set, else the configured one, else beside the repository when a clone URL is set,
+  // the backlog folder: SMOOTH_BACKLOG_CLI_HOME when set, else the configured one, else beside the repository when a clone URL is set,
   // else inside the repository
-  const fromEnv = (process.env.BACKLOG_HOME || '').trim();
+  const fromEnv = (process.env.SMOOTH_BACKLOG_CLI_HOME || '').trim();
   const fallback = fromEnv ? resolve(fromEnv.replace(/^~(?=\/|$)/, process.env.HOME || '~')) : kept ?? (setting.url ? join(dirname(top), name) : join(top, '.backlog'));
   let home = fallback;
   if (ask) {

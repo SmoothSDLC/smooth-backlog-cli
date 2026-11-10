@@ -35,9 +35,9 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  // BACKLOG_SESSION stays out: these tests pin the continuation rules, not the author-session rule
+  // SMOOTH_BACKLOG_CLI_SESSION stays out: these tests pin the continuation rules, not the author-session rule
   // (item 088), which a session id inherited from the running shell would apply to the session-name reviewers
-  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', HOME: f.user, BACKLOG_SESSION: '', ...env } };
+  const o = { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', HOME: f.user, SMOOTH_BACKLOG_CLI_SESSION: '', ...env } };
   if (args[0] === 'update' && reader(args)) cli(['show', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
@@ -167,14 +167,14 @@ test('082: the lead\'s completed-team review-and-close starts with the continuat
   const f = fixture();
   // item 098: the team's work item is unrefined; only the lead's own claim takes it (as the lead's earlier session A1)
   const s = make(f, 'lead continues a completed team'); ok(f, ['update', s, '--set-team', TEAM]);
-  ok(f, ['update', s, '--claim', A1], { TEAM_LEAD: A1 }); // the lead's earlier session holds the team's work item
+  ok(f, ['update', s, '--claim', A1], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: A1 }); // the lead's earlier session holds the team's work item
   const child = teamItem(f, 'the one slice, done'); // a slice of the work item, claimed, reviewed and closed by its member
   ok(f, ['update', child, '--claim', 'ann']);
   ok(f, ['update', child, '--request-review', 'any', '--note', 'n', '--by', 'ann']);
   ok(f, ['update', child, '--start-review', '--by', B1]);
   ok(f, ['update', child, '--review', 'pass', '--by', B1, '--comments', `fine per ${REF}`]);
   ok(f, ['update', child, '--close', '--summary', 'done', '--by', 'ann']);
-  const w = JSON.parse(run(f, ['team', 'pop', '--team', TEAM, '--agent', A2, '--json'], { TEAM_LEAD: A2 }).stdout);
+  const w = JSON.parse(run(f, ['team', 'pop', '--team', TEAM, '--agent', A2, '--json'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: A2 }).stdout);
   assert.equal(w.action, 'continue', w.instruction);
   assert.ok(w.instruction.includes(`every item of team ${TEAM} is done`), `the completed-team steps: ${w.instruction}`);
   assert.ok(w.instruction.includes(`--agent ${A2} --claim`), `the completed-team steps start with the continuation claim: ${w.instruction}`);

@@ -15,7 +15,7 @@ Smooth Backlog CLI keeps **structured, version-controllable work records**: ever
 There is one backlog per repository and branch and one set of commands. Where the item files live is a setting of the repository, nothing more:
 
 - **inside the repository** (the default): the repository's `.backlog` folder holds the configuration (`.backlog/config.json`) and the items; every change is committed on the current branch (the backlog's paths only) and pushed to origin;
-- **in a backlog repository you choose**: `backlog setup` records its path in `.backlog/config.json` (environment variables `BACKLOG_ORIGIN_URL` / `BACKLOG_HOME` override the configuration); every command pulls it before it reads and pushes after it changes an item, so many repositories and many people share one backlog repository.
+- **in a backlog repository you choose**: `backlog setup` records its path in `.backlog/config.json` (environment variables `SMOOTH_BACKLOG_CLI_ORIGIN_URL` / `SMOOTH_BACKLOG_CLI_HOME` override the configuration); every command pulls it before it reads and pushes after it changes an item, so many repositories and many people share one backlog repository.
 
 The backlog is always a git repository and every change to it is committed and pushed before the command exits. Every command, option, output and help text is the same in both places.
 
@@ -52,7 +52,7 @@ Items are selected by their number (`1`) or slug (`001-fix-the-login-redirect`).
 ## Working with Git and coding agents
 
 - **Branch isolation:** every item belongs to the branch that was checked out when it was created; `backlog list` shows the queue of the current branch, `backlog list all-branches` every branch the backlog carries (inside the repository the items are committed on their branch, so a branch sees the items it carries), `backlog move <item> --to-branch <name>` moves an item.
-- **Many hands:** a named agent (`BACKLOG_AGENT=<name>`, or `--claim <name>`) claims an item; another agent cannot take it; a write to an item that someone else changed since the agent last read it is refused (exit 5) until the agent reads it again (`backlog show <item> --agent <you>`).
+- **Many hands:** a named agent (`SMOOTH_BACKLOG_CLI_AGENT=<name>`, or `--claim <name>`) claims an item; another agent cannot take it; a write to an item that someone else changed since the agent last read it is refused (exit 5) until the agent reads it again (`backlog show <item> --agent <you>`).
 - **Reviews:** a team step, taken with `backlog team update <item> --team <team> --agent <you>`: the holder asks for a review (`--request-review <agent|any> --note "<commits, evidence>"`); another agent records the verdict (`--review complete|reject --by <reviewer> --comments "<findings>"`); the author never reviews its own work.
 - **Teams:** the team rules — refinement before work, review rules before the close, work-in-progress limits — apply to items that belong to a team. Teams, their leads and members and their review rules are configuration in the backlog folder (`teams.json`): for example "an item of team A closes when one member of team A and one member of team B passed the current commit". Nothing about a particular team or agent is built into the CLI. See `backlog update --help` and `backlog team --help`.
 - **Skill for agents:** `backlog setup` deploys the built-in backlog skill (`templates/skills/backlog`) into every agent folder present in the repository (`.agents`, `.claude`, `.github`, `.qwen`), so coding agents learn the commands from the repository itself.
@@ -90,8 +90,8 @@ with) and an empty `team`; a second setup keeps what is there.
 
 Everything that knows a team lives under `backlog team`: `pop` (the one next-action command, answering by the agent's role in
 the team's entry), `new` (files an item of the team in stage refining, and splits a team's item), `update` (the team steps: claim, release, review, close, the refinement steps, hand-offs),
-`query` (the read views and the views of the team) and `define` and `workflow`. Each takes `--team` and `--agent`; `TEAM_NAME` and
-`BACKLOG_AGENT` stand in for them, then the `team` and `user` of the configuration. A team without an entry is refused.
+`query` (the read views and the views of the team) and `define` and `workflow`. Each takes `--team` and `--agent`; `SMOOTH_BACKLOG_CLI_TEAM_NAME` and
+`SMOOTH_BACKLOG_CLI_AGENT` stand in for them, then the `team` and `user` of the configuration. A team without an entry is refused.
 
 - **What the team entry controls:** a team is one entry of `teams.json` at the root of the backlog: its `lead`, its
   `members`, its `external_reviewers` and the review stages it asks for (`review`), plus the flow it uses and its

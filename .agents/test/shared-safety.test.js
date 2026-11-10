@@ -98,7 +98,7 @@ test('validateHome: a missing path is refused with its message', async () => {
   const missing = join(d, 'nohome');
   await assert.rejects(
     validateHome(missing, ID, DFLT),
-    (e) => e.message === `BACKLOG_HOME=${missing} does not exist; expected a clone of ${ID} on main (unset BACKLOG_HOME to use ${DFLT})`,
+    (e) => e.message === `SMOOTH_BACKLOG_CLI_HOME=${missing} does not exist; expected a clone of ${ID} on main (unset SMOOTH_BACKLOG_CLI_HOME to use ${DFLT})`,
   );
 });
 

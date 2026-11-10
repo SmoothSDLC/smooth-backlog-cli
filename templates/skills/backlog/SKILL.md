@@ -50,9 +50,9 @@ exit code; `backlog upgrade disable` turns the weekly check off, `backlog upgrad
 
 A team's items follow the team rules configured in `teams.json` of the backlog folder: each team's lead, members,
 `review` rules (how many members of which team must pass the current work commit before the close) and
-`refinement_review` rules. A team session is bound by TEAM_NAME, TEAM_REPOSITORY and TEAM_BRANCH; the caller is
-BACKLOG_AGENT and acts only as itself. Every command here is a `backlog team` command and takes `--team <team> --agent <you>` (TEAM_NAME and
-BACKLOG_AGENT stand in); the step flags below are taken with `backlog team update <item> --team <team> --agent <you>`.
+`refinement_review` rules. A team session is bound by SMOOTH_BACKLOG_CLI_TEAM_NAME, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BACKLOG_CLI_TEAM_BRANCH; the caller is
+SMOOTH_BACKLOG_CLI_AGENT and acts only as itself. Every command here is a `backlog team` command and takes `--team <team> --agent <you>` (SMOOTH_BACKLOG_CLI_TEAM_NAME and
+SMOOTH_BACKLOG_CLI_AGENT stand in); the step flags below are taken with `backlog team update <item> --team <team> --agent <you>`.
 
 - File an item of the team: `backlog team new --team <team> --agent <you> --name "<name>" --objective "<one line>" --summary "<what it is about>"
   --review-refs <review document> --estimate <minutes>`; it starts in stage refining. `--split-from <item>` splits a team's item.
@@ -81,6 +81,6 @@ BACKLOG_AGENT stand in); the step flags below are taken with `backlog team updat
 ## Gotchas
 
 - An item is its number (or slug); priorities are ranks that move when the queue changes.
-- Every command that changes an item records who (BACKLOG_AGENT, else `--by`/`--claim`, else the user) and when.
+- Every command that changes an item records who (SMOOTH_BACKLOG_CLI_AGENT, else `--by`/`--claim`, else the user) and when.
 - Exit codes: 0 success, 1 refused (the reason on standard output, ❌), 2 invalid input or a failure, 3 idle (team
   pop), 4 the configured backlog repository is not cloned (`backlog setup`), 5 stale view (read the item again).

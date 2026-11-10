@@ -37,12 +37,12 @@ every documented option is parsed and every parsed option is documented).
 
 ### Environment variables (cbm: `query_graph MATCH (e:EnvVar) RETURN e.name`, 38 rows)
 
-User-facing: `BACKLOG_HOME`, `BACKLOG_ORIGIN_URL`, `BACKLOG_CLI_BRANCH`, `BACKLOG_LOCK_WAIT_MS`,
-`BACKLOG_REVIEW_STALE_SECONDS`, `BACKLOG_HEADLESS` (refused, see 2.9), `TEAM_NAME`, `TEAM_LEAD`, `TEAM_REPOSITORY`,
-`TEAM_BRANCH`, `TEAM_ROSTER`, `XDG_CONFIG_HOME`, two variables of a specific agent product for the caller's identity
-(see 2.4), one variable naming a run-recorder module (see 2.4). Internal/test: `BACKLOG_RUN_LOCK_HELD`,
-`BACKLOG_CLI_REPONAME`, `BACKLOG_CHILD_CALLS_FILE`, `BACKLOG_GUARD_FIXTURE`, `BACKLOG_PRIVATE_DENYLIST`,
-`BACKLOG_TEST_SELF`, `BACKLOG_UPGRADE_FROM`, `BACKLOG_RELEASE_RESULT`, `RELEASE_*`, `GITHUB_*`, `GH_TOKEN`.
+User-facing: `SMOOTH_BACKLOG_CLI_HOME`, `SMOOTH_BACKLOG_CLI_ORIGIN_URL`, `BACKLOG_CLI_BRANCH`, `SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS`,
+`SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS`, `BACKLOG_HEADLESS` (refused, see 2.9), `SMOOTH_BACKLOG_CLI_TEAM_NAME`, `SMOOTH_BACKLOG_CLI_TEAM_LEAD`, `SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY`,
+`SMOOTH_BACKLOG_CLI_TEAM_BRANCH`, `TEAM_ROSTER`, `XDG_CONFIG_HOME`, two variables of a specific agent product for the caller's identity
+(see 2.4), one variable naming a run-recorder module (see 2.4). Internal/test: `SMOOTH_BACKLOG_CLI_RUN_LOCK_HELD`,
+`BACKLOG_CLI_REPONAME`, `BACKLOG_CHILD_CALLS_FILE`, `BACKLOG_GUARD_FIXTURE`, `SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST`,
+`SMOOTH_BACKLOG_CLI_TEST_SELF`, `BACKLOG_UPGRADE_FROM`, `BACKLOG_RELEASE_RESULT`, `RELEASE_*`, `GITHUB_*`, `GH_TOKEN`.
 
 ### Configuration files and keys
 
@@ -275,7 +275,7 @@ Not changed by this pull request unless approved:
 Team awareness moved under `backlog team`: `pop`, `update`, `query`, `define`, `workflow`. The plain `update` still accepts
 the team steps and says where they moved; that notice is a candidate for removal. `backlog pop` and `backlog work` were folded
 into `backlog team pop`. Candidates not acted on: the engine's instruction texts still spell the plain update steps; `--team`
-narrows the lead lookup and the configuration check, while the items a session may touch are still bound by `TEAM_NAME`;
+narrows the lead lookup and the configuration check, while the items a session may touch are still bound by `SMOOTH_BACKLOG_CLI_TEAM_NAME`;
 the stored keys of the item template are not renamed (the key `owner` is written by `new` for the user an item outside a team
 belongs to, so the holder cannot take that name without a decision); a team's `wip` limits and named flow are stored and
 checked but no step reads them yet.

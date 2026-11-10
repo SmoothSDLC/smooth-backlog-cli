@@ -27,7 +27,7 @@ const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = ['new', '--name', 'ruled item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--team', 't1',
   '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', `Body.\n\n${DOD}`];
 // every call is a session of the team t1 acting as the named agent
-const run = (f, who, args) => cli(args, { cwd: f.cons, tmp: f.t, env: { TEAM_NAME: 't1', TEAM_LEAD: 'lead', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main', BACKLOG_AGENT: who, BACKLOG_SESSION: '' } });
+const run = (f, who, args) => cli(args, { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main', SMOOTH_BACKLOG_CLI_AGENT: who, SMOOTH_BACKLOG_CLI_SESSION: '' } });
 const ok = (f, who, args) => { const r = run(f, who, args); assert.equal(r.status, 0, `${who}: ${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 // the stale-view guard needs each actor's fresh read of the item first
 const upd = (f, who, args) => { ok(f, who, ['show', '1', '--agent', who]); return ok(f, who, ['update', '1', ...args]); };

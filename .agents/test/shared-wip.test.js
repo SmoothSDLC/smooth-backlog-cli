@@ -22,8 +22,8 @@ function fixture(repos = ['demo']) {
   writeFileSync(join(home, 'teams.json'), JSON.stringify(Object.fromEntries(['t1', 't2'].map(n => [n, { review: [{ stage: 'peer' }] }])))); // a team is configured before its steps run
   const run = (repo, args, want = 0, env = {}) => {
     const by = args[args.indexOf('--by') + 1] || args[args.indexOf('--claim') + 1];
-    if (args[0] === 'update' && (args.includes('--by') || args.includes('--claim'))) cli(['show', args[1], '--agent', by], { cwd: cons[repo], tmp: t, env: { TEAM_LEAD: 'lead', ...env } });
-    const r = cli(args, { cwd: cons[repo], tmp: t, env: { TEAM_LEAD: 'lead', ...env } });
+    if (args[0] === 'update' && (args.includes('--by') || args.includes('--claim'))) cli(['show', args[1], '--agent', by], { cwd: cons[repo], tmp: t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', ...env } });
+    const r = cli(args, { cwd: cons[repo], tmp: t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', ...env } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
@@ -62,7 +62,7 @@ test('034: each of the five levels refuses the claim past its limit; the lead\'s
   f.limits({ team: 1 });
   assert.match(f.run('demo', ['update', c, '--wip-override', 'urgent fix', '--by', 'bob'], 1).stdout, /only the team lead \(lead\) lifts/);
   // a member cannot record the lead's override as the lead
-  assert.match(f.run('demo', ['update', c, '--wip-override', 'mine', '--by', 'lead'], 1, { TEAM_NAME: 't1', BACKLOG_AGENT: 'bob' }).stdout, /you are bob \(BACKLOG_AGENT\): a member acts only as itself, not as lead/);
+  assert.match(f.run('demo', ['update', c, '--wip-override', 'mine', '--by', 'lead'], 1, { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_AGENT: 'bob' }).stdout, /you are bob \(SMOOTH_BACKLOG_CLI_AGENT\): a member acts only as itself, not as lead/);
   f.run('demo', ['update', c, '--wip-override', 'the release needs it today', '--by', 'lead']);
   f.run('demo', ['update', c, '--claim', 'cat']); // lifted for this item, recorded
   const fm = parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${c}.md`), 'utf8')).fm;
@@ -80,7 +80,7 @@ test('034: with a team limit of three, pop offers no fourth item while three are
   f.limits({ team: 3 });
   const items = ['a', 'b', 'c', 'd'].map(n => f.make('demo', `item ${n}`));
   for (const s of items) { f.run('demo', ['update', s, '--set-team', 't1']); f.refine('demo', s); }
-  const T = m => ({ TEAM_NAME: 't1', BACKLOG_AGENT: m }); // a team session acts only as itself
+  const T = m => ({ SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_AGENT: m }); // a team session acts only as itself
   ['m1', 'm2', 'm3'].forEach((m, i) => f.run('demo', ['update', items[i], '--claim', m], 0, T(m)));
   const p = JSON.parse(f.run('demo', ['team', 'pop', '--team', 't1', '--agent', 'm4', '--json'], [0, 3], T('m4')).stdout);
   assert.notEqual(p.action, 'claim', JSON.stringify(p));
@@ -110,12 +110,12 @@ test('034: a start that another clone made while this one published counts: the 
   const [a, b] = ['one', 'two'].map(n => f.make('demo', n));
   const home2 = join(f.t, 'home2');
   spawnSync('git', ['clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), home2]);
-  f.run('demo', ['show', b, '--agent', 'bob'], 0, { BACKLOG_HOME: home2 });
+  f.run('demo', ['show', b, '--agent', 'bob'], 0, { SMOOTH_BACKLOG_CLI_HOME: home2 });
   f.limits({ repository: 1 });
   // while amy's push is on its way, bob (the other clone, which has no limits file) claims the other item
   const hook = join(f.home, '.git', 'hooks', 'pre-push');
   const flag = join(f.t, 'hook-ran');
-  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons.demo}' && TEAM_LEAD=lead BACKLOG_HOME='${home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update ${b} --claim bob >/dev/null 2>&1\nexit 0\n`);
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons.demo}' && SMOOTH_BACKLOG_CLI_TEAM_LEAD=lead SMOOTH_BACKLOG_CLI_HOME='${home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update ${b} --claim bob >/dev/null 2>&1\nexit 0\n`);
   chmodSync(hook, 0o755);
   const r = f.run('demo', ['update', a, '--claim', 'amy'], 3);
   assert.match(r.stdout + r.stderr, /the repository work-in-progress limit of acme\/demo is 1 and 1 item\(s\) are in progress/);

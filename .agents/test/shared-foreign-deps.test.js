@@ -21,7 +21,7 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const run = (cwd, args, want = 0, env = {}) => {
-    const r = cli(args, { cwd, tmp: t, env: { ...env, BACKLOG_AGENT: env.BACKLOG_AGENT ?? (args[0] === 'team' ? '' : 'tester'), TEAM_LEAD: 'lead', BACKLOG_SESSION: '' } });
+    const r = cli(args, { cwd, tmp: t, env: { ...env, SMOOTH_BACKLOG_CLI_AGENT: env.SMOOTH_BACKLOG_CLI_AGENT ?? (args[0] === 'team' ? '' : 'tester'), SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_SESSION: '' } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
@@ -54,13 +54,13 @@ test('042: owner/name#seq across repositories: refused when unknown, blocks clai
   run(there, ['update', '1', '--claim', 'tester']);
   run(there, ['update', '1', '--request-review', 'any', '--note', 'n', '--by', 'tester']);
   run(there, ['show', '1', '--agent', 'rex']);
-  run(there, ['update', '1', '--start-review', '--by', 'rex'], 0, { BACKLOG_AGENT: 'rex' });
-  run(there, ['update', '1', '--review', 'pass', '--by', 'rex', '--comments', 'fine per references/review/code.md'], 0, { BACKLOG_AGENT: 'rex' }); // a fresh session reviews
+  run(there, ['update', '1', '--start-review', '--by', 'rex'], 0, { SMOOTH_BACKLOG_CLI_AGENT: 'rex' });
+  run(there, ['update', '1', '--review', 'pass', '--by', 'rex', '--comments', 'fine per references/review/code.md'], 0, { SMOOTH_BACKLOG_CLI_AGENT: 'rex' }); // a fresh session reviews
   run(there, ['show', '1', '--agent', 'tester']); // the review changed the item after tester's last read
   // item 059: the close needs the hand-off for the dependent of the other repository, accepted by the lead acting as itself
   run(there, ['update', '1', '--handoff', 'acme/app#1', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'tester']);
-  cli(['show', '1', '--agent', 'lead'], { cwd: there, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead' } }); // the lead reads the record it accepts
-  const accepted = cli(['update', '1', '--accept-handoff', 'acme/app#1', '--checks', 'verified', '--by', 'lead'], { cwd: there, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead' } });
+  cli(['show', '1', '--agent', 'lead'], { cwd: there, tmp: t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'lead', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' } }); // the lead reads the record it accepts
+  const accepted = cli(['update', '1', '--accept-handoff', 'acme/app#1', '--checks', 'verified', '--by', 'lead'], { cwd: there, tmp: t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'lead', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' } });
   assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
   run(there, ['show', '1', '--agent', 'tester']);
   run(there, ['update', '1', '--close', '--summary', 'delivered', '--by', 'tester']);
@@ -100,7 +100,7 @@ test('042: a lead whose team items wait only on another repository is told to st
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const run = (cwd, args, want = 0, env = {}) => {
-    const r = cli(args, { cwd, tmp: t, env: { BACKLOG_AGENT: 'lead', TEAM_LEAD: 'lead', TEAM_NAME: 't1', BACKLOG_SESSION: '', ...env } });
+    const r = cli(args, { cwd, tmp: t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'lead', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_SESSION: '', ...env } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
@@ -116,8 +116,8 @@ test('042: a lead whose team items wait only on another repository is told to st
   assert.match(p.instruction, /end the session here; the team is started in that repository/);
   // a refined team item that waits on another repository is not sent to the refinement review first either
   run(here, ['new', '--name', 'refined child', '--objective', 'o', '--summary', 's', '--depends-on', 'acme/lib#1', '--team', 't1', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]);
-  run(here, ['update', '3', '--refine-start', '--by', 'zed'], 0, { BACKLOG_AGENT: 'zed' });
-  run(here, ['update', '3', '--refine-done', '--by', 'zed', '--note', 'refined'], 0, { BACKLOG_AGENT: 'zed' });
+  run(here, ['update', '3', '--refine-start', '--by', 'zed'], 0, { SMOOTH_BACKLOG_CLI_AGENT: 'zed' });
+  run(here, ['update', '3', '--refine-done', '--by', 'zed', '--note', 'refined'], 0, { SMOOTH_BACKLOG_CLI_AGENT: 'zed' });
   const q = JSON.parse(run(here, ['team', 'pop', '--team', 't1', '--agent', 'lead', '--json'], 3).stdout);
   assert.deepEqual([q.action, q.first?.map(x => x.item)], ['idle', ['acme/lib#1']], JSON.stringify(q));
 });
@@ -130,7 +130,7 @@ test('042: a dependency cycle through another repository, or on the item itself,
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const run = (cwd, args, want = 0) => {
-    const r = cli(args, { cwd, tmp: t, env: { BACKLOG_AGENT: 'tester' } });
+    const r = cli(args, { cwd, tmp: t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'tester' } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
@@ -159,7 +159,7 @@ test('042: two clones that each add one half of a cycle through another reposito
   const there = consumer(t, 'acme', 'lib', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const run = (cwd, args, want = 0, env = {}) => {
-    const r = cli(args, { cwd, tmp: t, env: { BACKLOG_AGENT: 'tester', ...env } });
+    const r = cli(args, { cwd, tmp: t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'tester', ...env } });
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
@@ -168,11 +168,11 @@ test('042: two clones that each add one half of a cycle through another reposito
   run(there, NEW('lib item'));
   const home2 = join(t, 'home2');
   spawnSync('git', ['clone', '-q', join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), home2]);
-  run(there, ['show', '1', '--agent', 'bob'], 0, { BACKLOG_HOME: home2 });
+  run(there, ['show', '1', '--agent', 'bob'], 0, { SMOOTH_BACKLOG_CLI_HOME: home2 });
   // while tester's push is on its way, bob (the other clone) adds lib#1 -> app#1
   const hook = join(home, '.git', 'hooks', 'pre-push');
   const flag = join(t, 'hook-ran');
-  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${there}' && BACKLOG_HOME='${home2}' XDG_CONFIG_HOME='${join(t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 1 --set-depends-on acme/app#1 --by bob >/dev/null 2>&1\nexit 0\n`);
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${there}' && SMOOTH_BACKLOG_CLI_HOME='${home2}' XDG_CONFIG_HOME='${join(t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 1 --set-depends-on acme/app#1 --by bob >/dev/null 2>&1\nexit 0\n`);
   chmodSync(hook, 0o755);
   run(here, ['show', '1', '--agent', 'tester']);
   const r = run(here, ['update', '1', '--set-depends-on', 'acme/lib#1', '--by', 'tester'], 3);

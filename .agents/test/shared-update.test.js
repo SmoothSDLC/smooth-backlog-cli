@@ -288,7 +288,7 @@ test('review P1: update of an item of another team (field edit, note, append) is
   const text = readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8');
   const head = git(f.home, 'rev-parse', 'HEAD');
   for (const args of [['2', '--summary', 'x'], ['2', '--note', 'x'], ['2', '--append', 'x'], ['2', '--priority', '0'], ['2', '--section', 'Evidence', '--add-line', 'x']]) {
-    const r = cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' } });
+    const r = cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'release' } });
     assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
     assert.match(r.stdout, /team session is bound/);
   }
@@ -316,14 +316,14 @@ test('review P1: a lock left by a dead process is taken over (said once); a live
 
   // a live holder: refused after the configured wait, naming pid and command
   let refused;
-  await store.cloneLocked(f.home, async () => { refused = cli(['list', 'all-branches'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '400' } }); });
+  await store.cloneLocked(f.home, async () => { refused = cli(['list', 'all-branches'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '400' } }); });
   assert.equal(refused.status, 1, refused.stdout + refused.stderr);
   assert.match(refused.stderr, new RegExp(`locked by another process \\((agent [^,]+, )?pid ${process.pid}[,)]`));
   assert.match(refused.stderr, /since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\)/); // item 025: since when
   // a holder that finishes inside the configured wait: the command waits and succeeds
   let ok;
   await store.cloneLocked(f.home, async () => {
-    const child = cliAsync(['list', 'all-branches'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_LOCK_WAIT_MS: '15000' } });
+    const child = cliAsync(['list', 'all-branches'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '15000' } });
     await new Promise(res => setTimeout(res, 1500));
     assert.equal(child.exited(), false, 'still waiting while the holder runs');
     ok = child;
@@ -390,7 +390,7 @@ test('review P1: a bound team session reorders and re-ranks only its own items: 
   const f = seed();
   git(f.cons, 'push', '-q', 'origin', 'HEAD:refs/heads/release');
   for (const n of ['2', '3']) assert.equal(cli(['move', n, '--to-branch', 'release'], { cwd: f.cons, tmp: f.t }).status, 0); // two items of the team's branch; the rest stay on main
-  const team = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' };
+  const team = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'release' };
   const t = args => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: team });
   const others = () => JSON.stringify(readdirSync(join(f.folder, 'phases')).filter(n => !/^00[23]/.test(n)).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8')));
   const [before, head] = [others(), git(f.home, 'rev-parse', 'HEAD')];

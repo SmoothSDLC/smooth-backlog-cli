@@ -23,7 +23,7 @@ function setup(t) {
 for (const [label, args, rc] of [['success', ['--version'], '0'], ['failure', ['--json', 'no-such-command'], null]]) {
   test(`backlog.js records one run with its name and exit code (${label})`, async t => {
     const { f, out, stub } = setup(t);
-    const p = f.raw(args, { env: { ...f.env, BACKLOG_RUN_HOOK: stub, RECORD_OUT: out } });
+    const p = f.raw(args, { env: { ...f.env, SMOOTH_BACKLOG_CLI_RUN_HOOK: stub, RECORD_OUT: out } });
     await waitFor(out);
     const lines = readFileSync(out, 'utf8').trim().split('\n');
     assert.equal(lines.length, 1); assert.equal(lines[0], `record backlog.js ${p.status}`);
@@ -31,11 +31,11 @@ for (const [label, args, rc] of [['success', ['--version'], '0'], ['failure', ['
   });
   test(`backlog.js behaves the same without the recorder (${label})`, t => {
     const { f, out } = setup(t);
-    const p = f.raw(args, { env: { ...f.env, BACKLOG_RUN_HOOK: '/nonexistent/run-hook', RECORD_OUT: out } });
+    const p = f.raw(args, { env: { ...f.env, SMOOTH_BACKLOG_CLI_RUN_HOOK: '/nonexistent/run-hook', RECORD_OUT: out } });
     if (rc !== null) assert.equal(p.status, 0); else assert.notEqual(p.status, 0);
     assert.equal(p.signal, null); assert.equal(existsSync(out), false);
   });
-  test(`backlog.js spawns no child process when BACKLOG_RUN_HOOK is unset (${label})`, async t => {
+  test(`backlog.js spawns no child process when SMOOTH_BACKLOG_CLI_RUN_HOOK is unset (${label})`, async t => {
     const { f, dir } = setup(t);
     const out = join(dir, 'unset-out.txt');
     const fakebin = join(dir, 'fakebin');
@@ -45,11 +45,11 @@ for (const [label, args, rc] of [['success', ['--version'], '0'], ['failure', ['
       chmodSync(join(fakebin, name), 0o755);
     }
     const env = { ...f.env, RECORD_OUT: out, PATH: fakebin };
-    delete env.BACKLOG_RUN_HOOK;
+    delete env.SMOOTH_BACKLOG_CLI_RUN_HOOK;
     const p = f.raw(args, { env });
     await waitFor(out);
     const lines = existsSync(out) ? readFileSync(out, 'utf8').trim().split('\n') : [];
-    assert.equal(lines.length, 0, `a child process was spawned although BACKLOG_RUN_HOOK is unset: ${lines.join(' | ')}`);
+    assert.equal(lines.length, 0, `a child process was spawned although SMOOTH_BACKLOG_CLI_RUN_HOOK is unset: ${lines.join(' | ')}`);
     if (rc !== null) assert.equal(p.status, 0); else assert.notEqual(p.status, 0);
   });
 }

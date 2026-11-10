@@ -37,7 +37,7 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  const o = { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead', ...env } };
+  const o = { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', ...env } };
   if (args[0] === 'update' && reader(args)) cli(['show', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };

@@ -23,7 +23,7 @@ function fixture(prefix = 'team-teams-') {
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
-const LEAD = { TEAM_LEAD: 'lead' }; // ann, bob and zed are plain members
+const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' }; // ann, bob and zed are plain members
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
@@ -32,7 +32,7 @@ const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`
 const refined = (f, slug, cwd = f.cons) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => {
   const r = cli(['update', slug, ...a], { cwd, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr);
 });
-const pop = (f, agent, env) => JSON.parse(run(f, ['team', 'pop', '--team', env?.TEAM_NAME || 't1', '--agent', agent, '--json'], env?.TEAM_NAME ? { BACKLOG_AGENT: agent, ...env } : env).stdout); // the team of the session, else t1
+const pop = (f, agent, env) => JSON.parse(run(f, ['team', 'pop', '--team', env?.SMOOTH_BACKLOG_CLI_TEAM_NAME || 't1', '--agent', agent, '--json'], env?.SMOOTH_BACKLOG_CLI_TEAM_NAME ? { SMOOTH_BACKLOG_CLI_AGENT: agent, ...env } : env).stdout); // the team of the session, else t1
 const slugs = (f, args, env) => JSON.parse(ok(f, ['team', 'query', '--team', 't1', ...args, '--json'], env).stdout).map(x => x.slug);
 
 test('the runner sets the team on the work item and claims it for the lead; --set-team "" clears it', () => {
@@ -53,7 +53,7 @@ test('backlog new --team writes the team and starts the item as new; --split-fro
   ok(f, ['update', w, '--set-team', 't1']);
   const a = make(f, 'child a', '--split-from', w);
   assert.deepEqual([fm(f, a).team, fm(f, a).status, fm(f, a).refiner], ['t1', 'new', '']); // inherited
-  assert.notEqual(pop(f, 'lead', { TEAM_NAME: 't1' }).item, a); // the lead never claims a split item (it is offered its work item)
+  assert.notEqual(pop(f, 'lead', { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }).item, a); // the lead never claims a split item (it is offered its work item)
   const b = make(f, 'child of another team', '--split-from', w, '--team', 't2');
   assert.equal(fm(f, b).team, 't2'); // --team wins over the inherited team
   const c = make(f, 'other team item', '--team', 't2');
@@ -64,14 +64,14 @@ test('backlog new --team writes the team and starts the item as new; --split-fro
   assert.ok(!('team' in fm(f, s)) && !('stage' in fm(f, s))); // outside a team session a split of a teamless item needs no refinement review
 });
 
-test('with TEAM_NAME set, another team\'s item is never offered: pop, --claimable, --reviewable and --blocked', () => {
+test('with SMOOTH_BACKLOG_CLI_TEAM_NAME set, another team\'s item is never offered: pop, --claimable, --reviewable and --blocked', () => {
   const f = fixture();
   writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] }, t2: { review: [{ stage: 'peer' }] } })); // a review is asked for in both teams
   const [mine, theirs, none] = ['t1 job', 't2 job', 'job without team'].map(n => make(f, n));
   ok(f, ['update', mine, '--set-team', 't1']);
   ok(f, ['update', theirs, '--set-team', 't2']);
   refined(f, mine); refined(f, theirs);
-  const T1 = { TEAM_NAME: 't1' }; const T2 = { TEAM_NAME: 't2' };
+  const T1 = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }; const T2 = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't2' };
   assert.deepEqual(slugs(f, ['--claimable'], T1), [mine]);
   assert.deepEqual(slugs(f, ['--claimable'], T2), [theirs]);
   assert.deepEqual(slugs(f, ['--claimable']), [mine]); // --team t1 alone scopes the view the same: never t2's item or the item of no team
@@ -96,8 +96,8 @@ test('another team\'s chunk item is never offered, in this repository or (--scop
   ok(f, ['update', theirs, '--set-team', 't2']);
   refined(f, theirs);
   writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
-  const T1 = { TEAM_NAME: 't1' };
-  const popAll = env => JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--scope', 'all', '--json'], { BACKLOG_AGENT: 'ann', ...env }).stdout);
+  const T1 = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' };
+  const popAll = env => JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--scope', 'all', '--json'], { SMOOTH_BACKLOG_CLI_AGENT: 'ann', ...env }).stdout);
   const p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item], ['chunk', null]); // small-chunk work, but not t2's item
   const newIn = name => { const r = cli(['new', ...NEW(name), '--chunk'], { cwd: other, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr); return r.stdout.split('created phase ')[1].split(' ')[0]; };
@@ -120,9 +120,9 @@ test('the lead refines only an incomplete item of its own team', () => {
   ok(f, ['update', theirs, '--set-team', 't2']);
   const mine = bare('t1 incomplete');
   ok(f, ['update', mine, '--set-team', 't1']);
-  const lead = env => pop(f, 'lead', { ...env, TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' });
-  assert.deepEqual([lead({ TEAM_NAME: 't1' }).action, lead({ TEAM_NAME: 't1' }).item], ['refine', mine]);
-  assert.deepEqual([lead({ TEAM_NAME: 't2' }).action, lead({ TEAM_NAME: 't2' }).item], ['refine', theirs]);
+  const lead = env => pop(f, 'lead', { ...env, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' });
+  assert.deepEqual([lead({ SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }).action, lead({ SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }).item], ['refine', mine]);
+  assert.deepEqual([lead({ SMOOTH_BACKLOG_CLI_TEAM_NAME: 't2' }).action, lead({ SMOOTH_BACKLOG_CLI_TEAM_NAME: 't2' }).item], ['refine', theirs]);
   assert.equal(lead({}).item, mine); // --team t1 alone scopes the pop the same: never t2's item
 });
 

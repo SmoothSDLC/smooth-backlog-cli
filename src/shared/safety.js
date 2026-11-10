@@ -40,7 +40,7 @@ const realPath = p => { const r = realpathSync.native(p); return process.platfor
 // error names it, so the failure points at the value that was checked.
 export async function validateHome(path, expected, defaultHome, setting) {
   if (!isAbsolute(path)) throw new Error(`${path} is not an absolute path; use the absolute path to a clone of ${expected}`);
-  if (!existsSync(path)) throw new Error(`BACKLOG_HOME=${path} does not exist; expected a clone of ${expected} on main (unset BACKLOG_HOME to use ${defaultHome})`);
+  if (!existsSync(path)) throw new Error(`SMOOTH_BACKLOG_CLI_HOME=${path} does not exist; expected a clone of ${expected} on main (unset SMOOTH_BACKLOG_CLI_HOME to use ${defaultHome})`);
   const top = (await git(['rev-parse', '--show-toplevel'], path)).stdout.trim();
   if (!top || realPath(top) !== realPath(path)) throw new Error(`${path} is not the top folder of a git repository; expected a clone of ${expected} on main`);
   // Symlinks above the home (macOS /var, a linked ~) are not attacker-controlled: resolve the parent, refuse a link at the home itself.

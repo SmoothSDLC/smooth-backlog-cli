@@ -4,6 +4,15 @@
 
 One backlog, one CLI. Compared with 1.0.1:
 
+- **Breaking: every environment variable the CLI owns carries the prefix `SMOOTH_BACKLOG_CLI_`, and the old names are not read.**
+  There is no alias, no fallback and no deprecation period: a session that still sets an old name is simply not seen. The
+  fourteen renames: `TEAM_NAME`, `TEAM_REPOSITORY`, `TEAM_BRANCH`, `TEAM_LEAD` become `SMOOTH_BACKLOG_CLI_TEAM_NAME`,
+  `SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY`, `SMOOTH_BACKLOG_CLI_TEAM_BRANCH`, `SMOOTH_BACKLOG_CLI_TEAM_LEAD`; `BACKLOG_AGENT`,
+  `BACKLOG_SESSION`, `BACKLOG_HOME`, `BACKLOG_ORIGIN_URL`, `BACKLOG_LOCK_WAIT_MS`, `BACKLOG_PRIVATE_DENYLIST`, `BACKLOG_RUN_HOOK`,
+  `BACKLOG_RUN_LOCK_HELD`, `BACKLOG_REVIEW_STALE_SECONDS`, `BACKLOG_TEST_SELF` become `SMOOTH_BACKLOG_CLI_AGENT`,
+  `SMOOTH_BACKLOG_CLI_SESSION`, `SMOOTH_BACKLOG_CLI_HOME`, `SMOOTH_BACKLOG_CLI_ORIGIN_URL`, `SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS`,
+  `SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST`, `SMOOTH_BACKLOG_CLI_RUN_HOOK`, `SMOOTH_BACKLOG_CLI_RUN_LOCK_HELD`,
+  `SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS`, `SMOOTH_BACKLOG_CLI_TEST_SELF`. Standard system variables keep their names.
 - **Items are markdown files with front matter**, one per item, numbered and slugged (`001-fix-the-login-redirect`),
   with a history of events; the JSON manifest of 1.x is not read. A repository with a 1.x `.backlog/backlog_manifest.json`
   starts a new backlog; recreate the items you still need with `backlog new`.
@@ -42,7 +51,7 @@ One backlog, one CLI. Compared with 1.0.1:
   `new` (files an item of a team), `update <item> --team <t> --agent <a> <step>` (the team steps; `backlog update`
   refuses every change of an item that belongs to a team and names `backlog team update`), `query` (the claimable,
   reviewable, blocked, decisions, plan and wip views, and the read options of the reader), `define` and `workflow`. `--team` and `--agent` come from the flags, then
-  `TEAM_NAME` and `BACKLOG_AGENT`, then the `team` and `user` of `.backlog/config.json`. `backlog next` prints the open item
+  `SMOOTH_BACKLOG_CLI_TEAM_NAME` and `SMOOTH_BACKLOG_CLI_AGENT`, then the `team` and `user` of `.backlog/config.json`. `backlog next` prints the open item
   with the best priority whole (front matter and body) and skips nothing for team reasons.
 - **The user commands refuse an item with a team when they would change its team state.** `done` (through `update`), `update --replan`
   naming a team item, `archive` of a team item that is not closed (`--force` does not change that), `import --higher` when the source has
@@ -80,7 +89,7 @@ One backlog, one CLI. Compared with 1.0.1:
   (`.backlog/config.json`, written by `backlog setup` or on first use; the root file `.smooth-backlog.json` of earlier
   builds is still read) and, by default, the items (committed on the current branch, the backlog's paths only, pushed
   to origin); the configuration can name a clone of a backlog repository shared by many repositories and people
-  instead (`BACKLOG_ORIGIN_URL` names it). Environment variables override the configuration. Every command, option,
+  instead (`SMOOTH_BACKLOG_CLI_ORIGIN_URL` names it). Environment variables override the configuration. Every command, option,
   output and help text is the same in both places. The 1.x mode switches are gone. `setup` reports what it did without
   naming any folder path.
 - **The command set:** `setup`, `new`, `update`, `done`, `move`, `archive` (`archive done`), `import`, `clean`, `list`,
@@ -91,14 +100,14 @@ One backlog, one CLI. Compared with 1.0.1:
   <item>[,<item>...]` (with `--agent`), `next` (`next all-branches`), `history [<item>]` and `changes [--agent]` each
   do one thing; `--branch`, `--by-branch` and `--all` of the user's read commands are gone with it, and the read options of
   the reader (`--phase`, `--status`, `--events`, `--branch`, ...) are options of `backlog team query` only. `--json` prints the data itself, not an `{"ok","data"}` envelope.
-- **Many writers.** Every write records who made it (`BACKLOG_AGENT`, `--by`, `--claim`, `--agent`) and when. A
+- **Many writers.** Every write records who made it (`SMOOTH_BACKLOG_CLI_AGENT`, `--by`, `--claim`, `--agent`) and when. A
   write to an item that someone else changed since this agent last read it is refused (exit 5) until the agent reads
   it again. A named agent claims an item; a review is requested and recorded on the item.
 - **Teams are configuration.** Teams, their leads and members and their review rules (how many reviewers from which
   teams) live in `teams.json` in the backlog folder; work-in-progress limits in `wip-limits.json`. The team rules -
   refinement before work, the review rules before the close, the limits - bind the items of a team only; an item
   without a team is not bound by them, and nothing about a team or an agent is built into the CLI.
-- **For agents:** `backlog setup` deploys the built-in backlog skill into every agent folder present; `BACKLOG_RUN_HOOK`
+- **For agents:** `backlog setup` deploys the built-in backlog skill into every agent folder present; `SMOOTH_BACKLOG_CLI_RUN_HOOK`
   names an executable that records each run.
 
 ## 1.0.1

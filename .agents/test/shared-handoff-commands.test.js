@@ -30,8 +30,8 @@ function fixture() {
 const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', `Body of ${name}.\n\n${DOD}`];
-const LEAD = { TEAM_LEAD: 'lead' };
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, team: true, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...LEAD, ...env } });
+const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' };
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, team: true, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', ...LEAD, ...env } });
 const ok = (f, args, env) => {
   // the named actor must have read the item after the last change by another actor (the stale-view guard, item 088)
   const named = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
@@ -54,12 +54,12 @@ function pair(f) {
 const RECORD = { commit: 'b'.repeat(40), contract: 'the exported functions', verification: 'npm test: 0 failures', by: 'agent-a' };
 // recordHandoff reads the CLI session from the environment; the tests pin it and restore it afterwards.
 function withSession(value, fn) {
-  const saved = process.env.BACKLOG_SESSION;
-  if (value === undefined) delete process.env.BACKLOG_SESSION;
-  else process.env.BACKLOG_SESSION = value;
+  const saved = process.env.SMOOTH_BACKLOG_CLI_SESSION;
+  if (value === undefined) delete process.env.SMOOTH_BACKLOG_CLI_SESSION;
+  else process.env.SMOOTH_BACKLOG_CLI_SESSION = value;
   try { return fn(); } finally {
-    if (saved === undefined) delete process.env.BACKLOG_SESSION;
-    else process.env.BACKLOG_SESSION = saved;
+    if (saved === undefined) delete process.env.SMOOTH_BACKLOG_CLI_SESSION;
+    else process.env.SMOOTH_BACKLOG_CLI_SESSION = saved;
   }
 }
 const head = cons => spawnSync('git', ['-C', cons, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();

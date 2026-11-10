@@ -27,12 +27,12 @@ function fixture(name, extra) {
   const slug = r.stdout.split('created phase ')[1].split(' ')[0];
   return { t, home, cons, slug, file: join(home, 'acme', 'demo', 'phases', `${slug}.md`) };
 }
-const update = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
-const q = (f, agent) => cli(['show', f.slug, '--agent', agent], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
+const update = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '' } });
+const q = (f, agent) => cli(['show', f.slug, '--agent', agent], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '' } });
 const status = f => parse(readFileSync(f.file, 'utf8')).fm.status;
 
-const TEAM = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
-const asTeam = (f, agent, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { ...TEAM, BACKLOG_AGENT: agent, BACKLOG_SESSION: '' } });
+const TEAM = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
+const asTeam = (f, agent, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { ...TEAM, SMOOTH_BACKLOG_CLI_AGENT: agent, SMOOTH_BACKLOG_CLI_SESSION: '' } });
 
 test('--status done is refused on a team item: its status moves by the team steps', () => {
   const f = fixture('reviewed job', ['--review-refs', 'docs/review/code.md']);

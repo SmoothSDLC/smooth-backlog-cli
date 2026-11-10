@@ -73,22 +73,22 @@ test('an unknown command is refused (exit 2) naming the commands', t => {
 
 test('<command> --help prints the help text and needs no backlog folder; list prints its own help, also for a word of list', t => {
   const f = pair(t);
-  const r = inproc(f, `process.exitCode = await router.run('fake', ['--help'], { table: { fake: ['./never.js'] }, help: { fake: 'FAKE HELP' } });`, { BACKLOG_HOME: join(f.tmp, 'nope') });
+  const r = inproc(f, `process.exitCode = await router.run('fake', ['--help'], { table: { fake: ['./never.js'] }, help: { fake: 'FAKE HELP' } });`, { SMOOTH_BACKLOG_CLI_HOME: join(f.tmp, 'nope') });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'FAKE HELP\n');
-  const list = cli(['list', '--help'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: join(f.tmp, 'nope') } });
+  const list = cli(['list', '--help'], { cwd: f.cons, tmp: f.tmp, env: { SMOOTH_BACKLOG_CLI_HOME: join(f.tmp, 'nope') } });
   assert.equal(list.status, 0, list.stderr);
   assert.notEqual(list.stdout, cli(['next', '--help'], { cwd: f.cons, tmp: f.tmp }).stdout);
   assert.match(list.stdout, /^backlog list /);
-  assert.equal(cli(['list', 'open', '--help'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: join(f.tmp, 'nope') } }).stdout, list.stdout);
+  assert.equal(cli(['list', 'open', '--help'], { cwd: f.cons, tmp: f.tmp, env: { SMOOTH_BACKLOG_CLI_HOME: join(f.tmp, 'nope') } }).stdout, list.stdout);
 });
 
 test('a configured backlog folder that is missing -> exit 4 naming backlog setup', t => {
   const f = pair(t);
   const nope = join(f.tmp, 'nope');
   const cases = [
-    ['BACKLOG_HOME set but missing', { BACKLOG_HOME: nope }, /^❌ backlog: the backlog repository acme\/backlog-repo is configured but not cloned at .*nope: run 'backlog setup'/],
-    ['default folder missing', { BACKLOG_HOME: '', HOME: join(f.tmp, 'h') }, /^❌ backlog: the backlog repository acme\/backlog-repo is configured but not cloned at .*backlog-repo: run 'backlog setup' in this repository/],
+    ['SMOOTH_BACKLOG_CLI_HOME set but missing', { SMOOTH_BACKLOG_CLI_HOME: nope }, /^❌ backlog: the backlog repository acme\/backlog-repo is configured but not cloned at .*nope: run 'backlog setup'/],
+    ['default folder missing', { SMOOTH_BACKLOG_CLI_HOME: '', HOME: join(f.tmp, 'h') }, /^❌ backlog: the backlog repository acme\/backlog-repo is configured but not cloned at .*backlog-repo: run 'backlog setup' in this repository/],
   ];
   for (const [label, e, pattern] of cases) {
     const r = cli(['next'], { cwd: f.cons, tmp: f.tmp, env: e });
@@ -99,7 +99,7 @@ test('a configured backlog folder that is missing -> exit 4 naming backlog setup
   const record = join(f.tmp, 'config', 'backlog-repo', 'home');
   mkdirSync(dirname(record), { recursive: true });
   writeFileSync(record, `${nope}\n`);
-  const rec = cli(['next'], { cwd: f.cons, tmp: f.tmp, env: { BACKLOG_HOME: '' } });
+  const rec = cli(['next'], { cwd: f.cons, tmp: f.tmp, env: { SMOOTH_BACKLOG_CLI_HOME: '' } });
   assert.equal(rec.status, 4);
   assert.match(rec.stderr, /configured but not cloned/);
 });

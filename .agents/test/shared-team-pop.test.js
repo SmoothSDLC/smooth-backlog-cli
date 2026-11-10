@@ -41,7 +41,7 @@ function make(f, cwd, name, extra = []) {
   const r = cli(['new', ...args], { cwd, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const slug = r.stdout.split('created phase ')[1].split(' ')[0];
-  const t = cli(['update', slug, '--set-team', 't1', '--status', 'ready'], { cwd, tmp: f.t, env: { BACKLOG_AGENT: '' } }); // team pop acts as its --team: only the items of t1 are in reach (set after creation: no refinement stage, status ready)
+  const t = cli(['update', slug, '--set-team', 't1', '--status', 'ready'], { cwd, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '' } }); // team pop acts as its --team: only the items of t1 are in reach (set after creation: no refinement stage, status ready)
   assert.equal(t.status, 0, t.stdout + t.stderr);
   return slug;
 }
@@ -52,20 +52,20 @@ const ok = (f, slug, ...args) => {
   if (last && typeof last === 'object' && !Array.isArray(last)) extra = args.pop(); // a trailing { env } object
   const who = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
   if (who) cli(['show', slug, '--agent', who], { cwd: f.cons, tmp: f.t }); // an agent reads an item before it writes it again (seen.js)
-  const r = cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...extra.env } });
+  const r = cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', ...extra.env } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   return r;
 };
 // a release puts a team item back to new, where no claim reaches it: it is taken out of the team and made ready again, as `make` does
 const handOver = (f, slug, to) => { ok(f, slug, '--release', 'ann'); ok(f, slug, '--set-team', '', '--by', 'ann'); ok(f, slug, '--status', 'ready', '--set-team', 't1', '--by', 'ann'); ok(f, slug, '--claim', to); };
-const refuse = (f, slug, ...args) => cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
+const refuse = (f, slug, ...args) => cli(['update', slug, ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '' } });
 // ann is a plain member here; popLead asks as the team lead, who does no chunk work.
-const LEAD = { TEAM_LEAD: 'lead' };
+const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' };
 const popCli = (f, args, opts = {}) => cli(['team', 'pop', '--team', 't1', '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, ...opts, env: { ...LEAD, ...opts.env } });
 
 // The JSON of pop: exit 3 exactly when the action is idle.
 function pop(f, ...args) { return popAs(f, LEAD, ...args); }
-function popLead(f, ...args) { return popAs(f, { TEAM_LEAD: 'ann' }, ...args); }
+function popLead(f, ...args) { return popAs(f, { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' }, ...args); }
 function popAs(f, env, ...args) {
   const r = popCli(f, ['--json', ...args], { env });
   assert.ok([0, 3].includes(r.status), r.stdout + r.stderr);
@@ -85,7 +85,7 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   let p = popLead(f); // (e) nothing for the lead: idle, with blockers
   assert.ok(p.action === 'idle' && p.item === null);
   assert.deepEqual(p.blocked, [{ item: blocked, waiting_on: [{ id: String(Number(dep.split('-')[0])), slug: dep, status: 'in progress', claimed_by: 'bob' }] }]);
-  const text = popCli(f, [], { env: { TEAM_LEAD: 'ann' } });
+  const text = popCli(f, [], { env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' } });
   assert.equal(text.status, 3, text.stdout + text.stderr);
   assert.equal(text.stderr, '');
   assert.equal(text.stdout, `idle\n   your team works on 2 item(s) (1, 2): end your turn now with a text-only reply and no tool call; do not poll, the dispatcher wakes you\n   blocked ${blocked}: waits on ${dep} (status in progress, claimed by bob)\n`);
@@ -111,7 +111,7 @@ test('test_pop_precedence_and_claim_now: continue > review > claim > chunk > idl
   const n = cli(['team', 'pop', '--team', 't1', '--agent', 'ann'], { cwd: f.cons, tmp: f.t, env: LEAD });
   assert.ok(n.status === 0 && n.stdout.startsWith(`continue ${job}\n`), n.stdout + n.stderr);
   ok(f, dep, '--review', 'pass', '--by', 'zed', '--comments', 'fine per references/review/tests.md'); // zed's team pop started the review
-  assert.ok(cli(['team', 'pop', '--team', 't1'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '' } }).stderr.includes('needs --agent'));
+  assert.ok(cli(['team', 'pop', '--team', 't1'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '' } }).stderr.includes('needs --agent'));
 });
 
 test('075: the pop of an idle lead and of a claimable item prints its text and its JSON exactly, with empty stderr', () => {
@@ -120,12 +120,12 @@ test('075: the pop of an idle lead and of a claimable item prints its text and i
   const blocked = make(f, f.cons, '075 pop blocked', ['--depends-on', dep.split('-')[0]]);
   ok(f, dep, '--claim', 'bob');
   // the lead sees idle with the blocker: the text, word for word
-  const idleText = popCli(f, [], { env: { TEAM_LEAD: 'ann' } });
+  const idleText = popCli(f, [], { env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' } });
   assert.equal(idleText.status, 3, idleText.stdout + idleText.stderr);
   assert.equal(idleText.stderr, '');
   assert.equal(idleText.stdout, `idle\n   your team works on 2 item(s) (1, 2): end your turn now with a text-only reply and no tool call; do not poll, the dispatcher wakes you\n   blocked ${blocked}: waits on ${dep} (status in progress, claimed by bob)\n`);
   // the same state as JSON: the keys of the document and the blocked entry
-  const idleJson = popCli(f, ['--json'], { env: { TEAM_LEAD: 'ann' } });
+  const idleJson = popCli(f, ['--json'], { env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' } });
   assert.equal(idleJson.status, 3, idleJson.stdout + idleJson.stderr);
   assert.equal(idleJson.stderr, '');
   const idle = JSON.parse(idleJson.stdout);
@@ -162,7 +162,7 @@ test('test_pop_held_item_awaiting_review_is_not_continue_and_a_passed_one_is_clo
   const seq = item(f, job).fm.seq;
   assert.equal(p.action, 'idle');
   assert.deepEqual(p.blocked.find(b => b.item === job), { item: job, waiting_on: [`awaiting review: ${seq}`] });
-  const text = popCli(f, [], { env: { TEAM_LEAD: 'ann' } });
+  const text = popCli(f, [], { env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' } });
   assert.ok(text.status === 3 && text.stdout.includes(`blocked ${job}: awaiting review: ${seq}`), text.stdout);
   ok(f, job, '--review', 'changes', '--by', 'bob', '--comments', 'fix x per references/review/tests.md');
   p = pop(f); // a 'changes' verdict is work: continue
@@ -327,7 +327,7 @@ test('credentials in a wait are redacted in the text and the JSON of the pop (bl
   store.write({ path: join(f.folder, 'phases', `${held}.md`), fm: { ...fm, wait_on: 'https://user:hunter2secret@host/run' }, body }, f.folder);
   for (const args of [[], ['--json']]) {
     for (const cmd of [['team', 'pop', '--team', 't1']]) {
-      const r = cli([...cmd, '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'ann' } }); // the lead, while its team works: idle, the wait reported
+      const r = cli([...cmd, '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' } }); // the lead, while its team works: idle, the wait reported
       assert.equal(r.status, 3, r.stdout + r.stderr); // idle: it only waits
       assert.ok(r.stdout.includes('https://host/run'), r.stdout); // the wait is still named
       assert.ok(!(r.stdout + r.stderr).includes('hunter2secret'), `${cmd.join(' ')} ${args}: ${r.stdout}${r.stderr}`);

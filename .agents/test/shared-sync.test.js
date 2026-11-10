@@ -447,7 +447,7 @@ const cliNew = (f, home, cons, name, extra = {}) => new Promise(done => {
   const bin = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js');
   mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
   const p = spawn(process.execPath, [bin, 'new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'],
-    { cwd: cons, env: { ...process.env, ...env(f.dir), BACKLOG_HOME: home, BACKLOG_AGENT: name.toLowerCase(), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
+    { cwd: cons, env: { ...process.env, ...env(f.dir), SMOOTH_BACKLOG_CLI_HOME: home, SMOOTH_BACKLOG_CLI_AGENT: name.toLowerCase(), ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; let err = '';
   p.stdout.on('data', c => { out += c; });
   p.stderr.on('data', c => { err += c; });
@@ -473,7 +473,7 @@ test('075: overlapping writers, the other writer first: a CLI commit held at its
     assert.equal(b.out, '✅ created phase 001-otheritem (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
     assert.equal(b.err, '');
     assertPublish(f, f.home2, f.folder2, ['acme/demo/phases/001-otheritem.md', 'acme/demo/phases/002-nodeitem.md']); // the last publisher's mirror equals the published database
-    const ev = cli(['history', '2'], { cwd: cons2, tmp: f.dir, env: { BACKLOG_HOME: f.home2 } });
+    const ev = cli(['history', '2'], { cwd: cons2, tmp: f.dir, env: { SMOOTH_BACKLOG_CLI_HOME: f.home2 } });
     assert.match(ev.stdout, /renumbered.*001 -> 002/, ev.stdout + ev.stderr); // the history line of the renumbering is in the item
     assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all'), '', "B's clone tree is clean too");
   } finally { g.release(); } // never leave the held push (and its hook) running
@@ -498,7 +498,7 @@ test('075: CLI steps publish a clean, in-sync state: after new, archive and an o
   const aP = cliNew(f, f.home, cons, 'Gamma'); // its push will be held at the gate
   try {
     await g.entered(); // its push is inside the gate (it holds the run lock)
-    const bP = cliNew(f, f.home, cons, 'Delta', { BACKLOG_LOCK_WAIT_MS: '60000' }); // the second writer waits on the run lock
+    const bP = cliNew(f, f.home, cons, 'Delta', { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '60000' }); // the second writer waits on the run lock
     g.release(); // the first publishes 003-gamma, then the second acquires the lock and publishes 004-delta
     const [a, b] = await Promise.all([aP, bP]);
     assert.equal(a.status, 0, a.out + a.err);
@@ -518,7 +518,7 @@ test('075: overlapping writers, the same clone: a commit held at its push keeps 
   const aP = cliNew(f, f.home, cons, 'Nodeitem'); // writer 1; its commit is made locally and its first push is held at the gate
   try {
     await g.entered(); // the push is inside the gate (writer 1 holds the run lock)
-    const bP = cliNew(f, f.home, cons, 'Otheritem', { BACKLOG_LOCK_WAIT_MS: '60000' }); // writer 2 in the same clone waits on the run lock
+    const bP = cliNew(f, f.home, cons, 'Otheritem', { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '60000' }); // writer 2 in the same clone waits on the run lock
     g.release(); // writer 1 publishes 001-nodeitem, then writer 2 acquires the lock and publishes 002-otheritem on top of the held commit
     const [a, b] = await Promise.all([aP, bP]);
     assert.equal(a.status, 0, a.out + a.err);
@@ -536,7 +536,7 @@ test('two clones share the items through git alone: no database travels', t => {
   const f = fixture(t);
   const cons = consumer(f.dir, 'acme', 'demo', 'main');
   mkdirSync(join(f.dir, 'config', 'smooth-backlog-cli'), { recursive: true });
-  const run = (args, home) => cli(args, { cwd: cons, tmp: f.dir, env: { BACKLOG_HOME: home } });
+  const run = (args, home) => cli(args, { cwd: cons, tmp: f.dir, env: { SMOOTH_BACKLOG_CLI_HOME: home } });
   const NEW = name => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
   const names = r => JSON.parse(r.stdout).phases.map(p => p.name).sort();
   assert.equal(run(NEW('From A'), f.home).status, 0);

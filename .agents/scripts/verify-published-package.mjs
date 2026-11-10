@@ -33,7 +33,7 @@ export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry 
     const shim = process.platform === 'win32' ? join(prefix, 'backlog.cmd') : join(prefix, 'bin/backlog'); await fs.access(shim);
     const repo = join(work, 'repo'), config = join(work, 'config'), home = join(work, 'home');
     await fs.mkdir(repo); await fs.mkdir(config, { recursive: true }); await fs.mkdir(home);
-    const env = { ...process.env, XDG_CONFIG_HOME: config, HOME: home, BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: '', BACKLOG_AGENT: 'verifier', PATH: (process.platform === 'win32' ? prefix : join(prefix, 'bin')) + delimiter + process.env.PATH };
+    const env = { ...process.env, XDG_CONFIG_HOME: config, HOME: home, SMOOTH_BACKLOG_CLI_HOME: '', SMOOTH_BACKLOG_CLI_ORIGIN_URL: '', SMOOTH_BACKLOG_CLI_AGENT: 'verifier', PATH: (process.platform === 'win32' ? prefix : join(prefix, 'bin')) + delimiter + process.env.PATH };
     const options = { cwd: repo, env, windowsHide: true, timeout: 30000 };
     const git = args => exec('git', args, options);
     await git(['init', '-b', 'main']); await git(['config', 'user.email', 'release-test@example.invalid']); await git(['config', 'user.name', 'Published package verification']); await git(['commit', '--allow-empty', '-m', 'fixture root']);

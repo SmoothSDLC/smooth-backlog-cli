@@ -21,7 +21,7 @@ function fixture() {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-const run = (f, command, args) => cli([command, ...args], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
+const run = (f, command, args) => cli([command, ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '' } });
 const ok = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
 const COMMIT = 'def45678def45678def45678def45678def45678'; // a 40-hex commit for the hand-off records
 // a close with a dependent needs a hand-off recorded by the claimer and accepted by the team lead
@@ -31,7 +31,7 @@ const handoff = (f, slug, job, claimer) => {
   run(f, 'show', [slug, '--agent', claimer]);
   ok(f, slug, '--handoff', String(Number(job.split('-')[0])), '--handoff-commit', COMMIT, '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', claimer);
   run(f, 'show', [slug, '--agent', 'lead']);
-  const r = cli(['update', slug, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'lead'], { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: 'lead', BACKLOG_SESSION: '', TEAM_LEAD: 'lead' } });
+  const r = cli(['update', slug, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'lead'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'lead', SMOOTH_BACKLOG_CLI_SESSION: '', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
 };
 const refused = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };

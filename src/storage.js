@@ -25,9 +25,9 @@ export async function atomicWrite(path, text) {
 // wait: how long to wait for a holder (ms). takeOver: a lock whose pid is no longer running (on this host) is taken over and said so once,
 // instead of refused.
 let tookOver = false;
-// the record names the agent (--by or --agent of the command, else BACKLOG_AGENT or the user) and the time
+// the record names the agent (--by or --agent of the command, else SMOOTH_BACKLOG_CLI_AGENT or the user) and the time
 const argOf = flag => { const v = process.argv.find((x, i) => process.argv[i - 1] === flag) ?? process.argv.find(x => x.startsWith(`${flag}=`))?.slice(flag.length + 1); return v && !v.startsWith('--') ? v : ''; };
-const lockRecord = () => JSON.stringify({ pid: process.pid, host: hostname(), command: process.argv[2] ?? '', agent: (argOf('--by') || argOf('--agent') || process.env.BACKLOG_AGENT || process.env.USER || '').trim(), since: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
+const lockRecord = () => JSON.stringify({ pid: process.pid, host: hostname(), command: process.argv[2] ?? '', agent: (argOf('--by') || argOf('--agent') || process.env.SMOOTH_BACKLOG_CLI_AGENT || process.env.USER || '').trim(), since: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
 const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } };
 // A child that works under its parent's checkout adds itself to the record while it works, and puts the parent's back.
 // It registers holding the takeover marker, so a waiter that takes a dead parent's lock over and the child never both
@@ -145,7 +145,7 @@ export async function locked(path, callback, { wait = 10000, takeOver = false } 
         }
         if (!(error instanceof SyntaxError) && !(process.platform === 'win32' && error.code === 'EPERM')) throw error;
       }
-      if (Date.now() - started > wait) throw new BacklogError('LOCKED', `Backlog is locked by another process${holder}: ${path}. Retry after it finishes, or raise BACKLOG_LOCK_WAIT_MS.`, 1);
+      if (Date.now() - started > wait) throw new BacklogError('LOCKED', `Backlog is locked by another process${holder}: ${path}. Retry after it finishes, or raise SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS.`, 1);
       await delay(20 + Math.random() * 25);
     }
   }

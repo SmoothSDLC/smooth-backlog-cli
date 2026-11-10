@@ -1,5 +1,5 @@
 # Synthetic deny list: made-up entries that name nothing real. The guard in no-private-details.test.js scans the
-# tracked files with this list when BACKLOG_PRIVATE_DENYLIST is unset (as in CI), so the guard never skips; this
+# tracked files with this list when SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST is unset (as in CI), so the guard never skips; this
 # file itself is left out of that scan. The real deny list is private and never committed.
 synthetic-denied-detail-k7q2zx
 synthetic-denied-host-m4v9wr

@@ -109,7 +109,7 @@ export async function teamView(a, { rows, excluded, repo, branch, folder, home, 
           const file = own.get(r.path);
           if (!file || missingFields(file.fm, file.body).length) return false;
         }
-        if (!team.offeredTo(fm, f, repo)) return false; // another team's item (TEAM_NAME)
+        if (!team.offeredTo(fm, f, repo)) return false; // another team's item (SMOOTH_BACKLOG_CLI_TEAM_NAME)
         if (a.claimable) return isUnstarted(r.status) && !fm.claimed_by && !undone.length && team.isReady({ stage: stageOf(fm, f === repo ? own.get(r.path)?.body : '') }) && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
         return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) && !undone.some(d => d.foreign && d.item?.status !== 'closed') : undone.length > 0; // never a review of an item before ready , nor of one waiting on another repository 
       });

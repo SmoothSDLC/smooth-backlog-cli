@@ -1,6 +1,6 @@
 // backlog setup writes the repository's .backlog/config.json (a path relative to the repository), clones the
 // backlog repository beside it when it is missing, deploys the template skill into every agent folder present and
-// --ask asks for the path. Local bare repos only; BACKLOG_HOME unset.
+// --ask asks for the path. Local bare repos only; SMOOTH_BACKLOG_CLI_HOME unset.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -19,8 +19,8 @@ function fixture() {
   sharedBacklog(t); // creates the bare origin (and a clone at <t>/home, unused here)
   const app = consumer(t, 'acme', 'app', 'main');
   for (const d of ['.claude', '.qwen']) mkdirSync(join(app, d));
-  const env = { HOME: join(t, 'user'), XDG_CONFIG_HOME: join(t, 'config'), BACKLOG_HOME: '', BACKLOG_ORIGIN_URL: join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`),
-    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid', BACKLOG_AGENT: 'tester' };
+  const env = { HOME: join(t, 'user'), XDG_CONFIG_HOME: join(t, 'config'), SMOOTH_BACKLOG_CLI_HOME: '', SMOOTH_BACKLOG_CLI_ORIGIN_URL: join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`),
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid', SMOOTH_BACKLOG_CLI_AGENT: 'tester' };
   const run = (cwd, args, input) => { const r = spawnSync(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, ...env }, input: input ?? '', encoding: 'utf8' }); return { status: r.status, stdout: r.stdout, stderr: r.stderr }; };
   return { t, app, run };
 }

@@ -15,10 +15,10 @@ import { now, originRef, repoId, stateDir } from './store.js'; // a cycle (store
 export const STALE_EXIT = 5;
 let current; // the --by/--agent of the running command
 export const setActor = name => { if (name) current = String(name); };
-// the agent of the session (BACKLOG_AGENT), as --by and --agent name it: one agent, one view
+// the agent of the session (SMOOTH_BACKLOG_CLI_AGENT), as --by and --agent name it: one agent, one view
 // With no agent named, the writer is the user of the repository's configuration (setup records it from git, else the login name).
 let user;
-export const actor = () => current || (process.env.BACKLOG_AGENT || '').trim() || (user ??= configUser());
+export const actor = () => current || (process.env.SMOOTH_BACKLOG_CLI_AGENT || '').trim() || (user ??= configUser());
 // Hash the exact name: replacement aliases distinct agents. Old lossy names are deliberately not read.
 const viewsFile = (home, agent) => join(stateDir(home), 'smooth-backlog-cli-views', `${createHash('sha256').update(agent).digest('hex')}.json`);
 const homeOf = folder => dirname(dirname(folder)); // <home>/<owner>/<name>

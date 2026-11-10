@@ -7,9 +7,9 @@ Feature: Team flow - an item moves along one ordered list of status words, and a
     And a team "t1" with lead "lead" and members "ann, bob"
     And team "t1" reviews in the stages "peer, external"
     And team "t1" has the external reviewers "xia"
-    And the environment TEAM_NAME is "t1"
-    And the environment TEAM_REPOSITORY is "this repository"
-    And the environment TEAM_BRANCH is "main"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_NAME is "t1"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY is "this repository"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_BRANCH is "main"
     And I act as agent "lead"
     And I run `backlog new --name "Parser work" --objective "o" --summary "s" --estimate 90 --complexity medium --body "## Definition of done\n- [ ] the parser parses the sample"`
     And I run `backlog team update 1 --set-team t1 --set-review-refs docs/review/code.md`

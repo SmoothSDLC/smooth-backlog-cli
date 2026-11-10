@@ -17,7 +17,7 @@ import { isOpen } from '../shared/status.js';
 const clean = v => (typeof v === 'string' ? redact(v) : Array.isArray(v) ? v.map(clean) : v !== null && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)])) : v); // redacted before it is serialized
 // The holder of an item as its front matter shows it (the stored form: owner while owned_since is set).
 const holderOf = f => strip(String(f.claimed_by ?? (f.owned_since ? f.owner : '') ?? ''));
-const BIN = () => process.env.BACKLOG_TEST_SELF || fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)); // the test seam: a wrapper that fails on cue
+const BIN = () => process.env.SMOOTH_BACKLOG_CLI_TEST_SELF || fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)); // the test seam: a wrapper that fails on cue
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const self = (args, env = {}) => spawnSync(process.execPath, [BIN(), ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
@@ -52,11 +52,11 @@ async function engine(args) {
 export async function run({ team, agent }, rest) {
   let a;
   try { a = parse(rest); } catch (e) { return die(e.message); }
-  const own = strip(process.env.TEAM_NAME || '');
-  if (own && own !== team) return die(`this session is team ${own} (TEAM_NAME), not ${team}`);
-  const me = caller(); // the team session's agent (BACKLOG_AGENT in a team session)
-  if (me && me !== agent) return die(`you are ${me} (BACKLOG_AGENT): team pop answers only for yourself, not for ${agent}`);
-  if (a.lead && strip(a.lead) !== teamLead()) return die(`--lead ${a.lead} is not the team lead of this session (${teamLead()}; TEAM_LEAD): team pop acts as the lead the updates know`);
+  const own = strip(process.env.SMOOTH_BACKLOG_CLI_TEAM_NAME || '');
+  if (own && own !== team) return die(`this session is team ${own} (SMOOTH_BACKLOG_CLI_TEAM_NAME), not ${team}`);
+  const me = caller(); // the team session's agent (SMOOTH_BACKLOG_CLI_AGENT in a team session)
+  if (me && me !== agent) return die(`you are ${me} (SMOOTH_BACKLOG_CLI_AGENT): team pop answers only for yourself, not for ${agent}`);
+  if (a.lead && strip(a.lead) !== teamLead()) return die(`--lead ${a.lead} is not the team lead of this session (${teamLead()}; SMOOTH_BACKLOG_CLI_TEAM_LEAD): team pop acts as the lead the updates know`);
   const lead = agent === teamLead();
   let ownRepo; let branch;
   try { ownRepo = teamScope().repo || repoId(process.cwd()); branch = gitBranch(process.cwd()); } catch (e) { return die(e.message); }
@@ -150,9 +150,9 @@ async function workItem({ team, agent, repo, branch, engine: e }) {
   // the engine answers first; a held work item with no other item of the team is continued here (the engine would offer its close)
   if (e.action !== 'idle' && !(held && e.action === 'continue' && e.item === held.fm.phase && !children(held))) return { skipped: [] };
   if (held && children(held)) return { skipped: [] }; // the lead's work item is being worked by its team: the engine's idle answer stands
-  if (!branch) return { fail: die('team pop needs a branch: check one out here or set TEAM_BRANCH (a detached HEAD names none)') };
+  if (!branch) return { fail: die('team pop needs a branch: check one out here or set SMOOTH_BACKLOG_CLI_TEAM_BRANCH (a detached HEAD names none)') };
   const read = slug => self(['team', 'query', '--team', team, '--agent', agent, '--phase', slug]); // the agent's view of the item for its write
-  const claim = slug => self(['team', 'update', slug, '--team', team, '--agent', agent, '--claim'], { TEAM_REPOSITORY: repo, TEAM_BRANCH: branch });
+  const claim = slug => self(['team', 'update', slug, '--team', team, '--agent', agent, '--claim'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: repo, SMOOTH_BACKLOG_CLI_TEAM_BRANCH: branch });
   // a refused claim is update's refusal (exit 1, '❌ <item>: <why>' on stdout); any other failure ends the command
   const refused = r => r.status === 1 && /^❌ /m.test(r.stdout) && !/❌ backlog:/.test(r.stderr);
   const skipped = [];

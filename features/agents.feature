@@ -50,7 +50,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
 
   Scenario: the holder asks for a review and another agent reviews it
     Given a team "t1" with lead "lead" and members "alice, bob"
-    And the environment TEAM_NAME is "t1"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_NAME is "t1"
     And I act as agent "lead"
     And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done"`
     And I act as agent "alice"
@@ -65,7 +65,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
 
   Scenario: the author cannot review its own work
     Given a team "t1" with lead "lead" and members "alice, bob"
-    And the environment TEAM_NAME is "t1"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_NAME is "t1"
     And I act as agent "lead"
     And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done"`
     And I act as agent "alice"
@@ -77,7 +77,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
 
   Scenario: a changes verdict sends the item back to work
     Given a team "t1" with lead "lead" and members "alice, bob"
-    And the environment TEAM_NAME is "t1"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_NAME is "t1"
     And I act as agent "lead"
     And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done"`
     And I act as agent "alice"
@@ -90,7 +90,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
 
   Scenario: the holder closes the reviewed item
     Given a team "t1" with lead "lead" and members "alice, bob"
-    And the environment TEAM_NAME is "t1"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_NAME is "t1"
     And I act as agent "lead"
     And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done"`
     And I act as agent "alice"
@@ -106,7 +106,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
 
   Scenario: the holder records what it waits on
     Given a team "t1" with lead "lead" and members "alice, bob"
-    And the environment TEAM_NAME is "t1"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_NAME is "t1"
     And I act as agent "lead"
     And I run `backlog team update 1 --set-review-refs docs/review/code.md --set-estimate 90 --set-complexity medium --set-depends-on none --append "## Definition of done\n- [ ] the work is done" --set-team t1 --status ready`
     And I act as agent "alice"

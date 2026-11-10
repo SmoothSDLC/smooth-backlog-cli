@@ -24,7 +24,7 @@ function fixture() {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-const run = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '' } });
+const run = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '' } });
 const ok = (f, args) => { const r = run(f, args); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const make = (f, name) => createdSlug(ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none',

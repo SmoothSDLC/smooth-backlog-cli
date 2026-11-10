@@ -1,7 +1,7 @@
 Feature: Team - a team lead splits a work item, members refine it, a reviewed refinement is claimed, worked, reviewed by rule and closed
   Teams, their members and leads, and their review rules are configuration of the backlog folder (teams.json): nothing
-  about them is built into the CLI. A team session is bound by TEAM_NAME and TEAM_REPOSITORY/TEAM_BRANCH; the caller is
-  BACKLOG_AGENT and acts only as itself. Before stage ready a split item only takes its refinement steps.
+  about them is built into the CLI. A team session is bound by SMOOTH_BACKLOG_CLI_TEAM_NAME and SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY/SMOOTH_BACKLOG_CLI_TEAM_BRANCH; the caller is
+  SMOOTH_BACKLOG_CLI_AGENT and acts only as itself. Before stage ready a split item only takes its refinement steps.
 
   Background:
     Given a repository with a backlog
@@ -9,9 +9,9 @@ Feature: Team - a team lead splits a work item, members refine it, a reviewed re
     And a team "reviewers" with lead "rex" and members "rex, ria"
     And team "t1" work needs 1 pass by "t1" and 1 pass by "reviewers"
     And team "t1" refinements are reviewed by "reviewers"
-    And the environment TEAM_NAME is "t1"
-    And the environment TEAM_REPOSITORY is "this repository"
-    And the environment TEAM_BRANCH is "main"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_NAME is "t1"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY is "this repository"
+    And the environment SMOOTH_BACKLOG_CLI_TEAM_BRANCH is "main"
     And I act as agent "lead"
     And I run `backlog new --name "Parser work" --objective "o" --summary "s" --estimate 90 --complexity medium --body "## Definition of done\n- [ ] the parser parses the sample"`
     And I run `backlog team update 1 --set-team t1 --set-review-refs docs/review/code.md`

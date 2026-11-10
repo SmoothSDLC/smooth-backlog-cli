@@ -14,7 +14,7 @@ function fixture(prefix = 'team-plan-') {
   const t = mkdtempSync(join(tmpdir(), prefix));
   dirs.push(t);
   const home = sharedBacklog(t);
-  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }], members: ['ann', 'bob', 'zed'] } })); // t1 asks one peer review of its work; the lead (TEAM_LEAD below) is none of the members
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }], members: ['ann', 'bob', 'zed'] } })); // t1 asks one peer review of its work; the lead (SMOOTH_BACKLOG_CLI_TEAM_LEAD below) is none of the members
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   return { t, home, cons, user: join(t, 'user'), folder: join(home, 'acme', 'demo') };
@@ -24,13 +24,13 @@ const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--de
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
-  const o = { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', TEAM_LEAD: 'lead', HOME: f.user, ...env } };
+  const o = { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', HOME: f.user, ...env } };
   if (args[0] === 'update' && reader(args)) cli(['show', args[1], '--agent', reader(args)], o);
   return cli(args, o);
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const raw = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout); // an item as created: no team
-const make = (f, name, ...extra) => intoTeam(raw(f, name, ...extra), { cwd: f.cons, tmp: f.t, env: { BACKLOG_SESSION: '', HOME: f.user } }); // the plan reaches only the items of t1
+const make = (f, name, ...extra) => intoTeam(raw(f, name, ...extra), { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_SESSION: '', HOME: f.user } }); // the plan reaches only the items of t1
 const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
 const plan = (f, env, agents = 'ann,bob,zed,lead') => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', agents, '--json'], env).stdout);
 const rows = p => p.map(e => [e.member, e.action, e.item]);
@@ -89,7 +89,7 @@ test('a review in progress is hidden from the plan; a stale one goes to the lead
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'zed']);
   ok(f, ['update', job, '--start-review', '--by', 'bob']);
   assert.deepEqual(plan(f).filter(e => e.item === job), []);
-  const p = plan(f, { BACKLOG_REVIEW_STALE_SECONDS: '-1' }).filter(e => e.item === job);
+  const p = plan(f, { SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS: '-1' }).filter(e => e.item === job);
   assert.deepEqual(p.map(e => [e.member, e.action]), [['lead', 'reassign-review']]);
   assert.ok(p[0].instruction.includes(`--agent lead --reassign-review <member> --reason`), p[0].instruction);
 });
@@ -99,7 +99,7 @@ test('the lead and a review_only member get no claim; the lead refines an incomp
   writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }], members: ['ann', 'bob', 'zed', 'lead'], review_only: ['bob'] } })); // bob reviews only
   const [a, b] = ['first claim job', 'second claim job'].map(n => make(f, n));
   assert.deepEqual(plan(f).map(e => [e.member, e.action]), [['ann', 'claim'], ['zed', 'claim']]); // bob reviews only, the lead never claims
-  const bare = intoTeam(createdSlug(ok(f, ['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout), { cwd: f.cons, tmp: f.t, env: { BACKLOG_SESSION: '', HOME: f.user } }, 't1', ''); // an incomplete item of t1
+  const bare = intoTeam(createdSlug(ok(f, ['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout), { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_SESSION: '', HOME: f.user } }, 't1', ''); // an incomplete item of t1
   const r = plan(f).find(e => e.member === 'lead');
   assert.deepEqual([r.action, r.item], ['refine', bare]);
   assert.ok(r.reason.startsWith('incomplete: review_refs,estimate_min,definition_of_done') && r.instruction.includes('never action it'), JSON.stringify(r));
@@ -107,7 +107,7 @@ test('the lead and a review_only member get no claim; the lead refines an incomp
   assert.ok(a && b);
 });
 
-test("with TEAM_NAME another team's item is never planned, and nothing before stage ready is claimed or reviewed", () => {
+test("with SMOOTH_BACKLOG_CLI_TEAM_NAME another team's item is never planned, and nothing before stage ready is claimed or reviewed", () => {
   const f = fixture();
   const w = raw(f, 'work item');
   ok(f, ['update', w, '--set-team', 't1']);
@@ -116,7 +116,7 @@ test("with TEAM_NAME another team's item is never planned, and nothing before st
   for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']]) ok(f, ['update', w, ...a]);
   const theirs = raw(f, "t2's item");
   ok(f, ['update', theirs, '--set-team', 't2']);
-  const p = plan(f, { TEAM_NAME: 't1' });
+  const p = plan(f, { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' });
   assert.deepEqual(rows(p), [['ann', 'claim', w]]); // not c (refining), not t2's item
   assert.ok(c);
 });

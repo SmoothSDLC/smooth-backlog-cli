@@ -25,7 +25,7 @@ function fixture() {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-const LEAD = { TEAM_LEAD: 'lead' };
+const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' };
 const run = (f, args, env = {}, cwd = f.cons) => cli(args, { cwd, tmp: f.t, env: { ...LEAD, ...env } });
 const ok = (f, args, cwd = f.cons) => { const r = run(f, args, {}, cwd); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const NEW = (name, deps, extra = []) => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', deps,

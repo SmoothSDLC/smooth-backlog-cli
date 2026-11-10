@@ -3,7 +3,7 @@ export const SHARED = `Run the command from inside the repository whose backlog 
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
 change before it exits; a folder inside the repository is committed with the repository by its user. The executable
 reports each run to an optional run recorder hook: the hook spawns a child process only when the environment variable
-BACKLOG_RUN_HOOK names an executable, and no child process when the variable is unset.`;
+SMOOTH_BACKLOG_CLI_RUN_HOOK names an executable, and no child process when the variable is unset.`;
 
 export const EXIT = `Exit codes:
   0  The command succeeded. Read views and --dry-run also exit 0.

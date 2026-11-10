@@ -260,7 +260,7 @@ async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
   const files = new Map(store.load(folder).map(i => [i.path, i]));
   const every0 = await teamRows({ open: index.open(all), scope: 'branch', cap: 'off', every: false, excluded, repo, branch, folder, home });
   const missing = new Map(every0.map(x => { const file = files.get(x.r.path); return [x.r.id, file ? missingFields(file.fm, file.body) : ['the item file']]; }));
-  const every = every0.filter(x => team.inTeam(x.fm)); // only the caller's team's items (TEAM_NAME)
+  const every = every0.filter(x => team.inTeam(x.fm)); // only the caller's team's items (SMOOTH_BACKLOG_CLI_TEAM_NAME)
   const rows = every.filter(x => !missing.get(x.r.id).length // an incomplete item is never dispatched to a member
     && !(x.undone ?? []).some(d => d.foreign && d.item?.status !== 'closed')); // nor one that waits on another repository : pop names that first
   const held = Object.fromEntries(members.map(m => [m, team.heldItems(folder, m, { refining: true })]));
@@ -348,7 +348,7 @@ async function popCommand(argv) {
   try { branch = a.branch || team.teamScope().branch || (await git(['branch', '--show-current'], cwd)).stdout.trim(); } catch (e) { return die(e.message); }
   const bound = team.teamScope().branch;
   if (bound) { // a bound team pops only its own branch
-    if (branch !== bound) return die(`--branch ${branch}: this team session is bound to branch ${bound} (TEAM_BRANCH)`);
+    if (branch !== bound) return die(`--branch ${branch}: this team session is bound to branch ${bound} (SMOOTH_BACKLOG_CLI_TEAM_BRANCH)`);
     a.scope = 'branch'; a.all = false;
   }
   const plain = a.phase || a.events !== undefined || a['by-branch'];

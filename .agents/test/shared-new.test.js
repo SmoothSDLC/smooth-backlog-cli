@@ -267,20 +267,20 @@ test('review P1: new --split-from whose index write is refused leaves the item f
   assert.deepEqual(files(), before, 'no stray split event');
 });
 
-test('review P1: team new --split-from an item of another branch (TEAM_BRANCH differs) is refused and logs nothing', t => {
+test('review P1: team new --split-from an item of another branch (SMOOTH_BACKLOG_CLI_TEAM_BRANCH differs) is refused and logs nothing', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0); // 001-alpha-job on acme/demo, branch main
   const rows = () => readFileSync(join(f.folder, 'phases', '001-alpha-job.md'), 'utf8'); // the item carries its history
   const before = rows();
-  const r = teamNode(f, [...NONE, '--split-from', '1', '--body', '## Definition of done\n- [ ] x'], { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'release' });
+  const r = teamNode(f, [...NONE, '--split-from', '1', '--body', '## Definition of done\n- [ ] x'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'release' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /team session is bound to acme\/demo branch release/);
   assert.equal(rows(), before);
   assert.deepEqual(readdirSync(join(f.folder, 'phases')), ['001-alpha-job.md']);
 });
 
-test('075: team new: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the branch; a body without a definition of done gets the placeholder', t => {
-  const f = fixture(t); const env = { TEAM_REPOSITORY: 'acme/other', TEAM_BRANCH: 'team-1' };
+test('075: team new: SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY binds the repository and SMOOTH_BACKLOG_CLI_TEAM_BRANCH the branch; a body without a definition of done gets the placeholder', t => {
+  const f = fixture(t); const env = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/other', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'team-1' };
   const ok = teamNode(f, NONE, env);
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
   assert.equal(ok.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
@@ -289,15 +289,15 @@ test('075: team new: TEAM_REPOSITORY binds the repository and TEAM_BRANCH the br
   assert.equal(item.fm.repository, 'acme/other'); assert.equal(item.fm.branch, 'team-1');
   assert.deepEqual([item.fm.team, item.fm.status, item.fm.refiner], ['t1', 'new', '']);
   assert.match(item.body, /## Definition of done\n\n- \[ \] <machine-checkable acceptance>/);
-  const bad = teamNode(f, NONE, { TEAM_REPOSITORY: '../x' });
+  const bad = teamNode(f, NONE, { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: '../x' });
   assert.equal(bad.status, 2);
   assert.equal(bad.stdout, '');
   assert.match(bad.stderr, /^❌ backlog: .*\.\.\/x/);
 });
 
-test('075: a plain new ignores TEAM_REPOSITORY and TEAM_BRANCH', t => {
+test('075: a plain new ignores SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BACKLOG_CLI_TEAM_BRANCH', t => {
   const f = fixture(t);
-  const r = node(f, NONE, { TEAM_REPOSITORY: 'acme/other', TEAM_BRANCH: 'team-1' });
+  const r = node(f, NONE, { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/other', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'team-1' });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(items(f).length, 1);
   assert.equal(items(f)[0].fm.repository, 'acme/demo');

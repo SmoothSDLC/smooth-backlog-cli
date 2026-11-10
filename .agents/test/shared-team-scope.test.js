@@ -77,14 +77,14 @@ test('test_scopes_and_refinement_cap: --scope and the refinement_scope cap of ba
       const c = cli(['update', slug, '--claim', who], { cwd: f.cons, tmp: f.t });
       assert.equal(c.status, 0, c.stdout + c.stderr);
     }
-    let p = cli(['team', 'pop', '--team', 't1', '--agent', 't', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead' } });
+    let p = cli(['team', 'pop', '--team', 't1', '--agent', 't', '--scope', 'all', '--json'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' } });
     assert.ok(p.status === 0 && JSON.parse(p.stdout).action === 'chunk', p.stdout + p.stderr);
     writeFileSync(f.cfg, 'refinement_scope: repo\n');
     got = slugs(f, [...cl, '--scope', 'all']);
     assert.ok(!got.includes(chunk) && got.includes(chunkb));
     writeFileSync(f.cfg, 'refinement_scope: off\n');
     assert.ok(!slugs(f, [...cl, '--scope', 'repo']).includes(chunkb));
-    p = cli(['team', 'pop', '--team', 't1', '--agent', 't', '--json'], { cwd: f.cons, tmp: f.t, env: { TEAM_LEAD: 'lead' } });
+    p = cli(['team', 'pop', '--team', 't1', '--agent', 't', '--json'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' } });
     assert.ok(p.status === 3 && JSON.parse(p.stdout).action === 'idle', p.stdout + p.stderr);
     writeFileSync(f.cfg, 'refinement_scope: everywhere\n');
     const bad = cli(['team', 'query', '--team', 't1', ...cl], { cwd: f.cons, tmp: f.t });
@@ -174,7 +174,7 @@ test('any member but the author is offered the review at once; the reviewable vi
 test('a team session whose repository id leaves the home (../x) is refused with exit 2', () => {
   const f = fixture();
   make(f, f.cons, 'scope bound', []);
-  const up = cli(['team', 'query', '--team', 't1', '--claimable'], { cwd: f.cons, tmp: f.t, env: { TEAM_REPOSITORY: '../x' } });
+  const up = cli(['team', 'query', '--team', 't1', '--claimable'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: '../x' } });
   assert.equal(up.status, 2);
   assert.match(up.stderr, /^❌ backlog: not an owner\/name repository id: \.\.\/x/);
 });

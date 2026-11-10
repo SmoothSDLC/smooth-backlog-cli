@@ -16,11 +16,11 @@ import * as store from '../../src/shared/store.js';
 // child — the git-push / git-receive-pack chain, and, where a push gate is used, the gate's sh hook and its
 // sleep — that outlive the CLI's node child (the fixture's spawnSync timeout kill mid-push, an unsettled
 // chain) and still write into the temp folder when the test's cleanup removes it. Every process of the chain
-// inherits the CLI child's BACKLOG_HOME env; settleScenarioChildren kills the ones still alive (SIGTERM, then
+// inherits the CLI child's SMOOTH_BACKLOG_CLI_HOME env; settleScenarioChildren kills the ones still alive (SIGTERM, then
 // SIGKILL) so the removal cannot race with them, and fails loudly if the chain is still alive after the settle.
 // Linux only: the scan needs /proc. macOS is not supported by this suite; its support returns with item 085.
 function scenarioPids(d, procRoot = '/proc') {
-  const mark = `BACKLOG_HOME=${join(d, 'home')}`;
+  const mark = `SMOOTH_BACKLOG_CLI_HOME=${join(d, 'home')}`;
   const out = [];
   let entries;
   try { entries = readdirSync(procRoot); } catch (e) {
@@ -189,7 +189,7 @@ test('review P1: a number collision in the destination of a cross-repository mov
   const second = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp }); // becomes new/place 001-alpha-job
   await hold.held();
   assert.equal(cli(NEW('beta job'), { cwd: a.cons, tmp: a.tmp }).status, 0); // the source folder changes too
-  const delta = cli([...NEW('delta job'), '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'new/place' } }); // new/place 001-delta-job
+  const delta = cli([...NEW('delta job'), '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'new/place' } }); // new/place 001-delta-job
   assert.equal(delta.status, 0, delta.stdout + delta.stderr);
   hold.release();
   const r = await second.done;
@@ -225,7 +225,7 @@ test('audit: a move that empties phases/ does not carry another clone\'s new fil
 
 test('review P2: a destination-renumbered move caches the moved item and refuses a subsequent stale summary overwrite', async t => {
   const [a, b, { bare }] = writers(t);
-  const mover = process.env.BACKLOG_AGENT || configUser(a.cons); // cliAsync uses the inherited actor
+  const mover = process.env.SMOOTH_BACKLOG_CLI_AGENT || configUser(a.cons); // cliAsync uses the inherited actor
   for (const name of ['alpha', 'gamma']) assert.equal(cli([...NEW(name), '--review-refs', 'references/review/code.md',
     '--estimate', '5', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
@@ -235,7 +235,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
   let collision;
   try {
     collision = cli(['team', ...NEW('delta'), '--team', 't1', '--agent', 'amy', '--body', '## Definition of done\n- [ ] x'], {
-      cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'new/place' },
+      cwd: a.cons, tmp: a.tmp, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'new/place' },
     });
   } finally { hold.release(); }
   const moved = await move.done;
@@ -247,13 +247,13 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
   assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
 
   const changed = cli(['update', '002-alpha', '--summary', 'remote summary', '--by', 'other-writer'], {
-    cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'new/place' },
+    cwd: a.cons, tmp: a.tmp, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'new/place' },
   });
   assert.equal(changed.status, 0, changed.stdout + changed.stderr);
   const head = gitIn(bare, 'rev-parse', 'main');
   // Do not query the destination first: the move itself must have recorded what the mover wrote.
   const stale = cli(['update', '002-alpha', '--summary', 'stale summary', '--by', mover], {
-    cwd: b.cons, tmp: b.tmp, env: { TEAM_REPOSITORY: 'new/place' },
+    cwd: b.cons, tmp: b.tmp, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'new/place' },
   });
   assert.equal(stale.status, 5, stale.stdout + stale.stderr);
   assert.match(stale.stderr, /item 002-alpha was changed by other-writer .* after you last read it/);
@@ -265,7 +265,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
 
 test('review P2: update records its published identity when an added item is renumbered during recovery', async t => {
   const [a, b, { bare }] = writers(t);
-  const agent = process.env.BACKLOG_AGENT || configUser(a.cons);
+  const agent = process.env.SMOOTH_BACKLOG_CLI_AGENT || configUser(a.cons);
   assert.equal(cli(NEW('anchor'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const [anchor] = store.load(b.folder);
@@ -480,7 +480,7 @@ test('publication: permanent failure after a push race removes renumbering and r
   let collision; let remote;
   try {
     collision = cli(NEW('upstream collision'), { cwd: a.cons, tmp: a.tmp });
-    remote = cli(['team', ...NEW('other folder'), '--team', 't1', '--agent', 'amy', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { TEAM_REPOSITORY: 'other/repo' } });
+    remote = cli(['team', ...NEW('other folder'), '--team', 't1', '--agent', 'amy', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'other/repo' } });
   } finally { hold.release(); }
   const r = await failed.done;
   assert.equal(collision.status, 0, collision.stdout + collision.stderr);
@@ -613,7 +613,7 @@ test('publication graph: a claim is refused when its completed dependency reopen
      ['show', '1', '--agent', 'prod'], ['update', '1', '--handoff', '2', '--handoff-commit', 'def45678def45678def45678def45678def45678', '--handoff-contract', 'c', '--handoff-verification', 'v', '--by', 'prod'],
      ['update', '1', '--accept-handoff', '2', '--checks', 'verified', '--by', 'lead'],
      ['show', '1', '--agent', 'prod'], ['update', '1', '--status', 'done', '--by', 'prod']], // prod's read and prod's write: the same explicit actor (the CI runner's USER differs)
-    ['update', '1', '--status', 'pending', '--priority', '99'], ['update', '2', '--claim', 'amy'], { seedEnv: { TEAM_LEAD: 'lead' } });
+    ['update', '1', '--status', 'pending', '--priority', '99'], ['update', '2', '--claim', 'amy'], { seedEnv: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' } });
   rejectedPublication(t, b, bare, result, /dependencies not done/);
 });
 
@@ -658,7 +658,7 @@ test('publication graph: an outgoing slug dependency is rechecked after an upstr
 // A team's items: the active-work limit is a team rule, so these claims are `backlog team update` steps of team t1.
 const teamEntry = (a, b) => { for (const h of [a.home, b.home]) writeFileSync(join(h, 'teams.json'), '{"t1":{}}'); };
 const readyInT1 = n => ['team', 'update', n, '--team', 't1', '--agent', 'lead', '--set-team', 't1', '--status', 'ready'];
-const AMY = { BACKLOG_AGENT: 'amy' }; // a team command acts as the session's agent
+const AMY = { SMOOTH_BACKLOG_CLI_AGENT: 'amy' }; // a team command acts as the session's agent
 for (const force of [false, true]) test(`publication graph: concurrent team claims by one agent ${force ? 'respect --force' : 'cannot bypass the active-work limit'}`, async t => {
   const { b, bare, result } = await race(t, [teamEntry, COMPLETE('alpha'), COMPLETE('beta'), readyInT1('1'), readyInT1('2')],
     ['team', 'update', '1', '--team', 't1', '--claim', 'amy'], ['team', 'update', '2', '--team', 't1', '--claim', 'amy', ...(force ? ['--force'] : [])], { aEnv: AMY, bEnv: AMY, readAs: 'amy' });
@@ -715,7 +715,7 @@ for (const [name, args, change] of [
       const item = store.load(a.folder)[0];
       change(item.fm);
       store.write({ path: join(a.folder, item.path), fm: item.fm, body: item.body }, a.folder);
-    }, { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' });
+    }, { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' });
   assert.equal(result.status, 5, result.stdout + result.stderr);
   assert.match(result.stderr, /changed by.*read it again/s);
   assert.deepEqual(state(b.home), before, 'stale-view rollback retains the established pre-command snapshot');
@@ -753,7 +753,7 @@ test('cleanup settle: a child process that survives the settle is reported loudl
   const ready = join(d, 'ready');
   const child = spawn(process.execPath, ['-e',
     'process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(process.argv[1], ""); setTimeout(() => {}, 1e9)',
-    ready], { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
+    ready], { env: { SMOOTH_BACKLOG_CLI_HOME: join(d, 'home') }, stdio: 'ignore' });
   child.unref();
   t.after(() => { try { child.kill('SIGKILL'); } catch {} });
   const exited = new Promise(res => child.once('exit', res));
@@ -773,7 +773,7 @@ test('cleanup: scenarioPids sees the processes carrying the fixture env (item 76
   const notADir = join(d, 'not-a-dir');
   writeFileSync(notADir, '');
   assert.throws(() => scenarioPids(d, notADir), /unreadable/, 'a failed process scan is not verified empty');
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { env: { BACKLOG_HOME: join(d, 'home') }, stdio: 'ignore' });
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { env: { SMOOTH_BACKLOG_CLI_HOME: join(d, 'home') }, stdio: 'ignore' });
   child.unref();
   t.after(() => { try { child.kill('SIGKILL'); } catch {} });
   for (let i = 0; i < 100 && !scenarioPids(d).includes(child.pid); i++) await sleep(50);
@@ -786,7 +786,7 @@ test('cleanup: scenarioPids sees the processes carrying the fixture env (item 76
 const FAKE_PID = '9999999';
 const fakeProc = (d, withEnv = true) => {
   const root = join(d, 'proc'); mkdirSync(join(root, FAKE_PID), { recursive: true });
-  if (withEnv) writeFileSync(join(root, FAKE_PID, 'environ'), `PATH=/bin\0BACKLOG_HOME=${join(d, 'home')}\0`);
+  if (withEnv) writeFileSync(join(root, FAKE_PID, 'environ'), `PATH=/bin\0SMOOTH_BACKLOG_CLI_HOME=${join(d, 'home')}\0`);
   return root;
 };
 
@@ -794,7 +794,7 @@ test('cleanup: a scan entry whose environ is gone (the process exited between th
   const d = mkdtempSync(join(tmpdir(), 'dbconf-x-')); t.after(() => rmSync(d, { recursive: true, force: true }));
   const root = fakeProc(d, false);
   assert.deepStrictEqual(scenarioPids(d, root), []);
-  writeFileSync(join(root, FAKE_PID, 'environ'), `BACKLOG_HOME=${join(d, 'home')}\0`);
+  writeFileSync(join(root, FAKE_PID, 'environ'), `SMOOTH_BACKLOG_CLI_HOME=${join(d, 'home')}\0`);
   assert.deepStrictEqual(scenarioPids(d, root), [Number(FAKE_PID)], 'the same entry with its environ is a scenario process');
 });
 

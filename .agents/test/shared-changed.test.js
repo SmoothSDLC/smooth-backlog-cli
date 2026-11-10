@@ -47,7 +47,7 @@ function seed(items = ['alpha', 'beta', 'gamma']) {
   return { t, home, home2, cons, folder, folder2: join(home2, 'acme', 'demo'), bare: join(t, 'origins', 'acme', 'backlog-repo.git') };
 }
 // The CLI as the clone `home`; the agent is named by --agent/--by on the command.
-const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { BACKLOG_HOME: home, BACKLOG_AGENT: '', USER: 'nobody', ...opts.env } });
+const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_HOME: home, SMOOTH_BACKLOG_CLI_AGENT: '', USER: 'nobody', ...opts.env } });
 
 test('027: a change another agent makes while this agent is idle appears in its next --changed report, with the reference commit and time', () => {
   const f = seed();
@@ -272,7 +272,7 @@ test('027: a failed output does not advance the reference: the change is still i
   for (const args of [['--changed', '--agent', 'amy'], ['--changed', '--agent', 'amy', '--json']]) {
     const script = [
       `process.chdir(${JSON.stringify(f.cons)});`,
-      `process.env.BACKLOG_HOME = ${JSON.stringify(f.home)};`,
+      `process.env.SMOOTH_BACKLOG_CLI_HOME = ${JSON.stringify(f.home)};`,
       `process.env.XDG_CONFIG_HOME = ${JSON.stringify(join(f.t, 'config'))};`,
       `const { run } = await import(${JSON.stringify(queryPath)});`,
       'process.stdout.write = () => { throw new Error("the output failed (a broken pipe)"); };',

@@ -25,10 +25,10 @@ function fixture() {
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', `Body of ${name}.\n\n${DOD}`];
-const LEAD = { TEAM_LEAD: 'lead' };
+const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' };
 const C1 = '0123456789abcdef0123456789abcdef01234567';
 const C2 = 'fedcba9876543210fedcba9876543210fedcba98';
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, team: true, env: { BACKLOG_AGENT: '', BACKLOG_SESSION: '', ...LEAD, ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, team: true, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const seq = slug => Number(slug.split('-')[0]);
@@ -47,7 +47,7 @@ function producerWithHandoff(f, commit, session) {
   const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', commit, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--handoff-outputs', 'src/shared/update.js',
     '--handoff-pickup', 'the next vertical slice wires the close gate', '--handoff-risks', 'NONE', '--by', 'producer'],
-    { BACKLOG_SESSION: session });
+    { SMOOTH_BACKLOG_CLI_SESSION: session });
   return { p, d, record };
 }
 // The producer's review passing, through the CLI (by = the claimer who requests).
@@ -159,7 +159,7 @@ test('059.V1: a member cannot accept or reject a hand-off', () => {
 });
 
 // Review round 1 (round 1): the hand-off steps resolve the actor before the identity check, so a
-// member in a team session (BACKLOG_AGENT) without --by acts as itself, never as another claimer - and
+// member in a team session (SMOOTH_BACKLOG_CLI_AGENT) without --by acts as itself, never as another claimer - and
 // the accept and reject need the lead's --by.
 
 test('059.V1: the claimer records its hand-off without --by; the record is by the claimer', () => {
@@ -170,7 +170,7 @@ test('059.V1: the claimer records its hand-off without --by; the record is by th
   ok(f, ['update', p, '--claim', 'producer']);
   const record = ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
-    { BACKLOG_AGENT: 'producer' });
+    { SMOOTH_BACKLOG_CLI_AGENT: 'producer' });
   assert.match(record.stdout, /handoff=DEPENDENCY_HANDOFF v1/);
   const records = handoffs(f, p);
   assert.equal(records.length, 1);
@@ -186,7 +186,7 @@ test('059.V1: a member without --by cannot record another claimer\'s hand-off', 
   ok(f, ['update', p, '--claim', 'producer']);
   const r = run(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js'],
-    { BACKLOG_AGENT: 'other', TEAM_NAME: 't1' });
+    { SMOOTH_BACKLOG_CLI_AGENT: 'other', SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /a hand-off is recorded by the claimer: the item is claimed by producer, not by other/); // `team update` acts as the session's agent: --by is never missing
   assert.equal(handoffs(f, p).length, 0);
@@ -201,10 +201,10 @@ test('059.V1: a member without --by cannot accept or reject as the lead claimer'
   ok(f, ['update', p, '--handoff', seq(d), '--handoff-commit', C1, '--handoff-contract', 'the update steps of item 059.V1',
     '--handoff-verification', 'node --test .agents/test/shared-handoff-e2e.test.js', '--by', 'lead']);
   reviewPass(f, p, 'lead');
-  const accept = run(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked'], { BACKLOG_AGENT: 'other' });
+  const accept = run(f, ['update', p, '--accept-handoff', seq(d), '--checks', 'checked'], { SMOOTH_BACKLOG_CLI_AGENT: 'other' });
   assert.equal(accept.status, 1, accept.stdout + accept.stderr);
   assert.match(accept.stdout, /a hand-off is accepted by the team lead \(lead\), not by other/); // `team update` names the session's agent as --by
-  const reject = run(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'why not'], { BACKLOG_AGENT: 'other' });
+  const reject = run(f, ['update', p, '--reject-handoff', seq(d), '--reason', 'why not'], { SMOOTH_BACKLOG_CLI_AGENT: 'other' });
   assert.equal(reject.status, 1, reject.stdout + reject.stderr);
   assert.match(reject.stdout, /not by other/);
   assert.equal(receipts(f, p).length, 0);

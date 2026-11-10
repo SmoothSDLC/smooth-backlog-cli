@@ -22,7 +22,7 @@ function fixture() {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { BACKLOG_AGENT: 'me', BACKLOG_SESSION: '', ...env } });
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'me', SMOOTH_BACKLOG_CLI_SESSION: '', ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name) => createdSlug(ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's']).stdout);
 const pathOf = (f, slug) => join(f.folder, 'phases', `${slug}.md`);
@@ -66,14 +66,14 @@ test('a file with the earlier keys is read as it was, and its next write carries
 test('a holder in claimed_by and claimed_at becomes owner and owned_since, and a release clears them', () => {
   const f = fixture();
   const s = make(f, 'Held');
-  ok(f, ['update', s, '--claim', 'ada'], { BACKLOG_AGENT: 'ada' });
+  ok(f, ['update', s, '--claim', 'ada'], { SMOOTH_BACKLOG_CLI_AGENT: 'ada' });
   const held = fmOf(f, s);
   assert.equal(held.owner, 'ada');
   assert.match(held.owned_since, /^\d{4}-\d\d-\d\dT/);
   assert.deepEqual(OLD_KEYS.filter(k => k in held), []);
   asEarlier(f, s);
   assert.equal(fmOf(f, s).claimed_by, 'ada');
-  ok(f, ['update', s, '--release', 'ada'], { BACKLOG_AGENT: 'ada' });
+  ok(f, ['update', s, '--release', 'ada'], { SMOOTH_BACKLOG_CLI_AGENT: 'ada' });
   const free = fmOf(f, s);
   assert.deepEqual([free.owner, free.owned_since], ['', '']);
   assert.deepEqual(OLD_KEYS.filter(k => k in free), []);

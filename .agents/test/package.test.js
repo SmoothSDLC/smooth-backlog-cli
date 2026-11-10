@@ -17,7 +17,7 @@ test('the packed npm artifact installs offline and runs with its bundled templat
   const modules = await runNpm(['root', '--global', '--prefix', prefix]);
   const installed = join(modules, '@smoothsdlc/smooth-backlog-cli/bin/backlog.js');
   await import('node:fs').then(m => m.mkdirSync(join(f.root, '.agents')));
-  const p = spawnSync(process.execPath, [installed, 'setup'], { cwd: f.root, env: { ...f.env, BACKLOG_ORIGIN_URL: '', BACKLOG_HOME: '' }, encoding: 'utf8' });
+  const p = spawnSync(process.execPath, [installed, 'setup'], { cwd: f.root, env: { ...f.env, SMOOTH_BACKLOG_CLI_ORIGIN_URL: '', SMOOTH_BACKLOG_CLI_HOME: '' }, encoding: 'utf8' });
   assert.equal(p.status, 0, p.stderr || p.stdout);
   assert.ok(existsSync(join(f.root, '.agents/skills/backlog/SKILL.md')));
   const link = process.platform === 'win32' ? join(prefix, 'backlog.cmd') : join(prefix, 'bin/backlog'); assert.ok(existsSync(link));

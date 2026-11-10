@@ -17,8 +17,8 @@ import { loadWorkflow } from './workflow.js';
 // The refinement stages of a team's item; an item may be claimed when it has no stage (no team, or the team's work item,
 // which the runner claims for the lead) or its refinement review passed. The items the lead splits off start in stage refining.
 export const isReady = fm => [undefined, null, '', 'ready'].includes(fm.stage);
-// The team lead: TEAM_LEAD, else the lead of the session's team in the backlog configuration (teams.json); no built-in name.
-export const teamLead = name => strip(name || process.env.TEAM_LEAD || teamsConfig()[teamName()]?.lead || '');
+// The team lead: SMOOTH_BACKLOG_CLI_TEAM_LEAD, else the lead of the session's team in the backlog configuration (teams.json); no built-in name.
+export const teamLead = name => strip(name || process.env.SMOOTH_BACKLOG_CLI_TEAM_LEAD || teamsConfig()[teamName()]?.lead || '');
 
 
 // lib_db.is_chunk: a chunk item, small pieces of work any member does between items (front matter chunk: true).
@@ -26,11 +26,11 @@ export const isChunk = fm => ['true', 'yes', '1'].includes(String(fm.chunk).toLo
 // lib_db.needs_review: an item with review documents closes only after a passing review.
 export const needsReview = fm => asList(fm.review_refs).length > 0;
 
-// lib_db.team_name / in_team: the caller's team: TEAM_NAME (set by the team runner, an override), else the --team of the running
+// lib_db.team_name / in_team: the caller's team: SMOOTH_BACKLOG_CLI_TEAM_NAME (set by the team runner, an override), else the --team of the running
 // `backlog team` command; with a team named, the session works only that team's items.
 let sessionTeam = '';
 export const setSessionTeam = name => { sessionTeam = strip(name || ''); };
-export const teamName = () => strip(process.env.TEAM_NAME || '') || sessionTeam;
+export const teamName = () => strip(process.env.SMOOTH_BACKLOG_CLI_TEAM_NAME || '') || sessionTeam;
 // One team step as the engine tells an agent to run it: backlog team update <item> --team <team> --agent <agent> <flags>.
 export const teamStep = (item, agent, flags, team = teamName()) => `backlog team update ${item} --team ${team || '<team>'} --agent ${agent} ${flags}`;
 export const inTeam = fm => !teamName() || fm.team === teamName();
@@ -40,12 +40,12 @@ export const offeredTo = (fm, f, repo) => (f === repo ? inTeam(fm) : !fm.team ||
 
 // the (repository, branch) a team session is bound to by the environment; ('', '') outside a team.
 export function teamScope() {
-  const repo = strip(process.env.TEAM_REPOSITORY || '');
-  input(!repo || /^[\w.-]+\/[\w.-]+$/.test(repo), `TEAM_REPOSITORY='${repo}': expected owner/name`);
-  return { repo, branch: strip(process.env.TEAM_BRANCH || '') };
+  const repo = strip(process.env.SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY || '');
+  input(!repo || /^[\w.-]+\/[\w.-]+$/.test(repo), `SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY='${repo}': expected owner/name`);
+  return { repo, branch: strip(process.env.SMOOTH_BACKLOG_CLI_TEAM_BRANCH || '') };
 }
 
-// TEAM_BRANCH, else the caller's branch ('' when detached).
+// SMOOTH_BACKLOG_CLI_TEAM_BRANCH, else the caller's branch ('' when detached).
 export const gitBranch = cwd => teamScope().branch
   || spawnSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }).stdout?.trim() || '';
 
@@ -53,7 +53,7 @@ export const gitBranch = cwd => teamScope().branch
 export function outsideTeam(fm) {
   const { repo, branch } = teamScope();
   if (!repo || ((fm.repository || '') === repo && (!branch || (fm.branch || '') === branch))) return null;
-  return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (TEAM_REPOSITORY/TEAM_BRANCH): a team works only on its own items; read other scopes with backlog team query --scope, never claim or change them`;
+  return `this item belongs to repository ${fm.repository || '(none)'} branch ${fm.branch || '(none)'}, but this team session is bound to ${repo}${branch ? ` branch ${branch}` : ''} (SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY/SMOOTH_BACKLOG_CLI_TEAM_BRANCH): a team works only on its own items; read other scopes with backlog team query --scope, never claim or change them`;
 }
 // The refusal of a command that selects an existing item outside the session's scope, as an item or row: "<slug>: <why>", or null.
 export const teamRefusal = item => {
@@ -143,8 +143,8 @@ export const heldBy = (holder, agent) => (holder === agent) || sameWorker(holder
 // seconds since a front-matter time stamp; -1 when there is none.
 export const age = ts => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(String(ts)) ? (Date.now() - Date.parse(ts)) / 1000 : -1);
 
-// an in-progress review older than BACKLOG_REVIEW_STALE_SECONDS (1200) is offered again.
-export const staleReview = fm => fm.review_state === 'in_review' && age(fm.review_started) > Number(process.env.BACKLOG_REVIEW_STALE_SECONDS ?? 1200);
+// an in-progress review older than SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS (1200) is offered again.
+export const staleReview = fm => fm.review_state === 'in_review' && age(fm.review_started) > Number(process.env.SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS ?? 1200);
 
 // agent may start or continue the review: requested, in review by agent itself, or stale.
 // Beyond the earlier scripts: a stale review is handed on by the lead

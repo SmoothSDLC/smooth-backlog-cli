@@ -26,7 +26,7 @@ function build() {
   const item = () => parseItem(readFileSync(join(home, 'acme', 'demo', 'phases', items()[0]), 'utf8'));
   // kind: 'new' or 'team'; answers: what the person types, in order
   const asking = (kind, args, answers) => {
-    const r = spawnSync(process.execPath, [child, kind, ...args], { cwd: cons, env: { ...process.env, ...env(t), BACKLOG_AGENT: 'driver-ask', ASK_ANSWERS: JSON.stringify(answers) }, encoding: 'utf8', input: '' });
+    const r = spawnSync(process.execPath, [child, kind, ...args], { cwd: cons, env: { ...process.env, ...env(t), SMOOTH_BACKLOG_CLI_AGENT: 'driver-ask', ASK_ANSWERS: JSON.stringify(answers) }, encoding: 'utf8', input: '' });
     const asked = r.stderr.split('\n').filter(l => l.startsWith('ASKED ')).map(l => JSON.parse(l.slice(6)));
     return { status: r.status, stdout: r.stdout, stderr: r.stderr.split('\n').filter(l => !l.startsWith('ASKED ')).join('\n'), asked };
   };
@@ -72,7 +72,7 @@ test('new --ask on a real terminal (util-linux script) asks and reads lines type
   const f = build();
   mkdirSync(join(f.t, 'config', 'smooth-backlog-cli'), { recursive: true }); // a terminal run would check for a new release: the weekly check is off here
   writeFileSync(join(f.t, 'config', 'smooth-backlog-cli', 'config.json'), JSON.stringify({ schema_version: 1, weekly: false, auto: false }));
-  const r = spawnSync('script', ['-qec', `'${process.execPath}' '${bin}' new --ask --depends-on none`, '/dev/null'], { cwd: f.cons, env: { ...process.env, ...env(f.t), BACKLOG_AGENT: 'driver-ask' }, encoding: 'utf8', input: 'Pty title\nobj\nsum\nbody line\nsecond\n\n' });
+  const r = spawnSync('script', ['-qec', `'${process.execPath}' '${bin}' new --ask --depends-on none`, '/dev/null'], { cwd: f.cons, env: { ...process.env, ...env(f.t), SMOOTH_BACKLOG_CLI_AGENT: 'driver-ask' }, encoding: 'utf8', input: 'Pty title\nobj\nsum\nbody line\nsecond\n\n' });
   if (!r.stdout?.includes('Title: ')) return t.skip('no pseudo-terminal here');
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /✅ created phase 001-pty-title \(seq 1\)/);

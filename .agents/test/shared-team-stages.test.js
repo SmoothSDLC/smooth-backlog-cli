@@ -29,8 +29,8 @@ function fixture(prefix = 'team-stages-') {
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
-const LEAD = { TEAM_LEAD: 'lead' }; // ann, bob and zed are plain members
-const T1 = { TEAM_NAME: 't1' };
+const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' }; // ann, bob and zed are plain members
+const T1 = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' };
 // an agent reads an item before it writes it again (the stale-view guard of seen.js): the agent named by --by, --claim or --release
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
@@ -44,7 +44,7 @@ const up = (f, slug, ...args) => ok(f, ['update', slug, ...args]);
 const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
 const doc = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
 const fm = (f, slug) => doc(f, slug).fm;
-const pop = (f, agent, env) => { const r = run(f, ['team', 'pop', '--team', env?.TEAM_NAME || 't1', '--agent', agent, '--json'], env?.TEAM_NAME ? { BACKLOG_AGENT: agent, ...env } : env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
+const pop = (f, agent, env) => { const r = run(f, ['team', 'pop', '--team', env?.SMOOTH_BACKLOG_CLI_TEAM_NAME || 't1', '--agent', agent, '--json'], env?.SMOOTH_BACKLOG_CLI_TEAM_NAME ? { SMOOTH_BACKLOG_CLI_AGENT: agent, ...env } : env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
 const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => up(f, slug, ...a));
 const work = (f, title = 'team work item') => { const w = make(f, title); up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); return w; }; // the runner, for the lead
@@ -81,7 +81,7 @@ test('test_the_team_workflow_from_work_item_to_ready_work: split, member refinem
   assert.equal(fm(f, b).refiner, 'bob'); // b was taken for its first-round refinement by bob's team pop above
   p = pop(f, 'ann', T1);
   assert.deepEqual([p.action, p.item, p.claimed], ['claim', a, true]); // then the ready item
-  assert.notEqual(pop(f, 'zed', { TEAM_NAME: 't2' }).item, a); // nor offered to another team
+  assert.notEqual(pop(f, 'zed', { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't2' }).item, a); // nor offered to another team
   assert.ok(!JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--json'], T1).stdout).some(x => [b, other].includes(x.slug))); // refining: not claimable
   up(f, w, '--claim', 'lead'); // the work item has no stage: the runner claims it for the lead (idempotent)
 });
@@ -103,7 +103,7 @@ test('each step refuses out of order, and one step at a time', () => {
   up(f, c, '--refine-start', '--by', 'ann'); // the refiner again: allowed
   up(f, c, '--refine-done', '--by', 'ann', '--note', 'checked');
   no(f, ['update', c, '--request-refinement-review'], '--request-refinement-review --by <the team lead>');
-  no(f, ['update', c, '--request-refinement-review', '--by', 'bob'], 'the lead (lead; TEAM_LEAD) sends a refined item to the refinement review (got bob)');
+  no(f, ['update', c, '--request-refinement-review', '--by', 'bob'], 'the lead (lead; SMOOTH_BACKLOG_CLI_TEAM_LEAD) sends a refined item to the refinement review (got bob)');
   up(f, c, '--request-refinement-review', '--by', 'lead');
   no(f, ['update', c, '--refinement-review', 'pass', '--by', 'rex'], '--refinement-review needs --comments');
   no(f, ['update', c, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'x', '--claim', 'ann'], 'one team-work step at a time');
@@ -142,7 +142,7 @@ test('the review-hitl stage: an owner decision holds the item and its dependents
   const text = ok(f, ['team', 'query', '--team', 't1', '--decisions']).stdout;
   assert.ok(text.startsWith('📋 1 owner decision(s) waiting — acme/demo, branch main;') && text.includes(`${c} (team t1)`), text);
   for (const line of Q.split('\n')) assert.ok(text.includes(`        ${line}\n`), line);
-  assert.deepEqual(JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--decisions', '--json'], { TEAM_NAME: 't2' }).stdout), []); // another team's decisions are not listed for t2
+  assert.deepEqual(JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--decisions', '--json'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't2' }).stdout), []); // another team's decisions are not listed for t2
   up(f, c, '--decision', 'A: keep the old format');
   assert.deepEqual([fm(f, c).status, fm(f, c).refiner], ['refining', 'lead']); // the lead re-refines it with the decision
   assert.match(doc(f, c).body, /\nDECISION \d{4}-\d\d-\d\d: A: keep the old format\n/);
@@ -153,7 +153,7 @@ test('the review-hitl stage: an owner decision holds the item and its dependents
 
 test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewed or worked; the lead refines, then any member claims', () => {
   const f = fixture();
-  const team = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const team = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
   const base = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none'];
   const newBare = (...args) => createdSlug(ok(f, ['new', ...args]).stdout);
   const gaps = {
@@ -174,20 +174,20 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
   }
   const cl = JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--agent', 'bob', '--json']).stdout).map(x => x.slug);
   assert.ok(!Object.values(gaps).some(s => cl.includes(s)), cl.join(' '));
-  const tn = { ...team, TEAM_NAME: 't1' }; // the team session
-  const bobs = run(f, ['team', 'pop', '--team', 't1', '--agent', 'bob', '--json'], { ...tn, BACKLOG_AGENT: 'bob' }); // a member is never given an incomplete item to claim or work
+  const tn = { ...team, SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }; // the team session
+  const bobs = run(f, ['team', 'pop', '--team', 't1', '--agent', 'bob', '--json'], { ...tn, SMOOTH_BACKLOG_CLI_AGENT: 'bob' }); // a member is never given an incomplete item to claim or work
   assert.ok(!bobs.stdout.includes('"action": "claim"') && !bobs.stdout.includes('never action it'), bobs.stdout); // the first-round refinement it is offered is refused for an incomplete item: only the lead refines it
   let p;
-  p = pop(f, 'ann', { ...tn, TEAM_LEAD: 'ann' }); // the lead is told to refine one, with the gaps
+  p = pop(f, 'ann', { ...tn, SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' }); // the lead is told to refine one, with the gaps
   assert.ok(p.action === 'refine' && Object.values(gaps).includes(p.item) && p.missing.length && p.instruction.includes('never action it'), JSON.stringify(p));
-  assert.equal(pop(f, 'bob', { ...tn, TEAM_LEAD: 'bob' }).action, 'refine'); // TEAM_LEAD names the lead
-  no(f, ['update', gaps.estimate_min, '--claim', 'ann'], 'missing estimate_min', { ...team, TEAM_LEAD: 'ann' }); // the lead may not claim it either
-  ok(f, ['update', gaps.estimate_min, '--append', 'ESTIMATE: 5 min, complexity low. Gap: created without an estimate', '--by', 'lead'], { ...team, TEAM_LEAD: 'lead' }); // an older item's ESTIMATE line still counts
-  ok(f, ['update', gaps.review_refs, '--set-review-refs', 'references/review/code.md', '--set-estimate', '9', '--set-layer', '2', '--by', 'lead'], { ...team, TEAM_LEAD: 'lead' });
-  ok(f, ['update', gaps.depends_on, '--set-depends-on', 'none', '--by', 'lead'], { ...team, TEAM_LEAD: 'lead' });
-  ok(f, ['update', gaps.definition_of_done, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', DOD, '--by', 'lead'], { ...team, TEAM_LEAD: 'lead' }); // a definition of done replaces the placeholder
+  assert.equal(pop(f, 'bob', { ...tn, SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'bob' }).action, 'refine'); // SMOOTH_BACKLOG_CLI_TEAM_LEAD names the lead
+  no(f, ['update', gaps.estimate_min, '--claim', 'ann'], 'missing estimate_min', { ...team, SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' }); // the lead may not claim it either
+  ok(f, ['update', gaps.estimate_min, '--append', 'ESTIMATE: 5 min, complexity low. Gap: created without an estimate', '--by', 'lead'], { ...team, SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' }); // an older item's ESTIMATE line still counts
+  ok(f, ['update', gaps.review_refs, '--set-review-refs', 'references/review/code.md', '--set-estimate', '9', '--set-layer', '2', '--by', 'lead'], { ...team, SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' });
+  ok(f, ['update', gaps.depends_on, '--set-depends-on', 'none', '--by', 'lead'], { ...team, SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' });
+  ok(f, ['update', gaps.definition_of_done, '--set-review-refs', 'references/review/code.md', '--set-estimate', '5', '--append', DOD, '--by', 'lead'], { ...team, SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' }); // a definition of done replaces the placeholder
   for (const s of Object.values(gaps)) assert.deepEqual(JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--agent', 'lead', '--phase', s, '--json']).stdout).missing, [], s); // complete now
-  ok(f, ['update', gaps.estimate_min, '--claim', 'lead'], { ...tn, BACKLOG_AGENT: 'lead' });
+  ok(f, ['update', gaps.estimate_min, '--claim', 'lead'], { ...tn, SMOOTH_BACKLOG_CLI_AGENT: 'lead' });
 });
 
 test('an incomplete item waiting in review-hitl is not offered to the lead for refinement', () => {
@@ -196,7 +196,7 @@ test('an incomplete item waiting in review-hitl is not offered to the lead for r
   up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // the lead holds its work item: nothing comes before the lead's refinement of incomplete items
   const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout); // incomplete
   up(f, c, '--request-decision', 'What: which parser? Options: A, B. Recommendation: A.', '--by', 'ann');
-  const env = { ...T1, TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const env = { ...T1, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
   assert.deepEqual([pop(f, 'lead', env).action, pop(f, 'lead', env).item], ['idle', null]);
   up(f, c, '--decision', 'A');
   assert.notEqual(pop(f, 'bob', env).item, c);
@@ -262,15 +262,15 @@ test("the lead never starts a first-round refinement nor is offered a member's c
 
 test('a split of a team item may keep the placeholder; only the lead changes an incomplete item of a bound session', () => {
   const f = fixture();
-  const TR = { TEAM_NAME: 't1', TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const TR = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1');
   const c = createdSlug(ok(f, ['new', '--name', 'bare child', '--split-from', w, '--depends-on', 'none']).stdout); // the split may keep the placeholder
   assert.deepEqual([fm(f, c).team, fm(f, c).status], ['t1', 'new']);
   const bare = createdSlug(ok(f, ['new', '--name', 'bare item', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout); // no team field
-  no(f, ['update', bare, '--set-estimate', '5'], 'only the team lead (lead) refines it, not bob', { ...TR, BACKLOG_AGENT: 'bob' });
-  no(f, ['update', bare, '--set-estimate', '5', '--by', 'bob'], 'only the team lead (lead) refines it, not bob', { ...TR, BACKLOG_AGENT: 'bob' });
-  ok(f, ['update', bare, '--set-estimate', '5', '--by', 'lead'], { ...TR, BACKLOG_AGENT: 'lead' });
+  no(f, ['update', bare, '--set-estimate', '5'], 'only the team lead (lead) refines it, not bob', { ...TR, SMOOTH_BACKLOG_CLI_AGENT: 'bob' });
+  no(f, ['update', bare, '--set-estimate', '5', '--by', 'bob'], 'only the team lead (lead) refines it, not bob', { ...TR, SMOOTH_BACKLOG_CLI_AGENT: 'bob' });
+  ok(f, ['update', bare, '--set-estimate', '5', '--by', 'lead'], { ...TR, SMOOTH_BACKLOG_CLI_AGENT: 'lead' });
 });
 
 test('backlog work --lead names only the lead the updates know; pop --lead keeps a member\'s lock', () => {
@@ -278,10 +278,10 @@ test('backlog work --lead names only the lead the updates know; pop --lead keeps
   const w = make(f, 'team work item');
   up(f, w, '--set-team', 't1'); up(f, w, '--claim', 'lead'); // an unclaimed work item is offered to a member for refinement; the lead holds it
   const c = make(f, 'child', '--split-from', w);
-  const r = run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--lead', 'zed', '--json'], { TEAM_NAME: 't1', BACKLOG_AGENT: 'ann' });
+  const r = run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--lead', 'zed', '--json'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_AGENT: 'ann' });
   assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /--lead zed is not the team lead of this session \(lead; TEAM_LEAD\)/);
-  const ok2 = run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--lead', 'lead', '--json'], { ...T1, BACKLOG_AGENT: 'ann' });
+  assert.match(r.stderr, /--lead zed is not the team lead of this session \(lead; SMOOTH_BACKLOG_CLI_TEAM_LEAD\)/);
+  const ok2 = run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--lead', 'lead', '--json'], { ...T1, SMOOTH_BACKLOG_CLI_AGENT: 'ann' });
   assert.equal(ok2.status, 0, ok2.stdout + ok2.stderr);
   assert.deepEqual([JSON.parse(ok2.stdout).item, fm(f, c).refiner], [c, 'ann']);
 });
@@ -294,7 +294,7 @@ test('the lead edits a refining item only as its refiner; an append of ESTIMATE 
   no(f, ['update', c, '--set-estimate', '5', '--by', 'lead'], 'a member, not the team lead, refines in the first round');
   const inc = createdSlug(ok(f, ['new', '--name', 'incomplete', '--objective', 'o', '--summary', 's', '--depends-on', 'none']).stdout);
   up(f, inc, '--set-team', 't1');
-  const TR = { TEAM_REPOSITORY: 'acme/demo', TEAM_BRANCH: 'main' };
+  const TR = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
   no(f, ['update', inc, '--append', 'ESTIMATE: 5 min\nAdditional context', '--by', 'lead'], '--append', TR);
   ok(f, ['update', inc, '--append', 'ESTIMATE: 5 min', '--by', 'lead'], TR);
 });

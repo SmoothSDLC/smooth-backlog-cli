@@ -11,12 +11,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // The committed list of made-up entries the guard uses when the private list is not given (item 132).
 const SYNTHETIC = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'denylist-synthetic.txt');
 
-// The guard never skips (item 132): with BACKLOG_PRIVATE_DENYLIST set (the owner workstation) it scans with that private
+// The guard never skips (item 132): with SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST set (the owner workstation) it scans with that private
 // list; with it unset (as in CI) it scans with the committed synthetic list and leaves that list file out of the scan.
 test('the tracked files name no private environment detail', () => {
-  const synthetic = !process.env.BACKLOG_PRIVATE_DENYLIST;
-  const used = synthetic ? 'the synthetic fixture list (BACKLOG_PRIVATE_DENYLIST is unset)' : 'the private deny list (BACKLOG_PRIVATE_DENYLIST)';
-  const list = readFileSync(synthetic ? SYNTHETIC : process.env.BACKLOG_PRIVATE_DENYLIST, 'utf8')
+  const synthetic = !process.env.SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST;
+  const used = synthetic ? 'the synthetic fixture list (SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST is unset)' : 'the private deny list (SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST)';
+  const list = readFileSync(synthetic ? SYNTHETIC : process.env.SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST, 'utf8')
     .split('\n').map(line => line.trim())
     .filter(line => line && !line.startsWith('#'));
   assert.ok(list.length > 0, 'the deny list is empty: every non-comment, non-empty line is a denied detail');
@@ -36,7 +36,7 @@ test('the tracked files name no private environment detail', () => {
   assert.equal(hits.length, 0, `private environment detail in the tracked files (list: ${used}):\n${hits.slice(0, 50).join('\n')}${hits.length > 50 ? `\n... and ${hits.length - 50} more` : ''}`);
 });
 
-test('with BACKLOG_PRIVATE_DENYLIST unset the guard scans with the synthetic list and leaves that list file out', { skip: process.env.BACKLOG_GUARD_FIXTURE ? 'inside the guard fixture' : false }, t => {
+test('with SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST unset the guard scans with the synthetic list and leaves that list file out', { skip: process.env.BACKLOG_GUARD_FIXTURE ? 'inside the guard fixture' : false }, t => {
   const tmp = mkdtempSync(join(tmpdir(), 'guard-syn-'));
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
   const guard = join(tmp, '.agents', 'test', 'no-private-details.test.js');
@@ -75,7 +75,7 @@ test('the guard reports a hit by file and line, without the denied detail', { sk
   writeFileSync(deny, 'guard-hit-literal-x7q\n');
   // a minimal environment: the runner's NODE_TEST_* variables make a nested test run skip its files
   const run = spawnSync(process.execPath, ['--test', '.agents/test/no-private-details.test.js'], {
-    cwd: tmp, encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, BACKLOG_GUARD_FIXTURE: '1', BACKLOG_PRIVATE_DENYLIST: deny },
+    cwd: tmp, encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, BACKLOG_GUARD_FIXTURE: '1', SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST: deny },
   });
   const out = `${run.stdout}\n${run.stderr}`;
   assert.match(out, /tracked\.md:1/, 'the hit is reported by file and line:\n' + out);

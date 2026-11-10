@@ -45,7 +45,7 @@ function seed(items = ['alpha', 'beta', 'gamma'], repo = 'demo') {
   return { t, home, home2, cons, folder, folder2: join(home2, 'acme', repo), bare: join(t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`) };
 }
 // the CLI as the clone `home`; the agent is named by --agent/--by on the command
-const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { BACKLOG_HOME: home, BACKLOG_AGENT: '', USER: 'nobody', ...opts.env } });
+const run = (f, home, args, opts = {}) => cli(args, { cwd: opts.cwd ?? f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_HOME: home, SMOOTH_BACKLOG_CLI_AGENT: '', USER: 'nobody', ...opts.env } });
 const fm = (folder, file) => parse(readFileSync(join(folder, 'phases', file), 'utf8')).fm;
 const onOrigin = (f, path) => git(f.t, '--git-dir', f.bare, 'show', `main:${path}`);
 const sleepSec = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100); // updated has a resolution of one second
@@ -59,7 +59,7 @@ test('every write stamps updated_by next to updated; an item without updated_by 
   const keys = Object.keys(fm(f.folder, '001-alpha.md'));
   assert.equal(fm(f.folder, '001-alpha.md').updated_by, 'amy');
   assert.equal(keys.indexOf('updated_by'), keys.indexOf('updated') + 1);
-  const env = run(f, f.home, ['update', '2', '--append', 'y'], { env: { BACKLOG_AGENT: 'agent-7' } });
+  const env = run(f, f.home, ['update', '2', '--append', 'y'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'agent-7' } });
   assert.equal(env.status, 0, env.stderr);
   assert.equal(fm(f.folder, '002-beta.md').updated_by, 'agent-7');
 });
@@ -120,7 +120,7 @@ test('push race on the same item: one wins, the other is refused, and its change
   // while amy's push is on its way, bob pushes his change to the same item
   const hook = join(f.home, '.git', 'hooks', 'pre-push');
   const flag = join(f.t, 'hook-ran');
-  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 1 --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
+  writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && SMOOTH_BACKLOG_CLI_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update 1 --append 'bob won' --by bob >/dev/null 2>&1\nexit 0\n`);
   chmodSync(hook, 0o755);
   // amy's leading pull already ran when the hook fires, so amy's check passed: only the push-time guard can stop her
   const a = run(f, f.home, ['update', '1', '--append', 'amy lost', '--by', 'amy']);
@@ -141,7 +141,7 @@ test('053: a publication refusal also names another item the agent read that cha
   // while amy's push is on its way, bob changes both items she read
   const hook = join(f.home, '.git', 'hooks', 'pre-push');
   const flag = join(f.t, 'hook-ran');
-  const bob = n => `BACKLOG_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update ${n} --append 'bob ${n}' --by bob >/dev/null 2>&1`;
+  const bob = n => `SMOOTH_BACKLOG_CLI_HOME='${f.home2}' XDG_CONFIG_HOME='${join(f.t, 'config')}' '${process.execPath}' '${join(process.cwd(), 'bin', 'backlog.js')}' update ${n} --append 'bob ${n}' --by bob >/dev/null 2>&1`;
   writeFileSync(hook, `#!/bin/sh\n[ -f '${flag}' ] && exit 0\ntouch '${flag}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE\ncd '${f.cons}' && ${bob(1)} && ${bob(2)}\nexit 0\n`);
   chmodSync(hook, 0o755);
   const a = run(f, f.home, ['update', '1', '--append', 'amy lost', '--by', 'amy']);
@@ -199,11 +199,11 @@ test('nextSeqFor never returns a number whose file name is held, also by a file 
 
 test('the creator of an item has seen it: another writer\'s change is refused on her next update', () => {
   const f = seed();
-  const made = run(f, f.home, ['new', '--name', 'fresh job', '--depends-on', 'none'], { env: { BACKLOG_AGENT: 'amy' } });
+  const made = run(f, f.home, ['new', '--name', 'fresh job', '--depends-on', 'none'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'amy' } });
   assert.equal(made.status, 0, made.stdout + made.stderr);
   const bob = run(f, f.home2, ['update', '4', '--append', 'bob', '--by', 'bob']);
   assert.equal(bob.status, 0, bob.stderr + bob.stdout);
-  const amy = run(f, f.home, ['update', '4', '--append', 'amy'], { env: { BACKLOG_AGENT: 'amy' } });
+  const amy = run(f, f.home, ['update', '4', '--append', 'amy'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'amy' } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
 });
 
@@ -218,7 +218,7 @@ test('053: a cross-repository move refused for its own item also names the chang
   assert.equal(run(f, f.home2, ['update', '2', '--append', 'bob', '--by', 'bob']).status, 0);
   const src2 = run(f, f.home2, ['update', '1', '--append', 'bob', '--by', 'bob'], { cwd });
   assert.equal(src2.status, 0, src2.stderr + src2.stdout);
-  const amy = run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd, env: { BACKLOG_AGENT: 'amy' } });
+  const amy = run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd, env: { SMOOTH_BACKLOG_CLI_AGENT: 'amy' } });
   assert.equal(amy.status, 5, amy.stderr + amy.stdout);
   assert.match(amy.stderr, /item 001-source was changed by bob .*1 other item\(s\) you read changed too \(002-beta of acme\/demo\); read them again \(backlog show 001-source --agent <you>; in repository acme\/demo: backlog show 002-beta --agent <you>\)/);
 });

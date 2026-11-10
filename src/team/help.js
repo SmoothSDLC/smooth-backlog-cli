@@ -16,12 +16,12 @@ Usage:
 
 Only these commands read the team's entry in the backlog configuration (teams.json at the root of the backlog: the lead, the members,
 the external reviewers and the review stages) and the flow it names. The user commands know nothing of teams: they ignore the team environment and the team entries. --team and --agent
-are required on pop, new and update; TEAM_NAME and BACKLOG_AGENT stand in for them, then the team and user of .backlog/config.json. A team
+are required on pop, new and update; SMOOTH_BACKLOG_CLI_TEAM_NAME and SMOOTH_BACKLOG_CLI_AGENT stand in for them, then the team and user of .backlog/config.json. A team
 without an entry is refused: "team <team> is not configured in the backlog configuration".
 
 Teams, their leads and members and their review rules are configuration in the backlog folder (teams.json); work-in-progress
-limits are in wip-limits.json. A team session is bound by TEAM_NAME, TEAM_REPOSITORY and TEAM_BRANCH (set by the team runner) and
-acts as BACKLOG_AGENT: it works only on items of its team, repository and branch, and a member acts only as itself.
+limits are in wip-limits.json. A team session is bound by SMOOTH_BACKLOG_CLI_TEAM_NAME, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BACKLOG_CLI_TEAM_BRANCH (set by the team runner) and
+acts as SMOOTH_BACKLOG_CLI_AGENT: it works only on items of its team, repository and branch, and a member acts only as itself.
 
 backlog team <command> --help prints the options of one command.
 
@@ -29,9 +29,9 @@ ${SHARED}
 
 Options:
   --team NAME
-      The team (pop, new, update). In a team session (TEAM_NAME set) it must be that team.
+      The team (pop, new, update). In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set) it must be that team.
   --agent AGENT
-      The agent the command answers for (pop, new, update). In a team session (BACKLOG_AGENT set) it must be that agent.
+      The agent the command answers for (pop, new, update). In a team session (SMOOTH_BACKLOG_CLI_AGENT set) it must be that agent.
   --json
       Print the answer as JSON.
 ${HELP_FLAG}
@@ -40,8 +40,8 @@ Exit codes:
   0  The command succeeded: the answer names an item, the step was taken, define or workflow succeeded.
   1  The step was refused or could not be run: the reason is printed. Also: a synchronisation failure, the item changed before it
      could be shown (run it again), or the team has no entry in the configuration.
-  2  Invalid input: a missing --team or --agent, another team than TEAM_NAME, an agent other than BACKLOG_AGENT, no branch (a
-     detached HEAD without TEAM_BRANCH), or a definition with problems.
+  2  Invalid input: a missing --team or --agent, another team than SMOOTH_BACKLOG_CLI_TEAM_NAME, an agent other than SMOOTH_BACKLOG_CLI_AGENT, no branch (a
+     detached HEAD without SMOOTH_BACKLOG_CLI_TEAM_BRANCH), or a definition with problems.
   3  idle: nothing to do now (pop). The same code is used when the local clone of the backlog repository could not be updated from
      its origin before the answer.
   5  The item was changed by somebody else after this agent last read it (backlog team query --phase <item> --agent <you>).
@@ -93,16 +93,16 @@ ${SHARED}
 
 Options:
   --team NAME
-      The team (pop, update). In a team session (TEAM_NAME set) it must be that team.
+      The team (pop, update). In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set) it must be that team.
   --agent AGENT
-      The agent the command answers for (pop, update). In a team session (BACKLOG_AGENT set) it must be that agent.
+      The agent the command answers for (pop, update). In a team session (SMOOTH_BACKLOG_CLI_AGENT set) it must be that agent.
   --json
       Print the answer as JSON.
   --dry-run
       Only answer: write no claim and no mark (marked is null, claimed false) and do not take the lead's work item.
   --lead LEAD
       pop and --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the
-      environment variable TEAM_LEAD, else the lead of the team in teams.json.
+      environment variable SMOOTH_BACKLOG_CLI_TEAM_LEAD, else the lead of the team in teams.json.
   --scope {branch,repo,all}
       pop and the views --claimable, --reviewable and --blocked: how far the agent looks: this branch (the default), every branch of this repository, or also the chunk items
       of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
@@ -111,7 +111,7 @@ Options:
       pop only: look at every branch, not only the current one.
   --branch BRANCH
       pop only: the branch whose queue to use. The default is the branch that is checked out here. A team session bound by
-      TEAM_BRANCH can only use that branch.
+      SMOOTH_BACKLOG_CLI_TEAM_BRANCH can only use that branch.
 ${HELP_FLAG}
 
 Exit codes:
@@ -120,8 +120,8 @@ Exit codes:
      After an interruption the claim may already be saved, or even pushed: check the item before running team pop again.
      Also: a command it ran failed for another reason, a synchronisation failure included (the reason is printed), the item
      changed before it could be shown (run it again), or the team has no entry in the configuration.
-  2  Invalid input: a missing --team or --agent, another team than TEAM_NAME, an agent other than BACKLOG_AGENT, no branch (a
-     detached HEAD without TEAM_BRANCH).
+  2  Invalid input: a missing --team or --agent, another team than SMOOTH_BACKLOG_CLI_TEAM_NAME, an agent other than SMOOTH_BACKLOG_CLI_AGENT, no branch (a
+     detached HEAD without SMOOTH_BACKLOG_CLI_TEAM_BRANCH).
   3  idle: nothing to do now. The same code is used when the local clone of the backlog repository could not be updated from
      its origin before the answer.
 
@@ -135,8 +135,8 @@ Usage:
   backlog team new --team <name> --agent <name> --name <text> [options]
   backlog team new --team <name> --agent <name> --split-from <item> [options]
 
-Adds an item that belongs to the team, to the backlog of this repository and branch (a session bound by TEAM_REPOSITORY and
-TEAM_BRANCH files it under that repository and branch). The item gets the next free item number, the team, the status new and the
+Adds an item that belongs to the team, to the backlog of this repository and branch (a session bound by SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and
+SMOOTH_BACKLOG_CLI_TEAM_BRANCH files it under that repository and branch). The item gets the next free item number, the team, the status new and the
 stage refining; a member refines it, and the team's review of the refinement passes before anyone claims it. A split of a team's
 item (--split-from) is made here too: backlog new used outside a team refuses it. Every option of backlog new works here (backlog new --help
 has the item template); this command adds --review-refs. The agent is the writer of the item, as for every team command.
@@ -145,10 +145,10 @@ ${SHARED}
 
 Options:
   --team NAME
-      The team the item belongs to. In a team session (TEAM_NAME set) it must be that team. A team without an entry in the
+      The team the item belongs to. In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set) it must be that team. A team without an entry in the
       backlog configuration is refused.
   --agent AGENT
-      The agent that files the item. In a team session (BACKLOG_AGENT set) it must be that agent.
+      The agent that files the item. In a team session (SMOOTH_BACKLOG_CLI_AGENT set) it must be that agent.
   --title TITLE, --name NAME
       The title of the item. Required, unless --split-from is given.
   --objective OBJECTIVE
@@ -199,7 +199,7 @@ Exit codes:
   0  The item was created (or, with --dry-run, would be).
   1  The command refused: the reason is printed on standard output. Also: the split source does not exist or is outside the
      session's scope, a dependency is not in the backlog, --status was given, or the team has no entry in the configuration.
-  2  Invalid input: a missing --team or --agent, another team than TEAM_NAME, an agent other than BACKLOG_AGENT, an unknown
+  2  Invalid input: a missing --team or --agent, another team than SMOOTH_BACKLOG_CLI_TEAM_NAME, an agent other than SMOOTH_BACKLOG_CLI_AGENT, an unknown
      option, or a review document path that is absolute or leaves the repository.
   3  The repository that holds the items could not be synchronised with its origin: nothing was changed, or the change was not
      published and was rolled back.
@@ -222,17 +222,17 @@ checked against the team rules. A user command refuses every change of a team's 
 --close, --waiting, --waiting-done, --handoff, --accept-handoff, --reject-handoff). A team item is claimed only when its
 refinement review passed (stage ready); an item that lacks required fields is only refined; the team's review rules are met before
 the close. A team's item closes when the review rules of its team (teams.json) are met for the item's current work commit.
-A session with TEAM_REPOSITORY (and TEAM_BRANCH) set works only on items of that repository and branch: every change to another item is
-refused, field edits and --append as much as team steps. In a team session (TEAM_NAME set, BACKLOG_AGENT=<name>) a member acts only as
+A session with SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY (and SMOOTH_BACKLOG_CLI_TEAM_BRANCH) set works only on items of that repository and branch: every change to another item is
+refused, field edits and --append as much as team steps. In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set, SMOOTH_BACKLOG_CLI_AGENT=<name>) a member acts only as
 itself: its claim, release, refinement, review and close of an item name itself, never another agent.
 
 ${SHARED}
 
 Options:
   --team NAME
-      The team the step is for. In a team session (TEAM_NAME set) it must be that team.
+      The team the step is for. In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set) it must be that team.
   --agent AGENT
-      The agent that takes the step. In a team session (BACKLOG_AGENT set) it must be that agent. A bare --claim or --release
+      The agent that takes the step. In a team session (SMOOTH_BACKLOG_CLI_AGENT set) it must be that agent. A bare --claim or --release
       takes the agent.
   --claim AGENT
       Take the item for an agent . The command refuses when another agent holds the item, when an item
@@ -268,7 +268,7 @@ Options:
       lead, and claims that item for the lead; items split from it inherit the team.
   --refine-start
       A team member starts refining the item (--by <agent>): only a team's item in stage refining, or without a stage (unrefined),
-      that nobody claims or already refines. A split slice without a team joins the refining session's team (TEAM_NAME) here. The stages
+      that nobody claims or already refines. A split slice without a team joins the refining session's team (SMOOTH_BACKLOG_CLI_TEAM_NAME) here. The stages
       before any work are refining, refined, refinement-review and ready.
   --refine-done
       The refiner finished (--by <the refiner>, --note "<what you refined>"): stage refined. Refused while a team field or
@@ -288,7 +288,7 @@ Options:
   --reassign AGENT
       The team lead only (--by <lead>, --reason "<why>"): take the item from the agent that holds it and give it to AGENT.
       The former holder stays in the item's session_authors list (the new holder joins), so the self-review block
-      survives the hand-off. In a team session (TEAM_NAME set, BACKLOG_AGENT=<name>) a member acts only as itself: its
+      survives the hand-off. In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set, SMOOTH_BACKLOG_CLI_AGENT=<name>) a member acts only as itself: its
       claim, release, refinement, review and close of an item name itself, never another agent.
   --reassign-review AGENT
       The team lead only (--by <lead>, --reason "<why>"): hand the review of the item on to AGENT (not its author), for
@@ -398,9 +398,9 @@ ${SHARED}
 
 Options:
   --team NAME
-      The team (pop, update). In a team session (TEAM_NAME set) it must be that team.
+      The team (pop, update). In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set) it must be that team.
   --agent AGENT
-      The agent the command answers for (pop, update). In a team session (BACKLOG_AGENT set) it must be that agent. With
+      The agent the command answers for (pop, update). In a team session (SMOOTH_BACKLOG_CLI_AGENT set) it must be that agent. With
       --phase the agent has read that item (or each of a comma-separated list, printed as a JSON array): its next write of it
       is checked against that version. A change of an item's rank alone never makes the agent's view stale; a change of its
       content does, and the refusal names every such item of the write in one backlog team query --phase <a>,<b> command.
@@ -457,7 +457,7 @@ Options:
       this option or --all.
   --claimable
       Open, unclaimed items whose dependencies are all done, in priority order (a team item before stage ready, or without a stage, is not claimable: it is refined first); another repository's items only as chunk
-      work (chunk: true, with --scope all); with TEAM_NAME set, only that team's items of this repository .
+      work (chunk: true, with --scope all); with SMOOTH_BACKLOG_CLI_TEAM_NAME set, only that team's items of this repository .
   --reviewable
       Items with a requested review that --agent may start or continue: a session that did not claim the item and did
       not ask for the review (the sessions in session_authors) reviews; a new session of the same card may .
@@ -482,7 +482,7 @@ Options:
       Read-only.
   --lead LEAD
       pop and --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the
-      environment variable TEAM_LEAD, else the lead of the team in teams.json.
+      environment variable SMOOTH_BACKLOG_CLI_TEAM_LEAD, else the lead of the team in teams.json.
   --agents AGENTS
       With --plan: the team members present, comma-separated; the default is all the members of the team's entry.
   --scope {branch,repo,all}

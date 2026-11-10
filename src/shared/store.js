@@ -317,6 +317,7 @@ export function nextSeqFor(dir, tail, floor = 0) { // floor: a mark taken earlie
   const taken = new Set([...bare, ...load(dir).flatMap(i => [basename(i.path), itemFileName(i.fm.phase)])]);
   let n = Math.max(nextSeq(dir), floor + 1);
   while (taken.has(String(n).padStart(3, '0') + tail)) n++;
+  if (n > MAX_SEQ) throw new BacklogError('STORAGE_ERROR', `the folder has no number left: the highest number the CLI can use (${MAX_SEQ}) is taken`, 2); // the floor or a taken name can push past the bound
   return n;
 }
 

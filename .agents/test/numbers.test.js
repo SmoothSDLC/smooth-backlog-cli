@@ -375,3 +375,18 @@ for (const [title, deletesUpstream] of [['upstream deleted it, this clone change
     assert.equal(git(f.home, 'status', '--porcelain'), '');
   });
 }
+
+test('backlog team new --help says one above the highest number, not the next free one', () => {
+  const r = cli(['team', 'new', '--help'], { plain: true });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok((r.stdout + r.stderr).includes('one above the highest number'));
+  assert.ok(!(r.stdout + r.stderr).includes('next free'));
+});
+
+test('a floor taken at the bound is refused: no number above the bound is handed out', t => {
+  const a = repo(t);
+  allocate(a, F, 'one'); commit(a, 'one');
+  assert.equal(store.nextSeqFor(join(a, F), '-x.md', MAX_SEQ - 1), MAX_SEQ, 'the bound itself is free');
+  assert.throws(() => store.nextSeqFor(join(a, F), '-x.md', MAX_SEQ), e => e.exitCode === 2, 'exit 2');
+  assert.throws(() => store.nextSeqFor(join(a, F), '-x.md', MAX_SEQ), /no number left/);
+});

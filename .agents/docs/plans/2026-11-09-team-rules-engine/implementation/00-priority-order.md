@@ -279,7 +279,14 @@ batch after which the installed CLI would behave differently for an existing con
 - Unrelated-file risk: none (new files).
 - Depends on: nothing.
 
-**B08. The evaluator.**
+**B08. The evaluator.** Split by the lead (2026-11-10) into three parts done one after the other in lane 2: B08a the expression core
+(values, references, functions, conditions; src/team/rules/expression.js), B08b the table walk, the coded checks, the argument list and the
+typed set/add/remove with reference checks (src/team/rules/step.js and the data-driven case test), B08c the remaining effects, the step `new`
+and the change list. The evaluator is pure, so none of the parts waits for B06c1 or B06d; the item adapter between the in-memory item and
+the evaluator goes into B13. The spike's coded CLI functions (resolveInputs, userShow and their neighbours) are not B08 (B12, B17, B18, B20,
+B24). Case COD-05 needs the agent resolution of B12 and is proven there: B08 passes 179 of the 180 cases. Where the spike and chapter 03
+disagree the chapter wins: `is` compares lists entry by entry, nested every/some/count is refused at run time too, `$arg` placeholders
+inside longer texts are replaced. The example files and rule-cases.json are copied, not moved: the design chapters keep their paths.
 - Goal: the rule table walk with its precedence (first match decides, deny by default), conditions and functions with exactly one key
   and a fixed form, values and the closed list of references, the functions, the effects (`set`, `add`, `remove`, `note`, `related`,
   `place`, `archive`, `delete`, `branch`, `team`, `say`) with the type and reference checks of the fields (a reference to the own folder in

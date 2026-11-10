@@ -28,7 +28,8 @@ export function compile(src, strict = false) {
       if (i >= src.length) fail('a [ class is not closed');
       const c = src[i++];
       if (c === '\\') parts.push(esc());
-      else if (peek() === '-' && src[i + 1] !== undefined && src[i + 1] !== ']') { const hi = src[i + 1]; if (hi < c) fail(hi === '\\' ? `the range ${c}-\\ ends with an escape; write the members of the class one by one` : `the range ${c}-${hi} is reversed`); i += 2; parts.push(ch => ch >= c && ch <= hi); }
+      else if (peek() === '-' && src[i + 1] !== undefined && src[i + 1] !== ']') { const hi = src[i + 1]; if (hi === '\\' && (strict || hi < c)) fail(`the range ${c}-\\ ends with an escape; write the members of the class one by one`);
+      else if (hi < c) fail(`the range ${c}-${hi} is reversed`); i += 2; parts.push(ch => ch >= c && ch <= hi); }
       else parts.push(ch => ch === c);
     }
     i++;

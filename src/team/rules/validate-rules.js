@@ -3,19 +3,33 @@
 // ctx = { team, entry, say, keys }: `entry` and `entry.rules` are objects, but `rules.table` may be of any type (validate.js has already reported a wrong type), so
 // every read here is guarded. `say(path, rule, problem, fix, severity = 'error')` adds a finding of the team; `keys(object, kind, path, rule = null)` reports the keys
 // of an object that its kind does not allow. Nothing here throws: a rule that cannot be walked (nested too deeply) is one finding.
-import { ENVELOPE, LIST, NAMES, PAIR, Refusal, asList, same } from './expression.js';
+import { ENVELOPE, FLAGS, FUNCTIONS, LIST, NAMES, PAIR, Refusal, TESTS, asList, num } from './expression.js';
 import { compile } from './safe-regex.js';
 import { typed } from './step.js';
 import { closest, isObj } from './validate.js';
 
-export const TESTS = ['all', 'any', 'not', 'is', 'in', 'empty', '>=', '<=', 'regex', 'contains', 'every', 'some'];
-export const FUNCTIONS = ['count', 'length', 'plus', 'age', 'roles_of', 'text'];
-// The flags of the CLI: neither a step nor an argument of a team may carry one of these names.
-export const FLAGS = ['team', 'agent', 'session', 'repository', 'branch', 'json', 'dry-run', 'help', 'version', 'show-all', 'ask'];
 const NAME = /^[a-z][a-z0-9_-]*$/;
 const REFS = { ...NAMES, now: [''], team: ['name', 'items'] };
 const has = (o, k) => Object.hasOwn(o, k);
 // A literal is a value the evaluator reads as it is: no reference and no function.
+// A message names at most ten of a long list, so that a file with a hundred thousand names does not make a hundred thousand long messages.
+const NAMED = 10;
+const names = list => [...list.slice(0, NAMED).map(v => (['string', 'number', 'boolean'].includes(typeof v) ? String(v) : '<a value>')), ...(list.length > NAMED ? [`and ${list.length - NAMED} more`] : [])].join(', ');
+// Membership by the evaluator's `same` without a scan: a number matches a number or a decimal text, a text matches a text or a number.
+const memberOf = values => {
+  const text = new Set(); const number = new Set(); const decimal = new Set(); const other = new Set();
+  for (const v of values) {
+    if (typeof v === 'string') { text.add(v); const n = num(v); if (!Number.isNaN(n)) decimal.add(n); } else if (typeof v === 'number') number.add(v); else other.add(v);
+  }
+  return l => (typeof l === 'string' ? text.has(l) || number.has(num(l)) : typeof l === 'number' ? number.has(l) || decimal.has(l) : other.has(l));
+};
+// The value a literal stands for, or NONE when the evaluator has to compute it. A one-key text function is the text it holds, whatever it starts with.
+const NONE = Symbol('none');
+const fixed = x => {
+  if (isObj(x)) return Object.keys(x).length === 1 && has(x, 'text') && (x.text === null || typeof x.text !== 'object') ? x.text : NONE;
+  if (Array.isArray(x)) { const out = x.map(fixed); return out.includes(NONE) ? NONE : out; }
+  return literal(x) ? x : NONE;
+};
 const literal = x => x === null || (typeof x === 'string' ? !x.startsWith('$') : ['number', 'boolean'].includes(typeof x)) || (Array.isArray(x) && x.every(literal));
 
 export function checkRules({ team, entry, say, keys }) {
@@ -24,13 +38,21 @@ export function checkRules({ team, entry, say, keys }) {
   const defs = isObj(entry.item) ? entry.item : null;
   const roles = isObj(entry.people) ? new Set(Object.values(entry.people).flatMap(r => (Array.isArray(r) ? r : []))) : null;
   const declared = f => defs !== null && has(defs, f);
+  const cache = new Map();
+  const once = (k, make) => { if (!cache.has(k)) cache.set(k, make()); return cache.get(k); };
+  const fieldNames = () => once('fields', () => [...ENVELOPE, ...Object.keys(defs)]);
+  const roleNames = () => once('roles', () => [...roles]);
+  const peopleNames = () => once('people', () => Object.keys(entry.people));
+  const members = f => once(`m:${f}`, () => memberOf(defs[f].values));
+  // The definitions without their values: typed() would scan a long list for every literal, so the values are checked here by membership.
+  const bare = () => once('bare', () => ({ ...entry, item: Object.fromEntries(Object.entries(defs).map(([k, d]) => [k, isObj(d) ? { ...d, values: undefined } : d])) }));
 
   // The problems of one reference as [problem, fix] pairs. c = { rule, it: $it is valid here, nest: inside the match of a quantifier }.
   const refProblems = (node, c) => {
     const [root, ...rest] = node.slice(1).split('.'); const name = rest.join('.');
     if (root === 'item' || root === 'it') {
       const out = [];
-      if (defs && !ENVELOPE.includes(name) && !declared(name)) out.push([`${node} names no field of the item definition`, `add ${name} to ${team}.item or name one of ${[...ENVELOPE, ...Object.keys(defs)].join(', ')}`]);
+      if (defs && !ENVELOPE.includes(name) && !declared(name)) out.push([`${node} names no field of the item definition`, `add ${name} to ${team}.item or name one of ${names(fieldNames())}`]);
       if (root === 'it' && !c.it) out.push([`${node} is used outside every, some, count and related`, 'use $item for the item of the step']);
       return out;
     }
@@ -59,7 +81,7 @@ export function checkRules({ team, entry, say, keys }) {
     if (Array.isArray(node)) return node.forEach((x, i) => val(x, `${path}[${i}]`, c));
     if (!isObj(node)) return undefined;
     const ks = Object.keys(node);
-    if (ks.length !== 1) return say(path, c.rule, `a function has exactly one key (found ${ks.join(', ') || 'none'})`, 'write one function, for example {"plus": [<value>, <value>]}');
+    if (ks.length !== 1) return say(path, c.rule, `a function has exactly one key (found ${names(ks) || 'none'})`, 'write one function, for example {"plus": [<value>, <value>]}');
     const [k] = ks; const x = node[k]; const at = `${path}.${k}`;
     if (!FUNCTIONS.includes(k)) return say(at, c.rule, `unknown function ${k}`, `did you mean ${closest(k, FUNCTIONS)}? (${FUNCTIONS.join(', ')})`);
     if (k === 'text') return undefined;
@@ -76,7 +98,7 @@ export function checkRules({ team, entry, say, keys }) {
   function cond(node, path, c) {
     if (!isObj(node)) return say(path, c.rule, 'a condition must be an object with exactly one key', 'write {"is": [<value>, <value>]}, or wrap several conditions in all');
     const ks = Object.keys(node);
-    if (ks.length !== 1) return say(path, c.rule, `a condition has exactly one key (found ${ks.join(', ') || 'none'})`, 'wrap several conditions in all');
+    if (ks.length !== 1) return say(path, c.rule, `a condition has exactly one key (found ${names(ks) || 'none'})`, 'wrap several conditions in all');
     const [k] = ks; const x = node[k]; const at = `${path}.${k}`;
     if (!TESTS.includes(k)) return say(at, c.rule, `unknown test ${k}`, `did you mean ${closest(k, TESTS)}? (${TESTS.join(', ')})`);
     if (PAIR.includes(k) && !(Array.isArray(x) && x.length === 2)) return say(at, c.rule, `${k} takes a list of two values`, `write {"${k}": [<value>, <value>]}`);
@@ -86,13 +108,27 @@ export function checkRules({ team, entry, say, keys }) {
     if (k === 'empty') return val(x, at, c);
     if (k === 'regex') { pattern(x[1], at, c); return val(x[0], `${at}[0]`, c); }
     if (k === 'in' && roles && typeof x[0] === 'string' && !x[0].startsWith('$') && !roles.has(x[0])
-      && (x[1] === '$caller.roles' || (isObj(x[1]) && has(x[1], 'roles_of')))) say(at, c.rule, `no person has the role ${x[0]}`, `give a person the role or use one of ${[...roles].join(', ')}`);
+      && (x[1] === '$caller.roles' || (isObj(x[1]) && has(x[1], 'roles_of')))) say(at, c.rule, `no person has the role ${x[0]}`, `give a person the role or use one of ${names(roleNames())}`);
     const field = (k === 'is' || k === 'in') && typeof x[0] === 'string' ? /^\$(?:item|it)\.(.+)$/.exec(x[0])?.[1] : undefined;
     const values = field !== undefined && declared(field) && isObj(defs[field]) ? defs[field].values : undefined;
     if (Array.isArray(values)) {
-      for (const lit of asList(x[1]).filter(l => typeof l !== 'object' && literal(l))) if (!values.some(v => same(v, lit))) say(at, c.rule, `${lit} is not a value of ${field} (${values.join(', ')})`, `use a value of ${field} or add ${lit} to its values`);
+      const known = members(field);
+      for (const lit of asList(x[1]).filter(l => typeof l !== 'object' && literal(l))) if (!known(lit)) say(at, c.rule, `${lit} is not a value of ${field} (${names(values)})`, `use a value of ${field} or add ${lit} to its values`);
     }
     return val(x, at, c);
+  }
+
+  // A literal written into a field: typed() decides what the evaluator would, the values and the persons are checked by lookup.
+  function literalEffect(kind, f, v, d, at, c) {
+    const fix = Array.isArray(d.values) ? `use one of ${names(d.values)}` : `write a ${d.type} value`;
+    if (d.type === 'person' && typeof v === 'string' && v !== '' && isObj(entry.people) && !has(entry.people, v)) return say(at, c.rule, `field ${f}: ${JSON.stringify(v)} is not a person of the team (${names(peopleNames())})`, `write a person of the team: ${names(peopleNames())}`);
+    try {
+      const out = typed(bare(), f, kind === 'set' ? v : asList(v), '');
+      if (Array.isArray(d.values) && !asList(out).every(members(f))) say(at, c.rule, typeof v === 'string' ? `${v} is not a value of ${f}` : `field ${f}: ${JSON.stringify(v)} is not one of ${names(d.values)}`, fix);
+    } catch (err) {
+      if (err instanceof Refusal) say(at, c.rule, err.message, fix);
+    } // anything else is a malformed definition, reported with the item definition
+    return undefined;
   }
 
   // set, add and remove of an effect list or of a related entry: the fields are declared, add and remove take list fields, a literal fits its field.
@@ -104,13 +140,7 @@ export function checkRules({ team, entry, say, keys }) {
         const at = `${path}.${kind}.${f}`; const d = declared(f) ? defs[f] : undefined;
         if (defs && !declared(f)) say(at, c.rule, `${f} is no field of the item definition`, `add ${f} to ${team}.item`);
         else if (isObj(d) && kind !== 'set' && !LIST.includes(d.type)) say(at, c.rule, `${kind} needs a list field; ${f} is ${d.type}`, 'use set');
-        else if (isObj(d) && literal(x)) {
-          try { typed(entry, f, kind === 'set' ? x : asList(x), ''); } catch (err) {
-            if (!(err instanceof Refusal)) continue; // a malformed definition: reported with the item definition
-            const value = Array.isArray(d.values) && typeof x === 'string' && /is not one of/.test(err.message);
-            say(at, c.rule, value ? `${x} is not a value of ${f}` : err.message, value ? `use one of ${d.values.join(', ')}` : `write a ${d.type} value`);
-          }
-        }
+        else if (isObj(d) && fixed(x) !== NONE) literalEffect(kind, f, fixed(x), d, at, c);
         val(x, at, c);
       }
     }
@@ -132,8 +162,8 @@ export function checkRules({ team, entry, say, keys }) {
       if (!isObj(n) || typeof n.heading !== 'string' || !has(n, 'text')) say(at, c.rule, 'note must be an object with a heading text and a text', 'write "note": {"heading": "<heading>", "text": "<text>"}');
       if (isObj(n)) {
         keys(n, 'note', at, c.rule);
-        // A text that is one reference is read as that reference; any other text is filled.
-        if (has(n, 'text')) { if (typeof n.text === 'string' && n.text.startsWith('$')) val(n.text, `${at}.text`, c); else text(n.text, `${at}.text`, c, 'note'); }
+        // A text that does not start with $ is filled; any other value is computed and read as a text.
+        if (has(n, 'text')) { if (typeof n.text === 'string' && !n.text.startsWith('$')) text(n.text, `${at}.text`, c, 'note'); else val(n.text, `${at}.text`, c); }
       }
     }
     if (has(d, 'related')) {

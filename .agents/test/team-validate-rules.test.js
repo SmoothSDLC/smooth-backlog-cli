@@ -1,10 +1,11 @@
 // The checks of the rules of a team file, one by one, and their agreement with the evaluator: what validate refuses, the evaluator refuses at run time too.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ENVELOPE, Refusal, test as evaluate, value } from '../../src/team/rules/expression.js';
+import { readFileSync } from 'node:fs';
+import { ENVELOPE, FLAGS, FUNCTIONS, TESTS, Refusal, test as evaluate, value } from '../../src/team/rules/expression.js';
 import { EFFECTS, step } from '../../src/team/rules/step.js';
 import { compile } from '../../src/team/rules/safe-regex.js';
-import { FLAGS, FUNCTIONS, TESTS } from '../../src/team/rules/validate-rules.js';
+import * as checks from '../../src/team/rules/validate-rules.js';
 import { KEYS, errors, validate } from '../../src/team/rules/validate.js';
 
 const entry = rules => ({
@@ -83,7 +84,7 @@ test('condition: one key, a known test with the right form', () => {
 
 test('function: one key, a known function, plus takes a list', () => {
   const set = v => one({ do: { set: { estimate: v } } });
-  set({ plus: ['$item.estimate', 1] }); set({ length: '$item.holder' }); set({ text: '$literal' }); set({ age: '$now' });
+  set({ plus: ['$item.estimate', 1] }); set({ length: '$item.holder' }); set({ text: '5' }); set({ age: '$now' });
   one({ do: { set: { estimate: { plus: 1, length: 2 } } } }, 'rules.table[0].do.set.estimate: a function has exactly one key (found plus, length)');
   one({ do: { set: { estimate: {} } } }, 'rules.table[0].do.set.estimate: a function has exactly one key (found none)');
   one({ do: { set: { estimate: { sum: [] } } } }, 'rules.table[0].do.set.estimate.sum: unknown function sum');
@@ -190,7 +191,8 @@ test('effects: team, archive, delete, branch, note, related and place', () => {
   d({ place: { before: '$nope' } }, 'rules.table[0].do.place.before: $nope is no reference');
   d({ note: { heading: 'h', text: 'a {$arg.n}' } }); d({ note: { heading: 'h', text: '$arg.n' } }); d({ note: { heading: 'h', text: '' } });
   for (const v of ['x', 5, null, [], {}, { heading: 'h' }, { text: 't' }, { heading: 5, text: 't' }]) d({ note: v }, 'rules.table[0].do.note: note must be an object with a heading text and a text');
-  d({ note: { heading: 'h', text: 5 } }, 'rules.table[0].do.note.text: note must be a text');
+  d({ note: { heading: 'h', text: 5 } }); d({ note: { heading: 'h', text: { plus: ['$item.estimate', 1] } } }); d({ note: { heading: 'h', text: { text: '$x' } } });
+  d({ note: { heading: 'h', text: { sum: [] } } }, 'rules.table[0].do.note.text.sum: unknown function sum');
   d({ note: { heading: 'h', text: '$arg.Bad' } }, 'rules.table[0].do.note.text: Bad is not an argument name');
   d({ note: { heading: 'h', text: 'x {$nope}' } }, 'rules.table[0].do.note.text: {$nope} in the note text: $nope is no reference');
   d({ note: { heading: 'h', text: 't', more: 1 } }, 'rules.table[0].do.note.more: more is not a key of a note');
@@ -245,3 +247,41 @@ test('a rule that validate accepts runs: the shapes of every effect', () => {
 
 test('the envelope keys of the item are accepted as $item references', () => { for (const k of ENVELOPE) one({ when: { empty: `$item.${k}` } }); });
 test('compile still runs the constructs that validate refuses', () => { for (const p of ['a**', '^*', 'a{2}{3}']) assert.doesNotThrow(() => compile(p)); });
+
+test('the lists of tests and functions are the names of the evaluator in both directions', () => {
+  const source = readFileSync(new URL('../../src/team/rules/expression.js', import.meta.url), 'utf8');
+  const body = (from, to) => source.slice(source.indexOf(from), source.indexOf(to, source.indexOf(from)));
+  const switched = [...body('export function test(', 'default:').matchAll(/case '([^']+)':/g)].map(m => m[1]);
+  const functions = [...body('export function value(', 'throw new Refusal(`unknown function').matchAll(/op === '([a-z_]+)'/g)].map(m => m[1]);
+  assert.deepEqual([...TESTS].sort(), switched.sort());
+  assert.deepEqual([...FUNCTIONS].sort(), functions.sort());
+  assert.equal(checks.TESTS, undefined); // the checks read the evaluator's lists, they keep none of their own
+  assert.equal(checks.FUNCTIONS, undefined);
+});
+
+test('a literal wrapped in the text function is checked as the literal it is', () => {
+  const cases = [{ status: { text: 'zzz' } }, { estimate: { text: 'abc' } }, { owner: { text: 'zed' } }, { flag: { text: 'maybe' } }, { status: { text: '$5' } }];
+  for (const set of cases) {
+    const e = entry([rule({ do: { set } })]);
+    assert.equal(errors(validate({ t: e })).length, 1, JSON.stringify(set));
+    const item = { seq: 1, slug: '001-a', name: 'a', team: 't', repository: 'r', branch: 'b', archived: false, body: '', fields: { status: 'open', estimate: 1, holder: [], labels: [], owner: '', flag: false } };
+    assert.throws(() => step({ entry: e, team: 't', caller: 'a', items: [item], args: {}, session: { repository: 'r', branch: 'b' }, now: '2026-01-01T00:00:00Z', item, step: 'go' }), err => err instanceof Refusal && err.exitCode === 2, JSON.stringify(set));
+  }
+  one({ do: { set: { status: { text: 'done' }, estimate: { text: '5' } }, add: { labels: [{ text: 'x' }, 'y'] } } });
+  one({ do: { add: { labels: [{ text: 'q' }] } } }, 'rules.table[0].do.add.labels: field labels: ["q"] is not one of x, y');
+});
+
+test('long lists are named in part and a file with a hundred thousand values and literals is checked in seconds', () => {
+  const N = 100000; const values = Array.from({ length: N }, (_, i) => `v${i}`);
+  const e = entry([rule({ when: { in: ['$item.big', values.map(v => `${v}x`)] } }), rule({ id: 's', do: { set: { big: 'nope' } } })]);
+  e.item.big = { type: 'text', description: 'b', values };
+  for (let i = 0; i < N; i++) e.item[`f${i}`] = { type: 'text', description: 'f' };
+  const t = Date.now(); const found = errors(validate({ t: e }));
+  assert.ok(Date.now() - t < 8000, `${Date.now() - t} ms`);
+  assert.equal(found.length, N + 1);
+  for (const f of found.slice(0, 3)) assert.ok(f.problem.length < 200 && f.fix.length < 300, f.problem);
+  assert.match(found.at(-1).fix, /use one of v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, and 99990 more/);
+  const many = entry([rule({ when: { is: ['$item.status', 'x'] } })]); many.people = Object.fromEntries(Array.from({ length: N }, (_, i) => [`p${i}`, [`r${i}`]]));
+  many.rules.table = Array.from({ length: 3000 }, (_, i) => rule({ id: `r${i}`, when: { in: ['boss', '$caller.roles'] } }));
+  const s = Date.now(); assert.equal(errors(validate({ t: many })).length, 3000); assert.ok(Date.now() - s < 8000);
+});

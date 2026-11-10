@@ -6,6 +6,11 @@ import { compile } from './safe-regex.js';
 
 export const ENVELOPE = ['seq', 'slug', 'name', 'team', 'repository', 'branch', 'created', 'updated', 'updated_by', 'archived', 'body'];
 export const LIST = ['items', 'list'];
+// The flags of the CLI: neither a step nor an argument of a team may carry one of these names.
+export const FLAGS = ['team', 'agent', 'session', 'repository', 'branch', 'json', 'dry-run', 'help', 'version', 'show-all', 'ask'];
+// The tests and functions this evaluator runs (its switches below); the checks of a team file list the same names.
+export const TESTS = ['all', 'any', 'not', 'is', 'in', 'empty', '>=', '<=', 'regex', 'contains', 'every', 'some'];
+export const FUNCTIONS = ['count', 'length', 'plus', 'age', 'roles_of', 'text'];
 export const NAMES = { caller: ['', 'roles'], session: ['id', 'repository', 'branch', 'commit'] };
 export const PAIR = ['is', 'in', '>=', '<=', 'regex', 'contains'];
 export const FOREIGN = /^([\w.-]+\/[\w.-]+)#(\d+)$/;

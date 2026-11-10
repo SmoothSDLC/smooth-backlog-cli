@@ -184,3 +184,11 @@ test('strict compile refuses a quantifier on a quantifier or on an anchor, and t
   }
   for (const p of ['(a+)+', '(a*)*', 'a+b*', '(^a)*', '^a$', 'a{2,3}', '(?:ab){2}']) assert.doesNotThrow(() => compile(p, true), p);
 });
+
+test('strict compile refuses every class range that ends in a backslash; the default matcher still runs it', () => {
+  for (const p of ['[a-\\d]', '[0-\\d]', '[+-\\d]']) {
+    assert.throws(() => compile(p, true), { message: /ends with an escape/ }, p);
+  }
+  assert.doesNotThrow(() => compile('[0-\\d]'));
+  assert.doesNotThrow(() => compile('[+-\\d]'));
+});

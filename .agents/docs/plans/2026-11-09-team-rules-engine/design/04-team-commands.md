@@ -61,7 +61,7 @@ The new item's body is empty; a `note` effect of the step `new` writes its first
 
 - **pop**: the pop table walk of chapter 03 section 9 (each candidate step is tried in full without writing); then the offered step runs as
   in section 3. When upstream moved before the push, pop runs again on the upstream files (section 6) and chooses again; an item it
-  already tried in this command is not offered again; after three attempts it ends with exit 1. A synchronisation failure of pop is exit 1,
+  already tried in this command is not offered again; when the time budget of section 6 is used up it ends with exit 1. A synchronisation failure of pop is exit 1,
   never 3, because 3 means idle (today `src/team/pop.js:63-66`). Text output: the action line (`➡️  <step> <slug> (pop entry <id>, rule
   <id>)`), then the item's fields and body as `backlog team query <item>` prints them, so a member sees the whole item it took. Output with `--json`:
   `{"action": "<step>", "item": <seq>, "entry": "<pop entry id>", "rule": "<rule id>", "item_file": {<the whole item after the step>}}`;

@@ -52,10 +52,9 @@ only what that revert does not cover. After the cut-over the rollback is the one
 2. **The four variables the ruling's list missed: settled by the design.** Chapter 01 section 5 lists all fourteen variables the CLI owns,
    with RUN_HOOK, RUN_LOCK_HELD, REVIEW_STALE_SECONDS and TEST_SELF prefixed; B01 renames them. At the cut-over any program set as the run
    hook is named in SMOOTH_BACKLOG_CLI_RUN_HOOK (`01-landing-strategy.md` step 4).
-3. **Pop after lost races: the design contradicts itself.** Chapter 04 section 4 says pop "after three attempts ... ends with exit 1",
-   while section 6 says every team command keeps trying for at most half of the clone lock's time budget and then ends with exit 3, "exit 1
-   for pop". The plan follows section 6 for every team command, pop included (B15); section 4's sentence should be aligned when the design
-   is next revised.
+3. **Pop after lost races: settled in the design.** Chapter 04 section 4 said pop "after three attempts ... ends with exit 1", while
+   section 6 says every team command keeps trying for at most half of the clone lock's time budget and then ends with exit 3, "exit 1
+   for pop". Section 4 now names the time budget of section 6; the plan follows section 6 for every team command, pop included (B15).
 4. **Backlog item 150's title** names a team_templates key; the design has no such key: setup copies to the fixed folder
    .backlog/team-templates/ (chapter 01 section 1.2). B25 implements the design; the item's title should be aligned with it.
 5. **A folder without team items migrates without a team file: settled by the design.** Chapter 06 sections 3 and 5 let such a folder

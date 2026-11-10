@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { Refusal, defaultOf } from '../../src/team/rules/expression.js';
 import { create, step } from '../../src/team/rules/step.js';
 import { filter, pop } from '../../src/team/rules/pop.js';
+import { resolveInputs } from '../../src/team/inputs.js';
 
 const read = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
 const { cases } = read('./fixtures/team-rules/rule-cases.json');
@@ -11,11 +12,10 @@ const FILES = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 's
 const NOW = '2026-11-09T12:00:00Z';
 
 // What this harness supports; a case outside it is left to the part that adds it, and the count below says how many run.
-const RUN_KINDS = ['update', 'new', 'pop', 'filter'];
-const EXPECTED = ['exit', 'text', 'rule', 'items', 'max_ms', 'place', 'say', 'delete', 'archived', 'bound', 'branch', 'action', 'item', 'entry', 'filter'];
-// 205 cases run: the cases file holds 206 runnable ones, and COD-05 (a new without an agent) tests the agent text of the input resolution, which is not the evaluator's.
-const RUN_COUNT = 205;
-const LEFT_OUT = ['COD-05'];
+const RUN_KINDS = ['update', 'new', 'pop', 'filter', 'resolve', 'inputs'];
+const EXPECTED = ['exit', 'text', 'rule', 'items', 'max_ms', 'place', 'say', 'delete', 'archived', 'bound', 'branch', 'action', 'item', 'entry', 'filter', 'team', 'agent', 'all'];
+// 224 cases run: the evaluator's cases plus the input resolution (resolve, inputs and the agent of COD-05).
+const RUN_COUNT = 224;
 
 const defaults = entry => Object.fromEntries(Object.entries(entry.item).map(([f, d]) => [f, defaultOf(d)]));
 // An item of the rule set's team gets the definition's defaults unless the case is raw.
@@ -26,20 +26,23 @@ const items = (given, team, entry) => given.items.map(i => ({ seq: i.seq, slug: 
 const fileOf = c => (c.rule_set === 'inline' ? c.given.team_file : FILES[c.rule_set]);
 const teamOf = (c, file) => c.command.flags?.team ?? Object.keys(file)[0];
 function supported(c) {
-  return !LEFT_OUT.includes(c.id) && RUN_KINDS.includes(c.command.run) && Object.keys(c.expect).every(k => EXPECTED.includes(k));
+  return RUN_KINDS.includes(c.command.run) && Object.keys(c.expect).every(k => EXPECTED.includes(k));
 }
-// The caller: the agent flag wins over the environment variable (stand-in for the real resolution).
-const callerOf = cmd => {
-  const agent = cmd.flags?.agent || cmd.env?.SMOOTH_BACKLOG_CLI_AGENT;
-  if (!agent) throw new Refusal('this team command needs the agent: give --agent <name>, or set the SMOOTH_BACKLOG_CLI_AGENT variable', 2);
-  return agent;
-};
+// The caller of a new item comes from the real input resolution.
+const callerOf = cmd => resolveInputs({ command: 'new', flags: cmd.flags, env: cmd.env, config: { team: 'x' } }).agent;
 
 const ran = cases.filter(supported);
 
 for (const c of ran) {
   test(`${c.id}: ${c.rule ?? 'coded'} (${c.command.step})`, () => {
-    const cmd = c.command; const file = fileOf(c); const team = teamOf(c, file); const entry = file[team];
+    const cmd = c.command;
+    if (cmd.run === 'resolve' || cmd.run === 'inputs') {
+      let r; try { r = { exit: 0, ...resolveInputs({ command: cmd.command ?? 'query', flags: cmd.flags, env: cmd.env, config: cmd.config }) }; } catch (e) { if (!(e instanceof Refusal)) throw e; r = { exit: e.exitCode, text: e.message }; }
+      assert.equal(r.exit, c.expect.exit, JSON.stringify(r));
+      for (const k of ['text', 'team', 'agent', 'all']) if (k in c.expect) assert.deepEqual(r[k], c.expect[k], k);
+      return;
+    }
+    const file = fileOf(c); const team = teamOf(c, file); const entry = file[team];
     let got; const t0 = Date.now(); const all = items(c.given, team, entry); const before = JSON.stringify(all);
     try {
       const ctx = { entry, team, caller: callerOf(cmd), items: all, args: cmd.args ?? {}, session: { repository: 'acme/app', branch: 'main', ...cmd.session }, now: NOW };

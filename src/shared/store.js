@@ -21,7 +21,7 @@ import { lifted } from './status.js';
 import { derivedKeys, dropsLegacy, isOpen } from './status.js';
 
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
-const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //
+export const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //
 
 // The one storage setting: the folder that holds the items. Named by SMOOTH_BACKLOG_CLI_HOME, by the repository's configuration
 // (.backlog/config.json, backlog_repository: a path relative to the repository; ".backlog" means inside it; the root file of

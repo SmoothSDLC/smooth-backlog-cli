@@ -13,7 +13,7 @@ developed and how they reach the installed CLI is `01-landing-strategy.md`; the 
 
 ## 1. How every batch is proven
 
-Context: four checks prove a batch. They exist today and are run in the checkout that holds the batch (the engine worktree of
+Context: four checks prove a batch. They exist today and are run in the checkout that holds the batch (the batch's worktree,
 `01-landing-strategy.md`), never in another checkout.
 
 | check | command | what it does |
@@ -29,7 +29,7 @@ single full run reported 3 failures of .agents/test/upgrade.test.js under an old
 .agents/test/shared-sync-db.test.js; the first batch records the baseline with `npm test` under Node 24 before it changes anything.
 
 The lead's own test scripts, kept outside the repository, change into the checkout of the working branch before they run, so for a batch
-in the engine worktree the commands above are typed in that worktree. Two more checks apply when a batch touches what they cover:
+the commands above are typed in that batch's worktree. Two more checks apply when a batch touches what they cover:
 `node .agents/scripts/sync-commands-md.mjs` after any change of the help text (.agents/test/commands-documented.test.js fails when
 COMMANDS.md is out of date), and `npm pack --dry-run` after any change of the shipped files (B08 and B25 add templates/teams/, B27 removes
 templates/workflows/).
@@ -75,6 +75,39 @@ needed a new batch or a change of order.
 
 Batches outside this repository (the owner's team file, the skills, the full-scope execution, the gap review) are listed in section 4;
 the cut-over that brings the batches to the installed CLI is `01-landing-strategy.md`.
+
+### 2.1 Who does the work, and what runs at once
+
+Context: the owner's instruction of 2026-11-09: the lead makes sure the plan and its stages are correct and orchestrates agents; the
+agents write the code, the tests, the validations and the reviews; several agents run at once, in worktrees that are merged back into the
+working branch and removed. The lead does not implement.
+
+- **One batch, two agents, one after the other.** An implementing agent gets the batch's text of section 3 as its whole task (goal,
+  chapters to read, target files, proof), works in a worktree of its own on a local branch and stops when the proof of section 1 passes
+  there. A reviewing agent then reads the diff against the design chapters the batch cites and reruns the proof; its findings go back to
+  an implementing agent until none is left. Both run in the background on the smallest model that does the work at medium effort; a batch
+  that seems to need more is a batch whose text is not precise enough, and the lead rewrites or splits it instead.
+- **The lead merges.** After the review the lead rebases the batch's local branch onto the working branch, runs the proof on the result,
+  merges fast-forward, pushes, and removes the worktree and the local branch (`01-landing-strategy.md` section 3). A batch is done only
+  then. The lead records each step in the backlog item of the batch.
+- **Lanes.** Two lanes run at once. A lane holds one batch at a time; a batch starts when everything in its "depends on" column is merged.
+  Two batches run at the same time only when their target files do not overlap, except for the files the table names: there the batch
+  merged second is rebased and proven again before its merge.
+
+| stage | lane 1 | lane 2 | files both lanes touch |
+|---|---|---|---|
+| 1 | B01 | (idle: B01 renames in nearly every file) | |
+| 2 | B05, then B06 (the item file) | B07 (new files only), then B02, B03, B04 (configuration, numbers, publication) | src/shared/store.js (B02, B03 with B05, B06), src/shared/sync.js (B04 with B06's guard pattern) |
+| 3 | B08 (the evaluator) | (idle until B08 is merged; B04 may still be finishing) | |
+| 4 | B09, then B25 | B10, then B11 | none expected (new modules; B25 is src/shared/setup.js) |
+| 5 | B12, then B13 | (idle: the router and creation are one chain) | |
+| 6 | B14, then B15, then B16 (team commands) | B17, then B18, B19, B20 (user commands) | src/shared/sync.js (B15 with B19), src/help.js and the documents every batch updates |
+| 7 | B22, then B23, B24, B26 (migration, setup report) | B21 (the own-folder scope) | src/team/cli.js (B22 with B21's removals) |
+| 8 | B27, then B28 | (idle: removals touch everything) | |
+| 9 | B29 | | |
+
+The documents every behaviour change must update (the help text, the built-in skill, COMMANDS.md regenerated, README.md, CHANGELOG.md) are
+touched by both lanes of a stage; the batch merged second regenerates COMMANDS.md after its rebase.
 
 ## 3. The batches
 
@@ -552,7 +585,7 @@ repositories, never here (the information-security rule). They are listed so tha
 
 | order | what | where | backlog item | can start after | needed before |
 |---|---|---|---|---|---|
-| X1 | the owner's team template | the backlog repo | 148 | B10 (validate can check it, run from the engine checkout) | X2 |
+| X1 | the owner's team template | the backlog repo | 148 | B10 (validate can check it, run from the working branch's checkout) | X2 |
 | X1b | the template-location key in the configuration of every repository and branch, read by skills and people to find the owner's team template; the CLI never reads it (R5) | the owner's repositories | 150 | X1 | X3 |
 | X2 | the owner's team entry, finalized, in the new shape, at the location chapter 01 section 1.1 resolves for each repository folder that has team items; it includes the dependency rule for items migrated without hand-off records (coverage row B3-19) | the backlog repo | 149 | X1, B16 | the cut-over |
 | X3 | the lead and member skills read the rule set through the commands of chapter 07 section 1; the consumers of reference/consumers.tsv change | the owner's repositories | 151 | B16, B17 | the cut-over |

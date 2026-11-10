@@ -8,8 +8,8 @@ are in `../design/decisions.md` only and are not repeated here.
 
 ## 1. Risks and rollback per batch
 
-Context: before the cut-over every batch lives only on the engine branch, which is never installed (`01-landing-strategy.md` section 3), so
-the rollback of any batch is `git revert <batch commit>` on the engine branch, pushed; no consumer ever saw it. The column "rollback" adds
+Context: before the cut-over no batch is installed (`01-landing-strategy.md` section 3), so
+the rollback of any batch is `git revert <batch commit>` on the working branch, pushed; no consumer ever saw it. The column "rollback" adds
 only what that revert does not cover. After the cut-over the rollback is the one of `01-landing-strategy.md` section 5.
 
 | batch | risk | how the plan meets it | rollback beyond the revert |
@@ -63,9 +63,9 @@ only what that revert does not cover. After the cut-over the rollback is the one
 6. **The cases move into the test fixtures.** From B08 the tests read .agents/test/fixtures/team-rules/rule-cases.json and the templates
    in templates/teams/, not the plan folder (the plan moves to completed/ at the end). The design's copies stay as the record of the design;
    a later change of a case is made in the test copy by the batch that implements it.
-7. **The proof commands on the engine branch.** The lead's own test scripts change into the working branch's checkout before they run, so
-   for the engine branch the commands of `00-priority-order.md` section 1 are typed in the engine worktree; a log written by those scripts
-   proves the working branch, not the engine.
+7. **The proof commands in a batch's worktree.** The lead's own test scripts change into the working branch's checkout before they run, so
+   for a batch the commands of `00-priority-order.md` section 1 are typed in that batch's worktree; a log written by those scripts
+   proves the working branch's checkout, not the batch's worktree.
 8. **The guard command changes at B01.** From B01 on the CLI's guard test reads SMOOTH_BACKLOG_CLI_PRIVATE_DENYLIST; every instruction
    that names the old variable for the guard is updated with B01. The repository's pre-push hook is not part of the CLI and keeps its own
    setting.
@@ -93,53 +93,19 @@ design first and then in exactly these batches.
 
 ## 4. Owner choices of the implementation plan
 
-Context: two points of the plan itself, not of the design. Question 2 is procedural and follows rulings R24 and R25, so the lead has
-taken option B (owner instruction of 2026-11-06: procedural matters are the lead's). Question 1 follows the precedent of decision
-20261106-AE (the owner had the working branch created on the remote), so the plan is written for option A; it still needs one act of the
-owner, because no agent may create a branch on the remote. Each entry lists what changes under another option.
+Context: two points of the plan itself, not of the design. Both are closed.
 
 ### 2026-11-10 round 13, question 1: where the engine work is committed and pushed before the cut-over
 
-Scenario: an implementing agent finishes batch B01 (every environment variable renamed) and must commit and push it at the end of its turn.
-On the shared machine the `backlog` command is installed from the latest commit of the working branch `simplify/pr3-review`, and an agent
-session there runs `backlog team pop --team web --agent member-1` a minute later.
-
-The problem. The installed CLI is the HEAD of the working branch's checkout: the lead's commit procedure commits there and installs that
-commit at once. Nine of the 29 batches change what the agents see (renamed variables, JSON item files, new team command lines, hidden team
-items, removed commands), so B01 committed on the working branch would leave that session without its team and agent the moment it is
-committed, long before the migration and the new team files exist. The work must be pushed at the end of every turn, but the repository's
-pre-push hook refuses an agent push that creates a branch on the remote, so `git push origin team-rules-engine` from an agent is refused.
-
-The implementation pattern. The hazard is decided in two places outside the CLI: the installation step installs the HEAD of the working
-branch's checkout, and the pre-push hook refuses a new remote branch. The CLI code is the same under every option; only the branch, the
-worktree, the order of the batches and the moment of installation differ.
-
-- **Option A: an engine branch created on the remote by the owner.** The owner pushes the branch `team-rules-engine` once (from the
-  current HEAD of `simplify/pr3-review`), and every batch is committed in a separate worktree on that branch with plain git and pushed there
-  at the end of its turn. The working branch stays installed and keeps receiving plans, reviews and urgent fixes; the engine branch merges
-  it in at the start of each batch, and the cut-over merges the engine branch back in one step. The cost is one owner action and a merge
-  per batch; nothing of the engine reaches the agents before the cut-over, including the fix of number reuse.
-- **Option B: the batches go on the working branch, with the installation pinned.** The installation step is changed to install a fixed
-  commit (the last one before the engine) instead of the HEAD, and the batches are committed on `simplify/pr3-review` like everything
-  else. No branch is created and the history stays linear. It breaks the owner's rule that the latest commit of the active branch runs on
-  the shared machine, a pin is easy to forget at the cut-over, and an urgent fix to the installed CLI would then need a second branch anyway.
-- **Option C: the non-breaking batches are installed as they land; only the breaking ones wait on an engine branch.** This is review D's
-  staged landing (review D section 5): the number counter and publication (B03, B04), the seam (B05), the evaluator modules and the checks
-  (B07 to B11), `backlog team validate` (B12), the own-folder fixes without the removal of `move --to-repository` (part of B21) and the
-  setup templates (B25) are committed on the working branch and installed at once; the rest waits for one cut-over. The agents gain the
-  fix of number reuse and the validation of the new team files weeks earlier, and the final cut-over is smaller. The order of the batches
-  changes (those batches move before B01 and are written with today's variable names, then renamed by B01), B21 splits in two, and each
-  installed batch must be proven harmless to today's team commands, which also run on that build.
-
-Recommendation: option A; the plan is written for it. It is the only option that keeps both owner rules (the active branch runs live; every
-turn is pushed) without proving each batch harmless to the running agents, and it needs a single owner action.
-
-What changes under another option: option B changes `01-landing-strategy.md` sections 3 to 5 (the pinned installation and its removal at
-the cut-over) and no batch. Option C changes the order and the dependencies of `00-priority-order.md` (the batches named above move to the
-front; B21 splits into a non-breaking and a breaking part), the breaking count of `01-landing-strategy.md` section 2 (unchanged: the same
-nine), and adds a check per installed batch that today's team commands still pass.
+Answer (owner, 2026-11-09): every batch is committed on the working branch and pushed after every commit; the deployment and the live
+testing happen after the implementation is complete, all the tests pass and the reviews are done. The lead orchestrates agents that
+implement, test, validate and review, several at once, in worktrees that are merged back into the working branch and removed. The plan
+that follows from it is `01-landing-strategy.md` section 3 and `00-priority-order.md` section 2.1. The options considered before the
+answer (a separate branch on the remote, a pinned installation, a staged installation) are not taken.
 
 ### 2026-11-10 round 13, question 2: which backlog folders are migrated in the cut-over window
+
+Taken by the lead as procedural (owner instruction of 2026-11-06), following rulings R24 and R25: option B below.
 
 Scenario: the cut-over has installed the engine build. In a checkout of a repository whose folder of the shared backlog is not migrated, a
 person runs `backlog list`; the command stops with exit 2 and "the items of <owner>/<name> are markdown files; run backlog team migrate

@@ -14,8 +14,10 @@ The implementation plan is [2026-11-09-team-rules-engine/implementation/00-prior
 
 **Global Constraints:** public repo (nothing of the owner's internal factory); no alias, no backward compatibility (migrate or fail);
 one behaviour per command; every command and subcommand documented; every commit leaves the guards green; the CLI never writes the
-team file; user commands enforce nothing. Every batch is committed on an engine branch that is never deployed, until the one cut-over
-(landing strategy section 3; the one push that creates the branch on the remote is the owner's, 2026-11-10 round 13, question 1). Each batch cites its design chapters by number and re-reads
+team file; user commands enforce nothing. Every batch is committed on the working branch and pushed after every
+commit; nothing is installed until the implementation is complete, all tests pass and the reviews are done (owner, 2026-11-09; landing
+strategy section 3). The lead orchestrates; agents implement, test and review in worktrees that are merged back and removed (priority
+order section 2.1). Each batch cites its design chapters by number and re-reads
 them at its start.
 
 ## Tasks
@@ -61,7 +63,7 @@ them at its start.
   - [ ] B28 the compatibility paths go (R18; chapter 06 section 6)
 - [ ] Task 11: The owner's team: template (item 148), the template-location key in every repository's configuration (item 150), finalized entry and rule set (item 149), the lead and member skills read it and the
   consumers change (item 151); in the backlog repo and the owner's repositories, never here (chapter 07).
-- [ ] Task 12: The cut-over: the engine branch reaches the installed CLI, the folders are migrated, the consumers are updated
+- [ ] Task 12: The cut-over: the finished build is installed, the folders are migrated, the consumers are updated
   ([01-landing-strategy.md](2026-11-09-team-rules-engine/implementation/01-landing-strategy.md) section 4; the folders in use are migrated in the window, the others when next used, rulings R24 and R25).
 - [ ] Task 13: Full-scope execution against the owner's team rule set and the dummy teams (scrum, extreme programming, parallel work,
   single-agent team, the pattern catalogue, several teams at once) (item 153; [02-bdd-plan.md](2026-11-09-team-rules-engine/implementation/02-bdd-plan.md) section 4).

@@ -29,7 +29,7 @@ them at its start.
 - [ ] Task 4: Foundations (backlog item 152; [00-priority-order.md](2026-11-09-team-rules-engine/implementation/00-priority-order.md) phase 1).
   - [x] B01 the environment prefix (R20, R18; chapter 01 section 5, chapter 06 section 6)
   - [x] B02 the configuration keys and the team-file location (R22, R25; chapter 01 section 1.1, chapter 06 section 2.0; round 12, questions 1 and 6)
-  - [ ] B03 the number high-water mark (R12; chapter 05 sections 1, 2 and 4)
+  - [x] B03 the number high-water mark (R12; chapter 05 sections 1, 2 and 4)
   - [ ] B04 publication and staging (R12, R5; chapter 05 sections 2 and 3, chapter 04 section 6)
   - [x] B05 the item-file seam (preparation of R4; chapter 02 section 2.4)
   - [ ] B06 item files are JSON (R4, R7; chapter 02 sections 1 to 5, chapter 06 sections 2 and 6, chapter 05 section 2; round 12, question 3)

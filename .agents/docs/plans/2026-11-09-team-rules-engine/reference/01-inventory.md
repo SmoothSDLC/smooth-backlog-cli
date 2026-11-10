@@ -316,7 +316,6 @@ The feature files hold 101 scenarios; the ones that assert CODE-origin team beha
 
 ## 7. Consumers that depend on a CODE rule
 
-`consumers.tsv` (22 rows; CON-15..CON-22 added in revision 4, R1-029, R3-012) lists every call or text in the consuming repository (`<agent-skills>/team-lead`, `<agent-skills>/team-member`,
-`tools/team`, `eval/team`) that depends on a CODE rule, with the change and the phase. Two calls are already broken at 174c76d
-(CON-10: `backlog update --set-team` and `backlog pop` in `<eval-tooling>/<run-script>`; CON-11: `--decisions` through the user reader in
-`tools/team/<keeper-script>`).
+`consumers.tsv` (22 rows) lists, by id, the inventory group and the phase of every call or text in the repositories that consume the CLI and
+depend on a CODE rule. The full rows (file, line, what each depends on, the change needed) are kept in the backlog repository, because
+they describe the owner's own tooling and this repository is public. The coverage file uses the ids only.

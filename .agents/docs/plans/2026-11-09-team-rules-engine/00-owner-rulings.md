@@ -2,8 +2,7 @@
 
 Binding input. This file is the only inheritance from the earlier team-behaviour analysis: everything else of that analysis was
 removed from the tree on 2026-11-09 because it was built on a design the owner replaced (a large fixed vocabulary of named rule
-pieces, a separate workflow registry, commands that wrote the team file). It stays readable in git history at commit a507443 and must
-not be used as input to the new design.
+pieces, a separate workflow registry, commands that wrote the team file). It must not be used as input to the new design.
 
 ## What the CLI is
 - R1. For team behaviour the CLI is a rules evaluator: given an item (a JSON file), the command, the caller and the arguments, the
@@ -60,8 +59,8 @@ not be used as input to the new design.
 - An update of an item of team X: read X's rule set and the item, and refuse the update unless it conforms to the rules.
 
 ## Carried forward from earlier rounds (still binding)
-- The lifecycle of a card of the owner's team, its four review stages, the stage hand-off note and deploy not being a stage: see the owner rulings
-  file in the backlog repo.
+- The lifecycle of a card of the owner's team is recorded in the owner rulings file of the backlog repository; it is not repeated in this
+  public repository.
 - Team session inputs: TEAM_NAME, TEAM_REPOSITORY, TEAM_BRANCH, BACKLOG_AGENT, BACKLOG_SESSION stay inputs of the team commands, and
   every input is also an optional flag on every team command (order: flag, variable, configuration key).
 - Archived items are subject to no rule. Split items are linked to their parent but not bound to its team. An item bound to a team that
@@ -116,7 +115,7 @@ not be used as input to the new design.
   reads as the prefixed name from now on.
 
 ## Scope note (owner, 2026-11-09): several teams running at once
-- The owner's factory can run up to three teams at once. Solving it is not required. If the design agent finds a simple solution it enters the
+- The owner can run several teams at once. Solving it is not required. If the design agent finds a simple solution it enters the
   scope; any solution that needs a redesign of flags is out of scope. The lead's reading: one process serves one team through its own
   SMOOTH_BACKLOG_CLI_TEAM_NAME, and a process that must name another team uses `--team` (R15, flag first), so no change of variable names is
   needed. The design agent checks this, and reports what several teams writing one backlog repository at once cost (the number counter,

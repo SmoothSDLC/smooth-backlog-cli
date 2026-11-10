@@ -11,7 +11,7 @@ the coverage checklist: no behaviour or gap listed here may be lost without a re
 | 08-owner-questions.md | Open behaviour questions (delete a team item, move, abandon a step, JSON output shape, selectors) | Each is answered by a rule, a field or a command, or asked as a decision |
 | 09-gap-resolution.md, gaps.tsv | Gaps found when the user commands were compared with the team commands | Each gap ends as a rule, a field, a command or a drop |
 | 13-format-gaps.md | 17 behaviours of a real team that the earlier vocabulary could not state | Each is to be written as an ordinary rule over fields; a gap that cannot be written is a language gap |
-| consumers.tsv | The scripts and skills that call the CLI and what they read | Source for the update of the skills |
+| consumers.tsv | Ids of the consuming scripts and skills with inventory group and phase (full rows in the backlog repo) | Source for the update of the skills |
 | tests.tsv | Each existing test that proves a team behaviour | Source for the conformance scenarios of the new evaluator |
 
 Words and keys of the earlier vocabulary (for example the names of its conditions and predicates) are not to be reused.

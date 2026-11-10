@@ -20,18 +20,18 @@ import { foreignCycle, foreignItem, isForeign } from './dependencies.js';
 
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'; // what a branch the origin does not have yet is compared with: every file is new
 const OFFLINE = '⚠️  origin offline, local backlog updates may be behind and need manual remediation later';
-const pullArgs = t => ['pull', '-q', '--rebase', '--autostash', 'origin', t.branch]; // explicit: the checkout's tracking branch and push.default are the user's, not ours
-const refspec = t => `+refs/heads/${t.branch}:refs/remotes/${t.ref}`;
+export const pullArgs = t => ['pull', '-q', '--rebase', '--autostash', 'origin', t.branch]; // explicit: the checkout's tracking branch and push.default are the user's, not ours
+export const refspec = t => `+refs/heads/${t.branch}:refs/remotes/${t.ref}`;
 const esc = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const pad = n => String(n).padStart(3, '0');
 // A renumbering is [old, new] of one repository folder: a number is only taken in its own folder, so a caller applies it to that folder alone.
 const pairOf = (old, next, folder) => Object.defineProperty([old, next], 'folder', { value: resolve(folder) });
-const lockFile = home => join(store.stateDir(home), 'smooth-backlog-cli.lock');
+export const lockFile = home => join(store.stateDir(home), 'smooth-backlog-cli.lock');
 const itemFile = t => new RegExp(`^${esc(t.prefix)}[^/]+/[^/]+/(phases|archive)/.+${ITEM_EXT_PATTERN}$`); // an item file, from the root of the repository that holds it
 
 // git in the backlog clone; an index.lock held by a git run outside the CLI is retried 5 times
 //. Everything git says goes through redact: a URL may carry a token.
-async function g(home, args) {
+export async function g(home, args) {
   let r;
   for (let i = 0; i < 5; i++) {
     if (i) await delay(500 * i);
@@ -42,11 +42,11 @@ async function g(home, args) {
 }
 
 // Git pathspecs are globs: ":(literal)" keeps a folder name such as acme/* from matching its siblings.
-const lit = path => `:(literal)${path}`;
+export const lit = path => `:(literal)${path}`;
 // Every commit, including recovery squashes and amendments, leaves unrelated index entries alone.
-const commitOnly = (home, lits, options) => g(home, ['commit', '-q', ...options, '--only', '--', ...lits]);
-const fail = (home, what, r) => new BacklogError('SYNC_FAILED', `could not ${what} in ${home} (${r.stderr.slice(0, 300)}); the change is not recorded`, 3);
-const must = async (home, args, what) => { const r = await g(home, args); if (r.code) throw fail(home, what, r); return r; };
+export const commitOnly = (home, lits, options) => g(home, ['commit', '-q', ...options, '--only', '--', ...lits]);
+export const fail = (home, what, r) => new BacklogError('SYNC_FAILED', `could not ${what} in ${home} (${r.stderr.slice(0, 300)}); the change is not recorded`, 3);
+export const must = async (home, args, what) => { const r = await g(home, args); if (r.code) throw fail(home, what, r); return r; };
 
 // Where the items are published: the backlog repository clone (its own repository, branch main), or the user's repository when the items live in
 // its .backlog folder (the current branch, the backlog's paths under prefix). Every git command of this file runs at root with root-relative paths.
@@ -65,7 +65,7 @@ export async function target(home) {
 
 // `pull --autostash` exits 0 when applying the stash back conflicted: unmerged entries, or markers in the files. Nothing may ingest, stage or push
 // that content; the clone is left as it is for the user (their edits are in the files and in 'git stash').
-async function refuseConflicts(home, t) {
+export async function refuseConflicts(home, t) {
   const unmerged = (await g(home, ['ls-files', '-u', '-z'])).stdout.split('\0').filter(Boolean).map(e => e.split('\t')[1]);
   const marked = (await g(home, ['grep', '-l', '-E', '^(<{7}|>{7})( |$)', '--', `${t.prefix}*${ITEM_EXT}`])).stdout.split('\n').filter(Boolean);
   const files = [...new Set([...unmerged, ...marked])];
@@ -113,7 +113,7 @@ async function foldIn(home, t, lits, subject, amend) {
 }
 
 // A pull that failed leaves nothing parked: the rebase is aborted and the autostash, if still set aside, is put back.
-async function abortPull(home) {
+export async function abortPull(home) {
   await g(home, ['rebase', '--abort']);
   if (/autostash/i.test((await g(home, ['stash', 'list'])).stdout.split('\n')[0])) await g(home, ['stash', 'pop', '-q']);
 }
@@ -412,6 +412,30 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
   }
 }
 
+// The paths a command owns: the files it was given, and of each folder its item files, index.json and numbers.json that changed (plus the first-use
+// configuration the store wrote itself). Never the folder root, the team file, the templates or an edit of .backlog/config.json.
+export async function ownedPaths(home, t, names, files) {
+  const out = new Set(); const gone = new Set(); // gone: a deletion already staged, which add has no path for
+  for (let i = 0; i < names.length; i++) {
+    if (files[i]) { out.add(names[i]); continue; }
+    const rows = paths(await must(home, ['status', '--porcelain', '-z', '-uall', '--no-renames', '--', lit(names[i])], 'list the changes of the folder'));
+    for (const row of rows) {
+      const path = row.slice(3); const rest = path.slice(names[i].length + 1);
+      if (ITEM_PATH.test(rest) || rest === 'index.json' || rest === NUMBER_FILE) { out.add(path); if (row.startsWith('D ')) gone.add(path); }
+    }
+  }
+  if (!t.clone) { // the first use of a backlog inside the repository writes its configuration itself: only while it is not tracked yet (its creation); an edit of the committed file, such as the SHA, is a person's and never staged
+    for (const row of paths(await must(home, ['status', '--porcelain', '-z', '--', ...['config.json', '.gitignore'].map(f => lit(t.prefix + f))], 'list the new configuration'))) {
+      const file = row.slice(3);
+      // only what the store wrote itself on first use: a hand-written file of the same name (a lead's draft) is never committed
+      if (row.startsWith('?? ') && readFileSync(join(home, file), 'utf8') === (file.endsWith('config.json') ? store.FIRST_USE_CONFIG : store.FIRST_USE_IGNORE)) out.add(file);
+    }
+  }
+  return { lits: [...out].map(lit), adds: [...out].filter(p => !gone.has(p)).map(lit) };
+}
+
+export function takeStart(home) { const saved = starting.get(resolve(home)); starting.delete(resolve(home)); return saved; }
+
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
 // [old, new] pairs renumbered on the way. Recorded only when on origin/main.
 // `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
@@ -431,27 +455,8 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
   // What a command stages and commits: the files it was given, and of each folder its item files, index.json and numbers.json that changed. Never the folder
   // root, the team file, the templates or .backlog/config.json, and never a pattern: a draft of a lead lying in the folder is not carried along.
   const files = list.map(isFile);
-  const owned = async () => {
-    const out = new Set(); const gone = new Set(); // gone: a deletion already staged, which add has no path for
-    for (let i = 0; i < names.length; i++) {
-      if (files[i]) { out.add(names[i]); continue; }
-      const rows = paths(await must(home, ['status', '--porcelain', '-z', '-uall', '--no-renames', '--', lit(names[i])], 'list the changes of the folder'));
-      for (const row of rows) {
-        const path = row.slice(3); const rest = path.slice(names[i].length + 1);
-        if (ITEM_PATH.test(rest) || rest === 'index.json' || rest === NUMBER_FILE) { out.add(path); if (row.startsWith('D ')) gone.add(path); }
-      }
-    }
-    if (!t.clone) { // the first use of a backlog inside the repository writes its configuration itself: only while it is not tracked yet (its creation); an edit of the committed file, such as the SHA, is a person's and never staged
-      for (const row of paths(await must(home, ['status', '--porcelain', '-z', '--', ...['config.json', '.gitignore'].map(f => lit(t.prefix + f))], 'list the new configuration'))) {
-        const file = row.slice(3);
-        // only what the store wrote itself on first use: a hand-written file of the same name (a lead's draft) is never committed
-        if (row.startsWith('?? ') && readFileSync(join(home, file), 'utf8') === (file.endsWith('config.json') ? store.FIRST_USE_CONFIG : store.FIRST_USE_IGNORE)) out.add(file);
-      }
-    }
-    return { lits: [...out].map(lit), adds: [...out].filter(p => !gone.has(p)).map(lit) };
-  };
   const stage = async () => { // add -A with no path would stage everything
-    const { lits, adds } = await owned();
+    const { lits, adds } = await ownedPaths(home, t, names, files);
     for (const l of lits) committed.add(l.slice(':(literal)'.length));
     if (adds.length) await must(home, ['add', '-A', '--', ...adds], `stage ${names.join(', ')}`);
     return lits;
@@ -461,26 +466,25 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
   const committed = new Set(); // every path any staging of this command took
   return locked(lockFile(backlogHome), async () => {
     if (t.clone) await refuseUnpublished(home, t); // the user's own repository has its own unpushed commits: they are pushed with the change
-    const saved = starting.get(resolve(home)) ?? await snapshot(home);
-    starting.delete(resolve(home));
-    const own = path => (t.clone ? names.some(n => path === n || path.startsWith(`${n}/`)) : inBacklog(path));
+    const saved = takeStart(home) ?? await snapshot(home);
     const restoreStaging = async paths => {
       if (paths.length) await must(home, ['restore', '--staged', `--source=${saved.index}`, '--', ...paths.map(lit)], 'restore your staging');
     };
-    // Only the backlog's paths are put back (the whole clone when it is the backlog repository): the user's other files are not touched.
-    const backlogDir = join(home, t.prefix);
     const undoCommit = async target => {
       await g(home, ['rebase', '--abort']);
       await must(home, ['reset', '-q', '--soft', target], 'take back the unpublished change');
-      if ((await g(backlogDir, ['ls-files'])).stdout.trim()) {
-        await must(backlogDir, ['restore', '-q', '--staged', '--worktree', '--source=HEAD', '--', '.'], 'take back the unpublished change');
-      }
-      // Reconciliation can fail before staging its new files.
-      for (const path of paths(await g(backlogDir, ['ls-files', '--others', '--exclude-standard', '--full-name', '-z']))) {
-        if (own(path) && !saved.files.has(path)) rmSync(join(home, path), { force: true });
-      }
+      // Only the command's own paths go back: a lead's uncommitted team file, the SHA in .backlog/config.json and a person's own edits stay.
+      const mine = new Set([...committed, ...(await ownedPaths(home, t, names, files)).lits.map(l => l.slice(':(literal)'.length))]);
+      const lits = [...mine].map(lit);
+      const inHead = new Set(paths(await g(home, ['ls-tree', '-r', '--name-only', '-z', 'HEAD', '--', ...lits])));
+      const known = [...mine].filter(p => inHead.has(p));
+      const indexed = new Set(paths(await g(home, ['ls-files', '-z', '--', ...lits])));
+      const unstage = [...mine].filter(p => inHead.has(p) || indexed.has(p));
+      if (unstage.length) await must(home, ['restore', '-q', '--staged', '--source=HEAD', '--', ...unstage.map(lit)], 'take back the unpublished change');
+      if (known.length) await must(home, ['restore', '-q', '--worktree', '--source=HEAD', '--', ...known.map(lit)], 'take back the unpublished change');
+      for (const path of mine) if (!inHead.has(path) && !saved.files.has(path)) rmSync(join(home, path), { force: true }); // created by the command
       for (const [path, prior] of saved.files) {
-        if (!inBacklog(path)) continue;
+        if (!mine.has(path)) continue;
         const abs = join(home, path);
         rmSync(abs, { force: true });
         if (prior) {

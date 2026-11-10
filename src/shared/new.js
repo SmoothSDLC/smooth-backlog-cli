@@ -1,10 +1,10 @@
 // `backlog new`: adds an item to the queue. `team` (passed in by `backlog team new`) adds the options and rules of a team's items.
 // Order of work as the earlier scripts: pull, number, write, place in the index, commit and push.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { createInterface } from 'node:readline';
 import { BacklogError, input } from '../errors.js';
-import { parseItem as parse } from './frontmatter.js';
+import { readItemFile } from './item-file.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { actor, check, recordWrites } from './seen.js';
 import { configUser } from './setup.js';
@@ -166,7 +166,7 @@ async function create(argv, { home, folder, repo, scope, team }) {
       await assertInside(folder, file); // no symlink between the folder and the file
       if (!existsSync(file)) return refuse(`--split-from: the contents of '${src.slug}' are missing from the backlog repository`);
       check(folder, repo, actor(), src.slug, src.path); // the split logs a parent event based on this version and scope
-      const doc = parse(readFileSync(file, 'utf8'));
+      const doc = readItemFile(file);
       if (doc.fm.team && !team) return refuse(`item ${src.slug} belongs to team ${doc.fm.team}: a split of a team's item is made by backlog team new`);
       const parent = Array.from(doc.body.trim()).slice(0, 800).join('');
       inherited = { objective: src.objective, summary: src.summary, context: `Split from \`${src.slug}\`. Inherited context:\n\n${parent}` };

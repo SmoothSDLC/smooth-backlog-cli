@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
 import { asChild, locked } from '../storage.js';
-import { dumpItem as dump, hasFrontMatter, parseItem as parse, replaceItemFrontMatter as replaceFrontMatter } from './frontmatter.js';
+import { dumpItem as dump, eventLine, hasFrontMatter, parseItem as parse, readItemFile, readItemText, replaceItemFrontMatter as replaceFrontMatter } from './item-file.js';
 import { repoIdFromUrl } from './safety.js';
 import * as index from './index.js';
 import { actor, created, guarded } from './seen.js';
@@ -228,7 +228,7 @@ export function write(item, root, { frontMatterOnly = false } = {}) {
   index.seed(base);
   if (!existsSync(item.path)) created(base, relative(base, item.path));
   note(item.path);
-  atomicWrite(item.path, frontMatterOnly ? replaceFrontMatter(readFileSync(item.path, 'utf8'), item.fm) : dump(item.fm, item.body));
+  atomicWrite(item.path, frontMatterOnly ? replaceFrontMatter(readItemText(item.path), item.fm) : dump(item.fm, item.body));
 }
 
 // A text file of the repository folder that is no item (the index): the same checks, journal and atomic write as an item.
@@ -245,7 +245,7 @@ export function bareFiles(dir) {
   assertFolder(dir);
   let names;
   try { names = readdirSync(join(dir, 'phases')).filter(n => n.endsWith('.md')).sort(); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
-  return names.filter(n => !hasFrontMatter(readFileSync(join(dir, 'phases', n), 'utf8'))).map(n => `phases/${n}`);
+  return names.filter(n => !hasFrontMatter(readItemText(join(dir, 'phases', n)))).map(n => `phases/${n}`);
 }
 
 // The fields `backlog update <item> --<field> <value>` can set again when an item cannot be read.
@@ -283,7 +283,7 @@ export function load(dir) {
       if (e.isSymbolicLink()) assertNoSymlinks(dir, join(dir, path));
       if (e.isDirectory() && deep) walk(path, deep);
       else if (e.isFile() && e.name.endsWith('.md')) {
-        const text = readFileSync(join(dir, path), 'utf8');
+        const text = readItemText(join(dir, path));
         const sha256 = createHash('sha256').update(text).digest('hex'); //
         if (rel === 'phases' && !hasFrontMatter(text)) continue; // a README or a stray note in phases/ is not an item: ranking it would rewrite it as an empty one (see bareFiles)
         items.push({ path, ...lifted(readItem(path, text)), sha256, sha: sha256 });
@@ -383,16 +383,11 @@ export function findings(dir) {
 
 //
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-// One event of an item's history is one front-matter line: "<ts> <event> <branch|-> <commit|-> <note>".
-export const eventLine = ({ ts, event, branch, commitSha, note }) => [ts, event, branch || '-', commitSha || '-', String(note ?? '').replace(/\s+/g, ' ').trim()].filter((x, i) => i < 4 || x).join(' ');
-export function parseEvent(line) {
-  const [, ts, event, branch, commit, note] = /^(\S+) (\S+) (\S+) (\S+)(?: (.*))?$/.exec(line) ?? [];
-  return { ts, event, branch: branch === '-' ? '' : branch, commit_sha: commit === '-' ? '' : commit, note: note ?? '' };
-}
+export { eventLine, parseEvent } from './item-file.js'; // the event record of an item's history is written by item-file.js
 // Appends one event line to the item file's `events` list. The file is re-read first (the command may have written it a moment ago).
 export function addEvent(folder, path, { event, branch = '', commitSha = '', note = '' }) {
   const abs = join(folder, path);
-  const { fm, body } = parse(readFileSync(abs, 'utf8'));
+  const { fm, body } = readItemFile(abs);
   const line = eventLine({ ts: now(), event, branch, commitSha, note });
   fm.events = [...asList(fm.events), line];
   write({ path: abs, fm, body }, folder, { frontMatterOnly: true }); // keeps the body, BOM and line endings as they are

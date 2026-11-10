@@ -1,9 +1,8 @@
 // An item that cannot be read: `backlog update <item> --<field> <value>` sets the broken field again in the raw text of the item,
 // `backlog update <item> --restore` brings back the item's previous version. Every other command of the folder refuses (store.load).
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { say, refuse } from './archive.js';
-import { dump, parse, splitBom } from './frontmatter.js';
+import { dump, parse, readItemText, splitBom } from './item-file.js';
 import { git, itemSelector } from './safety.js';
 import * as store from './store.js';
 import { normalise } from './status.js';
@@ -52,7 +51,7 @@ export async function repairUnreadable(a, folder, bad) {
     say(`✅ ${slug} restored to its previous version`);
     return 0;
   }
-  let text = readFileSync(abs, 'utf8');
+  let text = readItemText(abs);
   for (const key of fields) {
     const value = INTEGERS.includes(key) ? (/^\s*[+-]?\d+\s*$/.test(a[key]) ? Number(a[key]) : null) : a[key];
     if (value === null) return refuse(`--${key} ${a[key]}: a whole number is needed`);

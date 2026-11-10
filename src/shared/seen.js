@@ -8,7 +8,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { parseItem as parse, storedFm } from './frontmatter.js';
+import { parseItem as parse, readItemFile, readItemText, storedFm } from './item-file.js';
 import { configUser } from './setup.js';
 import { now, originRef, repoId, stateDir } from './store.js'; // a cycle (store.js imports this file): used only at run time
 
@@ -46,7 +46,7 @@ function read(home, agent) { try { return JSON.parse(readFileSync(viewsFile(home
 const RANK_ONLY = ['priority', 'updated', 'updated_by', 'events'];
 const contentOf = doc => { const fm = { ...doc.fm }; for (const k of RANK_ONLY) delete fm[k]; return createHash('sha256').update(JSON.stringify([Object.keys(fm).sort().map(k => [k, fm[k]]), doc.body])).digest('hex'); };
 const textView = text => { const doc = parse(text); return { fm: doc.fm, sha: createHash('sha256').update(text).digest('hex'), content: contentOf(doc) }; };
-const fileView = (folder, path) => textView(readFileSync(join(folder, path), 'utf8'));
+const fileView = (folder, path) => textView(readItemText(join(folder, path)));
 // the item as a git revision of the backlog home has it (throws when it has none)
 const revView = (home, rev, file) => { const r = spawnSync('git', ['show', `${rev}:./${file}`], { cwd: home, encoding: 'utf8' }); if (r.status) throw new Error(r.stderr); return textView(r.stdout); };
 
@@ -140,13 +140,13 @@ export function changedSince(home, folder, repo, reference, agent) {
     let fm = {};
     if (x.status === 'D' || isMove) {
       const moved = isMove ? x.to : added.get(b);
-      if (moved) { try { fm = parse(readFileSync(join(folder, rel(moved)), 'utf8')).fm; } catch { /* gone: no author or time */ } }
+      if (moved) { try { fm = readItemFile(join(folder, rel(moved))).fm; } catch { /* gone: no author or time */ } }
       else {
         const v = spawnSync('git', ['show', `${reference.commit}:./${x.path}`], { cwd: home, encoding: 'utf8' });
         if (!v.status) fm = parse(v.stdout).fm;
       }
     } else {
-      try { fm = parse(readFileSync(join(folder, rel(x.path)), 'utf8')).fm; } catch { /* unreadable: no author or time */ }
+      try { fm = readItemFile(join(folder, rel(x.path))).fm; } catch { /* unreadable: no author or time */ }
     }
     entries.push({
       slug: b.replace(/\.md$/, ''),
@@ -231,7 +231,7 @@ export function staleViews(folder, repo, agent, rev) {
 export function check(folder, repo, agent, slug, path) {
   const seen = read(homeOf(folder), agent)[`${repo}/${slug}`];
   const { fm, sha, content } = fileView(folder, path);
-  if (seen && seen.sha !== sha && !(seen.content && seen.content === content)) throw staleError(slug, fm.updated_by, fm.updated, `${seen.updated}${seen.updated_by ? ` by ${seen.updated_by}` : ''}`, staleViews(folder, repo, agent), repo, readFileSync(join(folder, path), 'utf8'));
+  if (seen && seen.sha !== sha && !(seen.content && seen.content === content)) throw staleError(slug, fm.updated_by, fm.updated, `${seen.updated}${seen.updated_by ? ` by ${seen.updated_by}` : ''}`, staleViews(folder, repo, agent), repo, readItemText(join(folder, path)));
   const guard = operation.getStore()?.guard;
   if (guard && !guard.some(g => g.path === `${repo}/${path}`)) {
     // A retry may first encounter this item after rebasing. Protect the upstream

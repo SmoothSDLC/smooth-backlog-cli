@@ -9,7 +9,7 @@ import { basename, dirname, join, posix, relative, resolve, sep } from 'node:pat
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
-import { parseItem as parse } from './frontmatter.js';
+import { parseItem as parse, readItemText } from './item-file.js';
 import * as index from './index.js';
 import { actor, primarySlug, publicationGuard, staleError, staleViews } from './seen.js';
 import * as store from './store.js';
@@ -188,7 +188,7 @@ async function remapLocal(home, t, moves, files, baseRef, skip) {
     const abs = join(home, file);
     if (!here.length || skip.has(file) || !itemFile(t).test(file) || !existsSync(abs)) continue;
     const b = await g(home, ['show', `${baseRef}:${file}`]);
-    const next = remapDoc(parse(readFileSync(abs, 'utf8')), b.code ? null : parse(b.stdout), here);
+    const next = remapDoc(parse(readItemText(abs)), b.code ? null : parse(b.stdout), here);
     if (!next) continue;
     store.write({ path: abs, ...next });
     await must(home, ['add', '--', lit(file)], `stage ${file}`);

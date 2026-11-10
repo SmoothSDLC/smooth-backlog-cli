@@ -1,9 +1,9 @@
 // Dependencies between items (depends_on): an entry names an item of this backlog by number or slug, or of another repository's backlog
 // in the same clone as owner/name#seq. Every item may have them; no team is involved.
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import * as index from './index.js';
-import { parseItem as parse } from './frontmatter.js';
+import { readItemFile } from './item-file.js';
 import { itemSelector } from './safety.js';
 import { isFinished, lifted } from './status.js';
 import { load } from './store.js';
@@ -22,7 +22,7 @@ export function byIdent(rows, ident) {
 export function itemFm(folder, row) {
   let file;
   try { file = realpathSync(resolve(folder, String(row.path))); } catch (e) { if (e.code === 'ENOENT') return {}; throw e; } // only a missing file is {}
-  return file.startsWith(realpathSync(folder) + sep) ? lifted(parse(readFileSync(file, 'utf8'))).fm : {};
+  return file.startsWith(realpathSync(folder) + sep) ? lifted(readItemFile(file)).fm : {};
 }
 
 // All rows of the folder's items (index.rows), in file order.

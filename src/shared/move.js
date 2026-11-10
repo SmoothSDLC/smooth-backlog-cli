@@ -5,11 +5,11 @@
 // must be a plain owner/name (the earlier scripts joins any text onto the home).
 // shortcut: argparse's unique-prefix abbreviations are not accepted; the target number
 // comes from store.nextSeq (phases/ and archive/) where move.py:35-37 ignores archive/.
-import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { die, pyStr, refuse, say, usage, valueLike, withBacklog } from './archive.js';
-import { parseItem as parseDoc } from './frontmatter.js';
+import { readItemFile } from './item-file.js';
 import { find } from './index.js';
 import { isOpen } from './status.js';
 import { assertInside, git, redact } from './safety.js';
@@ -68,7 +68,7 @@ async function branchRefusal(branch, repo) {
 async function toBranch(folder, r, branch, note, { repo, guard, wrote }) {
   const path = join(folder, r.path);
   await assertInside(folder, path); // the file is inside the folder, no symlink on the way
-  const { fm, body } = parseDoc(readFileSync(path, 'utf8'));
+  const { fm, body } = readItemFile(path);
   seen.check(folder, repo, seen.actor(), r.slug, r.path);
   guard.push({ path: `${repo}/${r.path}`, slug: r.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   const old = Object.hasOwn(fm, 'branch') ? fm.branch ?? 'None' : '';
@@ -118,7 +118,7 @@ async function move(a, rows, ctx) {
   await assertInside(home, tdir); // no symlink between the home and the target folder
   const src = join(folder, r.path);
   await assertInside(folder, src);
-  const { fm, body } = parseDoc(readFileSync(src, 'utf8'));
+  const { fm, body } = readItemFile(src);
   seen.check(folder, repo, seen.actor(), r.slug, r.path);
   guard.push({ path: `${repo}/${r.path}`, slug: r.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   // beyond move.py parity: depends_on names items of THIS backlog; in the target they would point at unrelated items

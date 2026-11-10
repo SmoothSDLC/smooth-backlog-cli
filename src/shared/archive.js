@@ -2,12 +2,12 @@
 // oracle's order: pull, resolve the item, git mv under archive/, stamp status, event, take it out of the index, commit and
 // push. The item is found by number (seq) or slug. The helpers at the top are shared with move.js.
 // shortcut: argparse's unique-prefix abbreviations (--for) are not accepted.
-import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { find, rows as itemRows } from './index.js';
 import { assertInside, git, redact } from './safety.js';
-import { parseItem as parseDoc } from './frontmatter.js';
+import { readItemFile } from './item-file.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
@@ -95,7 +95,7 @@ async function archive(a, rows, { repo, folder, guard }) {
   if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived`); return 0; }
   const src = join(folder, row.path);
   await assertInside(folder, src); // the file is inside the folder, no symlink on the way
-  const { fm } = parseDoc(readFileSync(src, 'utf8'));
+  const { fm } = readItemFile(src);
   if (fm.team && row.status !== 'closed') return refuse(ARCHIVE_OPEN_TEAM(row.slug)); // an open team item leaves its team's queue by the team's steps, not by --force
   if (row.status !== 'closed' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'closed' — finish it or pass --force`);
   seen.check(folder, repo, seen.actor(), row.slug, row.path);

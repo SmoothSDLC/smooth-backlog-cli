@@ -3,10 +3,9 @@
 // the index, planning event (--priority move, completion, --replan), commit and push. The item is found by number
 // (seq) or slug. Without `team` an item is edited by its fields and body only.
 // shortcut: argparse's unique-prefix abbreviations (--stat) are not accepted.
-import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { parseItem as parseDoc } from './frontmatter.js';
+import { readItemFile } from './item-file.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { repairUnreadable } from './repair.js';
 import { isOpen, lifted, normalise } from './status.js';
@@ -214,7 +213,7 @@ async function change(a, folder, repo, team) {
 
   const path = join(folder, row.path);
   await assertInside(folder, path); // no symlink between the folder and the item file
-  const { fm, body: text } = lifted(parseDoc(readFileSync(path, 'utf8')));
+  const { fm, body: text } = lifted(readItemFile(path));
   if (fm.team && !team) return refuse(OF_A_TEAM); // a team's item is changed by backlog team update only
   const statusBefore = fm.status; // the close gate (059.3) runs on the pre-transition status
   seen.check(folder, repo, seen.actor(), row.slug, row.path); // refuses (exit 5) when someone else changed the item since this agent read it

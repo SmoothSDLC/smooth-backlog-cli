@@ -3,10 +3,10 @@
 // the earlier scripts order: pull, no-backlog check, branch, connect, findings. Output strings and --json match.
 // Never writes an item (the rows are built in memory). The views of a team (claimable, reviewable, blocked, decisions, plan, wip) come from `team`,
 // the object `backlog team query` passes in.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { parseItem, storedFm } from './frontmatter.js';
+import { readItemFile, storedFm } from './item-file.js';
 import * as index from './index.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
@@ -289,7 +289,7 @@ async function query(argv, team, branchColumn) {
     }
     if (a.json) {
       // who holds each item and whether it is in review, so no caller reads the item files for them
-      const fmOf = r => lifted(parseItem(readFileSync(resolve(folder, String(r.path)), 'utf8'))).fm;
+      const fmOf = r => lifted(readItemFile(resolve(folder, String(r.path)))).fm;
       const itemFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
       const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(x => (x && typeof x === 'object' ? itemFields(x) : x)) : v])); // bare files stay paths
       dump({ handoff: h, repository: repo, branch: redact(branch), phases: shown.map(itemFields), gone_branch_items: gone.map(itemFields), findings: each(bad) });

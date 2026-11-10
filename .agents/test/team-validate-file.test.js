@@ -13,6 +13,8 @@ const problems = file => errors(validate(file)).map(f => `${f.path}: ${f.problem
 
 // A small deterministic generator, so a failure repeats.
 function prng(seed) { let s = seed; return () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; }
+// A value nested 100000 levels deep, which JSON.parse accepts and JSON.stringify refuses.
+function deep(asArray) { let v = 1; for (let i = 0; i < 100000; i++) v = asArray ? [v] : { a: v }; return v; }
 const NOT_OBJECTS = [null, 7, 'text', [], [1, 'a'], true, {}, { x: 1 }];
 function random(r, depth = 0) {
   const k = Math.floor(r() * (depth > 3 ? 5 : 7));
@@ -28,7 +30,7 @@ function random(r, depth = 0) {
 function mutate(r, v) {
   const copy = structuredClone(v); const spots = [];
   (function walk(n) { if (n && typeof n === 'object') for (const k of Object.keys(n)) { spots.push([n, k]); walk(n[k]); } })(copy);
-  for (let i = 0; i < 3; i++) { const [n, k] = spots[Math.floor(r() * spots.length)]; if (r() < 0.2) delete n[k]; else n[k] = random(r, 2); }
+  for (let i = 0; i < 3; i++) { const [n, k] = spots[Math.floor(r() * spots.length)]; if (r() < 0.2) delete n[k]; else n[k] = r() < 0.15 ? deep(r() < 0.5) : random(r, 2); }
   return copy;
 }
 const checkAll = findings => {
@@ -143,4 +145,44 @@ test('a field without a description is a warning, never an error', () => {
 test('the findings of several teams keep the file order and name their team', () => {
   const f = { a: good().t, b: good().t }; f.a.people = {}; f.b.item = {};
   assert.deepEqual(errors(validate(f)).map(x => [x.team, x.path]), [['a', 'people'], ['b', 'item.status']]);
+});
+
+test('a value nested 100000 levels deep never throws: default, final, type and values entry, as a list and as an object', () => {
+  for (const asArray of [true, false]) {
+    const d = deep(asArray); const marker = '<a value nested too deeply>';
+    const withField = def => { const f = good(); f.t.item.x = { type: 'text', description: 'x', ...def }; return f; };
+    const cases = [withField({ default: d }), withField({ default: d, values: ['a'] }), withField({ values: ['a', d] }), withField({ type: d }),
+      (() => { const f = good(); f.t.item.status.final = [d]; return f; })(), (() => { const f = good(); f.t.item.status.values = ['open', d]; f.t.item.status.final = ['x']; return f; })()];
+    for (const f of cases) { const found = validate(f); checkAll(found); assert.ok(errors(found).length); }
+    assert.ok(problems(withField({ default: d })).some(p => p.includes(marker)));
+    assert.ok(problems(withField({ type: d })).some(p => p.includes(marker)));
+    assert.ok(problems(withField({ default: d, values: ['a'] })).some(p => p.includes(marker)));
+    assert.ok(problems(cases[4]).some(p => p.includes(marker)));
+  }
+});
+
+test('readTeamsText strips one leading byte-order mark', () => {
+  assert.deepEqual(readTeamsText('\uFEFF{"a": {}}'), { file: { a: {} } });
+  assert.ok(readTeamsText('\uFEFF\uFEFF{"a": {}}').finding);
+});
+
+test('a default of "" or null is checked against the values of a non-list type; a list default is checked entry by entry', () => {
+  const f = good(); f.t.item.x = { type: 'text', description: 'x', values: ['a', 'b'], default: '' };
+  assert.deepEqual(problems(f), ['item.x.default: the default "" is not one of the values']);
+  f.t.item.x = { type: 'item', description: 'x', values: [1, 2], default: null };
+  assert.deepEqual(problems(f), ['item.x.default: the default null is not one of the values']);
+  f.t.item.x = { type: 'text', description: 'x', values: ['a', 'b'], default: 'a' }; assert.deepEqual(problems(f), []);
+  f.t.item.x = { type: 'list', description: 'x', values: ['a', 'b'], default: [] }; assert.deepEqual(problems(f), []);
+});
+
+test('the file that is not an object has one wording in readTeamsText and in validate', () => {
+  assert.equal(readTeamsText('[]').finding.problem, validate([])[0].problem);
+});
+
+test('a person name with a control character or U+0085 is not a plain name', () => {
+  for (const c of ['\u0000', '\t', '\n', '\u001f', '\u007f', '\u0085', '\u009f']) {
+    const f = good(); f.t.people = { [`a${c}b`]: ['x'] };
+    assert.equal(problems(f).length, 1, JSON.stringify(c));
+    assert.match(problems(f)[0], /is not a plain name$/);
+  }
 });

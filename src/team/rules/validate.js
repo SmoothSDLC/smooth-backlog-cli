@@ -22,7 +22,10 @@ const RULES_TYPE = { table: ['a list', Array.isArray, '[]'], pop: ['a list', Arr
 
 export const isObj = o => o !== null && typeof o === 'object' && !Array.isArray(o);
 const has = (o, k) => Object.hasOwn(o, k);
-const show = v => (typeof v === 'string' ? v : JSON.stringify(v));
+// The one way a value of the file is echoed in a message: JSON.stringify and join recurse, so a value nested 100000 deep must not reach them unguarded.
+const show = v => { if (typeof v === 'string') return v; try { return JSON.stringify(v) ?? String(v); } catch { return '<a value nested too deeply>'; } };
+const quote = v => (typeof v === 'string' ? JSON.stringify(v) : show(v));
+const showAll = list => list.map(show).join(', ');
 
 const distance = (a, b) => { const d = [...Array(b.length + 1).keys()]; for (const x of a) { let prev = d[0]++; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (x === b[j - 1] ? 0 : 1)); prev = t; } } return d[b.length]; };
 export const closest = (k, allowed) => allowed.reduce((best, a) => (distance(k, a) < distance(k, best) ? a : best));
@@ -32,8 +35,8 @@ export const errors = findings => findings.filter(f => f.severity === 'error');
 export function readTeamsText(text) {
   const bad = (problem, fix) => ({ finding: { severity: 'error', team: null, path: '', rule: null, problem, fix } });
   let file;
-  try { file = JSON.parse(text); } catch (e) { return bad(`teams.json is not JSON (${e.message})`, 'correct the syntax at that place'); }
-  return isObj(file) ? { file } : bad('teams.json must hold an object with one entry per team', 'write {"<team>": {"people": ..., "item": ..., "rules": ...}}');
+  try { file = JSON.parse(text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text); } catch (e) { return bad(`teams.json is not JSON (${e.message})`, 'correct the syntax at that place'); }
+  return isObj(file) ? { file } : bad('the teams file must be an object with one entry per team', 'write {"<team>": {"people": ..., "item": ..., "rules": ...}}');
 }
 
 export function validate(file) {
@@ -65,7 +68,7 @@ function people(e, say) {
   if (has(e, 'people') && !isObj(p)) return say('people', null, 'people must be an object of person names and role lists', 'write "people": {"<name>": ["<role>"]}');
   if (!isObj(p) || !Object.keys(p).length) return say('people', null, 'the team has no person', 'add "people": {"<name>": ["<role>"]}');
   for (const [name, roles] of Object.entries(p)) {
-    if (!/^[^\s,]{1,64}$/.test(name)) say(`people.${name}`, null, `${name} is not a plain name`, 'no space, no comma, at most 64 characters');
+    if (!/^[^\s,\u0000-\u001f\u007f-\u009f]{1,64}$/.test(name)) say(`people.${name}`, null, `${name} is not a plain name`, 'no space, no comma, no control character, at most 64 characters');
     if (!Array.isArray(roles) || !roles.length || roles.some(x => typeof x !== 'string' || !x)) say(`people.${name}`, null, `${name} has no role list`, `write "${name}": ["<role>", ...]`);
     else for (const x of new Set(roles.filter((y, i) => roles.indexOf(y) !== i))) say(`people.${name}`, null, `${name} has the role ${x} twice`, 'list each role once');
   }
@@ -83,7 +86,7 @@ function item(e, say, keys) {
   if (!isObj(st) || !has(st, 'values')) return say('item.status', null, 'the item definition has no status field with values', 'add "status": {"type": "text", "values": [...], "final": [...]}');
   if (!Array.isArray(st.values)) return;
   if (!Array.isArray(st.final) || !st.final.length) say('item.status.final', null, 'the status field has no final values', 'add "final": [<the values that close an item>]');
-  else for (const v of st.final.filter(v => !st.values.includes(v))) say('item.status.final', null, `final value ${show(v)} is not a value of status`, `use one of ${st.values.join(', ')}`);
+  else for (const v of st.final.filter(v => !st.values.includes(v))) say('item.status.final', null, `final value ${show(v)} is not a value of status`, `use one of ${showAll(st.values)}`);
 }
 
 function field(f, d, say, keys) {
@@ -96,8 +99,8 @@ function field(f, d, say, keys) {
   const fits = x => (LIST.includes(d.type) ? Array.isArray(x) && x.every(y => single(d.type, y)) : single(d.type, x));
   if (has(d, 'values') && (!Array.isArray(d.values) || !d.values.length || !d.values.every(x => single(d.type, x)) || new Set(d.values).size !== d.values.length)) say(`${at}.values`, null, `values must be a non-empty list of distinct ${d.type} values`, 'list each allowed value once');
   if (has(d, 'default')) {
-    if (!fits(d.default)) say(`${at}.default`, null, `the default ${JSON.stringify(d.default)} is not a ${d.type}`, `give a ${d.type} value`);
-    else if (Array.isArray(d.values) && !asList(d.default).every(x => d.values.includes(x))) say(`${at}.default`, null, `the default ${JSON.stringify(d.default)} is not one of the values`, `use one of ${d.values.join(', ')}`);
+    if (!fits(d.default)) say(`${at}.default`, null, `the default ${quote(d.default)} is not a ${d.type}`, `give a ${d.type} value`);
+    else if (Array.isArray(d.values) && !(LIST.includes(d.type) ? asList(d.default).every(x => d.values.includes(x)) : d.values.includes(d.default))) say(`${at}.default`, null, `the default ${quote(d.default)} is not one of the values`, `use one of ${showAll(d.values)}`);
   }
   if (has(d, 'final') && f !== 'status') say(`${at}.final`, null, 'final belongs only to the status field', 'remove final here');
   if (typeof d.description !== 'string' || !d.description) say(at, null, `${f} has no description; agents read the descriptions`, 'add "description": "<what the field holds>"', 'warning');

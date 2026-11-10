@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FLAG_NAMES, SHOW_ALL, formOf, resolveInputs } from '../../src/team/inputs.js';
+import { FLAGS, SHOW_ALL, formOf, resolveInputs } from '../../src/team/inputs.js';
 
 const V = n => `SMOOTH_BACKLOG_CLI_${n}`;
 const refused = (input, text) => assert.throws(() => resolveInputs(input), e => e.exitCode === 2 && (text instanceof RegExp ? text.test(e.message) : e.message === text));
@@ -60,5 +60,5 @@ test('formOf maps the words of a query to its form, with or without the leading 
 });
 
 test('the reserved flag names are one list', () => {
-  assert.deepEqual([...FLAG_NAMES].sort(), ['agent', 'ask', 'branch', 'dry-run', 'help', 'json', 'repository', 'session', 'show-all', 'team', 'version']);
+  assert.deepEqual([...FLAGS].sort(), ['agent', 'ask', 'branch', 'dry-run', 'help', 'json', 'repository', 'session', 'show-all', 'team', 'version']);
 });

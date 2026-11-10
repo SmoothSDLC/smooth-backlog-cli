@@ -3,8 +3,9 @@
 // An empty value counts as not given. Nothing here reads a file, the configuration or git.
 import { Refusal } from './rules/expression.js';
 
-// The flag names every team command reserves; a step argument may not use one of them.
-export const FLAG_NAMES = ['team', 'agent', 'session', 'repository', 'branch', 'json', 'dry-run', 'help', 'version', 'show-all', 'ask'];
+// The reserved flag names are the one list of rules/expression.js (FLAGS); nothing here repeats it.
+export { FLAGS } from './rules/expression.js';
+
 // The forms that may act over every team; new, update, pop and the one-team query forms act for one team.
 export const SHOW_ALL = ['query', 'query <item>', 'query rules', 'validate', 'migrate'];
 const ONE_TEAM_QUERY = ['plan', 'check', 'filter', 'steps'];

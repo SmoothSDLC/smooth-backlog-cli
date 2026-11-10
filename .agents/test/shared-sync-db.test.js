@@ -542,14 +542,14 @@ test('review P1: publication preflight rejecting a conflict marker restores star
   gitIn(b.home, 'add', 'private.txt');
   const before = state(b.home); const remote = gitIn(bare, 'rev-parse', 'main');
   // an item holds its text in JSON strings, so no text a command writes puts a marker at the start of a line: the marker is in another file of the folder
-  writeFileSync(join(b.folder, 'conflict.json'), '<<<<<<< example\n'); const before2 = state(b.home);
+  writeFileSync(join(b.folder, 'conflict.json'), '<<<<<<< example\n'); gitIn(b.home, 'add', 'acme/demo/conflict.json'); const before2 = state(b.home);
   const r = cli(['update', '1', '--append', 'rejected note'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(r.status, 3, r.stdout + r.stderr);
   assert.match(r.stderr, /conflicts/i);
   assert.deepEqual(state(b.home), before2, 'preflight failure restores the items, HEAD and index byte for byte');
   assert.equal(gitIn(bare, 'rev-parse', 'main'), remote, 'nothing was published');
   assert.ok(!existsSync(join(b.home, '.git', 'smooth-backlog-cli-journal.json')));
-  rmSync(join(b.folder, 'conflict.json'));
+  gitIn(b.home, 'rm', '-q', '-f', 'acme/demo/conflict.json');
   const next = cli(['update', '1', '--append', 'valid follow-up'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(next.status, 0, next.stdout + next.stderr);
   assert.doesNotMatch(gitIn(bare, 'show', `main:acme/demo/${itemRel('001-alpha')}`), /rejected note/);

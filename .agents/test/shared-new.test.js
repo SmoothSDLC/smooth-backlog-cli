@@ -138,7 +138,7 @@ test('new: writes the item, records its history, commits as "acme/demo: new --na
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   const [item] = items(f);
   assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'repository', 'branch', 'created', 'updated', 'updated_by', 'status', 'objective', 'summary', 'location', 'commit',
-    'severity', 'claimed_by', 'claimed_at', 'owner', 'depends_on', 'review_state', 'reviewer', 'events']); // the envelope of the file first, then the fields in the order of the definition (B06c1: the header order of the markdown file is gone)
+    'severity', 'claimed_by', 'owner', 'claimed_at', 'depends_on', 'review_state', 'reviewer', 'events']); // the envelope of the file first, then the fields in the order of the definition (B06c1: the header order of the markdown file is gone)
   assert.deepEqual({ ...item.fm, created: 0, updated: 0, updated_by: 0, commit: 0, events: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
     status: 'pending', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0, updated_by: 0,
     depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', owner: defaultUser(f.cons), events: 0 });
@@ -385,7 +385,7 @@ test('075: team new: every flag, appended: the item carries the carried context,
   assert.equal(r.stderr, '');
   const [item] = items(f);
   assert.deepEqual(fmNorm(item.fm), { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
-    status: 'new', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', team: 't1', refiner: '', stage: 'refining',
+    status: 'new', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', team: 't1', refiner: '', stage: 'refining', owner: '',
     created: 0, updated: 0, updated_by: 0, chunk: true, review_refs: ['references/review/code.md', 'references/review/tests.example.md'],
     estimate_min: 30, complexity: 'medium', layer: '3', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Carried context (from the original ask)\n\nfrom the ask\n\n\nSome body\n\n## Definition of done\n- [ ] it works\n');

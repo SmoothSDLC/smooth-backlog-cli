@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, createdSlug, damageItem, GIT_IDENTITY, itemPath, readItem, sharedBacklog, writeItem, writeUnreadableItem } from './shared-fixtures.js';
-import { toItemJson } from '../../src/shared/item-json.js';
+import { dumpItem } from '../../src/shared/item-file.js';
 
 const STOP = acme => `❌ backlog: the items of ${acme} are markdown files; run backlog team migrate once to convert every item to JSON\n`;
 const MD = '---\nphase: 001-a\nseq: 1\nname: A\nstatus: pending\n---\nBody.\n';
@@ -99,8 +99,33 @@ test('an item the CLI wrote is byte for byte the codec text', t => {
   assert.equal(w.run('update', '1', '--summary', 'a summary').status, 0);
   const file = itemPath(w.folder, createdSlug(made.stdout));
   const { fm, body } = readItem(file);
-  assert.equal(readFileSync(file, 'utf8'), toItemJson(fm, body));
+  assert.equal(readFileSync(file, 'utf8'), dumpItem(fm, body));
   assert.ok(file.endsWith('.json'));
   writeItem(file, fm, body);
-  assert.equal(readFileSync(file, 'utf8'), toItemJson(fm, body));
+  assert.equal(readFileSync(file, 'utf8'), dumpItem(fm, body));
+});
+
+test('an item file that starts with a byte-order mark is read and its next write is the codec text without it', t => {
+  const w = world(t);
+  const made = w.run('new', '--name', 'alpha job');
+  assert.equal(made.status, 0, made.stdout + made.stderr);
+  const file = itemPath(w.folder, createdSlug(made.stdout));
+  writeFileSync(file, `\uFEFF${readFileSync(file, 'utf8')}`);
+  const shown = w.run('show', '1');
+  assert.equal(shown.status, 0, shown.stdout + shown.stderr);
+  assert.equal(w.run('update', '1', '--summary', 'edited').status, 0);
+  assert.ok(!readFileSync(file, 'utf8').startsWith('\uFEFF'));
+  assert.equal(readItem(file).fm.summary, 'edited');
+});
+
+test('archive works on an item that has no status key', t => {
+  const w = world(t);
+  const made = w.run('new', '--name', 'alpha job');
+  assert.equal(made.status, 0, made.stdout + made.stderr);
+  const file = itemPath(w.folder, createdSlug(made.stdout));
+  const doc = JSON.parse(readFileSync(file, 'utf8')); delete doc.fields.status; writeFileSync(file, `${JSON.stringify(doc, null, 2)}\n`);
+  const r = w.run('archive', '1', '--force');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const archived = JSON.parse(execFileSync('git', ['ls-files', 'archive'], { cwd: w.folder, encoding: 'utf8' }).split('\n').filter(Boolean).map(f => readFileSync(join(w.folder, f), 'utf8'))[0]);
+  assert.equal(archived.fields.status, 'archived');
 });

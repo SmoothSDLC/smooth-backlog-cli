@@ -4,12 +4,16 @@
 // and for the check that stops a folder of markdown items.
 import { readFileSync } from 'node:fs';
 import { basename, posix } from 'node:path';
-import { hasFrontMatter, parseItem as parseMarkdownItem, splitBom, storedFm } from './frontmatter.js';
+import { hasFrontMatter, loadedFm, parseItem as parseMarkdownItem, splitBom, storedFm } from './frontmatter.js';
 import { fromItemJson, toItemJson } from './item-json.js';
 
 // the codec doors: text of an item file to the in-memory item and back, and the stored form of the header
-export const parseItem = fromItemJson;
-export const dumpItem = toItemJson;
+// The file keeps the stored spellings of the holder (owner, owned_since) that the markdown writer stored; the in-memory item keeps claimed_by and claimed_at.
+// The envelope keys of the file are name, updated and updated_by (design chapter 02), so storedFm's title and last_updated spellings are mapped back.
+const ENVELOPE_BACK = { title: 'name', last_updated: 'updated', last_updated_by: 'updated_by' };
+const toFileKeys = fm => Object.fromEntries(Object.entries(storedFm(fm)).map(([k, v]) => [ENVELOPE_BACK[k] ?? k, v]));
+export const parseItem = text => { const { fm, body } = fromItemJson(text); return { fm: loadedFm(fm), body }; };
+export const dumpItem = (fm, body) => toItemJson(toFileKeys(fm), body);
 export { hasFrontMatter, parseMarkdownItem, splitBom, storedFm };
 
 // The name scheme of item files: the one place that knows the extension and what a name, a slug and an item path look like.

@@ -3,10 +3,10 @@
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog } from './shared-fixtures.js';
 import { dumpItem as dumpMarkdown, parse as parseMarkdown, parseItem as parseMarkdownItem } from '../../src/shared/frontmatter.js';
 
 const dirs = [];
@@ -75,6 +75,35 @@ test('show --json prints the stored spellings of the keys: the new names, none o
   assert.deepEqual(NEW_KEYS.filter(k => !(k in shown.front_matter)), []);
   assert.deepEqual(OLD_KEYS.filter(k => k in shown.front_matter), []);
   assert.equal(shown.front_matter.title, 'Fresh');
+});
+
+// the item file as JSON: the envelope (name, updated, updated_by) at the top, the holder in fields under the stored spellings
+const fileOf = (f, slug) => JSON.parse(readFileSync(itemPath(f.folder, slug), 'utf8'));
+
+test('a new item file carries the new keys and none of the earlier ones, and its owner is not empty', () => {
+  const f = fixture();
+  const doc = fileOf(f, make(f, 'Fresh'));
+  assert.deepEqual(['owner', 'owned_since'].filter(k => !(k in doc.fields)), []);
+  assert.deepEqual(['claimed_by', 'claimed_at'].filter(k => k in doc.fields), []);
+  assert.deepEqual(['name', 'updated', 'updated_by'].filter(k => !(k in doc)), []);
+  assert.equal(doc.name, 'Fresh');
+  assert.equal(doc.fields.owned_since, ''); // nobody holds it: the owner is the user of the configuration
+  assert.notEqual(doc.fields.owner, '');
+});
+
+test('a claim writes the claimer as owner and the time as owned_since; a release clears them', () => {
+  const f = fixture();
+  const s = make(f, 'Held');
+  ok(f, ['update', s, '--claim', 'ada'], { SMOOTH_BACKLOG_CLI_AGENT: 'ada' });
+  const held = fileOf(f, s).fields;
+  assert.equal(held.owner, 'ada');
+  assert.match(held.owned_since, /^\d{4}-\d\d-\d\dT/);
+  assert.deepEqual(['claimed_by', 'claimed_at'].filter(k => k in held), []);
+  assert.equal(JSON.parse(ok(f, ['show', s, '--json']).stdout).front_matter.owner, 'ada');
+  ok(f, ['update', s, '--release', 'ada'], { SMOOTH_BACKLOG_CLI_AGENT: 'ada' });
+  const free = fileOf(f, s).fields;
+  assert.deepEqual([free.owner, free.owned_since], ['', '']);
+  assert.deepEqual(['claimed_by', 'claimed_at'].filter(k => k in free), []);
 });
 
 test('backlog fields lists the new keys and no earlier one', () => {

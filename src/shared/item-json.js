@@ -13,7 +13,7 @@ const NOT_FIELDS = new Set([...ENVELOPE, 'events']);
 // The keys a 'fields' object may not hold: every key of the file proper (the header's 'phase' is the slug, so it is not among them).
 const FILE_KEYS = new Set(['seq', 'slug', 'name', 'team', 'repository', 'branch', 'created', 'updated', 'updated_by', 'events']);
 // The built-in definition of items without a team, in the order of chapter 02 section 4.
-const BUILT_IN = ['status', 'objective', 'summary', 'location', 'commit', 'severity', 'claimed_by', 'claimed_at', 'owner', 'depends_on', 'parent', 'estimate_min', 'complexity', 'layer', 'chunk', 'size_score', 'completed'];
+const BUILT_IN = ['status', 'objective', 'summary', 'location', 'commit', 'severity', 'owner', 'owned_since', 'depends_on', 'parent', 'estimate_min', 'complexity', 'layer', 'chunk', 'size_score', 'completed'];
 const HISTORY_KEYS = ['at', 'by', 'session', 'step', 'changes', 'note'];
 
 // A whole file that cannot be read: no key is named, as for an unreadable front-matter header.
@@ -55,9 +55,9 @@ export function toItemJson(fm, body) {
   return `{\n${lines.join(',\n')}\n}\n`;
 }
 
-export function fromItemJson(text) {
+export function fromItemJson(text) { // an editor may add a byte-order mark: it is not content
   let doc;
-  try { doc = JSON.parse(String(text ?? '')); } catch (e) { throw unreadable(`is not valid JSON (${e.message})`); }
+  try { doc = JSON.parse(String(text ?? '').replace(/^\uFEFF/, '')); } catch (e) { throw unreadable(`is not valid JSON (${e.message})`); }
   if (doc === null || typeof doc !== 'object' || Array.isArray(doc)) throw unreadable('is not a JSON object');
   const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
   const str = (k, nullable = false) => {

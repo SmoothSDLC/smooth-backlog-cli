@@ -6,6 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renam
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { fromItemJson, toItemJson } from '../../src/shared/item-json.js';
 import { dumpItem, itemFileName, itemSlug, isItemName, parseItem } from '../../src/shared/item-file.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
@@ -234,9 +235,9 @@ export const itemSlugs = (dir, sub = 'phases') => itemNames(dir, sub).map(slugOf
 // the item of a file on disk: { fm, body } (the header values and the body)
 export const readItem = path => parseItem(readFileSync(path, 'utf8'));
 // the item of a file on disk with its header keys as the file stores them ({ fm, body }): for a test of the stored spellings
-export const readStored = path => parseItem(readFileSync(path, 'utf8'));
+export const readStored = path => fromItemJson(readFileSync(path, 'utf8'));
 // writes an item file whose header keys are exactly the ones given (no earlier name is turned into its new one): for a test of the stored spellings
-export function writeStored(path, fm, body) { writeItem(path, fm, body); }
+export function writeStored(path, fm, body) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, toItemJson({ seq: Number(/^\d+/.exec(itemSlug(path))?.[0] ?? 0), name: '', repository: '', branch: '', updated: '', phase: itemSlug(path), ...fm }, body)); }
 // the regular-expression source that matches a text literally (for an expectation that names an item path)
 export const reEscape = text => String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // the item of a text (for the text of an item that git shows): { fm, body }

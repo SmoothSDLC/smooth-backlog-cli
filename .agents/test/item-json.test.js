@@ -12,8 +12,8 @@ test('a user item with every built-in field gives these exact bytes', () => {
   const fm = {
     phase: '042-add-the-login-form', seq: 42, name: 'Add the login form', repository: 'acme/app', branch: 'main',
     created: '2026-11-09T10:00:00Z', updated: '2026-11-09T11:20:00Z', updated_by: 'ann',
-    status: 'pending', objective: 'o', summary: 's', location: 'src/', commit: 'abc123', severity: 'normal', claimed_by: 'ann', claimed_at: '2026-11-09T11:00:00Z',
-    owner: 'ann', depends_on: [41], parent: null, estimate_min: 40, complexity: 'low', layer: 'cli', chunk: true, size_score: 3, completed: '',
+    status: 'pending', objective: 'o', summary: 's', location: 'src/', commit: 'abc123', severity: 'normal', owner: 'ann', owned_since: '2026-11-09T11:00:00Z',
+    depends_on: [41], parent: null, estimate_min: 40, complexity: 'low', layer: 'cli', chunk: true, size_score: 3, completed: '',
     events: ['2026-11-09T10:00:00Z new main abc123 first'],
   };
   assert.equal(toItemJson(fm, '# Phase 42\n'), `{
@@ -32,9 +32,8 @@ test('a user item with every built-in field gives these exact bytes', () => {
     "location": "src/",
     "commit": "abc123",
     "severity": "normal",
-    "claimed_by": "ann",
-    "claimed_at": "2026-11-09T11:00:00Z",
     "owner": "ann",
+    "owned_since": "2026-11-09T11:00:00Z",
     "depends_on": [41],
     "parent": null,
     "estimate_min": 40,

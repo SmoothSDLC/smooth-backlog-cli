@@ -103,6 +103,24 @@ test('restore: an unreadable item that was committed unreadable has no earlier v
   assert.ok(isDamagedItem(w.file, 'name'), 'and changes nothing');
 });
 
+// Only name and seq can be unreadable and repaired (the other repairable keys live under fields, which hold any value). The repair of seq is
+// followed by the check of --seq, which counts the repaired file's own number, so a command with --seq repairs on disk and then refuses.
+for (const n of [1, 2]) {
+  test(`--seq ${n} with --name repairs both unreadable keys on disk, then refuses: not above the highest number ever used`, t => {
+    const w = world(t);
+    assert.equal(w.run(...NEW).status, 0);
+    damageItem(w.file, 'name'); damageItem(w.file, 'seq');
+    w.publish('damaged');
+    const r = w.run('update', '001-alpha-job', '--name', 'alpha job', '--seq', String(n));
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.equal(r.stdout + r.stderr, `❌ --seq ${n} is not above the highest number ever used in acme/demo (${n}); numbers are never reused\n`);
+    const { fm } = readItem(w.file); // the repair is on disk, not committed or published
+    assert.deepEqual([fm.name, fm.seq], ['alpha job', n]);
+    assert.match(w.git('status', '--porcelain'), /001-alpha-job\.json/);
+    assert.equal(w.run('show', String(n)).status, 0, 'the repaired item reads again');
+  });
+}
+
 test('restore takes no other option; an item that is not the unreadable one is refused like every command', t => {
   const w = world(t);
   assert.equal(w.run(...NEW).status, 0);

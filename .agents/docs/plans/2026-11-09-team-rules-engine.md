@@ -56,7 +56,7 @@ them at its start.
   - [ ] B23 the migration's data cases (R4; chapter 06 sections 4.1 to 4.4 and 4.6)
   - [ ] B24 the field report and `--ask` (R17; chapter 06 sections 2.1 and 2.2)
 - [ ] Task 9: Setup (item 152; phase 6).
-  - [ ] B25 setup copies the team templates (R5, R23; chapter 01 section 1.2)
+  - [x] B25 setup copies the team templates (R5, R23; chapter 01 section 1.2)
   - [ ] B26 setup on a markdown backlog, and the migration report (R25; chapter 06 sections 2 and 2.0)
 - [ ] Task 10: Removals (item 152; phase 7).
   - [ ] B27 the old team code, commands, readers and shipped workflow go (R1, R5; chapter 01 section 1, chapter 04 section 1)

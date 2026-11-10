@@ -2,10 +2,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, statSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadTeams, missingText, recordPaths } from '../../src/team/teams-load.js';
+import { FIRST_USE_CONFIG } from '../../src/shared/store.js';
 import { teamsFile } from '../../src/team/teams-file.js';
 
 const solo = Object.values(JSON.parse(readFileSync(new URL('../../templates/teams/single-agent.json', import.meta.url), 'utf8')))[0];
@@ -31,7 +32,7 @@ const refused = (code) => e => e.code === 'TEAMS_FILE' && e.exitCode === code;
 
 test('a missing file stops the command with the resolved path and the three ways, and writes nothing', t => {
   const w = world(t);
-  assert.throws(() => w.load('solo', T0), e => refused(2)(e) && e.message === missingText(w.file()));
+  assert.throws(() => w.load('solo', T0), e => refused(2)(e) && e.message === missingText(join('.backlog', 'teams.json')));
   assert.equal(w.cfg().teams_file_sha, undefined);
 });
 
@@ -47,7 +48,7 @@ test('a team file reached through a symbolic-link folder inside the repository i
   mkdirSync(join(w.root, 'real'));
   writeFileSync(join(w.root, 'real', 'teams.json'), JSON.stringify(twoTeams()));
   symlinkSync(join(w.root, 'real'), join(w.top, '.backlog', 'link'));
-  assert.throws(() => w.load('solo', T0), e => refused(2)(e) && /link is a symbolic link; no folder between/.test(e.message));
+  assert.throws(() => w.load('solo', T0), e => refused(2)(e) && e.message === '.backlog/link is a symbolic link; no folder on the way to the team file may be one');
 });
 
 test('the first load writes the SHA into .backlog/config.json and the record; within 24 hours the copy is used', t => {
@@ -97,11 +98,11 @@ test('full always reads and validates, refreshes the record and writes the SHA',
 test('the whole file must be valid: one broken entry stops every team of the file', t => {
   const w = world(t);
   w.put(twoTeams(true));
-  const text = `${w.file()} fails validation for other; no team command runs until the whole file is valid; run backlog team validate --show-all`;
+  const text = `${join('.backlog', 'teams.json')} fails validation for other; no team command runs until the whole file is valid; run backlog team validate --show-all`;
   for (const team of ['solo', 'other', null]) assert.throws(() => w.load(team, T0), e => refused(2)(e) && e.message === text);
   w.put(twoTeams());
   assert.equal(w.load('solo', T0).from, 'disk');
-  assert.throws(() => w.load('nobody', T0), e => refused(1)(e) && /has no entry in .* \(teams: solo, other\)/.test(e.message));
+  assert.throws(() => w.load('nobody', T0), e => refused(1)(e) && /has no entry in \.backlog.teams\.json \(teams: solo, other\)/.test(e.message));
 });
 
 test('a read-only checkout and an unwritable state folder: the command proceeds, validating in full each time, silently', t => {
@@ -247,4 +248,35 @@ test('a corrupted copy, or a team missing from the record, forces a read', t => 
   w.put('{ not json');
   assert.throws(() => w.load('other', T1), refused(2));
   assert.equal(w.load('solo', T1).from, 'record');
+});
+
+test('messages name the file relative to the repository, or as configured outside it, never an absolute path', t => {
+  const w = world(t, { config: { teams_file: '../private/teams.json' } });
+  assert.throws(() => w.load('solo', T0), e => e.message === missingText('../private/teams.json') && !e.message.includes(w.root));
+  mkdirSync(join(w.root, 'private')); writeFileSync(join(w.root, 'private', 'teams.json'), '{ bad');
+  assert.throws(() => w.load('solo', T0), e => e.message.startsWith('../private/teams.json cannot be read') && !e.message.includes(w.root));
+  const lib = loadTeams;
+  assert.throws(() => lib({ top: w.top, home: w.home, repo: 'acme/lib', workRepo: 'local/repository', stateDir: w.stateDir, team: 'solo', now: T0 }), e => e.message === missingText(join('.backlog', 'acme', 'lib', 'teams.json')));
+});
+
+test('the state folder is private (0700) and the record and the copy are 0600', t => {
+  const w = world(t);
+  w.put(twoTeams()); w.load('solo', T0);
+  assert.equal(statSync(w.paths().dir).mode & 0o777, 0o700);
+  assert.equal(statSync(w.paths().record).mode & 0o777, 0o600);
+  assert.equal(statSync(w.paths().copy).mode & 0o777, 0o600);
+});
+
+test('a load that is not full reads a file with only warnings from disk and lets the command proceed', t => {
+  const w = world(t);
+  w.put({ solo: { ...solo, item: { ...solo.item, extra: { type: 'text' } } } });
+  assert.equal(w.load('solo', T0).from, 'disk');
+});
+
+test('with no configuration at all the new .backlog/config.json is what the store writes on first use plus the SHA', t => {
+  const root = mkdtempSync(join(tmpdir(), 'teams-first-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const top = join(root, 'app'); mkdirSync(join(top, '.backlog'), { recursive: true });
+  writeFileSync(join(top, '.backlog', 'teams.json'), JSON.stringify(twoTeams()));
+  loadTeams({ top, home: join(top, '.backlog'), repo: 'local/repository', stateDir: join(root, 'state'), team: 'solo', now: T0 });
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(top, ...CFG), 'utf8'))), [...Object.keys(JSON.parse(FIRST_USE_CONFIG)), 'teams_file_sha']);
 });

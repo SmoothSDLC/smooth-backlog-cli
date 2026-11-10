@@ -3,10 +3,11 @@
 // that is refused writes nothing; one that proceeds writes the SHA of the file into the repository's .backlog/config.json (or, for another
 // repository's file, only into the per-user record), the validated copy and the record. Nothing calls this yet.
 import { createHash, randomBytes } from 'node:crypto';
-import { lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { CONFIG, readConfig } from '../shared/setup.js';
+import { FIRST_USE_CONFIG } from '../shared/store.js';
 import { errors, readTeamsText, validate } from './rules/validate.js';
 import { missingText, teamsFile } from './teams-file.js';
 
@@ -34,9 +35,14 @@ function atomicWrite(path, data, options) {
 // The one key the CLI writes into the committed configuration. The configuration is read as the commands read it (the older root file
 // included), so every key of it is kept; a checkout that cannot be written is skipped silently.
 function writeSha(top, value) {
-  const cfg = readConfig(top);
-  if (cfg.teams_file_sha === value) return;
-  try { mkdirSync(join(top, '.backlog'), { recursive: true }); atomicWrite(join(top, CONFIG), `${JSON.stringify({ ...cfg, teams_file_sha: value }, null, 2)}\n`); } catch { /* not writable */ }
+  try {
+    const cfg = readConfig(top);
+    if (cfg.teams_file_sha === value) return;
+    // with no configuration at all the file starts as the store's first use would write it, so a later first use finds nothing to change
+    const base = existsSync(join(top, CONFIG)) || Object.keys(cfg).length ? cfg : JSON.parse(FIRST_USE_CONFIG);
+    mkdirSync(join(top, '.backlog'), { recursive: true });
+    atomicWrite(join(top, CONFIG), `${JSON.stringify({ ...base, teams_file_sha: value }, null, 2)}\n`);
+  } catch { /* not writable */ }
 }
 // The record of the last valid validation; one that is damaged counts as absent.
 function readRecord(path) {
@@ -44,16 +50,16 @@ function readRecord(path) {
   return rec && typeof rec === 'object' && ['sha', 'valid_teams', 'validated_at'].every(k => typeof rec[k] === 'string') ? rec : null;
 }
 // the file and every folder between its root (the repository or the backlog folder that holds it) and the file: never a symbolic link
-function assertPlain(path, roots) {
+function assertPlain(path, roots, shown) {
   const isLink = p => { try { return lstatSync(p).isSymbolicLink(); } catch { return false; } };
-  if (isLink(path)) throw refuse(`${path} is a symbolic link; the team file must be a plain file`);
+  if (isLink(path)) throw refuse(`${shown} is a symbolic link; the team file must be a plain file`);
   const root = roots.find(r => below(r, path));
-  if (root) for (let d = dirname(path); d !== root && below(root, d); d = dirname(d)) if (isLink(d)) throw refuse(`${d} is a symbolic link; no folder between ${root} and the team file may be one`);
+  if (root) for (let d = dirname(path); d !== root && below(root, d); d = dirname(d)) if (isLink(d)) throw refuse(`${relative(root, d)} is a symbolic link; no folder on the way to the team file may be one`);
 }
-function readTeamFile(path, top, home) {
-  assertPlain(path, [top, home]);
+function readTeamFile(path, top, home, shown) {
+  assertPlain(path, [top, home], shown);
   try { return readFileSync(path); } catch (e) {
-    if (e.code === 'ENOENT') throw refuse(missingText(path));
+    if (e.code === 'ENOENT') throw refuse(missingText(shown));
     return { failed: fsReason(e) };
   }
 }
@@ -62,13 +68,18 @@ function readTeamFile(path, top, home) {
 // Returns { file, from: 'record' | 'disk' } and, with full, the findings (errors and warnings) too.
 export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, now, full = false }) {
   const cfg = readConfig(top);
-  const { path, shaIn } = teamsFile({ top, home, repo, workRepo, cfg });
+  const { path, shaIn, how } = teamsFile({ top, home, repo, workRepo, cfg });
+  // A message names the file as the person wrote it: relative to the repository when it is inside, never an absolute path of this machine.
+  const shown = below(top, path) ? relative(top, path)
+    : how === 'the teams_file key' ? cfg.teams_file.trim()
+      : how === 'the backlog repository folder' ? join(cfg.backlog_repository.trim(), ...repo.split('/'), 'teams.json')
+        : join(...repo.split('/'), 'teams.json');
   const paths = recordPaths(stateDir, path);
   const rec = readRecord(paths.record);
   const fix = team === null ? 'run backlog team validate --show-all' : `run backlog team validate --team ${team}`;
   let bytes = null;
   // Another repository's file has no SHA committed beside it: it is hashed at every load and compared with the record's.
-  if (shaIn === 'record' && !full) { bytes = readTeamFile(path, top, home); if (bytes.failed) throw refuse(`${path} cannot be read (${bytes.failed}); ${fix}`); }
+  if (shaIn === 'record' && !full) { bytes = readTeamFile(path, top, home, shown); if (bytes.failed) throw refuse(`${shown} cannot be read (${bytes.failed}); ${fix}`); }
   const recorded = shaIn === 'config' ? cfg.teams_file_sha : (bytes ? sha(bytes) : undefined);
   if (!full && typeof recorded === 'string' && rec) {
     const copy = tryRead(paths.copy);
@@ -80,11 +91,11 @@ export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, no
       if (file && (team === null ? Object.keys(file).every(t => valid.includes(t)) : valid.includes(team))) return { file, from: 'record' };
     }
   }
-  if (!bytes) bytes = readTeamFile(path, top, home);
+  if (!bytes) bytes = readTeamFile(path, top, home, shown);
   const read = bytes.failed ? { finding: { problem: '' } } : readTeamsText(bytes.toString('utf8'));
   if (bytes.failed || read.finding) {
     const m = !bytes.failed && read.finding.problem.match(/^teams\.json is not JSON \((.*)\)$/s);
-    throw refuse(`${path} cannot be read (${bytes.failed || (m ? m[1] : 'it is not a JSON object')}); fix it and ${fix}`);
+    throw refuse(`${shown} cannot be read (${bytes.failed || (m ? m[1] : 'it is not a JSON object')}); fix it and ${fix}`);
   }
   const { file } = read;
   const findings = validate(file);
@@ -93,14 +104,14 @@ export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, no
   // refused command writes nothing.
   if (!full) {
     const bad = [...new Set(errs.map(f => f.team))].filter(Boolean);
-    if (errs.length) throw refuse(`${path} fails validation${bad.length ? ` for ${bad.join(', ')}` : ''}; no team command runs until the whole file is valid; run backlog team validate --show-all`);
-    if (team !== null && !Object.hasOwn(file, team)) throw refuse(`team ${team} has no entry in ${path} (teams: ${Object.keys(file).join(', ')})`, 1);
+    if (errs.length) throw refuse(`${shown} fails validation${bad.length ? ` for ${bad.join(', ')}` : ''}; no team command runs until the whole file is valid; run backlog team validate --show-all`);
+    if (team !== null && !Object.hasOwn(file, team)) throw refuse(`team ${team} has no entry in ${shown} (teams: ${Object.keys(file).join(', ')})`, 1);
   }
   if (!errs.length) {
     const hash = sha(bytes);
     if (shaIn === 'config') writeSha(top, hash);
     try {
-      mkdirSync(paths.dir, { recursive: true });
+      mkdirSync(paths.dir, { recursive: true, mode: 0o700 });
       atomicWrite(paths.copy, bytes, { mode: 0o600 });
       atomicWrite(paths.record, JSON.stringify({ sha: hash, valid_teams: Object.keys(file).join(','), validated_at: now }), { mode: 0o600 });
     } catch { /* a state folder that cannot be written: every command validates in full, silently */ }

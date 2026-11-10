@@ -2,7 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { Refusal, defaultOf, test as holds } from '../../src/team/rules/expression.js';
+import { Refusal, defaultOf } from '../../src/team/rules/expression.js';
+import { pop, queue, filter } from '../../src/team/rules/pop.js';
 import { create, step, stepArgs } from '../../src/team/rules/step.js';
 import { errors, validate } from '../../src/team/rules/validate.js';
 
@@ -53,7 +54,8 @@ test('pop entries: an id of their own, one existing step, a valid condition', ()
   assert.deepEqual(pop({ id: 'o', step: 'go', when: { is: ['$it.status', 'open'] } }), ['rules.pop[0].when.is[0]: $it.status is used outside every, some, count and related']);
   assert.deepEqual(pop({ id: 'o', step: 'go', when: { is: ['$item.nope', 'open'] } }).length, 1);
   assert.deepEqual(pop(null), ['rules.pop[0]: a pop entry must be an object']);
-  assert.deepEqual(where(base([go({ step: '*' })], { pop: [{ id: 'o', step: 'claim' }] })), []); // a rule for every step names it
+  // a rule for every step does not name a step: a mistyped pop step is caught even when the file has such a guard
+  assert.deepEqual(where(base([{ id: 'g', step: '*', deny: 'x', when: { empty: '$caller.roles' } }, go()], { pop: [{ id: 'o', step: 'claim' }] })), ['rules.pop[0]: no rule names the step claim']);
 });
 
 test('filters: a field-style name and a condition that is required and valid', () => {
@@ -68,13 +70,24 @@ test('filters: a field-style name and a condition that is required and valid', (
   assert.deepEqual(filters({ open: { when: is('status', 'open'), extra: 1 } }), ['rules.filters.open.extra: extra is not a key of a filter']);
 });
 
+test('shadowing and the pop checks stay fast on a big file', () => {
+  const words = Array.from({ length: 500 }, (_, i) => `w${i}`);
+  const wide = base(Array.from({ length: 300 }, (_, i) => go({ id: `r${i}`, step: words, when: is('status', `v${i}`) })));
+  let t = Date.now(); assert.ok(errors(validate(wide)).length >= 0); assert.ok(Date.now() - t < 1000, `${Date.now() - t} ms`);
+  const stars = base(Array.from({ length: 5000 }, (_, i) => ({ id: `s${i}`, step: '*', when: is('size', i), do: { set: { size: '$arg.n' } } })).concat([go({ id: 'g' })]),
+    { pop: Array.from({ length: 5000 }, (_, i) => ({ id: `p${i}`, step: i % 2 ? 'go' : `x${i}` })) });
+  t = Date.now(); const found = validate(stars); assert.ok(Date.now() - t < 1000, `${Date.now() - t} ms`);
+  assert.equal(errors(found).filter(f => /no rule names/.test(f.problem)).length, 2500);
+  assert.equal(errors(found).filter(f => /writes it into a field/.test(f.problem)).length, 5000);
+});
+
 test('a condition nested 100000 deep in a pop entry or a filter is one finding, never a throw', () => {
   let deep = is('status', 'open'); for (let i = 0; i < 100000; i++) deep = { not: deep };
   assert.equal(errors(validate(base([go()], { pop: [{ id: 'o', step: 'go', when: deep }], filters: { f: { when: deep } } }))).length, 2);
 });
 
-test('warnings: unread roles and fields, a step no rule allows, a step pop offers with an argument; they never make an error', () => {
-  const file = base([go({ id: 'a', when: { in: ['lead', '$caller.roles'] }, do: { set: { status: '$arg.to' } } }), { id: 'z', step: 'zap', deny: 'no' }],
+test('warnings: unread roles and fields, a step no rule allows, a step pop offers whose condition reads an argument; they never make an error', () => {
+  const file = base([go({ id: 'a', when: { all: [{ in: ['lead', '$caller.roles'] }, { empty: '$arg.to' }] } }), { id: 'z', step: 'zap', deny: 'no' }],
     { pop: [{ id: 'o', step: 'go' }, { id: 'p', step: 'zap' }] });
   const w = where(file, 'warning');
   assert.deepEqual(w, ['people.b: the role member is read by no rule, pop entry or filter', 'item.size: size is read by no rule',
@@ -88,6 +101,39 @@ test('warnings: unread roles and fields, a step no rule allows, a step pop offer
   assert.deepEqual(where(base([go({ do: { related: [{ items: [], set: { size: '$it.size' } }] } })]), 'warning'), ['people.a: the role lead is read by no rule, pop entry or filter', 'people.b: the role member is read by no rule, pop entry or filter']);
 });
 
+test('a pop step whose allowing rule writes an argument into a field is an error: pop passes no arguments', () => {
+  const scrum = structuredClone(TEMPLATES['scrum.json']); scrum.scrum.rules.pop.push({ id: 'refine-first', step: 'refine' });
+  const found = errors(validate(scrum)).map(f => `${f.path}: ${f.problem}`);
+  assert.deepEqual(found.filter(x => x.includes('--acceptance')), [`rules.pop[2]: pop cannot give --acceptance to the step refine, and a rule writes it into a field: the step would stop the command with exit 2 for the whole team`]);
+  assert.equal(found.length, 3); // acceptance, points, sprint
+  assert.match(errors(validate(scrum))[0].fix, /give the field a value that needs no argument, or remove the step refine from pop/);
+  // an argument read only in a deny text or a note is not written into a field: a warning
+  const note = base([go({ do: { note: { heading: 'h', text: '$arg.c' } } })], { pop: [{ id: 'o', step: 'go' }] });
+  assert.deepEqual(errors(validate(note)), []); assert.equal(where(note, 'warning').filter(x => x.includes('--c')).length, 1);
+  // related entries and a rule for every step count too
+  const rel = base([go({ do: { related: [{ items: [], set: { size: '$arg.n' } }] } })], { pop: [{ id: 'o', step: 'go' }] });
+  assert.equal(errors(validate(rel)).length, 1);
+  assert.equal(errors(validate(base([go(), { id: 'all', step: '*', do: { set: { size: '$arg.n' } } }], { pop: [{ id: 'o', step: 'go' }] }))).length, 1);
+});
+
+test('a reference written into a typed field is an error when its type is known and does not fit', () => {
+  const file = (set, extra = {}) => { const f = base([go({ do: { set } })]); Object.assign(f.t.item, { who: { type: 'person', description: 'w' }, flag: { type: 'boolean', description: 'f' }, tags: { type: 'list', description: 't' },
+    other: { type: 'text', description: 'o', values: ['open', 'late'] }, deps: { type: 'items', description: 'd' }, link: { type: 'item', description: 'l' }, ...extra }); return where(f); };
+  const one = (set, re) => { const r = file(set); assert.equal(r.length, 1, JSON.stringify(r)); assert.match(r[0], re); };
+  one({ size: '$item.who' }, /^rules\.table\[0\]\.do\.set\.size: field size: \$item\.who is a person, and size takes a number$/);
+  one({ size: '$caller' }, /\$caller is a person, and size takes a number/);
+  one({ flag: '$item.size' }, /is a number, and flag takes a boolean/);
+  one({ who: '$caller.roles' }, /is a list, and who takes one person value/);
+  one({ status: '$item.tags' }, /is a list, and status takes one text value/);
+  one({ who: '$item.size' }, /is a number, and who takes a person/);
+  one({ link: '$item.flag' }, /is a boolean, and link takes a item/);
+  one({ status: '$item.other' }, /can hold late, which is not among the values of status \(open, done\)/);
+  assert.deepEqual(file({ who: '$caller', status: '$item.status', size: '$item.link', tags: '$caller.roles', other: '$item.status' }), ['rules.table[0].do.set.other: field other: $item.status can hold done, which is not among the values of other (open, late)']);
+  // not judged: unknown types, arguments, the session, the clock, a text field that may hold anything, a text into a number
+  assert.deepEqual(file({ size: '$arg.n', who: '$session.id', status: '$now', other: '$item.who', link: '$item.size' }), []);
+  assert.deepEqual(file({ size: '$item.status', who: '$item.status', deps: '$item.link', tags: '$item.deps' }), []);
+});
+
 test('the five templates give no error and no shadowing', () => {
   assert.equal(Object.keys(TEMPLATES).length, 5);
   for (const [name, file] of Object.entries(TEMPLATES)) assert.deepEqual(errors(validate(file)), [], name);
@@ -99,9 +145,14 @@ const prng = seed => () => { seed = (seed * 1664525 + 1013904223) >>> 0; return 
 const VALUES = [5, null, [], {}, 'x', '$nope'];
 const paths = (x, at = []) => (x && typeof x === 'object' ? Object.keys(x).flatMap(k => [[...at, k], ...paths(x[k], [...at, k])]) : []);
 function mutate(file, r) {
-  const copy = structuredClone(file); const all = paths(copy); const p = all[Math.floor(r() * all.length)];
-  const parent = p.slice(0, -1).reduce((n, k) => n[k], copy); const k = p.at(-1); const m = Math.floor(r() * (VALUES.length + 1));
-  if (m === VALUES.length) { if (Array.isArray(parent)) parent.splice(Number(k), 1); else delete parent[k]; } else parent[k] = structuredClone(VALUES[m]);
+  const copy = structuredClone(file); const team = Object.values(copy)[0];
+  // Half of the mutations land in the pop entries, which are small; one of them names the step of another rule.
+  const all = paths(copy); const inPop = all.filter(p => p.includes('pop'));
+  const pool = r() < 0.5 && inPop.length ? inPop : all; const p = pool[Math.floor(r() * pool.length)];
+  const parent = p.slice(0, -1).reduce((n, k) => n[k], copy); const k = p.at(-1); const m = Math.floor(r() * (VALUES.length + 2));
+  const words = team.rules.table.flatMap(x => x.step);
+  if (m === VALUES.length) { if (Array.isArray(parent)) parent.splice(Number(k), 1); else delete parent[k]; } else if (m === VALUES.length + 1) parent[k] = words[Math.floor(r() * words.length)];
+  else parent[k] = structuredClone(VALUES[m]);
   return copy;
 }
 const outcome = fn => { try { fn(); return 'ok'; } catch (e) { return e instanceof Refusal ? `exit ${e.exitCode}` : `throws ${e.name}: ${e.message}`; } };
@@ -117,22 +168,20 @@ function probes(entry, team) {
     const run = v => () => { const args = Object.fromEntries(stepArgs(entry, s).map(a => [a, v])); return s === 'new' ? create({ ...ctx, args: { ...args, name: 'n' } }, 3) : step({ ...ctx, step: s, item, args }); };
     out.push([`${s}:${item.seq}`, () => { let last = 'ok'; for (const v of ['1', '2', '0', 'x', status[0], status.at(-1), people[0]]) { last = outcome(run(v)); if (last === 'ok' || last === 'exit 1') return; } throw new Error(last); }]);
   }
-  const open = items.filter(i => !defs.status.final.includes(i.fields.status));
-  for (const o of entry.rules.pop) for (const item of open) {
-    out.push([`pop:${o.id}:${item.seq}`, () => { if (o.when && !holds(o.when, { ...ctx, item, step: o.step, args: {} })) return; try { step({ ...ctx, item, step: o.step, args: {} }); } catch (e) { if (!(e instanceof Refusal && e.exitCode === 1)) throw e; } }]);
-  }
-  for (const [name, f] of Object.entries(entry.rules.filters)) for (const item of open) out.push([`filter:${name}:${item.seq}`, () => holds(f.when, { ...ctx, item })]);
+  out.push(['pop', () => pop(ctx)]);
+  for (const name of Object.keys(entry.rules.filters)) out.push([`filter:${name}`, () => filter(ctx, name)]);
+  out.push(['queue', () => queue(ctx)]);
   return out;
 }
 
 test('soundness: a mutated template that validate accepts is never refused by the evaluator for its own shape', () => {
-  const r = prng(20261110); let accepted = 0; let refused = 0;
+  const r = prng(20261110); let accepted = 0; let refused = 0; let offeredWrites = 0;
   for (const [name, file] of Object.entries(TEMPLATES)) {
     const team = Object.keys(file)[0]; const baseline = new Map(probes(file[team], team).map(([k, fn]) => [k, outcome(fn)]));
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 1000; i++) {
       const mutated = mutate(file, r); const found = validate(mutated);
       for (const f of found) assert.ok(f.fix && f.problem, `${name}: a finding without a fix`);
-      if (errors(found).length) { refused++; continue; }
+      if (errors(found).length) { refused++; if (errors(found).some(f => /writes it into a field/.test(f.problem))) offeredWrites++; continue; }
       if (!mutated[team]) continue;
       accepted++;
       for (const [k, fn] of probes(mutated[team], team)) {
@@ -142,4 +191,5 @@ test('soundness: a mutated template that validate accepts is never refused by th
     }
   }
   assert.ok(accepted > 100 && refused > 100, `${accepted} accepted, ${refused} refused`);
+  assert.ok(offeredWrites > 0, 'the mutations reach a pop step that writes an argument');
 });

@@ -6,7 +6,7 @@
 import { ENVELOPE, FLAGS, FUNCTIONS, LIST, NAMES, PAIR, Refusal, TESTS, asList, num, stepMatches } from './expression.js';
 import { compile } from './safe-regex.js';
 import { stepArgs, typed } from './step.js';
-import { closest, isObj } from './validate.js';
+import { TYPES, closest, isObj } from './validate.js';
 
 const NAME = /^[a-z][a-z0-9_-]*$/;
 const REFS = { ...NAMES, now: [''], team: ['name', 'items'] };
@@ -131,6 +131,28 @@ export function checkRules({ team, entry, say, keys }) {
     return undefined;
   }
 
+  // The type of a reference written into a field, when the file says it: a field of the item definition, $caller (a person) or $caller.roles (a list of texts).
+  const refType = x => {
+    if (x === '$caller') return { type: 'person', list: false };
+    if (x === '$caller.roles') return { type: 'text', list: true };
+    const m = /^\$(?:item|it)\.(.+)$/.exec(x);
+    return m && declared(m[1]) && isObj(defs[m[1]]) && TYPES.includes(defs[m[1]].type) ? { type: defs[m[1]].type, list: LIST.includes(defs[m[1]].type), values: defs[m[1]].values, name: m[1] } : null;
+  };
+  // What the evaluator would refuse: a list into a field of one value, a type that never converts, a known value the field does not hold. A text may hold anything, so it is not judged.
+  const NEVER = { number: ['boolean', 'person'], boolean: ['number', 'item', 'person', 'time'], item: ['boolean', 'person', 'time'], person: ['number', 'boolean', 'item', 'time'], items: ['boolean', 'person', 'time'] };
+  function refEffect(kind, f, x, d, at, c) {
+    const src = refType(x);
+    if (!src || !TYPES.includes(d.type)) return;
+    const own = LIST.includes(d.type); const say2 = (problem, fix) => say(at, c.rule, `field ${f}: ${x} ${problem}`, fix);
+    if (src.list && !own) return say2(`is a list, and ${f} takes one ${d.type} value`, `write a field of one value, or use add on a list field`);
+    if ((NEVER[d.type] ?? []).includes(src.type) && !(src.list && own)) return say2(`is ${src.type === 'item' ? 'an item' : `a ${src.type}`}, and ${f} takes a ${d.type}`, `write a value of type ${d.type}`);
+    if (Array.isArray(d.values) && src.name && Array.isArray(src.values)) {
+      const known = members(f); const missing = src.values.filter(v => !known(v));
+      if (missing.length) say2(`can hold ${names(missing)}, which ${missing.length > 1 ? 'are' : 'is'} not among the values of ${f} (${names(d.values)})`, `give ${f} the values of ${src.name}, or write a literal`);
+    }
+    return undefined;
+  }
+
   // set, add and remove of an effect list or of a related entry: the fields are declared, add and remove take list fields, a literal fits its field.
   function fieldEffects(spec, path, c) {
     for (const kind of ['set', 'add', 'remove']) {
@@ -141,6 +163,7 @@ export function checkRules({ team, entry, say, keys }) {
         if (defs && !declared(f)) say(at, c.rule, `${f} is no field of the item definition`, `add ${f} to ${team}.item`);
         else if (isObj(d) && kind !== 'set' && !LIST.includes(d.type)) say(at, c.rule, `${kind} needs a list field; ${f} is ${d.type}`, 'use set');
         else if (isObj(d) && fixed(x) !== NONE) literalEffect(kind, f, fixed(x), d, at, c);
+        else if (isObj(d) && typeof x === 'string') refEffect(kind, f, x, d, at, c);
         val(x, at, c);
       }
     }
@@ -233,12 +256,26 @@ const covers = (p, q) => p.text === q.text || (p.in !== null && q.is !== null &&
 const stepWords = r => (typeof r.step === 'string' ? [r.step] : Array.isArray(r.step) && r.step.every(s => typeof s === 'string') ? r.step : []);
 
 function checkShadowing(table, say) {
-  const infos = table.map(r => { try { return isObj(r) && stepWords(r).length > 0 && (!has(r, 'when') || isObj(r.when)) ? clauses(r.when).map(clauseInfo) : null; } catch { return null; } });
-  table.forEach((r, n) => {
-    if (!infos[n]) return;
-    const p = table.slice(0, n).find((e, m) => infos[m] && stepWords(r).every(s => stepMatches(stepWords(e), s)) && infos[m].every(c => infos[n].some(d => covers(c, d))));
-    if (p) say(`rules.table[${n}]`, typeof r.id === 'string' ? r.id : null, `rule ${r.id} can never decide: rule ${p.id} above it matches every case it matches`, `move ${r.id} above ${p.id}, or narrow ${p.id}`);
+  // Per rule, once: its clauses, its step words as a set and whether it names every step.
+  const infos = table.map(r => {
+    try {
+      if (!isObj(r) || (has(r, 'when') && !isObj(r.when))) return null;
+      const words = new Set(stepWords(r));
+      return words.size ? { clauses: clauses(r.when).map(clauseInfo), words, star: words.has('*') } : null;
+    } catch { return null; }
   });
+  for (let n = 0; n < table.length; n++) {
+    const me = infos[n];
+    if (!me) continue;
+    for (let m = 0; m < n; m++) {
+      const e = infos[m];
+      // The cheap and selective test comes first: the clauses, then the steps.
+      if (!e || !e.clauses.every(c => me.clauses.some(d => covers(c, d))) || !(e.star || [...me.words].every(w => e.words.has(w)))) continue;
+      const r = table[n];
+      say(`rules.table[${n}]`, typeof r.id === 'string' ? r.id : null, `rule ${r.id} can never decide: rule ${table[m].id} above it matches every case it matches`, `move ${r.id} above ${table[m].id}, or narrow ${table[m].id}`);
+      break;
+    }
+  }
 }
 
 // A condition nested so deeply that walking it overflows the stack: the evaluator could not run it either.
@@ -246,6 +283,8 @@ const guarded = (path, rule, say, fn) => { try { fn(); } catch (err) { say(path,
 
 // Pop entries: an id of its own, one existing step (not * and not new: a pop entry acts on an existing item) and an optional condition.
 function checkPop(entry, say, keys, cond, table) {
+  // Named means a rule writes the step word itself; a rule for every step (*) does not make a mistyped step exist.
+  const named = new Set(table.flatMap(r => (isObj(r) ? stepWords(r) : [])));
   const pop = entry.rules.pop;
   if (!Array.isArray(pop)) return;
   const ids = new Set();
@@ -260,7 +299,7 @@ function checkPop(entry, say, keys, cond, table) {
     const s = o.step;
     if (typeof s !== 'string' || !s) say(`${at}.step`, id, 'a pop entry names one step as a word', 'write "step": "<step>"');
     else if (s === '*' || s === 'new') say(`${at}.step`, id, `${s === '*' ? 'a pop entry names one step, not *' : 'new creates an item; a pop entry acts on an existing one'}`, 'name a step of rules.table');
-    else if (!table.some(r => isObj(r) && stepMatches(stepWords(r), s))) say(at, id, `no rule names the step ${s}`, 'name a step of rules.table');
+    else if (!named.has(s)) say(at, id, `no rule names the step ${s}`, 'name a step of rules.table');
     guarded(`${at}.when`, id, say, () => has(o, 'when') && cond(o.when, `${at}.when`, { rule: id, it: false, nest: false }));
   });
 }
@@ -297,16 +336,40 @@ function warn(entry, say) {
       for (const [name, roles] of Object.entries(people)) for (const r of Array.isArray(roles) ? roles : []) if (typeof r === 'string' && !seen.has(r) && seen.add(r) && !literals.has(r)) say(`people.${name}`, null, `the role ${r} is read by no rule, pop entry or filter`, 'remove it, or keep it as documentation', 'warning');
     }
     if (isObj(item)) for (const f of Object.keys(item)) if (!read.has(f) && !ENVELOPE.includes(f)) say(`item.${f}`, null, `${f} is read by no rule`, 'data only is allowed; nothing reads it', 'warning');
-    const named = [...new Set(table.flatMap(stepWords))].filter(s => s !== '*');
-    for (const s of named) {
-      if (table.some(r => has(r, 'do') && stepMatches(stepWords(r), s))) continue;
-      const n = rules.table.findIndex(r => isObj(r) && stepWords(r).includes(s));
-      say(`rules.table[${n}]`, typeof rules.table[n].id === 'string' ? rules.table[n].id : null, `no rule allows the step ${s}; it is always refused`, 'add a rule with do, or remove the step', 'warning');
-    }
-    pops.forEach(o => {
-      if (typeof o.step !== 'string' || !o.step) return;
-      const allowing = { rules: { table: table.filter(r => has(r, 'do')) } };
-      for (const a of stepArgs(allowing, o.step)) say(`rules.pop[${rules.pop.indexOf(o)}]`, typeof o.id === 'string' ? o.id : null, `pop cannot give --${a} to the step ${o.step}; the pop entry can only be refused`, 'a pop entry offers a step that needs no argument', 'warning');
+    // Per step word: the first rule that names it; the words of the rules that allow, and whether one of them is for every step.
+    const first = new Map(); const allowed = new Set(); let allowAll = false;
+    rules.table.forEach((r, n) => {
+      if (!isObj(r)) return;
+      for (const w of stepWords(r)) { if (!first.has(w)) first.set(w, n); if (has(r, 'do')) { if (w === '*') allowAll = true; else allowed.add(w); } }
     });
+    if (!allowAll) for (const [w, n] of first) if (w !== '*' && !allowed.has(w)) say(`rules.table[${n}]`, typeof rules.table[n].id === 'string' ? rules.table[n].id : null, `no rule allows the step ${w}; it is always refused`, 'add a rule with do, or remove the step', 'warning');
+    offered(rules, table, say);
   } catch { /* nested too deeply: the rule check reports it */ }
+}
+
+// The arguments the rules of a step read. Pop passes none, so a step it offers fails for the whole team (exit 2) when an allowing rule writes an argument into a field, and
+// a condition that reads an argument can only refuse. Each rule is walked once and each distinct pop step is merged once.
+function offered(rules, table, say) {
+  if (!Array.isArray(rules.pop)) return;
+  const alone = r => ({ rules: { table: [{ ...r, step: '*' }] } });
+  const writes = r => ({ step: '*', do: { set: r.do?.set, add: r.do?.add, remove: r.do?.remove, related: Array.isArray(r.do?.related) ? r.do.related.map(e => ({ set: e?.set, add: e?.add, remove: e?.remove })) : undefined } });
+  const star = { all: new Set(), write: new Set() }; const byWord = new Map();
+  for (const r of table) {
+    if (!has(r, 'do') || !isObj(r.do)) continue;
+    const all = stepArgs(alone(r), 'x'); const write = new Set(stepArgs(alone(writes(r)), 'x'));
+    for (const w of stepWords(r)) {
+      const t = w === '*' ? star : byWord.get(w) ?? byWord.set(w, { all: new Set(), write: new Set() }).get(w);
+      all.forEach(a => t.all.add(a)); write.forEach(a => t.write.add(a));
+    }
+  }
+  const merged = new Map();
+  const of = w => merged.get(w) ?? merged.set(w, { all: new Set([...star.all, ...(byWord.get(w)?.all ?? [])]), write: new Set([...star.write, ...(byWord.get(w)?.write ?? [])]) }).get(w);
+  rules.pop.forEach((o, n) => {
+    if (!isObj(o) || typeof o.step !== 'string' || !o.step) return;
+    const id = typeof o.id === 'string' ? o.id : null; const { all, write } = of(o.step);
+    for (const a of all) {
+      if (write.has(a)) say(`rules.pop[${n}]`, id, `pop cannot give --${a} to the step ${o.step}, and a rule writes it into a field: the step would stop the command with exit 2 for the whole team`, `give the field a value that needs no argument, or remove the step ${o.step} from pop`);
+      else say(`rules.pop[${n}]`, id, `pop cannot give --${a} to the step ${o.step}; the pop entry can only be refused`, 'a pop entry offers a step that needs no argument', 'warning');
+    }
+  });
 }

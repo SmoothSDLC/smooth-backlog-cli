@@ -161,8 +161,8 @@ batch after which the installed CLI would behave differently for an existing con
   (`02-bdd-plan.md` section 3); COMMANDS.md, README.md, CHANGELOG.md, templates/skills/backlog/SKILL.md.
 - Layer and role: configuration layer; implementing agent, a second agent reviews.
 - Proof: the standard proof, run with the new guard variable; a new test .agents/test/env-prefix.test.js: a session that sets only old
-  names (for example TEAM_NAME=web and BACKLOG_AGENT=a1) gets the three-ways text of chapter 01 section 5 from `backlog team query`, and no
-  file of src/ or bin/ reads an unprefixed name of the list.
+  names (for example TEAM_NAME=web and BACKLOG_AGENT=a1) is refused by `backlog team pop` with today's missing-team text (today's `backlog team query` needs no team; the
+  three-ways text of chapter 01 section 5 arrives with B12), and no file of src/ or bin/ reads an unprefixed name of the list.
 - Unrelated-file risk: high in count (every test that sets a variable, through the fixture or itself), low in meaning (a mechanical rename).
 - Depends on: nothing.
 

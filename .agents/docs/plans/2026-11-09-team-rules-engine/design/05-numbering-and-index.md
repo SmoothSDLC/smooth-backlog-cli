@@ -52,9 +52,16 @@ it and validate can compare it; it is never trusted alone.
 refuses in a shallow clone: exit 2, `❌ backlog: the backlog clone is shallow, so numbers cannot be proven unused: run git fetch --unshallow`
 (spike test "a shallow clone refuses to hand out a number"). Reading commands work.
 
-**Cost.** Clause 1 and 2 read the history once per clone and then only the commits added since: the implementation keeps the last scanned
-commit and the maximum per folder in the clone's state folder (`.git` or `.state`, never committed). One scan is bounded by the number of
-item creations, which is the size of the backlog, not of the code history.
+**Cost.** Only the commands that allocate a number read the history; reading commands do not. Every allocation scans the history of the
+folder: git walks every commit of the clone when it filters by path, so a scan grows with the history, not with the number of items
+(measured for B03: one scan 1.1 s on 5000 item commits; one `backlog new` 1.4 s before, 2.5 s after). No cache is built: one remembered
+commit cannot stand for every ref scanned, and a rewritten history would leave it wrong. A cache keyed by the scanned ref tips is an
+optional later batch, only if a real backlog shows it is needed.
+
+**The bound.** A folder whose mark reached 1 000 000 000 refuses every new number: exit 2, `❌ backlog: the folder has no number left: the
+highest number the CLI can use (1000000000) is taken`. `backlog update --seq` above the bound is refused the same way. Until B21 removes it,
+`backlog move` to another repository allocates a number in the target folder like `backlog new`; a move between branches of one folder keeps
+its number.
 
 **Limits, stated.** A history rewritten by a force push can remove commits and so lower the mark; the CLI never force-pushes, and the
 backlog repository's main branch should refuse force pushes. For a backlog kept inside a code repository (`backlog_repository: .backlog`),

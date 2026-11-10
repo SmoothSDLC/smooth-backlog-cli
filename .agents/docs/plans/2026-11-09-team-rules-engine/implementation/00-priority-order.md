@@ -199,14 +199,17 @@ batch after which the installed CLI would behave differently for an existing con
 
 **B04. Publication and staging.**
 - Goal: after a user command's rebase, every item the local commits added whose number is not above the upstream high-water mark is
-  renumbered above it, with its references; a rebase conflict on numbers.json takes the larger value; a writing command stages only the item files it wrote, index.json and
-  numbers.json of its folder, never the folder root, the team file, the templates or .backlog/config.json.
+  renumbered above it, with its references, whether or not a file upstream holds that number now; a writing command stages only the item
+  files it wrote, index.json and numbers.json of its folder, never the folder root, the team file, the templates or .backlog/config.json.
+  Already done by B03 and not part of this batch: the resolution of a conflict on numbers.json to the larger value, and the recording of a
+  renumbered number in numbers.json.
 - Rulings and chapters: R12, R5; chapter 05 sections 2 and 3, chapter 04 section 6 ("What is staged").
 - Target files: src/shared/sync.js (remapLocal, repairConflicts, the staging lists); tests added to .agents/test/numbers.test.js and a
   staging test in .agents/test/shared-sync.test.js.
 - Layer and role: synchronisation layer; implementing agent.
-- Proof: the standard proof; the scenarios "two clones create at once" and "another clone published and cleaned the same number before
-  this push" through `backlog new`; a lead's
+- Proof: the standard proof; first, the case B03's review left open: another clone publishes a number and deletes its item while this
+  clone pushes an item with the same number, and this clone must end above the upstream mark (today it keeps the number, because the
+  renumbering triggers only on a file present upstream); then "two clones create at once" through `backlog new`; a lead's
   uncommitted team file in the folder is not committed by the next `backlog new`.
 - Unrelated-file risk: medium; src/shared/sync.js is the most shared module (538 lines) and every concurrency test passes through it.
 - Depends on: B03.

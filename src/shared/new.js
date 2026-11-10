@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { createInterface } from 'node:readline';
 import { BacklogError, input } from '../errors.js';
-import { readItemFile } from './item-file.js';
+import { itemFileName, readItemFile } from './item-file.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { actor, check, recordWrites } from './seen.js';
 import { configUser } from './setup.js';
@@ -172,9 +172,9 @@ async function create(argv, { home, folder, repo, scope, team }) {
       inherited = { objective: src.objective, summary: src.summary, context: `Split from \`${src.slug}\`. Inherited context:\n\n${parent}` };
     }
     const name = a.name || `${a.splitFrom || 'split'}-cont`;
-    seq = nextSeqFor(folder, `-${slugify(name)}.md`);
+    seq = nextSeqFor(folder, itemFileName(`-${slugify(name)}`));
     slug = `${pad(seq)}-${slugify(name)}`;
-    rel = `phases/${slug}.md`;
+    rel = `phases/${itemFileName(slug)}`;
     const path = join(folder, rel);
     if (existsSync(path) && !a.force) return refuse(`${slug} exists (pass --force)`);
 

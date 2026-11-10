@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
 import { asChild, locked } from '../storage.js';
-import { dumpItem as dump, eventLine, hasFrontMatter, parseItem as parse, readItemFile, readItemText, replaceItemFrontMatter as replaceFrontMatter } from './item-file.js';
+import { dumpItem as dump, eventLine, hasFrontMatter, isItemName, itemFileName, itemSlug, parseItem as parse, readItemFile, readItemText, replaceItemFrontMatter as replaceFrontMatter } from './item-file.js';
 import { repoIdFromUrl } from './safety.js';
 import * as index from './index.js';
 import { actor, created, guarded } from './seen.js';
@@ -244,7 +244,7 @@ export function writeText(path, text, root) {
 export function bareFiles(dir) {
   assertFolder(dir);
   let names;
-  try { names = readdirSync(join(dir, 'phases')).filter(n => n.endsWith('.md')).sort(); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+  try { names = readdirSync(join(dir, 'phases')).filter(isItemName).sort(); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
   return names.filter(n => !hasFrontMatter(readItemText(join(dir, 'phases', n)))).map(n => `phases/${n}`);
 }
 
@@ -256,7 +256,7 @@ export const REPAIRABLE = ['status', 'commit', 'location', 'summary', 'name', 'o
 // item (never its path), the field the codec could not read, and the two ways out.
 function readItem(path, text) {
   try { return parse(text); } catch (e) {
-    const slug = basename(path, '.md');
+    const slug = itemSlug(path);
     const reason = String(e.message).replace(/^front matter /, '');
     const restore = `restore the item's previous version with backlog update ${slug} --restore`;
     const message = e.field === undefined
@@ -282,7 +282,7 @@ export function load(dir) {
       const path = `${rel}/${e.name}`;
       if (e.isSymbolicLink()) assertNoSymlinks(dir, join(dir, path));
       if (e.isDirectory() && deep) walk(path, deep);
-      else if (e.isFile() && e.name.endsWith('.md')) {
+      else if (e.isFile() && isItemName(e.name)) {
         const text = readItemText(join(dir, path));
         const sha256 = createHash('sha256').update(text).digest('hex'); //
         if (rel === 'phases' && !hasFrontMatter(text)) continue; // a README or a stray note in phases/ is not an item: ranking it would rewrite it as an empty one (see bareFiles)
@@ -304,13 +304,13 @@ export function nextSeq(dir) {
 // its neighbour's name stays, so the next number alone does not make the name new, and a write by path would replace that item.
 export function nextSeqFor(dir, tail) {
   let bare = []; try { bare = readdirSync(join(dir, 'phases')); } catch { /* no phases/ yet */ } // a file without front matter is not an item, but its name is taken
-  const taken = new Set([...bare, ...load(dir).flatMap(i => [basename(i.path), `${i.fm.phase}.md`])]);
+  const taken = new Set([...bare, ...load(dir).flatMap(i => [basename(i.path), itemFileName(i.fm.phase)])]);
   let n = nextSeq(dir);
   while (taken.has(String(n).padStart(3, '0') + tail)) n++;
   return n;
 }
 
-const slugOf = i => i.fm.phase || basename(i.path, '.md'); // ingest_phase slug
+const slugOf = i => i.fm.phase || itemSlug(i.path); // ingest_phase slug
 const statusOf = i => (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending');
 const branchOf = i => String(i.fm.branch || '');
 
@@ -383,7 +383,7 @@ export function findings(dir) {
 
 //
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-export { eventLine, parseEvent } from './item-file.js'; // the event record of an item's history is written by item-file.js
+export { eventLine, itemFileName, itemSlug, parseEvent } from './item-file.js'; // the event record of an item's history is written by item-file.js
 // Appends one event line to the item file's `events` list. The file is re-read first (the command may have written it a moment ago).
 export function addEvent(folder, path, { event, branch = '', commitSha = '', note = '' }) {
   const abs = join(folder, path);

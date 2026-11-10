@@ -6,9 +6,9 @@ import { spawnSync } from 'node:child_process';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { parseItem as parse, readItemFile, readItemText, storedFm } from './item-file.js';
+import { itemFileName, itemSlug, parseItem as parse, readItemFile, readItemText, stripItemExt, storedFm } from './item-file.js';
 import { configUser } from './setup.js';
 import { now, originRef, repoId, stateDir } from './store.js'; // a cycle (store.js imports this file): used only at run time
 
@@ -29,7 +29,7 @@ const operation = new AsyncLocalStorage();
 export const guarded = fn => operation.getStore() ? fn() : operation.run({ guard: [], created: new Set() }, fn);
 export const created = (folder, path) => operation.getStore()?.created.add(join(folder, path));
 // the slug of the item the running command created (new), for the status line
-export const primarySlug = () => { const c = operation.getStore()?.created; return c?.size ? basename([...c][0], '.md') : null; };
+export const primarySlug = () => { const c = operation.getStore()?.created; return c?.size ? itemSlug([...c][0]) : null; };
 export function publicationGuard(given = []) {
   const guard = operation.getStore()?.guard ?? [];
   for (const g of given) if (!guard.some(x => x.path === g.path)) guard.push(g);
@@ -149,7 +149,7 @@ export function changedSince(home, folder, repo, reference, agent) {
       try { fm = readItemFile(join(folder, rel(x.path))).fm; } catch { /* unreadable: no author or time */ }
     }
     entries.push({
-      slug: b.replace(/\.md$/, ''),
+      slug: stripItemExt(b),
       status: isMove ? 'D' : x.status,
       updated_by: fm.updated_by ?? '',
       updated: fm.updated ?? '',
@@ -167,7 +167,7 @@ function remapViews(folder, views, pairs) {
     for (const [old, next] of pairs.filter(p => p.folder === undefined || p.folder === resolve(v.folder ?? folder))) {
       if (Number(v.slug.match(/^\d+/)?.[0]) !== old) continue;
       const slug = String(next).padStart(3, '0') + v.slug.replace(/^\d+/, '');
-      v = { ...v, slug, path: v.path.replace(/[^/\\]+$/, `${slug}.md`) };
+      v = { ...v, slug, path: v.path.replace(/[^/\\]+$/, itemFileName(slug)) };
     }
     return v;
   });

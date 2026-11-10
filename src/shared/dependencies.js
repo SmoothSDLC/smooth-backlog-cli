@@ -1,9 +1,9 @@
 // Dependencies between items (depends_on): an entry names an item of this backlog by number or slug, or of another repository's backlog
 // in the same clone as owner/name#seq. Every item may have them; no team is involved.
 import { existsSync, realpathSync } from 'node:fs';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import * as index from './index.js';
-import { readItemFile } from './item-file.js';
+import { itemSlug, readItemFile } from './item-file.js';
 import { itemSelector } from './safety.js';
 import { isFinished, lifted } from './status.js';
 import { load } from './store.js';
@@ -42,7 +42,7 @@ export function foreignItem(folder, id) {
   if (!existsSync(other)) return null;
   const hits = load(other).filter(i => Number(i.fm.seq) === Number(m[3]));
   const it = hits.find(i => i.fm.status !== 'archived') ?? hits[0];
-  return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || basename(it.path, '.md'), status: it.fm.status ?? 'pending', fm: it.fm } : null;
+  return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || itemSlug(it.path), status: it.fm.status ?? 'pending', fm: it.fm } : null;
 }
 // does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
 // to it? Returns the reference that closes the cycle, or null. Local entries are read in the folder they are written in.
@@ -55,7 +55,7 @@ export function foreignCycle(folder, repoId, seq, deps, cache = new Map()) {
     const s = String(d ?? '').trim();
     const m = FOREIGN.exec(s);
     if (m) return `${m[1]}/${m[2]}#${Number(m[3])}`;
-    const it = /^\d+$/.test(s) ? items(repo).find(i => Number(i.fm.seq) === Number(s)) : items(repo).find(i => (i.fm.phase || basename(i.path, '.md')) === s);
+    const it = /^\d+$/.test(s) ? items(repo).find(i => Number(i.fm.seq) === Number(s)) : items(repo).find(i => (i.fm.phase || itemSlug(i.path)) === s);
     return it ? `${repo}#${Number(it.fm.seq)}` : null;
   };
   const seen = new Set();

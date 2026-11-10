@@ -9,7 +9,7 @@ import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { die, pyStr, refuse, say, usage, valueLike, withBacklog } from './archive.js';
-import { readItemFile } from './item-file.js';
+import { itemFileName, readItemFile } from './item-file.js';
 import { find } from './index.js';
 import { isOpen } from './status.js';
 import { assertInside, git, redact } from './safety.js';
@@ -131,11 +131,11 @@ async function move(a, rows, ctx) {
   if (elsewhere.length) return refuse(`${elsewhere.join(', ')} of other repositories depend${elsewhere.length > 1 ? '' : 's'} on ${repo}#${r.seq} (${r.slug}), which would leave them pointing at nothing; clear them first in their repositories: update <dependent> --set-depends-on ...`);
   if (inProgress(fm)) { const full = wipRefusal(tdir, target, { ...fm, repository: target }, r.slug, [], { repository: repo, slug: r.slug }); if (full) return refuse(`${r.slug}: in progress, and in ${target}: ${full}`); }
   const tail = `-${r.slug.includes('-') ? r.slug.split('-').slice(1).join('-') : r.slug}`;
-  const seq = store.nextSeqFor(tdir, `${tail}.md`); // never a number whose file name the target already holds
+  const seq = store.nextSeqFor(tdir, itemFileName(tail)); // never a number whose file name the target already holds
   const slug = `${String(seq).padStart(3, '0')}${tail}`;
   store.stamp(Object.assign(fm, { phase: slug, seq, repository: target }));
   fm.events = [...asList(fm.events), store.eventLine({ ts: store.now(), event: 'moved_in', branch: fm.branch, note: `from ${repo} as ${r.slug}` })]; // the history travels in the file
-  const copy = join(tdir, 'phases', `${slug}.md`);
+  const copy = join(tdir, 'phases', itemFileName(slug));
   // all or nothing: a throw anywhere below restores both backlogs (items and indexes)
   await store.undoOnThrow(tdir, async () => {
     store.write({ path: copy, fm, body }, tdir);
@@ -144,7 +144,7 @@ async function move(a, rows, ctx) {
     store.reflow(folder, { branches: [r.branch] }); // the item leaves the order of the source
     store.reflow(tdir); // and joins the end of the open items of its branch in the destination
   });
-  ctx.wrote.push({ slug, path: `phases/${slug}.md`, folder: tdir, repo: target }); // the mover has seen the copy it made
+  ctx.wrote.push({ slug, path: `phases/${itemFileName(slug)}`, folder: tdir, repo: target }); // the mover has seen the copy it made
   folders.push(tdir); // ONE commit and push covers the source and the target: never one pushed without the other
   say(`✅ ${r.slug} moved to ${target} as ${slug}`);
   return 0;

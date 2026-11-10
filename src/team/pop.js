@@ -9,7 +9,7 @@ import { storedFm } from '../shared/frontmatter.js';
 import * as index from '../shared/index.js';
 import { caller, isSplitSlice, missingFields } from './lifecycle.js';
 import { redact } from '../shared/safety.js';
-import { folder as repoFolder, load, repoId, resolveHome } from '../shared/store.js';
+import { folder as repoFolder, itemFileName, load, repoId, resolveHome } from '../shared/store.js';
 import { gitBranch, heldBy, teamLead, teamScope, teamStep, undoneDependencies } from './team.js';
 import { strip } from '../shared/text.js';
 import { isOpen } from '../shared/status.js';
@@ -101,7 +101,7 @@ export async function run({ team, agent }, rest) {
     try { item = JSON.parse(q.stdout); } catch { item = null; }
     if (q.status !== 0 || !item) { process.stdout.write(q.stdout); process.stderr.write(q.stderr); return q.status || 1; }
   } else if (!item && p.item) { // chunk work of another repository: its item file in that repository's folder of the backlog repository
-    const file = load(repoFolder(resolveHome().home, p.repository)).find(i => i.fm.phase === p.item || i.path.endsWith(`/${p.item}.md`));
+    const file = load(repoFolder(resolveHome().home, p.repository)).find(i => i.fm.phase === p.item || i.path.endsWith(`/${itemFileName(p.item)}`));
     if (!file) return die(`${p.item}: no such item in the backlog of ${p.repository}`, 1);
     item = { front_matter: storedFm(file.fm), body: file.body };
   }

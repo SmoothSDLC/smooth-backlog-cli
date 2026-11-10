@@ -5,6 +5,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { seam } from './seam.js';
+import { stripItemExt } from './item-file.js';
 import { load } from './store.js';
 
 const LEVELS = ['overall', 'repository', 'branch'];
@@ -39,7 +40,7 @@ export function progressItems(home) {
       if (!existsSync(join(folder, 'phases'))) continue;
       let items = [];
       try { items = load(folder); } catch (e) { warn(`the items of ${o.name}/${n.name} cannot be read (${e.message}); they are not counted against the work-in-progress limits`); continue; }
-      for (const i of items) if (i.path.startsWith('phases/') && inProgress(i.fm)) out.push({ repository: `${o.name}/${n.name}`, slug: i.fm.phase || i.path.slice(7, -3), fm: i.fm, path: i.path });
+      for (const i of items) if (i.path.startsWith('phases/') && inProgress(i.fm)) out.push({ repository: `${o.name}/${n.name}`, slug: i.fm.phase || stripItemExt(i.path.slice('phases/'.length)), fm: i.fm, path: i.path });
     }
   }
   return out;

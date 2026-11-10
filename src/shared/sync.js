@@ -9,7 +9,7 @@ import { basename, dirname, join, posix, relative, resolve, sep } from 'node:pat
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
-import { parseItem as parse, readItemText } from './item-file.js';
+import { ITEM_EXT, ITEM_EXT_PATTERN, ITEM_PATH, itemSlug, parseItem as parse, readItemText } from './item-file.js';
 import * as index from './index.js';
 import { actor, primarySlug, publicationGuard, staleError, staleViews } from './seen.js';
 import * as store from './store.js';
@@ -26,7 +26,7 @@ const pad = n => String(n).padStart(3, '0');
 // A renumbering is [old, new] of one repository folder: a number is only taken in its own folder, so a caller applies it to that folder alone.
 const pairOf = (old, next, folder) => Object.defineProperty([old, next], 'folder', { value: resolve(folder) });
 const lockFile = home => join(store.stateDir(home), 'smooth-backlog-cli.lock');
-const itemFile = t => new RegExp(`^${esc(t.prefix)}[^/]+/[^/]+/(phases|archive)/.+\\.md$`); // an item file, from the root of the repository that holds it
+const itemFile = t => new RegExp(`^${esc(t.prefix)}[^/]+/[^/]+/(phases|archive)/.+${ITEM_EXT_PATTERN}$`); // an item file, from the root of the repository that holds it
 
 // git in the backlog clone; an index.lock held by a git run outside the CLI is retried 5 times
 //. Everything git says goes through redact: a URL may carry a token.
@@ -66,7 +66,7 @@ export async function target(home) {
 // that content; the clone is left as it is for the user (their edits are in the files and in 'git stash').
 async function refuseConflicts(home, t) {
   const unmerged = (await g(home, ['ls-files', '-u', '-z'])).stdout.split('\0').filter(Boolean).map(e => e.split('\t')[1]);
-  const marked = (await g(home, ['grep', '-l', '-E', '^(<{7}|>{7})( |$)', '--', `${t.prefix}*.md`])).stdout.split('\n').filter(Boolean);
+  const marked = (await g(home, ['grep', '-l', '-E', '^(<{7}|>{7})( |$)', '--', `${t.prefix}*${ITEM_EXT}`])).stdout.split('\n').filter(Boolean);
   const files = [...new Set([...unmerged, ...marked])];
   if (files.length) {
     throw new BacklogError('SYNC_FAILED', `${home} has unresolved conflicts after updating from ${t.ref} (${files.slice(0, 5).join(', ')}${files.length > 5 ? ', ...' : ''}); `
@@ -232,7 +232,7 @@ async function renumberFiles(home, t, stream, added) {
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
     out.push(pairOf(old, next, folder));
-    const was = String(mine.fm.phase || posix.basename(path, '.md')); // an item without a phase field is named by its file
+    const was = String(mine.fm.phase || itemSlug(path)); // an item without a phase field is named by its file
     moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
   }
   if (moves.length) { // the local dependents of the renumbered items follow them
@@ -284,7 +284,7 @@ async function repairConflicts(home, t, folders, names, renumbered) {
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
         process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
         renumbered.push(pairOf(old, next, folder));
-        const was = String(mine.fm.phase || posix.basename(rel, '.md'));
+        const was = String(mine.fm.phase || itemSlug(rel));
         moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
         written.add(`${name}/${target}`);
       }
@@ -313,7 +313,7 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
   for (let n = 0; n < folders.length; n++) {
     const items = store.load(folders[n]);
     const prefix = `${names[n]}/`;
-    const slug = i => i.fm.phase || basename(i.path, '.md');
+    const slug = i => i.fm.phase || itemSlug(i.path);
     const seq = i => Number(Object.hasOwn(i.fm, 'seq') ? i.fm.seq : 0);
     const find = d => items.find(i => /^\d+$/.test(String(d)) ? seq(i) === Number(d) : slug(i) === String(d));
     const resolves = d => (isForeign(d) ? Boolean(foreignItem(folders[n], d)) : Boolean(find(d))); // owner/name#seq
@@ -339,7 +339,7 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
     for (const [file, status] of changed) {
       if (!file.startsWith(prefix)) continue;
       const path = file.slice(prefix.length);
-      if (!/^(phases\/[^/]+|archive\/.+)\.md$/.test(path)) continue;
+      if (!ITEM_PATH.test(path)) continue;
       const item = items.find(i => i.path === path);
       if (item) {
         const held = items.find(i => i !== item && seq(i) === seq(item));
@@ -354,7 +354,7 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
       if (status === 'A') continue; // a new item has no incoming identity to preserve
       const before = await must(home, ['show', `${t.cmp}:${file}`], `read the prior identity of ${file}`);
       let fm = {}; try { ({ fm } = parse(before.stdout)); } catch { /* the version on the origin cannot be read: this change is its repair */ }
-      const priorSlug = fm.phase || basename(file, '.md'); // an item without a phase field is named by its file
+      const priorSlug = fm.phase || itemSlug(file); // an item without a phase field is named by its file
       for (const d of [priorSlug, fm.seq]) if (d !== undefined && !resolves(d)) lost.add(key(d));
       // update --seq refuses incoming slug references as well as numeric ones, even though
       // a slug still resolves after a sequence-only change. Keep that pre-write rule after rebase.

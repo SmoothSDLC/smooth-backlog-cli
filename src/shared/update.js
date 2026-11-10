@@ -3,9 +3,9 @@
 // the index, planning event (--priority move, completion, --replan), commit and push. The item is found by number
 // (seq) or slug. Without `team` an item is edited by its fields and body only.
 // shortcut: argparse's unique-prefix abbreviations (--stat) are not accepted.
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { readItemFile } from './item-file.js';
+import { itemSlug, readItemFile } from './item-file.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { repairUnreadable } from './repair.js';
 import { isOpen, lifted, normalise } from './status.js';
@@ -163,7 +163,7 @@ async function update(argv, team) {
 // The slug of an item whose dependency chain (the files' depends_on, from deps on) leads back to `id`; `id` itself when deps names it. null: no cycle.
 function dependencyCycle(rows, folder, id, deps) {
   const edges = new Map();
-  for (const i of store.load(folder)) { const r = findItem(rows, String(i.fm.phase || basename(i.path, '.md'))); if (r) edges.set(r.id, { slug: r.slug, deps: asList(i.fm.depends_on) }); }
+  for (const i of store.load(folder)) { const r = findItem(rows, String(i.fm.phase || itemSlug(i.path))); if (r) edges.set(r.id, { slug: r.slug, deps: asList(i.fm.depends_on) }); }
   const seen = new Set();
   const walk = list => {
     for (const d of list) {

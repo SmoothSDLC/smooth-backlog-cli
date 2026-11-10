@@ -6,9 +6,9 @@
 // nothing calls these.
 import { createHash } from 'node:crypto';
 import { readdirSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { asList, strip } from '../shared/text.js';
-import { load } from '../shared/store.js';
+import { itemSlug, load } from '../shared/store.js';
 import { normalise } from '../shared/status.js';
 
 const HEX40 = /^[0-9a-f]{40}$/i; // git commit ids are hex, any case
@@ -91,7 +91,7 @@ export function dependentsOf(folder, repoId, producerFm) {
   let producerSlug = typeof producerFm.phase === 'string' && producerFm.phase !== '' ? producerFm.phase : null;
   if (producerSlug === null && seqNum !== null) {
     const self = load(folder).find(i => Number(i.fm.seq) === seqNum);
-    producerSlug = self ? basename(self.path, '.md') : null;
+    producerSlug = self ? itemSlug(self.path) : null;
   }
   for (const owner of owners) {
     const repos = readdirSync(join(home, owner), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort();
@@ -109,7 +109,7 @@ export function dependentsOf(folder, repoId, producerFm) {
           id: repo === repoId ? String(it.fm.seq) : `${repo}#${it.fm.seq}`,
           repository: repo,
           seq: Number(it.fm.seq),
-          slug: it.fm.phase || basename(it.path, '.md'),
+          slug: it.fm.phase || itemSlug(it.path),
           status,
         });
       }

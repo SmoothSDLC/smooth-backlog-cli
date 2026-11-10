@@ -3,9 +3,9 @@
 // git merges changes to different lines. The item files hold everything else: name and status here are copies that every read checks
 // against the item (the file is the truth for the item, the index for the order). Open (not finished) items come first.
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
-import { hasFrontMatter, readItemText } from './item-file.js';
+import { hasFrontMatter, itemSlug, readItemText } from './item-file.js';
 import { itemSelector } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
@@ -14,7 +14,7 @@ import { isOpen as workflowOpen } from './status.js';
 export const file = folder => join(folder, 'index.json');
 export const exists = folder => existsSync(file(folder));
 
-const slugOf = i => i.fm.phase || basename(i.path, '.md');
+const slugOf = i => i.fm.phase || itemSlug(i.path);
 const statusOf = i => (Object.hasOwn(i.fm, 'status') ? i.fm.status : 'pending');
 const branchOf = i => String(i.fm.branch || '');
 const live = items => items.filter(i => i.path.startsWith('phases/'));

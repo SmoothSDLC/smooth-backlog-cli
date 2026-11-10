@@ -266,7 +266,7 @@ async function repairConflicts(home, t, folders, names, renumbered) {
       const counters = new Set(); // the number records both sides changed
       for (const [path, st] of stages) {
         if (['23', '123'].includes(st) && names.some(name => path === `${name}/index.json`)) { orders.add(path); continue; } // merged below, once the renumbering is known
-        if (['23', '123'].includes(st) && names.some(name => path === `${name}/${NUMBER_FILE}`)) { counters.add(path); continue; } // the larger value wins, below
+        if (['23', '123', '12', '13'].includes(st) && names.some(name => path === `${name}/${NUMBER_FILE}`)) { counters.add(path); continue; } // every shape (both changed, added on both sides, deleted on one side and changed on the other): the larger value wins, below
         if (!['23', '123'].includes(st) || !itemFile(t).test(path) || nameOf(path) < 0) return false;
         if (st !== '23') return false; // a real edit of one item by both clones cannot be merged by number
       }

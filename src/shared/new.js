@@ -10,7 +10,7 @@ import { actor, check, recordWrites } from './seen.js';
 import { configUser } from './setup.js';
 import { assertInside, git, redact, slugify } from './safety.js';
 import { addEvent, branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, undoOnThrow, write } from './store.js';
-import { record as recordNumber } from './numbers.js';
+import { highWater, record as recordNumber } from './numbers.js';
 import { commitSettled, pull } from './sync.js';
 import { normalise } from './status.js';
 import { seam } from './seam.js';
@@ -130,8 +130,9 @@ export async function run(argv, { team = null, io = terminal } = {}) {
     const repo = scope.repo || repoId(process.cwd());
     const folder = repoFolder(home, repo);
     return await cloneLocked(home, async () => {
+      const floor = highWater(folder); // the mark before the pull: the pull --rebase flattens an unpushed merge commit, whose numbers the history no longer holds
       await pull(home);
-      return await create(argv, { home, folder, repo, scope, team });
+      return await create(argv, { home, folder, repo, scope, team, floor });
     });
   } catch (error) {
     process.stderr.write(`❌ backlog: ${redact(error.message)}\n`);
@@ -139,7 +140,7 @@ export async function run(argv, { team = null, io = terminal } = {}) {
   }
 }
 
-async function create(argv, { home, folder, repo, scope, team }) {
+async function create(argv, { home, folder, repo, scope, team, floor = 0 }) {
   const a = parseArgs(argv, team?.options);
   const severity = a.severity ?? 'normal';
   const priority = a.priority ?? (severity === 'critical' ? 0 : undefined); // a critical finding jumps the queue (:62)
@@ -173,7 +174,7 @@ async function create(argv, { home, folder, repo, scope, team }) {
       inherited = { objective: src.objective, summary: src.summary, context: `Split from \`${src.slug}\`. Inherited context:\n\n${parent}` };
     }
     const name = a.name || `${a.splitFrom || 'split'}-cont`;
-    seq = nextSeqFor(folder, itemFileName(`-${slugify(name)}`));
+    seq = nextSeqFor(folder, itemFileName(`-${slugify(name)}`), floor);
     slug = `${pad(seq)}-${slugify(name)}`;
     rel = `phases/${itemFileName(slug)}`;
     const path = join(folder, rel);

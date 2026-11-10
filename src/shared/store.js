@@ -300,20 +300,22 @@ export function load(dir) {
 // The highest number the folder ever held: its history (every ref, merge commits included), every value numbers.json ever had, the item files
 // present and their seq (numbers.js). A number is never handed out at or below it.
 export function mark(dir) {
-  return Math.max(highWater(dir), ...load(dir).map(i => Number(i.fm.seq) || 0));
+  return Math.max(highWater(dir), ...load(dir).map(i => { const n = Number(i.fm.seq) || 0; return n <= MAX_SEQ ? n : 0; })); // a stored seq above the bound never raises the mark
 }
 
 // The next number: one above the mark. Deleting, cleaning or archiving the newest item never gives its number again.
 export function nextSeq(dir) {
-  return mark(dir) + 1;
+  const n = mark(dir) + 1;
+  if (n > MAX_SEQ) throw new BacklogError('STORAGE_ERROR', `the folder has no number left: the highest number the CLI can use (${MAX_SEQ}) is taken`, 2);
+  return n;
 }
 
-// nextSeq whose file name `<seq><tail>` (tail: '-name.md') is also free in phases/ and archive/: update --seq can leave a low number unused while
+// nextSeq whose file name `<seq><tail>` (tail: '-name' and the item extension) is also free in phases/ and archive/: update --seq can leave a low number unused while
 // its neighbour's name stays, so the next number alone does not make the name new, and a write by path would replace that item.
-export function nextSeqFor(dir, tail) {
+export function nextSeqFor(dir, tail, floor = 0) { // floor: a mark taken earlier (before a pull), never to be handed out again
   let bare = []; try { bare = readdirSync(join(dir, 'phases')); } catch { /* no phases/ yet */ } // a file without front matter is not an item, but its name is taken
   const taken = new Set([...bare, ...load(dir).flatMap(i => [basename(i.path), itemFileName(i.fm.phase)])]);
-  let n = nextSeq(dir);
+  let n = Math.max(nextSeq(dir), floor + 1);
   while (taken.has(String(n).padStart(3, '0') + tail)) n++;
   return n;
 }

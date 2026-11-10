@@ -208,7 +208,7 @@ Options:
       Replace the objective of the item.
   --seq SEQ
       Set the item number to this integer. Refused unless it is above the highest number ever used in the repository's backlog (numbers
-      are never reused); the item then takes it and the number record follows.
+      are never reused) and at most 1000000000, the highest number the CLI can use; the item then takes it and the number record follows.
   --size_score SIZE_SCORE
       Set the size score of the item, an integer.
   --restore

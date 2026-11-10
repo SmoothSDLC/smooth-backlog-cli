@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, readItem, itemNames, slugOfName, GIT_IDENTITY } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, readItem, readHeader, changeItem, writeItem, itemNames, slugOfName, GIT_IDENTITY } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
@@ -149,7 +149,7 @@ test('053: a publication refusal also names another item the agent read that cha
   assert.match(a.stderr, /item 001-alpha was changed by bob .*1 other item\(s\) you read changed too \(002-beta\); read them again \(backlog show 001-alpha,002-beta --agent <you>\)/);
 });
 
-test('a move never replaces an item of the target that holds the file name, even after update --seq freed its number', () => {
+test('a move never replaces a file of the target that holds the file name', () => {
   const f = seed(['temp', 'beta'], 'dest');
   const src = consumer(f.t, 'acme', 'demo', 'main');
   const sfolder = join(f.home, 'acme', 'demo');
@@ -157,11 +157,16 @@ test('a move never replaces an item of the target that holds the file name, even
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'src'); git(f.home, 'push', '-q');
   const dest = consumer(f.t, 'acme', 'dest', 'main');
   assert.equal(run(f, f.home, ['move', '1', '--to-repository', 'acme/demo'], { cwd: dest }).status, 0);
-  assert.equal(run(f, f.home, ['update', '2', '--seq', '1'], { cwd: dest }).status, 1); // a number at or below the highest ever used is refused: numbers are never reused
+  // the name 003-beta.md is held by the target's item whose file is 002-beta.md and whose phase says 003-beta (edited by hand): the number 3 is free for the mark, its name is not
+  const held = itemPath(join(f.home, 'acme', 'dest'), '002-beta');
+  changeItem(held, { fm: { phase: '003-beta' } });
+  assert.equal(readHeader(held, 'phase'), '003-beta');
+  assert.equal(store.nextSeq(join(f.home, 'acme', 'dest')), 3, 'the mark alone would hand out 3');
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'phase edited by hand'); git(f.home, 'push', '-q');
   const m = run(f, f.home, ['move', '001-beta', '--to-repository', 'acme/dest'], { cwd: src });
   assert.equal(m.status, 0, m.stderr + m.stdout);
   const files = itemNames(join(f.home, 'acme', 'dest'));
-  assert.equal(files.length, 2, files.join());
+  assert.deepEqual(files, [itemName('002-beta'), itemName('004-beta')], files.join()); // 3 is skipped: its name is held
   assert.match(onOrigin(f, `acme/dest/${itemRel('002-beta')}`), /Body of beta/); // the destination's own item is intact
   assert.ok(files.some(n => n !== itemName('002-beta') && /SOURCE BODY/.test(readFileSync(itemPath(join(f.home, 'acme', 'dest'), slugOfName(n)), 'utf8'))));
 });
@@ -188,13 +193,23 @@ test('a change in the same second by the same writer name is still a change: the
   assert.equal(a.status, 5, a.stderr + a.stdout);
 });
 
-test('nextSeqFor never returns a number whose file name is held, also by a file without front matter', () => {
+test('a file without front matter holds its number in the mark', () => {
   const t = mkdtempSync(join(tmpdir(), 'stale-seq-')); dirs.push(t);
   const folder = join(t, 'acme', 'demo');
   mkdirSync(join(folder, 'phases'), { recursive: true });
   writeFileSync(itemPath(folder, '001-x'), 'a note, not an item\n');
   assert.equal(store.nextSeqFor(folder, itemName('-x')), 2);
   assert.equal(store.nextSeqFor(folder, itemName('-y')), 2); // the file's name holds its number: the highest number ever used is 1
+});
+
+test('nextSeqFor never returns a number whose file name is held by an item\'s phase, which the mark does not read', () => {
+  const t = mkdtempSync(join(tmpdir(), 'stale-seq-')); dirs.push(t);
+  const folder = join(t, 'acme', 'demo');
+  mkdirSync(join(folder, 'phases'), { recursive: true });
+  writeItem(itemPath(folder, '001-x'), { phase: '002-x', seq: 1, status: 'pending' }, '\n# Phase 1\n'); // the file says 1, the phase says 2
+  assert.equal(store.nextSeq(folder), 2, 'the mark is 1');
+  assert.equal(store.nextSeqFor(folder, itemName('-x')), 3, 'the name 002-x.md is held by the phase');
+  assert.equal(store.nextSeqFor(folder, itemName('-y')), 2);
 });
 
 test('the creator of an item has seen it: another writer\'s change is refused on her next update', () => {

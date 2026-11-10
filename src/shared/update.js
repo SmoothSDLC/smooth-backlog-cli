@@ -19,7 +19,7 @@ import { seam } from './seam.js';
 import { asList, rstrip, strip } from './text.js';
 import { foreignCycle, foreignItem, isForeign } from './dependencies.js';
 import { OF_A_TEAM, REPLAN_TEAM } from './team-items.js';
-import { record as recordNumber } from './numbers.js';
+import { MAX_SEQ, record as recordNumber } from './numbers.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
 const VALUE = [...SETTABLE, 'append', 'section', 'set-lines', 'add-line', 'remove-line', 'move-line', 'replan', 'note', 'set-estimate', 'set-complexity', 'set-layer', 'set-depends-on', 'set-chunk', 'severity', 'by', 'claim', 'release', 'reason'];
@@ -243,6 +243,7 @@ async function change(a, folder, repo, team) {
       if (wip) return refuse(`${row.slug}: ${wip}`);
     }
     if (k === 'seq') { // the number selects the item: another item (archived ones too) holding it would make every numeric selector ambiguous
+      if (n > MAX_SEQ) return refuse(`--seq ${n} is above the highest number the CLI can use (${MAX_SEQ})`);
       const held = rows.find(r => Number(r.seq) === n && r.id !== row.id)?.slug
         ?? store.load(folder).find(i => Number(i.fm.seq) === n && i.fm.phase !== row.slug)?.fm.phase;
       if (held) return refuse(`--seq ${n} is already item ${held}; the number must stay unique`);

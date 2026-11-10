@@ -7,18 +7,19 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
+import { ITEM_EXT_PATTERN } from './item-file.js';
 import { git, writeText } from './store.js';
 
 export const NUMBER_FILE = 'numbers.json';
 // A number above this is never a real item number: in the history it is ignored, in the working tree the file is an unreadable item
 // (a number past 2^53 would otherwise make two allocations equal).
 export const MAX_SEQ = 1e9;
-const NUM = /(?:^|\/)(\d+)-[^/]*\.(?:json|md)$/; // an item file name: .md or .json
+const NUM = new RegExp(`(?:^|/)(\\d+)-[^/]*(?:${ITEM_EXT_PATTERN}|\\.md)$`); // an item file name: the current extension, and .md (history written before a format switch keeps its old names)
 const ITEM_DIR = /^(?:phases|archive)\//;
 
 const history = (cwd, args) => {
   const r = git(args, cwd);
-  if (r.code) throw new BacklogError('STORAGE_ERROR', `cannot read the history of the backlog folder (git ${args[0]} failed); no number was handed out`, 1);
+  if (r.code) throw new BacklogError('STORAGE_ERROR', `cannot read the history of the backlog folder (git ${args[0]} failed); no number was handed out`, 2);
   return r.stdout;
 };
 

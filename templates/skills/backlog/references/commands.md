@@ -296,7 +296,7 @@ Options:
       Replace the objective of the item.
   --seq SEQ
       Set the item number to this integer. Refused unless it is above the highest number ever used in the repository's backlog (numbers
-      are never reused); the item then takes it and the number record follows.
+      are never reused) and at most 1000000000, the highest number the CLI can use; the item then takes it and the number record follows.
   --size_score SIZE_SCORE
       Set the size score of the item, an integer.
   --restore
@@ -1260,7 +1260,7 @@ Usage:
   backlog team new --team <name> --agent <name> --split-from <item> [options]
 
 Adds an item that belongs to the team, to the backlog of this repository and branch (a session bound by SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and
-SMOOTH_BACKLOG_CLI_TEAM_BRANCH files it under that repository and branch). The item gets the next free item number, the team, the status new and the
+SMOOTH_BACKLOG_CLI_TEAM_BRANCH files it under that repository and branch). The item gets the next item number (one above the highest number the repository's backlog ever used, so the number of a deleted, cleaned or archived item is never handed out again), the team, the status new and the
 stage refining; a member refines it, and the team's review of the refinement passes before anyone claims it. A split of a team's
 item (--split-from) is made here too: backlog new used outside a team refuses it. Every option of backlog new works here (backlog new --help
 has the item template); this command adds --review-refs. The agent is the writer of the item, as for every team command.

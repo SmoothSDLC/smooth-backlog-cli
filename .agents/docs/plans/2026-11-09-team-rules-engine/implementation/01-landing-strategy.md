@@ -4,7 +4,7 @@ Context: the owner's agents use the CLI all day on a shared machine, and that in
 repository (`simplify/pr3-review`) at every commit the lead makes. The engine work of `00-priority-order.md` changes the item format,
 renames every environment variable, removes commands and changes who a team command acts as. This file states the facts of the deployment
 (checked on 2026-11-10), what each breaking batch would break, the landing proposal, the cut-over steps with who does what, and the
-rollback. It is planned with the provisional answers of the two owner choices of the implementation plan, "2026-11-10 round 13,
+rollback. It is planned with the answers recorded for the two choices of the implementation plan, "2026-11-10 round 13,
 question 1" (where the engine work is committed) and "question 2" (which folders migrate in the window), written in full at the end of
 `03-risks-and-open-items.md`.
 
@@ -29,9 +29,11 @@ question 1" (where the engine work is committed) and "question 2" (which folders
    team file (chapter 06 section 3). Today's team file sits at the root of the backlog repository in today's shape; after the cut-over
    nothing reads it (ruling R22): a team's entry must be at the location chapter 01 section 1.1 resolves for each repository folder that has
    team items.
-8. Installations on other machines update themselves with the package manager and refuse a release whose `backlogSchemaVersion` differs;
-   batch B22 sets it to 2 (design question "2026-11-09 round 12, question 7"), so they stay on the older release until updated by hand, and
-   the stop file the migration writes makes that older release refuse a migrated folder instead of reusing numbers.
+8. Nothing is built for a release older than the cut-over (rulings R18 and the owner rule of 2026-11-07; design question "2026-11-09
+   round 12, question 7"): no marker in a migrated folder, no change of the schema number. An older release on a migrated folder sees no
+   item and would hand out number 1 again, so every installation that writes to a folder is upgraded before that folder is migrated
+   (step 3 of the cut-over installs the engine build on the shared machine; an installation on another machine is upgraded by its user
+   before it is used on a migrated folder).
 9. The lead's own test scripts change into the working branch's checkout before they run, so they test the working branch only.
 
 ## 2. What would break, batch by batch
@@ -53,7 +55,7 @@ the lead's commit procedure, each would reach every agent at once.
 No breaking batch can be gated off: a gate would keep the old behaviour readable beside the new one, which ruling R18 (no backwards
 compatibility) and ruling R20 (no alias for the old variable names) forbid, and the format cut-over of B06 cannot be half on.
 
-## 3. The landing proposal (provisional answer A of round 13, question 1)
+## 3. The landing (round 13, question 1: an engine branch on the remote, as decision 20261106-AE did for the working branch)
 
 Context: the hazard comes from one fact: the installed CLI is the HEAD of the working branch's checkout. Work committed elsewhere is not
 installed. The proposal uses that fact instead of changing the installation.
@@ -88,7 +90,7 @@ against this list; the implementing agents are idle during the window.
 | 2. Open the window | the owner | Stop every agent session that uses the installed CLI, and the scheduled runs that call it, so that no command runs between the installation and the migration. |
 | 3. Install | the lead | In the working branch's checkout: `git merge --ff-only team-rules-engine` (or `git merge team-rules-engine` when the working branch moved since the last merge), then run the installation step of the commit procedure alone, and check that it reports the merged commit. Push the working branch. |
 | 4. Team files and consumers | the lead | Write each team's entry at its resolved location (the owner's team entry of item 149; a folder without team items needs no file), validate each with `backlog team validate --team <team>`, commit the file with its `teams_file_sha`. Apply the consumer changes of reference/consumers.tsv (item 151): the prefixed variable names, `backlog team query --json` instead of `backlog list --json` for team items, the removed commands, the run-hook variable of any program set as the run hook. |
-| 5. Migrate | the lead | Per repository folder, in that repository's checkout: `backlog team migrate --show-all --dry-run`, then `backlog team migrate --show-all`, then commit .backlog/config.json (the migration record and the SHA). First the CLI repo's own folder, then the folders with team items, then the folders of repositories an agent session works in; the other folders are migrated when next used (provisional answer B of round 13, question 2). |
+| 5. Migrate | the lead | Per repository folder, in that repository's checkout: `backlog team migrate --show-all --dry-run`, then `backlog team migrate --show-all`, then commit .backlog/config.json (the migration record and the SHA). First the CLI repo's own folder, then the folders with team items, then the folders of repositories an agent session works in; the other folders are migrated when next used (rulings R24 and R25: the migration is per folder and `backlog setup` recommends it in a repository whose folder is not migrated; round 13, question 2). |
 | 6. Smoke checks | the lead, checked by the reviewing agent | In the CLI repo's checkout: `backlog --version`, `backlog list`, `backlog team validate --show-all`, `backlog team query --team <team>`, `backlog team pop --team <team> --agent <member> --dry-run --json`, and one `backlog new --name "cut-over check"` followed by `backlog archive <its number> --force`. Each must succeed with the expected output. |
 | 7. Close the window | the owner | Restart the agent sessions. The first real session of the owner's team is watched until its first pop and its first step succeed. |
 
@@ -99,11 +101,11 @@ migration commit per folder in the backlog repository) and the consumers (their 
 
 - **Before step 7 (no agent has written a JSON item).** Revert the merge on the working branch (`git revert -m 1 <merge commit>`), push, run
   the installation step; revert each folder's migration commit in the backlog repository (`git revert <migration commit>`), which restores
-  the markdown files exactly and removes the stop file and numbers.json with them, and push; revert the consumer commits in their
+  the markdown files exactly and removes numbers.json with them, and push; revert the consumer commits in their
   repositories. The installed CLI and the data are then as before the window.
 - **After step 7.** Agents have written JSON items; reverting a migration commit would then conflict or drop their writes. The rollback
   becomes a fix forward on the working branch, and a folder whose items are wrong is repaired by its team with its own steps or by the
-  owner with user commands and `--show-all`. An older build installed by mistake meanwhile stops on the stop file of every migrated folder
-  instead of handing out numbers again (fact 8). This is why the window closes only after the smoke checks.
+  owner with user commands and `--show-all`. An older build must not be installed again after this point: it would see a migrated folder as empty
+  (fact 8). This is why the window closes only after the smoke checks.
 - **Per batch, before the cut-over.** A batch that turns out wrong is reverted on the engine branch with `git revert <batch commit>`; it
   was never installed, so no consumer saw it.

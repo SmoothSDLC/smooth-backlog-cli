@@ -65,11 +65,11 @@ command is named; the four of setup.test.mjs go to .agents/test/shared-setup.tes
 | a record dated in the future (clock change) is stale: the file is read again | B11 | team-load |
 | a refused team command writes nothing: no SHA, no record, no copy, even when another team of the file is valid | B11, through a command in B13 | team-load, team-commands |
 | `backlog team validate` always validates in full, refreshes the record and writes the SHA | B12 | team-validate |
-| the record lists the valid teams: a valid team proceeds, an invalid team takes no action (question 4 of round 12) | B11, through a command in B13 | team-load, team-commands |
+| the whole file must be valid: one broken entry stops every team of the file (question 4 of round 12) | B11, through a command in B13 | team-load, team-commands |
 | a read-only checkout and an unwritable state folder: the command proceeds, validating in full each time, silently | B11 | team-load |
 | an unparsable .backlog/config.json stops every command and is never overwritten | B02 (user commands), B11 (team commands) | team-file-location, team-load |
 | a repository input that names another repository: that repository's team file; the SHA goes to the per-user record (question 1 of round 12) | B11 | team-load |
-| a backlog found without a configuration: the team file is in its repository folder and no configuration is created (question 6 of round 12) | B11 | team-load |
+| without a configuration the team file is .backlog/teams.json and the SHA goes into a new .backlog/config.json (question 6 of round 12) | B11 | team-load |
 | setup copies the five generic templates into .backlog/team-templates and says so | B25 | shared-setup |
 | a second setup replaces an edited copy and removes a file the person added there | B25 | shared-setup |
 | setup reports the migration until the folder is migrated, then states when (no version comparison) | B26 | shared-setup |
@@ -86,9 +86,9 @@ All are integration tests on two clones of one bare repository unless the row sa
 | two claims that together pass a team limit: the second is refused by the limit rule | B15 | team-concurrency |
 | two creations at once: two numbers | B15 | team-concurrency |
 | an item changed during a step past half of the time budget: exit 3 | B15 | team-concurrency |
-| a team re-run drops only the command's own commit; a person's unpushed commit and uncommitted change are kept (question 2 of round 12) | B15 | team-concurrency |
+| a team re-run drops only the command's own commit and publishes only that; a person's unpushed commit stays local and an uncommitted change is kept (question 2 of round 12) | B15 | team-concurrency |
 | a person's uncommitted change to a file of the command's commit blocks the reset: exit 3 with the text | B15 | team-concurrency |
-| upstream changed only another repository folder: the team command is not run again, its commit is rebased | B15 | team-concurrency |
+| upstream changed only another repository folder: the team command is not run again, and only its own commit is published | B15 | team-concurrency |
 | two clones create an item at once, through `backlog new` | B04 | numbers |
 | another clone published and cleaned (deleted) a number before this push: a team command takes the next number | B15 | team-concurrency |
 | the same race through a user command: the number is renumbered above upstream | B04 | numbers |
@@ -99,8 +99,7 @@ All are integration tests on two clones of one bare repository unless the row sa
 | a shallow clone refuses `backlog new` | B03 | numbers |
 | `backlog update <item> --seq <n>` below the mark is refused | B03 | numbers |
 | the migration seeds its folder from the folder's history | B22 | team-migrate |
-| a duplicate number of two items without a team after a code-branch merge is renumbered (question 3 of round 12) | B04 | numbers |
-| a duplicate number that involves a team item stops the folder's team commands until a person renumbers it (question 3 of round 12) | B12 (validate reports it), B13 (the stop) | team-validate, team-commands |
+| after a code-branch merge that left two items with one number, a command given that number stops and names both slugs; nothing is renumbered (question 3 of round 12) | B06 | item-json |
 | a lead's uncommitted team file in the folder is not committed by the next writing command (staging of owned paths) | B04 | shared-sync |
 | a user priority change leaves team entries in place | B19 | shared-index |
 | a team's `place` effect leaves user entries in place | B19 | team-commands |
@@ -135,7 +134,6 @@ All are integration tests in .agents/test/team-migrate.test.js, on fixture folde
 | a second run that converts nothing keeps `migrated_at` | B22 |
 | a second run after a team entry is removed unbinds its items | B23 |
 | a markdown item after the migration stops a command | B22 (the stop text itself is B06) |
-| an older release refuses a migrated folder because of the stop file (question 7 of round 12) | B22 (today's reader run on the migrated fixture) |
 | validate runs on a markdown backlog and checks the file only | B22 |
 | setup runs on a markdown backlog and recommends the migration | B26 (in shared-setup) |
 | an entry in today's shape stops the migration and nothing is written | B22 |

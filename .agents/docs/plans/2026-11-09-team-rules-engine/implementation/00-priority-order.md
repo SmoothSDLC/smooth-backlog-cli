@@ -2,9 +2,9 @@
 
 Context: the design of the team rules engine is in `../design/` (chapters 01 to 08, revised after the four independent reviews A to D),
 bound by the owner rulings R1 to R25 of `../00-owner-rulings.md` and the command page `../01-command-behaviour-matrix.md`. Seven points
-the rulings do not decide are in `../design/decisions.md`, labelled "2026-11-09 round 12, question 1" to "question 7"; each is applied
-there provisionally with the lead's recommendation, and every batch below that implements one cites its label, so that another answer
-changes exactly the batches listed in `03-risks-and-open-items.md` section 3. This file turns the design into an ordered list of small
+the reviews raised are in `../design/decisions.md`, labelled "2026-11-09 round 12, question 1" to "question 7"; all seven are closed
+(2026-11-09) and the design follows the answers. Every batch below that implements one cites its label; the batches each answer touched
+are listed in `03-risks-and-open-items.md` section 3. This file turns the design into an ordered list of small
 batches. Each batch is one commit that leaves every guard green, carries its own tests and its own documentation (the documentation rule
 of AGENTS.md: the built-in skill, the help text, COMMANDS.md regenerated, README.md and CHANGELOG.md, in the same change), and cites the
 design chapters it implements by number; a batch re-reads its chapters at its start and copies no design text. Where the batches are
@@ -66,11 +66,11 @@ calls (dependency) and, between two independent batches, the one whose failure w
 7. **Removals (B27 to B29).** The old team code is unreachable after B14 and B16; removing it last keeps every earlier batch small and
    lets each earlier batch keep the old unit tests of modules it does not touch.
 
-The order was checked against the revised design. The items the reviews added find their batch as follows: the stop file for older
-releases and schema version 2 (question 7) go with the migration (B22), and the new reader that ignores that one file name with B06; the
-publication rule that drops only the command's own commit (question 2) is B15; staging only the item files, index.json and numbers.json
-is B04; the per-user record that holds the SHA when the repository input names another repository or the repository has no configuration
-(questions 1 and 6) is B11 on the resolution of B02; setup on a markdown backlog is B26; the four extra variables are B01. None of them
+The order was checked against the revised design. The items the reviews added find their batch as follows: nothing is built for
+older releases (question 7), so B06 and B22 carry no marker file and no schema number; the publication rule that drops only the command's
+own commit and pushes only that commit (question 2) is B15; staging only the item files, index.json and numbers.json is B04; the refusal
+of a number that two items hold (question 3) is in the item lookup of B06; the per-user record that holds the SHA when the repository
+input names another repository (question 1) is B11 on the resolution of B02; setup on a markdown backlog is B26; the four extra variables are B01. None of them
 needed a new batch or a change of order.
 
 Batches outside this repository (the owner's team file, the skills, the full-scope execution, the gap review) are listed in section 4;
@@ -88,16 +88,16 @@ batch after which the installed CLI would behave differently for an existing con
 | B01 | every variable the CLI owns carries the prefix SMOOTH_BACKLOG_CLI_ (fourteen names) | yes | | none | 350 | 152 |
 | B02 | the configuration keys, the unreadable-configuration stop, the team-file location | no | round 12, questions 1 and 6 | B01 | 200 | 152 |
 | B03 | a number is allocated above the high-water mark of the folder's history | no (a shallow clone now refuses to allocate) | | B01 | 280 | 152 |
-| B04 | publication above the upstream mark for user commands; a duplicate renumbered only between items without a team; staging of owned paths only | no | round 12, question 3 | B03 | 280 | 152 |
+| B04 | publication above the upstream mark for user commands; staging of owned paths only | no | | B03 | 280 | 152 |
 | B05 | every item read and write goes through one item-file module (refactor, no behaviour change) | no | | B01 | 150 | 152 |
-| B06 | item files are JSON; a markdown item stops every command; the built-in user definition | yes | round 12, question 7 (the reader ignores the stop file) | B05 | 750 | 152 |
+| B06 | item files are JSON; a markdown item stops every command; the built-in user definition | yes | round 12, question 3 (a number that names two items is refused) | B05 | 750 | 152 |
 | B07 | the linear-time pattern matcher | no | | none | 250 | 152 |
 | B08 | the evaluator: rule table, conditions, values, effects, the step `new` | no | | B06, B07 | 800 | 152 |
 | B09 | the pop table and the named filters | no | | B08 | 250 | 152 |
 | B10 | the checks of the team file (people, item definition, every rule, schema) | no | | B08 | 550 | 152 |
 | B11 | validation on load with the SHA and the per-user record | no | round 12, questions 1, 4 and 6 | B02, B10 | 380 | 152 |
-| B12 | the team router, the inputs of a team command, `backlog team validate` | no (a new command; today's team commands keep their routes) | round 12, questions 1, 3, 4 and 5 | B11 | 450 | 152 |
-| B13 | `backlog team new` on the evaluator | yes | round 12, question 3 (the stop on a duplicate) | B12, B09 | 300 | 152 |
+| B12 | the team router, the inputs of a team command, `backlog team validate` | no (a new command; today's team commands keep their routes) | round 12, questions 1, 4 and 5 | B11 | 450 | 152 |
+| B13 | `backlog team new` on the evaluator | yes | | B12, B09 | 300 | 152 |
 | B14 | `backlog team update`, `backlog team query check`, `backlog team pop`, `backlog team query plan` | yes | | B13 | 600 added, about 3000 test lines removed | 152 |
 | B15 | a team command runs again on the upstream files when another agent published first | no (new behaviour of new commands) | round 12, question 2 | B14, B04 | 350 | 152 |
 | B16 | the read-only team query forms | no | round 12, question 5 | B14 | 280 | 152 |
@@ -106,10 +106,10 @@ batch after which the installed CLI would behave differently for an existing con
 | B19 | a reordering and `backlog clean` keep the other owner's index entries | no | | B17 | 200 | 152 |
 | B20 | a session that names a team cannot run user commands | yes | | B17 | 80 | 152 |
 | B21 | every command acts on its own repository folder only | yes (`backlog move` to another repository is removed) | round 12, question 1 | B06, B14 | 350 (mostly removals) | 152 |
-| B22 | `backlog team migrate`: the conversion of one folder, its failures, its dry run, its record, the stop file | no (a new command) | round 12, questions 1, 5 and 7 | B06, B10, B12, B03 | 680 | 152 |
+| B22 | `backlog team migrate`: the conversion of one folder, its failures, its dry run, its record | no (a new command) | round 12, questions 1, 5 and 7 | B06, B10, B12, B03 | 680 | 152 |
 | B23 | the migration's data cases: unbinding, split parents, priority order, status copies | no | | B22 | 300 | 152 |
 | B24 | the migration's field report and `--ask` | no | | B22 | 300 | 152 |
-| B25 | `backlog setup` copies the team templates | no | | B08 | 150 plus the five template files | 150, 152 |
+| B25 | `backlog setup` copies the team templates | no | | B08 | 150 plus the five template files | 152 |
 | B26 | `backlog setup` runs on a markdown backlog and reports the migration | no | | B22 | 80 | 152 |
 | B27 | the old team commands, modules, readers and the shipped workflow template are removed | yes | | B14, B16, B22 | about 4000 removed | 152 |
 | B28 | the compatibility paths are removed | yes | | B27, B22 | about 300 removed | 152 |
@@ -136,11 +136,11 @@ batch after which the installed CLI would behave differently for an existing con
 **B02. The configuration keys and the team-file location.**
 - Goal: the configuration reader knows `teams_file`, `teams_file_sha`, `migrated_at` and `migrated_by_version`; a configuration file that
   exists but cannot be read stops every command with exit 2 and is never written over; a pure function resolves the team file in the order
-  of chapter 01 section 1.1 (the repository input naming another repository, the explicit key, a backlog folder outside the repository
-  however the CLI found it, else .backlog/teams.json), with path segments compared and today's path safety, and the missing-file text.
+  of chapter 01 section 1.1 (the repository input naming another repository, the explicit key, the repository's folder of a
+  `backlog_repository` outside the repository, else .backlog/teams.json; a backlog folder found another way does not count), with path segments compared and today's path safety, and the missing-file text.
   Nothing calls the resolution yet.
 - Rulings and chapters: R22, R25 (the record keys, read only here); chapter 01 section 1.1, chapter 06 section 2.0; design questions
-  "2026-11-09 round 12, question 1" (step 0 of the resolution) and "question 6" (a backlog found any way counts as defined).
+  "2026-11-09 round 12, question 1" (step 0 of the resolution) and "question 6" (ruling R22 as written: only the configuration defines the location).
 - Target files: src/shared/setup.js (readConfig), src/shared/store.js (the reader used by every command), a new src/team/teams-file.js;
   tests .agents/test/team-file-location.test.js.
 - Layer and role: configuration layer; implementing agent.
@@ -166,16 +166,14 @@ batch after which the installed CLI would behave differently for an existing con
 
 **B04. Publication and staging.**
 - Goal: after a user command's rebase, every item the local commits added whose number is not above the upstream high-water mark is
-  renumbered above it, with its references; a rebase conflict on numbers.json takes the larger value; a duplicate number after a merge of
-  code branches is renumbered only when neither item has a team; a writing command stages only the item files it wrote, index.json and
+  renumbered above it, with its references; a rebase conflict on numbers.json takes the larger value; a writing command stages only the item files it wrote, index.json and
   numbers.json of its folder, never the folder root, the team file, the templates or .backlog/config.json.
-- Rulings and chapters: R12, R5; chapter 05 sections 2 and 3, chapter 04 section 6 ("What is staged"); design question
-  "2026-11-09 round 12, question 3" (renumber only items without a team).
+- Rulings and chapters: R12, R5; chapter 05 sections 2 and 3, chapter 04 section 6 ("What is staged").
 - Target files: src/shared/sync.js (remapLocal, repairConflicts, the staging lists); tests added to .agents/test/numbers.test.js and a
   staging test in .agents/test/shared-sync.test.js.
 - Layer and role: synchronisation layer; implementing agent.
 - Proof: the standard proof; the scenarios "two clones create at once" and "another clone published and cleaned the same number before
-  this push" through `backlog new`; "a duplicate number of two items without a team after a code-branch merge is renumbered"; a lead's
+  this push" through `backlog new`; a lead's
   uncommitted team file in the folder is not committed by the next `backlog new`.
 - Unrelated-file risk: medium; src/shared/sync.js is the most shared module (538 lines) and every concurrency test passes through it.
 - Depends on: B03.
@@ -198,17 +196,18 @@ batch after which the installed CLI would behave differently for an existing con
   size_score, `backlog done` writes closed, `backlog new` no longer writes review_state and reviewer, `backlog archive` writes no status
   word, undeclared fields kept and shown, the `review_state` column of `backlog list --json` kept with the stored value, the body template
   of a new user item kept, `backlog new --force` removed); `backlog fields` prints that definition; the conflict guard looks for `*.json`;
-  a markdown item with a header stops every command except those chapter 06 section 2 lists, with the migrate text; the reader ignores
-  exactly the file name phases/000-migrated-to-json.md. The markdown reader stays in the code for the migration only (B22).
-- Rulings and chapters: R4, R7; chapter 02 sections 1 to 5, chapter 06 sections 2 and 6 (first row); design question
-  "2026-11-09 round 12, question 7" (the one ignored file name).
+  a markdown item with a header stops every command except those chapter 06 section 2 lists, with the migrate text; a command
+  given a number that two items of the folder hold stops with exit 2 and names both slugs, and nothing is renumbered (chapter 05
+  section 2). The markdown reader stays in the code for the migration only (B22).
+- Rulings and chapters: R4, R7; chapter 02 sections 1 to 5, chapter 06 sections 2 and 6 (first row); chapter 05 section 2 (the
+  ambiguous number); design question "2026-11-09 round 12, question 3" (a merge made outside the CLI is outside its scope).
 - Target files: src/shared/item-file.js, src/shared/fields.js, src/shared/new.js, src/shared/archive.js, src/shared/store.js (the
   retired-key write stays until B28), src/shared/sync.js (the conflict guard's pattern), the test helper .agents/test/shared-concurrency.js
   (it writes markdown items) first, the BDD steps features/steps/cli.js (they read `.md` files today), the fixtures
   .agents/test/fixtures/shared/; the tests of the markdown-item group of `02-bdd-plan.md` section 3.
 - Layer and role: storage layer; implementing agent, reviewed by a second agent before commit (the largest batch).
 - Proof: the standard proof; a new test .agents/test/item-json.test.js: the byte-exact text form (same item, same bytes), the unreadable
-  item text, the markdown stop text, the ignored stop file, the history entry of a user write; the BDD of both locations unchanged in
+  item text, the markdown stop text, the refusal of a number held by two items, the history entry of a user write; the BDD of both locations unchanged in
   meaning.
 - Unrelated-file risk: high; the old team code still reads the in-memory item and keeps working through the seam (the in-memory shape of
   an item stays: envelope and fields merged as today), but every test that writes or reads a `.md` item changes.
@@ -269,11 +268,11 @@ batch after which the installed CLI would behave differently for an existing con
 - Depends on: B08.
 
 **B11. Validation on load.**
-- Goal: the load procedure of chapter 01 section 4: the SHA in .backlog/config.json, or in the per-user record when the repository input
-  names another repository or the working copy has no configuration; the per-user record and validated copy, valid from 0 to 24 hours;
-  per-team validity; a refused command writes nothing at all; a read-only checkout proceeds silently.
+- Goal: the load procedure of chapter 01 section 4: the SHA in .backlog/config.json (created when it does not exist), or in the
+  per-user record when the repository input names another repository; the per-user record and validated copy, valid from 0 to 24 hours;
+  the whole file must be valid, so a finding in any entry refuses every team; a refused command writes nothing at all; a read-only checkout proceeds silently.
 - Rulings and chapters: R18, R21, R22; chapter 01 sections 1.1 ("Where the SHA is kept") and 4; design questions "2026-11-09 round 12,
-  question 1" and "question 6" (where the SHA is kept) and "question 4" (validity per team).
+  question 1" and "question 6" (where the SHA is kept) and "question 4" (the whole file must be valid).
 - Target files: a new src/team/teams-load.js (port of the spike's teams-load.mjs on B02 and B10); tests .agents/test/team-load.test.js.
 - Layer and role: validation layer; implementing agent.
 - Proof: the standard proof; the fifteen scenarios of the spike's teams-load.test.mjs on real temporary folders.
@@ -287,33 +286,32 @@ batch after which the installed CLI would behave differently for an existing con
   keep their routes until B27, and migrate answers that it is not yet available until B22); every team command resolves its team (flag,
   then SMOOTH_BACKLOG_CLI_TEAM_NAME, then the `team` key; an empty value counts as not set), its agent (flag, then
   SMOOTH_BACKLOG_CLI_AGENT; never the configuration's user), its session, its repository (which names the repository the command acts on)
-  and branch; `--show-all` where it is accepted and its refusals elsewhere and with `--team`; the coded checks of chapter 04 section 5 that
-  need no step; the first command on the engine, `backlog team validate`, with its exit code per team and the item checks of chapter 08
-  sections 7 and 8 on JSON items (a duplicate number involving a team item is an error; a `seq` that differs from the file name is an
-  error). Today's commands `new`, `update`, `pop` and `query` stay routed to the old code until B13, B14 and B16 replace them.
+  and branch; `--show-all` where it is accepted and its refusal elsewhere, and `--team` deciding when both are given; the coded checks of chapter 04 section 5 that
+  need no step; the first command on the engine, `backlog team validate`, with its exit code following the whole file and the item checks of chapter 08
+  sections 7 and 8 on JSON items (a `seq` that differs from the file name is an error). Today's commands `new`, `update`, `pop` and `query` stay routed to the old code until B13, B14 and B16 replace them.
 - Rulings and chapters: R3b, R11, R14, R15, R18, R21; chapter 01 section 5, chapter 04 sections 1 and 5, chapter 08 sections 1, 2, 7, 8;
-  design questions "2026-11-09 round 12, question 1" (the repository input), "question 3" (the duplicate is an error), "question 4"
-  (validity per team) and "question 5" (which commands take `--show-all`).
+  design questions "2026-11-09 round 12, question 1" (the repository input), "question 4" (the whole file must be valid) and
+  "question 5" (which commands take `--show-all`; `--team` wins).
 - Target files: src/team/cli.js, a new src/team/inputs.js, a new src/team/validate-command.js, src/team/help.js, src/help.js; docs.
 - Layer and role: team command layer; implementing agent.
 - Proof: the standard proof; cases COD-01 to COD-04, COD-13, COD-16, R14-01 to R14-10, R15-01, R15-02 (run kinds `resolve` and `inputs`);
   a new integration test .agents/test/team-validate.test.js: `backlog team validate --team web` on a temporary repository prints the
-  findings, exits 2 on an error of its own team and 0 when only another team is broken, writes the SHA once.
+  findings, exits 2 on an error in any entry (naming the other teams in one line when its own entry is clean), 0 on a valid file, writes the SHA
+  once.
 - Unrelated-file risk: medium; .agents/test/team-cli.test.js and .agents/test/router.test.js test the router today.
 - Depends on: B11.
 
 **B13. `backlog team new`.**
 - Goal: the step `new` evaluated on the new item; the number from the counter only when the step is allowed; an empty body unless a
   `note` effect writes one; the item placed at the end of the team's queue unless a `place` effect says otherwise; written through the
-  journal, committed and pushed; every team command of a folder that holds a duplicate number involving a team item stops with exit 2.
+  journal, committed and pushed.
 - Rulings and chapters: R1, R2, R5, R12, the sentence "a new item for team X" of the rulings; chapter 04 section 2, chapter 05 sections 2
-  and 6; design question "2026-11-09 round 12, question 3" (the stop on a duplicate).
+  and 6.
 - Target files: src/team/new.js (rewritten), src/team/cli.js; the old tests of `backlog team new` in .agents/test/team-cli.test.js and the
   team test files that create items through it.
 - Layer and role: team command layer; implementing agent.
 - Proof: the standard proof; a new integration test .agents/test/team-commands.test.js replays every `new` case of rule-cases.json through
-  the real command on a temporary backlog (exit code, refusal text, rule id, the created file); "a duplicate number that involves a team
-  item stops the folder's team commands until a person renumbers it".
+  the real command on a temporary backlog (exit code, refusal text, rule id, the created file).
 - Unrelated-file risk: medium (old team tests that create items through `backlog team new` with today's flags change or go).
 - Depends on: B12, B09.
 
@@ -335,17 +333,21 @@ batch after which the installed CLI would behave differently for an existing con
 - Depends on: B13.
 
 **B15. Running again on the upstream files.**
-- Goal: when the push of a team command is refused, a change only outside its folder is rebased as it is; a change of its folder drops
+- Goal: when the push of a team command is refused, a change only outside its folder leaves its commit as it is; a change of its folder drops
   only the command's own commit (`git reset --keep HEAD~1`), runs today's pull with rebase and runs the whole command again on the
-  upstream files, with the random growing wait, for at most half of the clone lock's time budget; a person's uncommitted change that blocks
+  upstream files, with the random growing wait, for at most half of the clone lock's time budget; the push sends only the command's
+  own commit: when a person's unpushed commits lie below it, the same change is built as one commit on the upstream branch without touching
+  the working tree, pushed, and the local branch rebased onto it, so the person's commits stay local; a conflict with a person's unpushed
+  commit publishes nothing and stops with exit 3; a person's uncommitted change that blocks
   the reset stops with exit 3 and the text of chapter 04 section 6; with pushing switched off the command never re-runs; the stale-view
   guard does not run for team commands.
 - Rulings and chapters: R1, R12, R24; chapter 04 sections 6 and 7, chapter 05 section 3 (team commands); design question
-  "2026-11-09 round 12, question 2" (drop only the command's own commit; the push carries the branch as today).
+  "2026-11-09 round 12, question 2" (B: drop only the command's own commit and publish only that commit).
 - Target files: src/shared/sync.js (a new entry for team commands), src/team/update.js, src/team/new.js, src/team/pop.js.
 - Layer and role: synchronisation layer; implementing agent.
 - Proof: the standard proof; the two-clone scenarios of chapter 04 section 6 and the re-run tests of the spike's numbers.test.mjs ("a team
-  re-run drops only the command's own commit", "upstream changed only another folder") in a new .agents/test/team-concurrency.test.js.
+  re-run drops only the command's own commit and publishes only that", "upstream changed only another folder: ... only its own commit is
+  published") in a new .agents/test/team-concurrency.test.js.
 - Unrelated-file risk: medium (src/shared/sync.js again; user commands must keep their stale-view behaviour, proven by
   .agents/test/shared-stale.test.js unchanged).
 - Depends on: B14, B04.
@@ -440,22 +442,19 @@ batch after which the installed CLI would behave differently for an existing con
 - Goal: `backlog team migrate` (with `--team <name>` or `--show-all`, and `--dry-run`) converts every markdown item of its own repository
   folder, open and archived, with the mapping of chapter 02 section 5; validates the whole team file first and refreshes the record and
   the SHA as validate does; a folder in which no item has a team migrates without a team file; stops with no action on every failure of
-  chapter 06 section 5 (the too-long JSON file name included); seeds numbers.json from the folder's history; writes the stop file
-  phases/000-migrated-to-json.md that older releases refuse; commits once and pushes; writes `migrated_at` only when the run converted a
+  chapter 06 section 5 (the too-long JSON file name included); seeds numbers.json from the folder's history; commits once and pushes; writes `migrated_at` only when the run converted a
   file or is the first run over the folder, and `migrated_by_version` as information, and neither when the repository input names another
-  repository; `backlog team validate` on a markdown backlog checks the file only; `backlogSchemaVersion` becomes 2 in package.json.
+  repository; `backlog team validate` on a markdown backlog checks the file only. Nothing is written for older releases and
+  the schema number does not change.
 - Rulings and chapters: R4, R5, R12, R14, R18, R24, R25; chapter 06 sections 1 to 3, 4.5, 4.7, 5 and 6, chapter 02 section 5, chapter 05
   section 4, chapter 08 section 1; design questions "2026-11-09 round 12, question 1" (no record for another repository), "question 5"
-  (`--show-all` on migrate) and "question 7" (the stop file and schema version 2).
-- Target files: a new src/team/migrate.js (the only caller of src/shared/frontmatter.js after this batch), src/team/cli.js, package.json;
-  docs.
+  (`--show-all` on migrate) and "question 7" (nothing is built for older releases).
+- Target files: a new src/team/migrate.js (the only caller of src/shared/frontmatter.js after this batch), src/team/cli.js; docs.
 - Layer and role: migration layer; implementing agent, reviewed by a second agent.
 - Proof: the standard proof; the migration scenarios of `02-bdd-plan.md` section 2.4 that this batch covers, in a new
   .agents/test/team-migrate.test.js, on fixtures built from the forms of today (the existing .agents/test/fixtures/shared/item-*.md files);
-  "an older release refuses a migrated folder because of the stop file", run with today's reader on a migrated fixture; the tests of
-  today's markdown reader in .agents/test/shared-frontmatter.test.js kept as tests of the migration's reader; the self-update tests of
-  .agents/test/upgrade.test.js adjusted if they name the schema number.
-- Unrelated-file risk: low (new files, one key of package.json).
+  the tests of today's markdown reader in .agents/test/shared-frontmatter.test.js kept as tests of the migration's reader.
+- Unrelated-file risk: low (new files).
 - Depends on: B06, B10, B12, B03.
 
 **B23. The migration's data cases.**
@@ -482,7 +481,7 @@ batch after which the installed CLI would behave differently for an existing con
 **B25. Setup copies the team templates.**
 - Goal: `backlog setup` copies templates/teams/ to .backlog/team-templates/ with the symbolic-link check, replaces the folder on every
   setup, prints the message of chapter 01 section 1.2; nothing reads a template.
-- Rulings and chapters: R5, R23; chapter 01 section 1.2. Backlog item 150 (the team templates at setup) and 152.
+- Rulings and chapters: R5, R23; chapter 01 section 1.2. Backlog item 152.
 - Target files: src/shared/setup.js; docs.
 - Layer and role: setup layer; implementing agent.
 - Proof: the standard proof and `npm pack --dry-run`; the spike's two template tests of setup.test.mjs ported to
@@ -554,6 +553,7 @@ repositories, never here (the information-security rule). They are listed so tha
 | order | what | where | backlog item | can start after | needed before |
 |---|---|---|---|---|---|
 | X1 | the owner's team template | the backlog repo | 148 | B10 (validate can check it, run from the engine checkout) | X2 |
+| X1b | the template-location key in the configuration of every repository and branch, read by skills and people to find the owner's team template; the CLI never reads it (R5) | the owner's repositories | 150 | X1 | X3 |
 | X2 | the owner's team entry, finalized, in the new shape, at the location chapter 01 section 1.1 resolves for each repository folder that has team items; it includes the dependency rule for items migrated without hand-off records (coverage row B3-19) | the backlog repo | 149 | X1, B16 | the cut-over |
 | X3 | the lead and member skills read the rule set through the commands of chapter 07 section 1; the consumers of reference/consumers.tsv change | the owner's repositories | 151 | B16, B17 | the cut-over |
 | cut-over | the engine reaches the installed CLI and the folders in use are migrated | `01-landing-strategy.md` | 152 | B29, X2, X3 | X4 |
@@ -563,7 +563,7 @@ repositories, never here (the information-security rule). They are listed so tha
 ## 5. The rows of the coverage file deferred with an explicit blocker
 
 Context: design/coverage.tsv gives every behaviour of today's code, every test, every consumer, every gap, every ruling and every review
-finding a terminal state; 61 of its 2114 rows are DEFERRED-WITH-EXPLICIT-BLOCKER (design/coverage-counts.tsv). What unblocks each:
+finding a terminal state; 49 of its 2114 rows are DEFERRED-WITH-EXPLICIT-BLOCKER (design/coverage-counts.tsv). What unblocks each:
 
 | rows | blocker | unblocked by |
 |---|---|---|
@@ -572,4 +572,3 @@ finding a terminal state; 61 of its 2114 rows are DEFERRED-WITH-EXPLICIT-BLOCKER
 | B3-19 (a closed producer with no hand-off record satisfied a dependency) | the owner's rule set writes it as a rule | X2 (item 149) |
 | L12, L13, L33, L43, L52, L56, S06, S87, S88, S101 (user-command features outside the engine) | entry plan Task 8 files each as its own item | X5 (item 154) |
 | L32, L53, L54, L57, L58, L59, S95 and Q-09 to Q-15 (14 rows) | owner questions Q-09 to Q-15 of reference/08-owner-questions.md, all about user commands | the owner's answers, filed by X5 (item 154); until Q-10 is answered the team commands of B12 to B16 print raw JSON (chapter 04 section 4) |
-| R14, C-H2, C-H3, C-M1, C-M5, C-L6, D-H1, D-H3, D-H4, D-H5, D2-83, D2-86 (12 rows: a ruling and the review findings settled by a design question) | the owner's answers to "2026-11-09 round 12", questions 1 to 7 of design/decisions.md | each is built now with its provisional option by the batches that cite the question (table of `03-risks-and-open-items.md` section 3); another answer changes those batches before the cut-over |

@@ -2,10 +2,9 @@
 
 Context: `00-priority-order.md` orders the work in 29 batches, `01-landing-strategy.md` keeps them off the installed CLI until one
 cut-over, and `02-bdd-plan.md` maps every scenario. This file gives, per batch, what can go wrong and how the batch is undone (section 1);
-the points found while planning, for the lead (section 2); which batches change if the owner answers a design question of
-`../design/decisions.md` with another option than the provisional one (section 3); and, last, the two owner choices of the implementation
-plan itself (section 4), planned provisionally with their recommendations. The design's own choices are in `../design/decisions.md` only
-and are not repeated here.
+the points found while planning, for the lead (section 2); which batches carry each answer to the design questions of
+`../design/decisions.md` (section 3); and, last, the two choices of the implementation plan itself (section 4). The design's own answers
+are in `../design/decisions.md` only and are not repeated here.
 
 ## 1. Risks and rollback per batch
 
@@ -27,16 +26,16 @@ only what that revert does not cover. After the cut-over the rollback is the one
 | B10 | a finding without the fix text, or a false shadowing error that blocks a valid file | cases VAL-01 to VAL-35 and the five templates validate clean; the warnings, which the spike leaves out, get one test each | none |
 | B11 | the 24-hour copy hides an edit, so a lead believes a change is live; the SHA lands in the wrong place for another repository | stated behaviour of ruling R21 and the lead's habit of chapter 01 section 4; the scenarios of questions 1 and 6 of round 12 | delete the per-user record files of the team file |
 | B12 | the router refuses a word a later batch needs, or the old routes break before their replacement | define and workflow keep their routes until B27; migrate answers that it is not yet available until B22 | none |
-| B13 | a refused `new` consumes a number; a duplicate stops a folder that has none | the number is taken only after the rule allows the step (chapter 04 section 2); the duplicate test uses two real items | none |
+| B13 | a refused `new` consumes a number | the number is taken only after the rule allows the step (chapter 04 section 2) | none |
 | B14 | deleting about 3000 lines of old tests also deletes a behaviour that the templates do not cover | each deleted file is checked against coverage.tsv: every test row is BAKE-IN (a case), LAZY-LOAD, SKIP with a reason, or deferred; a second agent reviews the deletions | none |
-| B15 | the re-run loops, starves one writer, or drops a person's work | only the command's own commit is dropped; the wait grows at random and stops at half of the lock budget (chapter 04 sections 6 and 7); the two-clone scenarios include a person's unpushed commit and uncommitted change | none |
+| B15 | the re-run loops, starves one writer, drops a person's work or publishes it; the rebase of the local branch after the push fails | only the command's own commit is dropped and only that commit is pushed, built on the upstream branch without touching the working tree; a conflict publishes nothing and stops with exit 3; the wait grows at random and stops at half of the lock budget (chapter 04 sections 6 and 7); the two-clone scenarios include a person's unpushed commit and uncommitted change | none |
 | B16 | help reads a broken team file and fails | help reads nothing (chapter 04 section 1); a test runs `backlog team update --help` with a broken team file | none |
 | B17 | a read path still shows a team item (a count, a dependency list, a history, the held section of changes) | the test lists every reading command of chapter 04 section 8 with a team item present | none |
 | B18 | a user change of a team item escapes the history note | the test checks the entry for every writing command | none |
 | B19 | a reordering or a clean moves or drops a team entry | the three scenarios of `02-bdd-plan.md` section 2.3 | none |
 | B20 | an existing test or a script sets the team variable and then runs a user command | the B20 search over .agents/test; the consumers change at the cut-over (`01-landing-strategy.md` step 4) | none |
 | B21 | removing the foreign walk lets a cycle through another folder pass; the narrower guards miss a conflict that matters | ruling R24 accepts it: no command reads another folder; validate reports an unresolved reference; the guards still cover every path of the own folder | none |
-| B22 | a real folder holds a case the fixtures do not; the stop file is read by the new release as an item | the rehearsal of `01-landing-strategy.md` step 1 runs the migration on a scratch copy of every folder; B06 already ignores that one file name and a test proves it | in a scratch copy nothing to undo; on the real backlog, `git revert <migration commit>` restores the markdown files exactly and removes the stop file |
+| B22 | a real folder holds a case the fixtures do not; an older release is run on a migrated folder | the rehearsal of `01-landing-strategy.md` step 1 runs the migration on a scratch copy of every folder; every installation is upgraded before a folder is migrated (`01-landing-strategy.md` fact 8), since nothing is built for older releases | in a scratch copy nothing to undo; on the real backlog, `git revert <migration commit>` restores the markdown files exactly |
 | B23 | an item is unbound that should not be (a team name spelled differently) | the dry run lists every unbinding before anything is written | as B22 |
 | B24 | `--ask` writes a partial answer set | the answers are written at the end in one commit, and the end of input writes nothing (chapter 06 section 2.2) | as B22 |
 | B25 | setup removes a file a person put in .backlog/team-templates | stated in chapter 01 section 1.2 and in the message; templates are copied, never edited in place | none |
@@ -55,8 +54,10 @@ only what that revert does not cover. After the cut-over the rollback is the one
 3. **Pop after lost races: settled in the design.** Chapter 04 section 4 said pop "after three attempts ... ends with exit 1", while
    section 6 says every team command keeps trying for at most half of the clone lock's time budget and then ends with exit 3, "exit 1
    for pop". Section 4 now names the time budget of section 6; the plan follows section 6 for every team command, pop included (B15).
-4. **Backlog item 150's title** names a team_templates key; the design has no such key: setup copies to the fixed folder
-   .backlog/team-templates/ (chapter 01 section 1.2). B25 implements the design; the item's title should be aligned with it.
+4. **Backlog item 150 is not part of batch B25.** It is the owner's order of 2026-11-08: a template-location key in the configuration of
+   every repository and branch, read by skills and people to find the owner's team template. The CLI never reads a template (R5), so the
+   design has no such key and B25 (setup copies the generic templates, R23) is a different matter. The item stands as written and is
+   listed with the work outside this repository (`00-priority-order.md` section 4, X1b).
 5. **A folder without team items migrates without a team file: settled by the design.** Chapter 06 sections 3 and 5 let such a folder
    migrate with no file at the resolved location; the cut-over writes no placeholder file (`01-landing-strategy.md` step 4).
 6. **The cases move into the test fixtures.** From B08 the tests read .agents/test/fixtures/team-rules/rule-cases.json and the templates
@@ -74,30 +75,28 @@ only what that revert does not cover. After the cut-over the rollback is the one
    the plan takes review D's larger markdown figure as the upper bound (`02-bdd-plan.md` section 3). Six files review D marks for deletion
    are rewritten instead, because their subject stays (the same section).
 
-## 3. If the owner chooses another option, these batches change
+## 3. The answers to the design questions and the batches that carry them
 
-Context: `../design/decisions.md` holds seven owner questions, labelled "2026-11-09 round 12, question 1" to "question 7", each applied
-provisionally to the design with the lead's recommendation. The batches below implement the provisional option and cite the label. If the
-owner answers a question with another option, the design files that question lists change first, and then these batches, before the
-cut-over; no batch outside the list changes. The two owner choices of this plan (section 4) are included at the end.
+Context: `../design/decisions.md` holds the seven questions labelled "2026-11-09 round 12, question 1" to "question 7". All are closed
+(2026-11-09); the table names the answer and the batches that implement it. An answer that the owner later changes is changed in the
+design first and then in exactly these batches.
 
-| question | provisional option | batches that implement it | batches that change under another option, and how |
-|---|---|---|---|
-| 2026-11-09 round 12, question 1: what the repository input of a team command means | A: the input defines the repository acted on | B02, B11, B12, B21, B22 | option B (remove the input): B12 drops the `--repository` flag and the variable SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY (B01's list loses it), B02 drops step 0 of the resolution, B11 drops the per-user SHA for another repository, B21 and B22 drop the other-repository case; the cut-over changes every consumer that sets the variable |
-| 2026-11-09 round 12, question 2: what a team command publishes when another agent published first | A: drop only the command's own commit, then pull and push as today | B15 | option B (publish only the command's own commit): B15 gains its own publication code for team commands and its two-clone tests change; user commands (B04) are not touched |
-| 2026-11-09 round 12, question 3: a duplicate item number after two code branches are merged | A: renumber only items without a team | B04, B12, B13 | option B (renumber the newer item either way): B04 also renumbers team items and rewrites every `item` and `items` field of the team's definition, so it needs the definition and moves after B11; B12 and B13 drop the stop. Option C (never renumber; stop every command): B04 drops the renumbering, B12 reports every duplicate as an error, B13's stop moves into the load of every command (B06) |
-| 2026-11-09 round 12, question 4: when one team's entry in the team file is broken | B: validity per team | B11, B12 | option A (the whole file): B11 refuses every team when any entry fails, B12's exit code follows the whole file; their tests of per-team validity change |
-| 2026-11-09 round 12, question 5: which team commands take `--show-all` | A: query, validate and migrate; refused elsewhere and with `--team` | B12, B16, B22 | option B (`--team` wins): B12 drops the refusal of the combination (case R14-07 and its text); B16 and B22 unchanged |
-| 2026-11-09 round 12, question 6: where the team file is when the repository has no backlog configuration | A: a backlog found any way counts as defined | B02, B11 | option B (only an explicit key counts): B02's step 2 reads the key only, B11 creates .backlog/config.json to hold the SHA; B04's staging is unchanged (the configuration is never staged by a writing command) |
-| 2026-11-09 round 12, question 7: protecting a migrated folder from older releases | A: the stop file and schema version 2 | B06, B22 | option B (nothing): B06 drops the ignored file name, B22 writes no stop file and keeps the schema number; `01-landing-strategy.md` fact 8 and the rollback after step 7 lose their protection |
-| 2026-11-10 round 13, question 1 (section 4): where the engine work is committed before the cut-over | A: an engine branch created by the owner | none (the landing only) | option B: no batch changes; `01-landing-strategy.md` sections 3 to 5 change. Option C: the order of `00-priority-order.md` changes (section 4 below) |
-| 2026-11-10 round 13, question 2 (section 4): which folders migrate in the cut-over window | B: only the folders in use | none (the landing only) | option A: no batch changes; `01-landing-strategy.md` step 5 migrates every folder |
+| question | answer | batches that implement it |
+|---|---|---|
+| question 1: what the repository input of a team command means | A (owner): the input defines the repository acted on | B02, B11, B12, B21, B22 |
+| question 2: what a team command publishes when another agent published first | B (owner): only the command's own commit; a person's unpushed commits stay local | B15 (its own publication code for team commands; user commands, B04, are not touched) |
+| question 3: a duplicate item number after two code branches are merged | outside the CLI's scope (owner): nothing is renumbered and no folder stops; a number that names two items is refused | B06 (the refusal in the item lookup); B04, B12 and B13 carry nothing for it |
+| question 4: when one team's entry in the team file is broken | A (owner; R18): the whole file must be valid | B11, B12 |
+| question 5: which team commands take `--show-all` | B (owner): query, validate and migrate; refused elsewhere; `--team` decides when both are given | B12, B16, B22 |
+| question 6: where the team file is when the repository has no backlog configuration | ruling R22 as written: only the configuration defines it; the SHA goes into .backlog/config.json | B02, B11 |
+| question 7: protecting a migrated folder from older releases | nothing is built (R18 and the rule of 2026-11-07, as read by the lead) | none; B06 and B22 carry no marker and no schema number |
 
 ## 4. Owner choices of the implementation plan
 
-Context: two points of the plan itself, not of the design, change what the owner's agents see and are the owner's to choose. Both are
-planned provisionally with the recommendation, so the plan is complete as it stands; each lists what changes under another option. Neither
-repeats a question of `../design/decisions.md`.
+Context: two points of the plan itself, not of the design. Question 2 is procedural and follows rulings R24 and R25, so the lead has
+taken option B (owner instruction of 2026-11-06: procedural matters are the lead's). Question 1 follows the precedent of decision
+20261106-AE (the owner had the working branch created on the remote), so the plan is written for option A; it still needs one act of the
+owner, because no agent may create a branch on the remote. Each entry lists what changes under another option.
 
 ### 2026-11-10 round 13, question 1: where the engine work is committed and pushed before the cut-over
 
@@ -132,7 +131,7 @@ worktree, the order of the batches and the moment of installation differ.
   changes (those batches move before B01 and are written with today's variable names, then renamed by B01), B21 splits in two, and each
   installed batch must be proven harmless to today's team commands, which also run on that build.
 
-Recommendation: option A, applied provisionally. It is the only option that keeps both owner rules (the active branch runs live; every
+Recommendation: option A; the plan is written for it. It is the only option that keeps both owner rules (the active branch runs live; every
 turn is pushed) without proving each batch harmless to the running agents, and it needs a single owner action.
 
 What changes under another option: option B changes `01-landing-strategy.md` sections 3 to 5 (the pinned installation and its removal at
@@ -165,7 +164,7 @@ between the options; they differ in which folders the lead migrates in the windo
   is touched. A person returning to an idle repository meets one refused command and one migration, which the rehearsal has already proven
   to succeed for that folder.
 
-Recommendation: option B, applied provisionally. The rehearsal of `01-landing-strategy.md` step 1 runs the migration on a copy of every
+Taken by the lead: option B. The rehearsal of `01-landing-strategy.md` step 1 runs the migration on a copy of every
 folder, so the later migrations are known to work; the window stays as short as the agents' downtime allows; and ruling R24 makes each
 folder independent, so a folder left in markdown affects only its own repository.
 

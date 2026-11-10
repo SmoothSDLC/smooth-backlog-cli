@@ -62,3 +62,68 @@ for (const [mode, make] of Object.entries(modes)) {
     assert.equal(git(f.home, 'diff', '--cached', '--name-only'), '', 'nothing is left staged');
   });
 }
+
+// --- a pull that fails after upstream changed other paths
+function conflictSetup(t, personLine) {
+  const f = modes['backlog clone'](t);
+  const item = (folder, text) => store.write({ path: itemPath(folder, '001-alpha'), fm: { ...ENVELOPE, phase: '001-alpha', seq: 1, name: 'alpha', status: 'pending', repository: 'acme/demo', branch: 'main', summary: text }, body: '\n# x\n' });
+  item(f.folder, 'one');
+  put(join(f.home, 'acme', 'other', 'notes.txt'), 'l1\nl2\nl3\n'); put(join(f.home, 'acme', 'other', 'plain.txt'), 'p\n');
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'seed'); git(f.home, 'push', '-q');
+  const home2 = join(f.dir, 'home2'); git(f.dir, 'clone', '-q', f.bare, home2);
+  const other = join(f.home, 'acme', 'other');
+  writeFileSync(join(other, 'plain.txt'), 'person plain\n'); // a person's uncommitted edit of another folder
+  writeFileSync(join(other, 'notes.txt'), personLine);
+  return { f, item, home2 };
+}
+async function failedPull(t, personLine) {
+  const { f, item, home2 } = conflictSetup(t, personLine);
+  await sync.pull(f.home); // the command's starting snapshot
+  item(f.folder, 'mine'); // the command's change of alpha
+  // upstream: a conflicting change of alpha, an edit and a new file in the other folder
+  item(join(home2, 'acme', 'demo'), 'theirs');
+  writeFileSync(join(home2, 'acme', 'other', 'notes.txt'), 'U1\nl2\nl3\n'); writeFileSync(join(home2, 'acme', 'other', 'plain.txt'), 'plain from upstream\n'); writeFileSync(join(home2, 'acme', 'other', 'b-new.txt'), 'b\n');
+  git(home2, 'add', '-A'); git(home2, 'commit', '-qm', 'upstream'); git(home2, 'push', '-q');
+  const e = await sync.commitSettled(f.home, f.folder, 'change alpha').then(() => null, x => x);
+  assert.match(e?.message ?? '', /change was not published/);
+  return { f, e };
+}
+
+test('backlog clone: a pull that failed after upstream changed other folders leaves no path staged as reverted', async t => {
+  const { f } = await failedPull(t, 'l1\nl2\nP3\n');
+  assert.equal(git(f.home, 'diff', '--cached', '--name-only'), '');
+  assert.equal(readFileSync(join(f.home, 'acme', 'other', 'b-new.txt'), 'utf8'), 'b\n');
+});
+
+test('backlog clone: a person\'s edit of a path upstream changed is laid over the upstream version', async t => {
+  const { f } = await failedPull(t, 'l1\nl2\nP3\n');
+  assert.equal(readFileSync(join(f.home, 'acme', 'other', 'notes.txt'), 'utf8'), 'U1\nl2\nP3\n');
+  assert.equal(git(f.home, 'status', '--porcelain', '--', 'acme/other/notes.txt'), 'M acme/other/notes.txt');
+});
+
+test('backlog clone: a person\'s edit that conflicts with the upstream change is kept in a named stash and said so', async t => {
+  const { f, e } = await failedPull(t, 'P1\nl2\nl3\n');
+  assert.equal(readFileSync(join(f.home, 'acme', 'other', 'notes.txt'), 'utf8'), 'U1\nl2\nl3\n');
+  assert.match(git(f.home, 'stash', 'list'), /your edit of acme\/other\/notes\.txt/);
+  assert.match(e.message, /acme\/other\/notes\.txt.* conflicts with the upstream change and is kept in the stash/);
+  assert.equal(git(f.home, 'diff', '--cached', '--name-only'), '');
+});
+
+test('code repository: a person\'s edit that conflicts with the pull: the command\'s deleted item comes back and the next step is named', async t => {
+  const f = modes['code repository'](t);
+  item(f.folder, 1, 'alpha'); item(f.folder, 2, 'beta');
+  await sync.commitSettled(f.home, f.folder, 'new items');
+  const repo = join(f.home, '..'); const b = join(f.dir, 'b'); git(f.dir, 'clone', '-q', f.bare, b);
+  await sync.pull(f.home);
+  writeFileSync(join(repo, 'code.js'), 'mine\n');
+  rmSync(itemPath(f.folder, '001-alpha')); // the command removes an item
+  writeFileSync(join(b, 'code.js'), 'theirs\n'); git(b, 'add', '-A'); git(b, 'commit', '-qm', 'theirs'); git(b, 'push', '-q');
+  const e = await sync.commitSettled(f.home, f.folder, 'remove alpha').then(() => null, x => x);
+  assert.ok(e, 'the publication failed');
+  assert.ok(existsSync(itemPath(f.folder, '001-alpha')), 'the removed item is back');
+  assert.match(git(repo, 'stash', 'list'), /autostash/);
+  assert.match(e.message, /your own edit is kept in the stash/);
+  assert.match(e.message, /git -C .* reset --soft [0-9a-f]{40}/);
+});
+
+function item(folder, seq, name) { store.write({ path: itemPath(folder, `00${seq}-${name}`), fm: { ...ENVELOPE, phase: `00${seq}-${name}`, seq, name, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: '\n# x\n' }); }

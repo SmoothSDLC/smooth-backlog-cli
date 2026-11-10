@@ -3,8 +3,9 @@
 // pinned ec5b254e. Node has no flock, so the lock is a pid file (locked of src/storage.js)
 // and a number two clones picked at once is repaired after the rebase (renumber below).
 // A failure to sync throws BacklogError with exitCode 3; the caller prints it and exits.
-import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
@@ -99,7 +100,8 @@ async function snapshot(home) {
     files.set(path, !st ? null : st.isSymbolicLink() ? { link: readlinkSync(abs) } : { bytes: readFileSync(abs), mode: st.mode });
   }
   const index = (await must(home, ['write-tree'], 'save staging')).stdout.trim();
-  return { files, dirty, staged, index };
+  const head = (await g(home, ['rev-parse', '--verify', '-q', 'HEAD'])).stdout.trim();
+  return { files, dirty, staged, index, head };
 }
 
 // Resolves to true when it committed. amend: the command's own commit is HEAD (a stack of the user's commits is never squashed).
@@ -470,8 +472,33 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
     const restoreStaging = async paths => {
       if (paths.length) await must(home, ['restore', '--staged', `--source=${saved.index}`, '--', ...paths.map(lit)], 'restore your staging');
     };
-    const undoCommit = async target => {
+    const putBack = mine => { // the bytes a path of the command had before it ran
+    for (const [path, prior] of saved.files) {
+      if (!mine.has(path)) continue;
+      const abs = join(home, path);
+      rmSync(abs, { force: true });
+      if (prior) {
+        mkdirSync(dirname(abs), { recursive: true });
+        if (prior.link !== undefined) symlinkSync(prior.link, abs);
+        else { writeFileSync(abs, prior.bytes); chmodSync(abs, prior.mode); }
+      }
+    }
+    };
+    const undoCommit = async (target, cause) => {
       await g(home, ['rebase', '--abort']);
+      const unmerged = paths(await g(home, ['ls-files', '-u', '-z'])).map(e => e.split('\t')[1]).filter((p, i, a) => a.indexOf(p) === i);
+      if (unmerged.length) { // git refuses a soft reset in the middle of a merge: put the command's own files back and say what is left to do
+        const sha = (await must(home, ['rev-parse', target], 'find the commit before the change')).stdout.trim();
+        const mineSet = new Set(committed);
+        const inTarget = new Set(paths(await g(home, ['ls-tree', '-r', '--name-only', '-z', sha, '--', ...[...mineSet].map(lit)])));
+        const back = [...mineSet].filter(p => inTarget.has(p));
+        if (back.length) await g(home, ['restore', '-q', `--source=${sha}`, '--staged', '--worktree', '--', ...back.map(lit)]);
+        putBack(mineSet);
+        for (const p of mineSet) if (!inTarget.has(p)) { await g(home, ['rm', '-q', '--cached', '--ignore-unmatch', '--', lit(p)]); rmSync(join(home, p), { force: true }); }
+        const stash = (await g(home, ['stash', 'list'])).stdout.trim().split('\n').filter(Boolean)[0];
+        throw new BacklogError('SYNC_FAILED', `The change was not published in ${home} (${cause.message}), and your uncommitted edit of ${unmerged.slice(0, 5).join(', ')} conflicts with what was pulled, so the unpublished commit could not be taken back. `
+          + `The files of the change are put back; your own edit is kept in the stash${stash ? ` (${stash})` : ''}. Next: resolve the conflict in ${unmerged.slice(0, 5).join(', ')} (git -C ${home} status), then run: git -C ${home} reset --soft ${sha}  and run the command again`, 3);
+      }
       await must(home, ['reset', '-q', '--soft', target], 'take back the unpublished change');
       // Only the command's own paths go back: a lead's uncommitted team file, the SHA in .backlog/config.json and a person's own edits stay.
       const mine = new Set([...committed, ...(await ownedPaths(home, t, names, files)).lits.map(l => l.slice(':(literal)'.length))]);
@@ -483,17 +510,39 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       if (unstage.length) await must(home, ['restore', '-q', '--staged', '--source=HEAD', '--', ...unstage.map(lit)], 'take back the unpublished change');
       if (known.length) await must(home, ['restore', '-q', '--worktree', '--source=HEAD', '--', ...known.map(lit)], 'take back the unpublished change');
       for (const path of mine) if (!inHead.has(path) && !saved.files.has(path)) rmSync(join(home, path), { force: true }); // created by the command
-      for (const [path, prior] of saved.files) {
-        if (!mine.has(path)) continue;
-        const abs = join(home, path);
-        rmSync(abs, { force: true });
-        if (prior) {
-          mkdirSync(dirname(abs), { recursive: true });
-          if (prior.link !== undefined) symlinkSync(prior.link, abs);
-          else { writeFileSync(abs, prior.bytes); chmodSync(abs, prior.mode); }
-        }
+      putBack(mine);
+      // The reset to the fetched upstream leaves what upstream changed elsewhere looking staged as reverted: those paths follow HEAD.
+      const person = new Set([...saved.dirty, ...saved.staged, ...saved.files.keys()]);
+      const stray = paths(await must(home, ['diff', '--cached', '--name-only', '--no-renames', '-z', 'HEAD'], 'list the staged paths')).filter(p => !mine.has(p) && !person.has(p));
+      if (stray.length) {
+        const there = new Set(paths(await g(home, ['ls-tree', '-r', '--name-only', '-z', 'HEAD', '--', ...stray.map(lit)])));
+        await must(home, ['restore', '-q', '--staged', '--source=HEAD', '--', ...stray.map(lit)], 'take back the unpublished change');
+        const back = stray.filter(p => there.has(p));
+        if (back.length) await must(home, ['restore', '-q', '--worktree', '--source=HEAD', '--', ...back.map(lit)], 'take back the unpublished change');
       }
-      await restoreStaging([...new Set([...saved.dirty, ...saved.staged])].filter(inBacklog));
+      // The person's own staging goes back as it was, except for a path upstream changed meanwhile: there the person's edit is laid over the upstream version.
+      const own = [...new Set([...saved.dirty, ...saved.staged])].filter(inBacklog);
+      const moved = [];
+      for (const p of own) if (saved.head && (await g(home, ['diff', '--quiet', saved.head, 'HEAD', '--', lit(p)])).code === 1) moved.push(p);
+      await restoreStaging(own.filter(p => !moved.includes(p)));
+      const kept = [];
+      for (const p of moved) if (!await layOver(p)) kept.push(p);
+      if (kept.length) cause.message += `; your edit of ${kept.join(', ')} conflicts with the upstream change and is kept in the stash (git -C ${home} stash list), the file itself is the upstream version`;
+    };
+    // The person's working version of `path` merged onto the upstream version it now has (index = HEAD). False when it conflicts: the version is then stashed.
+    const layOver = async path => {
+      await g(home, ['restore', '-q', '--staged', '--source=HEAD', '--', lit(path)]);
+      const abs = join(home, path);
+      const theirs = await g(home, ['show', `HEAD:${path}`]);
+      if (!existsSync(abs) || theirs.code) return true; // deleted by the person, or removed upstream: nothing to lay over
+      const dir = mkdtempSync(join(tmpdir(), 'backlog-merge-'));
+      try {
+        const base = await g(home, ['show', `${saved.head}:${path}`]);
+        writeFileSync(join(dir, 'mine'), readFileSync(abs)); writeFileSync(join(dir, 'base'), base.code ? '' : base.stdout); writeFileSync(join(dir, 'theirs'), theirs.stdout);
+        const m = await g(home, ['merge-file', '-p', join(dir, 'mine'), join(dir, 'base'), join(dir, 'theirs')]);
+        if (m.code === 0) { writeFileSync(abs, m.stdout); return true; }
+        return (await g(home, ['stash', 'push', '-q', '-m', `backlog: your edit of ${path}, set aside because it conflicts with the pull`, '--', lit(path)])).code !== 0;
+      } finally { rmSync(dir, { recursive: true, force: true }); }
     };
     let mine = false; // the command's own commit is HEAD
     try {
@@ -569,7 +618,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
         const ahead = stale && Number((await g(home, ['rev-list', '--count', `${t.ref}..HEAD`])).stdout.trim()) > 0;
         to = stale ? (ahead ? 'HEAD~1' : 'HEAD') : t.ref;
       }
-      await undoCommit(to);
+      await undoCommit(to, e);
       throw e;
     }
   }, { takeOver: true });

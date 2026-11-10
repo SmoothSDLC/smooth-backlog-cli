@@ -9,7 +9,7 @@ import { basename, dirname, join, posix, relative, resolve, sep } from 'node:pat
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside, git as run, redact } from './safety.js';
-import { ITEM_EXT, ITEM_EXT_PATTERN, ITEM_PATH, itemSlug, parseItem as parse, readItemText } from './item-file.js';
+import { ITEM_EXT, ITEM_EXT_PATTERN, ITEM_PATH, itemSlug, itemSlugOfGitPath, parseItem as parse, readItemText } from './item-file.js';
 import * as index from './index.js';
 import { actor, primarySlug, publicationGuard, staleError, staleViews } from './seen.js';
 import * as store from './store.js';
@@ -232,7 +232,7 @@ async function renumberFiles(home, t, stream, added) {
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
     stream.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
     out.push(pairOf(old, next, folder));
-    const was = String(mine.fm.phase || itemSlug(path)); // an item without a phase field is named by its file
+    const was = String(mine.fm.phase || itemSlugOfGitPath(path)); // an item without a phase field is named by its file
     moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
   }
   if (moves.length) { // the local dependents of the renumbered items follow them
@@ -284,7 +284,7 @@ async function repairConflicts(home, t, folders, names, renumbered) {
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
         process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
         renumbered.push(pairOf(old, next, folder));
-        const was = String(mine.fm.phase || itemSlug(rel));
+        const was = String(mine.fm.phase || itemSlugOfGitPath(rel));
         moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
         written.add(`${name}/${target}`);
       }

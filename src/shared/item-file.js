@@ -2,7 +2,7 @@
 // Today an item is a markdown file with a front-matter header (frontmatter.js is its codec). The callers hold the in-memory item
 // ({ fm, body }) and the text of a file; this module is the only door between the two.
 import { readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, posix } from 'node:path';
 import { dump, dumpItem, hasFrontMatter, parse, parseItem, replaceItemFrontMatter, splitBom, storedFm } from './frontmatter.js';
 
 // the codec doors: text of an item file to the in-memory item and back, and the stored form of the header
@@ -13,6 +13,8 @@ export const ITEM_EXT = '.md';
 const EXT_PATTERN = ITEM_EXT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // the slug of an item file: its file name without the extension (a path may lead up to it)
 export const itemSlug = path => basename(path, ITEM_EXT);
+// the same for a path that comes from git (always forward slashes): the POSIX flavour on every platform; itemSlug is for a path of the local disk
+export const itemSlugOfGitPath = path => posix.basename(path, ITEM_EXT);
 // the file name of an item (or the tail of one, '-name') from its slug
 export const itemFileName = slug => `${slug}${ITEM_EXT}`;
 // true for a file name that ends in the item extension

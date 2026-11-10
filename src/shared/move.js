@@ -125,7 +125,7 @@ async function move(a, rows, ctx) {
   // beyond move.py parity: depends_on names items of THIS backlog; in the target they would point at unrelated items
   if (asList(fm.depends_on).length) return refuse(`${r.slug} depends on other items of ${repo}; dependencies are resolved against the target backlog, so clear them first: update ${r.slug} --set-depends-on none`);
   // beyond move.py parity: items of this backlog that list the item (by number or slug, as update --set-depends-on stores it) would be left pointing at nothing
-  const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && asList(i.fm.depends_on).some(d => find(rows, d)?.id === r.id)).map(i => i.fm.phase ?? i.path);
+  const dependents = store.load(folder).filter(i => i.fm.phase !== r.slug && asList(i.fm.depends_on).some(d => find(rows, d, true)?.id === r.id)).map(i => i.fm.phase ?? i.path);
   if (dependents.length) return refuse(`${dependents.join(', ')} depend${dependents.length > 1 ? '' : 's'} on ${r.slug}, which would leave their depends_on pointing at nothing; clear them first: update <dependent> --set-depends-on ... (the other dependencies, or none)`);
   // items of other repositories that name it as owner/name#seq would point at nothing too
   const elsewhere = foreignDependents(home, repo, r.seq);

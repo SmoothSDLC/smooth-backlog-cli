@@ -168,7 +168,7 @@ function dependencyCycle(rows, folder, id, deps) {
   const seen = new Set();
   const walk = list => {
     for (const d of list) {
-      const r = d === '' || d === null ? null : findItem(rows, String(d));
+      const r = d === '' || d === null ? null : findItem(rows, String(d), true); // an ambiguous number resolves to neither item
       if (!r) continue;
       if (r.id === id) return id;
       if (seen.has(r.id)) continue;
@@ -271,7 +271,7 @@ async function change(a, folder, repo, team) {
   if (a['set-depends-on'] !== undefined) {
     const deps = [];
     for (const d of asList(a['set-depends-on'])) {
-      if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in the backlog repository`); }
+      if (isForeign(d)) { if (!foreignItem(folder, d, true)) return refuse(`--set-depends-on: no item ${pyStr(d)} in the backlog repository`); }
       else if (!findItem(rows, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }

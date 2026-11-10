@@ -214,12 +214,13 @@ export function rows(folder, items = store.load(folder)) {
 export const open = list => list.filter(r => workflowOpen(r.status)).sort((a, b) => a.priority - b.priority || a.seq - b.seq);
 
 // By number or by slug; undefined when there is none. A number that two items hold (a live and an archived one too) is refused: the item is named by its slug.
-export function pick(hits, number) {
-  if (number !== undefined && hits.length > 1) throw new BacklogError('INVALID_INPUT', `number ${number} names two items, ${hits[0].slug} and ${hits[1].slug}; name the item by its slug`);
+// stored: the number comes from an edge an item stores, not from the command line: it resolves to neither item (undefined) and never throws.
+export function pick(hits, number, stored = false) {
+  if (number !== undefined && hits.length > 1) { if (stored) return undefined; throw new BacklogError('INVALID_INPUT', `number ${number} names two items, ${hits[0].slug} and ${hits[1].slug}; name the item by its slug`); }
   return hits[0];
 }
-export function find(list, ident) {
+export function find(list, ident, stored = false) {
   const sel = itemSelector(ident);
   if (!sel) return undefined;
-  return pick(list.filter(r => (sel.number !== undefined ? Number(r.seq) === sel.number : r.slug === sel.slug)), sel.number);
+  return pick(list.filter(r => (sel.number !== undefined ? Number(r.seq) === sel.number : r.slug === sel.slug)), sel.number, stored);
 }

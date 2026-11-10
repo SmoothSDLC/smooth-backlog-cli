@@ -40,8 +40,9 @@ Usage:
 An item is its number (1) or its slug (001-fix-the-login-redirect). Priorities are ranks: P0 is next. Each branch has its
 own queue, which runs without gaps and is renumbered when work is added, moved or finished. A number that two items of the
 folder hold (a live and an archived item too, after a merge made outside the CLI) is refused when a command is given it:
-the command stops with exit 2 and changes nothing; name the item by its slug, or give one of them a new number with
-backlog update <slug> --seq <n>. The CLI never renumbers such a pair by itself.
+the command stops with exit 2 and changes nothing. By its slug either item can be shown; one of the pair is given a new
+number with backlog update <slug> --seq <n>, and other writes to the pair are refused until then. A number an item stores
+in depends_on that two items hold counts as an undone dependency. The CLI never renumbers such a pair by itself.
 
 An item that belongs to a team is changed by backlog team update only. A user command that would change its team state (status,
 claim, review, refinement, dependencies, its place in the team's queue, its deletion) refuses it: update (every change), done,

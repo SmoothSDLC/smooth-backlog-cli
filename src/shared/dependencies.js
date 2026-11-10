@@ -9,11 +9,14 @@ import { isFinished, lifted } from './status.js';
 import { load } from './store.js';
 import { asList } from './text.js';
 
-// phase_by_ident over the rows: by number or by slug (a number two rows hold is refused, see index.pick).
+// phase_by_ident over the rows, for the edges an item stores: by number or by slug. A number two rows hold is resolved to neither: it answers a row that
+// names the ambiguity (status 'ambiguous', so the edge counts as undone and blocks), never a throw (only a number typed on the command line is refused).
 export function byIdent(rows, ident) {
   const sel = itemSelector(ident);
   if (!sel) return null;
-  return index.pick(rows.filter(r => (sel.number !== undefined ? Number(r.seq) === sel.number : r.slug === sel.slug)), sel.number) ?? null;
+  const hits = rows.filter(r => (sel.number !== undefined ? Number(r.seq) === sel.number : r.slug === sel.slug));
+  if (sel.number !== undefined && hits.length > 1) return { seq: null, slug: `number ${sel.number} (names two items: ${hits[0].slug} and ${hits[1].slug})`, status: 'ambiguous', path: '' };
+  return hits[0] ?? null;
 }
 
 // item_fm: the front matter of the row's file, {} when it is gone (or outside the folder); a parse or I/O error propagates. The rows give
@@ -33,7 +36,7 @@ const FOREIGN = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
 export const isForeign = id => FOREIGN.test(String(id ?? '').trim());
 // {repository, seq, slug, status, fm} of a foreign reference; null when that repository has no backlog folder or no such
 // item; undefined when id is no foreign reference. folder: this repository's folder of the backlog repository.
-export function foreignItem(folder, id) {
+export function foreignItem(folder, id, typed = false) { // typed: given on the command line; a stored edge that names a number two items hold answers status 'ambiguous'
   const m = FOREIGN.exec(String(id ?? '').trim());
   if (!m) return undefined;
   if (!SAFE.test(m[1]) || !SAFE.test(m[2])) return null;
@@ -42,7 +45,9 @@ export function foreignItem(folder, id) {
   let items;
   try { items = load(other); } catch (e) { if (e.markdown) return null; throw e; } // a folder of markdown items reads as no such item
   const hits = items.filter(i => Number(i.fm.seq) === Number(m[3]));
-  const it = index.pick(hits.map(i => ({ ...i, slug: i.fm.phase || itemSlug(i.path) })), Number(m[3]));
+  const named = hits.map(i => ({ ...i, slug: i.fm.phase || itemSlug(i.path) }));
+  if (!typed && named.length > 1) return { repository: `${m[1]}/${m[2]}`, seq: null, slug: `number ${m[3]} (names two items: ${named[0].slug} and ${named[1].slug})`, status: 'ambiguous', fm: {} };
+  const it = index.pick(named, Number(m[3]));
   return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || itemSlug(it.path), status: it.fm.status ?? 'pending', fm: it.fm } : null;
 }
 // does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back

@@ -153,7 +153,7 @@ async function create(argv, { home, folder, repo, scope, team, floor = 0 }) {
   {
     const deps = [];
     for (const d of asList(a.dependsOn)) {
-      if (isForeign(d)) { if (!foreignItem(folder, d)) return refuse(`--depends-on: no item '${d}' in the backlog repository`); }
+      if (isForeign(d)) { if (!foreignItem(folder, d, true)) return refuse(`--depends-on: no item '${d}' in the backlog repository`); }
       else if (!findItem(rows, d)) return refuse(`--depends-on: no item '${d}' in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }

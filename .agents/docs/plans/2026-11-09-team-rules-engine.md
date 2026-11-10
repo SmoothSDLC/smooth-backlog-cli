@@ -36,7 +36,7 @@ them at its start.
 - [ ] Task 5: The evaluator and validation (item 152; phase 2).
   - [x] B07 the linear pattern matcher (chapter 03 section 4.1, chapter 01 section 6)
   - [x] B08 the evaluator (R1, R2, R7, R8, R10; chapter 03 sections 1 to 8 and 12, chapter 02 section 3, chapter 01 section 6)
-  - [ ] B09 the pop table and the filters (R2, R10; chapter 03 sections 9 and 10, chapter 04 section 4)
+  - [x] B09 the pop table and the filters (R2, R10; chapter 03 sections 9 and 10, chapter 04 section 4)
   - [ ] B10 the checks of the team file (R11, R18; chapter 08 sections 2 to 6, chapter 03 sections 3, 4 and 14)
   - [x] B11 validation on load (R18, R21, R22; chapter 01 sections 1.1 and 4; round 12, questions 1, 4 and 6)
 - [ ] Task 6: The team commands on the evaluator (item 152; phase 3).

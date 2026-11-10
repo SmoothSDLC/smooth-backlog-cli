@@ -500,7 +500,7 @@ test('075: archive whose target file already exists: exit 1, the exact refusal, 
   writeFileSync(archivedPath(f.folder, '005-epsilon', 'phases'), readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8'));
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an archived copy exists already'); git(f.home, 'push', '-q');
   const before = snapshot(f);
-  const r = run(f, 'archive', ['5']);
+  const r = run(f, 'archive', ['005-epsilon']); // by slug: the number is held twice now, which a number refuses
   assert.equal(r.status, 1);
   assert.equal(r.stdout, '❌ an archived item named 005-epsilon already exists; archiving it again would replace that item\n');
   assert.equal(r.stderr, '');
@@ -555,7 +555,7 @@ test('057: archive and move print the slug and no path', () => {
   mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
   writeFileSync(archivedPath(f.folder, '006-zeta', 'phases'), readFileSync(itemPath(f.folder, '006-zeta'), 'utf8'));
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an archived copy exists already'); git(f.home, 'push', '-q');
-  assert.equal(runs('archive', ['6']).stdout, '❌ an archived item named 006-zeta already exists; archiving it again would replace that item\n');
+  assert.equal(runs('archive', ['006-zeta']).stdout, '❌ an archived item named 006-zeta already exists; archiving it again would replace that item\n');
   assert.match(runs('move', ['2', '--to-branch', 'release']).stdout, /^✅ 002-beta now belongs to branch 'release'\n/);
   assert.match(runs('move', ['7', '--to-repository', 'other/proj']).stdout, /^✅ 007-eta moved to other\/proj as 002-eta\n/);
   for (const out of outputs) assert.doesNotMatch(out, BACKLOG_PATH, out);

@@ -5,10 +5,10 @@ import { BacklogError } from '../../errors.js';
 import { compile } from './safe-regex.js';
 
 const ENVELOPE = ['seq', 'slug', 'name', 'team', 'repository', 'branch', 'created', 'updated', 'updated_by', 'archived', 'body'];
-const LIST = ['items', 'list'];
+export const LIST = ['items', 'list'];
 const NAMES = { caller: ['', 'roles'], session: ['id', 'repository', 'branch', 'commit'] };
 const PAIR = ['is', 'in', '>=', '<=', 'regex', 'contains'];
-const FOREIGN = /^([\w.-]+\/[\w.-]+)#(\d+)$/;
+export const FOREIGN = /^([\w.-]+\/[\w.-]+)#(\d+)$/;
 const DECIMAL = /^-?\d+(\.\d+)?$/;
 
 // exit 1 is a refusal of a step; exit 2 is a rule file that is wrong (it skipped validation). `rule` is the id of the rule that refused, when known.

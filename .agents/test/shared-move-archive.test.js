@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archivedPath, archivedRel, breakIndex, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, changeItem } from './shared-fixtures.js';
+import { archivedPath, archivedRel, breakIndex, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, changeItem, itemNames, itemName } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
@@ -60,7 +60,7 @@ function seed() {
 const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
 const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '').replace(/[0-9a-f]{7}->[0-9a-f]{7}/g, 'SHA->SHA');
 const doc = text => norm(JSON.stringify(parse(text)));
-const names = (dir, sub) => (existsSync(join(dir, sub)) ? readdirSync(join(dir, sub), { recursive: true }).filter(n => n.endsWith('.md')).sort() : []);
+const names = (dir, sub) => itemNames(dir, sub, true);
 
 function snapshotFolder(dir) {
   const files = {};
@@ -405,9 +405,9 @@ test('review P2: move adds the keys it sets (branch, repository) to an item whos
   assert.equal(run(f, 'move', ['2', '--to-branch', 'release']).status, 0);
   assert.equal(fm(f.folder, itemRel('002-beta')).fm.branch, 'release');
   assert.equal(run(f, 'move', ['2', '--to-repository', 'other/proj']).status, 0);
-  const moved = fm(f.other, `phases/${names(f.other, 'phases').find(n => n.endsWith('-beta.md'))}`).fm;
+  const moved = fm(f.other, `phases/${names(f.other, 'phases').find(n => n.endsWith(itemName('-beta')))}`).fm;
   assert.equal(moved.repository, 'other/proj');
-  assert.equal(typeof index.rows(f.other).rows.find(r => r.path.endsWith('-beta.md')).priority, 'number');
+  assert.equal(typeof index.rows(f.other).rows.find(r => r.path.endsWith(itemName('-beta'))).priority, 'number');
 });
 
 test('075: archive of a done item: git mv, status stamp, reflow, one commit', () => {

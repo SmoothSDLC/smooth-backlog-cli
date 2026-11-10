@@ -127,7 +127,7 @@ function infoOf(item, opts) {
     const dir = join(home, owner, name, 'phases');
     if (!existsSync(dir) || (opts.cwd && existsSync(join(home, owner, basename(opts.cwd))) && name !== basename(opts.cwd))) continue; // the repository the command runs in
     for (const file of readdirSync(dir)) {
-      if (file !== `${item}.md` && !(String(item).match(/^\d+$/) && Number(file.split('-')[0]) === Number(item))) continue;
+      if (file !== itemFileName(item) && !(String(item).match(/^\d+$/) && Number(file.split('-')[0]) === Number(item))) continue;
       let fm; try { fm = parseItem(readFileSync(join(dir, file), 'utf8')).fm; } catch { return {}; } // a damaged item names no team
       return { team: fm.team || undefined, holder: fm.claimed_by || fm.owner || undefined, file: join(dir, file) };
     }

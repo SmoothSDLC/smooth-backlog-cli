@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, reEscape } from './shared-fixtures.js';
 import { defaultUser } from '../../src/shared/setup.js';
 import * as store from '../../src/shared/store.js';
 
@@ -75,7 +75,7 @@ const norm = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS')
   .replace(/sha drift [0-9a-f]+->[0-9a-f]+/g, 'sha drift SHA->SHA');
 const normJson = s => JSON.parse(s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(/"last_updated_by": "[^"]*"/g, '"last_updated_by": "UPD"'),
   (k, v) => (typeof v === 'string' && /^[0-9a-f]{7,}$/.test(v) ? 'SHA' : v));
-const STATUS_FINDINGS = '⚠️  CRITICAL: phases/006-foreign.md says repository other/thing but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 006-foreign --to-repository\n'
+const STATUS_FINDINGS = `⚠️  CRITICAL: ${itemRel('006-foreign')} says repository other/thing but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 006-foreign --to-repository\n`
   + '⚠️  item 007-untagged records no repository or branch; it is out of the queue until its repository and branch are filled in\n'
   + '⚠️ ========================================================================\n'
   + '⚠️  1 CRITICAL ITEM(S) ON THE BACKLOG — SURFACE THESE FIRST, DO NOT BURY:\n'
@@ -394,7 +394,7 @@ test('`backlog next` is --next', () => {
 test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
   const f = fx();
   const text = reader(f, ['--next', '--branch', 'nowhere']).stdout; // the fixture's findings banners come first
-  assert.match(text, /^⚠️  CRITICAL: phases\/006-foreign\.md says repository other\/thing/);
+  assert.match(text, new RegExp(`^⚠️  CRITICAL: ${reEscape(itemRel('006-foreign'))} says repository other/thing`));
   assert.ok(text.endsWith('\nℹ️  no actionable item for acme/demo, branch nowhere; --all shows every branch\n'), text);
   assert.equal(reader(f, ['--next', '--branch', 'nowhere', '--json']).stdout.trim(), '{}');
 });

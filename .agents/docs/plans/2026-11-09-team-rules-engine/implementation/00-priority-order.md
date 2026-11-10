@@ -170,7 +170,7 @@ batch after which the installed CLI would behave differently for an existing con
 - Goal: the configuration reader knows `teams_file`, `teams_file_sha`, `migrated_at` and `migrated_by_version`; a configuration file that
   exists but cannot be read stops every command with exit 2 and is never written over; a pure function resolves the team file in the order
   of chapter 01 section 1.1 (the repository input naming another repository, the explicit key, the repository's folder of a
-  `backlog_repository` outside the repository, else .backlog/teams.json; a backlog folder found another way does not count), with path segments compared and today's path safety, and the missing-file text.
+  `backlog_repository` outside the repository, else .backlog/teams.json; a backlog folder found another way does not count), with path segments compared, and the missing-file text (the refusal of a symbolic link is made when the file is loaded, B11).
   Nothing calls the resolution yet.
 - Rulings and chapters: R22, R25 (the record keys, read only here); chapter 01 section 1.1, chapter 06 section 2.0; design questions
   "2026-11-09 round 12, question 1" (step 0 of the resolution) and "question 6" (ruling R22 as written: only the configuration defines the location).

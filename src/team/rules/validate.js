@@ -75,7 +75,7 @@ function people(e, say) {
 }
 
 // Whether x is one value of the type; a list type holds texts or item numbers.
-const single = (type, x) => (type === 'number' ? typeof x === 'number' : type === 'boolean' ? typeof x === 'boolean' : type === 'item' ? x === null || Number.isInteger(x)
+export const single = (type, x) => (type === 'number' ? typeof x === 'number' : type === 'boolean' ? typeof x === 'boolean' : type === 'item' ? x === null || Number.isInteger(x)
   : LIST.includes(type) ? typeof x === 'string' || Number.isInteger(x) : typeof x === 'string');
 
 function item(e, say, keys) {

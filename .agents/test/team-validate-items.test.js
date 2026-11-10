@@ -70,6 +70,33 @@ test('items of no team and odd input give no finding and no throw', () => {
   assert.doesNotThrow(() => itemFindings({ alpha: { item: 5 } }, [item(1)]));
 });
 
+test('a repository named archive is not an archive; the third segment is', () => {
+  assert.equal(one([item(1, { status: 'bad' }, 'alpha', 'archive/archive/phases/001-x.json')]).severity, 'error');
+});
+
+test('a field named __proto__ is undeclared; a seqs that is no Set and a throwing resolver are handled', () => {
+  const f = one([{ path: P(1), seq: 1, team: 'alpha', fields: JSON.parse('{"status":"open","__proto__":"x"}') }]);
+  assert.match(f.problem, /^field __proto__ is not declared/);
+  assert.equal(one([item(1, { depends_on: 9 })], { seqs: [9] }).problem, 'field depends_on names no item 9');
+  assert.equal(one([item(1, { depends_on: 'p/q#4' })], { foreign: () => { throw new Error('x'); } }).severity, 'warning');
+});
+
+test('a value that cannot be shown gets its own text', () => {
+  assert.equal(one([item(1, { status: 5n })]).problem, 'the value of status is not a text');
+  assert.equal(one([item(1, { stage: 5n })]).problem.startsWith('field stage'), true);
+  assert.match(one([item(1, { tags: ['a', 5n] })]).problem, /not a list/);
+});
+
+test('a value that does not fit its type is an error; a null or missing status is an error', () => {
+  const typed = { alpha: { people: {}, rules: {}, item: def({ n: { type: 'number' }, b: { type: 'boolean' }, many: { type: 'items' } }) } };
+  const r = itemFindings(typed, [item(1, { n: 'abc', b: 'yes', tags: 'a', many: [2, 'p/q#1'] }), item(2, { n: 3 })]);
+  assert.deepEqual(r.map(f => f.problem), ['the value of n is not a number', 'the value of b is not a boolean', 'the value of tags is not a list']);
+  assert.ok(r.every(f => f.severity === 'error' && /backlog team update/.test(f.fix)));
+  const m = run([{ path: P(1), seq: 1, team: 'alpha', fields: {} }, item(2, { status: null })]);
+  assert.deepEqual(m.map(f => f.severity), ['error', 'error']);
+  assert.match(m[0].problem, /status of the item is missing/);
+});
+
 // numbers
 const git = (cwd, ...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd, stdio: 'pipe' });
 const repo = () => {

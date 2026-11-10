@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import * as handoff from '../../src/team/handoff.js';
 import { foreignItem } from '../../src/shared/dependencies.js';
 import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
+import { itemPath } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -23,7 +24,7 @@ function store() {
 const item = (home, owner, name, fm) => {
   const dir = join(home, owner, name);
   mkdirSync(join(dir, 'phases'), { recursive: true });
-  writeFileSync(join(dir, 'phases', `${String(fm.seq).padStart(3, '0')}-x.md`), dump(fm, '## Definition of done\n\n- [ ] x\n'));
+  writeFileSync(itemPath(dir, `${String(fm.seq).padStart(3, '0')}-x`), dump(fm, '## Definition of done\n\n- [ ] x\n'));
 };
 
 const COMMIT = 'a'.repeat(40);
@@ -216,7 +217,7 @@ test('059.1: dependentsOf propagates a load error of a sibling repository folder
   item(home, 'acme', 'app', producer);
   item(home, 'acme', 'app', { seq: 6, phase: '006-dep', status: 'pending', depends_on: [5] });
   mkdirSync(join(home, 'acme', 'lib', 'phases'), { recursive: true });
-  writeFileSync(join(home, 'acme', 'lib', 'phases', '004-broken.md'), '---\nnot a pair\n---\nbody\n');
+  writeFileSync(itemPath(join(home, 'acme', 'lib'), '004-broken'), '---\nnot a pair\n---\nbody\n');
   assert.throws(() => handoff.dependentsOf(join(home, 'acme', 'app'), 'acme/app', producer), /item 004-broken: the item has no readable header \(line 1 is not a 'key: value' pair/, 'a folder that cannot be loaded propagates, so its dependents cannot be missed');
 });
 
@@ -224,7 +225,7 @@ test('059.1: the zero-padded foreign spelling resolves through the item 042 patt
   const home = store();
   const other = join(home, 'acme', 'lib');
   mkdirSync(join(other, 'phases'), { recursive: true });
-  writeFileSync(join(other, 'phases', '004-x.md'), dump({ seq: 4, phase: '004-x', status: 'pending', depends_on: [] }, '## Definition of done\n\n- [ ] x\n'));
+  writeFileSync(itemPath(other, '004-x'), dump({ seq: 4, phase: '004-x', status: 'pending', depends_on: [] }, '## Definition of done\n\n- [ ] x\n'));
   const hit = foreignItem(join(home, 'acme', 'app'), 'acme/lib#04');
   assert.equal(hit?.seq, 4, 'owner/name#04 names the item with seq 4, compared numerically');
 });

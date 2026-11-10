@@ -7,13 +7,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, sharedBacklog, consumer, GIT_IDENTITY } from './shared-fixtures.js';
-import {
-  repoIdFromUrl, validateHome, slugify, itemSelector,
-  assertInside, checkRefs, redact, git,
-} from '../../src/shared/safety.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, itemName, sharedBacklog } from './shared-fixtures.js';
+import { repoIdFromUrl, validateHome, slugify, itemSelector, assertInside, checkRefs, redact, git } from '../../src/shared/safety.js';
 
 // The fixture helpers' internal git calls inherit process.env; give them an
 // identity so the seed commits always work (same identity the fixtures use).
@@ -156,7 +153,7 @@ test('assertInside: a path inside the root returns the relative path; the root i
   const phases = join(home, 'phases');
   mkdirSync(phases);
   assert.equal(await assertInside(home, phases), 'phases');
-  assert.equal(await assertInside(home, join(phases, '001-a.md')), join('phases', '001-a.md'));
+  assert.equal(await assertInside(home, join(phases, itemName('001-a'))), join('phases', itemName('001-a')));
   assert.equal(await assertInside(home, home), '');
 });
 

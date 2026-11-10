@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync }
 import { spawnSync } from 'node:child_process';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, itemRel, sharedBacklog } from './shared-fixtures.js';
 import { cliAsync, gitIn } from './shared-concurrency.js';
 import * as store from '../../src/shared/store.js';
 
@@ -79,8 +79,8 @@ test('025: two agents writing different items at once both succeed, and both cha
   assert.equal(ra.status, 0, ra.stdout + ra.stderr);
   assert.equal(rb.status, 0, rb.stdout + rb.stderr);
   const bare = gitIn(f.home, 'remote', 'get-url', 'origin');
-  assert.match(gitIn(f.t, '--git-dir', bare, 'show', 'main:acme/demo/phases/001-alpha.md'), /from amy/);
-  assert.match(gitIn(f.t, '--git-dir', bare, 'show', 'main:acme/demo/phases/002-beta.md'), /from bob/);
+  assert.match(gitIn(f.t, '--git-dir', bare, 'show', `main:acme/demo/${itemRel('001-alpha')}`), /from amy/);
+  assert.match(gitIn(f.t, '--git-dir', bare, 'show', `main:acme/demo/${itemRel('002-beta')}`), /from bob/);
   assert.equal(existsSync(join(f.home, '.git', 'smooth-backlog-cli-run.lock')), false); // checked in: no record left
 });
 

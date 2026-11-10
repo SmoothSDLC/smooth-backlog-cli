@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog } from './shared-fixtures.js';
 import { decodeList, edgeState } from '../../src/team/handoff.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 
@@ -32,7 +32,7 @@ const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, team: true
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const seq = slug => Number(slug.split('-')[0]);
-const itemFile = (f, slug) => join(f.folder, 'phases', `${slug}.md`);
+const itemFile = (f, slug) => itemPath(f.folder, slug);
 const fm = (f, slug) => parse(readFileSync(itemFile(f, slug), 'utf8')).fm;
 const body = (f, slug) => parse(readFileSync(itemFile(f, slug), 'utf8')).body;
 const handoffs = (f, slug) => decodeList(fm(f, slug).handoffs) ?? [];

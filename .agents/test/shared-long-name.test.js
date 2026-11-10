@@ -2,12 +2,10 @@
 // write once added 41 characters to the item's file name and passed the 255-byte limit: ENAMETOOLONG). Local bare repos.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
-import { GIT_IDENTITY, cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog, itemNames, slugOfName } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -24,9 +22,9 @@ test('047: update, replan, close and new work beside an item with a 250-byte fil
   run(NEW(long));
   run(NEW('second item'));
   const phases = join(home, 'acme', 'demo', 'phases');
-  const file = readdirSync(phases).find(n => n.startsWith('001-'));
+  const file = itemNames(join(home, 'acme', 'demo')).find(n => n.startsWith('001-'));
   assert.ok(Buffer.byteLength(file) >= 245 && Buffer.byteLength(file) <= 255, `${file} is ${Buffer.byteLength(file)} bytes`);
-  const slug = file.replace(/\.md$/, '');
+  const slug = slugOfName(file);
   run(['show', slug, '--agent', 'tester']);
   run(['update', slug, '--note', 'a note', '--by', 'tester']);
   run(['update', '--replan', '2,1']);

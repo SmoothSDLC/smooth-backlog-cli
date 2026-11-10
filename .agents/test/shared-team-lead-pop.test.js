@@ -2,13 +2,12 @@
 // (front matter team = the team, no stage) with the whole item. Local bare repos.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -29,11 +28,11 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 // another team takes an item: the one place a refining slice changes team, written to the file the way an earlier build left it
 const moveTeam = (f, slug, team) => {
-  const file = join(f.folder, 'phases', `${slug}.md`);
+  const file = itemPath(f.folder, slug);
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^team: .*$/m, `team: ${team}`));
   for (const args of [['add', '-A'], ['commit', '-q', '-m', 'move team'], ['push', '-q']]) spawnSync('git', args, { cwd: f.home, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
 };
-const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
+const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
 const pop = (f, env, ...args) => { const r = run(f, ['team', 'pop', '--json', ...args], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
 
 test('team pop: the lead claims its team\'s first work item in the work order, then continues it, with the whole item', () => {
@@ -154,7 +153,7 @@ test('query --status --json rows carry claimed_by and review_state', () => {
   assert.deepEqual(rows[reviewed], ['bob', 'requested']);
   assert.deepEqual(rows[free], ['', 'none']);
   ok(f, ['show', reviewed, '--agent', 'zed']); ok(f, ['update', reviewed, '--start-review', '--by', 'zed']);
-  const file = join(f.folder, 'phases', `${free}.md`); // a front matter without the two keys: '' (written by hand here, never by the CLI)
+  const file = itemPath(f.folder, free); // a front matter without the two keys: '' (written by hand here, never by the CLI)
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^owner:.*\n/m, '').replace(/^owned_since:.*\n/m, '').replace(/^review_state:.*\n/m, ''));
   const again = Object.fromEntries(JSON.parse(ok(f, ['list', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
   assert.deepEqual([again[reviewed], again[free]], [['bob', 'in_review'], ['', '']]);
@@ -240,7 +239,7 @@ test('team pop: the claim itself refuses another team\'s item in a team session'
 test('an item without depends_on names it', () => {
   const f = fixture();
   const s = make(f, 'hand edited item');
-  const file = join(f.folder, 'phases', `${s}.md`);
+  const file = itemPath(f.folder, s);
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^depends_on:.*\n/m, '').replace(/^review_refs:\n(?:- .*\n)*/m, '').replace(/^review_refs:.*\n/m, ''));
   const x = JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--phase', s, '--json']).stdout);
   assert.deepEqual(x.missing, ['review_refs', 'depends_on']);

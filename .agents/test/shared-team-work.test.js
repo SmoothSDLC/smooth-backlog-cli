@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseItem as parse, storedFm } from '../../src/shared/frontmatter.js';
-import { cli, consumer, createdSlug, intoTeam, sharedBacklog } from './shared-fixtures.js';
+import { storedFm } from '../../src/shared/frontmatter.js';
+import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -40,7 +40,7 @@ const run = (f, args, env = {}) => {
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
-const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
+const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
 const work = (f, agent, env, ...args) => { const r = run(f, ['team', 'pop', '--team', env?.SMOOTH_BACKLOG_CLI_TEAM_NAME || 't1', '--agent', agent, '--json', ...args], env?.SMOOTH_BACKLOG_CLI_TEAM_NAME ? { SMOOTH_BACKLOG_CLI_AGENT: agent, ...env } : env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
 const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => ok(f, ['update', slug, ...a]));
@@ -133,7 +133,7 @@ test('in a team session a member acts only as itself; only the lead reassigns or
   no(f, ['update', job, '--reassign', 'bob', '--by', 'lead'], '--reassign needs --reason', LEADS);
   let r = ok(f, ['update', job, '--reassign', 'bob', '--by', 'lead', '--reason', 'ann is on another team'], LEADS);
   assert.equal(fm(f, job).claimed_by, 'bob');
-  assert.ok(readFileSync(join(f.folder, 'phases', `${job}.md`), 'utf8').includes('## Reassigned by lead from ann to bob at'), r.stdout);
+  assert.ok(readFileSync(itemPath(f.folder, job), 'utf8').includes('## Reassigned by lead from ann to bob at'), r.stdout);
   ok(f, ['update', job, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob'], BOB);
   no(f, ['update', job, '--start-review', '--by', 'zed'], 'not as zed', ANN);
   no(f, ['update', job, '--start-review', '--by', 'ann'], 'the same session cannot review its own work', ANN); // ann claimed the job before the reassign (session_authors)
@@ -143,7 +143,7 @@ test('in a team session a member acts only as itself; only the lead reassigns or
   no(f, ['update', other, '--release', 'bob', '--by', 'lead'], 'only the team lead (lead) does, with --reason', LEADS);
   r = ok(f, ['update', other, '--release', 'bob', '--by', 'lead', '--reason', 'bob is stopped'], LEADS);
   assert.equal(fm(f, other).claimed_by, '');
-  assert.ok(readFileSync(join(f.folder, 'phases', `${other}.md`), 'utf8').includes('Released by lead for bob at'));
+  assert.ok(readFileSync(itemPath(f.folder, other), 'utf8').includes('Released by lead for bob at'));
   no(f, ['update', other, '--claim', 'zed'], 'not as zed', BOB);
   ok(f, ['update', other, '--claim', 'zed']); // outside a team session the caller is not known: the named agent is taken as given
 });
@@ -163,7 +163,7 @@ test('a member never takes over another agent\'s stale review; the lead hands it
   no(f, ['update', job, '--reassign-review', 'bob', '--by', 'lead', '--reason', 'x'], 'cannot review its own work');
   ok(f, ['update', job, '--reassign-review', 'ann', '--by', 'lead', '--reason', 'zed is stopped'], STALE);
   assert.deepEqual([fm(f, job).status, fm(f, job).reviewer], ['reviewing', 'ann']);
-  assert.ok(readFileSync(join(f.folder, 'phases', `${job}.md`), 'utf8').includes('## Review reassigned by lead from zed to ann at'));
+  assert.ok(readFileSync(itemPath(f.folder, job), 'utf8').includes('## Review reassigned by lead from zed to ann at'));
   ok(f, ['update', job, '--review', 'pass', '--by', 'ann', '--comments', 'fine per references/review/code.md']);
 });
 

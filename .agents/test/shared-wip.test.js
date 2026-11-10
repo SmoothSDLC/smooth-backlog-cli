@@ -8,8 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -65,7 +64,7 @@ test('034: each of the five levels refuses the claim past its limit; the lead\'s
   assert.match(f.run('demo', ['update', c, '--wip-override', 'mine', '--by', 'lead'], 1, { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_AGENT: 'bob' }).stdout, /you are bob \(SMOOTH_BACKLOG_CLI_AGENT\): a member acts only as itself, not as lead/);
   f.run('demo', ['update', c, '--wip-override', 'the release needs it today', '--by', 'lead']);
   f.run('demo', ['update', c, '--claim', 'cat']); // lifted for this item, recorded
-  const fm = parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${c}.md`), 'utf8')).fm;
+  const fm = readItem(itemPath(join(f.home, 'acme', 'demo'), c)).fm;
   assert.deepEqual([fm.wip_override, fm.wip_override_by], ['the release needs it today', 'lead']);
   f.limits({ overall: 1 });
   assert.match(f.run('other', ['update', o, '--claim', 'dan'], 1).stdout, /overall work-in-progress limit/); // only the owner's file changes overall
@@ -92,14 +91,14 @@ test('034: query --wip prints the counts and the stale items; a renumbering leav
   f.limits({ repository: 5, stale_hours: 1 });
   const [a, b, c] = ['one', 'two', 'three'].map(n => f.make('demo', n));
   f.run('demo', ['update', a, '--claim', 'amy']);
-  const file = join(f.home, 'acme', 'demo', 'phases', `${a}.md`);
+  const file = itemPath(join(f.home, 'acme', 'demo'), a);
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^last_updated: .*$/m, 'last_updated: "2026-01-01T00:00:00Z"')); // old: stale
   const text = f.run('demo', ['team', 'query', '--team', 't1', '--wip']).stdout;
   assert.match(text, /repository +acme\/demo +1 \/ 5/);
   assert.match(text, /stale \(no change of their own for more than 1 h\): 1/);
   const j = JSON.parse(f.run('demo', ['team', 'query', '--team', 't1', '--wip', '--json']).stdout);
   assert.deepEqual(j.stale.map(x => x.slug), [a]);
-  const upd = s => parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${s}.md`), 'utf8')).fm.updated;
+  const upd = s => readItem(itemPath(join(f.home, 'acme', 'demo'), s)).fm.updated;
   const before = [b, c].map(upd);
   f.run('demo', ['update', '--replan', `${c},${b},${a}`]); // re-ranks b and c only
   assert.deepEqual([b, c].map(upd), before);
@@ -150,11 +149,11 @@ test('034: an owner decision past a limit is recorded; the item then waits in re
   for (const x of [q, r]) f.run('demo', ['update', x, '--request-decision', 'which way, and why', '--by', 'lead']);
   f.limits({ overall: 0 });
   f.run('demo', ['update', q, '--decision', 'this way']);
-  const held = parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${q}.md`), 'utf8')).fm;
+  const held = readItem(itemPath(join(f.home, 'acme', 'demo'), q)).fm;
   assert.deepEqual([held.status, held.refiner], ['refining', '']);
   rmSync(join(f.home, 'wip-limits.json'));
   f.run('demo', ['update', r, '--decision', 'that way']);
-  assert.equal(parse(readFileSync(join(f.home, 'acme', 'demo', 'phases', `${r}.md`), 'utf8')).fm.refiner, 'lead'); // no limit: the lead re-refines it
+  assert.equal(readItem(itemPath(join(f.home, 'acme', 'demo'), r)).fm.refiner, 'lead'); // no limit: the lead re-refines it
 });
 
 test('034: an item in progress is not moved into a repository past its limit', () => {

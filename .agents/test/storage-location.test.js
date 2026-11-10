@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, w
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { GIT_IDENTITY, ORIGIN_URL, cli, consumer } from './shared-fixtures.js';
+import { ORIGIN_URL, cli, consumer, itemPath, GIT_IDENTITY } from './shared-fixtures.js';
 
 function world(t) {
   const tmp = mkdtempSync(join(tmpdir(), 'backlog-location-'));
@@ -26,7 +26,7 @@ test('nothing configured: the backlog is .backlog inside the repository, created
   const r = run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.deepEqual(JSON.parse(readFileSync(join(repo, '.backlog', 'config.json'), 'utf8')), { backlog_repository: '.backlog' }, 'the config lives in .backlog');
-  assert.ok(existsSync(join(repo, '.backlog', 'local', 'repository', 'phases', '001-x.md')), 'the item file is inside the repository');
+  assert.ok(existsSync(itemPath(join(repo, '.backlog', 'local', 'repository'), '001-x')), 'the item file is inside the repository');
   assert.equal(readFileSync(join(repo, '.backlog', '.gitignore'), 'utf8').trim(), '.state/');
   const q = run(['show', '1', '--json']);
   assert.equal(q.status, 0, q.stdout + q.stderr);
@@ -65,7 +65,7 @@ test('the root file .smooth-backlog.json of earlier builds is still read when .b
   spawnSync('git', ['push', '-q', '-u', 'origin', 'main'], { cwd: clone });
   writeFileSync(join(repo, '.smooth-backlog.json'), JSON.stringify({ backlog_repository: relative(repo, clone) }));
   assert.equal(run(['new', '--name', 'x', '--objective', 'o', '--summary', 's']).status, 0);
-  assert.ok(existsSync(join(clone, 'acme', 'demo', 'phases', '001-x.md')), 'the items went to the configured folder');
+  assert.ok(existsSync(itemPath(join(clone, 'acme', 'demo'), '001-x')), 'the items went to the configured folder');
   assert.ok(!existsSync(join(repo, '.backlog', 'local')), 'nothing inside the repository');
 });
 

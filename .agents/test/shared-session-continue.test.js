@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog, GIT_IDENTITY, teamMembers } from './shared-fixtures.js';
+import { cli, consumer, itemPath, itemRel, sharedBacklog, teamMembers } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 
 const TEAM = 't07:09:1a';
@@ -49,7 +49,7 @@ const teamItem = (f, name) => {
   for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']]) ok(f, ['update', s, ...a]);
   return s;
 };
-const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
+const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === itemRel(slug)).fm;
 // the item after a review changes verdict and the earlier session's hand-off request: ready for a rework
 const reworked = (f, s) => {
   ok(f, ['update', s, '--claim', A1]);
@@ -75,7 +75,7 @@ test('082: a continuation of an item without session_authors keeps the earlier h
   const s = teamItem(f, 'continuation of an older item');
   ok(f, ['update', s, '--claim', A1]);
   // an item claimed before session_authors existed: the list is not in the file
-  const file = join(f.folder, 'phases', `${s}.md`);
+  const file = itemPath(f.folder, s);
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
   assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
   ok(f, ['update', s, '--claim', A2]); // the continuation

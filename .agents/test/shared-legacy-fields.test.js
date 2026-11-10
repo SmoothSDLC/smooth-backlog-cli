@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog } from './shared-fixtures.js';
 import { parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
@@ -29,7 +29,7 @@ const ok = (f, args) => { const r = run(f, args); assert.equal(r.status, 0, `${a
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const make = (f, name) => createdSlug(ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none',
   '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout);
-const pathOf = (f, slug) => join(f.folder, 'phases', `${slug}.md`);
+const pathOf = (f, slug) => itemPath(f.folder, slug);
 const text = (f, slug) => readFileSync(pathOf(f, slug), 'utf8');
 const read = (f, slug) => ok(f, ['show', slug, '--agent', 'me']);
 // A class-era item: both keys written straight into the file, bypassing the migration.

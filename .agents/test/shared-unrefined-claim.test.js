@@ -9,11 +9,10 @@
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, createdSlug, sharedBacklog, teamMembers } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, teamMembers, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -40,7 +39,7 @@ const run = (f, args, env = {}) => {
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const make = (f, name) => createdSlug(ok(f, ['new', ...NEW(name)]).stdout);
-const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
+const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
 const teamItem = f => { const s = make(f, 'unrefined team item'); ok(f, ['update', s, '--set-team', 't1']); return s; }; // team set, no stage
 const pop = (f, agent) => JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json'], T1).stdout);
 const claimable = (f, env) => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--json'], env).stdout).map(x => x.slug);

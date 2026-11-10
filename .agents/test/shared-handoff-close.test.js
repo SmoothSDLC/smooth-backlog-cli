@@ -4,12 +4,13 @@
 // Fixtures are written in the stored form: handoffs and handoff_receipts hold the compact JSON strings encode makes.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as handoff from '../../src/team/handoff.js';
 import { closeGate } from '../../src/team/handoff-close.js';
-import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
+import { dump } from '../../src/shared/frontmatter.js';
+import { itemPath, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -27,7 +28,7 @@ const SLUG = '005-producer';
 const make = (f, owner, name, fm) => {
   const dir = join(f.home, owner, name);
   mkdirSync(join(dir, 'phases'), { recursive: true });
-  writeFileSync(join(dir, 'phases', `${fm.phase}.md`), dump(fm, '## Definition of done\n\n- [ ] x\n'));
+  writeFileSync(itemPath(dir, fm.phase), dump(fm, '## Definition of done\n\n- [ ] x\n'));
 };
 const gate = (f, fm) => closeGate({ fm, folder: f.folder, repo: REPO, slug: SLUG });
 
@@ -130,6 +131,6 @@ test('059.3: closeGate takes the stored front-matter form straight from the code
   const producer = { seq: 5, phase: SLUG, status: 'pending', depends_on: [], handoffs: [handoff.encode(rec6)], handoff_receipts: [handoff.encode(receipt('6', rec6.digest))] };
   make(f, 'acme', 'app', producer);
   make(f, 'acme', 'app', { seq: 6, phase: '006-accepted', status: 'pending', depends_on: [5] });
-  const back = parse(readFileSync(join(f.folder, 'phases', `${SLUG}.md`), 'utf8')).fm;
+  const back = readItem(itemPath(f.folder, SLUG)).fm;
   assert.deepEqual(gate(f, back), {}, 'the stored form the codec returns satisfies the gate as the in-memory form does');
 });

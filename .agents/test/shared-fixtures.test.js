@@ -3,11 +3,11 @@
 // (~/git/backlog-repo) must be untouched.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, sharedBacklog, itemNames, slugOfName } from './shared-fixtures.js';
 
 test('shared fixtures: a new phase lands on the local bare and the real backlog stays untouched', t => {
   const tmp = mkdtempSync(join(tmpdir(), 'backlog-shared-fixtures-'));
@@ -28,7 +28,7 @@ test('shared fixtures: a new phase lands on the local bare and the real backlog 
   assert.equal(r.status, 0, `backlog new failed: ${r.stdout}${r.stderr}`);
 
   const phases = join(home, 'backlog-test', 'consumer', 'phases');
-  const made = readdirSync(phases).filter(n => /^\d{3}-x\.md$/.test(n));
+  const made = itemNames(join(home, 'backlog-test', 'consumer')).filter(n => /^\d{3}-x$/.test(slugOfName(n)));
   assert.equal(made.length, 1, `no new item file in ${phases}`);
   const phaseFile = join(phases, made[0]);
   assert.ok(existsSync(phaseFile), `phase file ${phaseFile} missing in the shared clone`);

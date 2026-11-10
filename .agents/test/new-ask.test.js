@@ -5,13 +5,12 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bin } from './helpers.js';
-import { cli, consumer, env, sharedBacklog } from './shared-fixtures.js';
-import { parseItem } from '../../src/shared/frontmatter.js';
+import { cli, consumer, env, sharedBacklog, itemNames, readItem, itemPath, slugOfName } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -22,8 +21,8 @@ function build() {
   dirs.push(t);
   const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
-  const items = () => { try { return readdirSync(join(home, 'acme', 'demo', 'phases')); } catch { return []; } };
-  const item = () => parseItem(readFileSync(join(home, 'acme', 'demo', 'phases', items()[0]), 'utf8'));
+  const items = () => itemNames(join(home, 'acme', 'demo'));
+  const item = () => readItem(itemPath(join(home, 'acme', 'demo'), slugOfName(items()[0])));
   // kind: 'new' or 'team'; answers: what the person types, in order
   const asking = (kind, args, answers) => {
     const r = spawnSync(process.execPath, [child, kind, ...args], { cwd: cons, env: { ...process.env, ...env(t), SMOOTH_BACKLOG_CLI_AGENT: 'driver-ask', ASK_ANSWERS: JSON.stringify(answers) }, encoding: 'utf8', input: '' });

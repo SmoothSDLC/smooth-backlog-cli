@@ -7,13 +7,13 @@
 // another writer would, committed and pushed in the fixture's backlog clone.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as handoff from '../../src/team/handoff.js';
-import { GIT_IDENTITY, cli, consumer, intoTeam, sharedBacklog, teamMembers } from './shared-fixtures.js';
+import { cli, consumer, intoTeam, itemPath, sharedBacklog, teamMembers, readItem, GIT_IDENTITY } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -37,7 +37,7 @@ const COMPLETE = ['--review-refs', 'references/review/code.md', '--estimate', '5
 // The hand-off front matter as another writer would store it: lists of encode(...) strings, committed and pushed
 // in the fixture's backlog clone.
 function setFront(f, slug, keys, folder = f.folder) {
-  const file = join(folder, 'phases', `${slug}.md`); const d = parse(readFileSync(file, 'utf8'));
+  const file = itemPath(folder, slug); const d = readItem(file);
   writeFileSync(file, dump({ ...d.fm, ...keys }, d.body));
   for (const a of [['commit', '-qam', `test: ${slug}`], ['push', '-q', 'origin', 'HEAD']]) {
     const p = spawnSync('git', a, { cwd: f.home, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -52,7 +52,7 @@ const hex = n => n.toString(16).padStart(40, '0');
 // The edge's stored form after the close: the named keys take the given values, the others are removed
 // (edgeState in handoff.js tells the states apart by the key's presence and value).
 function edgeState(f, slug, keys, folder = f.folder) {
-  const file = join(folder, 'phases', `${slug}.md`); const d = parse(readFileSync(file, 'utf8'));
+  const file = itemPath(folder, slug); const d = readItem(file);
   const fm = { ...d.fm };
   for (const k of ['handoffs', 'handoff_receipts']) { if (k in keys) fm[k] = keys[k]; else delete fm[k]; }
   writeFileSync(file, dump(fm, d.body));

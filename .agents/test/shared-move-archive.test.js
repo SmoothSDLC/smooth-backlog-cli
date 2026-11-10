@@ -3,11 +3,10 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { breakIndex, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { archivedPath, archivedRel, breakIndex, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
@@ -35,7 +34,7 @@ function seed() {
   const item = (dir, seq, name, extra = {}) => {
     const num = String(seq).padStart(3, '0');
     store.write({
-      path: join(dir, `phases/${num}-${name}.md`),
+      path: itemPath(dir, `${num}-${name}`),
       fm: {
         phase: `${num}-${name}`, seq, name: `Name ${name}`, objective: `Café ☕ ${name}`, summary: `sum ${name}`, status: 'pending',
         severity: 'normal', priority: seq - 1, repository: dir === folder ? 'acme/demo' : 'other/proj', branch: 'main', commit: '', location: '',
@@ -96,8 +95,8 @@ test('archive finds the item by number, never by database row id', () => {
   const r = run(f, 'archive', ['1', '--force']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^📦 001-alpha archived/);
-  assert.ok(existsSync(join(f.folder, 'archive/phases/001-alpha.md')));
-  assert.ok(existsSync(join(f.folder, 'phases/003-gamma.md')));
+  assert.ok(existsSync(archivedPath(f.folder, '001-alpha', 'phases')));
+  assert.ok(existsSync(itemPath(f.folder, '003-gamma')));
 });
 
 test('review P2: a name with --- in it does not hide the closing front-matter delimiter: archive --force stamps the file', () => {
@@ -107,7 +106,7 @@ test('review P2: a name with --- in it does not hide the closing front-matter de
   const slug = made.stdout.split('created phase ')[1].split(' ')[0];
   const r = run(f, 'archive', [slug, '--force']);
   assert.equal(r.status, 0, r.stderr);
-  const moved = fm(f.folder, `archive/phases/${slug}.md`);
+  const moved = fm(f.folder, archivedRel(slug, 'phases'));
   assert.equal(moved.fm.status, 'archived');
   assert.equal(moved.fm.name, 'three---dashes');
   assert.equal(rowOf(f.folder, slug).status, 'archived');
@@ -136,7 +135,7 @@ test('an origin that cannot be read refuses the move', () => {
   const missing = join(f.t, 'missing', 'acme', 'demo.git');
   assert.equal(r.stdout, `❌ could not read the branches of the origin of acme/demo (fatal: '${missing}' does not appear to be a git repository\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.); the target branch 'release' cannot be checked\n`);
   assert.equal(r.stderr, '');
-  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'main');
+  assert.equal(fm(f.folder, itemRel('002-beta')).fm.branch, 'main');
 });
 
 // --- move --to-repository
@@ -176,25 +175,25 @@ test('review P1: a symlink at archive/ or archive/phases/ refuses the archive be
     try {
       if (nested) { mkdirSync(join(f.folder, 'archive')); symlinkSync(outside, join(f.folder, 'archive', 'phases')); } else symlinkSync(outside, join(f.folder, 'archive'));
     } catch (e) { t.skip(`cannot create a symlink here: ${e.code}`); return; }
-    const source = readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8');
+    const source = readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8');
     const r = run(f, 'archive', ['5']);
     assert.notEqual(r.status, 0, r.stdout);
     assert.match(r.stdout + r.stderr, /Symlink destination is unsupported/);
     assert.deepEqual(readdirSync(outside), [], 'nothing was written outside the repository');
-    assert.equal(readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8'), source, 'the source file stays as it was, unstamped');
+    assert.equal(readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8'), source, 'the source file stays as it was, unstamped');
   }
 });
 
 test('review P1: archive and move hold the per-repository run lock from the pull to the push', async () => {
   const f = seed();
-  const a = await waitsForRunLock(f, ['archive', '5'], () => existsSync(join(f.folder, 'phases', '005-epsilon.md')));
+  const a = await waitsForRunLock(f, ['archive', '5'], () => existsSync(itemPath(f.folder, '005-epsilon')));
   assert.deepEqual(a.during, { exited: false, same: true }, 'archive waits while another command holds the lock');
   assert.equal(a.result.status, 0, a.result.stderr);
-  assert.ok(!existsSync(join(f.folder, 'phases', '005-epsilon.md')) && existsSync(join(f.folder, 'archive', 'phases', '005-epsilon.md')));
-  const m = await waitsForRunLock(f, ['move', '2', '--to-branch', 'release'], () => fm(f.folder, 'phases/002-beta.md').fm.branch);
+  assert.ok(!existsSync(itemPath(f.folder, '005-epsilon')) && existsSync(archivedPath(f.folder, '005-epsilon', 'phases')));
+  const m = await waitsForRunLock(f, ['move', '2', '--to-branch', 'release'], () => fm(f.folder, itemRel('002-beta')).fm.branch);
   assert.deepEqual(m.during, { exited: false, same: true }, 'move waits while another command holds the lock');
   assert.equal(m.result.status, 0, m.result.stderr);
-  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'release');
+  assert.equal(fm(f.folder, itemRel('002-beta')).fm.branch, 'release');
 });
 
 for (const [title, script, args] of [['archive', 'archive', ['5']], ['move --to-branch', 'move', ['2', '--to-branch', 'release']]]) {
@@ -208,7 +207,7 @@ for (const [title, script, args] of [['archive', 'archive', ['5']], ['move --to-
     assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
     const pushed = pushedState(f);
     assert.ok(pushed.slugs.includes('009-local') && !pushed.slugs.includes('008-local'), pushed.slugs.join());
-    assert.ok(pushed.files.includes('phases/009-local.md'));
+    assert.ok(pushed.files.includes(itemRel('009-local')));
   });
 }
 
@@ -216,7 +215,7 @@ test('review P2: move accepts --note="two words" (an option with a value, not a 
   const f = seed();
   const r = run(f, 'move', ['2', '--to-branch=release', '--note=because it is ready']);
   assert.equal(r.status, 0, r.stderr + r.stdout);
-  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'release');
+  assert.equal(fm(f.folder, itemRel('002-beta')).fm.branch, 'release');
 });
 
 test('review P2: move --to-repository refuses an item with depends_on, before any file is written; cleared, it moves', () => {
@@ -229,7 +228,7 @@ test('review P2: move --to-repository refuses an item with depends_on, before an
   assert.equal(r.stdout, '❌ 003-gamma depends on other items of acme/demo; dependencies are resolved against the target backlog, so clear them first: update 003-gamma --set-depends-on none\n');
   assert.equal(r.stderr, '');
   assert.deepEqual(names(f.other, 'phases'), target);
-  assert.equal(existsSync(join(f.folder, 'phases', '003-gamma.md')), true);
+  assert.equal(existsSync(itemPath(f.folder, '003-gamma')), true);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
   assert.equal(run(f, 'update', ['3', '--set-depends-on', 'none']).status, 0);
   assert.equal(run(f, 'move', ['3', '--to-repository', 'other/proj']).status, 0);
@@ -239,14 +238,14 @@ test('review P1: move --to-repository whose target index write is refused remove
   const f = seed();
   breakIndex(f.home, f.other); // the index of the target cannot be written
   const head = git(f.home, 'rev-parse', 'HEAD');
-  const src = readFileSync(join(f.folder, 'phases', '003-gamma.md'));
+  const src = readFileSync(itemPath(f.folder, '003-gamma'));
   const rows = () => mirror(f);
   const before = rows();
   const target = names(f.other, 'phases');
   const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
   assert.deepEqual(names(f.other, 'phases'), target, 'no copy is left in the target');
-  assert.deepEqual(readFileSync(join(f.folder, 'phases', '003-gamma.md')), src);
+  assert.deepEqual(readFileSync(itemPath(f.folder, '003-gamma')), src);
   assert.equal(rows(), before);
   assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', 'other/proj'), '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
@@ -263,7 +262,7 @@ test('review P2: move --to-repository refuses an item other items depend on, by 
   assert.equal(r.stdout, '❌ 001-alpha, 002-beta depend on 003-gamma, which would leave their depends_on pointing at nothing; clear them first: update <dependent> --set-depends-on ... (the other dependencies, or none)\n');
   assert.equal(r.stderr, '');
   assert.deepEqual(names(f.other, 'phases'), target);
-  assert.equal(existsSync(join(f.folder, 'phases', '003-gamma.md')), true);
+  assert.equal(existsSync(itemPath(f.folder, '003-gamma')), true);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
   assert.equal(run(f, 'update', ['1', '--set-depends-on', 'none']).status, 0);
   assert.equal(run(f, 'update', ['2', '--set-depends-on', 'none']).status, 0);
@@ -276,7 +275,7 @@ const mirror = f => JSON.stringify(['phases', 'archive'].flatMap(sub => names(f.
 for (const eol of ['\n', '\r\n', '\r']) {
   test(`review P2: archive replaces a whole escaped multiline status scalar (${JSON.stringify(eol)})`, () => {
     const f = seed();
-    const p = join(f.folder, 'phases', '002-beta.md');
+    const p = itemPath(f.folder, '002-beta');
     const source = '\uFEFF' + readFileSync(p, 'utf8').replace(/^status: .*$/m, 'status: "pend\\\n  ing"').replace(/\n/g, eol);
     writeFileSync(p, source);
     const before = parse(source);
@@ -284,7 +283,7 @@ for (const eol of ['\n', '\r\n', '\r']) {
     git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'multiline status'); git(f.home, 'push', '-q');
     const r = run(f, 'archive', ['2', '--force']);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    const text = readFileSync(join(f.folder, 'archive/phases/002-beta.md'), 'utf8');
+    const text = readFileSync(archivedPath(f.folder, '002-beta', 'phases'), 'utf8');
     const { events, ...rest } = parse(text).fm;
     assert.ok(events.some(l => l.includes(' archived ')), 'the archive is recorded in the item');
     assert.deepEqual({ fm: rest, body: parse(text).body }, { fm: { ...before.fm, status: 'archived' }, body: before.body });
@@ -296,20 +295,20 @@ for (const eol of ['\n', '\r\n', '\r']) {
 
 test('review P2: archive stamps status: archived into an item saved with CRLF line endings', () => {
   const f = seed();
-  const p = join(f.folder, 'phases', '005-epsilon.md');
+  const p = itemPath(f.folder, '005-epsilon');
   writeFileSync(p, readFileSync(p, 'utf8').replace(/\n/g, '\r\n'));
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'crlf'); git(f.home, 'push', '-q');
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
-  assert.match(readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8'), /status: "archived"\r\n/);
+  assert.equal(fm(f.folder, archivedRel('005-epsilon', 'phases')).fm.status, 'archived');
+  assert.match(readFileSync(archivedPath(f.folder, '005-epsilon', 'phases'), 'utf8'), /status: "archived"\r\n/);
 });
 
 test('review P1: archive and move --to-branch whose index write is refused put the files back and commit nothing', () => {
   for (const args of [['archive', ['5']], ['move', ['2', '--to-branch', 'release']]]) {
     const f = seed();
     breakIndex(f.home, f.folder);
-    const files = () => JSON.stringify([names(f.folder, 'phases'), names(f.folder, 'archive'), readFileSync(join(f.folder, 'phases/002-beta.md'), 'utf8'), readFileSync(join(f.folder, 'phases/005-epsilon.md'), 'utf8')]);
+    const files = () => JSON.stringify([names(f.folder, 'phases'), names(f.folder, 'archive'), readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8')]);
     const before = [files(), mirror(f), git(f.home, 'rev-parse', 'HEAD')];
     const r = run(f, ...args);
     assert.notEqual(r.status, 0, `${args[0]}: ${r.stdout}${r.stderr}`);
@@ -323,7 +322,7 @@ test('review P1: a cross-repository move waits for the operation lock of the clo
   await store.cloneLocked(f.home, async () => {
     child = cliAsync(['move', '3', '--to-repository', 'other/proj'], { cwd: f.cons, tmp: f.t });
     await new Promise(r => setTimeout(r, 2500));
-    during = { exited: child.exited(), source: existsSync(join(f.folder, 'phases', '003-gamma.md')), copied: names(f.other, 'phases').length };
+    during = { exited: child.exited(), source: existsSync(itemPath(f.folder, '003-gamma')), copied: names(f.other, 'phases').length };
   });
   assert.deepEqual(during, { exited: false, source: true, copied: 1 }, 'the move waits for the destination lock');
   assert.equal((await child.done).status, 0);
@@ -336,7 +335,7 @@ test('review P1: a bare --to-repository (the item names its target) also waits f
   await store.cloneLocked(f.home, async () => {
     child = cliAsync(['move', '7', '--to-repository'], { cwd: f.cons, tmp: f.t });
     await new Promise(r => setTimeout(r, 2500));
-    during = { exited: child.exited(), source: existsSync(join(f.folder, 'phases', '007-eta.md')) };
+    during = { exited: child.exited(), source: existsSync(itemPath(f.folder, '007-eta')) };
   });
   assert.deepEqual(during, { exited: false, source: true });
   assert.equal((await child.done).status, 0);
@@ -345,7 +344,7 @@ test('review P1: a bare --to-repository (the item names its target) also waits f
 test('review P1: a cross-repository move whose source index write is refused leaves no copy in the destination', () => {
   const f = seed();
   breakIndex(f.home, f.folder);
-  const files = () => JSON.stringify([names(f.folder, 'phases'), names(f.other, 'phases'), readFileSync(join(f.folder, 'phases/003-gamma.md'), 'utf8')]);
+  const files = () => JSON.stringify([names(f.folder, 'phases'), names(f.other, 'phases'), readFileSync(itemPath(f.folder, '003-gamma'), 'utf8')]);
   const before = [files(), mirror(f), mirror({ folder: f.other }), git(f.home, 'rev-parse', 'HEAD')];
   const r = run(f, 'move', ['3', '--to-repository', 'other/proj']);
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
@@ -363,7 +362,7 @@ test('review P1: archive whose index write is refused leaves nothing staged in t
 test('review P2: move of an archived item (--to-branch, --to-repository) is refused and writes nothing', () => {
   const f = seed();
   assert.equal(run(f, 'archive', ['5']).status, 0);
-  const file = join(f.folder, 'archive', 'phases', '005-epsilon.md');
+  const file = archivedPath(f.folder, '005-epsilon', 'phases');
   const before = [readFileSync(file, 'utf8'), mirror(f), names(f.other, 'phases'), git(f.home, 'rev-parse', 'HEAD')];
   for (const args of [['5', '--to-branch', 'release'], ['005-epsilon', '--to-repository', 'other/proj']]) {
     const r = run(f, 'move', args);
@@ -385,13 +384,13 @@ test('review P2: after a cross-repository move both queues are dense (the source
 test('review P2: archive inserts status: archived into an item whose front matter has no status key (LF, CRLF, lone CR)', () => {
   for (const eol of ['\n', '\r\n', '\r']) {
     const f = seed();
-    const p = join(f.folder, 'phases', '005-epsilon.md');
+    const p = itemPath(f.folder, '005-epsilon');
     writeFileSync(p, readFileSync(p, 'utf8').replace(/^status: .*\n/m, '').replace(/\n/g, eol));
     assert.ok(!/status:/.test(readFileSync(p, 'utf8').split(`${eol}---`)[1]), 'fixture has no status key');
     git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'no status'); git(f.home, 'push', '-q');
     const r = run(f, 'archive', ['5', '--force']);
     assert.equal(r.status, 0, JSON.stringify(eol) + r.stderr);
-    const text = readFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), 'utf8');
+    const text = readFileSync(archivedPath(f.folder, '005-epsilon', 'phases'), 'utf8');
     assert.equal(parse(text).fm.status, 'archived', JSON.stringify(eol));
     assert.equal(text.split('status:').length, 2);
     assert.ok(text.includes(`${eol}status: "archived"${eol}`), JSON.stringify(eol));
@@ -400,11 +399,11 @@ test('review P2: archive inserts status: archived into an item whose front matte
 
 test('review P2: move adds the keys it sets (branch, repository) to an item whose front matter lacks them, and the item is listed in the index of its new place', () => {
   const f = seed();
-  const p = join(f.folder, 'phases', '002-beta.md');
+  const p = itemPath(f.folder, '002-beta');
   writeFileSync(p, readFileSync(p, 'utf8').replace(/^(branch|repository|priority): .*\n/gm, ''));
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'no keys'); git(f.home, 'push', '-q');
   assert.equal(run(f, 'move', ['2', '--to-branch', 'release']).status, 0);
-  assert.equal(fm(f.folder, 'phases/002-beta.md').fm.branch, 'release');
+  assert.equal(fm(f.folder, itemRel('002-beta')).fm.branch, 'release');
   assert.equal(run(f, 'move', ['2', '--to-repository', 'other/proj']).status, 0);
   const moved = fm(f.other, `phases/${names(f.other, 'phases').find(n => n.endsWith('-beta.md'))}`).fm;
   assert.equal(moved.repository, 'other/proj');
@@ -417,27 +416,27 @@ test('075: archive of a done item: git mv, status stamp, reflow, one commit', ()
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, '📦 005-epsilon archived\n   📋 planning event: backlog re-densified to 4 item(s) (P0..P3)\n');
   assert.equal(r.stderr, '');
-  assert.equal(fm(f.folder, 'archive/phases/005-epsilon.md').fm.status, 'archived');
-  assert.ok(!existsSync(join(f.folder, 'phases/005-epsilon.md')));
+  assert.equal(fm(f.folder, archivedRel('005-epsilon', 'phases')).fm.status, 'archived');
+  assert.ok(!existsSync(itemPath(f.folder, '005-epsilon')));
   const row = () => { const r = rowOf(f.folder, '005-epsilon'); return { status: r.status, path: r.path }; };
-  assert.deepEqual(row(), { status: 'archived', path: 'archive/phases/005-epsilon.md' });
+  assert.deepEqual(row(), { status: 'archived', path: archivedRel('005-epsilon', 'phases') });
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['archive 5']);
-  assert.equal(git(f.home, 'log', '-1', '--follow', '--format=%s', '--', 'acme/demo/archive/phases/005-epsilon.md'), SUBJECT['archive 5']);
+  assert.equal(git(f.home, 'log', '-1', '--follow', '--format=%s', '--', `acme/demo/${archivedRel('005-epsilon', 'phases')}`), SUBJECT['archive 5']);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'), 'published');
 });
 
 test('075: archive --dry-run names the move and changes nothing', () => {
   const f = seed();
   const head = git(f.home, 'rev-parse', 'HEAD');
-  const file = readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8');
+  const file = readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8');
   const r = run(f, 'archive', ['5', '--dry-run']);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'ℹ️  [dry-run] would archive 005-epsilon and mark it archived\n');
   assert.equal(r.stderr, '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head, 'no commit');
-  assert.equal(readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8'), file, 'the file is untouched');
+  assert.equal(readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8'), file, 'the file is untouched');
   assert.ok(!existsSync(join(f.folder, 'archive')), 'no archive folder is created');
-  assert.ok(!existsSync(join(f.folder, 'phases', '005-epsilon.md')) === false);
+  assert.ok(!existsSync(itemPath(f.folder, '005-epsilon')) === false);
 });
 
 test('075: archive of an already archived item: an info line, exit 0, nothing changes', () => {
@@ -485,10 +484,10 @@ test('075: move has no --dry-run: argparse refuses it with exit 2 and nothing ch
 
 test('move --to-repository: the item brings its own history, once, with no prefix', () => {
   const f = seed();
-  const line = store.addEvent(f.folder, 'phases/007-eta.md', { event: 'claimed', branch: 'main', note: 'carried note' });
+  const line = store.addEvent(f.folder, itemRel('007-eta'), { event: 'claimed', branch: 'main', note: 'carried note' });
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'a history'); git(f.home, 'push', '-q');
   assert.equal(run(f, 'move', ['7', '--to-repository', 'other/proj']).status, 0);
-  const events = fm(f.other, 'phases/002-eta.md').fm.events;
+  const events = fm(f.other, itemRel('002-eta')).fm.events;
   assert.deepEqual(events.filter(l => l.includes('carried note')), [line]);
   assert.ok(events.some(l => l.includes(' moved_in ')), 'the arrival is recorded in the item');
   assert.ok(events.every(l => !l.includes('[from ')), events.join('\n'));
@@ -500,10 +499,10 @@ test('075: move --to-repository: new number in the target, source file gone, one
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, '✅ 007-eta moved to other/proj as 002-eta\n');
   assert.equal(r.stderr, '');
-  assert.ok(existsSync(join(f.other, 'phases/002-eta.md')));
-  assert.ok(!existsSync(join(f.folder, 'phases/007-eta.md')));
+  assert.ok(existsSync(itemPath(f.other, '002-eta')));
+  assert.ok(!existsSync(itemPath(f.folder, '007-eta')));
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['move 7 --to-repository']);
-  const moved = fm(f.other, 'phases/002-eta.md').fm;
+  const moved = fm(f.other, itemRel('002-eta')).fm;
   assert.deepEqual([moved.phase, moved.seq, moved.status, moved.repository], ['002-eta', 2, 'pending', 'other/proj']);
   assert.deepEqual(git(f.home, 'show', '--format=', '--name-only', '--no-renames', 'HEAD').split('\n').map(p => p.split('/').slice(0, 2).join('/')).filter((p, i, a) => a.indexOf(p) === i).sort(), ['acme/demo', 'other/proj']);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
@@ -512,12 +511,12 @@ test('075: move --to-repository: new number in the target, source file gone, one
 test('archive --force of an open item: the mirror row says archived, the queue no longer offers it, the change is published', () => {
   const f = seed();
   const row = () => { const r = rowOf(f.folder, '002-beta'); return { status: r.status, path: r.path }; };
-  assert.deepEqual(row(), { status: 'pending', path: 'phases/002-beta.md' });
+  assert.deepEqual(row(), { status: 'pending', path: itemRel('002-beta') });
   const r = run(f, 'archive', ['2', '--force']);
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(row(), { status: 'archived', path: 'archive/phases/002-beta.md' });
+  assert.deepEqual(row(), { status: 'archived', path: archivedRel('002-beta', 'phases') });
   assert.ok(cli(['next', '--json'], { cwd: f.cons, tmp: f.t }).stdout.indexOf('002-beta') < 0);
-  assert.deepEqual(names(f.folder, 'archive'), ['phases/002-beta.md']);
+  assert.deepEqual(names(f.folder, 'archive'), [itemRel('002-beta')]);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
 });
 
@@ -546,7 +545,7 @@ test('075: archive of a not-done item without --force: exit 1, the exact refusal
 test('075: archive whose target file already exists: exit 1, the exact refusal, nothing written or committed', () => {
   const f = seed();
   mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
-  writeFileSync(join(f.folder, 'archive/phases/005-epsilon.md'), readFileSync(join(f.folder, 'phases/005-epsilon.md'), 'utf8'));
+  writeFileSync(archivedPath(f.folder, '005-epsilon', 'phases'), readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8'));
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an archived copy exists already'); git(f.home, 'push', '-q');
   const before = snapshot(f);
   const r = run(f, 'archive', ['5']);
@@ -582,10 +581,10 @@ test('075: archive --force of an open item: the exact output, the stamp, the row
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, '📦 002-beta archived\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n');
   assert.equal(r.stderr, '');
-  assert.equal(fm(f.folder, 'archive/phases/002-beta.md').fm.status, 'archived');
-  assert.ok(!existsSync(join(f.folder, 'phases/002-beta.md')));
+  assert.equal(fm(f.folder, archivedRel('002-beta', 'phases')).fm.status, 'archived');
+  assert.ok(!existsSync(itemPath(f.folder, '002-beta')));
   const row = () => { const r = rowOf(f.folder, '002-beta'); return { status: r.status, path: r.path }; };
-  assert.deepEqual(row(), { status: 'archived', path: 'archive/phases/002-beta.md' });
+  assert.deepEqual(row(), { status: 'archived', path: archivedRel('002-beta', 'phases') });
   assert.equal(git(f.home, 'log', '-1', '--format=%s'), SUBJECT['archive 2 --force']);
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'), 'published');
 });
@@ -602,7 +601,7 @@ test('057: archive and move print the slug and no path', () => {
   assert.equal(runs('move', ['5', '--to-branch', 'release']).stdout,
     '❌ 005-epsilon is archived and cannot be moved (archived items are read-only)\n');
   mkdirSync(join(f.folder, 'archive', 'phases'), { recursive: true });
-  writeFileSync(join(f.folder, 'archive', 'phases', '006-zeta.md'), readFileSync(join(f.folder, 'phases', '006-zeta.md'), 'utf8'));
+  writeFileSync(archivedPath(f.folder, '006-zeta', 'phases'), readFileSync(itemPath(f.folder, '006-zeta'), 'utf8'));
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an archived copy exists already'); git(f.home, 'push', '-q');
   assert.equal(runs('archive', ['6']).stdout, '❌ an archived item named 006-zeta already exists; archiving it again would replace that item\n');
   assert.match(runs('move', ['2', '--to-branch', 'release']).stdout, /^✅ 002-beta now belongs to branch 'release'\n/);

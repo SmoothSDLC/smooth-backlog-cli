@@ -3,11 +3,11 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedPath, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
@@ -34,7 +34,7 @@ function seed() {
   const item = (seq, name, extra = {}) => {
     const num = String(seq).padStart(3, '0');
     store.write({
-      path: join(folder, `phases/${num}-${name}.md`),
+      path: itemPath(folder, `${num}-${name}`),
       fm: {
         phase: `${num}-${name}`, seq, name: `Name ${name}`, objective: `Café ☕ ${name}`, summary: `sum ${name}`, status: 'pending',
         severity: 'normal', priority: seq - 1, repository: 'acme/demo', branch: 'main', commit: '', location: '',
@@ -57,22 +57,22 @@ function seed() {
 
 const run = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t });
 const rankOf = (f, slug) => index.rows(f.folder).rows.find(r => r.slug === slug).priority; // the rank is in the index, not in the item
-const fm = (f, name) => parse(readFileSync(join(f.folder, 'phases', name), 'utf8'));
+const fm = (f, name) => readItem(itemPath(f.folder, slugOfName(name)));
 
 test('the class options are gone: --set-work-class and --set-review-classes are unrecognized, nothing is written', () => {
   const f = seed();
-  const before = readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8');
+  const before = readFileSync(itemPath(f.folder, '002-beta'), 'utf8');
   for (const flag of ['--set-work-class', '--set-review-classes']) {
     const r = run(f, ['2', flag, 'docs']);
     assert.equal(r.status, 2, r.stdout + r.stderr);
     assert.match(r.stderr, new RegExp(`unrecognized arguments: ${flag}`));
   }
-  assert.equal(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), before);
+  assert.equal(readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), before);
 });
 
 test('update --priority changes the index and no other item file; the item itself is stamped and records the move', () => {
   const f = seed();
-  const files = () => Object.fromEntries(readdirSync(join(f.folder, 'phases')).map(n => [n, readFileSync(join(f.folder, 'phases', n), 'utf8')]));
+  const files = () => Object.fromEntries(itemNames(f.folder).map(n => [n, readFileSync(itemPath(f.folder, slugOfName(n)), 'utf8')]));
   assert.equal(run(f, ['1', '--summary', 'first write builds the index']).status, 0);
   const before = files();
   const indexBefore = readFileSync(join(f.folder, 'index.json'), 'utf8');
@@ -83,26 +83,26 @@ test('update --priority changes the index and no other item file; the item itsel
   assert.notEqual(readFileSync(join(f.folder, 'index.json'), 'utf8'), indexBefore, 'the order is in the index');
   assert.equal(rankOf(f, '002-beta'), 0);
   assert.equal(rankOf(f, '001-alpha'), 1);
-  assert.match(parse(after['002-beta.md']).fm.events.at(-1), / planning_event /);
+  assert.match(parse(after[itemName('002-beta')]).fm.events.at(-1), / planning_event /);
 });
 
 test('a folder whose items carry the rank of an earlier build gets its index at the first write; the items lose the key when they are next written', () => {
   const f = seed();
   for (const [n, rank] of [['001-alpha', 3], ['002-beta', 1], ['003-gamma', 2], ['004-delta', 0], ['005-epsilon', 4], ['006-zeta', 5]]) { // the ranks an earlier build wrote
-    const p = join(f.folder, 'phases', `${n}.md`);
-    const doc = parse(readFileSync(p, 'utf8'));
+    const p = itemPath(f.folder, n);
+    const doc = readItem(p);
     writeFileSync(p, dump({ ...doc.fm, priority: rank }, doc.body));
   }
   rmSync(join(f.folder, 'index.json'), { force: true }); // the fixture's writes made one; an earlier build had none
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'legacy ranks'); git(f.home, 'push', '-q');
   assert.equal(existsSync(join(f.folder, 'index.json')), false);
-  assert.equal(fm(f, '003-gamma.md').fm.priority, 2);
+  assert.equal(fm(f, itemName('003-gamma')).fm.priority, 2);
   assert.equal(run(f, ['3', '--summary', 'written']).status, 0);
   assert.deepEqual(index.read(f.folder).branches.main.map(e => e.slug), ['004-delta', '002-beta', '003-gamma', '001-alpha', '005-epsilon', '006-zeta'], 'the order the priority fields gave, open items first');
-  assert.equal(Object.hasOwn(fm(f, '003-gamma.md').fm, 'priority'), false, 'the written item lost the key');
-  assert.equal(fm(f, '002-beta.md').fm.priority, 1, 'an item nobody wrote keeps it, ignored');
+  assert.equal(Object.hasOwn(fm(f, itemName('003-gamma')).fm, 'priority'), false, 'the written item lost the key');
+  assert.equal(fm(f, itemName('002-beta')).fm.priority, 1, 'an item nobody wrote keeps it, ignored');
   assert.equal(run(f, ['2', '--summary', 'written']).status, 0);
-  assert.equal(Object.hasOwn(fm(f, '002-beta.md').fm, 'priority'), false);
+  assert.equal(Object.hasOwn(fm(f, itemName('002-beta')).fm, 'priority'), false);
 });
 
 test('a bare number is the item number, never the database row id', t => {
@@ -110,9 +110,9 @@ test('a bare number is the item number, never the database row id', t => {
   const r = run(f, ['2', '--status', 'in_progress']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^✅ 002-beta updated/);
-  assert.equal(fm(f, '002-beta.md').fm.status, 'in progress');
-  assert.equal(fm(f, '001-alpha.md').fm.status, 'pending'); // row id 2 is item 1: it must not be touched
-  assert.equal(fm(f, '003-gamma.md').fm.updated, '2026-10-01T00:00:00Z');
+  assert.equal(fm(f, itemName('002-beta')).fm.status, 'in progress');
+  assert.equal(fm(f, itemName('001-alpha')).fm.status, 'pending'); // row id 2 is item 1: it must not be touched
+  assert.equal(fm(f, itemName('003-gamma')).fm.updated, '2026-10-01T00:00:00Z');
   const p = run(f, ['3', '--priority', '0']);
   assert.match(p.stdout, /P0/);
   assert.equal(rankOf(f, '003-gamma'), 0);
@@ -123,24 +123,24 @@ test('order of work: pull first, then change, write, log the event, commit and p
   const f = seed();
   const other = join(f.t, 'other');
   git(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), other);
-  const text = readFileSync(join(other, 'acme', 'demo', 'phases', '004-delta.md'), 'utf8').replace('sum delta', 'remote summary');
-  writeFileSync(join(other, 'acme', 'demo', 'phases', '004-delta.md'), text);
+  const text = readFileSync(itemPath(join(other, 'acme', 'demo'), '004-delta'), 'utf8').replace('sum delta', 'remote summary');
+  writeFileSync(itemPath(join(other, 'acme', 'demo'), '004-delta'), text);
   git(other, 'commit', '-q', '-am', 'remote edit');
   git(other, 'push', '-q');
   const r = run(f, ['4', '--status', 'in_progress', '--note', 'go']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(fm(f, '004-delta.md').fm.summary, 'remote summary'); // the pull happened before the item was read and rewritten
+  assert.equal(fm(f, itemName('004-delta')).fm.summary, 'remote summary'); // the pull happened before the item was read and rewritten
   const log = git(f.home, 'log', '--format=%s', '-1');
   assert.equal(log, 'acme/demo: update 4 --status');
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
-  const item = fm(f, '004-delta.md').fm;
+  const item = fm(f, itemName('004-delta')).fm;
   assert.equal(item.status, 'in progress');
   const e = store.parseEvent(item.events.at(-1));
   assert.deepEqual([e.event, e.note], ['state_change', 'go']);
   const head = git(f.home, 'show', '--stat', '--format=', 'HEAD');
   assert.doesNotMatch(head, /backlog\.db/);
-  assert.match(head, /acme\/demo\/phases\/004-delta\.md/);
+  assert.match(head, new RegExp(reEscape(`acme/demo/${itemRel('004-delta')}`)));
 });
 
 test('a refusal and a dry run make no commit', () => {
@@ -177,7 +177,7 @@ test('a repository without a backlog yet: no phase, exit 1', () => {
 
 test('review P1: update holds the per-repository run lock from the pull to the push (a held lock makes it wait)', async () => {
   const f = seed();
-  const watch = () => fm(f, '002-beta.md').fm.summary;
+  const watch = () => fm(f, itemName('002-beta')).fm.summary;
   const { during, result, before } = await waitsForRunLock(f, ['update', '2', '--summary', 'locked change'], watch);
   assert.deepEqual(during, { exited: false, same: true }, 'the command must wait while another command holds the lock');
   assert.equal(result.status, 0, result.stderr);
@@ -196,17 +196,17 @@ test('review P1: a renumbering during the commit is followed by a rescan that is
   assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
   const pushed = pushedState(f);
   assert.ok(pushed.slugs.includes('009-local') && !pushed.slugs.includes('008-local'), pushed.slugs.join());
-  assert.ok(pushed.files.includes('phases/009-local.md') && !pushed.files.includes('phases/008-local.md'));
+  assert.ok(pushed.files.includes(itemRel('009-local')) && !pushed.files.includes(itemRel('008-local')));
 });
 
 test('review P2: --summary="two words" and --append="extra text" are options with a value, not positionals (argparse)', () => {
   const f = seed();
   const a = run(f, ['2', '--summary=two words']);
   assert.equal(a.status, 0, a.stderr);
-  assert.equal(fm(f, '002-beta.md').fm.summary, 'two words');
+  assert.equal(fm(f, itemName('002-beta')).fm.summary, 'two words');
   const b = run(f, ['2', '--append=extra text']);
   assert.equal(b.status, 0, b.stderr);
-  assert.match(fm(f, '002-beta.md').body, /\n\nextra text\n$/);
+  assert.match(fm(f, itemName('002-beta')).body, /\n\nextra text\n$/);
   assert.equal(run(f, ['--summary=two words', '2']).status, 0); // the option may come first
   assert.equal(run(f, ['an item', '--bogus x']).status, 2);       // an unknown option with a space is a positional: two of them are an error
 });
@@ -222,7 +222,7 @@ function claimable(f) {
 test('review P1 (job 15): two processes cannot both claim an unclaimed item; a claim waits for the run lock', async () => {
   const f = seed();
   claimable(f);
-  const w = await waitsForRunLock(f, ['update', '2', '--claim', 'ann'], () => fm(f, '002-beta.md').fm.claimed_by);
+  const w = await waitsForRunLock(f, ['update', '2', '--claim', 'ann'], () => fm(f, itemName('002-beta')).fm.claimed_by);
   assert.deepEqual(w.during, { exited: false, same: true }, 'the claim waits while another command holds the lock');
   assert.equal(w.result.status, 0, w.result.stdout + w.result.stderr);
   const g = seed();
@@ -230,28 +230,28 @@ test('review P1 (job 15): two processes cannot both claim an unclaimed item; a c
   const both = await Promise.all(['ann', 'amy'].map(who => cliAsync(['update', '2', '--claim', who], { cwd: g.cons, tmp: g.t }).done));
   assert.deepEqual(both.map(r => r.status).sort(), [0, 1], both.map(r => r.stdout + r.stderr).join('\n'));
   const winner = both[0].status === 0 ? 'ann' : 'amy';
-  assert.equal(fm(g, '002-beta.md').fm.claimed_by, winner);
+  assert.equal(fm(g, itemName('002-beta')).fm.claimed_by, winner);
   assert.equal(git(g.home, 'status', '--porcelain'), '');
   assert.equal(git(g.home, 'rev-parse', 'origin/main'), git(g.home, 'rev-parse', 'HEAD'));
 });
 
 test('review P2 (job 15): --set-review-refs goes through checkRefs: an absolute or ..-crossing ref is refused and nothing is written', () => {
   const f = seed();
-  const before = readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8');
+  const before = readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8');
   const head = git(f.home, 'rev-parse', 'HEAD');
   for (const ref of ['../../outside/tests.md', '/outside/tests.md']) {
     const r = run(f, ['5', '--set-review-refs', ref]);
     assert.notEqual(r.status, 0, ref);
     assert.match(r.stdout + r.stderr, /review ref .* (is absolute|contains '\.\.')/);
   }
-  assert.equal(readFileSync(join(f.folder, 'phases', '005-epsilon.md'), 'utf8'), before);
+  assert.equal(readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8'), before);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
 test('review P2: update on an archived item is refused for every flag that goes through it, and writes nothing', () => {
   const f = seed();
   assert.equal(cli(['archive', '2', '--force'], { cwd: f.cons, tmp: f.t }).status, 0);
-  const file = join(f.folder, 'archive', 'phases', '002-beta.md');
+  const file = archivedPath(f.folder, '002-beta', 'phases');
   const before = readFileSync(file, 'utf8');
   const head = git(f.home, 'rev-parse', 'HEAD');
   for (const args of [['002-beta', '--summary', 'new'], ['2', '--status', 'done'], ['002-beta', '--claim', 'me'], ['002-beta', '--request-review', 'rex'], ['002-beta', '--close']]) {
@@ -266,7 +266,7 @@ test('review P2: update on an archived item is refused for every flag that goes 
 test('review P1: update whose index write is refused restores the file, and commits nothing', () => {
   const f = seed();
   breakIndex(f.home, f.folder);
-  const target = join(f.folder, 'phases', '002-beta.md');
+  const target = itemPath(f.folder, '002-beta');
   const text = readFileSync(target, 'utf8');
   const head = git(f.home, 'rev-parse', 'HEAD');
   const r = run(f, ['2', '--priority', '0']); // the item is written, then the order cannot be
@@ -285,14 +285,14 @@ test('review P2: after two clones picked one number, the merged queue is re-dens
 
 test('review P1: update of an item of another team (field edit, note, append) is refused and writes nothing', () => {
   const f = seed();
-  const text = readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8');
+  const text = readFileSync(itemPath(f.folder, '002-beta'), 'utf8');
   const head = git(f.home, 'rev-parse', 'HEAD');
   for (const args of [['2', '--summary', 'x'], ['2', '--note', 'x'], ['2', '--append', 'x'], ['2', '--priority', '0'], ['2', '--section', 'Evidence', '--add-line', 'x']]) {
     const r = cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'release' } });
     assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
     assert.match(r.stdout, /team session is bound/);
   }
-  assert.equal(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), text);
+  assert.equal(readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), text);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
@@ -392,7 +392,7 @@ test('review P1: a bound team session reorders and re-ranks only its own items: 
   for (const n of ['2', '3']) assert.equal(cli(['move', n, '--to-branch', 'release'], { cwd: f.cons, tmp: f.t }).status, 0); // two items of the team's branch; the rest stay on main
   const team = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'release' };
   const t = args => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: team });
-  const others = () => JSON.stringify(readdirSync(join(f.folder, 'phases')).filter(n => !/^00[23]/.test(n)).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8')));
+  const others = () => JSON.stringify(itemNames(f.folder).filter(n => !/^00[23]/.test(n)).map(n => readFileSync(itemPath(f.folder, slugOfName(n)), 'utf8')));
   const [before, head] = [others(), git(f.home, 'rev-parse', 'HEAD')];
   const refused = t(['--replan', '1,3']);
   assert.equal(refused.status, 1, refused.stdout + refused.stderr);
@@ -411,7 +411,7 @@ const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
 const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '');
 function snapshot(f) {
   const files = {};
-  for (const n of readdirSync(join(f.folder, 'phases'))) files[n] = norm(JSON.stringify(parse(readFileSync(join(f.folder, 'phases', n), 'utf8'))));
+  for (const n of itemNames(f.folder)) files[n] = norm(JSON.stringify(readItem(itemPath(f.folder, slugOfName(n)))));
   const cols = ['id', 'handoff_id', 'slug', 'seq', 'name', 'objective', 'summary', 'status', 'severity', 'priority', 'path', 'branch', 'commit_sha', 'location', 'repository', 'size_score', 'completed_at'];
   const out = {
     files,
@@ -457,7 +457,7 @@ test('--status done completes, stamps completed, re-prioritizes and prints the p
   const f = seed();
   const r = step(f, ['2', '--status', 'done']);
   assert.match(r.stdout, /PLANNING EVENT — completing work RE-PRIORITIZES the backlog/);
-  assert.match(fm(f, '002-beta.md').fm.completed, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+  assert.match(fm(f, itemName('002-beta')).fm.completed, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   step(f, ['1', '--status', 'done', '--note', 'n']);
   step(f, ['3', '--status', 'done', '--priority', '0']);
   step(f, ['4', '--status', 'done']); // empties the backlog down to item 5
@@ -469,37 +469,37 @@ test('--status takes any word on an item outside a team: a free word keeps it in
   const queue = () => index.open(index.rows(f.folder).rows).map(r => r.slug);
   assert.ok(queue().includes('001-alpha'));
   assert.equal(step(f, ['1', '--status', 'blocked on vendor']).status, 0);
-  assert.equal(fm(f, '001-alpha.md').fm.status, 'blocked on vendor');
+  assert.equal(fm(f, itemName('001-alpha')).fm.status, 'blocked on vendor');
   assert.ok(queue().includes('001-alpha'), 'a free-text word is open');
   assert.equal(step(f, ['1', '--status', 'in-progress']).status, 0); // typed with a hyphen, stored as the word
-  assert.equal(fm(f, '001-alpha.md').fm.status, 'in progress');
+  assert.equal(fm(f, itemName('001-alpha')).fm.status, 'in progress');
   assert.equal(step(f, ['2', '--status', 'closed']).status, 0);
   assert.ok(!queue().includes('002-beta'));
   assert.equal(step(f, ['1', '--status', 'done']).status, 0); // done is closed
-  assert.equal(fm(f, '001-alpha.md').fm.status, 'closed');
+  assert.equal(fm(f, itemName('001-alpha')).fm.status, 'closed');
   assert.ok(!queue().includes('001-alpha'));
 });
 
 test('--status on an item of a team is refused: its status moves by the team steps, and nothing is written', () => {
   const f = seed();
   assert.equal(step(f, ['1', '--set-team', 't1']).status, 0);
-  const before = readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8');
+  const before = readFileSync(itemPath(f.folder, '001-alpha'), 'utf8');
   const r = step(f, ['1', '--status', 'closed']);
   assert.equal(r.status, 1, r.stdout);
   assert.match(r.stdout, /backlog team update takes no --status: the status of a team item moves by its steps/);
-  assert.equal(readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8'), before);
+  assert.equal(readFileSync(itemPath(f.folder, '001-alpha'), 'utf8'), before);
 });
 
 test('an item written with the earlier fields reads as the new word, and its first write drops stage and review_state', () => {
   const f = seed();
-  const file = join(f.folder, 'phases', '003-gamma.md'); // status in_progress
-  const { fm: old, body } = parse(readFileSync(file, 'utf8'));
+  const file = itemPath(f.folder, '003-gamma'); // status in_progress
+  const { fm: old, body } = readItem(file);
   store.write({ path: file, fm: { ...old, review_state: 'requested' }, body }, f.folder);
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an item of an earlier build'); git(f.home, 'push', '-q');
   const read = cli(['show', '3', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(JSON.parse(read.stdout).status, 'ready for review');
   assert.equal(step(f, ['3', '--note', 'x']).status, 0);
-  const after = fm(f, '003-gamma.md').fm;
+  const after = fm(f, itemName('003-gamma')).fm;
   assert.equal(after.status, 'ready for review');
   assert.ok(!('stage' in after) && !('review_state' in after), JSON.stringify(after));
 });
@@ -555,8 +555,8 @@ test('--note on an item that waits clears the wait with a WAIT DONE line', () =>
   const f = seed();
   const noted = cli(['update', '4', '--note', 'workflow finished'], { cwd: f.cons, tmp: f.t, team: true }); // the wait is a team's: the note is a step of `backlog team update`
   assert.equal(noted.status, 0, noted.stdout + noted.stderr);
-  assert.equal(fm(f, '004-delta.md').fm.wait_on, '');
-  assert.match(fm(f, '004-delta.md').body, /\n\nWAIT DONE \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \(next step on the item\)\n$/);
+  assert.equal(fm(f, itemName('004-delta')).fm.wait_on, '');
+  assert.match(fm(f, itemName('004-delta')).body, /\n\nWAIT DONE \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \(next step on the item\)\n$/);
 });
 
 test('refinement flags --set-review-refs --set-chunk --set-estimate --set-complexity --set-layer --set-depends-on', () => {
@@ -590,7 +590,7 @@ const ok2 = (f, item) => assert.equal(run(f, [item, '--section', 'Evidence', '--
 
 test('update --section edits one body section and nothing else, through every edit option', () => {
   const f = seed();
-  const body = () => fm(f, '001-alpha.md').body;
+  const body = () => fm(f, itemName('001-alpha')).body;
   const before = body();
   const ok = args => { const r = run(f, ['1', '--section', ...args]); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
   ok(['Evidence', '--add-line', 'first proof']);
@@ -601,19 +601,19 @@ test('update --section edits one body section and nothing else, through every ed
   ok(['Tasks', '--move-line', '2:1']);
   assert.match(body(), /## Evidence\n\n- first proof\n\n## Tasks\n\n- b\n- a\n$/);
   assert.ok(body().startsWith(before.trimEnd()), 'the text before the edited sections is byte-identical');
-  assert.equal(fm(f, '001-alpha.md').fm.name, 'Name alpha', 'the front matter fields stay');
-  assert.match(fm(f, '001-alpha.md').fm.events.at(-1), /set Tasks=move-line/);
-  const other = readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8');
+  assert.equal(fm(f, itemName('001-alpha')).fm.name, 'Name alpha', 'the front matter fields stay');
+  assert.match(fm(f, itemName('001-alpha')).fm.events.at(-1), /set Tasks=move-line/);
+  const other = readFileSync(itemPath(f.folder, '002-beta'), 'utf8');
   ok2(f, '6'); // a finished item takes the edit too, and no other item is written
-  assert.equal(readFileSync(join(f.folder, 'phases', '002-beta.md'), 'utf8'), other);
-  assert.match(fm(f, '006-zeta.md').body, /## Evidence\n\n- late\n$/);
+  assert.equal(readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), other);
+  assert.match(fm(f, itemName('006-zeta')).body, /## Evidence\n\n- late\n$/);
   const dry = run(f, ['1', '--section', 'Tasks', '--add-line', 'never', '--dry-run']);
   assert.equal(dry.status, 0); assert.doesNotMatch(body(), /never/);
 });
 
 test('update --section refuses what it cannot do and writes nothing', () => {
   const f = seed();
-  const text = () => readFileSync(join(f.folder, 'phases', '001-alpha.md'), 'utf8');
+  const text = () => readFileSync(itemPath(f.folder, '001-alpha'), 'utf8');
   const before = text(); const head = git(f.home, 'rev-parse', 'HEAD');
   for (const args of [['--section', 'Tasks'], ['--add-line', 'x'], ['--section', 'Tasks', '--add-line', 'x', '--remove-line', '1'], ['--section', 'Tasks', '--top', '--remove-line', '1'],
     ['--section', 'Tasks', '--remove-line', '0'], ['--section', 'Tasks', '--move-line', '1'], ['--section', 'Tasks', '--add-line', 'a\nb'], ['--section', ' ', '--add-line', 'x']]) {

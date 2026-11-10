@@ -2,13 +2,12 @@
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as store from '../../src/shared/store.js';
-import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -42,7 +41,7 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const up = (f, slug, ...args) => ok(f, ['update', slug, ...args]);
 const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
-const doc = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
+const doc = (f, slug) => readItem(itemPath(f.folder, slug));
 const fm = (f, slug) => doc(f, slug).fm;
 const pop = (f, agent, env) => { const r = run(f, ['team', 'pop', '--team', env?.SMOOTH_BACKLOG_CLI_TEAM_NAME || 't1', '--agent', agent, '--json'], env?.SMOOTH_BACKLOG_CLI_TEAM_NAME ? { SMOOTH_BACKLOG_CLI_AGENT: agent, ...env } : env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
@@ -112,7 +111,7 @@ test('each step refuses out of order, and one step at a time', () => {
   const d = make(f, 'claimed child', '--split-from', w);
   no(f, ['update', d, '--claim', 'ann', '--force'], 'claim needs ready or in progress'); // --force does not pass the stages
   const { fm: dfm, body: dbody } = doc(f, d);
-  store.write({ path: join(f.folder, 'phases', `${d}.md`), fm: { ...dfm, claimed_by: 'ann' }, body: dbody }, f.folder); // as a hand edit leaves it
+  store.write({ path: itemPath(f.folder, d), fm: { ...dfm, claimed_by: 'ann' }, body: dbody }, f.folder); // as a hand edit leaves it
   no(f, ['update', d, '--refine-start', '--by', 'bob'], 'claimed by ann: the work item itself is refined and split by the team lead');
   assert.equal(fm(f, plain).stage, undefined);
 });
@@ -162,7 +161,7 @@ test('test_incomplete_items_are_refined_by_the_lead_only: never claimed, reviewe
     definition_of_done: newBare(...base('complete placeholder only')), // the placeholder definition of done only (no refs, no estimate)
   };
   const deps = make(f, 'complete no depends_on');
-  const path = join(f.folder, 'phases', `${deps}.md`);
+  const path = itemPath(f.folder, deps);
   const { fm: dfm, body } = doc(f, deps);
   delete dfm.depends_on;
   store.write({ path, fm: dfm, body }, f.folder); // an item written before depends_on existed

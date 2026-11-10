@@ -2,11 +2,10 @@
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, createdSlug, intoTeam, sharedBacklog, teamMembers } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, teamMembers, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -31,7 +30,7 @@ const run = (f, args, env = {}) => {
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const raw = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout); // an item as created: no team
 const make = (f, name, ...extra) => intoTeam(raw(f, name, ...extra), { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_SESSION: '', HOME: f.user } }); // the plan reaches only the items of t1
-const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
+const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
 const plan = (f, env, agents = 'ann,bob,zed,lead') => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', agents, '--json'], env).stdout);
 const rows = p => p.map(e => [e.member, e.action, e.item]);
 

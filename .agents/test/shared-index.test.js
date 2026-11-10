@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { dump } from '../../src/shared/frontmatter.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
+import { itemPath, itemRel } from './shared-fixtures.js';
 
 function folder(t) {
   const home = mkdtempSync(join(tmpdir(), 'index-test-'));
@@ -16,7 +17,7 @@ function folder(t) {
   return dir;
 }
 // An item file as an earlier build wrote it, rank included (store.write drops the rank).
-const put = (dir, n, extra = {}) => writeFileSync(join(dir, 'phases', `00${n}-i${n}.md`), dump({ phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', repository: 'acme/demo', branch: 'main', ...extra }, `Body ${n}.\n`));
+const put = (dir, n, extra = {}) => writeFileSync(itemPath(dir, `00${n}-i${n}`), dump({ phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', repository: 'acme/demo', branch: 'main', ...extra }, `Body ${n}.\n`));
 const slugs = (dir, branch = 'main') => index.read(dir).branches[branch].map(e => e.slug);
 
 test('read: a folder without an index has no branches', t => {
@@ -66,7 +67,7 @@ test('read: an index that is not JSON, or has no list of items per branch, is re
 });
 
 test('reconcile: items without an entry are appended, entries without an item leave, name and status follow the file, open entries come first', () => {
-  const item = (n, extra = {}) => ({ path: `phases/00${n}-i${n}.md`, fm: { phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', branch: 'main', ...extra }, body: '' });
+  const item = (n, extra = {}) => ({ path: itemRel(`00${n}-i${n}`), fm: { phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', branch: 'main', ...extra }, body: '' });
   const idx = { branches: { main: [{ seq: 1, slug: '001-i1', name: 'old', status: 'pending' }, { seq: 9, slug: '009-gone', name: 'G', status: 'pending' }, { seq: 2, slug: '002-i2', name: 'I2', status: 'pending' }] } };
   const { idx: next, order } = index.reconcile(idx, [item(1, { status: 'done', name: 'New' }), item(2), item(3)]);
   assert.deepEqual(next.branches.main, [
@@ -76,7 +77,7 @@ test('reconcile: items without an entry are appended, entries without an item le
 });
 
 test('reconcile: a move puts the item at the clamped rank among the open ones; a lead list goes first; an item of another branch leaves the list', () => {
-  const item = (n, extra = {}) => ({ path: `phases/00${n}-i${n}.md`, fm: { phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', branch: 'main', ...extra }, body: '' });
+  const item = (n, extra = {}) => ({ path: itemRel(`00${n}-i${n}`), fm: { phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', branch: 'main', ...extra }, body: '' });
   const items = [item(1), item(2), item(3), item(4, { branch: 'b' })];
   const idx = { branches: { main: [{ seq: 4, slug: '004-i4', name: 'I4', status: 'pending' }] } };
   assert.deepEqual(index.reconcile(idx, items).idx.branches.main.map(e => e.slug), ['001-i1', '002-i2', '003-i3']);

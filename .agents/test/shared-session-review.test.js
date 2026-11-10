@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, intoTeam, sharedBacklog, teamMembers } from './shared-fixtures.js';
+import { cli, consumer, intoTeam, itemPath, itemRel, sharedBacklog, teamMembers, GIT_IDENTITY } from './shared-fixtures.js';
 import { mkdirSync } from 'node:fs';
 import * as store from '../../src/shared/store.js';
 
@@ -50,7 +50,7 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const no = (f, args, text) => { const r = run(f, args); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 // team: the item belongs to t1, which team pop and the team views need to reach it
 const make = (f, team = true) => { const slug = ok(f, ['new', ...NEW('review session')]).stdout.split('created phase ')[1].split(' ')[0]; return team ? intoTeam(slug, { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_SESSION: '' } }) : slug; };
-const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === `phases/${slug}.md`).fm;
+const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === itemRel(slug)).fm;
 // the setup of every test: the building session claims and asks for the review
 const setup = (f, team = true) => { const s = make(f, team); ok(f, ['update', s, '--claim', A1]); ok(f, ['update', s, '--request-review', 'any', '--note', 'n', '--by', A1]); return s; };
 
@@ -168,7 +168,7 @@ test('082: a reassignment keeps the former holder blocked: the legacy item keeps
   const s = make(f);
   ok(f, ['update', s, '--claim', A1]);
   // an item claimed before session_authors existed: the list is not in the file
-  const file = join(f.folder, 'phases', `${s}.md`);
+  const file = itemPath(f.folder, s);
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
   assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
   ok(f, ['update', s, '--reassign', A2, '--by', 'lead', '--reason', 'the earlier session ended']);
@@ -188,7 +188,7 @@ test('082: a legacy item keeps its original author in session_authors across eve
   // names, so the self-review block of the earlier session survives the transition (a release
   // after a lead's review request erased the original author of such an item).
   const legacy = (f, s) => {
-    const file = join(f.folder, 'phases', `${s}.md`);
+    const file = itemPath(f.folder, s);
     writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
     assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
   };
@@ -218,7 +218,7 @@ test('082: a legacy item keeps its original author in session_authors across eve
     }, (f, s) => refuse(f, s, A1)],
     ['a team pop continuation claim', (f, s) => {
       // the lead's own work item carries no stage (the team's split items do): the pop continues it
-      const file = join(f.folder, 'phases', `${s}.md`); writeFileSync(file, readFileSync(file, 'utf8').replace(/^(stage|refiner): .*\n/mg, ''));
+      const file = itemPath(f.folder, s); writeFileSync(file, readFileSync(file, 'utf8').replace(/^(stage|refiner): .*\n/mg, ''));
       const p = run(f, ['team', 'pop', '--team', 't1', '--json'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: A2, SMOOTH_BACKLOG_CLI_AGENT: A2 });
       assert.equal(p.status, 0, p.stdout + p.stderr);
       return [A1, A2];

@@ -5,8 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, intoTeam, sharedBacklog } from './shared-fixtures.js';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { cli, consumer, intoTeam, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 
 const dirs = [];
@@ -36,7 +35,7 @@ const handoff = (f, slug, job, claimer) => {
 };
 const refused = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };
 const q = (f, ...args) => { const r = run(f, 'team', ['query', '--team', 't1', ...args, '--json']); assert.equal(r.status, 0, r.stdout + r.stderr); return JSON.parse(r.stdout).map(x => x.slug); };
-const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
+const item = (f, slug) => readItem(itemPath(f.folder, slug));
 
 // conftest.Repos.new: a team item names its review refs, an estimate and a definition of done.
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
@@ -79,7 +78,7 @@ test('test_new_item_refusals: refusals at creation, the class options are gone, 
 test('test_item_without_team_fields_keeps_working: an item written before team work stays visible, and in no team view', () => {
   const f = fixture();
   const s = make(f, 'written before team work', ['--no-review-refs']); // outside a team, --status done finishes it
-  const path = join(f.folder, 'phases', `${s}.md`);
+  const path = itemPath(f.folder, s);
   const OLD = ['work_class', 'review_classes', 'depends_on', 'claimed_by', 'claimed_at', 'review_state', 'reviewer'];
   const { fm, body } = item(f, s);
   store.write({ path, fm: Object.fromEntries(Object.entries(fm).filter(([k]) => !OLD.includes(k))), body }, f.folder); // as an old item looks
@@ -138,7 +137,7 @@ test('an item with old work_class and review_classes fields behaves exactly like
   const f = fixture();
   const plain = makeTeam(f, 'plain job');
   const old = makeTeam(f, 'old job');
-  const path = join(f.folder, 'phases', `${old}.md`);
+  const path = itemPath(f.folder, old);
   // as a class-era item looks: the keys are written straight into the file (store.write drops them)
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^---\n/, '---\nwork_class:\n- chunk\n- docs\nreview_classes:\n- security\n'));
   assert.ok(/^work_class:/m.test(readFileSync(path, 'utf8')) && /^review_classes:/m.test(readFileSync(path, 'utf8')), 'the seeded file carries both keys');

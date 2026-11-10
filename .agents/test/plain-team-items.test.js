@@ -10,8 +10,8 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
-import { dump, parseItem } from '../../src/shared/frontmatter.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem, archivedPath, GIT_IDENTITY } from './shared-fixtures.js';
+import { dump } from '../../src/shared/frontmatter.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -44,16 +44,16 @@ function build() {
     assert.equal(made.status, 0, made.stdout + made.stderr);
     const slug = createdSlug(made.stdout);
     if (closed) { // a team item closes by its team steps; the file is set here, as a closed item looks
-      const file = join(home, 'acme', 'demo', 'phases', `${slug}.md`);
-      const { fm, body } = parseItem(readFileSync(file, 'utf8'));
+      const file = itemPath(join(home, 'acme', 'demo'), slug);
+      const { fm, body } = readItem(file);
       writeFileSync(file, dump({ ...fm, status: 'closed', completed: '2026-01-02T00:00:00Z' }, body));
       git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'closed item'); git(home, 'push', '-q');
     }
     return slug;
   });
   const fm = slug => {
-    for (const where of ['phases', 'archive/phases']) {
-      try { return parseItem(readFileSync(join(home, 'acme', 'demo', where, `${slug}.md`), 'utf8')).fm; } catch { /* the other place */ }
+    for (const path of [itemPath(join(home, 'acme', 'demo'), slug), archivedPath(join(home, 'acme', 'demo'), slug, 'phases')]) {
+      try { return readItem(path).fm; } catch { /* the other place */ }
     }
     return null;
   };

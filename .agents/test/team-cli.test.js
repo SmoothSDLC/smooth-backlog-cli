@@ -5,9 +5,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import { spawnSync } from 'node:child_process';
-import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -24,7 +23,7 @@ const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const plainRun = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, plain: true, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_AGENT: 'ann' } });
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, notices: true, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_AGENT: '', ...env } }); // every command here names its agent; a session agent (SMOOTH_BACKLOG_CLI_AGENT) would have to be the same one
-const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
+const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
 // a refined, ready item of team t1
 function ready(f) {
   const s = createdSlug(run(f, ['new', ...NEW('item')]).stdout);

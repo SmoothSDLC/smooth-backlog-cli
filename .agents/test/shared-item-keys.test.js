@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog } from './shared-fixtures.js';
 import { parse } from '../../src/shared/frontmatter.js';
 
 const dirs = [];
@@ -25,7 +25,7 @@ function fixture() {
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'me', SMOOTH_BACKLOG_CLI_SESSION: '', ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name) => createdSlug(ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's']).stdout);
-const pathOf = (f, slug) => join(f.folder, 'phases', `${slug}.md`);
+const pathOf = (f, slug) => itemPath(f.folder, slug);
 const fmOf = (f, slug) => parse(readFileSync(pathOf(f, slug), 'utf8')).fm;
 // The file as an earlier release wrote it: the five stored keys under their earlier names (and the holder, if any, in claimed_by).
 function asEarlier(f, slug) {

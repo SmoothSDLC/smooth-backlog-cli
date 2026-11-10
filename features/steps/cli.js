@@ -1,10 +1,11 @@
 // Step definitions. Every check goes through the CLI itself (backlog list --json), never through the item files.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dump, parse } from '../../src/shared/frontmatter.js';
 import { step } from '../support/gherkin.js';
+import { itemNames, itemPath, slugOfName } from '../../.agents/test/shared-fixtures.js';
 
 // `backlog ...` with shell-like splitting: double quotes group words, \" is a quote inside them
 export const split = s => (s.match(/"(?:[^"\\]|\\.)*"|\S+/g) ?? []).map(t => t.startsWith('"') ? t.slice(1, -1).replace(/\\"/g, '"').replace(/\\n/g, '\n') : t);
@@ -122,8 +123,8 @@ step(/^the queue is (\d+(?:, \d+)*)$/, (w, list) => {
 // The folder as an earlier release left it: the order in a priority field of each item (the last item first), no index file.
 step(/^the order is kept in the items, as an earlier release did$/, w => {
   const dir = w.folder();
-  const names = readdirSync(join(dir, 'phases')).filter(n => n.endsWith('.md')).sort();
-  names.forEach((n, i) => { const p = join(dir, 'phases', n); const doc = parse(readFileSync(p, 'utf8')); writeFileSync(p, dump({ ...doc.fm, priority: names.length - 1 - i }, doc.body)); });
+  const names = itemNames(dir);
+  names.forEach((n, i) => { const p = itemPath(dir, slugOfName(n)); const doc = readStored(p); writeFileSync(p, dump({ ...doc.fm, priority: names.length - 1 - i }, doc.body)); });
   rmSync(join(dir, 'index.json'), { force: true });
   const repo = w.backlogRepo();
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'earlier release'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
@@ -131,8 +132,8 @@ step(/^the order is kept in the items, as an earlier release did$/, w => {
 // An item damaged by a hand edit or a bad merge, committed and pushed to the repository that holds the items: its status line is cut open.
 step(/^the status of item (\d+) is damaged in the backlog repository$/, (w, n) => {
   const dir = w.folder();
-  const name = readdirSync(join(dir, 'phases')).find(f => f.startsWith(String(n).padStart(3, '0')));
-  const p = join(dir, 'phases', name);
+  const name = itemNames(dir).find(f => f.startsWith(String(n).padStart(3, '0')));
+  const p = itemPath(dir, slugOfName(name));
   writeFileSync(p, readFileSync(p, 'utf8').replace(/^status: .*$/m, 'status: "pend'));
   const repo = w.backlogRepo();
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'damaged'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');

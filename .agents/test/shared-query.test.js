@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
 import { defaultUser } from '../../src/shared/setup.js';
 import * as store from '../../src/shared/store.js';
 
@@ -47,7 +47,7 @@ function build(withFindings) {
   git(cons, 'checkout', '-q', 'main');
   if (withFindings) {
     const item = (seq, name, extra) => store.write({
-      path: join(f.folder, `phases/${String(seq).padStart(3, '0')}-${name}.md`),
+      path: itemPath(f.folder, `${String(seq).padStart(3, '0')}-${name}`),
       fm: { phase: `${String(seq).padStart(3, '0')}-${name}`, seq, name, objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 9, repository: 'acme/demo', branch: 'main', commit: 'abc1234', location: '', ...extra },
       body: `\n# Phase ${seq}\n`,
     });
@@ -120,7 +120,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "status": "pending",
       "severity": "critical",
       "priority": 0,
-      "path": "phases/002-beta.md",
+      "path": "${itemRel('002-beta')}",
       "sha": "SHA",
       "branch": "main",
       "commit_sha": "SHA",
@@ -144,7 +144,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "status": "pending",
       "severity": "normal",
       "priority": 1,
-      "path": "phases/001-alpha.md",
+      "path": "${itemRel('001-alpha')}",
       "sha": "SHA",
       "branch": "main",
       "commit_sha": "SHA",
@@ -168,7 +168,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "status": "in progress",
       "severity": "normal",
       "priority": 2,
-      "path": "phases/003-gamma.md",
+      "path": "${itemRel('003-gamma')}",
       "sha": "SHA",
       "branch": "main",
       "commit_sha": "SHA",
@@ -192,7 +192,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "status": "closed",
       "severity": "normal",
       "priority": 4,
-      "path": "phases/004-delta.md",
+      "path": "${itemRel('004-delta')}",
       "sha": "SHA",
       "branch": "main",
       "commit_sha": "SHA",
@@ -218,7 +218,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "status": "pending",
       "severity": "normal",
       "priority": 0,
-      "path": "phases/005-feat.md",
+      "path": "${itemRel('005-feat')}",
       "sha": "SHA",
       "branch": "feature",
       "commit_sha": "SHA",
@@ -245,7 +245,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
         "status": "pending",
         "severity": "normal",
         "priority": 3,
-        "path": "phases/006-foreign.md",
+        "path": "${itemRel('006-foreign')}",
         "sha": "SHA",
         "branch": "main",
         "commit_sha": "SHA",
@@ -271,7 +271,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
         "status": "pending",
         "severity": "normal",
         "priority": 0,
-        "path": "phases/007-untagged.md",
+        "path": "${itemRel('007-untagged')}",
         "sha": "SHA",
         "branch": "",
         "commit_sha": "SHA",
@@ -292,7 +292,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
 
 test('an item file deleted outside the CLI is simply absent: no ghost, no crash', () => {
   const f = build(true); // a fresh fixture: the shared one is read by other tests
-  rmSync(join(f.folder, 'phases', '002-beta.md'));
+  rmSync(itemPath(f.folder, '002-beta'));
   const r = cli(['list', '--json'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stderr);
   const v = JSON.parse(r.stdout);
@@ -356,14 +356,14 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
     branch: 'feature',
     phases: [{
       id: 5, handoff_id: 1, slug: '005-feat', seq: 5, name: 'Feat', objective: 'Caf\u00e9 \u2615 Feat', summary: 'sum Feat',
-      status: 'pending', severity: 'normal', priority: 0, path: 'phases/005-feat.md', sha: 'SHA', branch: 'feature', commit_sha: 'SHA',
+      status: 'pending', severity: 'normal', priority: 0, path: itemRel('005-feat'), sha: 'SHA', branch: 'feature', commit_sha: 'SHA',
       location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
       claimed_by: '', review_state: 'none'
     }],
     gone_branch_items: [],
     findings: {
-      foreign: [{ id: 6, handoff_id: 1, slug: '006-foreign', seq: 6, name: 'foreign', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 3, path: 'phases/006-foreign.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'other/thing', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
-      untagged: [{ id: 7, handoff_id: 1, slug: '007-untagged', seq: 7, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 0, path: 'phases/007-untagged.md', sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }]
+      foreign: [{ id: 6, handoff_id: 1, slug: '006-foreign', seq: 6, name: 'foreign', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 3, path: itemRel('006-foreign'), sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'other/thing', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
+      untagged: [{ id: 7, handoff_id: 1, slug: '007-untagged', seq: 7, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 0, path: itemRel('007-untagged'), sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }]
     }
   });
 });
@@ -375,7 +375,7 @@ test('075: --next --json prints the queue head; --next text prints the findings 
   assert.ok(body.includes('# Phase 002'), body);
   assert.deepEqual(row, {
     id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta',
-    status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA',
+    status: 'pending', severity: 'critical', priority: 0, path: itemRel('002-beta'), sha: 'SHA', branch: 'main', commit_sha: 'SHA',
     location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null });
   const shown = norm(view(f, ['next']).stdout);
   assert.ok(shown.startsWith(STATUS_FINDINGS + NEXT_HEADER), 'the findings and the item');
@@ -401,7 +401,7 @@ test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
 
 test('075: --phase prints the full item (row, front matter, body) by slug and by number; not found is exit 1 on stdout', () => {
   const f = fx();
-  const beta = { id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, path: 'phases/002-beta.md', sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
+  const beta = { id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, path: itemRel('002-beta'), sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
     front_matter: { phase: '002-beta', seq: 2, title: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', last_updated: 'TS', last_updated_by: 'UPD', depends_on: [], owner: defaultUser(f.cons), owned_since: '', review_state: 'none', reviewer: '' },
     body: '\n# Phase 002 — Beta\n\n**Objective:** Caf\u00e9 \u2615 Beta\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n' };
   // the item carries its history (events) in its front matter: compared apart from the rest
@@ -409,7 +409,7 @@ test('075: --phase prints the full item (row, front matter, body) by slug and by
   const [bySlug, betaEvents] = noEvents(normJson(view(f, ['show', '002-beta']).stdout));
   assert.deepEqual(bySlug, beta, 'by slug');
   assert.match(betaEvents[0], /^TS planning_event - - added 002-beta at rank 0/);
-  const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal', priority: 2, path: 'phases/003-gamma.md',
+  const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal', priority: 2, path: itemRel('003-gamma'),
     front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, title: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal' } };
   gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
   const [byNumber, events] = noEvents(normJson(view(f, ['show', '3']).stdout));
@@ -438,7 +438,7 @@ test('history reads the item history from the items, newest first, archived item
   const all = run('history');
   assert.ok(all.stdout.includes('second note') && all.stdout.includes('archived'), all.stdout);
   // the database is not the source: an event that exists only in a file is listed
-  const file = join(f.folder, 'phases', '002-beta.md');
+  const file = itemPath(f.folder, '002-beta');
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^events:\n/m, 'events:\n- "2020-01-01T00:00:00Z note - - only in the file"\n'));
   assert.match(run('history', '2').stdout, /only in the file/);
   assert.equal(run('history', '99').status, 1);
@@ -588,7 +588,7 @@ for (const link of ['repo', 'owner']) test(`review P1: a symlink at ${{ repo: '<
 test('review P2: a symlink in the item folder is refused, and the file outside it is never read', () => {
   const f = build(false);
   writeFileSync(join(f.t, 'secret.md'), 'outside\n');
-  symlinkSync(join(f.t, 'secret.md'), join(f.folder, 'phases', 'link.md'));
+  symlinkSync(join(f.t, 'secret.md'), itemPath(f.folder, 'link'));
   const next = cli(['next', '--json'], { cwd: f.cons, tmp: f.t }); // reads the item files: the symlink itself is refused
   assert.equal(next.status, 1, next.stdout + next.stderr);
   assert.match(next.stderr, /Symlink destination is unsupported/);

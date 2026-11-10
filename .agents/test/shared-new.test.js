@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, createdSlug, GIT_IDENTITY, itemName, itemPath, itemRel, sharedBacklog, itemNames, slugOfName } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import { defaultUser } from '../../src/shared/setup.js';
@@ -188,7 +188,7 @@ test('a number two clones picked at once: the later push is renumbered, rescanne
 touch "${f.dir}/hooked"
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
 mkdir -p "${other}/acme/demo/phases"
-printf -- '---\\nphase: 001-bravo\\nseq: 1\\nname: Bravo\\nstatus: pending\\nrepository: acme/demo\\nbranch: main\\n---\\n\\n# Phase 001 — Bravo\\n' > "${other}/acme/demo/phases/001-bravo.md"
+printf -- '---\\nphase: 001-bravo\\nseq: 1\\nname: Bravo\\nstatus: pending\\nrepository: acme/demo\\nbranch: main\\n---\\n\\n# Phase 001 — Bravo\\n' > "${other}/acme/demo/${itemRel('001-bravo')}"
 git -C "${other}" add -A && git -C "${other}" commit -q -m bravo && git -C "${other}" push -q
 `);
   chmodSync(hook, 0o755);
@@ -196,7 +196,7 @@ git -C "${other}" add -A && git -C "${other}" commit -q -m bravo && git -C "${ot
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'renumbered 001 -> 002\n✅ created phase 002-alpha-job (seq 2) — appended, now at P0\n'
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
-  assert.deepEqual(items(f).map(i => [i.path, i.fm.phase, i.fm.seq]), [['phases/001-bravo.md', '001-bravo', 1], ['phases/002-alpha-job.md', '002-alpha-job', 2]]);
+  assert.deepEqual(items(f).map(i => [i.path, i.fm.phase, i.fm.seq]), [[itemRel('001-bravo'), '001-bravo', 1], [itemRel('002-alpha-job'), '002-alpha-job', 2]]);
   assert.match(items(f)[1].body, /^\n# Phase 002 — Alpha job\n/);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
@@ -229,7 +229,7 @@ test('review P2: review refs go through checkRefs: an absolute or ..-crossing re
 
 test('review P2: a file with the name of the next item is never replaced: the item takes the next free number, with or without --force', t => {
   const f = fixture(t);
-  const path = join(f.folder, 'phases', '001-alpha-job.md');
+  const path = itemPath(f.folder, '001-alpha-job');
   mkdirSync(join(f.folder, 'phases'), { recursive: true });
   const seeded = '---\nphase: 001-alpha-job\n---\nSEEDED BODY\n'; // no seq and no mirror row: the number 1 is handed out again
   writeFileSync(path, seeded);
@@ -239,7 +239,7 @@ test('review P2: a file with the name of the next item is never replaced: the it
   const forced = node(f, [...NONE, '--force']);
   assert.equal(forced.status, 0, forced.stderr);
   assert.ok(readFileSync(path, 'utf8').includes('SEEDED BODY'));
-  assert.deepEqual(items(f).map(i => i.path).sort(), ['phases/001-alpha-job.md', 'phases/002-alpha-job.md', 'phases/003-alpha-job.md']);
+  assert.deepEqual(items(f).map(i => i.path).sort(), [itemRel('001-alpha-job'), itemRel('002-alpha-job'), itemRel('003-alpha-job')]);
 });
 
 test('review P1: new whose index write is refused removes the file it wrote and commits nothing', t => {
@@ -250,8 +250,8 @@ test('review P1: new whose index write is refused removes the file it wrote and 
   const r = node(f, NONE);
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /Symlink destination is unsupported/);
-  assert.equal(existsSync(join(f.folder, 'phases', '002-alpha-job.md')), false, 'the half-created item is gone');
-  assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', 'acme/demo/phases/002-alpha-job.md'), '');
+  assert.equal(existsSync(itemPath(f.folder, '002-alpha-job')), false, 'the half-created item is gone');
+  assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=all', '--', `acme/demo/${itemRel('002-alpha-job')}`), '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
@@ -260,7 +260,7 @@ test('review P1: new --split-from whose index write is refused leaves the item f
   assert.equal(node(f, NONE).status, 0);
   assert.equal(node(f, NONE).status, 0);
   breakIndex(f.home, f.folder);
-  const files = () => readdirSync(join(f.folder, 'phases')).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8'));
+  const files = () => itemNames(f.folder).map(n => readFileSync(itemPath(f.folder, slugOfName(n)), 'utf8'));
   const before = files();
   const r = node(f, [...NONE, '--split-from', '1']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
@@ -270,13 +270,13 @@ test('review P1: new --split-from whose index write is refused leaves the item f
 test('review P1: team new --split-from an item of another branch (SMOOTH_BACKLOG_CLI_TEAM_BRANCH differs) is refused and logs nothing', t => {
   const f = fixture(t);
   assert.equal(node(f, NONE).status, 0); // 001-alpha-job on acme/demo, branch main
-  const rows = () => readFileSync(join(f.folder, 'phases', '001-alpha-job.md'), 'utf8'); // the item carries its history
+  const rows = () => readFileSync(itemPath(f.folder, '001-alpha-job'), 'utf8'); // the item carries its history
   const before = rows();
   const r = teamNode(f, [...NONE, '--split-from', '1', '--body', '## Definition of done\n- [ ] x'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'release' });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /team session is bound to acme\/demo branch release/);
   assert.equal(rows(), before);
-  assert.deepEqual(readdirSync(join(f.folder, 'phases')), ['001-alpha-job.md']);
+  assert.deepEqual(itemNames(f.folder), [itemName('001-alpha-job')]);
 });
 
 test('075: team new: SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY binds the repository and SMOOTH_BACKLOG_CLI_TEAM_BRANCH the branch; a body without a definition of done gets the placeholder', t => {
@@ -359,7 +359,7 @@ for (const [title, [setup, args]] of Object.entries(SCENARIOS)) {
     const item = all[all.length - 1];
     const slug = createdSlug(r.stdout);
     assert.equal(slug, item.fm.phase, 'the slug the output names is the item that was created');
-    assert.equal(item.path, `phases/${slug}.md`);
+    assert.equal(item.path, itemRel(slug));
     const created = setup.length
       ? (title === 'a rank beyond the end is clamped, a layer of process' ? 'inserted at P7, now at P1' : 'inserted at P0, now at P0')
       : 'appended, now at P0';
@@ -420,7 +420,7 @@ test('075: --split-from a long parent: the inherited context is trimmed to 800 c
     + '   📋 planning event: backlog re-densified to 2 item(s) (P0..P1)\n');
   assert.equal(subject(f), SUBJECT.newSplitFrom('001-long'));
   const [, child] = items(f);
-  const parent = store.load(f.folder).find(i => i.path === 'phases/001-long.md');
+  const parent = store.load(f.folder).find(i => i.path === itemRel('001-long'));
   const inherited = parent.body.replace(/^\n/, '').slice(0, 800); // 800 characters of the source body, not more
   assert.equal(child.body, `\n# Phase 002 — 001-long-cont\n\n**Objective:** Long\n\n\n## Split from \`001-long\`. Inherited context:\n\n${inherited}\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n`);
 });

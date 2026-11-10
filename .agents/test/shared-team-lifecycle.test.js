@@ -4,10 +4,10 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, GIT_IDENTITY, sharedBacklog, intoTeam } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, readItem, itemSlugs, itemNames, slugOfName, GIT_IDENTITY } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
@@ -38,13 +38,13 @@ const update = (f, args, env) => {
   const named = ['--by', '--claim', '--release'].map(k => args[args.indexOf(k) + 1]).find((v, i) => args.includes(['--by', '--claim', '--release'][i]));
   const who = named ?? (args.includes('--request-review') ? 'ann' : 'smooth'); // a review is requested by the one working on the item (ann here); an un-named write acts as the environment agent (smooth here)
   if (who && args[0] && !args[0].startsWith('-')) {
-    const slugs = args.includes('--close') ? readdirSync(join(f.folder, 'phases')).map(n => n.replace(/\.md$/, '')) : [args[0]];
+    const slugs = args.includes('--close') ? itemSlugs(f.folder) : [args[0]];
     for (const slug of slugs) cli(['show', slug, '--agent', named === undefined && args.includes('--close') ? (item(f, slug).fm.claimed_by || who) : who], { cwd: f.cons, tmp: f.t, env: env || { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '' } });
   }
   return cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: env || { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '' } });
 };
 const history = (f, item) => cli(['history', item], { cwd: f.cons, tmp: f.t });
-const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
+const item = (f, slug) => readItem(itemPath(f.folder, slug));
 
 // A complete team item: review refs, an estimate, a definition of done.
 const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
@@ -102,7 +102,7 @@ test('claim, review and close lifecycle (port of test_claim_review_close_lifecyc
   ok(job, '--review', 'pass', '--by', 'amy', '--comments', 'test present, all green (references/review/code.md)');
   ok(job, '--close', '--summary', 'feature delivered with tests');
 
-  const text = readFileSync(join(f.folder, 'phases', `${job}.md`), 'utf8');
+  const text = readFileSync(itemPath(f.folder, job), 'utf8');
   ({ fm } = item(f, job));
   assert.equal(fm.status, 'closed');
   assert.equal(fm.summary, 'feature delivered with tests');
@@ -125,14 +125,14 @@ test('team session: SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY binds the repository, a s
   assert.equal(item(f, s).fm.claimed_by, '');
   const ok = update(f, [s, '--claim', 'ann'], inScope);
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
-  assert.match(readFileSync(join(f.folder, 'phases', `${s}.md`), 'utf8'), /Claimed by ann at \S+ repository=acme\/demo branch=main cwd=/);
+  assert.match(readFileSync(itemPath(f.folder, s), 'utf8'), /Claimed by ann at \S+ repository=acme\/demo branch=main cwd=/);
   assert.equal(update(f, [s, '--note', 'x'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: '../x' }).status, 2);
 });
 
 test('team scope guards every mutating update path, not only the team steps ', () => {
   const f = fixture();
   const s = make(f, 'scoped edits', []);
-  const file = join(f.folder, 'phases', `${s}.md`);
+  const file = itemPath(f.folder, s);
   const outside = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'other' };
   const inside = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
   const before = readFileSync(file, 'utf8');
@@ -193,7 +193,7 @@ test('team.js: the team entry names the members in order and the review-only one
 // Item files of a folder (the rules read the rows built from them, the files only for metadata).
 function seed(f) {
   const put = (seq, name, extra) => store.write({
-    path: join(f.folder, `phases/${String(seq).padStart(3, '0')}-${name}.md`),
+    path: itemPath(f.folder, `${String(seq).padStart(3, '0')}-${name}`),
     fm: { phase: `${String(seq).padStart(3, '0')}-${name}`, seq, name, status: 'pending', priority: seq - 1, depends_on: [], claimed_by: '', ...extra },
     body: '\n',
   }, f.folder);
@@ -221,10 +221,10 @@ test('a holder whose item file has malformed front matter still blocks a second 
   const a = make(f, 'held job', []);
   const b = make(f, 'second job', []);
   assert.equal(update(f, [a, '--claim', 'ann']).status, 0);
-  const held = join(f.folder, 'phases', `${a}.md`);
+  const held = itemPath(f.folder, a);
   writeFileSync(held, readFileSync(held, 'utf8').replace(/^owner:/m, 'not a pair\nowner:'));
   assert.throws(() => team.heldItems(f.folder, 'ann'), /not a 'key: value' pair/);
-  const files = () => readdirSync(join(f.folder, 'phases')).map(n => readFileSync(join(f.folder, 'phases', n), 'utf8'));
+  const files = () => itemSlugs(f.folder).map(s => readFileSync(itemPath(f.folder, s), 'utf8'));
   const before = files();
   const out = update(f, [b, '--claim', 'ann']);
   assert.notEqual(out.status, 0, out.stdout + out.stderr);
@@ -238,7 +238,7 @@ test('the lifecycle steps, in order: each succeeds or is refused with the expect
   const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
   const snapshot = f => {
     const files = {};
-    for (const name of readdirSync(join(f.folder, 'phases'))) files[name] = JSON.stringify(parse(readFileSync(join(f.folder, 'phases', name), 'utf8'))).replace(TS, 'TS');
+    for (const name of itemNames(f.folder)) files[name] = JSON.stringify(readItem(itemPath(f.folder, slugOfName(name)))).replace(TS, 'TS');
     const cols = ['id', 'slug', 'seq', 'status', 'priority', 'branch', 'commit_sha', 'completed_at'];
     return { files, phases: index.rows(f.folder).rows.map(r => JSON.stringify(Object.fromEntries(cols.map(c => [c, r[c]])))) };
   };

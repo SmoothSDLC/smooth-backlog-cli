@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -34,7 +34,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     return r;
   };
   const json = (agent, args) => JSON.parse(as(agent, args, [0, 3]).stdout); // 3: pop and work with nothing to do now
-  const fm = slug => parse(readFileSync(join(home, 'acme', 'demo', 'phases', `${slug}.md`), 'utf8')).fm;
+  const fm = slug => readItem(itemPath(join(home, 'acme', 'demo'), slug)).fm;
   const slugOf = r => r.stdout.split('created phase ')[1].split(' ')[0];
   const steps = [];
   const step = async (id, fn) => { await ctx.test(id, fn); steps.push(id); }; // one TAP line per step
@@ -88,7 +88,7 @@ test('the team workflow through the CLI only, step by step', async ctx => {
     const r = as('ann', ['update', c1, '--review', 'changes', '--by', 'ann', '--comments', 'add the empty-input case (docs/review/tests.md)']);
     assert.equal(STOP.exec(r.stdout)?.[1], 'ann');
   });
-  const doc = slug => readFileSync(join(home, 'acme', 'demo', 'phases', `${slug}.md`), 'utf8');
+  const doc = slug => readFileSync(itemPath(join(home, 'acme', 'demo'), slug), 'utf8');
   await step('S20 a fresh session: rework, the dependency hand-off before the final review, --request-review, --review pass', () => {
     assert.equal(json('zed', ['team', 'pop', '--team', 't1', '--agent', 'zed', '--json']).item, c1);
     // the producer records its hand-off in the consumer's item before the final review 

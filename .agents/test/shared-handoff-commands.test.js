@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import * as store from '../../src/shared/store.js';
 import * as handoff from '../../src/team/handoff.js';
 import { dump, parseItem as parse } from '../../src/shared/frontmatter.js';
-import { GIT_IDENTITY, cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
 import { recordHandoff, acceptHandoff, rejectHandoff } from '../../src/team/handoff-commands.js';
 
 const dirs = [];
@@ -113,7 +113,7 @@ test('059.2: recordHandoff turns handoffs: none into a list when the producer re
   const p = pair(f);
   const it = item(f, 1);
   // the same stored form the CLI writes for a closed producer without dependents
-  writeFileSync(join(f.folder, 'phases', `${p.producer}.md`), dump({ ...it.fm, handoffs: 'none' }, it.body));
+  writeFileSync(itemPath(f.folder, p.producer), dump({ ...it.fm, handoffs: 'none' }, it.body));
   const r = recordHandoff(ctxOf(f, 1), { dependent: '2', ...RECORD });
   assert.ok(!r.refuse, r.refuse);
   assert.ok(Array.isArray(r.fm.handoffs), 'none becomes a list, it is not written back as the string none');

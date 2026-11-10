@@ -9,7 +9,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { archivedRel, cli, consumer, itemPath, itemRel, sharedBacklog, readItem, GIT_IDENTITY } from './shared-fixtures.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 
@@ -33,7 +33,7 @@ function seed(items = ['alpha', 'beta', 'gamma']) {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const folder = join(home, 'acme', 'demo');
   items.forEach((name, i) => store.write({
-    path: join(folder, 'phases', `${String(i + 1).padStart(3, '0')}-${name}.md`),
+    path: itemPath(folder, `${String(i + 1).padStart(3, '0')}-${name}`),
     fm: {
       phase: `${String(i + 1).padStart(3, '0')}-${name}`, seq: i + 1, name: `Name ${name}`, objective: `obj ${name}`, summary: `sum ${name}`, status: 'pending', severity: 'normal',
       priority: i, repository: 'acme/demo', branch: 'main', commit: '', location: '', created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z',
@@ -87,8 +87,8 @@ test('027: items the agent holds are listed apart from the other changed items',
   const f = seed();
   assert.equal(run(f, f.home, ['changes', '--agent', 'amy']).status, 0);
   // the seed items are incomplete for a team claim, so the claim is written as a holder write would be
-  const file = join(f.folder, 'phases', '001-alpha.md');
-  const doc = parse(readFileSync(file, 'utf8'));
+  const file = itemPath(f.folder, '001-alpha');
+  const doc = readItem(file);
   store.write({ path: file, fm: { ...doc.fm, claimed_by: 'amy', claimed_at: '2026-10-02T00:00:00Z' }, body: doc.body }, f.folder);
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'claimed'); git(f.home, 'push', '-q');
   assert.equal(run(f, f.home2, ['update', '1', '--append', 'bob on 1', '--by', 'bob']).status, 0);
@@ -194,14 +194,14 @@ test('027: an archived item appears in the report as a D for its old name', () =
   assert.equal(run(f, f.home, ['changes', '--agent', 'amy']).status, 0);
   // while amy is idle, bob archives item 1 in his own clone (a move under archive/)
   mkdirSync(join(f.folder2, 'archive', 'phases'), { recursive: true });
-  git(f.home2, 'mv', 'acme/demo/phases/001-alpha.md', 'acme/demo/archive/phases/001-alpha.md');
+  git(f.home2, 'mv', `acme/demo/${itemRel('001-alpha')}`, `acme/demo/${archivedRel('001-alpha', 'phases')}`);
   git(f.home2, 'commit', '-q', '-m', 'archive 1');
   git(f.home2, 'push', '-q');
   const text = run(f, f.home, ['changes', '--agent', 'amy']);
   assert.equal(text.status, 0, text.stderr + text.stdout);
   assert.match(text.stdout, /changed: 001-alpha \(D\)/, 'the archived item is reported, not vanished');
   // bob archives item 2 while amy is idle again
-  git(f.home2, 'mv', 'acme/demo/phases/002-beta.md', 'acme/demo/archive/phases/002-beta.md');
+  git(f.home2, 'mv', `acme/demo/${itemRel('002-beta')}`, `acme/demo/${archivedRel('002-beta', 'phases')}`);
   git(f.home2, 'commit', '-q', '-m', 'archive 2');
   git(f.home2, 'push', '-q');
   const r = run(f, f.home, ['changes', '--agent', 'amy', '--json']);
@@ -215,7 +215,7 @@ test('027: a renumbered (moved) item reports one D for its old name, not a vanis
   const f = seed();
   assert.equal(run(f, f.home, ['changes', '--agent', 'amy']).status, 0);
   // while amy is idle, bob renumbers item 1 in his own clone (a move inside the folder)
-  git(f.home2, 'mv', 'acme/demo/phases/001-alpha.md', 'acme/demo/phases/002-alpha.md');
+  git(f.home2, 'mv', `acme/demo/${itemRel('001-alpha')}`, `acme/demo/${itemRel('002-alpha')}`);
   git(f.home2, 'commit', '-q', '-m', 'renumber 1 to 2');
   git(f.home2, 'push', '-q');
   const r = run(f, f.home, ['changes', '--agent', 'amy', '--json']);

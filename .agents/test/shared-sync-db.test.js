@@ -3,11 +3,11 @@
 import { configUser } from '../../src/shared/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { execFileSync, spawn } from 'node:child_process';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
@@ -108,7 +108,7 @@ test('two CLI writers creating different items in separate clones: both succeed 
   const verify = mkdtempSync(join(tmpdir(), 'dbconf-v-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
   gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
   const dir = join(verify, 'c', 'acme', 'demo');
-  assert.deepEqual(store.load(dir).map(i => [i.path, i.fm.name]), [['phases/001-alpha-job.md', 'alpha job'], ['phases/002-beta-job.md', 'beta job']]);
+  assert.deepEqual(store.load(dir).map(i => [i.path, i.fm.name]), [[itemRel('001-alpha-job'), 'alpha job'], [itemRel('002-beta-job'), 'beta job']]);
   assert.deepEqual(index.rows(dir).rows.map(x => ({ slug: x.slug, seq: x.seq })).sort((x, y) => x.seq - y.seq), [{ slug: '001-alpha-job', seq: 1 }, { slug: '002-beta-job', seq: 2 }]);
   assert.deepEqual(index.read(dir).branches.main.map(e => e.slug), ['001-alpha-job', '002-beta-job'], 'the published index lists both items once');
 
@@ -128,8 +128,8 @@ test('review P2: retrying a rolled-back creation takes the upstream number into 
   assert.notEqual(cli(NEW('beta job'), { cwd: b.cons, tmp: b.tmp }).status, 0); // committed locally with its db, push refused
   rmSync(hook);
   // the other clone pushes the same number as a file only
-  store.write({ path: join(a.folder, 'phases', '001-alpha-job.md'), fm: { phase: '001-alpha-job', seq: 1, name: 'alpha job', status: 'pending', repository: 'acme/demo', branch: 'main', priority: 0, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' }, body: '\n# Phase 001\n' }, a.folder);
-  gitIn(a.home, 'add', 'acme/demo/phases/001-alpha-job.md'); gitIn(a.home, 'commit', '-q', '-m', 'alpha'); gitIn(a.home, 'push', '-q');
+  store.write({ path: itemPath(a.folder, '001-alpha-job'), fm: { phase: '001-alpha-job', seq: 1, name: 'alpha job', status: 'pending', repository: 'acme/demo', branch: 'main', priority: 0, created: '2026-10-01T00:00:00Z', updated: '2026-10-01T00:00:00Z' }, body: '\n# Phase 001\n' }, a.folder);
+  gitIn(a.home, 'add', `acme/demo/${itemRel('001-alpha-job')}`); gitIn(a.home, 'commit', '-q', '-m', 'alpha'); gitIn(a.home, 'push', '-q');
   assert.equal(cli(NEW('beta job'), { cwd: b.cons, tmp: b.tmp }).status, 0); // a fresh command allocates 002 after pulling alpha
   const r = cli(['update', '2', '--note', 'after the renumbering'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -168,7 +168,7 @@ for (const [title, args] of [['list', ['list', 'all-branches']], ['new', NEW('be
     const [a, b, { bare }] = writers(t);
     assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
     assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
-    const file = join(b.folder, 'phases', '001-alpha-job.md');
+    const file = itemPath(b.folder, '001-alpha-job');
     writeFileSync(file, readFileSync(file, 'utf8').replace(/^summary: .*$/m, 'summary: "LOCAL EDIT"')); // an uncommitted edit of b
     assert.equal(cli(['update', '1', '--summary', 'REMOTE EDIT'], { cwd: a.cons, tmp: a.tmp }).status, 0); // upstream changes the same line
     const head = gitIn(bare, 'rev-parse', 'main');
@@ -176,7 +176,7 @@ for (const [title, args] of [['list', ['list', 'all-branches']], ['new', NEW('be
     assert.equal(r.status, 3, `${r.stdout}${r.stderr}`);
     assert.match(r.stderr, /unresolved conflicts/);
     assert.equal(gitIn(bare, 'rev-parse', 'main'), head, 'nothing was pushed');
-    assert.ok(!existsSync(join(b.folder, 'phases', '002-beta-job.md')), 'nothing was created');
+    assert.ok(!existsSync(itemPath(b.folder, '002-beta-job')), 'nothing was created');
   });
 }
 
@@ -218,7 +218,7 @@ test('audit: a move that empties phases/ does not carry another clone\'s new fil
   assert.equal(r.status, 0, `exit ${r.status}\n${r.stdout}${r.stderr}`);
   const verify = mkdtempSync(join(tmpdir(), 'dbconf-q-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
   gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
-  const files = repo => existsSync(join(verify, 'c', ...repo, 'phases')) ? readdirSync(join(verify, 'c', ...repo, 'phases')) : [];
+  const files = repo => itemNames(join(verify, 'c', ...repo));
   assert.deepEqual(files(['acme', 'demo']).filter(f => /beta/.test(f)).length, 1, 'beta stays in acme/demo');
   assert.deepEqual(files(['new', 'place']).filter(f => /beta/.test(f)), [], 'beta is not carried into new/place');
 });
@@ -242,7 +242,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
   assert.equal(collision.status, 0, collision.stdout + collision.stderr);
   assert.equal(moved.status, 0, moved.stdout + moved.stderr);
   assert.match(moved.stdout, /renumbered 001 -> 002/);
-  const path = 'new/place/phases/002-alpha.md';
+  const path = `new/place/${itemRel('002-alpha')}`;
   assert.match(gitIn(bare, 'show', `main:${path}`), /phase: "002-alpha"/);
   assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
 
@@ -269,7 +269,7 @@ test('review P2: update records its published identity when an added item is ren
   assert.equal(cli(NEW('anchor'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const [anchor] = store.load(b.folder);
-  store.write({ path: join(b.folder, 'phases/002-local.md'), fm: {
+  store.write({ path: itemPath(b.folder, '002-local'), fm: {
     ...anchor.fm, phase: '002-local', seq: 2, name: 'local', priority: 1,
     review_refs: ['references/review/code.md'], estimate_min: 5,
   }, body: '\n## Definition of done\n- [ ] x\n' }, b.folder);
@@ -331,7 +331,7 @@ test('review P2: failed create, note and archive each roll back; successful retr
   }
   const row = store.load(join(clone(t, bare), 'acme', 'demo')).find(i => i.fm.name === 'local job');
   assert.equal(row.fm.phase, '002-local-job'); assert.equal(row.fm.status, 'archived');
-  assert.equal(row.path, 'archive/phases/002-local-job.md');
+  assert.equal(row.path, archivedRel('002-local-job', 'phases'));
   const events = row.fm.events.map(store.parseEvent);
   assert.equal(events.filter(e => e.event === 'archived').length, 1);
   assert.equal(events.filter(e => e.note.includes('LOCAL_ARCHIVE_EVIDENCE')).length, 1);
@@ -343,7 +343,7 @@ test('audit t2: the same item changed by two clones: the second is refused (exit
   assert.equal(result.status, 5, `${result.stdout}${result.stderr}`);
   assert.match(result.stderr, /item 001-alpha-job was changed by .* after you last read it/);
   assert.equal(gitIn(b.home, 'branch', '--list').split('\n').filter(Boolean).length, 1, 'no side branch');
-  assert.ok(!gitIn(bare, 'show', 'main:acme/demo/phases/001-alpha-job.md').includes('from b'));
+  assert.ok(!gitIn(bare, 'show', `main:acme/demo/${itemRel('001-alpha-job')}`).includes('from b'));
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
   assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
   const again = cli(['update', '1', '--summary', 'from b again'], { cwd: b.cons, tmp: b.tmp });
@@ -365,8 +365,8 @@ test('review (merge risk): a failed push is rolled back; a later command never p
   const w = cli(['update', '2', '--append', 'second note'], { cwd: a.cons, tmp: a.tmp });
   assert.equal(w.status, 0, w.stdout + w.stderr);
   const dir = join(clone(t, bare), 'acme', 'demo');
-  assert.doesNotMatch(readFileSync(join(dir, 'phases', '001-one.md'), 'utf8'), /first note/);
-  assert.match(readFileSync(join(dir, 'phases', '002-two.md'), 'utf8'), /second note/);
+  assert.doesNotMatch(readFileSync(itemPath(dir, '001-one'), 'utf8'), /first note/);
+  assert.match(readFileSync(itemPath(dir, '002-two'), 'utf8'), /second note/);
   assert.equal(gitIn(a.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
 });
 
@@ -404,9 +404,9 @@ for (const [name, args] of [
   writeFileSync(join(a.home, 'private.txt'), 'staged private content'); gitIn(a.home, 'add', 'private.txt');
   writeFileSync(join(a.home, 'private.txt'), 'unstaged private content');
   writeFileSync(join(a.folder, 'private.md'), 'pre-existing file inside the command folder');
-  const item = join(a.folder, 'phases', '001-one.md');
+  const item = itemPath(a.folder, '001-one');
   writeFileSync(item, readFileSync(item, 'utf8') + '\npre-existing staged note\n');
-  gitIn(a.home, 'add', 'acme/demo/phases/001-one.md');
+  gitIn(a.home, 'add', `acme/demo/${itemRel('001-one')}`);
   writeFileSync(item, readFileSync(item, 'utf8') + '\npre-existing unstaged note\n');
   const before = state(a.home);
   const hook = join(bare, 'hooks', 'pre-receive');
@@ -420,19 +420,19 @@ for (const [name, args] of [
   rmSync(hook);
   assert.equal(cli(NEW('later success'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   const files = gitIn(bare, 'ls-tree', '-r', '--name-only', 'main');
-  assert.ok(files.includes('acme/demo/phases/001-one.md'));
+  assert.ok(files.includes(`acme/demo/${itemRel('001-one')}`));
   assert.doesNotMatch(files, /failed-creation|new\/place|private.txt/);
-  assert.doesNotMatch(gitIn(bare, 'show', 'main:acme/demo/phases/001-one.md'), /failed note/);
+  assert.doesNotMatch(gitIn(bare, 'show', `main:acme/demo/${itemRel('001-one')}`), /failed note/);
 });
 
 test('publication: legacy two-commit move with destination-only conflict is refused; explicit drop and retry publishes both folders', async t => {
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('one'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
-  const src = 'acme/demo/phases/001-one.md'; const dst = 'new/place/phases/001-one.md';
+  const src = `acme/demo/${itemRel('001-one')}`; const dst = `new/place/${itemRel('001-one')}`;
   mkdirSync(join(b.home, 'new', 'place', 'phases'), { recursive: true }); gitIn(b.home, 'mv', src, dst);
   gitIn(b.home, 'add', '-A'); gitIn(b.home, 'commit', '-qm', 'legacy cross-repository move');
-  store.addEvent(join(b.home, 'new', 'place'), 'phases/001-one.md', { event: 'note', note: 'second legacy commit' });
+  store.addEvent(join(b.home, 'new', 'place'), itemRel('001-one'), { event: 'note', note: 'second legacy commit' });
   gitIn(b.home, 'add', '-A'); gitIn(b.home, 'commit', '-qm', 'second legacy commit');
   const hashes = gitIn(b.home, 'log', '--format=%h', 'origin/main..HEAD').split('\n');
   mkdirSync(join(a.home, 'new', 'place'), { recursive: true }); writeFileSync(join(a.home, 'new', 'place', 'upstream.txt'), 'destination-only change\n');
@@ -443,7 +443,7 @@ test('publication: legacy two-commit move with destination-only conflict is refu
   assert.equal(refused.status, 3, refused.stdout + refused.stderr);
   for (const hash of hashes) assert.ok(refused.stderr.includes(hash));
   assert.deepEqual(state(b.home), before); assert.equal(gitIn(bare, 'rev-parse', 'main'), remote);
-  assert.deepEqual(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(p => p.endsWith('001-one.md')), [src]);
+  assert.deepEqual(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(p => p.endsWith(itemName('001-one'))), [src]);
   // The fixture explicitly drops the legacy stack; the CLI never chooses for the owner.
   gitIn(b.home, 'fetch', '-q', 'origin'); gitIn(b.home, 'reset', '--hard', 'origin/main');
   writeFileSync(join(b.home, 'private.txt'), 'do not publish'); gitIn(b.home, 'add', 'private.txt');
@@ -456,13 +456,13 @@ test('publication: legacy two-commit move with destination-only conflict is refu
     gitIn(a.home, 'add', 'new/place'); gitIn(a.home, 'commit', '-qm', 'destination race'); gitIn(a.home, 'push', '-q');
   } finally { hold.release(); }
   const r = await move.done; assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.deepEqual(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(p => p.endsWith('001-one.md')), [dst]);
+  assert.deepEqual(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(p => p.endsWith(itemName('001-one'))), [dst]);
   assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
   assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
   assert.equal(gitIn(b.home, 'ls-files', '--stage', '--', 'private.txt'), staged);
   assert.doesNotMatch(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main'), /private.txt/);
   const changed = gitIn(bare, 'diff-tree', '--no-commit-id', '--no-renames', '--name-status', '-r', 'main');
-  assert.match(changed, /D\s+acme\/demo\/phases\/001-one.md/); assert.match(changed, /A\s+new\/place\/phases\/001-one.md/);
+  assert.match(changed, new RegExp(`D\\s+${reEscape(`acme/demo/${itemRel('001-one')}`)}`)); assert.match(changed, new RegExp(`A\\s+${reEscape(`new/place/${itemRel('001-one')}`)}`));
 });
 
 test('publication: permanent failure after a push race removes renumbering and retains all incoming remote files', async t => {
@@ -505,8 +505,8 @@ for (const dependency of ['1', '001-alpha']) test(`review P1: publication refuse
   assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'both files and databases match the winning upstream clone');
-  assert.ok(existsSync(join(b.folder, 'phases', '001-alpha.md')));
-  assert.ok(!existsSync(join(b.home, 'acme', 'dst', 'phases', '001-alpha.md')));
+  assert.ok(existsSync(itemPath(b.folder, '001-alpha')));
+  assert.ok(!existsSync(itemPath(join(b.home, 'acme', 'dst'), '001-alpha')));
   const set = cli(['update', '002-dependent', '--set-team', 't1'], { cwd: b.cons, tmp: b.tmp }); // the team views reach only the items of their team
   assert.equal(set.status, 0, set.stdout + set.stderr);
   for (const w of [a, b]) {
@@ -534,9 +534,9 @@ test('review P1: publication preflight rejecting an appended conflict marker res
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('alpha'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
-  const item = join(b.folder, 'phases', '001-alpha.md');
+  const item = itemPath(b.folder, '001-alpha');
   writeFileSync(item, readFileSync(item, 'utf8') + '\nprior staged note\n');
-  gitIn(b.home, 'add', 'acme/demo/phases/001-alpha.md');
+  gitIn(b.home, 'add', `acme/demo/${itemRel('001-alpha')}`);
   writeFileSync(item, readFileSync(item, 'utf8') + '\nprior unstaged note\n');
   writeFileSync(join(b.home, 'private.txt'), 'private staging');
   gitIn(b.home, 'add', 'private.txt');
@@ -549,7 +549,7 @@ test('review P1: publication preflight rejecting an appended conflict marker res
   assert.ok(!existsSync(join(b.home, '.git', 'smooth-backlog-cli-journal.json')));
   const next = cli(['update', '1', '--append', 'valid follow-up'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(next.status, 0, next.stdout + next.stderr);
-  assert.doesNotMatch(gitIn(bare, 'show', 'main:acme/demo/phases/001-alpha.md'), /<<<<<<< example/);
+  assert.doesNotMatch(gitIn(bare, 'show', `main:acme/demo/${itemRel('001-alpha')}`), /<<<<<<< example/);
 });
 
 
@@ -626,7 +626,7 @@ test('publication identity: an upstream archived file cannot duplicate the slug 
   await hold.held();
   try {
     const item = store.load(a.folder)[0];
-    store.write({ path: join(a.folder, 'archive', '099-other.md'), fm: { ...item.fm, seq: 99, status: 'archived' }, body: item.body }, a.folder);
+    store.write({ path: archivedPath(a.folder, '099-other'), fm: { ...item.fm, seq: 99, status: 'archived' }, body: item.body }, a.folder);
     gitIn(a.home, 'add', 'acme/demo/archive'); gitIn(a.home, 'commit', '-qm', 'external archived slug collision'); gitIn(a.home, 'push', '-q');
   } finally { hold.release(); }
   rejectedPublication(t, b, bare, await second.done, /slug.*001-alpha.*unique|duplicate.*001-alpha/i);
@@ -641,7 +641,7 @@ test('publication identity: an upstream slug dependent also prevents changing it
 test('item 045: an item without a phase field keeps the identity of its file name: renumbering it is refused while an upstream item depends on that slug', async t => {
   const { b, bare, result } = await race(t, [NEW('alpha')],
     [...NEW('dependent'), '--depends-on', '001-alpha'], ['update', '1', '--seq', '5'], { afterSeed: a => {
-      const file = join(a.folder, 'phases', '001-alpha.md');
+      const file = itemPath(a.folder, '001-alpha');
       writeFileSync(file, readFileSync(file, 'utf8').replace(/^phase: .*\n/m, '')); // an older file: its slug is its file name
       gitIn(a.home, 'commit', '-qam', 'an item without a phase field'); gitIn(a.home, 'push', '-q');
     } });
@@ -689,7 +689,7 @@ async function fileRace(t, seed, args, publish, env) {
 
 test('publication identity: an upstream archived sequence colliding with an existing assignment is refused', async t => {
   const { b, bare, result } = await fileRace(t, [NEW('alpha')], ['update', '1', '--seq', '5'], a => {
-    store.write({ path: join(a.folder, 'archive', '005-other.md'), fm: { phase: '005-other', seq: 5, status: 'archived' }, body: '\narchived\n' }, a.folder);
+    store.write({ path: archivedPath(a.folder, '005-other'), fm: { phase: '005-other', seq: 5, status: 'archived' }, body: '\narchived\n' }, a.folder);
   });
   rejectedPublication(t, b, bare, result, /seq.*5.*005-other/);
 });

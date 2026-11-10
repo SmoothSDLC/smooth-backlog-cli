@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, itemName, itemPath, sharedBacklog, readItem, GIT_IDENTITY } from './shared-fixtures.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import { setField } from '../../src/shared/repair.js';
 import * as store from '../../src/shared/store.js';
@@ -27,7 +27,7 @@ test('the codec names the field it cannot read; a broken line before any key nam
 });
 
 test('load refuses an unreadable item with its name and field, never a path, and offers the two ways out', t => {
-  const dir = folder(t, { '001-a.md': '---\nphase: 001-a\nstatus: "pend\n---\n' });
+  const dir = folder(t, { [itemName('001-a')]: '---\nphase: 001-a\nstatus: "pend\n---\n' });
   const bad = store.unreadable(dir);
   assert.equal(bad.exitCode, 2);
   assert.match(bad.message, /^item 001-a: the field status cannot be read \(.*not closed\)\. Fix it with backlog update 001-a --status <value>, or restore the item's previous version with backlog update 001-a --restore$/);
@@ -36,11 +36,11 @@ test('load refuses an unreadable item with its name and field, never a path, and
 });
 
 test('a field update cannot repair is not offered; an item with no readable header offers the restore only', t => {
-  const events = folder(t, { '001-a.md': '---\nphase: 001-a\nevents:\n- "x\n---\n' });
+  const events = folder(t, { [itemName('001-a')]: '---\nphase: 001-a\nevents:\n- "x\n---\n' });
   assert.match(store.unreadable(events).message, /^item 001-a: the field events cannot be read \(.*\)\. Restore the item's previous version with backlog update 001-a --restore$/);
-  const header = folder(t, { '001-a.md': '---\nnot a pair\n---\n' });
+  const header = folder(t, { [itemName('001-a')]: '---\nnot a pair\n---\n' });
   assert.match(store.unreadable(header).message, /^item 001-a: the item has no readable header \(.*\)\. Restore the item's previous version with backlog update 001-a --restore$/);
-  assert.equal(store.unreadable(folder(t, { '001-a.md': item() })), null);
+  assert.equal(store.unreadable(folder(t, { [itemName('001-a')]: item() })), null);
 });
 
 test('setField replaces the key line and the lines that continue it, keeps the rest byte for byte, and adds a missing key', () => {
@@ -60,7 +60,7 @@ const world = t => {
   mkdirSync(join(dir, 'config', 'smooth-backlog-cli'), { recursive: true });
   const git = (...a) => execFileSync('git', a, { cwd: home, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
   const run = (...args) => cli(args, { cwd: cons, tmp: dir });
-  const file = join(home, 'acme', 'demo', 'phases', '001-alpha-job.md');
+  const file = itemPath(join(home, 'acme', 'demo'), '001-alpha-job');
   const publish = m => { git('add', '-A'); git('commit', '-q', '-m', m); git('push', '-q'); };
   return { dir, home, git, run, file, publish };
 };
@@ -74,7 +74,7 @@ test('restore: the previous committed version comes back, with a restored event,
   w.publish('damaged');
   const r = w.run('update', '1', '--restore');
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const doc = parse(readFileSync(w.file, 'utf8'));
+  const doc = readItem(w.file);
   assert.equal(doc.fm.summary, 'good one');
   assert.match(doc.fm.events.at(-1), / restored .*restored 001-alpha-job to its version of [0-9a-f]{7}/);
   assert.equal(w.git('status', '--porcelain'), '');
@@ -94,7 +94,7 @@ test('restore: an unreadable item that was committed unreadable has no earlier v
   assert.match(half.stderr, /item 001-alpha-job: the field name cannot be read/);
   assert.match(readFileSync(w.file, 'utf8'), /^status: "cut/m, 'a command that leaves another field unreadable changes nothing');
   assert.equal(w.run('update', '1', '--status', 'pending', '--name', 'alpha job').status, 0);
-  assert.equal(parse(readFileSync(w.file, 'utf8')).fm.name, 'alpha job');
+  assert.equal(readItem(w.file).fm.name, 'alpha job');
 });
 
 test('restore takes no other option; an item that is not the unreadable one is refused like every command', t => {

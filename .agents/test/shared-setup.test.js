@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameS
 import { tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, consumer, itemPath, sharedBacklog } from './shared-fixtures.js';
 
 const BIN = resolve(fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)));
 const dirs = [];
@@ -38,7 +38,7 @@ test('043: setup clones beside the repository, writes a relative config, deploys
   for (const d of ['.claude', '.qwen']) assert.ok(existsSync(join(app, d, 'skills', 'backlog', 'SKILL.md')), d);
   const made = run(app, ['new', '--name', 'first', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x']);
   assert.equal(made.status, 0, made.stdout + made.stderr);
-  assert.ok(existsSync(join(clone, 'acme', 'app', 'phases', '001-first.md'))); // new used the configured clone
+  assert.ok(existsSync(itemPath(join(clone, 'acme', 'app'), '001-first'))); // new used the configured clone
   renameSync(join(t, 'consumer'), join(t, 'moved')); // the repository and its sibling clone move together
   const moved = join(t, 'moved', 'app');
   const q = run(moved, ['show', '1', '--agent', 'tester']);
@@ -47,7 +47,7 @@ test('043: setup clones beside the repository, writes a relative config, deploys
   run(moved, ['show', '1', '--agent', 'tester']);
   const u = run(moved, ['update', '1', '--append', 'after the move', '--by', 'tester']);
   assert.equal(u.status, 0, u.stdout + u.stderr);
-  assert.match(readFileSync(join(t, 'moved', BACKLOG_NAME, 'acme', 'app', 'phases', '001-first.md'), 'utf8'), /after the move/);
+  assert.match(readFileSync(itemPath(join(t, 'moved', BACKLOG_NAME, 'acme', 'app'), '001-first'), 'utf8'), /after the move/);
 });
 
 test('043: a second setup leaves the clone, replaces the skill copies and keeps the config; a missing clone names backlog setup', () => {
@@ -113,6 +113,6 @@ test('setup records the user (the git user name, else the login name) and an emp
   // an item outside a team records its owner; with no agent named the user writes
   const made = named.run(named.app, ['new', '--name', 'mine', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x']);
   assert.equal(made.status, 0, made.stdout + made.stderr);
-  const file = readFileSync(join(named.t, 'consumer', BACKLOG_NAME, 'acme', 'app', 'phases', '001-mine.md'), 'utf8');
+  const file = readFileSync(itemPath(join(named.t, 'consumer', BACKLOG_NAME, 'acme', 'app'), '001-mine'), 'utf8');
   assert.match(file, /^owner: "?Grace"?$/m);
 });

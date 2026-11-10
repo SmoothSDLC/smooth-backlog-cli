@@ -6,7 +6,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renam
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseItem } from '../../src/shared/frontmatter.js';
+import { dumpItem, parse, parseItem } from '../../src/shared/frontmatter.js';
+import { itemFileName, itemSlug, isItemName } from '../../src/shared/item-file.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
@@ -206,4 +207,42 @@ export function teamMembers(home, team, members) {
   const file = join(home, 'teams.json');
   let all = {}; try { all = JSON.parse(readFileSync(file, 'utf8')); } catch { /* none yet */ }
   writeFileSync(file, JSON.stringify({ ...all, [team]: { ...all[team], members } }));
+}
+
+// ---- item files: the tests reach an item file only through these helpers, so the file name and the codec are named in one place ----
+// the path of an open item (<repository folder>/phases/<name>)
+export const itemPath = (dir, slug) => join(dir, 'phases', itemFileName(slug));
+// the path of an archived item (<repository folder>/archive[/<sub-folder>]/<name>)
+export const archivedPath = (dir, slug, sub) => join(dir, 'archive', ...(sub ? [sub] : []), itemFileName(slug));
+// the path of an open item inside a repository folder, as git and the index spell it (phases/<name>)
+export const itemRel = slug => `phases/${itemFileName(slug)}`;
+// the same for an archived item (archive[/<sub-folder>]/<name>)
+export const archivedRel = (slug, sub) => ['archive', ...(sub ? [sub] : []), itemFileName(slug)].join('/');
+// the file name of an item from its slug (for output of git, ls, staged paths, `git show rev:path`)
+export const itemName = itemFileName;
+// the slug of an item file name or path (a path of the local disk or from git)
+export const slugOfName = name => itemSlug(String(name).split('/').pop());
+// the names of the item files in <dir>/<sub> ('phases' or 'archive'), sorted; [] when the folder is missing; recursive: the paths below <sub> (archive keeps sub-folders)
+export const itemNames = (dir, sub = 'phases', recursive = false) => (existsSync(join(dir, sub)) ? readdirSync(join(dir, sub), recursive ? { recursive: true } : undefined).filter(isItemName).sort() : []);
+// the slugs of the item files in <dir>/<sub>, sorted
+export const itemSlugs = (dir, sub = 'phases') => itemNames(dir, sub).map(slugOfName);
+// the item of a file on disk: { fm, body } (the header values and the body)
+export const readItem = path => parseItem(readFileSync(path, 'utf8'));
+// the item of a file on disk with its header keys as the file stores them ({ fm, body }): for a test of the stored spellings
+export const readStored = path => parse(readFileSync(path, 'utf8'));
+// the regular-expression source that matches a text literally (for an expectation that names an item path)
+export const reEscape = text => String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// one header value of an item file
+export const readHeader = (path, key) => readItem(path).fm[key];
+// the text of an item file as it is on disk
+export const readItemFileText = path => readFileSync(path, 'utf8');
+// the text of a whole item built from header values and a body, as the CLI writes it
+export const itemText = (fm, body) => dumpItem(fm, body);
+// writes a whole item file (creating the folder) from header values and a body
+export function writeItem(path, fm, body) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, itemText(fm, body)); }
+// rewrites an item file with changed header values (an object merged over the old ones; a value undefined removes the key) and/or a changed body (a string)
+export function changeItem(path, { fm = {}, body } = {}) {
+  const item = readItem(path); const next = { ...item.fm, ...fm };
+  for (const k of Object.keys(fm)) if (fm[k] === undefined) delete next[k];
+  writeFileSync(path, itemText(next, body ?? item.body));
 }

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, archivedPath, reEscape } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { gitIn } from './shared-concurrency.js';
 
@@ -23,8 +23,8 @@ function solo(t) {
 const NEW = (name, ...more) => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', ...more];
 // A complete item (the team fields update --claim needs) that is then set done in its file and ingested.
 const FULL = (name, ...more) => NEW(name, '--review-refs', 'references/review/docs.md', '--estimate', '5', '--body', '## Definition of done\n- [ ] x', ...more);
-function finish(s, file) {
-  const path = join(s.folder, 'phases', file);
+function finish(s, slug) {
+  const path = itemPath(s.folder, slug);
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^status: .*$/m, 'status: done'));
   assert.equal(s.run(['list', 'all-branches']).status, 0); // ingests the edit
 }
@@ -46,23 +46,23 @@ test('audit t1/t9: a refused or dry-run command leaves nothing untracked that wo
 test('audit t4: a done item can be neither claimed nor released back into the queue (it stays done)', t => {
   const s = solo(t);
   const made = s.run(FULL('alpha job')); assert.equal(made.status, 0, out(made));
-  finish(s, '001-alpha-job.md');
+  finish(s, '001-alpha-job');
   for (const args of [['update', '1', '--claim', 'amy'], ['update', '1', '--release', 'amy']]) {
     const r = s.run(args);
     assert.equal(r.status, 1, out(r));
     assert.match(out(r), /finished item cannot be (claimed|released)/);
   }
-  const file = readFileSync(join(s.folder, 'phases', '001-alpha-job.md'), 'utf8');
+  const file = readFileSync(itemPath(s.folder, '001-alpha-job'), 'utf8');
   assert.match(file, /^status: done$/m); assert.doesNotMatch(file, /owner: amy/);
 });
 
 test('audit: update --status refuses archived (backlog archive moves a finished item), takes any other word of a plain item', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
-  const file = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(file, 'utf8');
+  const file = itemPath(s.folder, '001-alpha-job'); const before = readFileSync(file, 'utf8');
   const r = s.run(['update', '1', '--status', 'archived']);
   assert.equal(r.status, 1, out(r)); assert.match(out(r), /backlog archive moves a finished item to archive\//);
-  assert.equal(readFileSync(file, 'utf8'), before); assert.equal(existsSync(join(s.folder, 'archive', '001-alpha-job.md')), false);
+  assert.equal(readFileSync(file, 'utf8'), before); assert.equal(existsSync(archivedPath(s.folder, '001-alpha-job')), false);
   assert.equal(s.run(['update', '1', '--status', 'bogus']).status, 0);
   assert.equal(s.run(['update', '1', '--status', 'in_progress']).status, 0);
 });
@@ -72,7 +72,7 @@ test('audit: update --set-depends-on refuses itself and any cycle, and leaves th
   assert.equal(s.run(NEW('alpha job')).status, 0);
   assert.equal(s.run(NEW('beta job', '--depends-on', '1')).status, 0); // 2 -> 1
   assert.equal(s.run(NEW('gamma job', '--depends-on', '2')).status, 0); // 3 -> 2 -> 1
-  const file = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(file, 'utf8');
+  const file = itemPath(s.folder, '001-alpha-job'); const before = readFileSync(file, 'utf8');
   for (const [item, dep, why] of [['1', '1', /depend on itself/], ['1', '001-alpha-job', /depend on itself/], ['1', '3', /cycle/], ['2', '3', /cycle/]]) {
     const r = s.run(['update', item, '--set-depends-on', dep]);
     assert.equal(r.status, 1, `${item} -> ${dep}: ${out(r)}`); assert.match(out(r), why);
@@ -84,7 +84,7 @@ test('audit: update --set-depends-on refuses itself and any cycle, and leaves th
 test('audit t7: list all-branches and team query --by-branch survive an item whose status is empty (shown as None)', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
-  const file = join(s.folder, 'phases', '001-alpha-job.md');
+  const file = itemPath(s.folder, '001-alpha-job');
   writeFileSync(file, readFileSync(file, 'utf8').replace(/^status: .*$/m, 'status: null')); // a hand-edited item without a status
   for (const args of [['list', 'all-branches'], ['team', 'query', '--team', 't1', '--by-branch', 'main']]) {
     const r = s.run(args);
@@ -95,7 +95,7 @@ test('audit t7: list all-branches and team query --by-branch survive an item who
 test('audit t6: a BOM file keeps its front matter; a phases/ file without front matter is skipped, reported and never rewritten', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
-  const alpha = join(s.folder, 'phases', '001-alpha-job.md');
+  const alpha = itemPath(s.folder, '001-alpha-job');
   writeFileSync(alpha, `\uFEFF${readFileSync(alpha, 'utf8')}`); // saved by an editor that adds a BOM
   const readme = join(s.folder, 'phases', 'README.md'); const note = '\nnotes for humans\n\n## not front matter\n';
   writeFileSync(readme, note);
@@ -104,7 +104,7 @@ test('audit t6: a BOM file keeps its front matter; a phases/ file without front 
   assert.equal(readFileSync(readme, 'utf8'), note, 'the stray file is not rewritten');
   const fixed = readFileSync(alpha, 'utf8');
   assert.match(fixed, /^title: "alpha job"$/m); assert.match(fixed, /^seq: 1$/m); // fields kept, number not reused
-  assert.ok(existsSync(join(s.folder, 'phases', '002-beta-job.md')));
+  assert.ok(existsSync(itemPath(s.folder, '002-beta-job')));
   const q = s.run(['list', 'all-branches']);
   assert.equal(q.status, 0, out(q)); assert.match(q.stdout, /phases\/README\.md has no front matter/);
 });
@@ -113,11 +113,11 @@ test('review: archive stamps the status of a file that starts with a BOM and kee
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
   assert.equal(s.run(NEW('beta job')).status, 0);
-  const path = join(s.folder, 'phases', '001-alpha-job.md');
+  const path = itemPath(s.folder, '001-alpha-job');
   writeFileSync(path, `\uFEFF${readFileSync(path, 'utf8')}`);
   const r = s.run(['archive', '1', '--force']);
   assert.equal(r.status, 0, out(r));
-  const moved = readFileSync(join(s.folder, 'archive', 'phases', '001-alpha-job.md'), 'utf8');
+  const moved = readFileSync(archivedPath(s.folder, '001-alpha-job', 'phases'), 'utf8');
   assert.ok(moved.startsWith('\uFEFF---\n')); assert.match(moved, /^status: "archived"$/m);
   assert.doesNotMatch(moved, /status: "pending"/);
 });
@@ -139,7 +139,7 @@ test('review: a phases/ file without front matter is no item for new, query or u
 test('review: update --seq refuses a number another item holds (archived ones included)', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0); assert.equal(s.run(NEW('beta job')).status, 0);
-  const file = join(s.folder, 'phases', '002-beta-job.md');
+  const file = itemPath(s.folder, '002-beta-job');
   const r = s.run(['update', '2', '--seq', '1']);
   assert.equal(r.status, 1, out(r)); assert.match(out(r), /already item 001-alpha-job/);
   assert.equal(s.run(['archive', '1', '--force']).status, 0);
@@ -173,7 +173,7 @@ test('review: a clone whose upstream is origin/side and push.default=upstream st
   const side = gitIn(bare, 'rev-parse', 'side');
   const r = s.run(NEW('alpha job'));
   assert.equal(r.status, 0, out(r));
-  assert.match(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main'), /acme\/demo\/phases\/001-alpha-job\.md/);
+  assert.match(gitIn(bare, 'ls-tree', '-r', '--name-only', 'main'), new RegExp(reEscape(`acme/demo/${itemRel('001-alpha-job')}`)));
   assert.equal(gitIn(bare, 'rev-parse', 'side'), side, 'side is untouched');
   assert.equal(s.run(['update', '1', '--summary', 'again']).status, 0); // later pulls follow main too
 });
@@ -182,7 +182,7 @@ test('review P1: a command killed (kill -9) mid-mutation is rolled back by the n
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0); assert.equal(s.run(NEW('beta job')).status, 0);
   const bare = join(s.tmp, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
-  const item = join(s.folder, 'phases', '001-alpha-job.md'); const before = readFileSync(item, 'utf8');
+  const item = itemPath(s.folder, '001-alpha-job'); const before = readFileSync(item, 'utf8');
   const link = `${s.tmp}-link`; symlinkSync(s.tmp, link); t.after(() => rmSync(link, { force: true })); // the child spells the clone as macOS's /var does, the next command as /private/var
   const child = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), 'shared-audit-child.js'), join(link, 'home'), join(link, 'home', 'acme', 'demo')], { encoding: 'utf8' });
   assert.equal(child.signal, 'SIGKILL', child.stderr);
@@ -190,11 +190,11 @@ test('review P1: a command killed (kill -9) mid-mutation is rolled back by the n
   const r = s.run(['update', '2', '--summary', 'next']);
   assert.equal(r.status, 0, out(r)); assert.match(r.stderr, /rolled back a command that was killed/);
   assert.equal(readFileSync(item, 'utf8'), before, 'item 1 is back, still pending');
-  assert.equal(existsSync(join(s.folder, 'archive', 'phases', '001-alpha-job.md')), false);
+  assert.equal(existsSync(archivedPath(s.folder, '001-alpha-job', 'phases')), false);
   const one = index.rows(s.folder).rows.find(r => r.seq === 1);
-  assert.deepEqual({ status: one.status, path: one.path }, { status: 'pending', path: 'phases/001-alpha-job.md' });
+  assert.deepEqual({ status: one.status, path: one.path }, { status: 'pending', path: itemRel('001-alpha-job') });
   const tree = gitIn(bare, 'ls-tree', '-r', '--name-only', 'main');
-  assert.match(tree, /acme\/demo\/phases\/001-alpha-job\.md/); assert.doesNotMatch(tree, /archive/);
+  assert.match(tree, new RegExp(reEscape(`acme/demo/${itemRel('001-alpha-job')}`))); assert.doesNotMatch(tree, /archive/);
   assert.equal(gitIn(s.home, 'status', '--porcelain'), '');
 });
 
@@ -210,7 +210,7 @@ test('review: update --seq is refused while another item (archived included) dep
 test('review: a scalar comma depends_on ("1,2") counts as two references in move, --seq and the cycle check', t => {
   const s = solo(t);
   for (const n of ['alpha job', 'beta job', 'gamma job']) assert.equal(s.run(NEW(n)).status, 0);
-  const path = join(s.folder, 'phases', '003-gamma-job.md');
+  const path = itemPath(s.folder, '003-gamma-job');
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^depends_on: .*$/m, 'depends_on: "1,2"')); // a hand-written scalar
   const mv = s.run(['move', '2', '--to-repository', 'other/proj']);
   assert.equal(mv.status, 1, out(mv)); assert.match(out(mv), /003-gamma-job depends on 002-beta-job/);
@@ -237,7 +237,7 @@ test('review: after the author released her claim, pop and query --reviewable st
 test('review P2: the cycle check follows the outgoing edges of an item whose file has no phase field (slug from the file name, as ingestion)', t => {
   const s = solo(t);
   for (const n of ['alpha job', 'beta job']) assert.equal(s.run(NEW(n)).status, 0);
-  const path = join(s.folder, 'phases', '002-beta-job.md');
+  const path = itemPath(s.folder, '002-beta-job');
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^phase: .*\n/m, ''));
   assert.equal(s.run(['list', 'all-branches']).status, 0); // ingests the edit
   assert.equal(s.run(['update', '2', '--set-depends-on', '1']).status, 0);

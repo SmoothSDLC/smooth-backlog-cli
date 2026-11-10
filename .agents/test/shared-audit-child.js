@@ -3,14 +3,15 @@ import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import * as store from '../../src/shared/store.js';
+import { itemPath, itemRel, archivedRel, archivedPath } from './shared-fixtures.js';
 
 const [home, folder] = process.argv.slice(2);
 await store.cloneLocked(home, async () => {
   await store.undoOnThrow(folder, async () => {
-    const src = join(folder, 'phases', '001-alpha-job.md'); const to = join(folder, 'archive', 'phases', '001-alpha-job.md');
+    const src = itemPath(folder, '001-alpha-job'); const to = archivedPath(folder, '001-alpha-job', 'phases');
     store.note(src); store.note(to);
     mkdirSync(join(folder, 'archive', 'phases'), { recursive: true });
-    spawnSync('git', ['mv', 'phases/001-alpha-job.md', 'archive/phases/001-alpha-job.md'], { cwd: folder }); // stages the rename
+    spawnSync('git', ['mv', itemRel('001-alpha-job'), archivedRel('001-alpha-job', 'phases')], { cwd: folder }); // stages the rename
     writeFileSync(to, readFileSync(to, 'utf8').replace(/^status: .*$/m, 'status: "archived"'));
     process.kill(process.pid, 'SIGKILL'); // no catch, no finally
   });

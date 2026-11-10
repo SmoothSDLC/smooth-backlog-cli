@@ -6,10 +6,9 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as store from '../../src/shared/store.js';
 import { teamHelp } from '../../src/team/help.js';
-import { cli, consumer, GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog, readItem, GIT_IDENTITY } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -45,7 +44,7 @@ function make(f, cwd, name, extra = []) {
   assert.equal(t.status, 0, t.stdout + t.stderr);
   return slug;
 }
-const item = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
+const item = (f, slug) => readItem(itemPath(f.folder, slug));
 const ok = (f, slug, ...args) => {
   let extra = {};
   const last = args[args.length - 1];
@@ -205,7 +204,7 @@ test('test_claim_only_when_every_held_item_waits', () => {
   r = refuse(f, four, '--claim', 'ann'); // 'changes' verdict counts as active
   assert.ok(r.status === 1 && r.stdout.includes(one) && r.stdout.includes(two), r.stdout);
   ok(f, four, '--claim', 'ann', '--force'); // --force overrides, recorded
-  assert.ok(readFileSync(join(f.folder, 'phases', `${four}.md`), 'utf8').includes('--force past the claim rule'));
+  assert.ok(readFileSync(itemPath(f.folder, four), 'utf8').includes('--force past the claim rule'));
   ok(f, four, '--release', 'ann');
   ok(f, one, '--waiting', 'x', '--by', 'ann');
   ok(f, one, '--waiting-done', '--by', 'ann');
@@ -324,7 +323,7 @@ test('credentials in a wait are redacted in the text and the JSON of the pop (bl
   ok(f, held, '--claim', 'ann');
   ok(f, make(f, f.cons, 'pop team work', []), '--claim', 'bob'); // the team is at work: the lead has nothing to continue
   const { fm, body } = item(f, held);
-  store.write({ path: join(f.folder, 'phases', `${held}.md`), fm: { ...fm, wait_on: 'https://user:hunter2secret@host/run' }, body }, f.folder);
+  store.write({ path: itemPath(f.folder, held), fm: { ...fm, wait_on: 'https://user:hunter2secret@host/run' }, body }, f.folder);
   for (const args of [[], ['--json']]) {
     for (const cmd of [['team', 'pop', '--team', 't1']]) {
       const r = cli([...cmd, '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' } }); // the lead, while its team works: idle, the wait reported

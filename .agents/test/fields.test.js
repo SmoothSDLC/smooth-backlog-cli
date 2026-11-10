@@ -4,9 +4,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parse } from '../../src/shared/frontmatter.js';
 import { FIELDS } from '../../src/shared/fields.js';
-import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readStored } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -19,7 +18,7 @@ function fixture() {
   return { t, cons, folder: join(home, 'acme', 'demo') };
 }
 const run = (f, args) => cli(args, { cwd: f.cons, tmp: f.t });
-const fm = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8')).fm;
+const fm = (f, slug) => readStored(itemPath(f.folder, slug)).fm;
 
 test('backlog fields prints one line per field with the five columns; --json lists the same fields', () => {
   const f = fixture();
@@ -50,7 +49,7 @@ test('new takes --title and --description as the owner\'s words for --name and -
   assert.equal(s, '001-parser-fix');
   assert.equal(fm(f, s).title, 'Parser fix');
   assert.equal(fm(f, s).summary, 'First sentence.\nSecond sentence.');
-  assert.ok(readFileSync(join(f.folder, 'phases', `${s}.md`), 'utf8').includes('the parser reads the sample'));
+  assert.ok(readFileSync(itemPath(f.folder, s), 'utf8').includes('the parser reads the sample'));
   const both = run(f, ['new', '--title', 'a', '--name', 'b', '--depends-on', 'none']);
   assert.equal(both.status, 2); assert.match(both.stderr, /--title and --name are the same option/);
   const old = createdSlug(run(f, ['new', '--name', 'Old words', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', 'text']).stdout);

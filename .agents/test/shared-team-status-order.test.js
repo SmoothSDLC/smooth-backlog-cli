@@ -5,10 +5,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
-import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import * as store from '../../src/shared/store.js';
-import { cli, consumer, createdSlug, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -43,7 +41,7 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const up = (f, slug, ...args) => ok(f, ['update', slug, ...args]);
 const make = (f, name, ...extra) => createdSlug(ok(f, ['new', ...NEW(name), ...extra]).stdout);
-const doc = (f, slug) => parse(readFileSync(join(f.folder, 'phases', `${slug}.md`), 'utf8'));
+const doc = (f, slug) => readItem(itemPath(f.folder, slug));
 const fm = (f, slug) => doc(f, slug).fm;
 const pop = (f, agent, env) => { const r = run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json'], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return JSON.parse(r.stdout); };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
@@ -57,9 +55,9 @@ test('a team step for a team with no entry in the configuration is refused with 
   const s = item(f, 'ghost');
   const configured = JSON.parse(readFileSync(join(f.home, 'teams.json'), 'utf8')); delete configured.ghost; // the fixture gave the team an empty entry to set it; the item keeps naming it
   writeFileSync(join(f.home, 'teams.json'), JSON.stringify(configured));
-  const before = readFileSync(join(f.folder, 'phases', `${s}.md`), 'utf8');
+  const before = readFileSync(itemPath(f.folder, s), 'utf8');
   no(f, ['update', s, '--refine-start', '--by', 'ann'], 'team ghost is not configured in the backlog configuration');
-  assert.equal(readFileSync(join(f.folder, 'phases', `${s}.md`), 'utf8'), before);
+  assert.equal(readFileSync(itemPath(f.folder, s), 'utf8'), before);
 });
 
 test('a claim of an item that is not ready is refused, naming ready; the refinement steps move the word along the order', () => {

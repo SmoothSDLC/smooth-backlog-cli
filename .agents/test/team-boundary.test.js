@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 import * as index from '../../src/shared/index.js';
 import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
-import { cli, consumer, createdSlug, intoTeam, sharedBacklog, teamNew } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, teamNew } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -25,7 +25,7 @@ function fixture() {
 const DOD = '## Definition of done\n\n- [ ] the check holds';
 const BASE = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', DOD];
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, plain: true, env: { SMOOTH_BACKLOG_CLI_AGENT: '', ...env } });
-const file = (f, slug) => join(f.folder, 'phases', `${slug}.md`);
+const file = (f, slug) => itemPath(f.folder, slug);
 const fm = (f, slug) => parse(readFileSync(file(f, slug), 'utf8')).fm;
 const plainItem = (f, name = 'plain item') => createdSlug(run(f, ['new', ...BASE(name)]).stdout);
 const teamItem = (f, name = 'team item') => {

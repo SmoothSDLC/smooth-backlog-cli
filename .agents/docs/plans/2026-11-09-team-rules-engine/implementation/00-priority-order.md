@@ -227,6 +227,20 @@ batch after which the installed CLI would behave differently for an existing con
 - Depends on: B01.
 
 **B06. Item files are JSON.**
+- Split by the lead (2026-11-10), because one batch of this size cannot be held by one agent at medium effort; each part is its own
+  commit with the standard proof, in this order:
+  - **B06a, the test seam** (tests only, no expectation changed): every test and BDD step that builds the path of an item file, reads an
+    item file or edits its header goes through helpers of the shared test fixture, so that the switch changes the helpers and not the
+    tests.
+  - **B06b, the JSON codec** (new code, switched on nowhere): the text form of chapter 02 section 2.4 and the mapping of section 5, from
+    and to the item the code holds in memory, with its own tests of byte-exact output and of the round trip.
+  - **B06c, the switch**: the item-file module writes and reads `.json` with the codec; a markdown item with a header stops every command
+    except those chapter 06 section 2 lists; the test helpers and the fixtures follow; the body layout code and the team code's import
+    pinned by the boundary test are settled here.
+  - **B06d, the built-in definition of items without a team** (chapter 02 section 4): what `backlog new`, `backlog done` and
+    `backlog archive` write, undeclared fields kept and shown, `backlog new --force` removed, `backlog fields` prints the definition.
+  - **B06e, the history** (chapter 02 section 2.3): an entry per write with the changed values before and after; `backlog history`.
+  - **B06f, a number that two items hold** is refused (chapter 05 section 2).
 - Goal: items are written and read as JSON files (the envelope, the fields, the body, the history, the fixed key order and text form);
   today's events become history entries; the built-in definition of items without a team (claimed_by and claimed_at kept, parent,
   size_score, `backlog done` writes closed, `backlog new` no longer writes review_state and reviewer, `backlog archive` writes no status

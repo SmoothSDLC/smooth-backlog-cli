@@ -11,7 +11,7 @@ test('the five example team files parse and name at least one team with rules', 
   for (const n of NAMES) { const teams = Object.values(files[n]); assert.ok(teams.length > 0, n); for (const t of teams) assert.ok(t.rules?.table?.length, n); }
 });
 
-test('the cases file has 288 cases with the run kinds of the plan', () => {
+test('the cases file has 288 cases with the expected run kinds', () => {
   assert.equal(cases.length, 288);
   const kinds = {}; for (const c of cases) kinds[c.command.run] = (kinds[c.command.run] ?? 0) + 1;
   assert.deepEqual(kinds, { update: 155, new: 25, pop: 17, filter: 9, resolve: 6, 'user-show': 6, validate: 40, inputs: 12, 'user-ref': 2, 'user-set': 2, 'migrate-check': 1, 'migrate-ask': 1, 'teams-file': 8, 'setup-advice': 4 });

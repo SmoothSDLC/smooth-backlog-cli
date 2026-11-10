@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BacklogError } from '../../src/errors.js';
-import { Refusal, asList, fill, find, num, same, stepMatches, test as holds, value } from '../../src/team/rules/expression.js';
+import { Refusal, patternCacheSize, asList, fill, find, num, same, stepMatches, test as holds, value } from '../../src/team/rules/expression.js';
 
 const entry = { people: { ann: ['lead', 'member'], bob: ['member'] }, item: { status: { type: 'text', default: 'open' }, deps: { type: 'items', default: [] }, estimate: { type: 'number', default: 0 } } };
 const item = (seq, fields = {}, more = {}) => ({ seq, slug: `${seq}-x`, name: `item ${seq}`, team: 't', repository: 'acme/app', branch: 'main', archived: false, body: '', fields, ...more });
@@ -47,7 +47,8 @@ test('tests: all any not is in empty >= <= regex contains every some', () => {
   assert.equal(t({ any: [{ is: [1, 2] }, { is: [2, 2] }] }), true);
   assert.equal(t({ is: [2, '2'] }), true); assert.equal(t({ is: ['2', 2] }), true); assert.equal(t({ is: [2, '2.5'] }), false);
   assert.equal(t({ in: ['a', ['a', 'b']] }), true); assert.equal(t({ in: ['1', '$item.deps'] }), true); assert.equal(t({ in: ['', ''] }), false);
-  for (const [v, want] of [['', true], [' ', true], [[], true], ['x', false], [0, false]]) assert.equal(t({ empty: { text: v } }) , typeof v === 'string' ? want : t({ empty: v }));
+  for (const [v, want] of [[null, true], [false, false], [0, false], [[], true], [' ', true], ['', true], ['x', false], [[0], false]]) assert.equal(t({ empty: v }), want, JSON.stringify(v));
+  assert.equal(t({ any: [{ empty: '$arg.none' }, { is: [1, 2] }] }), true);
   assert.equal(t({ empty: '$arg.none' }), true); assert.equal(t({ empty: '$item.deps' }), false);
   assert.equal(t({ '>=': ['60', 60] }), true); assert.equal(t({ '<=': ['60.9', 60] }), false); assert.equal(t({ '>=': ['0x3C', 60] }), false); assert.equal(t({ '<=': [' ', 60] }), false);
   assert.equal(t({ regex: ['abc', '^a.c$'] }), true); assert.equal(t({ regex: ['abd', '^a.c$'] }), false);
@@ -65,11 +66,28 @@ test('is compares lists entry by entry', () => {
 
 test('forms refused with exit 2: wrong key count, wrong pair, unknown test', () => {
   const c = ctx();
-  refuses(() => holds({ is: ['$item.status', 'open'], in: ['a', 'b'] }, c), 2, /exactly one key/);
-  refuses(() => holds({}, c), 2, /found none/);
-  refuses(() => holds({ is: ['a'] }, c), 2, /list of two values/);
-  refuses(() => holds({ regex: 'a' }, c), 2, /list of two values/);
+  refuses(() => holds({ is: ['$item.status', 'open'], in: ['a', 'b'] }, c), 2, /^a condition has exactly one key \(found is, in\)$/);
+  refuses(() => holds({}, c), 2, /^a condition has exactly one key \(found none\)$/);
+  refuses(() => holds({ is: ['a'] }, c), 2, /^is takes a list of two values$/);
+  for (const op of ['in', '>=', '<=', 'contains', 'regex']) { refuses(() => holds({ [op]: 'a' }, c), 2, new RegExp(`^${op} takes a list of two values$`)); refuses(() => holds({ [op]: [1, 2, 3] }, c), 2, new RegExp(`^${op} takes a list of two values$`)); }
   refuses(() => holds({ maybe: [1, 2] }, c), 2, /unknown test/);
+});
+
+test('the form of all, any, not, every, some, count and a condition: one boundary each, exit 2', () => {
+  const c = ctx();
+  refuses(() => holds({ all: 5 }, c), 2, /^all takes a list of conditions$/);
+  refuses(() => holds({ any: 'x' }, c), 2, /^any takes a list of conditions$/);
+  refuses(() => holds({ not: [{ is: [1, 1] }] }, c), 2, /^not takes one condition$/);
+  refuses(() => holds({ not: 5 }, c), 2, /^not takes one condition$/);
+  refuses(() => holds({ every: 5 }, c), 2, /^every takes an object with items and match$/);
+  refuses(() => holds({ every: { items: [1] } }, c), 2, /^every takes an object with items and match$/);
+  refuses(() => holds({ some: { match: { all: [] } } }, c), 2, /^some takes an object with items and match$/);
+  refuses(() => value({ count: 5 }, c), 2, /^count takes an object with items \(match optional\)$/);
+  refuses(() => value({ count: { match: { all: [] } } }, c), 2, /^count takes an object with items \(match optional\)$/);
+  refuses(() => holds(null, c), 2, /^a condition must be an object with exactly one key$/);
+  refuses(() => holds([{ is: [1, 1] }], c), 2, /^a condition must be an object with exactly one key$/);
+  refuses(() => holds({ all: [null] }, c), 2, /^a condition must be an object with exactly one key$/);
+  refuses(() => holds({ all: ['x'] }, c), 2, /^a condition must be an object with exactly one key$/);
 });
 
 test('every, some and count cannot be nested (exit 2 at run time)', () => {
@@ -101,7 +119,12 @@ test('regex: cached, a bad pattern is exit 2, a backtracking pattern is fast', (
   refuses(() => holds({ regex: ['x', '(?=a)'] }, c), 2, /^regex: /);
   refuses(() => holds({ regex: ['x', 5] }, c), 2, /pattern must be text/);
   const t0 = Date.now(); assert.equal(holds({ regex: ['a'.repeat(5000) + 'b', '^(a+)+$'] }, c), false); assert.ok(Date.now() - t0 < 500);
-  for (let i = 0; i < 3; i++) assert.equal(holds({ regex: ['aaa', '^a+$'] }, c), true);
+  const before = patternCacheSize();
+  for (let i = 0; i < 3; i++) assert.equal(holds({ regex: ['aaa', '^cache-probe-a+$'] }, c), false);
+  assert.equal(patternCacheSize(), before + 1);
+  holds({ regex: ['aaa', '^cache-probe-b+$'] }, c); assert.equal(patternCacheSize(), before + 2);
+  refuses(() => holds({ regex: ['x', '(?=a)'] }, c), 2, /^regex: /); assert.equal(patternCacheSize(), before + 2);
+  assert.equal(holds({ regex: ['xabcx', 'abc'] }, c), true);
 });
 
 test('fill and stepMatches', () => {
@@ -115,4 +138,49 @@ test('fill and stepMatches', () => {
 
 test('two items of one number are never given to the evaluator: find takes the first', () => {
   assert.equal(find(ctx({ items: [item(5, { status: 'a' }), item(5, { status: 'b' })] }), 5).fields.status, 'a');
+});
+
+test('literals, envelope keys and item references', () => {
+  const c = ctx({ item: item(2, {}, { created: '2026-01-01', updated: '2026-02-02', updated_by: 'bob', body: 'text' }) });
+  assert.deepEqual([true, false, null].map(x => value(x, c)), [true, false, null]); assert.equal(value(7, c), 7);
+  for (const [k, want] of [['seq', 2], ['slug', '2-x'], ['name', 'item 2'], ['team', 't'], ['repository', 'acme/app'], ['branch', 'main'], ['created', '2026-01-01'], ['updated', '2026-02-02'], ['updated_by', 'bob'], ['archived', false], ['body', 'text']]) assert.equal(value(`$item.${k}`, c), want, k);
+  assert.equal(value('$it.name', { ...c, it: item(9) }), 'item 9');
+});
+
+test('session, team and now references: the closed list, a misspelled name is exit 2', () => {
+  const c = ctx({ session: { id: 's1', repository: 'acme/app', branch: 'b', commit: 'abc' } });
+  assert.deepEqual(['id', 'branch', 'commit'].map(n => value(`$session.${n}`, c)), ['s1', 'b', 'abc']);
+  assert.equal(value('$session.id', ctx({ session: {} })), ''); assert.equal(value('$session.id', ctx({ session: undefined })), '');
+  for (const p of ['$session.brnach', '$team.foo', '$now.x', '$caller.x']) refuses(() => value(p, c), 2, /^unknown reference /);
+  refuses(() => fill('x {$session.brnach}', c), 2, /^unknown reference \$session\.brnach$/);
+  assert.deepEqual(value('$team.items', ctx({ session: undefined })), []);
+  assert.equal(find(ctx({ session: undefined }), 3).missing, true);
+});
+
+test('$team.items leaves out archived items and items of other teams', () => {
+  const items = [item(1), item(2, {}, { archived: true }), item(3, {}, { team: 'other' }), item(4, {}, { repository: 'acme/lib' }), item(5)];
+  assert.deepEqual(value('$team.items', ctx({ items })), [1, 5]);
+});
+
+test('$caller.roles of an unknown caller is an empty list', () => {
+  assert.deepEqual(value('$caller.roles', ctx({ caller: 'zed' })), []);
+});
+
+test('age of an empty value is null, and a comparison on null does not hold', () => {
+  const c = ctx();
+  assert.equal(value({ age: '' }, c), null); assert.equal(value({ age: '$arg.none' }, c), null);
+  assert.equal(holds({ '>=': [{ age: '' }, 60] }, c), false); assert.equal(holds({ '<=': [{ age: '' }, 60] }, c), false);
+});
+
+test('a cap is written as not <=: a value that is not a number is refused too', () => {
+  const c = ctx(); const cap = { not: { '<=': ['$arg.n', 60] } };
+  assert.equal(holds(cap, ctx({ args: { n: 'abc' } })), true); assert.equal(holds(cap, ctx({ args: { n: '61' } })), true); assert.equal(holds(cap, ctx({ args: { n: '60' } })), false);
+  assert.equal(holds({ not: { '<=': ['abc', 60] } }, c), true);
+});
+
+test('every on an empty list holds, some does not', () => {
+  const c = ctx({ item: item(2, { deps: [] }) });
+  assert.equal(holds({ every: { items: '$item.deps', match: { is: [1, 2] } } }, c), true);
+  assert.equal(holds({ some: { items: '$item.deps', match: { is: [1, 1] } } }, c), false);
+  assert.equal(value({ count: { items: '$item.deps' } }, c), 0);
 });

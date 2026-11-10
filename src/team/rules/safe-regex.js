@@ -1,4 +1,4 @@
-// The `regex` test of the rule language (design chapter 03, section 4.1): a linear-time matcher for a subset of regular expressions.
+// The `regex` test of the rule language: a linear-time matcher for a subset of regular expressions.
 // A pattern compiles to a small program run as a set of states over the text (Thompson / Pike), so the time is at most text length x program size: no
 // backtracking, whatever the pattern. Not supported (a validate error): back-references, lookaround, flags, lazy quantifiers, \b.
 const MAX_PATTERN = 200, MAX_PROGRAM = 5000, MAX_COUNT = 100, MAX_TEXT = 10000;

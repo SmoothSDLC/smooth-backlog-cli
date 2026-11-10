@@ -99,7 +99,7 @@ test('every, some and count cannot be nested (exit 2 at run time)', () => {
 });
 
 test('decimal literals only: numbers and texts', () => {
-  assert.equal(num('60.9'), 60.9); assert.equal(num(' 7 '), 7); assert.equal(num('-3'), -3); assert.ok(Number.isNaN(num('0x3C'))); assert.ok(Number.isNaN(num('1e3')));
+  assert.equal(num('60.9'), 60.9); assert.ok(Number.isNaN(num(' 7'))); assert.ok(Number.isNaN(num('7 '))); assert.equal(num('-3'), -3); assert.ok(Number.isNaN(num('0x3C'))); assert.ok(Number.isNaN(num('1e3')));
   assert.ok(Number.isNaN(num(' '))); assert.ok(Number.isNaN(num(''))); assert.ok(Number.isNaN(num(null)));
 });
 

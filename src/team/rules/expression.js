@@ -17,8 +17,8 @@ export class Refusal extends BacklogError {
 }
 
 export const asList = v => (v == null || v === '' ? [] : Array.isArray(v) ? v : [v]);
-// Only a decimal literal is a number: " ", "0x3C" and "1e3" are not.
-export const num = v => (typeof v === 'number' ? v : typeof v === 'string' && DECIMAL.test(v.trim()) ? Number(v) : NaN);
+// Only a decimal literal is a number: " ", " 7", "0x3C" and "1e3" are not.
+export const num = v => (typeof v === 'number' ? v : typeof v === 'string' && DECIMAL.test(v) ? Number(v) : NaN);
 export const defaultOf = d => (d.default !== undefined ? d.default : LIST.includes(d.type) ? [] : d.type === 'item' ? null : d.type === 'number' ? 0 : d.type === 'boolean' ? false : '');
 // A field the item lacks reads as its definition's default.
 export const get = (item, name, entry) => (item == null ? undefined : ENVELOPE.includes(name) ? item[name]

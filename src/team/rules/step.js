@@ -3,11 +3,24 @@
 // result holds changed copies of items and the input is never changed. A refusal is exit 1; a wrong value or rule file is exit 2.
 import { FOREIGN, LIST, Refusal, asList, defaultOf, fill, find, get, num, same, stepMatches, test, value } from './expression.js';
 
-// The first matching rule decides; no match is the coded refusal.
+// Every effect a rule may write, and the ones this evaluator runs; B08c moves names from the first list into SUPPORTED (the case harness reads it).
+export const EFFECTS = ['set', 'add', 'remove', 'note', 'related', 'place', 'archive', 'delete', 'branch', 'team', 'say'];
+export const SUPPORTED = ['set', 'add', 'remove'];
+const isObj = o => o !== null && typeof o === 'object' && !Array.isArray(o);
+
+// The first matching rule decides; no match is the coded refusal. A matching rule that is malformed is a wrong rule file (exit 2).
 export function decide(ctx) {
   for (const r of ctx.entry.rules.table) {
     if (!stepMatches(r.step, ctx.step) || (r.when && !test(r.when, ctx))) continue;
-    return 'deny' in r ? { allowed: false, rule: r.id, text: fill(r.deny, ctx) } : { allowed: true, rule: r.id, do: r.do ?? {} };
+    if ('deny' in r === 'do' in r) throw new Refusal(`rule ${r.id}: a rule has exactly one of deny and do`, 2, r.id);
+    if ('deny' in r) return { allowed: false, rule: r.id, text: fill(r.deny, ctx) };
+    if (!isObj(r.do)) throw new Refusal(`rule ${r.id}: do must be an object`, 2, r.id);
+    for (const k of Object.keys(r.do)) {
+      if (!EFFECTS.includes(k)) throw new Refusal(`rule ${r.id}: ${k} is not an effect`, 2, r.id);
+      if (!SUPPORTED.includes(k)) throw new Refusal(`effect ${k} is not supported yet (rule ${r.id})`, 2, r.id);
+      if (['set', 'add', 'remove'].includes(k) && !isObj(r.do[k])) throw new Refusal(`rule ${r.id}: ${k} must be an object`, 2, r.id);
+    }
+    return { allowed: true, rule: r.id, do: r.do };
   }
   return { allowed: false, rule: null, text: `no rule of team ${ctx.team} allows the step ${ctx.step} on item ${ctx.item.seq}` };
 }
@@ -27,8 +40,9 @@ export function typed(entry, field, v, own) {
   else if (LIST.includes(def.type)) {
     out = (typeof v === 'string' ? v.split(',').map(s => s.trim()).filter(Boolean) : asList(v)).map(x => (def.type === 'items' && !FOREIGN.test(String(x)) ? num(x) : String(x)));
     if (out.some(x => Number.isNaN(x))) bad('is not a list of item numbers');
-  } else out = v == null ? '' : String(v);
-  if (def.type === 'person' && out && !(out in entry.people)) bad(`is not a person of the team (${Object.keys(entry.people).join(', ')})`);
+  } else if (Array.isArray(v)) bad('is a list, and this field takes one value');
+  else out = v == null ? '' : String(v);
+  if (def.type === 'person' && out && !Object.hasOwn(entry.people, out)) bad(`is not a person of the team (${Object.keys(entry.people).join(', ')})`);
   if (def.values && !asList(out).every(x => def.values.some(y => same(x, y)))) bad(`is not one of ${def.values.join(', ')}`);
   return out;
 }
@@ -39,6 +53,7 @@ function change(entry, item, list, own) {
   const next = { ...item, fields: { ...item.fields } };
   for (const [kind, f, v] of list) {
     if (kind === 'set') { next.fields[f] = typed(entry, f, v, own); continue; }
+    if (!LIST.includes(entry.item[f]?.type) && entry.item[f]) throw new Refusal(`field ${f} is not a list field`, 2);
     const cur = asList(get(item, f, entry)); const vs = typed(entry, f, asList(v), own);
     next.fields[f] = kind === 'add' ? [...cur, ...vs.filter(x => !cur.some(y => same(x, y)))] : cur.filter(x => !vs.some(y => same(x, y)));
   }
@@ -61,6 +76,7 @@ export function step(ctx) {
   const { item, entry } = ctx;
   const takes = stepArgs(entry, ctx.step);
   for (const k of Object.keys(ctx.args ?? {})) if (!takes.includes(k)) throw new Refusal(`the step ${ctx.step} of team ${ctx.team} takes no --${k} (it takes: ${takes.map(a => `--${a}`).join(', ') || 'no argument'})`, 2);
+  if (!item) throw new Refusal('the item does not exist');
   if (item.archived) throw new Refusal(`item ${item.seq} is archived; archived items take no step`);
   if (item.team && item.team !== ctx.team) throw new Refusal(`item ${item.seq} belongs to team ${item.team}; team ${ctx.team} acts only on its own items and on items without a team`);
   const d = decide(ctx);

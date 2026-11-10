@@ -7,6 +7,7 @@ import { dumpItem, parseItem, readItemText } from './item-file.js';
 import { git, itemSelector } from './safety.js';
 import * as store from './store.js';
 import { normalise } from './status.js';
+import { highWater } from './numbers.js';
 
 const INTEGERS = ['seq', 'size_score'];
 const ENVELOPE_KEYS = ['seq', 'name', 'repository', 'branch', 'created', 'updated', 'updated_by', 'team'];
@@ -45,10 +46,14 @@ export async function repairUnreadable(a, folder, bad) {
     return 0;
   }
   let text = readItemText(abs);
-  if (bad.unreadable.key === 'seq') a.seqRepaired = true;
   for (const key of fields) {
     const value = INTEGERS.includes(key) ? (/^\s*[+-]?\d+\s*$/.test(a[key]) ? Number(a[key]) : null) : a[key];
     if (value === null) return refuse(`--${key} ${a[key]}: a whole number is needed`);
+    if (key === 'seq' && bad.unreadable.key === 'seq') { // decided before anything is written: the number of the item's own file name restores it, any other must be above the mark
+      const high = highWater(folder);
+      if (value !== Number(/^\d+/.exec(slug)?.[0]) && value <= high) return refuse(`--seq ${value} is not above the highest number ever used in ${folder.split(/[\\/]/).slice(-2).join('/')} (${high}); numbers are never reused`);
+      a.seqRepaired = true; // the update that follows need not check the number again
+    }
     if (key === 'status' && !normalise(value)) return refuse('--status needs a word');
     text = setField(text, key, key === 'status' ? normalise(value) : value);
   }

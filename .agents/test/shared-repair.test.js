@@ -121,21 +121,33 @@ test('--seq on a healthy item with its own number is still refused', t => {
   assert.equal(w.run('update', '1', '--seq', '1').status, 1);
 });
 
-// Only name and seq can be unreadable and repaired (the other repairable keys live under fields, which hold any value). The repair of seq is
-// followed by the check of --seq, which counts the repaired file's own number, so a command with --seq repairs on disk and then refuses.
-for (const n of [2, 3]) {
-  test(`--seq ${n} with --name repairs both unreadable keys on disk, then refuses a number that is not the item's own: not above the highest number ever used`, t => {
+// Only name and seq can be unreadable and repaired (the other repairable keys live under fields, which hold any value). The number is decided
+// before anything is written: the number of the item's own file name restores it, any other must be above the mark.
+test('--seq far above the mark repairs an unreadable seq with --name in one command', t => {
+  const w = world(t);
+  assert.equal(w.run(...NEW).status, 0);
+  damageItem(w.file, 'name'); damageItem(w.file, 'seq');
+  w.publish('damaged');
+  const r = w.run('update', '001-alpha-job', '--name', 'alpha job', '--seq', '50');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const { fm } = readItem(w.file);
+  assert.deepEqual([fm.name, fm.seq], ['alpha job', 50]);
+  assert.equal(w.run('show', '50').status, 0);
+});
+
+for (const n of [2]) { // the folder holds items 1 and 2, so the mark is 2
+  test(`--seq ${n} at or below the mark is refused and the damaged file is left as it was`, t => {
     const w = world(t);
     assert.equal(w.run(...NEW).status, 0);
+    assert.equal(w.run('new', '--name', 'beta job', '--depends-on', 'none').status, 0);
     damageItem(w.file, 'name'); damageItem(w.file, 'seq');
     w.publish('damaged');
+    const before = readFileSync(w.file, 'utf8');
     const r = w.run('update', '001-alpha-job', '--name', 'alpha job', '--seq', String(n));
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.equal(r.stdout + r.stderr, `❌ --seq ${n} is not above the highest number ever used in acme/demo (${n}); numbers are never reused\n`);
-    const { fm } = readItem(w.file); // the repair is on disk, not committed or published
-    assert.deepEqual([fm.name, fm.seq], ['alpha job', n]);
-    assert.match(w.git('status', '--porcelain'), /001-alpha-job\.json/);
-    assert.equal(w.run('show', String(n)).status, 0, 'the repaired item reads again');
+    assert.equal(r.stdout + r.stderr, `❌ --seq ${n} is not above the highest number ever used in acme/demo (2); numbers are never reused\n`);
+    assert.equal(readFileSync(w.file, 'utf8'), before, 'nothing was written');
+    assert.equal(w.git('status', '--porcelain'), '');
   });
 }
 

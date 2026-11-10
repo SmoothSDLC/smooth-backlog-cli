@@ -95,7 +95,7 @@ async function archive(a, rows, { repo, folder, guard }) {
   if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived`); return 0; }
   const src = join(folder, row.path);
   await assertInside(folder, src); // the file is inside the folder, no symlink on the way
-  const { fm } = readItemFile(src);
+  const { fm, body } = readItemFile(src);
   if (fm.team && row.status !== 'closed') return refuse(ARCHIVE_OPEN_TEAM(row.slug)); // an open team item leaves its team's queue by the team's steps, not by --force
   if (row.status !== 'closed' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'closed' — finish it or pass --force`);
   seen.check(folder, repo, seen.actor(), row.slug, row.path);
@@ -111,7 +111,7 @@ async function archive(a, rows, { repo, folder, guard }) {
   if ((await git(['mv', '--', from, to], folder)).code) { // archive.py:39-49: a file git does not track yet moves plainly
     try { renameSync(src, join(folder, to)); } catch { return refuse(`could not archive ${row.slug}: the file move failed`); }
   }
-  store.write({ path: join(folder, to), fm: { ...fm, status: 'archived' } }, folder);
+  store.write({ path: join(folder, to), fm: { ...fm, status: 'archived' }, body }, folder);
   // archiving removes an item from the backlog -> planning event: it leaves the index and the remainder re-densifies to 0..M-1
   store.addEvent(folder, to, { event: 'archived', branch: row.branch, commitSha: row.commit_sha, note: `${row.slug} -> ${to}` });
   const order = store.reflow(folder, { branches: [row.branch] });

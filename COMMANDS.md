@@ -99,7 +99,7 @@ Run inside the git repository to set up. The command:
      way to a skill copy or to the folder is refused (exit 2, naming the path relative to the repository, nothing changed);
   6. commits and pushes what it wrote (the configuration, the team templates and the skill copies) on the current branch,
      and prints a summary of every action: the .backlog folder, the configuration, the team templates, the skill copies,
-     the commit. No path is printed.
+     the commit. No absolute path is printed.
 
 Every command finds the backlog folder in this order: SMOOTH_BACKLOG_CLI_HOME, the repository's configuration (.backlog/config.json,
 backlog_repository: a path relative to the repository; .backlog means inside it; the root file .smooth-backlog.json of

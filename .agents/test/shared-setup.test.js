@@ -94,6 +94,8 @@ test('043: setup removes nothing through a symbolic link in an agent folder', ()
   const r = run(app, ['setup']);
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stderr, /symbolic link on the way: nothing changed/);
+  assert.ok(!r.stderr.includes(t), 'no absolute path');
+  assert.match(r.stderr, /^❌ backlog: \.claude\/skills\/backlog: Symlink destination is unsupported: \.claude\/skills\./);
   assert.equal(readFileSync(join(outside, 'backlog', 'keep.txt'), 'utf8'), 'keep');
   assert.ok(!existsSync(join(t, 'consumer', BACKLOG_NAME)) && !existsSync(join(app, '.smooth-backlog.json'))); // checked first: nothing changed
 });
@@ -116,6 +118,7 @@ test('setup records the user (the git user name, else the login name) and an emp
   assert.equal(readHeader(itemPath(join(named.t, 'consumer', BACKLOG_NAME, 'acme', 'app'), '001-mine'), 'owner'), 'Grace');
 });
 
+const count = dir => Number(spawnSync('git', ['-C', dir, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).stdout);
 const SHIPPED = fileURLToPath(new URL('../../templates/teams/', import.meta.url));
 const FIVE = ['extreme-programming.json', 'parallel.json', 'patterns.json', 'scrum.json', 'single-agent.json'];
 
@@ -134,6 +137,7 @@ test('setup copies the five generic templates into .backlog/team-templates, says
 test('a second setup replaces an edited copy and removes a file the person added there, as for the skill copy', () => {
   const { app, run } = fixture();
   assert.equal(run(app, ['setup']).status, 0);
+  const commits = count(app);
   const dir = join(app, '.backlog', 'team-templates');
   writeFileSync(join(dir, 'scrum.json'), '{"edited": true}');
   writeFileSync(join(dir, 'my-team.json'), '{}');
@@ -141,6 +145,7 @@ test('a second setup replaces an edited copy and removes a file the person added
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(readFileSync(join(dir, 'scrum.json'), 'utf8'), readFileSync(join(SHIPPED, 'scrum.json'), 'utf8'));
   assert.ok(!readdirSync(dir).includes('my-team.json'));
+  assert.equal(count(app), commits);
   assert.equal(spawnSync('git', ['-C', app, 'status', '--porcelain'], { encoding: 'utf8' }).stdout, '');
 });
 
@@ -153,7 +158,7 @@ test('a symbolic link as the templates folder stops setup with exit 2, naming th
   const before = head(app);
   const r = run(app, ['setup']);
   assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /\.backlog\/team-templates: Symlink destination is unsupported: \.backlog\/team-templates\./);
+  assert.match(r.stderr, /^❌ backlog: Symlink destination is unsupported: \.backlog\/team-templates\. Resolve it before using backlog\. \(a symbolic link/);
   assert.ok(!r.stderr.includes(t), 'no absolute path');
   assert.deepEqual(readdirSync(outside), []);
   assert.equal(head(app), before);

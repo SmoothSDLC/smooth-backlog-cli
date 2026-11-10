@@ -18,6 +18,7 @@ export const LEGACY_CONFIG = '.smooth-backlog.json'; // written at the repositor
 export const ORIGIN_KEY = 'backlog_origin_url';
 export const NEUTRAL_NAME = 'backlog-repo';
 export const TEMPLATE_DIR = '.backlog/team-templates'; // the generic team templates, copied from templates/teams on every setup
+// the names and their order are fixed by the message setup prints, not read from the folder
 const TEMPLATES = ['scrum', 'extreme-programming', 'parallel', 'single-agent', 'patterns'];
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
@@ -88,6 +89,9 @@ export function originSetting(cwd = process.cwd()) {
 }
 export const originFolderName = cwd => originSetting(cwd).name || NEUTRAL_NAME;
 
+// The refusal of a symbolic link: the path relative to the repository, named once, never the absolute one.
+const linkRefusal = (top, label, e) => { const m = e.message.split(`${top}${sep}`).join(''); return `${m.includes(label) ? '' : `${label}: `}${m} (a symbolic link on the way: nothing changed)`; };
+
 export async function run(argv) {
   if (argv.includes('--help')) { const h = (await import('../help.js')).HELP?.setup; if (h) { process.stdout.write(h.endsWith('\n') ? h : `${h}\n`); return 0; } }
   assertConfigReadable(); // an unreadable configuration stops setup before anything changes
@@ -103,10 +107,10 @@ export async function run(argv) {
     const detect = join(top, a.detect);
     if (!existsSync(detect) || !statSync(detect).isDirectory()) continue;
     const target = join(top, a.destination);
-    try { await safePath(top, detect); await safeTree(top, target); } catch (e) { return die(`${a.destination}: ${e.message} (a symbolic link on the way: nothing changed)`); }
+    try { await safePath(top, detect); await safeTree(top, target); } catch (e) { return die(linkRefusal(top, a.destination, e)); }
     targets.push({ target, destination: a.destination });
   }
-  try { await safeTree(top, join(top, TEMPLATE_DIR)); } catch (e) { return die(`${TEMPLATE_DIR}: ${e.message.split(`${top}${sep}`).join('')} (a symbolic link on the way: nothing changed)`); }
+  try { await safeTree(top, join(top, TEMPLATE_DIR)); } catch (e) { return die(linkRefusal(top, TEMPLATE_DIR, e)); }
   const kept = configuredHome(top);
   // the backlog folder: SMOOTH_BACKLOG_CLI_HOME when set, else the configured one, else beside the repository when a clone URL is set,
   // else inside the repository

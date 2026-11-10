@@ -84,5 +84,5 @@ SMOOTH_BACKLOG_CLI_AGENT stand in); the step flags below are taken with `backlog
 - Every command that changes an item records who (SMOOTH_BACKLOG_CLI_AGENT, else `--by`/`--claim`, else the user) and when.
 - Exit codes: 0 success, 1 refused (the reason on standard output, ❌), 2 invalid input or a failure, 3 idle (team
   pop), 4 the configured backlog repository is not cloned (`backlog setup`), 5 stale view (read the item again).
-  Exit 2 also stops every command when `.backlog/config.json` exists but is not a JSON object (a trailing comma, a half-written
+  Exit 2 also stops every command that reads the repository's configuration (not `backlog upgrade`, `--help`, `--version`) when `.backlog/config.json` exists but is not a JSON object (a trailing comma, a half-written
   edit): fix the file by hand; nothing runs and nothing is written until it can be read.

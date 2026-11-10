@@ -27,7 +27,7 @@ export const topOf = cwd => { const r = spawnSync('git', ['rev-parse', '--show-t
 // is an empty configuration.
 export function readConfig(top) {
   let text = null;
-  try { text = readFileSync(join(top, CONFIG), 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw unreadable(e.message); }
+  try { text = readFileSync(join(top, CONFIG), 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw unreadable(fsReason(e)); }
   if (text !== null) {
     let cfg;
     try { cfg = JSON.parse(text); } catch (e) { throw unreadable(e.message); }
@@ -37,6 +37,9 @@ export function readConfig(top) {
   try { const cfg = JSON.parse(readFileSync(join(top, LEGACY_CONFIG), 'utf8')); if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return cfg; } catch { /* none */ }
   return {};
 }
+// The reason for a file-system failure: the error code and a fixed phrase, never Node's message (it holds the absolute path).
+const FS_REASON = { EACCES: 'permission denied', EPERM: 'permission denied', EISDIR: 'it is a folder, not a file', ENOTDIR: '.backlog is not a folder' };
+const fsReason = e => (e && typeof e.code === 'string' && e.code ? `${e.code}: ${FS_REASON[e.code] || 'it cannot be opened'}` : 'it cannot be opened');
 const unreadable = reason => new BacklogError('CONFIG_UNREADABLE', `${CONFIG} cannot be read (${reason}); fix it: no command runs and nothing is written while it cannot be read`, 2);
 // The stop for every command before it reads or writes anything: throws when the repository's configuration cannot be read.
 export function assertConfigReadable(cwd = process.cwd()) {

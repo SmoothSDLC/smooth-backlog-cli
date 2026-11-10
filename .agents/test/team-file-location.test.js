@@ -1,9 +1,9 @@
 // Batch B02: where the team file is (the pure resolution), and an unreadable .backlog/config.json that stops every command.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { GIT_IDENTITY, cli, consumer } from './shared-fixtures.js';
 import { missingText, teamsFile } from '../../src/team/teams-file.js';
 
@@ -102,4 +102,36 @@ test('setup keeps the team-file keys and an unknown key with their values', t =>
   const after = JSON.parse(readFileSync(w.file, 'utf8'));
   for (const [k, v] of Object.entries(keep)) assert.deepEqual(after[k], v, k);
   assert.ok(typeof after.user === 'string' && after.user, 'setup still records the user');
+});
+const NO_PATH_STOP = reason => `❌ backlog: .backlog/config.json cannot be read (${reason}); fix it: no command runs and nothing is written while it cannot be read\n`;
+test('a folder in the place of .backlog/config.json stops list with exit 2 and a reason that names no path', t => {
+  const w = world(t);
+  mkdirSync(w.file, { recursive: true });
+  const r = w.run(['list']);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.stderr, NO_PATH_STOP('EISDIR: it is a folder, not a file'));
+  assert.equal(r.stdout, '');
+  assert.ok(!(r.stdout + r.stderr).includes(dirname(w.repo)), 'no absolute path');
+});
+test('.backlog as a plain file stops list with exit 2 and a reason that names no path', t => {
+  const w = world(t);
+  writeFileSync(join(w.repo, '.backlog'), 'not a folder');
+  const r = w.run(['list']);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.stderr, NO_PATH_STOP('ENOTDIR: .backlog is not a folder'));
+  assert.equal(r.stdout, '');
+  assert.ok(!(r.stdout + r.stderr).includes(dirname(w.repo)), 'no absolute path');
+});
+test('an unreadable .backlog/config.json (mode 000) stops list with exit 2 and a reason that names no path', t => {
+  if (process.getuid() === 0) return; // root reads a file of mode 000: the case cannot be made
+  const w = world(t);
+  mkdirSync(join(w.repo, '.backlog'), { recursive: true });
+  writeFileSync(w.file, '{"backlog_repository": ".backlog"}');
+  chmodSync(w.file, 0o000);
+  let r;
+  try { r = w.run(['list']); } finally { chmodSync(w.file, 0o644); } // the mode is restored so the temporary folder can be removed
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.stderr, NO_PATH_STOP('EACCES: permission denied'));
+  assert.equal(r.stdout, '');
+  assert.ok(!(r.stdout + r.stderr).includes(dirname(w.repo)), 'no absolute path');
 });

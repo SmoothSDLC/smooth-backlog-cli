@@ -6,8 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renam
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dumpItem, parse, parseItem } from '../../src/shared/frontmatter.js';
-import { itemFileName, itemSlug, isItemName } from '../../src/shared/item-file.js';
+import { dump, dumpItem, itemFileName, itemSlug, isItemName, parse, parseItem } from '../../src/shared/item-file.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
@@ -198,7 +197,10 @@ export function intoTeam(slug, opts, team = 't1', status = 'ready') { // status 
   const r = cli(['team', 'update', slug, '--team', team, '--agent', opts.agent ?? 'lead', '--set-team', team, ...(status ? ['--status', status] : [])], { ...opts, env: { ...opts.env, SMOOTH_BACKLOG_CLI_AGENT: '' } }); // opts.env: the caller's own session, so its view
   if (r.status !== 0) throw new Error(`intoTeam ${slug}: ${r.stdout}${r.stderr}`);
   const file = status === 'ready' && infoOf(slug, opts).file; // the item is refined: it carries the stage a refined item has
-  if (file) { const text = readFileSync(file, 'utf8'); if (!/^stage:/m.test(text)) writeFileSync(file, text.replace(/^team: .*$/m, m => `${m}\nstage: ready\nrefiner: ${opts.agent ?? 'lead'}`)); }
+  if (file) {
+    const { fm, body } = readItem(file);
+    if (!('stage' in fm)) { const next = {}; for (const k of Object.keys(fm)) { next[k] = fm[k]; if (k === 'team') Object.assign(next, { stage: 'ready', refiner: opts.agent ?? 'lead' }); } writeItem(file, next, body); }
+  }
   return slug;
 }
 
@@ -230,8 +232,12 @@ export const itemSlugs = (dir, sub = 'phases') => itemNames(dir, sub).map(slugOf
 export const readItem = path => parseItem(readFileSync(path, 'utf8'));
 // the item of a file on disk with its header keys as the file stores them ({ fm, body }): for a test of the stored spellings
 export const readStored = path => parse(readFileSync(path, 'utf8'));
+// writes an item file whose header keys are exactly the ones given (no earlier name is turned into its new one): for a test of the stored spellings
+export function writeStored(path, fm, body) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, dump(fm, body)); }
 // the regular-expression source that matches a text literally (for an expectation that names an item path)
 export const reEscape = text => String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// the item of a text (for the text of an item that git shows): { fm, body }
+export const itemOfText = text => parseItem(text);
 // one header value of an item file
 export const readHeader = (path, key) => readItem(path).fm[key];
 // the text of an item file as it is on disk
@@ -246,3 +252,18 @@ export function changeItem(path, { fm = {}, body } = {}) {
   for (const k of Object.keys(fm)) if (fm[k] === undefined) delete next[k];
   writeFileSync(path, itemText(next, body ?? item.body));
 }
+
+// ---- items a test damages or makes by hand: how an unreadable key looks is known only here (the format of the day) ----
+// The keys of these helpers are spelled as the file spells them (title, not name).
+// makes one header value of an item file unreadable (the other keys stay readable)
+export function damageItem(path, key) { writeFileSync(path, readFileSync(path, 'utf8').replace(new RegExp(`^${reEscape(key)}: .*$`, 'm'), `${key}: "cut`)); }
+// whether the header value of an item file is still unreadable as damageItem made it
+export const isDamagedItem = (path, key) => new RegExp(`^${reEscape(key)}: "cut`, 'm').test(readFileSync(path, 'utf8'));
+// writes an item file whose header keys are exactly the ones given (see writeStored), then damages the keys named
+export function writeDamagedItem(path, fm, keys, body) { writeStored(path, fm, body); for (const k of keys) damageItem(path, k); }
+// writes a file in an item's place whose header cannot be read at all (no key can be named)
+export function writeUnreadableItem(path, body = '') { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, `---\nnot a pair\n---\n${body}`); }
+// the file as an editor that adds a byte order mark saves it
+export const bomItem = path => writeFileSync(path, `\uFEFF${readFileSync(path, 'utf8')}`);
+// the file with other line endings
+export const crlfItem = (path, eol = '\r\n') => writeFileSync(path, readFileSync(path, 'utf8').replace(/\n/g, eol));

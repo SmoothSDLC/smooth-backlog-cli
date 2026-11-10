@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameS
 import { tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, consumer, itemPath, sharedBacklog } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, consumer, itemPath, sharedBacklog, readHeader } from './shared-fixtures.js';
 
 const BIN = resolve(fileURLToPath(new URL('../../bin/backlog.js', import.meta.url)));
 const dirs = [];
@@ -113,6 +113,5 @@ test('setup records the user (the git user name, else the login name) and an emp
   // an item outside a team records its owner; with no agent named the user writes
   const made = named.run(named.app, ['new', '--name', 'mine', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] x']);
   assert.equal(made.status, 0, made.stdout + made.stderr);
-  const file = readFileSync(itemPath(join(named.t, 'consumer', BACKLOG_NAME, 'acme', 'app'), '001-mine'), 'utf8');
-  assert.match(file, /^owner: "?Grace"?$/m);
+  assert.equal(readHeader(itemPath(join(named.t, 'consumer', BACKLOG_NAME, 'acme', 'app'), '001-mine'), 'owner'), 'Grace');
 });

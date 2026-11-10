@@ -8,8 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cli, consumer, createdSlug, itemPath, sharedBacklog } from './shared-fixtures.js';
-import { parse } from '../../src/shared/frontmatter.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readStored, writeStored } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 
 const dirs = [];
@@ -34,20 +33,20 @@ const text = (f, slug) => readFileSync(pathOf(f, slug), 'utf8');
 const read = (f, slug) => ok(f, ['show', slug, '--agent', 'me']);
 // A class-era item: both keys written straight into the file, bypassing the migration.
 function seed(f, slug) {
-  const s = text(f, slug);
-  writeFileSync(pathOf(f, slug), s.replace(/^---\n/, '---\nwork_class:\n- chunk\nreview_classes:\n- security\n'));
-  assert.ok(KEYS.every(k => text(f, slug).includes(`${k}:`)), 'the seeded file carries both keys');
+  const s = readStored(pathOf(f, slug));
+  writeStored(pathOf(f, slug), { work_class: ['chunk'], review_classes: ['security'], ...s.fm }, s.body);
+  assert.ok(KEYS.every(k => k in readStored(pathOf(f, slug)).fm), 'the seeded file carries both keys');
   read(f, slug); // the file changed behind the CLI's back: the agent reads it again before it writes (the stale-read guard)
 }
-const has = (f, slug) => KEYS.filter(k => new RegExp(`^${k}:`, 'm').test(text(f, slug)));
+const has = (f, slug) => KEYS.filter(k => k in readStored(pathOf(f, slug)).fm);
 
 test('096: writing an open item removes the two retired keys and keeps every other field', () => {
   const f = fixture();
   const s = make(f, 'plain');
-  const { fm, body } = parse(text(f, s));
+  const { fm, body } = readStored(pathOf(f, s));
   store.write({ path: pathOf(f, s), fm: { ...fm, work_class: ['chunk'], review_classes: ['security'] }, body }, f.folder);
   assert.deepEqual(has(f, s), []);
-  assert.deepEqual(parse(text(f, s)).fm, fm);
+  assert.deepEqual(readStored(pathOf(f, s)).fm, fm);
 });
 
 test('096: backlog update --append on an item that carries both keys leaves the file without them; the commit contains the removal', () => {
@@ -78,7 +77,7 @@ test('096: a front-matter-only write drops the keys', () => {
   const f = fixture();
   const s = make(f, 'front matter only');
   seed(f, s);
-  const { fm, body } = parse(text(f, s));
+  const { fm, body } = readStored(pathOf(f, s));
   store.write({ path: pathOf(f, s), fm, body }, f.folder, { frontMatterOnly: true });
   assert.deepEqual(has(f, s), []);
 });
@@ -97,7 +96,7 @@ test('096 pin: an item without the keys is rewritten byte for byte as before', (
   const f = fixture();
   const s = make(f, 'pin');
   const before = text(f, s);
-  const { fm, body } = parse(before);
+  const { fm, body } = readStored(pathOf(f, s));
   store.write({ path: pathOf(f, s), fm, body }, f.folder);
   assert.equal(text(f, s), before);
 });

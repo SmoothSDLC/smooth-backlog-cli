@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, readItem, readHeader, changeItem, writeItem, itemNames, slugOfName, GIT_IDENTITY } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
 
 const git = (cwd, ...args) => {

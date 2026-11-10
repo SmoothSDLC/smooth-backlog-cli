@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cli, consumer, itemPath, itemRel, sharedBacklog, readItem } from './shared-fixtures.js';
+import { cli, consumer, itemPath, itemRel, sharedBacklog, readItem, itemOfText } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -28,7 +28,7 @@ test('046: --severity changes the field, is published with an event, and refuses
   assert.match(r.stdout, /severity=normal/);
   assert.equal(readItem(file).fm.severity, 'normal');
   const bare = spawnSync('git', ['-C', home, 'remote', 'get-url', 'origin'], { encoding: 'utf8' }).stdout.trim();
-  assert.match(spawnSync('git', ['--git-dir', bare, 'show', `main:acme/demo/${itemRel('001-loud-item')}`], { encoding: 'utf8' }).stdout, /^severity: "?normal"?$/m); // pushed
+  assert.equal(itemOfText(spawnSync('git', ['--git-dir', bare, 'show', `main:acme/demo/${itemRel('001-loud-item')}`], { encoding: 'utf8' }).stdout).fm.severity, 'normal'); // pushed
   assert.match(run(['history', '1']).stdout, /severity=normal/); // the event
   assert.equal(run(['list', 'critical']).stdout.includes('001-loud-item'), false);
   const bad = run(['update', '1', '--severity', 'urgent', '--by', 'tester']);

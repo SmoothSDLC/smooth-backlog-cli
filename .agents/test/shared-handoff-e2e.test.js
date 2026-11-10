@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cli, consumer, itemPath, sharedBacklog, changeItem } from './shared-fixtures.js';
 import { decodeList, edgeState } from '../../src/team/handoff.js';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/item-file.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));

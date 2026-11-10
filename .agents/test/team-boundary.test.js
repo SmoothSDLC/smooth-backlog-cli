@@ -6,10 +6,10 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, stat
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as index from '../../src/shared/index.js';
 import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
-import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, teamNew } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, teamNew, damageItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -125,7 +125,7 @@ test('a plain update still restores an unreadable team item: --restore names no 
   const s = teamItem(f);
   const edit = asTeam(f, 'ann', [s, '--summary', 'good one']);
   assert.equal(edit.status, 0, edit.stdout + edit.stderr);
-  writeFileSync(file(f, s), readFileSync(file(f, s), 'utf8').replace(/^summary: .*$/m, 'summary: "cut'));
+  damageItem(file(f, s), 'summary');
   const git = (...a) => execFileSync('git', a, { cwd: f.home, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
   git('add', '-A'); git('commit', '-q', '-m', 'damaged'); git('push', '-q');
   const r = run(f, ['update', s, '--restore']);

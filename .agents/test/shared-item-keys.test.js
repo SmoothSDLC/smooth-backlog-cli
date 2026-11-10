@@ -3,11 +3,10 @@
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, itemPath, sharedBacklog } from './shared-fixtures.js';
-import { parse } from '../../src/shared/frontmatter.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readStored, writeStored } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -26,15 +25,15 @@ const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { SMO
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name) => createdSlug(ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's']).stdout);
 const pathOf = (f, slug) => itemPath(f.folder, slug);
-const fmOf = (f, slug) => parse(readFileSync(pathOf(f, slug), 'utf8')).fm;
+const fmOf = (f, slug) => readStored(pathOf(f, slug)).fm;
 // The file as an earlier release wrote it: the five stored keys under their earlier names (and the holder, if any, in claimed_by).
 function asEarlier(f, slug) {
-  const doc = parse(readFileSync(pathOf(f, slug), 'utf8'));
+  const doc = readStored(pathOf(f, slug));
   const old = Object.fromEntries(Object.entries(doc.fm).flatMap(([k, v]) => {
     if (k === 'owner') return [['claimed_by', doc.fm.owned_since ? v : ''], ...(doc.fm.owned_since ? [] : [['owner', v]])];
     return [[{ title: 'name', last_updated: 'updated', last_updated_by: 'updated_by', owned_since: 'claimed_at' }[k] ?? k, v]];
   }));
-  writeFileSync(pathOf(f, slug), readFileSync(pathOf(f, slug), 'utf8').replace(/^---\n[\s\S]*?\n---\n/, `---\n${Object.entries(old).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join('\n')}\n---\n`));
+  writeStored(pathOf(f, slug), old, doc.body);
 }
 
 test('a new item carries the new keys and none of the earlier ones', () => {
@@ -83,7 +82,7 @@ test('an item carrying both an earlier key and its new one keeps the new one', (
   const f = fixture();
   const s = make(f, 'Both');
   const p = pathOf(f, s);
-  writeFileSync(p, readFileSync(p, 'utf8').replace(/^title: .*$/m, 'name: "Earlier"\ntitle: "Newer"'));
+  const doc = readStored(p); writeStored(p, Object.fromEntries(Object.entries(doc.fm).flatMap(([k, v]) => (k === 'title' ? [['name', 'Earlier'], [k, 'Newer']] : [[k, v]]))), doc.body);
   assert.equal(JSON.parse(ok(f, ['show', s, '--json']).stdout).front_matter.title, 'Newer');
   ok(f, ['update', s, '--append', 'x']);
   const after = fmOf(f, s);

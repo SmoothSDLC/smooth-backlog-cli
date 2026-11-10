@@ -8,8 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, cli, consumer, env, itemName, itemPath, itemRel, ORIGIN_URL, sharedBacklog, archivedRel, archivedPath, readItem as parsedItem, itemNames, slugOfName, reEscape, writeItem } from './shared-fixtures.js';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { BACKLOG_NAME, cli, consumer, env, itemName, itemPath, itemRel, ORIGIN_URL, sharedBacklog, archivedRel, archivedPath, readItem as parsedItem, itemNames, slugOfName, reEscape, writeItem, itemText } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
@@ -129,12 +128,11 @@ test('write: atomic, mode 0o600, parent folders created, no temp file left, key 
   assert.equal(parsed.body, 'New body.\n');
   assert.equal(statSync(abs).mode & 0o777, 0o600);
   assert.deepEqual(readdirSync(dirname(abs)), [itemName('009-new')]);
-  const orig = readFileSync(abs, 'utf8');
   store.write({ path: abs, fm: { ...parsed.fm, status: 'in_progress' }, body: parsed.body });
-  assert.equal(readFileSync(abs, 'utf8'), orig.replace(/^status: .*$/m, 'status: "in_progress"'));
+  assert.equal(readFileSync(abs, 'utf8'), itemText({ ...parsed.fm, status: 'in_progress' }, parsed.body));
   putItem(dirname(dirname(abs)), item(8, { phase: '008-old' }));
-  store.write({ path: join(dirname(abs), itemName('008-old')), fm: parse(readFileSync(join(dirname(abs), itemName('008-old')), 'utf8')).fm, body: 'x\n' });
-  assert.equal(Object.hasOwn(parse(readFileSync(join(dirname(abs), itemName('008-old')), 'utf8')).fm, 'priority'), false, 'a write drops the legacy rank');
+  store.write({ path: join(dirname(abs), itemName('008-old')), fm: parsedItem(join(dirname(abs), itemName('008-old'))).fm, body: 'x\n' });
+  assert.equal(Object.hasOwn(parsedItem(join(dirname(abs), itemName('008-old'))).fm, 'priority'), false, 'a write drops the legacy rank');
 });
 
 test('addEvent appends an event line to the item file and keeps every other key', t => {
@@ -214,7 +212,7 @@ test('undoOnThrow puts back only what the command wrote: a file that appears mea
   const dir = scratch(t);
   const folder = join(dir, 'o', 'n'); mkdirSync(join(folder, 'phases'), { recursive: true });
   const mine = itemPath(folder, '001-mine'); const pulled = itemPath(folder, '002-pulled'); const edited = itemPath(folder, '003-edited');
-  writeFileSync(edited, '---\nphase: 003-edited\nseq: 3\n---\nold\n');
+  writeItem(edited, { phase: '003-edited', seq: 3 }, 'old\n');
   await assert.rejects(store.undoOnThrow(folder, async () => {
     store.write({ path: mine, fm: { phase: '001-mine', seq: 1 }, body: 'x\n' }, folder);
     store.write({ path: edited, fm: { phase: '003-edited', seq: 3 }, body: 'new\n' }, folder);
@@ -445,10 +443,8 @@ test('075: nextSeq: an archived item keeps its number: after archiving 2, the ne
 test('075: findings: an item of another repository is foreign, an item without repository and branch is untagged', t => {
   const f = fixturePair(t);
   threeItems(f);
-  writeFileSync(itemPath(f.folder, '004-foreign'),
-    '---\nphase: "004-foreign"\nseq: 4\nname: "Foreign"\nstatus: "pending"\nrepository: "acme/other"\nbranch: "main"\n---\n');
-  writeFileSync(itemPath(f.folder, '005-untagged'),
-    '---\nphase: "005-untagged"\nseq: 5\nname: "Untagged"\nstatus: "pending"\n---\n');
+  writeItem(itemPath(f.folder, '004-foreign'), { phase: '004-foreign', seq: 4, name: 'Foreign', status: 'pending', repository: 'acme/other', branch: 'main' }, '');
+  writeItem(itemPath(f.folder, '005-untagged'), { phase: '005-untagged', seq: 5, name: 'Untagged', status: 'pending' }, '');
   // the hand-written files reach the mirror when the next write command rescans
   cli(['update', '1', '--note', 'the mirror rescan'], { cwd: f.cons, tmp: f.t });
   const r = cli(['list'], { cwd: f.cons, tmp: f.t });

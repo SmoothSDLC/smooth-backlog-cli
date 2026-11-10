@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as store from '../../src/shared/store.js';
 import * as handoff from '../../src/team/handoff.js';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/item-file.js';
 import { cli, consumer, itemPath, sharedBacklog, GIT_IDENTITY, writeItem, itemText } from './shared-fixtures.js';
 import { recordHandoff, acceptHandoff, rejectHandoff } from '../../src/team/handoff-commands.js';
 

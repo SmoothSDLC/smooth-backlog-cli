@@ -7,10 +7,10 @@ import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, rmSync, w
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedPath, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY, writeItem } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedPath, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY, writeItem, changeItem } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
 import { editSection } from '../../src/shared/update.js';
 
@@ -123,8 +123,7 @@ test('order of work: pull first, then change, write, log the event, commit and p
   const f = seed();
   const other = join(f.t, 'other');
   git(f.t, 'clone', '-q', join(f.t, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), other);
-  const text = readFileSync(itemPath(join(other, 'acme', 'demo'), '004-delta'), 'utf8').replace('sum delta', 'remote summary');
-  writeFileSync(itemPath(join(other, 'acme', 'demo'), '004-delta'), text);
+  changeItem(itemPath(join(other, 'acme', 'demo'), '004-delta'), { fm: { summary: 'remote summary' } });
   git(other, 'commit', '-q', '-am', 'remote edit');
   git(other, 'push', '-q');
   const r = run(f, ['4', '--status', 'in_progress', '--note', 'go']);

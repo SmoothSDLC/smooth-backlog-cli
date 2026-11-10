@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, intoTeam, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
+import { cli, consumer, intoTeam, itemPath, sharedBacklog, readItem, readStored, writeStored } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 
 const dirs = [];
@@ -139,8 +139,8 @@ test('an item with old work_class and review_classes fields behaves exactly like
   const old = makeTeam(f, 'old job');
   const path = itemPath(f.folder, old);
   // as a class-era item looks: the keys are written straight into the file (store.write drops them)
-  writeFileSync(path, readFileSync(path, 'utf8').replace(/^---\n/, '---\nwork_class:\n- chunk\n- docs\nreview_classes:\n- security\n'));
-  assert.ok(/^work_class:/m.test(readFileSync(path, 'utf8')) && /^review_classes:/m.test(readFileSync(path, 'utf8')), 'the seeded file carries both keys');
+  const seeded = readStored(path); writeStored(path, { work_class: ['chunk', 'docs'], review_classes: ['security'], ...seeded.fm }, seeded.body);
+  assert.ok('work_class' in readStored(path).fm && 'review_classes' in readStored(path).fm, 'the seeded file carries both keys');
   run(f, 'show', [old, '--agent', 'me']); // the file changed behind the CLI: read it again before the writes below
   const pop = agent => JSON.parse(run(f, 'team', ['pop', '--team', 't1', '--agent', agent, '--json']).stdout); // team pop claims what it offers
   // the team view of both items is the same but for identity, rank and time stamps

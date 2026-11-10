@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, archivedPath, reEscape, changeItem } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, archivedPath, reEscape, changeItem, readHeader, bomItem } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { gitIn } from './shared-concurrency.js';
 
@@ -25,7 +25,7 @@ const NEW = (name, ...more) => ['new', '--name', name, '--objective', 'o', '--su
 const FULL = (name, ...more) => NEW(name, '--review-refs', 'references/review/docs.md', '--estimate', '5', '--body', '## Definition of done\n- [ ] x', ...more);
 function finish(s, slug) {
   const path = itemPath(s.folder, slug);
-  writeFileSync(path, readFileSync(path, 'utf8').replace(/^status: .*$/m, 'status: done')); // the text is the input: a later check matches `status: done` exactly
+  changeItem(path, { fm: { status: 'done' } });
   assert.equal(s.run(['list', 'all-branches']).status, 0); // ingests the edit
 }
 const out = r => `${r.stdout}${r.stderr}`;
@@ -52,8 +52,8 @@ test('audit t4: a done item can be neither claimed nor released back into the qu
     assert.equal(r.status, 1, out(r));
     assert.match(out(r), /finished item cannot be (claimed|released)/);
   }
-  const file = readFileSync(itemPath(s.folder, '001-alpha-job'), 'utf8');
-  assert.match(file, /^status: done$/m); assert.doesNotMatch(file, /owner: amy/);
+  const file = itemPath(s.folder, '001-alpha-job');
+  assert.equal(readHeader(file, 'status'), 'done'); assert.doesNotMatch(readFileSync(file, 'utf8'), /owner: amy/);
 });
 
 test('audit: update --status refuses archived (backlog archive moves a finished item), takes any other word of a plain item', t => {
@@ -85,7 +85,7 @@ test('audit t7: list all-branches and team query --by-branch survive an item who
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
   const file = itemPath(s.folder, '001-alpha-job');
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^status: .*$/m, 'status: null')); // a hand-edited item without a status
+  changeItem(file, { fm: { status: null } }); // a hand-edited item without a status
   for (const args of [['list', 'all-branches'], ['team', 'query', '--team', 't1', '--by-branch', 'main']]) {
     const r = s.run(args);
     assert.equal(r.status, 0, out(r)); assert.match(r.stdout, /001-alpha-job/); assert.match(r.stdout, /None/);
@@ -96,14 +96,13 @@ test('audit t6: a BOM file keeps its front matter; a phases/ file without front 
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
   const alpha = itemPath(s.folder, '001-alpha-job');
-  writeFileSync(alpha, `\uFEFF${readFileSync(alpha, 'utf8')}`); // saved by an editor that adds a BOM
+  bomItem(alpha); // saved by an editor that adds a BOM
   const readme = join(s.folder, 'phases', 'README.md'); const note = '\nnotes for humans\n\n## not front matter\n';
   writeFileSync(readme, note);
   const r = s.run(NEW('beta job', '--priority', '0'));
   assert.equal(r.status, 0, out(r));
   assert.equal(readFileSync(readme, 'utf8'), note, 'the stray file is not rewritten');
-  const fixed = readFileSync(alpha, 'utf8');
-  assert.match(fixed, /^title: "alpha job"$/m); assert.match(fixed, /^seq: 1$/m); // fields kept, number not reused
+  assert.equal(readHeader(alpha, 'name'), 'alpha job'); assert.equal(readHeader(alpha, 'seq'), 1); // fields kept, number not reused
   assert.ok(existsSync(itemPath(s.folder, '002-beta-job')));
   const q = s.run(['list', 'all-branches']);
   assert.equal(q.status, 0, out(q)); assert.match(q.stdout, /phases\/README\.md has no front matter/);
@@ -114,7 +113,7 @@ test('review: archive stamps the status of a file that starts with a BOM and kee
   assert.equal(s.run(NEW('alpha job')).status, 0);
   assert.equal(s.run(NEW('beta job')).status, 0);
   const path = itemPath(s.folder, '001-alpha-job');
-  writeFileSync(path, `\uFEFF${readFileSync(path, 'utf8')}`);
+  bomItem(path);
   const r = s.run(['archive', '1', '--force']);
   assert.equal(r.status, 0, out(r));
   const moved = readFileSync(archivedPath(s.folder, '001-alpha-job', 'phases'), 'utf8');
@@ -145,7 +144,7 @@ test('review: update --seq refuses a number another item holds (archived ones in
   assert.equal(s.run(['archive', '1', '--force']).status, 0);
   const again = s.run(['update', '2', '--seq', '1']);
   assert.equal(again.status, 1, out(again));
-  assert.match(readFileSync(file, 'utf8'), /^seq: 2$/m);
+  assert.equal(readHeader(file, 'seq'), 2);
   assert.equal(s.run(['update', '2', '--seq', '7']).status, 0);
 });
 
@@ -211,7 +210,7 @@ test('review: a scalar comma depends_on ("1,2") counts as two references in move
   const s = solo(t);
   for (const n of ['alpha job', 'beta job', 'gamma job']) assert.equal(s.run(NEW(n)).status, 0);
   const path = itemPath(s.folder, '003-gamma-job');
-  writeFileSync(path, readFileSync(path, 'utf8').replace(/^depends_on: .*$/m, 'depends_on: "1,2"')); // a hand-written scalar
+  changeItem(path, { fm: { depends_on: '1,2' } }); // a hand-written scalar
   const mv = s.run(['move', '2', '--to-repository', 'other/proj']);
   assert.equal(mv.status, 1, out(mv)); assert.match(out(mv), /003-gamma-job depends on 002-beta-job/);
   const seq = s.run(['update', '2', '--seq', '9']);

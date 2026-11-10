@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { archivedRel, cli, consumer, itemPath, itemRel, sharedBacklog, readItem, GIT_IDENTITY } from './shared-fixtures.js';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
 
 const git = (cwd, ...args) => {

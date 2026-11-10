@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { cli, consumer, itemPath, sharedBacklog, readItem, changeItem } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog, readItem, changeItem, readStored, writeStored } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -154,7 +154,7 @@ test('query --status --json rows carry claimed_by and review_state', () => {
   assert.deepEqual(rows[free], ['', 'none']);
   ok(f, ['show', reviewed, '--agent', 'zed']); ok(f, ['update', reviewed, '--start-review', '--by', 'zed']);
   const file = itemPath(f.folder, free); // a front matter without the two keys: '' (written by hand here, never by the CLI)
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^owner:.*\n/m, '').replace(/^owned_since:.*\n/m, '').replace(/^review_state:.*\n/m, ''));
+  const stored = readStored(file); for (const k of ['owner', 'owned_since', 'review_state']) delete stored.fm[k]; writeStored(file, stored.fm, stored.body);
   const again = Object.fromEntries(JSON.parse(ok(f, ['list', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
   assert.deepEqual([again[reviewed], again[free]], [['bob', 'in_review'], ['', '']]);
 });

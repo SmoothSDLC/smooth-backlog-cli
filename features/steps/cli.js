@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parse } from '../../src/shared/frontmatter.js';
 import { step } from '../support/gherkin.js';
-import { itemNames, itemPath, readItem, slugOfName, writeItem } from '../../.agents/test/shared-fixtures.js';
+import { damageItem, itemNames, itemPath, readItem, slugOfName, writeItem } from '../../.agents/test/shared-fixtures.js';
 
 // `backlog ...` with shell-like splitting: double quotes group words, \" is a quote inside them
 export const split = s => (s.match(/"(?:[^"\\]|\\.)*"|\S+/g) ?? []).map(t => t.startsWith('"') ? t.slice(1, -1).replace(/\\"/g, '"').replace(/\\n/g, '\n') : t);
@@ -134,7 +133,7 @@ step(/^the status of item (\d+) is damaged in the backlog repository$/, (w, n) =
   const dir = w.folder();
   const name = itemNames(dir).find(f => f.startsWith(String(n).padStart(3, '0')));
   const p = itemPath(dir, slugOfName(name));
-  writeFileSync(p, readFileSync(p, 'utf8').replace(/^status: .*$/m, 'status: "pend'));
+  damageItem(p, 'status');
   const repo = w.backlogRepo();
   w.gitIn(repo, 'add', '-A'); w.gitIn(repo, 'commit', '-q', '-m', 'damaged'); w.gitIn(repo, 'push', '-q', 'origin', 'HEAD');
 });

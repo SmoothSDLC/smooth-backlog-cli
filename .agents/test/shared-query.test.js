@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, reEscape } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, reEscape, changeItem, readHeader } from './shared-fixtures.js';
 import { defaultUser } from '../../src/shared/setup.js';
 import * as store from '../../src/shared/store.js';
 
@@ -439,7 +439,7 @@ test('history reads the item history from the items, newest first, archived item
   assert.ok(all.stdout.includes('second note') && all.stdout.includes('archived'), all.stdout);
   // the database is not the source: an event that exists only in a file is listed
   const file = itemPath(f.folder, '002-beta');
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^events:\n/m, 'events:\n- "2020-01-01T00:00:00Z note - - only in the file"\n'));
+  changeItem(file, { fm: { events: ['2020-01-01T00:00:00Z note - - only in the file', ...readHeader(file, 'events')] } });
   assert.match(run('history', '2').stdout, /only in the file/);
   assert.equal(run('history', '99').status, 1);
 });

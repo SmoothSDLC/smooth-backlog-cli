@@ -6,10 +6,10 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archivedPath, archivedRel, breakIndex, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, changeItem, itemNames, itemName } from './shared-fixtures.js';
+import { archivedPath, archivedRel, breakIndex, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, changeItem, itemNames, itemName, crlfItem } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
 
 const git = (cwd, ...args) => {
@@ -296,7 +296,7 @@ for (const eol of ['\n', '\r\n', '\r']) {
 test('review P2: archive stamps status: archived into an item saved with CRLF line endings', () => {
   const f = seed();
   const p = itemPath(f.folder, '005-epsilon');
-  writeFileSync(p, readFileSync(p, 'utf8').replace(/\n/g, '\r\n'));
+  crlfItem(p);
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'crlf'); git(f.home, 'push', '-q');
   const r = run(f, 'archive', ['5']);
   assert.equal(r.status, 0, r.stderr);
@@ -385,7 +385,7 @@ test('review P2: archive inserts status: archived into an item whose front matte
   for (const eol of ['\n', '\r\n', '\r']) {
     const f = seed();
     const p = itemPath(f.folder, '005-epsilon');
-    writeFileSync(p, readFileSync(p, 'utf8').replace(/^status: .*\n/m, '').replace(/\n/g, eol));
+    changeItem(p, { fm: { status: undefined } }); crlfItem(p, eol);
     assert.ok(!/status:/.test(readFileSync(p, 'utf8').split(`${eol}---`)[1]), 'fixture has no status key');
     git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'no status'); git(f.home, 'push', '-q');
     const r = run(f, 'archive', ['5', '--force']);

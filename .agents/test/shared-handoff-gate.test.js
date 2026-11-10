@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as handoff from '../../src/team/handoff.js';
 import { cli, consumer, intoTeam, itemPath, sharedBacklog, teamMembers, readItem, GIT_IDENTITY, writeItem } from './shared-fixtures.js';
 

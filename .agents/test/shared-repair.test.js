@@ -5,8 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cli, consumer, itemName, itemPath, sharedBacklog, readItem, GIT_IDENTITY } from './shared-fixtures.js';
-import { parseItem as parse } from '../../src/shared/frontmatter.js';
+import { cli, consumer, itemName, itemPath, sharedBacklog, readItem, GIT_IDENTITY, damageItem, isDamagedItem, writeDamagedItem } from './shared-fixtures.js';
+import { parseItem as parse } from '../../src/shared/item-file.js';
 import { setField } from '../../src/shared/repair.js';
 import * as store from '../../src/shared/store.js';
 
@@ -70,7 +70,7 @@ test('restore: the previous committed version comes back, with a restored event,
   const w = world(t);
   assert.equal(w.run(...NEW).status, 0);
   assert.equal(w.run('update', '1', '--summary', 'good one').status, 0);
-  writeFileSync(w.file, readFileSync(w.file, 'utf8').replace(/^summary: .*$/m, 'summary: "cut'));
+  damageItem(w.file, 'summary');
   w.publish('damaged');
   const r = w.run('update', '1', '--restore');
   assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -84,7 +84,7 @@ test('restore: the previous committed version comes back, with a restored event,
 test('restore: an unreadable item that was committed unreadable has no earlier version; a second broken field is named in the same refusal', t => {
   const w = world(t);
   mkdirSync(dirname(w.file), { recursive: true });
-  writeFileSync(w.file, '---\nphase: 001-alpha-job\nseq: 1\nname: "also\nstatus: "cut\nrepository: acme/demo\nbranch: main\n---\nBody.\n');
+  writeDamagedItem(w.file, { phase: '001-alpha-job', seq: 1, name: 'also', status: 'cut', repository: 'acme/demo', branch: 'main' }, ['name', 'status'], 'Body.\n');
   w.publish('born damaged');
   const none = w.run('update', '1', '--restore');
   assert.equal(none.status, 1, none.stdout + none.stderr);
@@ -92,7 +92,7 @@ test('restore: an unreadable item that was committed unreadable has no earlier v
   const half = w.run('update', '1', '--status', 'pending');
   assert.equal(half.status, 2, half.stdout + half.stderr);
   assert.match(half.stderr, /item 001-alpha-job: the field name cannot be read/);
-  assert.match(readFileSync(w.file, 'utf8'), /^status: "cut/m, 'a command that leaves another field unreadable changes nothing');
+  assert.ok(isDamagedItem(w.file, 'status'), 'a command that leaves another field unreadable changes nothing');
   assert.equal(w.run('update', '1', '--status', 'pending', '--name', 'alpha job').status, 0);
   assert.equal(readItem(w.file).fm.name, 'alpha job');
 });
@@ -101,7 +101,7 @@ test('restore takes no other option; an item that is not the unreadable one is r
   const w = world(t);
   assert.equal(w.run(...NEW).status, 0);
   assert.equal(w.run('new', '--name', 'beta job', '--depends-on', 'none').status, 0);
-  writeFileSync(w.file, readFileSync(w.file, 'utf8').replace(/^status: .*$/m, 'status: "cut'));
+  damageItem(w.file, 'status');
   w.publish('damaged');
   const both = w.run('update', '1', '--restore', '--summary', 'x');
   assert.equal(both.status, 1, both.stdout + both.stderr);

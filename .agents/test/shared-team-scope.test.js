@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, intoTeam, itemPath, sharedBacklog, itemRel, GIT_IDENTITY } from './shared-fixtures.js';
+import { cli, consumer, intoTeam, itemPath, sharedBacklog, itemRel, GIT_IDENTITY, writeUnreadableItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -148,7 +148,7 @@ test('the diagnostic of an unreadable backlog of another repository does not pri
   const odd = join(f.home, 'user:review_dummy@host', 'thing');
   mkdirSync(odd, { recursive: true });
   mkdirSync(join(odd, 'phases'));
-  writeFileSync(itemPath(odd, '001-x'), '---\nthis is not a pair\n---\n'); // an item file that cannot be read
+  writeUnreadableItem(itemPath(odd, '001-x')); // an item file that cannot be read
   const r = cli(['team', 'query', '--team', 't1', '--claimable', '--scope', 'all'], { cwd: f.cons, tmp: f.t });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stderr, /backlog not read/); // the diagnostic is still there

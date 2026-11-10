@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, createdSlug, GIT_IDENTITY, itemName, itemPath, itemRel, sharedBacklog, itemNames, slugOfName } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, createdSlug, GIT_IDENTITY, itemName, itemPath, itemRel, sharedBacklog, itemNames, slugOfName, writeItem } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import { defaultUser } from '../../src/shared/setup.js';
@@ -231,8 +231,7 @@ test('review P2: a file with the name of the next item is never replaced: the it
   const f = fixture(t);
   const path = itemPath(f.folder, '001-alpha-job');
   mkdirSync(join(f.folder, 'phases'), { recursive: true });
-  const seeded = '---\nphase: 001-alpha-job\n---\nSEEDED BODY\n'; // no seq and no mirror row: the number 1 is handed out again
-  writeFileSync(path, seeded);
+  writeItem(path, { phase: '001-alpha-job' }, 'SEEDED BODY\n'); // no seq and no mirror row: the number 1 is handed out again
   const first = node(f, NONE);
   assert.equal(first.status, 0, first.stderr);
   assert.ok(readFileSync(path, 'utf8').includes('SEEDED BODY'));

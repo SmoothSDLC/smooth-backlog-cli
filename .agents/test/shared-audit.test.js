@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, archivedPath, reEscape, changeItem, readHeader, bomItem } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, archivedPath, reEscape, changeItem, readHeader } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { gitIn } from './shared-concurrency.js';
 
@@ -92,11 +92,10 @@ test('audit t7: list all-branches and team query --by-branch survive an item who
   }
 });
 
-test('audit t6: a BOM file keeps its front matter; a phases/ file without front matter is skipped, reported and never rewritten', t => {
+test('audit t6: a phases/ file without front matter is no item and is never rewritten', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
   const alpha = itemPath(s.folder, '001-alpha-job');
-  bomItem(alpha); // saved by an editor that adds a BOM
   const readme = join(s.folder, 'phases', 'README.md'); const note = '\nnotes for humans\n\n## not front matter\n';
   writeFileSync(readme, note);
   const r = s.run(NEW('beta job', '--priority', '0'));
@@ -105,20 +104,7 @@ test('audit t6: a BOM file keeps its front matter; a phases/ file without front 
   assert.equal(readHeader(alpha, 'name'), 'alpha job'); assert.equal(readHeader(alpha, 'seq'), 1); // fields kept, number not reused
   assert.ok(existsSync(itemPath(s.folder, '002-beta-job')));
   const q = s.run(['list', 'all-branches']);
-  assert.equal(q.status, 0, out(q)); assert.match(q.stdout, /phases\/README\.md has no front matter/);
-});
-
-test('review: archive stamps the status of a file that starts with a BOM and keeps the BOM', t => {
-  const s = solo(t);
-  assert.equal(s.run(NEW('alpha job')).status, 0);
-  assert.equal(s.run(NEW('beta job')).status, 0);
-  const path = itemPath(s.folder, '001-alpha-job');
-  bomItem(path);
-  const r = s.run(['archive', '1', '--force']);
-  assert.equal(r.status, 0, out(r));
-  const moved = readFileSync(archivedPath(s.folder, '001-alpha-job', 'phases'), 'utf8');
-  assert.ok(moved.startsWith('\uFEFF---\n')); assert.match(moved, /^status: "archived"$/m);
-  assert.doesNotMatch(moved, /status: "pending"/);
+  assert.equal(q.status, 0, out(q)); assert.doesNotMatch(q.stdout + q.stderr, /README/, 'a README is no item and is not reported');
 });
 
 test('review: a phases/ file without front matter is no item for new, query or update (no fake mirror row, never rewritten)', t => {
@@ -237,7 +223,7 @@ test('review P2: the cycle check follows the outgoing edges of an item whose fil
   const s = solo(t);
   for (const n of ['alpha job', 'beta job']) assert.equal(s.run(NEW(n)).status, 0);
   const path = itemPath(s.folder, '002-beta-job');
-  changeItem(path, { fm: { phase: undefined } });
+  changeItem(path, { fm: { phase: '' } });
   assert.equal(s.run(['list', 'all-branches']).status, 0); // ingests the edit
   assert.equal(s.run(['update', '2', '--set-depends-on', '1']).status, 0);
   const r = s.run(['update', '1', '--set-depends-on', '2']);

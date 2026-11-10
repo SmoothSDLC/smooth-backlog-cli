@@ -212,7 +212,7 @@ export function teamMembers(home, team, members) {
 }
 
 // the keys the item file requires, for a test that writes an item through store.write with only the keys it is about
-export const ENVELOPE = { repository: '', branch: '', updated: '2026-10-01T00:00:00Z' };
+export const ENVELOPE = { name: '', repository: '', branch: '', updated: '2026-10-01T00:00:00Z' };
 
 // ---- item files: the tests reach an item file only through these helpers, so the file name and the codec are named in one place ----
 // the path of an open item (<repository folder>/phases/<name>)
@@ -245,15 +245,11 @@ export const itemOfText = text => parseItem(text);
 export const readHeader = (path, key) => readItem(path).fm[key];
 // the text of an item file as it is on disk
 export const readItemFileText = path => readFileSync(path, 'utf8');
-// the text of a whole item built from header values and a body, as the CLI writes it
-export const itemText = (fm, body) => dumpItem(fm, body);
-// writes a whole item file (creating the folder) from header values and a body
-// A key the file format requires and the header lacks is filled (the number and slug from the file name, the others empty), so that a test names only what it is about.
-export function writeItem(path, fm, body) {
-  const slug = itemSlug(path);
-  const full = { seq: Number(/^\d+/.exec(slug)?.[0] ?? 0), phase: slug, name: '', repository: '', branch: '', updated: '', ...fm };
-  mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, itemText(full, body));
-}
+// the text of a whole item built from header values and a body, as the CLI writes it. A key the file format requires and the header lacks
+// is filled (the number from the slug, the others empty), so that a test names only what it is about.
+export const itemText = (fm, body) => dumpItem({ seq: Number(/^\d+/.exec(fm.phase ?? '')?.[0] ?? 0), phase: '', name: '', repository: '', branch: '', updated: '', ...fm }, body);
+// writes a whole item file (creating the folder) from header values and a body; the slug defaults to the one in the file name
+export function writeItem(path, fm, body) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, itemText({ phase: itemSlug(path), ...fm }, body)); }
 // rewrites an item file with changed header values (an object merged over the old ones; a value undefined removes the key) and/or a changed body (a string)
 export function changeItem(path, { fm = {}, body } = {}) {
   const item = readItem(path); const next = { ...item.fm, ...fm };
@@ -273,7 +269,3 @@ export function writeDamagedItem(path, fm, keys, body) { writeStored(path, fm, b
 // the message of an item whose file cannot be read at all
 export const UNREADABLE_ITEM_MESSAGE = /the file is not valid JSON/;
 export function writeUnreadableItem(path, body = '') { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, `not json\n${body}`); }
-// the file as an editor that adds a byte order mark saves it
-export const bomItem = path => writeFileSync(path, `\uFEFF${readFileSync(path, 'utf8')}`);
-// the file with other line endings
-export const crlfItem = (path, eol = '\r\n') => writeFileSync(path, readFileSync(path, 'utf8').replace(/\n/g, eol));

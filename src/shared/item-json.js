@@ -84,10 +84,12 @@ export function fromItemJson(text) {
     return lineOf(e);
   });
   // A null envelope value (an empty updated_by) is an absent key, so that reading what was written gives back the header object that was given.
-  const fm = { ...doc.fields };
+  // The envelope keys come first (in the order of the header of earlier items), then the fields, then the history.
+  const fm = {};
   const put = (k, v) => { if (v !== undefined && v !== null && !(v === '' && k === 'updated_by')) fm[k] = v; };
-  put('seq', seq); put('phase', slug); put('name', name); put('team', doc.team); put('repository', repository); put('branch', branch);
+  put('phase', slug); put('seq', seq); put('name', name); put('team', doc.team); put('repository', repository); put('branch', branch);
   put('created', created); put('updated', updated); put('updated_by', updatedBy);
+  for (const [k, v] of Object.entries(doc.fields)) if (!Object.hasOwn(fm, k)) fm[k] = v; // a field called phase cannot replace the slug
   if (events.length) fm.events = events;
   return { fm, body: doc.body };
 }

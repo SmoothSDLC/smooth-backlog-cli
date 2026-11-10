@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archivedPath, archivedRel, breakIndex, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, changeItem, itemNames, itemName, crlfItem, ENVELOPE } from './shared-fixtures.js';
+import { archivedPath, archivedRel, breakIndex, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, changeItem, itemNames, itemName, ENVELOPE } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
@@ -272,38 +272,6 @@ test('review P2: move --to-repository refuses an item other items depend on, by 
 const mirror = f => JSON.stringify(['phases', 'archive'].flatMap(sub => names(f.folder, sub).map(n => readFileSync(join(f.folder, sub, n), 'utf8')))); // the item files are the whole state
 
 
-for (const eol of ['\n', '\r\n', '\r']) {
-  test(`review P2: archive replaces a whole escaped multiline status scalar (${JSON.stringify(eol)})`, () => {
-    const f = seed();
-    const p = itemPath(f.folder, '002-beta');
-    const source = '\uFEFF' + readFileSync(p, 'utf8').replace(/^status: .*$/m, 'status: "pend\\\n  ing"').replace(/\n/g, eol);
-    writeFileSync(p, source);
-    const before = parse(source);
-    assert.equal(before.fm.status, 'pending');
-    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'multiline status'); git(f.home, 'push', '-q');
-    const r = run(f, 'archive', ['2', '--force']);
-    assert.equal(r.status, 0, r.stdout + r.stderr);
-    const text = readFileSync(archivedPath(f.folder, '002-beta', 'phases'), 'utf8');
-    const { events, ...rest } = parse(text).fm;
-    assert.ok(events.some(l => l.includes(' archived ')), 'the archive is recorded in the item');
-    assert.deepEqual({ fm: rest, body: parse(text).body }, { fm: { ...before.fm, status: 'archived' }, body: before.body });
-    assert.ok(text.startsWith(`\uFEFF---${eol}`), 'BOM and line endings survive');
-    assert.equal(text.slice(text.indexOf(`${eol}---${eol}`) + (eol + '---' + eol).length), source.slice(source.indexOf(`${eol}---${eol}`) + (eol + '---' + eol).length), 'body bytes survive');
-    assert.equal(rowOf(f.folder, '002-beta').status, parse(text).fm.status);
-  });
-}
-
-test('review P2: archive stamps status: archived into an item saved with CRLF line endings', () => {
-  const f = seed();
-  const p = itemPath(f.folder, '005-epsilon');
-  crlfItem(p);
-  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'crlf'); git(f.home, 'push', '-q');
-  const r = run(f, 'archive', ['5']);
-  assert.equal(r.status, 0, r.stderr);
-  assert.equal(fm(f.folder, archivedRel('005-epsilon', 'phases')).fm.status, 'archived');
-  assert.match(readFileSync(archivedPath(f.folder, '005-epsilon', 'phases'), 'utf8'), /status: "archived"\r\n/);
-});
-
 test('review P1: archive and move --to-branch whose index write is refused put the files back and commit nothing', () => {
   for (const args of [['archive', ['5']], ['move', ['2', '--to-branch', 'release']]]) {
     const f = seed();
@@ -381,26 +349,10 @@ test('review P2: after a cross-repository move both queues are dense (the source
   assert.deepEqual(ranks(f.other, 'main'), [0, 1]);
 });
 
-test('review P2: archive inserts status: archived into an item whose front matter has no status key (LF, CRLF, lone CR)', () => {
-  for (const eol of ['\n', '\r\n', '\r']) {
-    const f = seed();
-    const p = itemPath(f.folder, '005-epsilon');
-    changeItem(p, { fm: { status: undefined } }); crlfItem(p, eol);
-    assert.ok(!/status:/.test(readFileSync(p, 'utf8').split(`${eol}---`)[1]), 'fixture has no status key');
-    git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'no status'); git(f.home, 'push', '-q');
-    const r = run(f, 'archive', ['5', '--force']);
-    assert.equal(r.status, 0, JSON.stringify(eol) + r.stderr);
-    const text = readFileSync(archivedPath(f.folder, '005-epsilon', 'phases'), 'utf8');
-    assert.equal(parse(text).fm.status, 'archived', JSON.stringify(eol));
-    assert.equal(text.split('status:').length, 2);
-    assert.ok(text.includes(`${eol}status: "archived"${eol}`), JSON.stringify(eol));
-  }
-});
-
-test('review P2: move adds the keys it sets (branch, repository) to an item whose front matter lacks them, and the item is listed in the index of its new place', () => {
+test('review P2: move sets the values (branch, repository) of an item that holds them empty, and the item is listed in the index of its new place', () => {
   const f = seed();
   const p = itemPath(f.folder, '002-beta');
-  changeItem(p, { fm: { branch: undefined, repository: undefined, priority: undefined } });
+  changeItem(p, { fm: { branch: '', repository: '', priority: undefined } }); // the file format requires both keys: an item without values holds them empty
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'no keys'); git(f.home, 'push', '-q');
   assert.equal(run(f, 'move', ['2', '--to-branch', 'release']).status, 0);
   assert.equal(fm(f.folder, itemRel('002-beta')).fm.branch, 'release');

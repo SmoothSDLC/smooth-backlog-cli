@@ -7,7 +7,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSyn
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape, changeItem, itemOfText, ENVELOPE } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape, changeItem, itemOfText, readItem, ENVELOPE } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
@@ -405,9 +405,9 @@ for (const [name, args] of [
   writeFileSync(join(a.home, 'private.txt'), 'unstaged private content');
   writeFileSync(join(a.folder, 'private.md'), 'pre-existing file inside the command folder');
   const item = itemPath(a.folder, '001-one');
-  writeFileSync(item, readFileSync(item, 'utf8') + '\npre-existing staged note\n');
+  changeItem(item, { body: readItem(item).body + '\npre-existing staged note\n' });
   gitIn(a.home, 'add', `acme/demo/${itemRel('001-one')}`);
-  writeFileSync(item, readFileSync(item, 'utf8') + '\npre-existing unstaged note\n');
+  changeItem(item, { body: readItem(item).body + '\npre-existing unstaged note\n' });
   const before = state(a.home);
   const hook = join(bare, 'hooks', 'pre-receive');
   writeFileSync(hook, '#!/bin/sh\necho "permanently read-only" >&2\nexit 1\n'); chmodSync(hook, 0o755);
@@ -530,26 +530,29 @@ test('review P1: publication refuses update --seq when another clone allocates t
   assert.equal(q.status, 0, q.stdout + q.stderr);
 });
 
-test('review P1: publication preflight rejecting an appended conflict marker restores starting files, database and staging', t => {
+test('review P1: publication preflight rejecting a conflict marker restores starting files, database and staging', t => {
   const [a, b, { bare }] = writers(t);
   assert.equal(cli(NEW('alpha'), { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
   const item = itemPath(b.folder, '001-alpha');
-  writeFileSync(item, readFileSync(item, 'utf8') + '\nprior staged note\n');
+  changeItem(item, { body: readItem(item).body + '\nprior staged note\n' });
   gitIn(b.home, 'add', `acme/demo/${itemRel('001-alpha')}`);
-  writeFileSync(item, readFileSync(item, 'utf8') + '\nprior unstaged note\n');
+  changeItem(item, { body: readItem(item).body + '\nprior unstaged note\n' });
   writeFileSync(join(b.home, 'private.txt'), 'private staging');
   gitIn(b.home, 'add', 'private.txt');
   const before = state(b.home); const remote = gitIn(bare, 'rev-parse', 'main');
-  const r = cli(['update', '1', '--append', '<<<<<<< example'], { cwd: b.cons, tmp: b.tmp });
+  // an item holds its text in JSON strings, so no text a command writes puts a marker at the start of a line: the marker is in another file of the folder
+  writeFileSync(join(b.folder, 'conflict.json'), '<<<<<<< example\n'); const before2 = state(b.home);
+  const r = cli(['update', '1', '--append', 'rejected note'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(r.status, 3, r.stdout + r.stderr);
   assert.match(r.stderr, /conflicts/i);
-  assert.deepEqual(state(b.home), before, 'preflight failure restores Markdown, HEAD and index byte for byte');
+  assert.deepEqual(state(b.home), before2, 'preflight failure restores the items, HEAD and index byte for byte');
   assert.equal(gitIn(bare, 'rev-parse', 'main'), remote, 'nothing was published');
   assert.ok(!existsSync(join(b.home, '.git', 'smooth-backlog-cli-journal.json')));
+  rmSync(join(b.folder, 'conflict.json'));
   const next = cli(['update', '1', '--append', 'valid follow-up'], { cwd: b.cons, tmp: b.tmp });
   assert.equal(next.status, 0, next.stdout + next.stderr);
-  assert.doesNotMatch(gitIn(bare, 'show', `main:acme/demo/${itemRel('001-alpha')}`), /<<<<<<< example/);
+  assert.doesNotMatch(gitIn(bare, 'show', `main:acme/demo/${itemRel('001-alpha')}`), /rejected note/);
 });
 
 
@@ -642,7 +645,7 @@ test('item 045: an item without a phase field keeps the identity of its file nam
   const { b, bare, result } = await race(t, [NEW('alpha')],
     [...NEW('dependent'), '--depends-on', '001-alpha'], ['update', '1', '--seq', '5'], { afterSeed: a => {
       const file = itemPath(a.folder, '001-alpha');
-      changeItem(file, { fm: { phase: undefined } }); // an older file: its slug is its file name
+      changeItem(file, { fm: { phase: '' } }); // an older file: its slug is its file name
       gitIn(a.home, 'commit', '-qam', 'an item without a phase field'); gitIn(a.home, 'push', '-q');
     } });
   rejectedPublication(t, b, bare, result, /depends on.*001-alpha/);
@@ -696,7 +699,7 @@ test('publication identity: an upstream archived sequence colliding with an exis
 
 test('publication safety: upstream conflict markers abort an otherwise disjoint write', async t => {
   const { b, bare, result } = await fileRace(t, [NEW('alpha')], ['update', '1', '--append', 'rejected note'], a => {
-    writeFileSync(join(a.folder, 'conflict.md'), '<<<<<<< upstream\nunfinished\n');
+    writeFileSync(join(a.folder, 'conflict.json'), '<<<<<<< upstream\nunfinished\n');
   });
   assert.equal(result.status, 3, result.stdout + result.stderr);
   assert.match(result.stderr, /unresolved conflicts/);

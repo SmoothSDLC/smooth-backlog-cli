@@ -125,7 +125,7 @@ test('a plain update still restores an unreadable team item: --restore names no 
   const s = teamItem(f);
   const edit = asTeam(f, 'ann', [s, '--summary', 'good one']);
   assert.equal(edit.status, 0, edit.stdout + edit.stderr);
-  damageItem(file(f, s), 'summary');
+  damageItem(file(f, s), 'name');
   const git = (...a) => execFileSync('git', a, { cwd: f.home, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
   git('add', '-A'); git('commit', '-q', '-m', 'damaged'); git('push', '-q');
   const r = run(f, ['update', s, '--restore']);

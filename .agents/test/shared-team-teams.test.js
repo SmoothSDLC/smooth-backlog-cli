@@ -43,7 +43,7 @@ test('the runner sets the team on the work item and claims it for the lead; --se
   assert.deepEqual([fm(f, w).team, fm(f, w).claimed_by, fm(f, w).stage], ['t1', 'lead', undefined]); // a work item has no stage
   r = ok(f, ['update', w, '--set-team', '']);
   assert.match(r.stdout, /updated \(team=none\)/);
-  assert.equal(fm(f, w).team, '');
+  assert.equal(fm(f, w).team, undefined); // a cleared team is no team key in the file
 });
 
 test('backlog new --team writes the team and starts the item as new; --split-from inherits the team', () => {

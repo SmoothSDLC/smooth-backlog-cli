@@ -59,8 +59,8 @@ test('096: backlog update --append on an item that carries both keys leaves the 
   ok(f, ['update', s, '--append', 'a note', '--by', 'me']);
   assert.deepEqual(has(f, s), []);
   const shown = spawnSync('git', ['-C', f.home, 'show', 'HEAD', '--', '.'], { encoding: 'utf8' }).stdout;
-  assert.match(shown, /^-work_class:/m);
-  assert.match(shown, /^-review_classes:/m);
+  assert.match(shown, /^-\s+"work_class":/m);
+  assert.match(shown, /^-\s+"review_classes":/m);
 });
 
 test('096: a priority move rewrites no neighbour: the keys stay in it until its own next write drops them', () => {

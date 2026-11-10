@@ -31,7 +31,7 @@ function withEnv(t, vars) {
 }
 
 const item = (n, extra = {}) => ({
-  phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', repository: 'acme/demo', branch: 'main', priority: n - 1, ...extra,
+  phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status: 'pending', repository: 'acme/demo', branch: 'main', updated: '2026-10-01T00:00:00Z', priority: n - 1, ...extra,
 });
 // An item file as it is: store.write would drop the rank an earlier build kept in the item, and these tests place such items.
 function putItem(folder, fm, rel = itemRel(fm.phase)) {

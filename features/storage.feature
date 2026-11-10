@@ -55,12 +55,12 @@ Feature: Storage - where the item files live changes nothing about the commands
     When I run `backlog list`
     Then the command succeeds
     And the output does not contain "phases/"
-    And the output does not contain ".md"
+    And the output does not contain ".json"
     And the output does not contain the backlog folder path
     When I run `backlog next`
     Then the command succeeds
     And the output does not contain "phases/"
-    And the output does not contain ".md"
+    And the output does not contain ".json"
 
   Scenario: the version is printed
     When I run `backlog --version`

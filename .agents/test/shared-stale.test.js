@@ -197,7 +197,7 @@ test('a file without front matter holds its number in the mark', () => {
   const t = mkdtempSync(join(tmpdir(), 'stale-seq-')); dirs.push(t);
   const folder = join(t, 'acme', 'demo');
   mkdirSync(join(folder, 'phases'), { recursive: true });
-  writeFileSync(itemPath(folder, '001-x'), 'a note, not an item\n');
+  writeFileSync(join(folder, 'phases', '001-x.md'), 'a note, not an item\n'); // a markdown file without a header is no item
   assert.equal(store.nextSeqFor(folder, itemName('-x')), 2);
   assert.equal(store.nextSeqFor(folder, itemName('-y')), 2); // the file's name holds its number: the highest number ever used is 1
 });

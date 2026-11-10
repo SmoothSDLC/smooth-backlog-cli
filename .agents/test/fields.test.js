@@ -47,11 +47,11 @@ test('new takes --title and --description as the owner\'s words for --name and -
   const s = createdSlug(run(f, ['new', '--title', 'Parser fix', '--objective', 'o', '--summary', 'First sentence.', '--summary', 'Second sentence.', '--depends-on', 'none',
     '--description', '## Definition of done\n\n- [ ] the parser reads the sample']).stdout);
   assert.equal(s, '001-parser-fix');
-  assert.equal(fm(f, s).title, 'Parser fix');
+  assert.equal(fm(f, s).name, 'Parser fix');
   assert.equal(fm(f, s).summary, 'First sentence.\nSecond sentence.');
   assert.ok(readFileSync(itemPath(f.folder, s), 'utf8').includes('the parser reads the sample'));
   const both = run(f, ['new', '--title', 'a', '--name', 'b', '--depends-on', 'none']);
   assert.equal(both.status, 2); assert.match(both.stderr, /--title and --name are the same option/);
   const old = createdSlug(run(f, ['new', '--name', 'Old words', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', 'text']).stdout);
-  assert.equal(fm(f, old).title, 'Old words');
+  assert.equal(fm(f, old).name, 'Old words');
 });

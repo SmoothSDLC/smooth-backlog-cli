@@ -283,7 +283,7 @@ SMOOTH_BACKLOG_CLI_RUN_HOOK names an executable, and no child process when the v
 Options:
   --status STATUS
       The new status, any word, stored exactly as typed (in_progress stays in_progress). closed finishes the item and completes
-      it; done and archived are finished words too, but only closed sets the completion time; archived is refused (backlog archive
+      it; done is a finished word too and sets the completion time as well; archived is refused (backlog archive
       moves a finished item); any other word is free text and keeps the item open.
   --branch BRANCH
       Refused by design: the branch of an item is not changed here. Use backlog move --to-branch instead.

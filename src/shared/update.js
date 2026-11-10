@@ -8,7 +8,7 @@ import { BacklogError } from '../errors.js';
 import { itemSlug, readItemFile } from './item-file.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { repairUnreadable } from './repair.js';
-import { isArchived, isOpen, lifted, normalise } from './status.js';
+import { isArchived, isFinished, isOpen, lifted, normalise } from './status.js';
 import { assertInside, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -300,7 +300,7 @@ async function change(a, folder, repo, team) {
     }
     if (gate.text) body = `${rstrip(body)}\n\n${gate.text}\n`;
   }
-  const completing = a.status === 'closed' || event === 'closed';
+  const completing = isFinished(a.status) || event === 'closed';
   if (completing && !fm.completed) fm.completed = store.now();
   store.stamp(fm);
   if (a.append) body = `${rstrip(body)}\n\n${a.append}\n`;

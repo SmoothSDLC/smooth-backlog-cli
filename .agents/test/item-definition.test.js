@@ -75,7 +75,10 @@ test('new writes no review_state or reviewer, --split-from writes parent, done s
     assert.equal(fmOf(three).status, 'In_Progress'); // as typed
     assert.match(run(['new', '--name', 'x', '--force']).stderr, /unrecognized arguments: --force/);
     ok(['update', '3', '--status', 'done']);
-    assert.equal(fmOf(three).status, 'done'); // as typed, and a finished word
+    assert.equal(fmOf(three).status, 'done'); // as typed, and a finished word that stamps completed
+    assert.ok(fmOf(three).completed);
+    assert.ok(!fmOf(two).completed && !fmOf(one).completed); // an open word does not
+    ok(['update', '2', '--status', 'blocked']); assert.ok(!fmOf(two).completed);
     assert.deepEqual(JSON.parse(ok(['list', 'done', '--json']).stdout).phases.map(r => r.slug), [three]);
     ok(['done', '1']);
     assert.equal(fmOf(one).status, 'closed'); assert.ok(fmOf(one).completed);

@@ -104,7 +104,7 @@ async function archive(a, rows, { repo, folder, guard }) {
   const from = relative(folder, resolve(src)).split('\\').join('/');
   const to = `archive/${from}`; // the same path under archive/ (archive.py:76-77)
   store.assertNoSymlinks(folder, join(folder, to)); // a link at archive/ or archive/phases/ would take the move outside
-  if (a['dry-run']) { say(`ℹ️  [dry-run] would archive ${row.slug} and mark it archived`); return 0; }
+  if (a['dry-run']) { say(`ℹ️  [dry-run] would archive ${row.slug} and move it to the archive`); return 0; }
 
   if (existsSync(join(folder, to))) return refuse(`an archived item named ${row.slug} already exists; archiving it again would replace that item`);
   mkdirSync(join(folder, to, '..'), { recursive: true });

@@ -283,7 +283,7 @@ async function change(a, folder, repo, team) {
   }
   if (team) team.fieldsAfter(a, { fm, changes });
   const holder = fm.claimed_by || '';
-  const todo = team ? team.step(a, { fm, body, begun, slug: row.slug, folder, repo, statusBefore, given: [...SETTABLE, 'severity'].filter(k => a[k] !== undefined) }) : plainStep(a, { fm, slug: row.slug, folder, repo }); // --severity is a field edit too
+  const todo = team ? team.step(a, { fm, body, begun, path: row.path, slug: row.slug, folder, repo, statusBefore, given: [...SETTABLE, 'severity'].filter(k => a[k] !== undefined) }) : plainStep(a, { fm, slug: row.slug, folder, repo }); // --severity is a field edit too
   if (todo.refuse) return refuse(todo.refuse);
   const { event } = todo;
   if (todo.text) {

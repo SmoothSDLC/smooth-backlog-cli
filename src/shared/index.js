@@ -192,6 +192,7 @@ const num = v => (typeof v === 'string' && INT.test(v) ? Number(v) : v);
 const txt = v => (typeof v === 'number' ? String(v) : v);
 export const HANDOFF = Object.freeze({ id: 1, slug: 'BACKLOG', title: 'Backlog', objective: 'phase anchor (no document)', path: '', sha: '', status: 'active', source_context: '' });
 
+// The row's status is a view: an item under archive/ shows 'archived' whatever its file stores (the file keeps its status; archive writes no word).
 // The items of a folder as rows (every item, archived ones too, in file order) with the priority of the live ones computed from the
 // index (the position in the branch; null for an archived item). { handoff, rows, items }.
 export function rows(folder, items = store.load(folder)) {

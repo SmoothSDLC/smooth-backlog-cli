@@ -442,7 +442,7 @@ export function runCloseGate({ fm, statusBefore, folder, repo, slug }) {
   if (missing) gate.refuse += ' A hand-off is required: run `backlog update --help` for details.';
   return gate;
 }
-export function step(a, { fm, body, slug, folder, repo, incomplete, given, before = fm, statusBefore = fm.status }) {
+export function step(a, { fm, body, path, slug, folder, repo, incomplete, given, before = fm, statusBefore = fm.status }) {
   // the hand-off flags are detected by presence, not truthiness -
   // parse accepts an empty value (update.js), so without this --handoff '' / --accept-handoff '' / --reject-handoff ''
   // select no action and fall through to a successful state change; now they select the action and are refused below.
@@ -515,7 +515,7 @@ export function step(a, { fm, body, slug, folder, repo, incomplete, given, befor
     if (work.length) return { refuse: `${slug}: incomplete item, missing ${incomplete.join(', ')}: in a team nobody claims, reviews or works it (${work.join(', ')} refused); the team lead refines it only: ${refineHow(slug, teamLead())}` };
   }
   if (!actions.length) return { event: 'state_change' };
-  const item = { fm, folder, repo, body };
+  const item = { fm, folder, repo, body, path };
   try {
     switch (actions[0]) {
       case 'refine-start': return refineStart(item, a.by, { force: a.force });

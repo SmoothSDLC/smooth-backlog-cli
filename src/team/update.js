@@ -4,7 +4,7 @@ import { checkRefs } from '../shared/safety.js';
 import * as store from '../shared/store.js';
 import { run as runUpdate } from '../shared/update.js';
 import { foreignItem, isForeign } from '../shared/dependencies.js';
-import { isFinished, isOpen } from '../shared/status.js';
+import { isArchived, isFinished, isOpen } from '../shared/status.js';
 import { inProgress } from '../shared/wip-limits.js';
 import { asList, rstrip, strip } from '../shared/text.js';
 import { caller, closeNow, headline, missingFields, reviewRefusal, runCloseGate, shutdown, step } from './lifecycle.js';
@@ -21,7 +21,7 @@ export const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'refine-start
 const claimOf = (agent, claim) => ({ ...claim, agent, verify({ item, items, folder, name, find, slug }) {
   for (const d of asList(item.fm.depends_on)) {
     const target = isForeign(d) ? foreignItem(folder, d) : find(d);
-    if (!target || !isFinished(isForeign(d) ? target.status : target.fm.status)) return `${slug(item)} dependencies not done: ${d}`;
+    if (!target || !(isArchived(target) || isFinished(isForeign(d) ? target.status : target.fm.status))) return `${slug(item)} dependencies not done: ${d}`;
   }
   const wip = claim.reclaim ? null : wipRefusal(folder, name, item.fm, agent, slug(item));
   if (wip) return `${slug(item)}: ${wip}`;

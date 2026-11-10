@@ -149,6 +149,19 @@ test('059.4: a done producer without a handoffs key (legacy) lets the dependent 
   gate(f, 'legacy', p, d, null);
 });
 
+test('an item archived with --force counts as finished for a team claim: it keeps its status, the path says archived', () => {
+  const f = fixture();
+  const p = make(f, 'forced producer', 'none');
+  const d = make(f, 'dependent job', p, [...COMPLETE]);
+  ok(f, ['show', d, '--agent', 'ada']);
+  teamMembers(f.home, 't1', ['ada']);
+  assert.match(run(f, ['update', d, '--claim', 'ada']).stdout, /dependencies not done/); // open and live: blocks
+  ok(f, ['archive', p, '--force']);
+  assert.equal(readItem(itemPath(f.folder, p).replace('/phases/', '/archive/phases/')).fm.status, 'pending');
+  const claim = run(f, ['update', d, '--claim', 'ada']);
+  assert.equal(claim.status, 0, claim.stdout + claim.stderr);
+});
+
 // The cross-repository gate (rex round 2, finding 4): a done producer of another repository of the backlog clone,
 // with an accepted and with an unsatisfied record.
 function foreignFixture(prefix) {

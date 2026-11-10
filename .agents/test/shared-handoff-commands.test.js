@@ -147,6 +147,8 @@ test('059.2: recordHandoff refuses without a --by, for an archived item, and for
   assert.match(noBy.refuse, /by/);
   const archived = recordHandoff({ ...p.ctx, fm: { ...p.ctx.fm, status: 'archived' } }, { dependent: '2', ...RECORD });
   assert.match(archived.refuse, /archived/);
+  const byPath = recordHandoff({ ...p.ctx, path: 'archive/phases/001-x.json', fm: { ...p.ctx.fm, status: 'closed' } }, { dependent: '2', ...RECORD });
+  assert.match(byPath.refuse, /archived/); // archived by its path, the status word is no part of it
   const other = recordHandoff(p.ctx, { dependent: '2', ...RECORD, by: 'other-agent' });
   assert.match(other.refuse, /claimed by agent-a/);
   assert.ok(!other.refuse.includes('not one of'), 'the claimer refusal, not the dependents refusal');

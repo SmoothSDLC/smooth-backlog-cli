@@ -383,7 +383,7 @@ test('075: archive --dry-run names the move and changes nothing', () => {
   const file = readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8');
   const r = run(f, 'archive', ['5', '--dry-run']);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, 'ℹ️  [dry-run] would archive 005-epsilon and mark it archived\n');
+  assert.equal(r.stdout, 'ℹ️  [dry-run] would archive 005-epsilon and move it to the archive\n');
   assert.equal(r.stderr, '');
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head, 'no commit');
   assert.equal(readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8'), file, 'the file is untouched');
@@ -547,7 +547,7 @@ test('057: archive and move print the slug and no path', () => {
   const f = seed();
   const outputs = [];
   const runs = (script, args) => { const r = run(f, script, args); outputs.push(r.stdout + r.stderr); return r; };
-  assert.equal(runs('archive', ['5', '--dry-run']).stdout, 'ℹ️  [dry-run] would archive 005-epsilon and mark it archived\n');
+  assert.equal(runs('archive', ['5', '--dry-run']).stdout, 'ℹ️  [dry-run] would archive 005-epsilon and move it to the archive\n');
   assert.match(runs('archive', ['5']).stdout, /^📦 005-epsilon archived\n/);
   assert.equal(runs('archive', ['5']).stdout, 'ℹ️  005-epsilon already archived\n');
   assert.equal(runs('move', ['5', '--to-branch', 'release']).stdout,

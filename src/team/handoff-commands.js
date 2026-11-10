@@ -1,11 +1,12 @@
 // the logic of the hand-off commands of recordHandoff is the producer's --handoff,
 // acceptHandoff and rejectHandoff the team lead's --accept-handoff / --reject-handoff. Each takes
-// ctx = {fm, body, slug, folder, repo} and the options, changes nothing on disk, and returns
+// ctx = {fm, body, slug, folder, repo, path} and the options, changes nothing on disk, and returns
 // {refuse} (the text after "❌ ") or {fm: {<keys to set, in the stored form>}, text: <the block to append
 // to the body>, event}. The data rules are 059.1's src/team/handoff.js; the integration slice calls
 // these from src/team/lifecycle.js.
 import { decodeList, dependentsOf, edgeState, encode, makeReceipt, makeRecord, receiptBlock, recordBlock } from './handoff.js';
 import { now } from '../shared/store.js';
+import { isArchived } from '../shared/status.js';
 import { strip } from '../shared/text.js';
 
 const source = ctx => `${ctx.repo}#${ctx.fm.seq}`;
@@ -26,7 +27,7 @@ const noRecord = (ctx, dependent) => {
 export function recordHandoff(ctx, { dependent, commit, contract, verification, outputs, pickup, risks, by }) {
   const { fm, folder, repo } = ctx;
   if (!by) return { refuse: "a hand-off is recorded by the item's claimer: --by <agent> is missing" };
-  if (fm.status === 'archived') return { refuse: 'status is archived; an archived item does not record a hand-off' };
+  if (isArchived(ctx) || fm.status === 'archived') return { refuse: 'the item is archived; an archived item does not record a hand-off' };
   if (by !== fm.claimed_by) return { refuse: `a hand-off is recorded by the claimer: the item is claimed by ${fm.claimed_by || 'nobody'}, not by ${by}` };
   const dependents = dependentsOf(folder, repo, fm);
   if (!dependents.some(d => d.id === dependent)) {

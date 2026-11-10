@@ -186,3 +186,31 @@ test('a person name with a control character or U+0085 is not a plain name', () 
     assert.match(problems(f)[0], /is not a plain name$/);
   }
 });
+
+// Fragments of rules: right and wrong, put in the places of a rule so that every check sees odd input.
+const FRAGMENTS = [{ is: ['$item.status', 'open'] }, { all: [] }, { any: [{ empty: '$arg.x' }] }, { not: { all: [] } }, { some: { items: '$item.parent', match: { is: ['$it.status', 'x'] } } },
+  { every: { items: [], match: { some: { items: [], match: { all: [] } } } } }, { regex: ['$arg.x', '(a+)+'] }, { regex: ['$arg.x', '$arg.p'] }, { regex: ['a', 'a**'] }, { in: ['boss', '$caller.roles'] },
+  { plus: ['$item.estimate', 1] }, { count: { items: '$item.children' } }, { roles_of: '$caller' }, { text: '$x' }, { is: ['$nope', 1] }, { is: ['$it.status', 1] }, { is: [1] }, { a: 1, b: 2 }, { bogus: [] },
+  '$item.status', '$it.status', '$arg.help', '$arg.x', '$nope', '$caller.roles', '{$item.status} {$nope}', 'first', 'last', { before: '$arg.n' }, { after: 3 }, { heading: 'h', text: 't {$arg.x}' },
+  [{ items: '$item.children', set: { status: 'open' } }], { set: { status: 'open' } }, { set: { nofield: 1 } }, { add: { estimate: 1 } }, true, false, 'open', '', 'go', '*', ['go', '*'], 'help', 'x', 5, 0, null, [], {}];
+function mutateRules(r, file) {
+  const copy = structuredClone(file); const spots = [];
+  const entry = Object.values(copy)[0];
+  (function walk(n) { if (n && typeof n === 'object') for (const k of Object.keys(n)) { spots.push([n, k]); walk(n[k]); } })(entry.rules.table);
+  for (let i = 0; i < 4; i++) {
+    const [n, k] = spots[Math.floor(r() * spots.length)];
+    if (r() < 0.15) delete n[k]; else n[k] = r() < 0.08 ? deep(r() < 0.5) : r() < 0.1 ? { [['when', 'do', 'set', 'step', 'deny', 'items', 'match', 'say', 'note'][Math.floor(r() * 9)]]: structuredClone(FRAGMENTS[Math.floor(r() * FRAGMENTS.length)]) } : structuredClone(FRAGMENTS[Math.floor(r() * FRAGMENTS.length)]);
+  }
+  return copy;
+}
+
+test('validate never throws on rules: 1500 mutated rule tables of the templates, every finding with its fix', () => {
+  const r = prng(777);
+  for (let i = 0; i < 1500; i++) checkAll(validate(mutateRules(r, template(NAMES_OF[i % 5]))));
+});
+
+test('a rule table that is not a list, or whose rules are not objects, gives findings and no crash', () => {
+  for (const table of NOT_OBJECTS) { const f = good(); f.t.rules.table = table; checkAll(validate(f)); }
+  for (const rule of NOT_OBJECTS) { const f = good(); f.t.rules.table = [rule]; checkAll(validate(f)); }
+  for (const bad of [deep(true), deep(false)]) { const f = good(); f.t.rules.table = [{ id: 'r', step: 'go', when: bad, do: {} }, { id: 's', step: 'go', do: { set: { status: bad } } }]; checkAll(validate(f)); assert.ok(errors(validate(f)).length); }
+});

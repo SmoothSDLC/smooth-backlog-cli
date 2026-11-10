@@ -3,7 +3,8 @@
 // backtracking, whatever the pattern. Not supported (a validate error): back-references, lookaround, flags, lazy quantifiers, \b.
 const MAX_PATTERN = 200, MAX_PROGRAM = 5000, MAX_COUNT = 100, MAX_TEXT = 10000;
 
-export function compile(src) {
+// strict: also refuse a quantifier that repeats another quantifier or an anchor (a**, a{2}{3}, ^*), which the matcher itself runs; validate asks for it.
+export function compile(src, strict = false) {
   if (typeof src !== 'string') throw new Error('the pattern must be text');
   if (src.length > MAX_PATTERN) throw new Error(`the pattern is longer than ${MAX_PATTERN} characters`);
   let i = 0;
@@ -27,7 +28,7 @@ export function compile(src) {
       if (i >= src.length) fail('a [ class is not closed');
       const c = src[i++];
       if (c === '\\') parts.push(esc());
-      else if (peek() === '-' && src[i + 1] !== undefined && src[i + 1] !== ']') { const hi = src[i + 1]; if (hi < c) fail(`the range ${c}-${hi} is reversed`); i += 2; parts.push(ch => ch >= c && ch <= hi); }
+      else if (peek() === '-' && src[i + 1] !== undefined && src[i + 1] !== ']') { const hi = src[i + 1]; if (hi < c) fail(hi === '\\' ? `the range ${c}-\\ ends with an escape; write the members of the class one by one` : `the range ${c}-${hi} is reversed`); i += 2; parts.push(ch => ch >= c && ch <= hi); }
       else parts.push(ch => ch === c);
     }
     i++;
@@ -54,10 +55,13 @@ export function compile(src) {
       if (c === '*') [min, max] = [0, Infinity]; else if (c === '+') [min, max] = [1, Infinity]; else if (c === '?') [min, max] = [0, 1];
       else if (c === '{' && (m = /^\{(\d+)(,(\d*))?\}/.exec(src.slice(i)))) {
         min = Number(m[1]); max = m[2] ? (m[3] === '' ? Infinity : Number(m[3])) : min; i += m[0].length - 1;
-        if (min > MAX_COUNT || (max !== Infinity && (max > MAX_COUNT || max < min))) fail(`a counted repetition is at most ${MAX_COUNT}`);
+        if (min > MAX_COUNT || (max !== Infinity && max > MAX_COUNT)) fail(`a counted repetition is at most ${MAX_COUNT}`);
+        if (max < min) fail('a counted repetition has its minimum above its maximum');
       } else return n;
       i++;
       if (peek() === '?') fail('a lazy quantifier is not supported');
+      if (strict && n.t === 'rep') fail('a quantifier cannot follow another quantifier');
+      if (strict && (n.t === '^' || n.t === '$')) fail('a quantifier cannot repeat ^ or $');
       n = { t: 'rep', n, min, max };
     }
   };

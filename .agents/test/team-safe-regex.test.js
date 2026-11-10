@@ -112,7 +112,8 @@ const REFUSED = [
   ['*a', 'a quantifier has nothing to repeat (at character 1)'],
   ['+', 'a quantifier has nothing to repeat (at character 1)'],
   ['a{101}', 'a counted repetition is at most 100 (at character 5)'],
-  ['a{3,2}', 'a counted repetition is at most 100 (at character 5)'],
+  ['a{3,2}', 'a counted repetition has its minimum above its maximum (at character 5)'],
+  ['[a-\\d]', 'the range a-\\ ends with an escape; write the members of the class one by one (at character 2)'],
   ['a??', 'a lazy quantifier is not supported (at character 2)'],
   ['\\9', '\\9 is not supported (at character 1)'],
   ['a{101,}', 'a counted repetition is at most 100 (at character 6)'],
@@ -173,4 +174,13 @@ test('case INL-05: ^(a+)+$ on 5001 characters answers at once, with no match', (
   assert.equal(result, false);
   assert.ok(ms < 500, `took ${ms} ms`);
   assert.equal(test_('a'.repeat(5000)), true);
+});
+
+test('strict compile refuses a quantifier on a quantifier or on an anchor, and the default matcher still runs them', () => {
+  for (const [p, m] of [['a**', 'a quantifier cannot follow another quantifier (at character 3)'], ['a{2}{3}', 'a quantifier cannot follow another quantifier (at character 7)'],
+    ['^*', 'a quantifier cannot repeat ^ or $ (at character 2)'], ['a$+', 'a quantifier cannot repeat ^ or $ (at character 3)']]) {
+    assert.throws(() => compile(p, true), { message: m }, p);
+    assert.doesNotThrow(() => compile(p), p);
+  }
+  for (const p of ['(a+)+', '(a*)*', 'a+b*', '(^a)*', '^a$', 'a{2,3}', '(?:ab){2}']) assert.doesNotThrow(() => compile(p, true), p);
 });

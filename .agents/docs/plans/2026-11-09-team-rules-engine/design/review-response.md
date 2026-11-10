@@ -5,6 +5,11 @@ the code and data, and implementability) found 12 High, 23 Medium and 18 Low fin
 (where), **rejected** (with the evidence), or **owner choice** (the decision in `decisions.md` that settles it). Finding ids are the
 reviews' own: A-H1 is High finding 1 of review A. Paths are relative to this `design/` folder.
 
+Rounds 1 to 4 are the record of their time; where a later round or a ruling changed an answer, the later one holds. In particular: the
+"decisions 2 to 4" that round 1 cites were answered by the owner's rulings R14 to R21, and the DEFERRED rows they blocked are resolved
+(`coverage.tsv`); R2-5 ("the whole backlog") was replaced by R3-4 (the repository folder), and R3-4's stop on a foreign folder still in
+markdown was replaced by R4-1 (an unresolved reference). The owner questions open now are the seven of `decisions.md`, round 5 below.
+
 Totals: 12 High: 11 fixed (one of them with an owner choice for its last part, decision 4), 1 owner choice (decision 2). 23 Medium:
 20 fixed, 2 rejected with evidence, 1 owner choice (decision 3). 18 Low: 17 fixed (one in part, with the remaining limit stated),
 1 owner choice (decision 2).
@@ -144,3 +149,112 @@ After round 2: `evaluator-spike/evaluator.mjs` 366 lines, `safe-regex.mjs` 108, 
 (a measurement, not a test) 48; tests: `evaluator.test.mjs` (every case of `rule-cases.json` plus the coverage check of examples),
 `numbers.test.mjs` (7 git scenarios), `teams-load.test.mjs` (9 scenarios of R21 and R22 after round 3); round 4 adds `setup.mjs` (templates and migration advice) with
 `setup.test.mjs` (3 tests) and one test of `numbers.test.mjs` (a commit rebased when upstream changed only another folder).
+
+## Round 5: reviews C and D, judged against the code and the rulings
+
+Context: review C (`review-c.md`, correctness and ruling conformance, 27 findings) and review D (`review-d.md`, implementability against
+the code, 22 findings and a sample of 98 behaviours) reviewed the round-4 design. Each finding was checked against `src/` and the rulings
+R1 to R25 before it was answered. Verdicts: **fixed** (where), **rejected** (with the evidence), **owner choice** (the question of
+`decisions.md` that settles it; each is applied provisionally, so the design is complete either way). Review C's 23 adversarial tests
+became permanent spike tests where the finding holds (all 23: cases VAL-22 to VAL-33, INL-06 to INL-11, R19A-03, R22-06, and tests in
+`teams-load.test.mjs` and `numbers.test.mjs`; ADV-23 documents the provisional answer of question 2).
+
+Totals: review C 27 findings: 22 fixed, 5 owner choices (H2: question 1; H3: question 2; M1: question 3; M5: questions 4 and 5, with
+one part rejected; L6: question 6).
+Review D 22 findings: 17 fixed, 4 owner choices (questions 1, 2, 6, 7), 1 rejected. Review D section 2, 22 missed or wrongly attributed
+behaviours: 20 fixed, 2 owner choices (questions 2, 6).
+
+### Review C
+
+| id | verdict | where |
+|---|---|---|
+| C-H1 | fixed: a refused team command now writes nothing (no SHA, no record, no copy); the refusal is decided before any write | chapter 01 section 4 step 4; `teams-load.mjs` `loadTeams`; test "a refused team command writes nothing" |
+| C-H2 | owner choice, question 1 (provisional A: the input defines the actionable repository; its own team file; SHA per user) | chapter 01 sections 1.1 (step 0) and 5; chapter 04 section 9; `teams-load.mjs` `teamsFile`; case R22-07 |
+| C-H3 | owner choice, question 2; the data loss is fixed by provisional A (`git reset --keep HEAD~1` drops only the command's own commit; verified: today's in-repository mode pushes the person's commits with every change, `src/shared/sync.js:53-62`, `:412`, `:499`) | chapter 04 sections 6 and 9; chapter 05 section 3; `numbers.mjs` `publishByRerun`; two tests |
+| C-H4 | fixed: `backlog setup` runs on a markdown backlog | chapter 06 section 2 |
+| C-H5 | fixed in the plan folder by the lead (commit 5ee67f4: `consumers.tsv` ids only, the inventory's consumer section and the rulings generic, no pointer to the removed analysis); files outside the plan folder are outside this design and listed in the hand-back | `../reference/`, `../00-owner-rulings.md` |
+| C-M1 | owner choice, question 3 (provisional A: only items without a team are renumbered; a duplicate with a team item stops that folder's team commands) | chapter 05 sections 2, 3, 4; chapter 08 section 7 |
+| C-M2 | fixed: the history scan reads merge commits (`-m`) | chapter 05 section 2; `numbers.mjs`; test "a number that exists only in a merge commit" |
+| C-M3 | fixed: a file-name number above 10^9 is an unreadable item and never part of the mark | chapter 05 section 2; `numbers.mjs` `MAX_SEQ`; test "a file-name number above the bound" |
+| C-M4 | fixed: the text now says an unresolved foreign reference reads as a missing item and the team's rule decides; a rule tells it by its empty fields | chapter 03 section 4; chapter 04 section 9 |
+| C-M5 | owner choice for two parts (per-team validity: question 4; which commands take `--show-all`: question 5); rejected for the third: the help of one user command is not blocked, because R19a says "The owner did not ask to block `--help` or `--version`" and the command matrix says every `--help` reads nothing | `decisions.md`; chapter 04 section 8 |
+| C-M6 | fixed: the spike's validate implements every error check of chapter 08 sections 3 to 6 (the 11 of the review and two more: a literal of the wrong type, a step named like a CLI flag); the team effect and true-only `archive`/`delete` are also checked at run time; pop stops on a broken rule instead of answering idle | `evaluator.mjs` `validate`, `step`, `pop`, `test`, `value`; chapters 03 sections 4, 8, 9 and 08 sections 4 to 6; cases VAL-22 to VAL-35, INL-06 to INL-09 |
+| C-M7 | fixed: `show-all` and `ask` are reserved argument names | chapter 03 section 5; chapter 08 section 6; case VAL-22 |
+| C-M8 | fixed: a reference to the own folder in the foreign form is the local number and gets every check | chapter 02 section 3; `evaluator.mjs` `typed`; cases INL-10, INL-11 |
+| C-M9 | fixed: `migrated_at` changes only when the run converted a file (or on the first run over a folder that had nothing to convert) | chapter 06 section 2.0; `setup.mjs` `recordMigration`; test "migrated_at records when the folder was migrated" |
+| C-M10 | fixed: an unparsable `.backlog/config.json` stops every command with exit 2 and is never overwritten | chapter 01 section 1.1; chapter 04 section 5; `teams-load.mjs` `readConfig`; test "an unparsable .backlog/config.json" |
+| C-M11 | fixed: `--help` reads nothing and writes nothing; it points to `backlog team query steps` | chapter 04 section 1; chapter 02 section 3 |
+| C-L1 | fixed: a record outside 0 to 24 hours old is stale | chapter 01 section 4 step 3; `teams-load.mjs`; test "a record dated in the future" |
+| C-L2 | fixed: the spike refuses a symbolic-link folder between the root and the team file | `teams-load.mjs` `assertPlain`; test "a teams_file reached through a symbolic-link folder" |
+| C-L3 | fixed: "outside the repository" compares path segments | chapter 01 section 1.1; `teams-load.mjs` `below`; case R22-06 |
+| C-L4 | fixed: the reading is stated (set to a name; an empty value names no team, as in the team lookup) | chapter 04 section 8; case R19A-03 |
+| C-L5 | fixed: `"step": []` and a reversed class range are validate errors | chapter 08 section 6; `evaluator.mjs`, `safe-regex.mjs`; cases VAL-32, VAL-33 |
+| C-L6 | owner choice, question 6 (the review's narrower reading is option B; provisional A follows the backlog the CLI resolves) | chapter 01 section 1.1; case R22-08 |
+| C-L7 | fixed: the reading is stated (R3a lists moving, archiving, importing and cleaning; R16 and R19 lift it with the flag; `done` writes `closed`, which validate reports on a team item, and `--set status=<word>` is the way to write the team's word) | chapter 04 section 8 |
+| C-L8 | fixed: the lock time-out is stated as the accepted limit, and re-runs use at most half of the lock budget | chapter 04 sections 6 and 9 |
+| C-L9 | fixed: `setup.mjs` cites section 2.0; chapter 03 section 13 counts five modules; chapter 06 says the migration validates and refreshes the SHA as validate does; the superseded answers of rounds 1 to 3 are marked at the top of this file | as listed |
+| C-L10 | fixed: `coverage.tsv` has a row for every ruling (R1 to R25, R3a, R3b, R19a), the scope note, the five carried bullets and the two lead decisions | `coverage/make-coverage.mjs` |
+| C-L11 | fixed: the flip of the SHA while two repositories are pulled at different moments is stated | chapter 01 section 4 |
+
+### Review D
+
+| id | verdict | where |
+|---|---|---|
+| D-H1 | owner choice, question 2; the loss of the person's commits is fixed by provisional A (verified at `src/shared/sync.js:53-62`, `:412`, `:499`) | chapter 04 section 6; `numbers.mjs`; test "a team re-run drops only the command's own commit" |
+| D-H2 | fixed: a writing command stages only its item files, `index.json` and `numbers.json`, never the team file, the templates or the configuration (today's `add -A` of the folder, `src/shared/sync.js:408,446,490`) | chapter 04 sections 6 and 9 |
+| D-H3 | owner choice, question 7 (verified: an older release reads only `*.md`, `src/shared/store.js:285`, hands out `nextSeq` from the files, `:299`, and the self-update refuses another schema, `src/upgrade.js:140`; a header today's parser rejects stops every command of the folder, checked with today's `parse`) | chapter 06 sections 3, 5, 6, 7 |
+| D-H4 | owner choice, question 6 (provisional A; the SHA goes to the per-user record when the repository has no configuration, so none is created) | chapter 01 section 1.1; case R22-08; test "question 6, provisional A" |
+| D-H5 | owner choice, question 1 | chapter 01 sections 1.1 and 5; chapter 04 section 9 |
+| D-M1 | fixed: the conflict and unpublished-commit guards look only at the own folder; the foreign existence and cycle checks of `backlog new` and `backlog update` are removed; the journal and the rollback are the stated exception | chapter 04 section 9; chapter 02 section 4; coverage rows INV-161, INV-403, INV-404, INV-475, INV-478 |
+| D-M2 | fixed: re-runs use at most half of the lock budget | chapter 04 sections 6 and 7 |
+| D-M3 | fixed by the re-run of question 2 (only the own commit, whose files are all in the folder); a refused reset stops with exit 3 and a text | chapter 04 section 6 |
+| D-M4 | fixed: the "migrated by an older version" advice is dropped (every build reports `0.0.0-development`, and R25 did not ask for it) | chapter 06 section 2.0; `setup.mjs`; case R25-02 |
+| D-M5 | fixed (as C-H4) | chapter 06 section 2 |
+| D-M6 | fixed: a folder in which no item has a team migrates without a team file | chapter 06 sections 3 and 5; chapter 01 section 1.1 |
+| D-M7 | fixed: clean removes only the index entries of the items it deleted; its setup run includes the templates and the advice | chapter 04 section 8 |
+| D-M8 | fixed: `templates/workflows/` is deleted from the package at the cut-over, with its mentions | chapter 01 section 1 |
+| D-M9 | fixed: the rows named are re-attributed | coverage rows INV-054 to INV-056, INV-161, INV-169, INV-177, INV-178, INV-403, INV-404, INV-406, INV-475, INV-478; group CR-DOD |
+| D-M10 | rejected as a design defect: the CLI design does not change; landing in stages with the matching changes of the scripts and skills outside this repository is the landing plan (`../implementation/01-landing-strategy.md`) | none |
+| D-L1 | fixed: `size_score` declared; undeclared fields of user items shown and kept; `backlog new` no longer writes `review_state` and `reviewer`; `list --json` keeps the `review_state` column with the stored value | chapter 02 section 4 |
+| D-L2 | fixed: `backlog update --branch` listed as a writer of `branch` | chapter 02 section 2.1 |
+| D-L3 | fixed: user `backlog archive` writes no status word | chapter 02 section 4 |
+| D-L4 | fixed: the held section of `backlog changes` reads `claimed_by` of items without a team only | chapter 04 section 8 |
+| D-L5 | fixed: an empty `team` key counts as not set | chapter 01 section 5; case COD-16 |
+| D-L6 | fixed: a JSON file name that would be too long is a failure row of the migration | chapter 06 section 5 |
+| D-L7 | fixed: the R19a guard runs in `src/main.js` before `setup` and `upgrade` | chapter 04 section 8 |
+
+### Review D section 2: the 17 missed and 5 wrongly attributed behaviours
+
+| row | behaviour | verdict | where |
+|---|---|---|---|
+| 2 (W) | `new --force` replaces an item with the same file name | fixed: removed (a new file name is always free) | chapter 02 section 4; coverage INV-169 |
+| 3 (W) | the definition-of-done placeholder of a new user item | fixed: kept as body text | chapter 02 section 4; coverage INV-178, CR-DOD |
+| 4 (M) | the body of a new team item | fixed: empty; a `note` effect writes it | chapter 04 section 2 |
+| 13 (W) | `owner` of a user item | fixed: attributed to the user definition | coverage INV-177 |
+| 14 (M) | `new` writes `review_state` and `reviewer` | fixed: no longer written | chapter 02 section 4 |
+| 15 (W) | `--depends-on` reads another folder | fixed: removed (R24) | chapter 04 section 9; coverage INV-161 |
+| 19 (M) | 250-byte file names | fixed: failure row | chapter 06 section 5 |
+| 26 (M) | `update --size_score` | fixed: field declared | chapter 02 section 4 |
+| 27 (M) | `update --branch` | fixed: writer listed | chapter 02 section 2.1 |
+| 37 (W) | `--set-depends-on` cycle walk through other folders | fixed: removed (R24) | chapter 04 section 9; coverage INV-478 |
+| 44 (M) | the journal may touch another folder | fixed: stated exception | chapter 04 section 9 |
+| 51 (M) | `changes` held section by team keys | fixed: `claimed_by` only | chapter 04 section 8 |
+| 54 (M) | `list --json` `review_state` column | fixed: kept, stored value | chapter 02 section 4 |
+| 64 (M) | `clean` runs setup again | fixed: stated with templates and advice | chapter 04 section 8 |
+| 66 (M) | `clean` drops the whole index list | fixed: only its own entries | chapter 04 section 8 |
+| 72 (M) | `archive` writes status `archived` | fixed: no status word | chapter 02 section 4 |
+| 81 (M) | setup writes `"team": ""` | fixed: empty is not set | chapter 01 section 5; case COD-16 |
+| 83 (M) | the per-user record and the team file location | owner choice, question 6 | chapter 01 section 1.1 |
+| 86 (M) | in-repository publication pushes the person's commits | owner choice, question 2 | chapter 04 section 6 |
+| 87 (M) | `push-backlog-updates: false` | fixed: no push, no re-run, stated | chapter 04 section 6 |
+| 90 (M) | refusal on unpublished commits anywhere in the clone | fixed: own folder only | chapter 04 section 9 |
+| 91 (M) | conflict refusal over every `*.md` of the clone | fixed: own folder, `*.json` | chapter 04 section 9 |
+
+Variables (R20): the four names the ruling's inventory missed were each found in the code before they were added, prefixed, to the list of
+every CLI-owned variable (chapter 01 section 5): SMOOTH_BACKLOG_CLI_RUN_HOOK (`bin/backlog.js:7,10`, `src/shared/help-parts.js:6`),
+SMOOTH_BACKLOG_CLI_RUN_LOCK_HELD (`src/shared/store.js:95,101`), SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS (`src/team/team.js:146-147`),
+SMOOTH_BACKLOG_CLI_TEST_SELF (`src/team/pop.js:20`).
+
+Spike after round 5: 26 more cases in `rule-cases.json` (288 in all), `numbers.test.mjs` 12 tests (4 more), `teams-load.test.mjs` 15
+(6 more), `setup.test.mjs` 4 (1 more); `node --test` in `evaluator-spike/` runs 320 tests, all passing. Lines: `evaluator.mjs` 408,
+`safe-regex.mjs` 108, `numbers.mjs` 80, `teams-load.mjs` 94, `setup.mjs` 31.

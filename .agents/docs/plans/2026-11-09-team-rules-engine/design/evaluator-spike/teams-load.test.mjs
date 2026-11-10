@@ -1,7 +1,7 @@
 // R21 and R22 scenarios on real files in a temporary folder: node --test teams-load.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadTeams, missingText, recordPaths, teamsFile } from './teams-load.mjs';
@@ -112,4 +112,62 @@ test('a read-only checkout and an unwritable state folder: the command proceeds,
   const sha = w.cfg().teams_file_sha;
   chmodSync(join(w.top, '.backlog'), 0o755);
   assert.equal(sha, undefined);
+});
+
+// round 5: the adversarial tests of review C that hold (ADV-01 to ADV-04), and the provisional answers to questions 1 and 6
+test('a refused team command writes nothing: no SHA, no record, no copy, even when another team of the file is valid (review C H1)', t => {
+  const w = world(t);
+  w.put(twoTeams(true));
+  assert.throws(() => w.load('other', T0), e => e.exit === 2);
+  assert.equal(w.cfg().teams_file_sha, undefined);
+  assert.equal(existsSync(recordPaths(w.stateDir, w.file()).record), false);
+  assert.equal(existsSync(recordPaths(w.stateDir, w.file()).copy), false);
+  assert.throws(() => w.load(null, T0), e => e.exit === 2); // --show-all needs every team
+  assert.equal(w.cfg().teams_file_sha, undefined);
+});
+
+test('an unparsable .backlog/config.json stops every command and is never overwritten (review C M10)', t => {
+  const w = world(t);
+  w.put(twoTeams());
+  const broken = '{"backlog_repository": ".backlog", "team": "solo",}';
+  writeFileSync(join(w.top, '.backlog', 'config.json'), broken);
+  assert.throws(() => w.load('solo', T0), e => e.exit === 2 && e.message.startsWith('.backlog/config.json cannot be read'));
+  assert.throws(() => w.load(null, T0, true), e => e.exit === 2);
+  assert.equal(readFileSync(join(w.top, '.backlog', 'config.json'), 'utf8'), broken);
+});
+
+test('a teams_file reached through a symbolic-link folder inside the repository is refused (review C L2)', t => {
+  const w = world(t, { config: { teams_file: '.backlog/link/teams.json' } });
+  mkdirSync(join(w.root, 'real'));
+  writeFileSync(join(w.root, 'real', 'teams.json'), JSON.stringify(twoTeams()));
+  symlinkSync(join(w.root, 'real'), join(w.top, '.backlog', 'link'));
+  assert.throws(() => w.load('solo', T0), e => e.exit === 2 && /link is a symbolic link; no folder between/.test(e.message));
+});
+
+test('a record dated in the future (clock skew) is stale: the file is read again (review C L1)', t => {
+  const w = world(t);
+  w.put(twoTeams()); w.load('solo', '2030-01-01T00:00:00Z');
+  w.put('{ not json');
+  assert.throws(() => w.load('solo', T0), e => e.exit === 2 && /cannot be read/.test(e.message));
+});
+
+test('question 1, provisional A: a repository input names the actionable repository; the SHA goes to the per-user record, never into the working copy', t => {
+  const w = world(t);
+  const lib = join(w.home, 'acme', 'lib'); mkdirSync(lib, { recursive: true });
+  writeFileSync(join(lib, 'teams.json'), JSON.stringify(twoTeams()));
+  const load = now => loadTeams({ top: w.top, home: w.home, repo: 'acme/lib', workRepo: 'local/repository', stateDir: w.stateDir, team: 'solo', now });
+  assert.equal(load(T0).from, 'disk');
+  assert.equal(w.cfg().teams_file_sha, undefined);
+  assert.equal(load(T1).from, 'record');
+});
+
+test('question 6, provisional A: a backlog found without a configuration puts the team file in its repository folder, and no configuration is created', t => {
+  const root = mkdtempSync(join(tmpdir(), 'teams-noconf-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const top = join(root, 'app'); const home = join(root, 'backlog'); const stateDir = join(root, 'state');
+  mkdirSync(top); mkdirSync(join(home, 'acme', 'app'), { recursive: true });
+  writeFileSync(join(home, 'acme', 'app', 'teams.json'), JSON.stringify(twoTeams()));
+  const load = now => loadTeams({ top, home, repo: 'acme/app', stateDir, team: 'solo', now });
+  assert.equal(load(T0).from, 'disk');
+  assert.throws(() => readFileSync(join(top, '.backlog', 'config.json')), { code: 'ENOENT' });
+  assert.equal(load(T1).from, 'record');
 });

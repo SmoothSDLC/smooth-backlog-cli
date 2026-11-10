@@ -76,7 +76,7 @@ const GROUP = {
   'WIP-ACTIVE': [B, 'example: parallel/claim-limit-person', 'the count condition says what counts'], 'WIP-OVERRIDE': [L, 'pattern: patterns/lift-limit, patterns/limit-top-level', ''],
   'WIP-VIEW': [B, 'example: parallel/filter:in-progress', 'command: backlog team query filter <name>'], 'WIP-SETTEAM': [B, 'example: parallel/adopt', ''], 'WIP-START': [S, '-', 'no coded start on an item without a team'],
   'DEP-FINISHED': [B, 'example: parallel/claim-dependencies', ''], 'CR-TEAMNEW': [B, 'command: backlog team new evaluates the step new (chapter 04)', ''],
-  'CR-DOD': [L, 'pattern: patterns/request-review-needs-done-when', 'user new writes no definition-of-done placeholder (R3)'],
+  'CR-DOD': [L, 'pattern: patterns/request-review-needs-done-when', 'user new keeps its definition-of-done placeholder: body text that enforces nothing (chapter 02 section 4)'],
   'Q-POP': [B, 'language: the pop table (chapter 03)', ''], 'Q-LEADWORK': [B, 'example: parallel/lead-splits', ''], 'Q-PLAN': [B, 'command: backlog team query plan (chapter 04)', ''],
   'Q-VIEWS': [B, 'language: filters; command: backlog team query filter <name> (chapter 04)', ''], 'Q-ROWS': MACH('the team queue is the index entries of the team\'s items', '05'),
   'Q-REVIEWONLY': [B, 'example: scrum/claim-developer-only', ''], 'DEF-TEAM': [B, 'command: backlog team validate (chapter 08)', ''], 'DEF-ENTRY': [B, 'command: backlog team validate (chapter 08)', ''],
@@ -97,6 +97,16 @@ const ROW = {
   'INV-589': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body'],
   'INV-590': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body'],
   'INV-591': [L, 'pattern: patterns/request-review-needs-done-when', 'a rule reads $item.body'],
+  // re-attributed in round 5 (review D M9)
+  'INV-054': MACH('command syntax of the user command clean', '04'), 'INV-055': MACH('command syntax of the user command clean', '04'), 'INV-056': MACH('command syntax of the user command clean', '04'),
+  'INV-169': [S, '-', 'backlog new --force is removed: with numbers never reused the file name of a new item is always free (chapter 02 section 4)'],
+  'INV-177': [B, 'field: owner of the built-in user item definition, the user at creation (chapter 02 section 4)', 'the team seam around the line goes (decision D-17)'],
+  'INV-178': [B, 'field: claimed_by and claimed_at of the built-in user item definition; the definition-of-done placeholder stays as body text (chapter 02 section 4)', 'review_state and reviewer are no longer written by user new (R1, R3)'],
+  'INV-403': MACH('the conflict guard looks only at the own folder\'s paths (R24)', '04 section 9'), 'INV-404': MACH('the unpublished-commit guard looks only at commits of the own folder (R24)', '04 section 9'),
+  'INV-406': MACH('a read whose update fails answers from the local copy; a write is refused (exit 3)', '04'),
+  'INV-161': [S, '-', 'owner ruling R24: a foreign reference is only checked to be well formed; its existence is never checked on a write (chapter 04 section 9)'],
+  'INV-475': [S, '-', 'owner ruling R24: a foreign reference is only checked to be well formed; its existence is never checked on a write (chapter 04 section 9)'],
+  'INV-478': [S, '-', 'owner ruling R24: no cycle walk through other repositories\' items (chapter 04 section 9)'],
 };
 
 // ---- tests.tsv: by disposition first, then by theme
@@ -185,6 +195,54 @@ const ONE = {
   'D-33': [B, 'field: default words of the built-in user item definition', ''],
 };
 
+// ---- reviews C and D (round 5): fixed (the chapter that carries the fix), rejected (SKIP with the evidence), or an owner question
+const Q = (n, how) => [D, `owner answer to 2026-11-09 round 12, question ${n} (${how})`, ''];
+const REVIEW = {
+  'C-H1': MACH('a refused team command writes nothing: no SHA, no record, no copy', '01 section 4'), 'C-H2': Q(1, 'applied provisionally as option A: the input defines the repository acted on'),
+  'C-H3': Q(2, 'applied provisionally as option A: only the command\'s own commit is dropped, so nothing of a person is lost'), 'C-H4': MACH('backlog setup runs on a markdown backlog', '06 section 2'),
+  'C-H5': [B, 'plan folder: fixed by the lead in commit 5ee67f4 (consumers.tsv holds ids only; the inventory consumer section and the rulings are generic)', ''],
+  'C-M1': Q(3, 'applied provisionally as option A: only items without a team are renumbered'), 'C-M2': MACH('the high-water mark reads merge commits (-m)', '05 section 2'),
+  'C-M3': MACH('a file-name number above 10^9 is an unreadable item and never part of the mark', '05 section 2'),
+  'C-M4': MACH('an unresolved foreign reference reads as a missing item; the team rule decides; a rule tells it by its empty fields', '03 section 4 and 04 section 9'),
+  'C-M5': [D, 'owner answer to 2026-11-09 round 12, question 4 and question 5 (both applied provisionally); the help of one user command is decided by the text of R19a', ''],
+  'C-M6': MACH('every error check of chapter 08 sections 3 to 6 in the spike; the team effect and true-only archive and delete also checked at run time; pop stops on a broken rule (cases VAL-22 to VAL-35, INL-06 to INL-09)', '08 section 6 and 03 section 8'),
+  'C-M7': MACH('show-all and ask are reserved argument names (case VAL-22)', '03 section 5'), 'C-M8': MACH('an own-folder reference in foreign form is the local number (cases INL-10, INL-11)', '02 section 3'),
+  'C-M9': MACH('migrated_at changes only when the run converted a file', '06 section 2.0'), 'C-M10': MACH('an unparsable .backlog/config.json stops every command and is never overwritten', '01 section 1.1'),
+  'C-M11': MACH('--help reads nothing and writes nothing; a team\'s steps through backlog team query steps', '04 section 1'),
+  'C-L1': MACH('a record outside 0 to 24 hours is stale', '01 section 4'), 'C-L2': MACH('no symbolic-link folder between the root and the team file', '01 section 1.1'),
+  'C-L3': MACH('outside the repository is decided by path segments (case R22-06)', '01 section 1.1'), 'C-L4': MACH('an empty team variable names no team and does not block (case R19A-03)', '04 section 8'),
+  'C-L5': MACH('step [] and a reversed class range are validate errors (cases VAL-32, VAL-33)', '08 section 6'), 'C-L6': Q(6, 'applied provisionally as option A: a backlog found any way counts as defined'),
+  'C-L7': MACH('what --show-all allows for done, clean and import is stated', '04 section 8'), 'C-L8': MACH('the lock time-out is the stated limit; re-runs use half the budget', '04 sections 6 and 9'),
+  'C-L9': MACH('stale texts corrected; earlier review answers marked superseded', '03, 06, review-response.md'), 'C-L10': MACH('one coverage row per ruling, carried bullet and lead decision', 'coverage'),
+  'C-L11': MACH('the SHA flip between the backlog repository and the code repository is stated', '01 section 4'),
+  'D-H1': Q(2, 'applied provisionally as option A: only the command\'s own commit is dropped'), 'D-H2': MACH('a writing command stages only its item files, index.json and numbers.json', '04 section 6'),
+  'D-H3': Q(7, 'applied provisionally as option A: the stop file and schema version 2'), 'D-H4': Q(6, 'applied provisionally as option A; the SHA goes to the per-user record when the repository has no configuration'),
+  'D-H5': Q(1, 'applied provisionally as option A'),
+  'D-M1': MACH('the guards look only at the own folder; the foreign checks of new and update are removed; the journal and the rollback are the stated exception', '04 section 9'),
+  'D-M2': MACH('re-runs use at most half of the lock budget', '04 section 6'), 'D-M3': MACH('the re-run drops only the own commit; a refused reset stops with exit 3', '04 section 6'),
+  'D-M4': MACH('no version comparison; migrated_by_version is information', '06 section 2.0'), 'D-M5': MACH('backlog setup runs on a markdown backlog', '06 section 2'),
+  'D-M6': MACH('a folder with no team item migrates without a team file', '06 sections 3 and 5'),
+  'D-M7': MACH('clean removes only the index entries of the items it deleted; its setup run includes the templates and the advice', '04 section 8'),
+  'D-M8': MACH('templates/workflows is deleted from the package at the cut-over', '01 section 1'), 'D-M9': MACH('the named coverage rows are re-attributed', 'coverage'),
+  'D-M10': [S, '-', 'not a design change: landing in stages with the matching changes of the scripts and skills outside this repository is the landing plan (implementation/01-landing-strategy.md)'],
+  'D-L1': MACH('size_score declared; undeclared fields of user items shown and kept; list --json keeps review_state as stored', '02 section 4'),
+  'D-L2': MACH('backlog update --branch is a writer of branch', '02 section 2.1'), 'D-L3': MACH('user archive writes no status word', '02 section 4'),
+  'D-L4': MACH('the held section of changes reads claimed_by of items without a team only', '04 section 8'), 'D-L5': MACH('an empty team key counts as not set (case COD-16)', '01 section 5'),
+  'D-L6': MACH('a JSON file name that would be too long stops the migration', '06 section 5'), 'D-L7': MACH('the R19a guard runs in src/main.js before setup and upgrade', '04 section 8'),
+  'D2-2': [S, '-', 'backlog new --force is removed: a new item\'s file name is always free (chapter 02 section 4)'],
+  'D2-3': MACH('user new keeps the definition-of-done placeholder as body text', '02 section 4'), 'D2-4': MACH('a new team item starts with an empty body; a note effect writes its first section', '04 section 2'),
+  'D2-13': [B, 'field: owner of the built-in user item definition (chapter 02 section 4)', ''], 'D2-14': MACH('user new no longer writes review_state and reviewer', '02 section 4'),
+  'D2-15': [S, '-', 'owner ruling R24: a foreign reference is only checked to be well formed (chapter 04 section 9)'], 'D2-19': MACH('a JSON file name that would be too long stops the migration', '06 section 5'),
+  'D2-26': [B, 'field: size_score of the built-in user item definition (chapter 02 section 4)', ''], 'D2-27': MACH('backlog update --branch writes the envelope branch', '02 section 2.1'),
+  'D2-37': [S, '-', 'owner ruling R24: no cycle walk through other repositories\' items (chapter 04 section 9)'], 'D2-44': MACH('the journal restores only bytes the command recorded: the stated exception', '04 section 9'),
+  'D2-51': MACH('held is claimed_by of items without a team', '04 section 8'), 'D2-54': MACH('list --json keeps review_state as the stored value or empty', '02 section 4'),
+  'D2-64': MACH('clean runs setup again, with the templates and the advice', '04 section 8'), 'D2-66': MACH('clean removes only the index entries of the items it deleted', '04 section 8'),
+  'D2-72': MACH('user archive writes no status word', '02 section 4'), 'D2-81': MACH('an empty team key counts as not set', '01 section 5'),
+  'D2-83': Q(6, 'applied provisionally as option A'), 'D2-86': Q(2, 'applied provisionally as option A: the push carries the person\'s commits as today'),
+  'D2-87': MACH('with push off a team command never pushes and never re-runs', '04 section 6'), 'D2-90': MACH('the unpublished-commit guard looks only at the own folder', '04 section 9'),
+  'D2-91': MACH('the conflict guard looks only at the own folder\'s paths and at *.json', '04 section 9'),
+};
+
 // ---- the rows
 const rows = [];
 const add = (source, id, ref, [state, target, reason]) => rows.push({ source, id, ref, state, target, reason });
@@ -209,25 +267,57 @@ for (const c of sampled.filter(c => /^(M|X)|\/ M/.test(c[4]))) add('review-b.md 
 const STATES = [B, L, S, D];
 // the owner rulings of rounds 5 to 8 (R14 to R21), one row each, and the scope note
 const RULING = {
-  R14: MACH('a specific team for every team command; --show-all accepted by query, validate and migrate, refused by new, update and pop (cases R14-01 to R14-09)', '01'),
+  R1: MACH('the evaluator holds no status word, stage or role; the team rule set decides', '03'),
+  R2: [B, 'example: parallel/new-child, parallel/wait-for-children, parallel/claim-dependencies', 'splitting, parents and dependencies are fields and rules (chapter 03 section 8)'],
+  R3: MACH('user commands enforce nothing and never read the team file', '04 section 8'),
+  R3a: MACH('user commands see only items without a team (as amended by R16 and R19)', '04 section 8'),
+  R3b: MACH('team commands read the agent and the team from flag, variable, configuration; never the user identity', '01 section 5'),
+  R4: MACH('JSON items; backlog team migrate converts every item of the folder or fails', '02 and 06'),
+  R5: MACH('the CLI only reads the team file; it writes the SHA only', '01 section 1'),
+  R6: MACH('a template is a starting copy; setup copies the generic ones', '01 section 1.2'),
+  R7: MACH('the item definition is data: type, description, default, values, final', '02 section 3'),
+  R8: MACH('one readable rule set read by the skills through backlog team query rules and steps', '03 and 07'),
+  R9: [B, 'example: every rule of the five examples has a case and a verification entry (rule-cases.json)', ''],
+  R10: MACH('routing-table precedence: first match decides, default refusal, shadowing found by validate', '03 section 3'),
+  R11: [B, 'command: backlog team validate gives one finding per problem with the fix (chapter 08)', ''],
+  R12: MACH('numbers from the high-water mark of the folder history, merge commits included; publication above the upstream mark', '05'),
+  R13: MACH('the index structure unchanged; user and team queues are filtered views', '05 sections 5 and 6'),
+  R14: [D, 'owner answer to 2026-11-09 round 12, question 5 (applied provisionally as option A: query, validate and migrate take --show-all; cases R14-01 to R14-10)', ''],
   R15: MACH('flag, then variable, then configuration; a differing flag is not refused; the consequence is stated once (cases R15-01 to R15-03)', '01'),
   R16: MACH('user commands ignore team items and hide references to them unless --show-all is given; the flag is derived for every user command that selects or lists items (cases R16-01 to R16-03)', '04 section 8'),
   R17: MACH('backlog team migrate reports every missing, invalid or undeclared field per item; --ask repairs one field at a time on a terminal (cases R17-01, R17-02)', '06 section 2'),
-  R18: MACH('a team whose entry fails validation takes no action; the migration needs every entry valid; the checks cover required keys, shape, definition, coherence (case VAL-21)', '01 section 4 and 08'),
+  R18: MACH('no compatibility path; a refused command writes nothing; the migration needs every entry valid; every error check of chapter 08 sections 3 to 6 in the spike (cases VAL-01 to VAL-35)', '01 section 4 and 08'),
   R19: MACH('with --show-all a user command may set values on a team item, with a history entry by the user (cases R19-01, R19-02)', '04 section 8'),
-  R19a: MACH('SMOOTH_BACKLOG_CLI_TEAM_NAME set: every user command fails with the blanket text; help and version are not blocked (cases R19A-01, R19A-02)', '04 section 8'),
-  R20: MACH('every CLI-owned environment variable is prefixed SMOOTH_BACKLOG_CLI_, the two internal ones the inventory missed included', '01 section 5'),
-  R21: MACH('the SHA in .backlog/config.json, the per-user record of the valid teams with the validated copy, 24 hours, validate refreshes, update only when valid (spike teams-load.test.mjs)', '01 section 4'),
+  R19a: MACH('SMOOTH_BACKLOG_CLI_TEAM_NAME set to a name: every user command fails with the blanket text, guard in src/main.js; help and version are not blocked (cases R19A-01 to R19A-03)', '04 section 8'),
+  R20: MACH('every CLI-owned environment variable is prefixed SMOOTH_BACKLOG_CLI_, the four the inventory missed included (RUN_HOOK, RUN_LOCK_HELD, REVIEW_STALE_SECONDS, TEST_SELF)', '01 section 5'),
+  R21: MACH('the SHA, the per-user record of the valid teams with the validated copy, 0 to 24 hours, validate refreshes, a refused command writes nothing (spike teams-load.test.mjs)', '01 section 4'),
+  R22: MACH('the team file per repository and branch: the teams_file key, else the repository folder of a backlog outside the repository, else .backlog/teams.json; the SHA in .backlog/config.json or the per-user record (cases R22-01 to R22-08; questions 1 and 6 applied provisionally)', '01 section 1.1'),
   R23: MACH('backlog setup copies the five generic templates into .backlog/team-templates, replaced on every setup as the skill copy; nothing reads them (spike setup.test.mjs)', '01 section 1.2'),
-  R24: MACH('the scope of every command is the repository folder: audit table; foreign references unresolved instead of stopping, no cross-folder cycle walk, move between branches only, rebase when upstream changed only other folders, conflicts outside the folder stop without publishing (cases R24-01, R24-02)', '04 section 9'),
-  R25: MACH('migrated_at and migrated_by_version written by the migration into .backlog/config.json; setup prints the advice for each state; no other command uses them (cases R25-01 to R25-04)', '06 section 2.0'),
-  R22: MACH('the team file per repository and branch: the teams_file key, else <backlog repository>/<owner>/<name>/teams.json beside the folder index, else .backlog/teams.json; teams_file_sha in .backlog/config.json; the migration per repository folder (cases R22-01 to R22-05, spike teams-load.test.mjs)', '01 section 1.1'),
+  R24: MACH('the scope of every command is the repository folder: audit table with the guards, the foreign checks of new and update, the journal exception, staging of own paths, the re-run of the own commit only (cases R24-01, R24-02)', '04 section 9'),
+  R25: MACH('migrated_at (when the folder became JSON) and migrated_by_version written by the migration; setup recommends the migration until it is recorded and runs on a markdown backlog (cases R25-01 to R25-04)', '06 sections 2 and 2.0'),
   'scope note': MACH('several teams at once: one clone per user serialises one machine; across machines the re-run with a random growing wait (measured with contention.mjs)', '04 section 7'),
+  'carried-1': [S, '-', 'the owner team lifecycle is kept in the backlog repository; nothing of it is in this public repository'],
+  'carried-2': MACH('the session inputs, prefixed, each also a flag (flag, variable, configuration)', '01 section 5'),
+  'carried-3': MACH('archived items take no rule; split items linked by parent, not bound; items of a team without an entry unbound with a record', '03 and 06 section 4'),
+  'carried-4': MACH('no review stage named after a team; the examples and texts are generic', '01 and 03'),
+  'carried-5': MACH('every command with its scenario and full command line', '04 section 1'),
+  'lead-1': MACH('archived items migrate to JSON too', '06 section 4.2'),
+  'lead-2': MACH('rule expressions are data for the evaluator; nothing in the team file is executed', '01 section 6'),
 };
 // the targets name decisions that exist
-const decisions = (readFileSync('decisions.md', 'utf8').match(/^## \d+\./gm) ?? []).length;
-for (const id of [...readFileSync('../00-owner-rulings.md', 'utf8').matchAll(/^- (R1[4-9]a?|R2[0-5])\./gm)].map(m => m[1])) add('00-owner-rulings.md', id, '', RULING[id] ?? (() => { throw new Error(`${id} unmapped`); })());
-if (/^## Scope note/m.test(readFileSync('../00-owner-rulings.md', 'utf8'))) add('00-owner-rulings.md', 'scope note', '', RULING['scope note']);
+const decisions = (readFileSync('decisions.md', 'utf8').match(/^## 2026-11-09 round 12, question \d+:/gm) ?? []).length;
+const rulings = readFileSync('../00-owner-rulings.md', 'utf8');
+for (const id of [...rulings.matchAll(/^- (R\d+[ab]?)(?:\.| \()/gm)].map(m => m[1])) add('00-owner-rulings.md', id, '', RULING[id] ?? (() => { throw new Error(`${id} unmapped`); })());
+if (/^## Scope note/m.test(rulings)) add('00-owner-rulings.md', 'scope note', '', RULING['scope note']);
+const bullets = head => (rulings.split(head)[1] ?? '').split('\n## ')[0].split('\n').filter(l => l.startsWith('- '));
+bullets('## Carried forward').forEach((_, i) => add('00-owner-rulings.md', `carried-${i + 1}`, '', RULING[`carried-${i + 1}`] ?? (() => { throw new Error(`carried-${i + 1} unmapped`); })()));
+bullets('## Decisions taken by the lead agent').forEach((_, i) => add('00-owner-rulings.md', `lead-${i + 1}`, '', RULING[`lead-${i + 1}`] ?? (() => { throw new Error(`lead-${i + 1} unmapped`); })()));
+// reviews C and D of round 5: every finding, and every missed (M) or wrongly attributed (W) behaviour of review D section 2
+const reviewC = readFileSync('review-c.md', 'utf8').split('## 2.')[1].split('\n## 3.')[0];
+for (const id of ids(reviewC, /^(?:\*\*|- \*\*)([HML]\d+)[.*]/gm)) add('review-c.md section 2', `C-${id}`, '', REVIEW[`C-${id}`] ?? (() => { throw new Error(`C-${id} unmapped`); })());
+const reviewD = readFileSync('review-d.md', 'utf8');
+for (const id of ids(reviewD.split('## 1.')[1].split('\n## 2.')[0], /^\| (D-[HML]\d+) \|/gm)) add('review-d.md section 1', id, '', REVIEW[id] ?? (() => { throw new Error(`${id} unmapped`); })());
+for (const c of reviewD.split('## 2.')[1].split('\n## 3.')[0].split('\n').filter(l => /^\| \d+ \|/.test(l)).map(l => l.split('|').map(x => x.trim())).filter(c => /\*\*[MW]\*\*/.test(c[4]))) add('review-d.md section 2', `D2-${c[1]}`, c[3], REVIEW[`D2-${c[1]}`] ?? (() => { throw new Error(`D2-${c[1]} unmapped`); })());
 const files = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 'single-agent', 'patterns'].map(n => [n, Object.values(JSON.parse(readFileSync(`examples/${n}.json`, 'utf8')))[0]]));
 const known = new Set(Object.entries(files).flatMap(([n, e]) => [...e.rules.table.map(r => r.id), ...e.rules.pop.map(o => o.id), ...Object.keys(e.rules.filters).map(v => `filter:${v}`)].map(id => `${n}/${id}`)));
 const seen = new Set();
@@ -236,7 +326,7 @@ for (const r of rows) {
   if (seen.has(key)) throw new Error(`${key} twice`); seen.add(key);
   if (!STATES.includes(r.state)) throw new Error(`${key}: state ${r.state}`);
   if ((r.state === S || r.state === D) && !(r.reason || r.target !== '-')) throw new Error(`${key}: no reason or blocker`);
-  for (const m of `${r.target} ${r.reason}`.matchAll(/decision (\d+) of design/g)) if (Number(m[1]) > decisions) throw new Error(`${key}: decision ${m[1]} does not exist`);
+  for (const m of `${r.target} ${r.reason}`.matchAll(/round 12, question (\d+)/g)) if (Number(m[1]) > decisions) throw new Error(`${key}: question ${m[1]} does not exist`);
   for (const m of `${r.target} ${r.reason}`.matchAll(/\b((?:parallel|scrum|extreme-programming|single-agent|patterns)\/[a-z:-]+)/g)) if (!known.has(m[1])) throw new Error(`${key}: ${m[1]} is no rule of the examples`);
 }
 const inputs = { 'inventory.tsv': inv.length, 'tests.tsv': tests.length, 'consumers.tsv': cons.length, 'gaps.tsv': gaps.length };

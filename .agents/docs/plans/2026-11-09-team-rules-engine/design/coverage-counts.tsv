@@ -1,5 +1,5 @@
 source	input rows	BAKE-IN	LAZY-LOAD	SKIP	DEFERRED-WITH-EXPLICIT-BLOCKER	total
-inventory.tsv	1033	671	157	201	4	1033
+inventory.tsv	1033	669	157	203	4	1033
 tests.tsv	819	687	83	49	0	819
 consumers.tsv	22	2	0	0	20	22
 gaps.tsv	47	6	2	22	17	47
@@ -8,5 +8,8 @@ gaps.tsv	47	6	2	22	17	47
 01-inventory.md	14	8	0	6	0	14
 08-owner-questions.md part 1	17	13	0	4	0	17
 review-b.md section 3	21	11	4	5	1	21
-00-owner-rulings.md	14	14	0	0	0	14
-all	2021	1428	253	291	49	2021
+00-owner-rulings.md	36	34	0	1	1	36
+review-c.md section 2	27	22	0	0	5	27
+review-d.md section 1	22	17	0	1	4	22
+review-d.md section 2	22	17	0	3	2	22
+all	2114	1502	253	298	61	2114

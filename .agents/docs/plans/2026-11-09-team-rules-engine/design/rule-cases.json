@@ -461,16 +461,16 @@
     "exit": 0,
     "rule": "new-child",
     "items": {
+     "30": {
+      "children": [
+       31
+      ]
+     },
      "31": {
       "status": "ready",
       "parent": 30,
       "estimate": 30,
       "depends_on": []
-     },
-     "30": {
-      "children": [
-       31
-      ]
      }
     },
     "place": {
@@ -549,17 +549,17 @@
     "exit": 0,
     "rule": "new-child",
     "items": {
-     "32": {
-      "depends_on": [
-       31
-      ],
-      "parent": 30
-     },
      "30": {
       "children": [
        31,
        32
       ]
+     },
+     "32": {
+      "depends_on": [
+       31
+      ],
+      "parent": 30
      }
     }
    }
@@ -4480,14 +4480,14 @@
     "exit": 0,
     "rule": "new-linked",
     "items": {
-     "6": {
-      "status": "deciding",
-      "question": "keep the old flag?"
-     },
      "5": {
       "depends_on": [
        6
       ]
+     },
+     "6": {
+      "status": "deciding",
+      "question": "keep the old flag?"
      }
     }
    }
@@ -5950,14 +5950,14 @@
     "exit": 0,
     "rule": "record-handoff",
     "items": {
+     "1": {
+      "accepted_inputs": []
+     },
      "3": {
       "handoff_to": [
        1
       ],
       "handoff_commit": "abc1234"
-     },
-     "1": {
-      "accepted_inputs": []
      }
     }
    }
@@ -7059,6 +7059,9 @@
        "status": {
         "type": "text",
         "values": [
+         "open"
+        ],
+        "final": [
          "open"
         ]
        },
@@ -9406,7 +9409,9 @@
         "values": [
          "open"
         ],
-        "final": []
+        "final": [
+         "open"
+        ]
        },
        "a.b": {
         "type": "text"
@@ -10185,7 +10190,7 @@
    "expect": {
     "exit": 0,
     "path": "/work/backlog/acme/app/teams.json",
-    "how": "the configured backlog repository"
+    "how": "the backlog repository folder"
    }
   },
   {
@@ -10250,7 +10255,7 @@
    },
    "expect": {
     "exit": 2,
-    "text": "no team file at /work/app/.backlog/teams.json; name one with the \"teams_file\" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the configuration names a backlog repository, else at .backlog/teams.json"
+    "text": "no team file at /work/app/.backlog/teams.json; name one with the \"teams_file\" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the backlog folder lies outside the repository, else at .backlog/teams.json"
    }
   },
   {
@@ -10290,8 +10295,9 @@
    },
    "expect": {
     "exit": 0,
-    "text": "ℹ️  the backlog of this repository was last migrated on 2026-11-12T09:00:00Z by version 1.3.2; this is version 1.4.0: run backlog team migrate --show-all --dry-run, then backlog team migrate --show-all"
-   }
+    "text": "ℹ️  the backlog of this repository was last migrated on 2026-11-12T09:00:00Z by version 1.3.2"
+   },
+   "note": "review D M4: the version comparison is dropped; a migrated backlog always gets the information line"
   },
   {
    "id": "R25-03",
@@ -10400,6 +10406,1585 @@
       ]
      }
     }
+   }
+  },
+  {
+   "id": "VAL-22",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-05: show-all and ask are CLI flags",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "go",
+         "when": {
+          "all": [
+           {
+            "empty": "$arg.show-all"
+           },
+           {
+            "empty": "$arg.ask"
+           }
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when.all[0].empty",
+      "rule": "r",
+      "problem": "--show-all belongs to the CLI"
+     },
+     {
+      "path": "rules.table[0].when.all[1].empty",
+      "rule": "r",
+      "problem": "--ask belongs to the CLI"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-23",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-06",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "give-away",
+         "step": "go",
+         "do": {
+          "team": "other"
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].do.team",
+      "rule": "give-away",
+      "problem": "the team effect binds only to $team.name or unbinds with \"\""
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-24",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-07",
+   "given": {
+    "items": [],
+    "team_file": {
+     "Bad Team": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "",
+      "rule": null,
+      "problem": "Bad Team is not a team name: lowercase letters, digits, - _ and :, starting with a letter or digit"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-25",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-08",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "agent-1": "worker",
+       "agent 2": [
+        "x",
+        "x"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "people.agent-1",
+      "rule": null,
+      "problem": "agent-1 has no role list"
+     },
+     {
+      "path": "people.agent 2",
+      "rule": null,
+      "problem": "agent 2 is not a plain name"
+     },
+     {
+      "path": "people.agent 2",
+      "rule": null,
+      "problem": "agent 2 has the role x twice"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-26",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-09",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": "abc"
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       },
+       "size": {
+        "type": "text",
+        "default": "xl",
+        "values": [
+         "s",
+         "m"
+        ]
+       }
+      },
+      "rules": {
+       "table": [],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "item.estimate.default",
+      "rule": null,
+      "problem": "the default \"abc\" is not a number"
+     },
+     {
+      "path": "item.size.default",
+      "rule": null,
+      "problem": "the default \"xl\" is not one of the values"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-27",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-10",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "values": [
+         "open",
+         "done"
+        ]
+       },
+       "kind": {
+        "type": "text",
+        "values": [
+         "a",
+         "b"
+        ],
+        "final": [
+         "a"
+        ]
+       }
+      },
+      "rules": {
+       "table": [],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "item.kind.final",
+      "rule": null,
+      "problem": "final belongs only to the status field"
+     },
+     {
+      "path": "item.status.final",
+      "rule": null,
+      "problem": "the status field has no final values"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-28",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-11: a malformed condition is a validate error, never a silent idle",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "go",
+         "when": {
+          "is": "$item.status"
+         },
+         "do": {}
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when.is",
+      "rule": "r",
+      "problem": "is takes a list of two values"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-29",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-12",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "go",
+         "do": {
+          "set": {
+           "estimate": {
+            "plus": "$item.estimate"
+           }
+          }
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].do.set.estimate.plus",
+      "rule": "r",
+      "problem": "plus takes a list of values"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-30",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-13",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "go",
+         "deny": "waits for {$item.kids}"
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].deny",
+      "rule": "r",
+      "problem": "{$item.kids} in the deny text: $item.kids names no field of the item definition"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-31",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-16",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "go",
+         "do": {
+          "delete": "no",
+          "archive": "false"
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].do.archive",
+      "rule": "r",
+      "problem": "archive takes only true"
+     },
+     {
+      "path": "rules.table[0].do.delete",
+      "rule": "r",
+      "problem": "delete takes only true"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-32",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-17",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": [],
+         "do": {}
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].step",
+      "rule": "r",
+      "problem": "step must be a word, a list of words or \"*\""
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-33",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-18",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "go",
+         "when": {
+          "regex": [
+           "$item.status",
+           "[z-a]"
+          ]
+         },
+         "do": {}
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].when.regex",
+      "rule": "r",
+      "problem": "not a pattern the CLI runs (the range z-a is reversed (at character 2))"
+     }
+    ]
+   }
+  },
+  {
+   "id": "INL-06",
+   "rule_set": "inline",
+   "rule": "give-away",
+   "note": "review C ADV-06 at run time",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "give-away",
+         "step": "go",
+         "do": {
+          "team": "other"
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "a"
+    },
+    "item": 1,
+    "step": "go",
+    "args": {}
+   },
+   "expect": {
+    "exit": 2,
+    "rule": "give-away",
+    "text": "rule give-away: the team effect binds only to team t or unbinds with \"\"; it never moves an item to another team"
+   }
+  },
+  {
+   "id": "INL-07",
+   "rule_set": "inline",
+   "rule": "count-up",
+   "note": "review C ADV-12 at run time: a refusal, never a crash",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "count-up",
+         "step": "go",
+         "do": {
+          "set": {
+           "estimate": {
+            "plus": "$item.estimate"
+           }
+          }
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "a"
+    },
+    "item": 1,
+    "step": "go",
+    "args": {}
+   },
+   "expect": {
+    "exit": 2,
+    "text": "plus takes a list of values"
+   }
+  },
+  {
+   "id": "INL-08",
+   "rule_set": "inline",
+   "rule": "keep",
+   "note": "review C ADV-16 at run time: only true deletes or archives",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "keep",
+         "step": "go",
+         "do": {
+          "delete": "no",
+          "archive": "false"
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "a"
+    },
+    "item": 1,
+    "step": "go",
+    "args": {}
+   },
+   "expect": {
+    "exit": 0,
+    "rule": "keep",
+    "delete": false
+   }
+  },
+  {
+   "id": "INL-09",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "review C ADV-11 at run time: pop stops on a broken rule instead of answering idle",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "broken",
+         "step": "go",
+         "when": {
+          "is": "$item.status"
+         },
+         "do": {}
+        }
+       ],
+       "pop": [
+        {
+         "id": "next",
+         "step": "go"
+        }
+       ],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "pop",
+    "flags": {
+     "agent": "a"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "is takes a list of two values"
+   }
+  },
+  {
+   "id": "INL-10",
+   "rule_set": "inline",
+   "rule": "link",
+   "note": "review C ADV-14: an own-folder reference in foreign form is the local number",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "link",
+         "step": "link",
+         "do": {
+          "set": {
+           "deps": "$arg.to"
+          }
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "a"
+    },
+    "item": 1,
+    "step": "link",
+    "args": {
+     "to": "acme/app#1"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "field deps of item 1: an item cannot name itself"
+   }
+  },
+  {
+   "id": "INL-11",
+   "rule_set": "inline",
+   "rule": "link",
+   "note": "review C ADV-14",
+   "given": {
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "link",
+         "step": "link",
+         "do": {
+          "set": {
+           "deps": "$arg.to"
+          }
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    },
+    "items": [
+     {
+      "seq": 1,
+      "team": "t",
+      "fields": {
+       "status": "open"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "update",
+    "flags": {
+     "agent": "a"
+    },
+    "item": 1,
+    "step": "link",
+    "args": {
+     "to": "acme/app#999"
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "field deps of item 1: no item 999"
+   }
+  },
+  {
+   "id": "R19A-03",
+   "rule_set": null,
+   "rule": null,
+   "note": "review C L4: an empty variable names no team, so it does not block (the same reading as the team lookup)",
+   "given": {
+    "items": [
+     {
+      "seq": 91,
+      "team": "",
+      "fields": {
+       "status": "pending"
+      }
+     }
+    ]
+   },
+   "command": {
+    "run": "user-show",
+    "item": 91,
+    "env": {
+     "SMOOTH_BACKLOG_CLI_TEAM_NAME": ""
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "item": 91
+   }
+  },
+  {
+   "id": "COD-16",
+   "rule_set": null,
+   "rule": null,
+   "note": "review D L5: setup writes \"team\": \"\" into every configuration; an empty key is not set",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "resolve",
+    "config": {
+     "team": ""
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "a team command needs a team: give --team <name>, or set the SMOOTH_BACKLOG_CLI_TEAM_NAME variable, or set the \"team\" key in .backlog/config.json"
+   }
+  },
+  {
+   "id": "R14-10",
+   "rule_set": null,
+   "rule": null,
+   "note": "question 5 (provisional A): the query forms that evaluate one team refuse --show-all",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "inputs",
+    "command": "query plan",
+    "flags": {
+     "show-all": true
+    }
+   },
+   "expect": {
+    "exit": 2,
+    "text": "--show-all acts over every team; backlog team query plan acts for one team: give --team <name> instead"
+   }
+  },
+  {
+   "id": "R22-06",
+   "rule_set": null,
+   "rule": null,
+   "note": "review C L3 (ADV-19): a backlog folder named ..backlog inside the repository is inside it",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "teams-file",
+    "top": "/x/app",
+    "home": "/x/app/..backlog",
+    "repo": "acme/app",
+    "cfg": {
+     "backlog_repository": "..backlog"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "path": "/x/app/.backlog/teams.json",
+    "how": "the default .backlog/teams.json"
+   }
+  },
+  {
+   "id": "R22-07",
+   "rule_set": null,
+   "rule": null,
+   "note": "question 1 (provisional A): a repository input that differs from the working copy names the actionable repository; its team file is its folder in the backlog folder, and the working copy keys do not apply",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "teams-file",
+    "top": "/work/app",
+    "home": "/work/backlog",
+    "repo": "acme/lib",
+    "workRepo": "acme/app",
+    "cfg": {
+     "backlog_repository": "../backlog",
+     "teams_file": "team/rules.json"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "path": "/work/backlog/acme/lib/teams.json",
+    "how": "the repository input"
+   }
+  },
+  {
+   "id": "R22-08",
+   "rule_set": null,
+   "rule": null,
+   "note": "question 6 (provisional A): a backlog folder found through the session variable or the per-user record, with no configuration in the repository, also puts the team file in the backlog repository folder",
+   "given": {
+    "items": []
+   },
+   "command": {
+    "run": "teams-file",
+    "top": "/work/app",
+    "home": "/elsewhere/backlog",
+    "repo": "acme/app",
+    "cfg": {}
+   },
+   "expect": {
+    "exit": 0,
+    "path": "/elsewhere/backlog/acme/app/teams.json",
+    "how": "the backlog repository folder"
+   }
+  },
+  {
+   "id": "VAL-34",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "chapter 08 section 6: a literal written into a field has its type",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "go",
+         "do": {
+          "set": {
+           "estimate": "abc"
+          }
+         }
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].do.set.estimate",
+      "rule": "r",
+      "problem": "field estimate: \"abc\" is not a number"
+     }
+    ]
+   }
+  },
+  {
+   "id": "VAL-35",
+   "rule_set": "inline",
+   "rule": null,
+   "note": "chapter 08 section 6: a step word is not a flag name of the CLI",
+   "given": {
+    "items": [],
+    "team_file": {
+     "t": {
+      "people": {
+       "a": [
+        "lead"
+       ],
+       "b": [
+        "member"
+       ]
+      },
+      "item": {
+       "status": {
+        "type": "text",
+        "default": "open",
+        "values": [
+         "open",
+         "done"
+        ],
+        "final": [
+         "done"
+        ]
+       },
+       "estimate": {
+        "type": "number",
+        "default": 0
+       },
+       "deps": {
+        "type": "items",
+        "default": []
+       }
+      },
+      "rules": {
+       "table": [
+        {
+         "id": "r",
+         "step": "help",
+         "do": {}
+        }
+       ],
+       "pop": [],
+       "filters": {}
+      }
+     }
+    }
+   },
+   "command": {
+    "run": "validate"
+   },
+   "expect": {
+    "exit": 2,
+    "findings": [
+     {
+      "path": "rules.table[0].step",
+      "rule": "r",
+      "problem": "help is a flag name of the CLI"
+     }
+    ]
    }
   }
  ]

@@ -54,7 +54,7 @@ chapter 03 section 8 (`team`, `branch`, `archive`, `delete`).
 | `slug` | text | the CLI | the number and the name in file-name form |
 | `name` | text | `--name` of `backlog new` or `backlog team new`; `backlog update --name` | the title (the index copies it) |
 | `team` | text, or absent | `backlog team new`; a rule's `team` effect; the migration | the team that owns the item; absent = an item without a team |
-| `repository`, `branch` | text | the CLI (the session's repository and branch); a rule's `branch` effect; `backlog move` for items without a team | where the item belongs |
+| `repository`, `branch` | text | the CLI (the session's repository and branch); a rule's `branch` effect; `backlog move` and `backlog update --branch` for items without a team (on a team item only with `--show-all`, R19; review D L2) | where the item belongs |
 | `created`, `updated`, `updated_by` | time, time, text | every write | when, and by whom: the agent for team commands, the user identity for user commands (R3, R3b). `created` may be null and `updated_by` empty for an item migrated without them (chapter 06 section 4.5) |
 | `fields` | object | chapter 2.2 | the item's values |
 | `body` | text (markdown) | creation, the `note` effect, `backlog update --append` | the description and the appended records |
@@ -108,7 +108,7 @@ dynamic behaviour is in the rule set. The definition is the value of the `item` 
 | key of a field | required | meaning |
 |---|---|---|
 | `type` | yes | one of the types below |
-| `description` | no (validate warns when absent) | what the field means; printed by `backlog team query rules` and by `backlog team new --help` when a team is resolved |
+| `description` | no (validate warns when absent) | what the field means; printed by `backlog team query rules` and `backlog team query steps` (help texts stay generic and read nothing, review C M11) |
 | `default` | no | the value of a new item and of an item that lacks the field; when absent: empty text, 0, false, null or an empty list by type |
 | `values` | no | the allowed values; a write of another value is refused (exit 2) |
 | `final` | only on `status` | which of the allowed values close an item: a property of the allowed values, which R7 lists as data. The CLI uses it for one thing, the definition of "open" (chapter 05 section 5): the index puts closed items after the open ones and a team's queue holds open items. Rules decide everything else |
@@ -127,7 +127,7 @@ the team's. The CLI holds no status word of a team (owner ruling R1).
 | `time` | ISO 8601 UTC text | `$now`, or a text the rule gives | |
 | `person` | string | a key of `people`, or empty | `❌ backlog: field holder: "x" is not a person of the team (<names>)` (exit 2) |
 | `item` | number or null | an item number, or empty for null | when a step writes the field: the item exists in the repository folder (open or archived), else `❌ backlog: field parent of item 31: no item 99` (exit 2), and it is not the item itself (`an item cannot name itself`, case PAR-60) |
-| `items` | list of numbers or `owner/name#seq` texts | a comma-separated argument or a list | as for `item`, for each entry of this folder (case COD-12); a foreign `owner/name#seq` must only be well formed: whether that item exists is never checked on a write, because no command may stop because of another repository's folder (ruling R24); an unresolved one reads as a missing item and validate reports it |
+| `items` | list of numbers or `owner/name#seq` texts | a comma-separated argument or a list | as for `item`, for each entry of this folder (case COD-12); a reference to the step's own folder written in the foreign form (`acme/app#7` for an item of `acme/app`) is the local number 7 and gets every check of a local number (case INL-10, review C M8); a foreign `owner/name#seq` of another folder must only be well formed: whether that item exists is never checked on a write, because no command may stop because of another repository's folder (ruling R24); an unresolved one reads as a missing item and validate reports it |
 | `list` | list of strings | a comma-separated argument or a list | `values` for each entry |
 
 The reference check of `item` and `items` is today's referential integrity of dependencies (reference inventory group DI-REF), now applied
@@ -154,10 +154,24 @@ otherwise (decision D-19: a status is stored exactly as typed); the default word
 | `depends_on` | items | empty list | `backlog new --depends-on`, `backlog update --set-depends-on` |
 | `parent` | item | null | `backlog new --split-from <item>` (new: the split link, owner ruling on split items) |
 | `estimate_min`, `complexity`, `layer`, `chunk` | number, text, text, boolean | empty | the existing flags of `backlog new` and `backlog update` |
+| `size_score` | number | empty | `backlog update --size_score`, and the repair of an unreadable item (`src/shared/store.js:253`; review D L1) |
 | `completed` | time | empty | `backlog done`, `backlog update --close` |
 
-`backlog new` writes only these fields (no team keys, finding F10 removed). A user item's `depends_on` and `parent` are data: stored,
-checked for existence and cycles, shown; never a gate (decision D-18).
+`backlog new` writes only these fields (no team keys, finding F10 removed): it no longer writes `review_state` and `reviewer` (review is
+team behaviour, R1 and R3). A user item's `depends_on` and `parent` are data: stored, checked for existence and cycles inside the own
+folder only (a foreign `owner/name#seq` is only checked to be well formed, R24; review D M1), shown; never a gate (decision D-18).
+
+What else user commands keep or drop (review D, section 2):
+- **Fields a user item carries that this definition does not declare** (today's `review_state`, `reviewer`, `review_refs` on many migrated
+  items): kept as stored, shown by `backlog show`, kept by every write. The `review_state` column of `backlog list --json` stays and holds
+  the stored value, or empty when the item has none, so a script that reads the column keeps working.
+- **The body of a new user item** keeps today's text: the heading `# Phase <n> — <name>`, the objective line and the definition-of-done
+  placeholder when the body has none. It is body text and enforces nothing, so R3 does not remove it. A new team item starts with an empty
+  body; the step's `note` effect writes its first section.
+- **`backlog new --force`** (replace an item with the same file name) is removed: with numbers never reused (chapter 05) the file name of a
+  new item is always free, so there is nothing to replace.
+- **`backlog archive`** moves the file to `archive/` and writes no status word (decision D-26); `archived` among the closing words above
+  only reads items archived before the cut-over correctly (review D L3).
 
 ## 5. Mapping of today's front matter to the JSON file
 

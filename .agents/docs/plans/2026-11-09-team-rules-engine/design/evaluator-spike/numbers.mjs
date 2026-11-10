@@ -1,5 +1,5 @@
 // Spike of the never-reused item numbers (design chapter 05, owner ruling R12) on real git. The high-water mark of a repository folder
-// is the highest number found in: every item file name ever added in the history the clone holds (all refs), every `last` value ever
+// is the highest number found in: every item file name ever added in the history the clone holds (all refs, merge commits included: -m), every `last` value ever
 // committed to numbers.json, and the working tree. A number is handed out only above it, so a deleted item, a reverted creation, a
 // lowered or deleted counter and a number another clone published and deleted are never handed out again. Not the implementation:
 // no journal, no lock, no cache of the history scan (shortcut: the full log is read on each call; the implementation keeps the last
@@ -10,15 +10,18 @@ import { join } from 'node:path';
 
 export const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 const NUM = /(?:^|\/)(\d+)-[^/]*\.(?:json|md)$/;
+// A number above this is never a real item number (R12 expects tens of thousands): in the history it is ignored, in the working tree the
+// file is an unreadable item (review C M3; a number past 2^53 would otherwise make two allocations equal).
+export const MAX_SEQ = 1e9;
 
 export function highWater(cwd, folder, refs = ['--all'], { tree = true } = {}) {
   if (git(cwd, 'rev-parse', '--is-shallow-repository').trim() === 'true') throw new Error('the backlog clone is shallow, so numbers cannot be proven unused: run git fetch --unshallow');
   let max = 0;
-  const see = n => { max = Math.max(max, Number(n)); };
-  for (const line of git(cwd, 'log', ...refs, '--format=', '--name-only', '--diff-filter=AR', '--', folder).split('\n')) { const m = NUM.exec(line); if (m) see(m[1]); }
-  for (const line of git(cwd, 'log', ...refs, '-p', '--format=', '--', `${folder}/numbers.json`).split('\n')) { const m = /"last":\s*(\d+)/.exec(line); if (m) see(m[1]); }
+  const see = n => { const v = Number(n); if (v <= MAX_SEQ) max = Math.max(max, v); };
+  for (const line of git(cwd, 'log', ...refs, '-m', '--format=', '--name-only', '--diff-filter=AR', '--', folder).split('\n')) { const m = NUM.exec(line); if (m) see(m[1]); }
+  for (const line of git(cwd, 'log', ...refs, '-m', '-p', '--format=', '--', `${folder}/numbers.json`).split('\n')) { const m = /"last":\s*(\d+)/.exec(line); if (m) see(m[1]); }
   if (tree) {
-    for (const sub of ['phases', 'archive']) { const d = join(cwd, folder, sub); if (existsSync(d)) for (const f of readdirSync(d, { recursive: true })) { const m = NUM.exec(String(f)); if (m) see(m[1]); } }
+    for (const sub of ['phases', 'archive']) { const d = join(cwd, folder, sub); if (existsSync(d)) for (const f of readdirSync(d, { recursive: true })) { const m = NUM.exec(String(f)); if (m && Number(m[1]) > MAX_SEQ) throw new Error(`${folder}/${sub}/${f}: the number in the file name is above ${MAX_SEQ}, so the item cannot be read; rename or remove the file`); if (m) see(m[1]); } }
     const counter = join(cwd, folder, 'numbers.json'); if (existsSync(counter)) see(JSON.parse(readFileSync(counter, 'utf8')).last ?? 0);
   }
   return max;
@@ -33,14 +36,17 @@ export function allocate(cwd, folder, name) {
   return n;
 }
 
-// Team commands: when upstream changed the command's own folder, the local commit is dropped (git reset --keep: other paths of the clone
-// keep any local change) and the whole command runs again on the upstream files; when upstream changed only other folders, nothing the
-// command read changed (R24), so its commit is rebased and pushed as it is.
+// Team commands (question 2, provisional A): when upstream changed the command's own folder, only the command's own commit (HEAD) is
+// dropped (git reset --keep HEAD~1; a person's commits and uncommitted changes stay), today's pull with rebase brings upstream in, and the
+// whole command runs again on the upstream files; when upstream changed only other folders, nothing the command read changed (R24), so
+// the pull rebases its commit as it is. The push publishes the branch as today: a person's own unpushed commits go with it.
 export function publishByRerun(cwd, rerun, folder) {
   git(cwd, 'fetch', '-q');
   if (Number(git(cwd, 'rev-list', '--count', 'HEAD..@{u}').trim())) {
     const touched = folder === undefined || git(cwd, 'diff', '--name-only', 'HEAD...@{u}', '--', folder).trim() !== '';
-    if (touched) { git(cwd, 'reset', '-q', '--keep', '@{u}'); rerun(); } else git(cwd, 'rebase', '-q', '@{u}');
+    if (touched) git(cwd, 'reset', '-q', '--keep', 'HEAD~1');
+    git(cwd, 'pull', '-q', '--rebase', '--autostash');
+    if (touched) rerun();
   }
   git(cwd, 'push', '-q');
 }

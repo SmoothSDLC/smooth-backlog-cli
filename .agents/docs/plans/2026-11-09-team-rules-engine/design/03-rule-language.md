@@ -61,7 +61,10 @@ is what happens. Refusals usually come first (guards), the allowing rules after 
 
 A condition is a JSON object with exactly one key, the test. A condition with two keys (`{"is": [...], "in": [...]}`) or none is a
 validate error, and the evaluator refuses it at run time too (exit 2, `a condition has exactly one key (found is, in)`, cases VAL-13,
-INL-03): several conditions are written inside `all`. The same holds for a function object.
+INL-03): several conditions are written inside `all`. The same holds for a function object. Each test and function also has a fixed form:
+`is`, `in`, `>=`, `<=`, `regex` and `contains` take a list of exactly two values, `all` and `any` a list of conditions, `not` one
+condition, `every` and `some` an object with `items` and `match`, `count` an object with `items` and an optional `match`, `plus` a list.
+Another form is a validate error and, at run time, exit 2 (`is takes a list of two values`, cases VAL-28, VAL-29, INL-07, INL-09).
 
 | test | form | holds when |
 |---|---|---|
@@ -79,7 +82,11 @@ INL-03): several conditions are written inside `all`. The same holds for a funct
 
 Inside `match`, `$it` is the related item and `$item` stays the item of the step, so a rule can compare the two
 (`{"in": ["$it.seq", "$item.accepted_inputs"]}`, pattern `claim-inputs-accepted`). A related item that does not exist reads as an item
-with no fields (so `{"is": ["$it.status", "splitting"]}` is false for it, case PAR-13). `every`, `some` and `count` cannot be nested.
+with no fields (so `{"is": ["$it.status", "splitting"]}` is false for it, case PAR-13). The same holds for a foreign `owner/name#seq` that
+does not resolve (its folder unreadable, still markdown, or without the item, ruling R24): it reads as a missing item, and whether that
+refuses a step is the team's rule. A rule can tell the two cases apart, because a missing item has no fields:
+`{"empty": "$it.status"}` holds for a missing item and not for an open one. The parallel example's `claim-dependencies` treats a missing
+dependency as not closed, so a claim waits (case R24-01; review C M4). `every`, `some` and `count` cannot be nested.
 
 ### 4.1 The patterns of `regex`
 
@@ -112,7 +119,8 @@ A literal text that starts with `$` is written `{"text": "$5"}`.
 **The arguments of a step are its `$arg` references.** A step accepts exactly the `--<name>` flags that the rules naming it (or `"*"`)
 read as `$arg.<name>`; any other flag is invalid input (exit 2) naming the accepted ones. No separate declaration is needed, and
 `backlog team query steps` lists each step with its arguments (chapter 04). The names `team`, `agent`, `session`, `repository`, `branch`,
-`json`, `dry-run`, `help` and `version` belong to the CLI and cannot be argument names (a validate error, case VAL-19).
+`json`, `dry-run`, `help`, `version`, `show-all` and `ask` belong to the CLI and cannot be argument names (a validate error, cases VAL-19,
+VAL-22; review C M7). A flag the CLI adds later joins this list.
 
 The names after a root are a closed list: `$caller` and `$caller.roles`; `$session.id`, `.repository`, `.branch`, `.commit`; `$team.name`
 and `.items`; `$now`. Any other name (`$session.brnach`) is a validate error, never an empty value (case VAL-15). Field, step and argument
@@ -163,10 +171,10 @@ written with `, ` between entries. A refusal prints the text and ` (rule <id>)` 
 | `related` | `{"related": [{"items": <items>, "set": {...}, "add": {...}, "remove": {...}}]}` | changes other items in the same change; inside, `$it` is that item and `$item` the item of the step. Every related item must be a live item of the same team in the step's repository folder, else exit 1 naming it (validate checks the fields and values of a `related` entry like those of the item, case VAL-16, and accepts `$it` there, case VAL-17) |
 | `place` | `"first"`, `"last"`, `{"before": <item>}`, `{"after": <item>}` | moves the item in the team's queue (chapter 05 section 6) |
 | `say` | `"<text>"` | a line printed after the success line, for the agent (for example "end this session now"; reference format gap G-016) |
-| `team` | `"$team.name"` or `""` | binds an item without a team to the command's team, or unbinds an item of the team (it becomes an item without a team) |
+| `team` | `"$team.name"` or `""` | binds an item without a team to the command's team, or unbinds an item of the team (it becomes an item without a team). Any other value is a validate error (case VAL-23) and, as a coded check at run time, exit 2 (case INL-06): a team never moves an item to another team (review C M6) |
 | `branch` | value | moves the item to another branch of the same repository folder (case PAT-56; a move to another repository folder is not offered: the item would need a new number there) |
-| `archive` | `true` | moves the item to the archive folder; from then on no rule applies to it |
-| `delete` | `true` | removes the item file; its number is never handed out again (chapter 05; case PAT-55). A team that writes no rule with `delete` cannot delete. Items that name the deleted number keep it; it reads as a missing item and validate reports it |
+| `archive` | `true` | moves the item to the archive folder; from then on no rule applies to it. Only the JSON value `true` archives: `"false"` or `"no"` is a validate error and archives nothing at run time (cases VAL-31, INL-08) |
+| `delete` | `true` (only the JSON value `true`, as for `archive`) | removes the item file; its number is never handed out again (chapter 05; case PAT-55). A team that writes no rule with `delete` cannot delete. Items that name the deleted number keep it; it reads as a missing item and validate reports it |
 
 **The binding check** (coded): a team command may change an item without a team only through a rule whose `team` effect binds it to the
 command's team (case PAR-48, example rule `adopt`); the unbinding effect `"team": ""` is case PAT-57. The capability comes from owner
@@ -202,7 +210,9 @@ writing and with no argument, succeeds (the table allows it and every coded chec
 step on it exactly as `backlog team update <item> <step>` would (unless `--dry-run`). No answer: idle, exit 3. Because the offered step is
 tried in full, every guard of the step (limits, roles, dependencies, a related item that is archived) also shapes what pop offers, and pop
 never offers what the step would refuse (cases PAR-49 to PAR-53, SCR-24, SCR-25, SCR-28, SOL-09, SOL-10, PAT-42 to PAT-44; case INL-01:
-an item whose step would fail on an archived parent is skipped). A step that needs an argument cannot be offered (validate warns).
+an item whose step would fail on an archived parent is skipped). A step that needs an argument cannot be offered (validate warns). Only
+a refusal (exit 1) makes pop try the next item: a broken rule or a value of the wrong type (exit 2) stops pop with that error, so a malformed
+rule never turns into a silent idle (case INL-09; review C M6).
 
 ## 10. Filters
 
@@ -264,14 +274,16 @@ wants one.
 
 ## 13. Size
 
-The spike (`design/evaluator-spike/`) is three modules of plain Node with no dependency: `evaluator.mjs` (references, tests, functions, the
+The spike (`design/evaluator-spike/`) is five modules of plain Node with no dependency: `evaluator.mjs` (references, tests, functions, the
 table walk, effects with typing and reference checks, `new`, `pop`, filters, the coded team and agent resolution, the user-command
-visibility check, and the validate checks the cases exercise, the schema included), `safe-regex.mjs` (the linear matcher) and `numbers.mjs`
-(the high-water mark on git), plus `teams-load.mjs` (the validation on load of chapter 01 section 4) and `contention.mjs` (the
-measurement of chapter 04 section 7). Its tests are every case of `design/rule-cases.json`, one check that every rule, pop entry and filter of every
-example has a case and a verification entry, the git scenarios of `numbers.test.mjs` and the scenarios of `teams-load.test.mjs`. The line counts are in the review response file;
-they measure the idea, not the implementation, which adds files, git publication, the journal, the index, the history and the remaining
-validate checks of chapter 08. Many spike lines are long; the implementation will be several times its size.
+visibility check, and every error check of `backlog team validate` in chapter 08 sections 3 to 6, the schema included), `safe-regex.mjs`
+(the linear matcher), `numbers.mjs`
+(the high-water mark on git and the publication of chapter 05 section 3), `teams-load.mjs` (the validation on load of chapter 01
+section 4) and `setup.mjs` (the templates and the migration record of `backlog setup`), plus the script `contention.mjs` (the measurement
+of chapter 04 section 7). Its tests are every case of `design/rule-cases.json`, one check that every rule, pop entry and filter of every
+example has a case and a verification entry, the git scenarios of `numbers.test.mjs` and the scenarios of `teams-load.test.mjs` and
+`setup.test.mjs`. The line counts are in the review response file; they measure the idea, not the implementation, which adds files, the
+journal, the index, the history, the warnings of chapter 08 and its item checks (sections 7 and 8). Many spike lines are long; the implementation will be several times its size.
 
 ## 14. The schema of a team entry
 

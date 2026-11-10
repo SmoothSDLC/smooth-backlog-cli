@@ -18,7 +18,9 @@ const KEYS = {
 };
 const LABEL = { entry: 'a team entry', rules: 'rules', field: 'a field definition', rule: 'a rule', pop: 'a pop entry', filter: 'a filter', do: 'an effect list', related: 'a related entry', note: 'a note', place: 'a place' };
 const NAMES = { caller: ['', 'roles'], session: ['id', 'repository', 'branch', 'commit'], team: ['name', 'items'], now: [''] };
-const RESERVED_ARGS = ['team', 'agent', 'session', 'repository', 'branch', 'json', 'dry-run', 'help', 'version'];
+const RESERVED_ARGS = ['team', 'agent', 'session', 'repository', 'branch', 'json', 'dry-run', 'help', 'version', 'show-all', 'ask'];
+const TEAM_KEY = /^[a-z0-9][a-z0-9_:-]*$/;
+const PAIR = ['is', 'in', '>=', '<=', 'regex', 'contains'];
 const NAME = /^[a-z][a-z0-9_-]*$/;
 const FOREIGN = /^([\w.-]+\/[\w.-]+)#(\d+)$/;
 const DECIMAL = /^-?\d+(\.\d+)?$/;
@@ -58,7 +60,7 @@ export function value(v, ctx) {
   if (op === 'text') return a;
   if (op === 'count') return related(a.items, ctx).filter(it => test(a.match ?? { all: [] }, { ...ctx, it })).length;
   if (op === 'length') return asList(value(a, ctx)).length;
-  if (op === 'plus') return value(a, ctx).reduce((s, x) => s + (num(x) || 0), 0);
+  if (op === 'plus') { if (!Array.isArray(a)) throw new Refusal('plus takes a list of values', 2); return value(a, ctx).reduce((s, x) => s + (num(x) || 0), 0); }
   if (op === 'age') { const t = Date.parse(value(a, ctx)); return Number.isNaN(t) ? null : (Date.parse(ctx.now) - t) / 1000; }
   if (op === 'roles_of') return ctx.entry.people[value(a, ctx)] ?? [];
   throw new Refusal(`unknown function ${op}`, 2);
@@ -75,6 +77,7 @@ const related = (expr, ctx) => asList(value(expr, ctx)).map(s => find(ctx, s));
 
 export function test(c, ctx) {
   const [op, a] = one(c, 'condition');
+  if (PAIR.includes(op) && !(Array.isArray(a) && a.length === 2)) throw new Refusal(`${op} takes a list of two values`, 2);
   const v = x => value(x, ctx);
   switch (op) {
     case 'all': return a.every(x => test(x, ctx));
@@ -106,8 +109,11 @@ export function decide(ctx) {
 }
 
 // A value written into a field takes the field's type (machinery, not a rule): a wrong value is invalid input (exit 2).
-function typed(entry, field, v) {
+// own: the step's repository folder; a reference to it written in the foreign form owner/name#n is the local number n (no escape from the checks).
+function typed(entry, field, v, own) {
   const def = entry.item[field];
+  const local = x => { const f = FOREIGN.exec(String(x)); return f && f[1] === own ? Number(f[2]) : x; };
+  if (['item', 'items'].includes(def.type)) v = Array.isArray(v) ? v.map(local) : typeof v === 'string' && def.type === 'items' ? v.split(',').map(s => local(s.trim())).filter(x => x !== '') : local(v);
   const bad = why => { throw new Refusal(`field ${field}: ${JSON.stringify(v)} ${why}`, 2); };
   let out;
   if (def.type === 'number') { out = num(v); if (Number.isNaN(out)) bad('is not a number'); }
@@ -124,11 +130,11 @@ function typed(entry, field, v) {
 
 // Every value of an effect is computed on the items as they were before the step; then the changes are made on copies.
 const changes = (spec, ctx, it) => ['set', 'add', 'remove'].flatMap(kind => Object.entries(spec[kind] ?? {}).map(([f, x]) => [kind, f, value(x, { ...ctx, it })]));
-function change(entry, item, list) {
+function change(entry, item, list, own) {
   const next = { ...item, fields: { ...item.fields } };
   for (const [kind, f, v] of list) {
-    if (kind === 'set') { next.fields[f] = typed(entry, f, v); continue; }
-    const cur = asList(get(item, f, entry)); const vs = typed(entry, f, asList(v));
+    if (kind === 'set') { next.fields[f] = typed(entry, f, v, own); continue; }
+    const cur = asList(get(item, f, entry)); const vs = typed(entry, f, asList(v), own);
     next.fields[f] = kind === 'add' ? [...cur, ...vs.filter(x => !cur.some(y => same(x, y)))] : cur.filter(x => !vs.some(y => same(x, y)));
   }
   return next;
@@ -151,20 +157,21 @@ export function step(ctx) {
   if (item.team && item.team !== ctx.team) throw new Refusal(`item ${item.seq} belongs to team ${item.team}; team ${ctx.team} acts only on its own items and on items without a team`);
   const d = decide(ctx);
   if (!d.allowed) throw new Refusal(`${d.text}${d.rule ? ` (rule ${d.rule})` : ''}`, 1, d.rule);
+  if (d.do.team !== undefined && ![ctx.team, ''].includes(value(d.do.team, ctx))) throw new Refusal(`rule ${d.rule}: the team effect binds only to team ${ctx.team} or unbinds with ""; it never moves an item to another team`, 2, d.rule);
   if (!item.team && (d.do.team === undefined || value(d.do.team, ctx) !== ctx.team)) throw new Refusal(`item ${item.seq} belongs to no team; only a rule that binds it to team ${ctx.team} may change it (rule ${d.rule} does not)`, 1, d.rule);
   const own = changes(d.do, ctx, item);
   const others = (d.do.related ?? []).flatMap(r => related(r.items, ctx).map(it => [it, changes(r, ctx, it)]));
-  const next = change(entry, !item.team ? { ...item, fields: { ...Object.fromEntries(Object.entries(entry.item).map(([f, def]) => [f, defaultOf(def)])), ...item.fields } } : item, own);
+  const next = change(entry, !item.team ? { ...item, fields: { ...Object.fromEntries(Object.entries(entry.item).map(([f, def]) => [f, defaultOf(def)])), ...item.fields } } : item, own, ctx.session.repository);
   if (d.do.team !== undefined) next.team = value(d.do.team, ctx);
   if (d.do.branch !== undefined) next.branch = String(value(d.do.branch, ctx));
-  if (d.do.archive) next.archived = true;
+  if (d.do.archive === true) next.archived = true;
   if (d.do.note) { const x = d.do.note.text; next.notes = [...(item.notes ?? []), { heading: d.do.note.heading, text: typeof x === 'string' && !x.startsWith('$') ? fill(x, ctx) : String(value(x, ctx) ?? ''), by: ctx.caller }]; }
   const out = new Map([[item.seq, next]]);
   const written = new Map([[item.seq, own.map(([, f]) => f)]]);
   for (const [it, list] of others) {
     if (it.missing) throw new Refusal(`item ${it.seq} does not exist (rule ${d.rule})`, 1, d.rule);
     if (it.team !== ctx.team || it.archived || it.repository !== ctx.session.repository) throw new Refusal(`item ${it.seq} is not an open item of team ${ctx.team} in ${ctx.session.repository}; rule ${d.rule} cannot change it`, 1, d.rule);
-    out.set(it.seq, change(entry, out.get(it.seq) ?? it, list));
+    out.set(it.seq, change(entry, out.get(it.seq) ?? it, list, ctx.session.repository));
     written.set(it.seq, [...(written.get(it.seq) ?? []), ...list.map(([, f]) => f)]);
   }
   // reference checks (machinery) on the item and items fields this step wrote: each names an existing item, never the item itself
@@ -176,7 +183,7 @@ export function step(ctx) {
     }
   }
   const p = d.do.place;
-  return { rule: d.rule, items: out, delete: Boolean(d.do.delete), say: d.do.say ? fill(d.do.say, ctx) : null,
+  return { rule: d.rule, items: out, delete: d.do.delete === true, say: d.do.say ? fill(d.do.say, ctx) : null,
     place: p && typeof p === 'object' ? Object.fromEntries(Object.entries(p).map(([k, x]) => [k, value(x, ctx)])) : p ?? null };
 }
 
@@ -201,7 +208,7 @@ export function pop(ctx) {
   for (const entry of ctx.entry.rules.pop ?? []) for (const item of queue(ctx)) {
     const c = { ...ctx, item, step: entry.step, args: {} };
     if (entry.when && !test(entry.when, c)) continue;
-    try { step(c); } catch (e) { if (e instanceof Refusal) continue; throw e; }
+    try { step(c); } catch (e) { if (e instanceof Refusal && e.exit === 1) continue; throw e; } // exit 2 is a broken rule or value: never a silent idle
     return { action: entry.step, item: item.seq, entry: entry.id };
   }
   return { action: 'idle' };
@@ -277,31 +284,53 @@ export function validate(file) {
   const say = (team, path, rule, problem, fix) => out.push({ team, path, rule, problem, fix });
   for (const [team, e] of Object.entries(file)) {
     const keys = (obj, kind, path, rule = null) => { if (obj && typeof obj === 'object' && !Array.isArray(obj)) for (const k of Object.keys(obj)) if (!KEYS[kind].includes(k)) say(team, `${path}.${k}`.replace(/^\./, ''), rule, `${k} is not a key of ${LABEL[kind]}`, `did you mean ${closest(k, KEYS[kind])}? (${KEYS[kind].join(', ')})`); };
+    if (!TEAM_KEY.test(team)) say(team, '', null, `${team} is not a team name: lowercase letters, digits, - _ and :, starting with a letter or digit`, 'rename the team');
     keys(e, 'entry', ''); keys(e.rules, 'rules', 'rules');
     for (const k of KEYS.entry) if (!e?.[k]) say(team, k, null, `the entry has no ${k}`, `add ${k} (chapter 01 section 2)`);
     if (e?.rules) for (const k of KEYS.rules) if (!e.rules[k]) say(team, `rules.${k}`, null, `rules has no ${k}`, `add "${k}": ${k === 'filters' ? '{}' : '[]'}`);
     const roles = new Set(Object.values(e.people ?? {}).flat());
     if (!e.people || !Object.keys(e.people).length) say(team, 'people', null, 'the team has no person', 'add "people": {"<name>": ["<role>"]}');
+    for (const [p, r] of Object.entries(e.people ?? {})) {
+      if (!/^[^\s,]{1,64}$/.test(p)) say(team, `people.${p}`, null, `${p} is not a plain name`, 'no space, no comma, at most 64 characters');
+      if (!Array.isArray(r) || !r.length || r.some(x => typeof x !== 'string' || !x)) say(team, `people.${p}`, null, `${p} has no role list`, `write "${p}": ["<role>", ...]`);
+      else for (const x of new Set(r.filter((y, i) => r.indexOf(y) !== i))) say(team, `people.${p}`, null, `${p} has the role ${x} twice`, 'list each role once');
+    }
     for (const [f, d] of Object.entries(e.item ?? {})) {
       keys(d, 'field', `item.${f}`);
       if (ENVELOPE.includes(f)) say(team, `item.${f}`, null, `${f} is a key every item has already`, 'choose another field name');
       else if (!NAME.test(f)) say(team, `item.${f}`, null, `${f} is not a field name: lowercase letters, digits, - and _, starting with a letter`, 'rename the field');
-      if (!TYPES.includes(d.type)) say(team, `item.${f}.type`, null, `unknown type ${d.type}`, `use ${TYPES.join(', ')}`);
+      if (!TYPES.includes(d.type)) { say(team, `item.${f}.type`, null, `unknown type ${d.type}`, `use ${TYPES.join(', ')}`); continue; }
+      const one = x => (d.type === 'number' ? typeof x === 'number' : d.type === 'boolean' ? typeof x === 'boolean' : d.type === 'item' ? x === null || Number.isInteger(x) : LIST.includes(d.type) ? typeof x === 'string' || Number.isInteger(x) : typeof x === 'string');
+      const fits = x => (LIST.includes(d.type) ? Array.isArray(x) && x.every(one) : one(x));
+      if ('values' in d && (!Array.isArray(d.values) || !d.values.length || !d.values.every(one) || new Set(d.values).size !== d.values.length)) say(team, `item.${f}.values`, null, `values must be a non-empty list of distinct ${d.type} values`, 'list each allowed value once');
+      if ('default' in d) {
+        if (!fits(d.default)) say(team, `item.${f}.default`, null, `the default ${JSON.stringify(d.default)} is not a ${d.type}`, `give a ${d.type} value`);
+        else if (Array.isArray(d.values) && !asList(d.default).every(x => d.values.includes(x))) say(team, `item.${f}.default`, null, `the default ${JSON.stringify(d.default)} is not one of the values`, `use one of ${d.values.join(', ')}`);
+      }
+      if ('final' in d && f !== 'status') say(team, `item.${f}.final`, null, 'final belongs only to the status field', 'remove final here');
     }
+    const st = e.item?.status;
+    if (st?.values && !(Array.isArray(st.final) && st.final.length)) say(team, 'item.status.final', null, 'the status field has no final values', 'add "final": [<the values that close an item>]');
+    else if (st?.values) for (const v of st.final.filter(v => !st.values.includes(v))) say(team, 'item.status.final', null, `final value ${v} is not a value of status`, `use one of ${st.values.join(', ')}`);
     if (!e.item?.status?.values) say(team, 'item.status', null, 'the item definition has no status field with values', 'add "status": {"type": "text", "values": [...], "final": [...]}');
     const table = e.rules?.table ?? [];
+    // the problems of one reference: [problem, fix] pairs
+    const refProblems = (node, it) => {
+      const [root, ...rest] = node.slice(1).split('.'); const name = rest.join('.');
+      if (['item', 'it'].includes(root)) {
+        const out = [];
+        if (!ENVELOPE.includes(name) && !(name in (e.item ?? {}))) out.push([`${node} names no field of the item definition`, `add ${name} to ${team}.item or name one of ${Object.keys(e.item ?? {}).join(', ')}`]);
+        if (root === 'it' && !it) out.push([`${node} is used outside every, some, count and related`, 'use $item for the item of the step']);
+        return out;
+      }
+      if (root === 'arg') return RESERVED_ARGS.includes(name) ? [[`--${name} belongs to the CLI`, 'name the argument otherwise']] : NAME.test(name) ? [] : [[`${name} is not an argument name`, 'lowercase letters, digits, - and _']];
+      return root in NAMES && NAMES[root].includes(name) ? [] : [[`${node} is no reference`, 'use one of $item.<field>, $it.<field>, $arg.<name>, $caller, $caller.roles, $session.id|repository|branch|commit, $team.name|items, $now']];
+    };
+    // a literal text with {$...} placeholders (deny, say, note): each placeholder is a reference
+    const texts = (text, path, rule, where, it = false) => { if (typeof text === 'string' && !text.startsWith('$')) for (const [, p] of text.matchAll(/\{(\$[^}]*)\}/g)) for (const [problem, fix] of refProblems(p, it)) say(team, path, rule, `{${p}} in the ${where} text: ${problem}`, fix); };
     // a node of a condition or a value; ctx: where $it is valid, and the rule
     const walk = (node, path, rule, it, kind) => {
-      if (typeof node === 'string') {
-        if (!node.startsWith('$')) return;
-        const [root, ...rest] = node.slice(1).split('.'); const name = rest.join('.');
-        if (['item', 'it'].includes(root)) {
-          if (!ENVELOPE.includes(name) && !(name in (e.item ?? {}))) say(team, path, rule, `${node} names no field of the item definition`, `add ${name} to ${team}.item or name one of ${Object.keys(e.item ?? {}).join(', ')}`);
-          if (root === 'it' && !it) say(team, path, rule, `${node} is used outside every, some, count and related`, 'use $item for the item of the step');
-        } else if (root === 'arg') { if (RESERVED_ARGS.includes(name)) say(team, path, rule, `--${name} belongs to the CLI`, 'name the argument otherwise'); else if (!NAME.test(name)) say(team, path, rule, `${name} is not an argument name`, 'lowercase letters, digits, - and _'); }
-        else if (!(root in NAMES) || !NAMES[root].includes(name)) say(team, path, rule, `${node} is no reference`, `use one of $item.<field>, $it.<field>, $arg.<name>, $caller, $caller.roles, $session.id|repository|branch|commit, $team.name|items, $now`);
-        return;
-      }
+      if (typeof node === 'string') { if (node.startsWith('$')) for (const [problem, fix] of refProblems(node, it)) say(team, path, rule, problem, fix); return; }
       if (Array.isArray(node)) return node.forEach((x, i) => walk(x, `${path}[${i}]`, rule, it, kind));
       if (!node || typeof node !== 'object') return;
       const ks = Object.keys(node);
@@ -309,6 +338,11 @@ export function validate(file) {
       const [k] = ks; const x = node[k]; const at = `${path}.${k}`;
       const allowed = kind === 'condition' ? TESTS : FUNCTIONS;
       if (!allowed.includes(k)) return say(team, at, rule, `unknown ${kind === 'condition' ? 'test' : 'function'} ${k}`, `did you mean ${closest(k, allowed)}?`);
+      if (kind === 'condition' && PAIR.includes(k) && !(Array.isArray(x) && x.length === 2)) return say(team, at, rule, `${k} takes a list of two values`, `write {"${k}": [<value>, <value>]}`);
+      if (['all', 'any'].includes(k) && !Array.isArray(x)) return say(team, at, rule, `${k} takes a list of conditions`, `write {"${k}": [<condition>, ...]}`);
+      if (k === 'not' && (!x || typeof x !== 'object' || Array.isArray(x))) return say(team, at, rule, 'not takes one condition', 'write {"not": <condition>}');
+      if (k === 'plus' && !Array.isArray(x)) return say(team, at, rule, 'plus takes a list of values', 'write {"plus": [<value>, <value>]}');
+      if (QUANT.includes(k) && (!x || typeof x !== 'object' || !('items' in x) || (k !== 'count' && !x.match))) return say(team, at, rule, `${k} takes items${k === 'count' ? ' and an optional match' : ' and match'}`, `write {"${k}": {"items": <items>, "match": <condition>}}`);
       if (QUANT.includes(k)) {
         if (it) say(team, at, rule, `${k} inside another every, some or count`, 'a rule reads one hop of related items; split it into two rules');
         for (const q of Object.keys(x ?? {})) if (!['items', 'match'].includes(q)) say(team, `${at}.${q}`, rule, `${q} is not a key of ${k}`, 'use items and match');
@@ -330,6 +364,7 @@ export function validate(file) {
         if (!(f in (e.item ?? {}))) say(team, `${path}.${kind}.${f}`, rule, `${f} is no field of the item definition`, `add ${f} to ${team}.item`);
         else if (kind !== 'set' && !LIST.includes(e.item[f].type)) say(team, `${path}.${kind}.${f}`, rule, `${kind} needs a list field; ${f} is ${e.item[f].type}`, 'use set');
         else if (typeof x === 'string' && !x.startsWith('$') && e.item[f].values && !e.item[f].values.includes(x)) say(team, `${path}.${kind}.${f}`, rule, `${x} is not a value of ${f}`, `use one of ${e.item[f].values.join(', ')}`);
+        else if (['string', 'number', 'boolean'].includes(typeof x) && !String(x).startsWith('$')) { try { typed(e, f, kind === 'set' ? x : asList(x), ''); } catch (err) { say(team, `${path}.${kind}.${f}`, rule, err.message, `write a ${e.item[f].type} value`); } }
         walk(x, `${path}.${kind}.${f}`, rule, it, 'value');
       }
     };
@@ -339,11 +374,18 @@ export function validate(file) {
       keys(r, 'rule', at, r.id ?? null);
       if (!r.id || ids.has(r.id)) say(team, at, r.id ?? null, r.id ? `the id ${r.id} is used twice` : 'the rule has no id', 'give every rule its own id');
       ids.add(r.id);
-      for (const s of asList(r.step)) if (s !== '*' && !NAME.test(s)) say(team, `${at}.step`, r.id, `${s} is not a step name`, 'lowercase letters, digits, - and _, starting with a letter');
+      if (!(typeof r.step === 'string' || (Array.isArray(r.step) && r.step.length))) say(team, `${at}.step`, r.id, 'step must be a word, a list of words or "*"', 'name the step the rule decides');
+      else for (const s of asList(r.step)) if (s !== '*' && !NAME.test(s)) say(team, `${at}.step`, r.id, `${s} is not a step name`, 'lowercase letters, digits, - and _, starting with a letter');
+      else if (RESERVED_ARGS.includes(s)) say(team, `${at}.step`, r.id, `${s} is a flag name of the CLI`, 'name the step otherwise');
+      if (typeof r.deny === 'string') texts(r.deny, `${at}.deny`, r.id, 'deny');
       if (('deny' in r) === ('do' in r)) say(team, at, r.id, 'a rule has exactly one outcome: deny or do', 'keep one of deny and do');
       if (r.when) walk(r.when, `${at}.when`, r.id, false, 'condition');
       if (r.do) {
         keys(r.do, 'do', `${at}.do`, r.id); effects(r.do, `${at}.do`, r.id, false);
+        if ('team' in r.do && !['$team.name', ''].includes(r.do.team)) say(team, `${at}.do.team`, r.id, 'the team effect binds only to $team.name or unbinds with ""', 'a team never moves an item to another team');
+        for (const k of ['archive', 'delete']) if (k in r.do && r.do[k] !== true) say(team, `${at}.do.${k}`, r.id, `${k} takes only true`, `leave ${k} out when the step must not ${k}`);
+        if ('say' in r.do) texts(r.do.say, `${at}.do.say`, r.id, 'say');
+        if (r.do.note) texts(r.do.note.text, `${at}.do.note.text`, r.id, 'note');
         if (r.do.note) { keys(r.do.note, 'note', `${at}.do.note`, r.id); walk(r.do.note.text, `${at}.do.note.text`, r.id, false, 'value'); }
         (r.do.related ?? []).forEach((x, i) => { keys(x, 'related', `${at}.do.related[${i}]`, r.id); walk(x.items, `${at}.do.related[${i}].items`, r.id, false, 'value'); effects(x, `${at}.do.related[${i}]`, r.id, true); });
       }

@@ -1,7 +1,7 @@
 // R12 scenarios on real git repositories in a temporary folder: node --test numbers.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { allocate, git, highWater, publishByRebase, publishByRerun, seed } from './numbers.mjs';
@@ -98,4 +98,52 @@ test('upstream changed only another repository folder: the team command is not r
   publishByRerun(b, () => { reran = true; }, F);
   assert.equal(reran, false);
   assert.deepEqual(items(b), [`${F}/phases/001-mine.json`]);
+});
+
+// round 5: the adversarial tests of review C on numbers and publication (ADV-20 to ADV-23)
+test('a number that exists only in a merge commit is never handed out again (review C M2)', t => {
+  const { a } = world(t);
+  allocate(a, F, 'one'); commit(a, 'one');
+  git(a, 'checkout', '-q', '-b', 'side'); writeFileSync(join(a, 'side.txt'), 'x'); commit(a, 'side');
+  git(a, 'checkout', '-q', 'main'); writeFileSync(join(a, 'main.txt'), 'y'); commit(a, 'main');
+  git(a, 'merge', '-q', '--no-ff', '--no-commit', 'side');
+  writeFileSync(join(a, F, 'phases', '005-merged.json'), '{"seq": 5}\n'); git(a, 'add', '-A'); git(a, 'commit', '-q', '-m', 'merge with a new item');
+  git(a, 'rm', '-q', `${F}/phases/005-merged.json`); commit(a, 'clean 5');
+  assert.equal(highWater(a, F), 5);
+  assert.equal(allocate(a, F, 'next'), 6);
+});
+
+test('a file-name number above the bound is an unreadable item, and never part of the mark once removed (review C M3)', t => {
+  const { a } = world(t);
+  mkdirSync(join(a, F, 'phases'), { recursive: true });
+  writeFileSync(join(a, F, 'phases', '9007199254740993-odd.json'), '{}\n'); commit(a, 'planted');
+  assert.throws(() => allocate(a, F, 'x'), /above 1000000000/);
+  git(a, 'rm', '-q', `${F}/phases/9007199254740993-odd.json`); commit(a, 'removed');
+  assert.deepEqual([allocate(a, F, 'x'), allocate(a, F, 'y')], [1, 2]);
+});
+
+test("a team re-run drops only the command's own commit: a person's unpushed commit in another folder stays (review C H3, question 2)", t => {
+  const { a, clone } = world(t);
+  const b = clone('b');
+  allocate(a, F, 'alpha'); commit(a, 'A 1'); git(a, 'push', '-q');
+  mkdirSync(join(b, 'acme', 'other'), { recursive: true }); writeFileSync(join(b, 'acme', 'other', 'draft.txt'), 'mine'); commit(b, 'person draft');
+  allocate(b, F, 'beta'); commit(b, 'B team');
+  let got;
+  publishByRerun(b, () => { got = allocate(b, F, 'beta'); commit(b, 'B team again'); }, F);
+  assert.equal(got, 2);
+  assert.match(git(b, 'log', '--format=%s'), /person draft/);
+  // provisional answer A of question 2: the person's commit is published with the change, as today's in-repository mode does
+  assert.match(git(b, 'log', '--format=%s', 'origin/main'), /person draft/);
+});
+
+test('upstream changed only another folder: the commit is rebased as it is, and the push carries the branch as today (review C ADV-23, question 2)', t => {
+  const { a, clone } = world(t);
+  const b = clone('b');
+  allocate(a, 'acme/other', 'theirs'); commit(a, 'other folder'); git(a, 'push', '-q');
+  mkdirSync(join(b, 'acme', 'third'), { recursive: true }); writeFileSync(join(b, 'acme', 'third', 'draft.txt'), 'mine'); commit(b, 'person draft');
+  allocate(b, F, 'mine'); commit(b, 'B 1');
+  let reran = false;
+  publishByRerun(b, () => { reran = true; }, F);
+  assert.equal(reran, false);
+  assert.match(git(b, 'log', '--format=%s', 'origin/main'), /person draft/); // under option B of question 2 only "B 1" would be published
 });

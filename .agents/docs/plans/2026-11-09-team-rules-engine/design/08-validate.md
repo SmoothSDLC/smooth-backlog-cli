@@ -17,7 +17,9 @@ section 4), so a broken rule set is never used. This chapter lists every check a
 - `--json` — the same findings as a list, for a script or an agent.
 - Every run refreshes the per-user validation record of chapter 01 section 4 (the SHA of what it read, the valid teams, now) when at least
   one team is valid, and writes the file's SHA into `.backlog/config.json` (key `teams_file_sha`) when it changed, so the lead commits the
-  SHA with the edit (ruling R22). It writes nothing else (ruling R5: the team file is only read).
+  SHA with the edit (ruling R22); where chapter 01 section 1.1 keeps the SHA in the per-user record instead, only the record changes. It
+  writes nothing else (ruling R5: the team file is only read). Validity is per team (question 4, provisional B): the exit code and the
+  findings follow the named team's entry and the file's shape, and a run for one team never refuses because of another team's entry.
 - No file at the resolved location: the text of chapter 01 section 1.1 (the resolved path and the three ways to define it), exit 2.
 - On a backlog whose items are still markdown (before `backlog team migrate`), validate runs sections 3 to 6 on the file and prints
   `ℹ️  the items are markdown: run backlog team migrate, then validate checks them too`; sections 7 and 8 need JSON items (chapter 06
@@ -39,8 +41,9 @@ One finding per problem, never only "invalid":
 
 With `--json`: `[{"severity": "error", "team": "parallel", "path": "rules.table[11]", "rule": "claim-dependencies", "problem": "...", "fix": "..."}]`.
 `path` is the JSON path inside the team's entry (or the item file for an item finding); `rule` is the id of the rule or pop entry, or null for
-people and item definition findings. The spike's `validate` returns exactly these keys (cases VAL-01 to VAL-12; the five example files
-validate clean, cases VAL-EX-*).
+people and item definition findings. The spike's `validate` returns these keys and implements every error check of sections 3 to 6
+(cases VAL-01 to VAL-35; the five example files validate clean, cases VAL-EX-*); the warnings and the item checks of sections 7 and 8 are
+left to the implementation.
 
 **What ruling R18 asks of the validation, and where each part is.** Every required field: the keys of the file, an entry, `rules`, every
 field definition, rule, pop entry and filter (sections 3 to 6 and the schema of chapter 03 section 14; `rules` must hold `table`, `pop`
@@ -56,7 +59,7 @@ entry in today's shape (`lead`, `members`, `review`) fails the schema like any o
 | check | severity | problem text (fix) |
 |---|---|---|
 | the file is valid JSON and an object | error | `teams.json is not JSON (<parser message, line and column>)` (correct the syntax at that place) |
-| each key is a team name | error | `<key> is not a team name: lowercase letters, digits, - _ and :, starting with a letter or digit` (rename the team) |
+| each key is a team name | error | `<key> is not a team name: lowercase letters, digits, - _ and :, starting with a letter or digit` (rename the team; case VAL-24) |
 | each entry has exactly `people`, `item`, `rules`, and `rules` has exactly `table`, `pop`, `filters` | error | `<key> is not a key of a team entry (people, item, rules)` / `the entry has no <key>` |
 
 ## 4. People
@@ -65,7 +68,7 @@ entry in today's shape (`lead`, `members`, `review`) fails the schema like any o
 |---|---|---|
 | `people` is an object with at least one person | error | `the team has no person` (add `"people": {"<name>": ["<role>"]}`) |
 | each name is a plain name (no space, no comma, at most 64 characters) | error | `<name> is not a plain name` |
-| each value is a non-empty list of distinct role words | error | `<name> has no role` / `<name> has the role <r> twice` |
+| each value is a non-empty list of distinct role words | error | `<name> has no role list` / `<name> has the role <r> twice` (case VAL-25) |
 | a role that no rule reads | warning | `the role <r> is read by no rule, pop entry or filter` (remove it, or it is documentation) |
 
 ## 5. The item definition
@@ -74,10 +77,10 @@ entry in today's shape (`lead`, `members`, `review`) fails the schema like any o
 |---|---|---|
 | a field name is not an envelope key | error | `<f> is a key every item has already` (choose another field name; case VAL-11) |
 | `type` is known | error | `unknown type <t>` (use text, number, boolean, time, person, item, items or list) |
-| `default` has the type and is among `values` | error | `the default <v> is not a <type>` / `the default <v> is not one of the values` |
+| `default` has the type and is among `values` | error | `the default <v> is not a <type>` / `the default <v> is not one of the values` (case VAL-26) |
 | `values` is a non-empty list of distinct values of the type | error | `values must be a non-empty list of distinct <type> values` |
-| `status` exists with `values` and `final`, and `final` is a subset of `values` | error | `the item definition has no status field with values` (case VAL-10) / `final value <v> is not a value of status` |
-| `final` on another field | error | `final belongs only to the status field` |
+| `status` exists with `values` and `final`, and `final` is a non-empty subset of `values` | error | `the item definition has no status field with values` (case VAL-10) / `the status field has no final values` / `final value <v> is not a value of status` (case VAL-27) |
+| `final` on another field | error | `final belongs only to the status field` (case VAL-27) |
 | a field without `description` | warning | `<f> has no description; agents read the descriptions` |
 | a field no rule, pop entry or filter reads | warning | `<f> is read by no rule` (data only is allowed; the warning says nothing reads it) |
 
@@ -90,24 +93,24 @@ filter, `do`, `related` entry, `note`, `place` and quantifier.
 | check | severity | problem text (fix) |
 |---|---|---|
 | each rule has an `id`, unique in the team | error | `the rule has no id` / `the id <id> is used twice` |
-| `step` is a word, a list of words or `"*"`; a step word is not a CLI flag name | error | `step must be a word, a list of words or "*"` |
+| `step` is a word, a non-empty list of words or `"*"`; a step word is not a CLI flag name | error | `step must be a word, a list of words or "*"` (case VAL-32) / `help is a flag name of the CLI` (case VAL-35) |
 | exactly one of `deny` and `do` | error | `a rule has exactly one outcome: deny or do` (case VAL-06) |
 | a condition and a function have exactly one key | error | `a condition has exactly one key (found is, in)` (wrap several conditions in all; case VAL-13) |
-| the key of a condition is a test of chapter 03 section 4, with the right form | error | `unknown test <k>` (with the closest test) / `<k> takes a list of two values` |
-| every function is known and well formed | error | `unknown function <k>` |
+| the key of a condition is a test of chapter 03 section 4, with the right form | error | `unknown test <k>` (with the closest test) / `<k> takes a list of two values` (case VAL-28: a malformed condition would otherwise make pop answer idle) / `not takes one condition` / `every takes items and match` |
+| every function is known and well formed | error | `unknown function <k>` / `plus takes a list of values` (case VAL-29) / `count takes items and an optional match` |
 | field, step and argument names are lowercase letters, digits, `-` and `_`, starting with a letter | error | `a.b is not a field name: ...` (case VAL-19) |
 | `$item.<f>` and `$it.<f>` name a declared field or an envelope key | error | `$item.kids names no field of the item definition` (add it, or name one of ...; case VAL-02) |
 | `$it` only inside `every`, `some`, `count` and a `related` entry | error | `$it.status is used outside every, some, count and related` (use $item; `$it` inside `related` is valid, case VAL-17) |
 | no `every`, `some`, `count` inside another | error | `every inside another every, some or count` (split the rule; case VAL-08) |
-| `$arg.<name>` is not a CLI flag name (team, agent, session, repository, branch, json, dry-run, help, version) | error | `--help belongs to the CLI` (name the argument otherwise; case VAL-19) |
+| `$arg.<name>` is not a CLI flag name (team, agent, session, repository, branch, json, dry-run, help, version, show-all, ask) | error | `--help belongs to the CLI` (name the argument otherwise; cases VAL-19, VAL-22) |
 | a reference is one of the closed list of chapter 03 section 5 | error | `$session.brnach is no reference` (use one of ...; case VAL-15) |
 | a role literal compared with `$caller.roles` or `roles_of` is held by some person | error | `no person has the role boss` (give a person the role, or use one of ...; case VAL-03) |
 | a literal compared with a field that has `values` is one of them | error | `doen is not a value of status (open, done)` (case VAL-04) |
-| a `regex` pattern compiles on the linear matcher of chapter 03 section 4.1 | error | `not a pattern the CLI runs (<the first unsupported construct and where>)` (cases VAL-09, VAL-20) / `the pattern is longer than 200 characters` / `the pattern is too large` |
+| a `regex` pattern compiles on the linear matcher of chapter 03 section 4.1 | error | `not a pattern the CLI runs (<the first unsupported construct and where>)` (cases VAL-09, VAL-20, VAL-33: a reversed range `[z-a]`) / `the pattern is longer than 200 characters` / `the pattern is too large` |
 | every effect is known; `set`, `add`, `remove` name declared fields; `add` and `remove` name list fields; the same inside every `related` entry | error | `<f> is no field of the item definition` (cases VAL-05, VAL-16) / `add needs a list field; <f> is <type>` |
-| a literal written into a field has the type and is among its values | error | `shipped is not a value of status` (case VAL-12) |
-| `team` effect is `"$team.name"` or `""`; `archive` and `delete` are `true` | error | `the team effect binds only to $team.name or unbinds with ""` |
-| a placeholder in a text is a valid reference | error | `{$item.kids} in the deny text names no field` |
+| a literal written into a field has the type and is among its values | error | `shipped is not a value of status` (case VAL-12) / `field estimate: "abc" is not a number` (case VAL-34) |
+| `team` effect is `"$team.name"` or `""`; `archive` and `delete` are `true` | error | `the team effect binds only to $team.name or unbinds with ""` (case VAL-23; a team never moves an item to another team) / `delete takes only true` (case VAL-31: `"delete": "no"` would otherwise delete) |
+| a placeholder in a deny, say or note text is a valid reference | error | `{$item.kids} in the deny text: $item.kids names no field of the item definition` (case VAL-30) |
 | shadowing (chapter 03 section 3): an earlier rule names every step of a later one and each of its clauses is a clause of the later rule, compared without regard to key order, an `in` covering an `is` of one of its values | error | `rule <b> can never decide: rule <a> above it matches every case it matches` (move b above a, or narrow a; cases VAL-01, VAL-18). Shadowing that only logic could prove (for example `>=` 3 above `>=` 5) is not found; the chapter 03 order rule still holds for it |
 | a pop entry names a step some rule names | error | `no rule names the step claim` (case VAL-07) |
 | an offered step whose allowing rules read an argument | warning | `pop cannot give --note to the step hand-to-check; the pop entry can only be refused` |
@@ -122,7 +125,8 @@ filter, `do`, `related` entry, `note`, `place` and quantifier.
 | an open item's field value is not among the field's `values` (for example after a status word was removed from the definition) | error | `<path>: status "refining" is not a value of status of team <t>` (add the value back, or move the item with a step) |
 | an item carries a field the definition does not declare | warning | `<path>: field <f> is not declared by the item definition of team <t>; rules cannot read it` |
 | an `item` or `items` field names no item (a deleted or cleaned item), or a foreign `owner/name#seq` that does not resolve (its folder unreadable, still markdown, or without that item; ruling R24) | warning | `<path>: field depends_on names no item 99` (the item's other steps still work; a step that writes the field must drop the number) |
-| two items of one folder hold one number (after a merge of code branches, chapter 05 section 2) | error | `<owner>/<name>: number <n> is held by <slug a> and <slug b>` (the next writing command renumbers the newer one) |
+| two items of one folder hold one number (after a merge of code branches, chapter 05 section 2) | error | `<owner>/<name>: number <n> is held by <slug a> and <slug b>` (question 3, provisional A: when neither has a team, the next writing command renumbers the newer one; when either has a team, the folder's team commands stop until a person gives one of them a free number with `backlog update <slug> --show-all --seq <n>`) |
+| an item's JSON `seq` differs from the number of its file name (a hand edit) | error | `<path>: seq <s> differs from the file name's number <n>` (restore the file; the mark reads file names only, review C section 5) |
 
 ## 8. Numbers
 

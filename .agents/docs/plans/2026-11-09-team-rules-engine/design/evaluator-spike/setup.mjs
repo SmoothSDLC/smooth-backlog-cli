@@ -1,4 +1,4 @@
-// Spike of the two additions to `backlog setup` (owner rulings R23 and R25, design chapter 06 section 8): the generic team templates are
+// Spike of the two additions to `backlog setup` (owner rulings R23 and R25, design chapter 06 section 2.0): the generic team templates are
 // copied into the repository's .backlog folder (the CLI never reads them), and setup recommends the migration according to the two keys
 // the migration writes into .backlog/config.json.
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
@@ -16,16 +16,16 @@ export function deployTemplates(top, source) {
   return `✅ team templates copied to ${TEMPLATE_DIR}: ${TEMPLATES.join(', ')}; copy one to the team file and edit it there`;
 }
 
-// R25: what the migration writes after every successful run that is not a dry run.
-export const recordMigration = (cfg, { now, version }) => ({ ...cfg, migrated_at: now, migrated_by_version: version });
+// R25: what the migration writes after a successful run that is not a dry run (review C M9). migrated_at is when the folder became JSON:
+// it changes only when the run converted at least one file, or on the first run over a folder that had nothing to convert;
+// migrated_by_version names the CLI of the latest run.
+export const recordMigration = (cfg, { now, version, converted }) => ({ ...cfg, migrated_at: converted > 0 || !cfg.migrated_at ? now : cfg.migrated_at, migrated_by_version: version });
 
-const parts = v => String(v).split(/[.-]/).slice(0, 3).map(n => Number(n) || 0);
-const older = (a, b) => { const [x, y] = [parts(a), parts(b)]; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false; };
 const RUN = 'backlog team migrate --show-all --dry-run, then backlog team migrate --show-all';
-// R25: the line setup prints once the configuration defines a backlog folder.
-export function migrateAdvice(cfg, version) {
+// R25: the line setup prints once the configuration defines a backlog folder. No version comparison: every build of the CLI reports the
+// same development version today, and R25 asks only for the recommendation and the record (review D M4).
+export function migrateAdvice(cfg) {
   if (typeof cfg.backlog_repository !== 'string' || !cfg.backlog_repository) return null;
   if (!cfg.migrated_at) return `ℹ️  the backlog of this repository has not been migrated to JSON items: run ${RUN}`;
-  if (older(cfg.migrated_by_version, version)) return `ℹ️  the backlog of this repository was last migrated on ${cfg.migrated_at} by version ${cfg.migrated_by_version}; this is version ${version}: run ${RUN}`;
   return `ℹ️  the backlog of this repository was last migrated on ${cfg.migrated_at} by version ${cfg.migrated_by_version}`;
 }

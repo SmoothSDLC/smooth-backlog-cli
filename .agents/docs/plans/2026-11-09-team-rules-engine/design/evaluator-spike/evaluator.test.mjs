@@ -22,7 +22,7 @@ function run(c) {
   const file = c.rule_set === 'inline' ? c.given.team_file : FILES[c.rule_set];
   if (cmd.run === 'validate') { const f = validate(file); return { exit: f.length ? 2 : 0, findings: f.map(({ path, rule, problem }) => ({ path, rule, problem })) }; }
   if (cmd.run === 'resolve') return { exit: 0, team: resolveTeam(cmd) };
-  if (cmd.run === 'setup-advice') return { exit: 0, text: migrateAdvice(cmd.cfg, cmd.version) };
+  if (cmd.run === 'setup-advice') return { exit: 0, text: migrateAdvice(cmd.cfg) };
   if (cmd.run === 'inputs') return { exit: 0, ...resolveInputs(cmd) };
   if (cmd.run === 'teams-file') { const f = teamsFile(cmd); return cmd.missing ? { exit: 2, text: missingText(f.path) } : { exit: 0, path: f.path, how: f.how }; }
   if (cmd.run === 'user-show') return { exit: 0, item: userShow(items(c.given), cmd.item, { showAll: cmd.show_all, env: cmd.env }).seq };

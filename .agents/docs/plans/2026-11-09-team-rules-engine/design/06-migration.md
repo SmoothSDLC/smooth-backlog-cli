@@ -1,8 +1,9 @@
 # 06 — The migration of every item from markdown to JSON
 
 Context: owner ruling R4 stores items as JSON files and migrates every existing item, open and archived; the CLI migrates or fails, with
-no second format and no alias. `backlog team migrate` converts item files only: it never touches the team file (ruling R5; it may write
-the file's SHA into `.backlog/config.json` as every team command does, chapter 01 section 4). It runs once per repository folder of the
+no second format and no alias. `backlog team migrate` converts item files only: it never touches the team file (ruling R5). It validates
+the team file in full, as `backlog team validate` does, and like it refreshes the per-user record and the file's SHA (chapter 01 section 4)
+when the file is valid. It runs once per repository folder of the
 backlog, after the release that reads JSON and before any other command of that release can be used on the backlog. This chapter
 fixes the order of the cut-over, the command, the data issues of real backlogs and the failures.
 
@@ -29,7 +30,9 @@ backwards compatibility: a team entry still in today's shape is not read, it sto
 
 Scenario: the owner upgrades the CLI; any other command on the backlog stops with
 `❌ backlog: the items of <owner>/<name> are markdown files; run backlog team migrate once to convert every item to JSON` (exit 2). Only
-`backlog team validate`, `backlog team migrate`, `backlog --help`, `backlog --version` and `backlog upgrade` run on a markdown backlog.
+`backlog team validate`, `backlog team migrate`, `backlog setup`, `backlog --help`, `backlog --version` and `backlog upgrade` run on a
+markdown backlog. `backlog setup` is on the list because it reads no item and ruling R25 makes it recommend the migration on exactly such a
+backlog (review C H4, review D M5).
 
 Like every team command, the migration needs a specific team or `--show-all` (rulings R3b, R14). The two forms differ only in which team's
 items are checked against an item definition: **the conversion is always the whole repository folder** of the actionable repository it
@@ -61,25 +64,28 @@ and a field set by `--ask` is recorded with the resolved agent (`--agent`, else 
 Context: ruling R25 asks `backlog setup` to recommend the migration as soon as the configuration defines a backlog folder, and the
 configuration to record when the backlog was migrated and the version of the CLI that last ran the migration.
 
-- **Two keys of `.backlog/config.json`**, written by `backlog team migrate` after every successful run that is not a dry run (and by
-  nothing else): `migrated_at`, the time of that run (ISO 8601 UTC, for example `2026-11-12T09:00:00Z`), and `migrated_by_version`, the
-  version of the CLI that ran it (the package version, for example `1.4.0`). Being keys of the actionable repository's configuration, they
-  describe that repository's folder only (ruling R24). The CLI writes them into the working tree; a person commits them, as for the SHA.
+- **Two keys of `.backlog/config.json`**, written by `backlog team migrate` after a successful run that is not a dry run (and by nothing
+  else). `migrated_at` is when the folder became JSON (ISO 8601 UTC, for example `2026-11-12T09:00:00Z`): it is written when the run
+  converted at least one file, and on the first run over a folder that had nothing to convert (a folder that was JSON from the start); a
+  later run that converts nothing leaves it (review C M9). `migrated_by_version` is the package version of the CLI of the latest run, kept
+  as information (every build today reports `0.0.0-development`, so no command compares it, review D M4). Being keys of the actionable
+  repository's configuration, they describe that repository's folder only (ruling R24). The CLI writes them into the working tree; a
+  person commits them, as for the SHA. When the repository input names another repository than the working copy's (question 1), the
+  working copy's configuration is not that repository's, so the keys are not written; a later run in that repository records them.
 - **What setup prints**, after the configuration lines, whenever the configuration defines a backlog folder (`backlog_repository`), which
   is after every setup:
   - never migrated (no `migrated_at`): `ℹ️  the backlog of this repository has not been migrated to JSON items: run backlog team migrate
     --show-all --dry-run, then backlog team migrate --show-all` (case R25-01);
-  - migrated by an older version than the running one: `ℹ️  the backlog of this repository was last migrated on <migrated_at> by version
-    <migrated_by_version>; this is version <version>: run backlog team migrate --show-all --dry-run, then backlog team migrate --show-all`
-    (case R25-02);
-  - migrated by this version (or a later one): `ℹ️  the backlog of this repository was last migrated on <migrated_at> by version
-    <migrated_by_version>` (case R25-03).
+  - migrated: `ℹ️  the backlog of this repository was last migrated on <migrated_at> by version <migrated_by_version>` (cases R25-02,
+    R25-03). Round 4 also advised a new run when an older version had migrated; that was not asked by R25 and cannot work while every
+    build reports the same development version, so it is dropped (review D M4).
   The recommendation names `--show-all` because setup does not know which team the person works for; `--team <name>` works as well. Setup
   never runs the migration.
 - **Other commands do nothing with the two keys.** No command refuses or warns because of them; a folder still in markdown stops commands
   exactly as section 2 already says, whatever the keys say.
 
-Spike: `evaluator-spike/setup.mjs`, test "setup recommends the migration in each state of the two keys"; cases R25-01 to R25-04.
+Spike: `evaluator-spike/setup.mjs`, tests "setup recommends the migration until the folder is migrated ..." and "migrated_at records when
+the folder was migrated ..."; cases R25-01 to R25-04.
 
 ### 2.1 The field report (ruling R17)
 
@@ -118,7 +124,9 @@ text pattern of `backlog new --ask` (`src/shared/new.js:106`): exit 2,
 2. Resolve the team file (chapter 01 section 1.1), load it and validate the whole file in full (chapter 08 sections 3 to 6; the per-user record of chapter 01 section 4 is not
    used: the migration always validates, as `backlog team validate` does). A missing or unreadable file, or any entry that fails, stops
    the migration with no action (R18, section 5). The migration needs the team names to know which items to unbind, and an owner who wants
-   every team item unbound writes `{}`.
+   every team item unbound writes `{}`. A folder in which no item (open or archived) has a `team` key needs no team file: with no file at
+   the resolved location the migration converts it and says `ℹ️  no team file at <path>; no item of <owner>/<name> has a team`
+   (review D M6: most folders of a real backlog hold no team item).
 3. For the repository folder `<owner>/<name>`: read every `.md` item file of `phases/` and of `archive/` (recursively) with today's front-matter
    reader (`src/shared/frontmatter.js`, which survives only here, as the reader of the cut-over and not as a second format); a file of
    `phases/` without a front-matter block is not an item and is left alone, as today. Build the folder's order (section 4.4) before anything
@@ -126,8 +134,18 @@ text pattern of `backlog new --ask` (`src/shared/new.js:106`): exit 2,
 4. Build each JSON file with the mapping of chapter 02 section 5 and the rules of section 4.
 5. Check the whole folder before writing anything (section 5).
 6. Write every JSON file, remove every converted `.md` file, write the folder's `numbers.json` (chapter 05 section 4; its high-water mark
-   includes every number the folder's history ever held) and the folder's index, all through the journal; commit once; push. Then write
-   `migrated_at` and `migrated_by_version` into `.backlog/config.json` (section 2.0).
+   includes every number the folder's history ever held), the folder's index, and the stop file for older releases (below), all through the
+   journal; commit once; push. Then write `migrated_at` and `migrated_by_version` into `.backlog/config.json` (section 2.0).
+
+**The stop file for older releases** (question 7 of `decisions.md`, applied provisionally). A release older than the cut-over reads only
+`*.md` items (`src/shared/store.js:285`), so on a migrated folder it sees no item: `backlog new` would hand out number 1 again
+(`nextSeq`, `src/shared/store.js:299`) and the index reconcile would drop every entry. Such releases keep running on machines whose
+self-update refuses a release with another `backlogSchemaVersion` (`src/upgrade.js:140`), and after a rollback of an installation. The
+migration therefore writes `phases/000-migrated-to-json.md` in the folder: a front-matter block that today's reader cannot parse
+(`---` / `this folder holds JSON items: use a release of the CLI with backlogSchemaVersion 2 or later` / `---`), so every command of an
+older release stops on that folder with exit 2 (`src/shared/store.js:257-266`) before it reads or writes anything. The new release ignores
+exactly that one file name. `package.json` gets `backlogSchemaVersion: 2` in the cut-over, so the self-update of an older installation
+names the manual update instead of installing it silently (review D H3).
 7. Print the field report (section 2.1); with `--ask`, run section 2.2.
 
 ## 4. Data issues of real backlogs
@@ -197,7 +215,7 @@ The migration takes no action (no item, no file, nothing in the backlog) when an
 
 | case | text |
 |---|---|
-| no team file at the resolved location | the text of chapter 01 section 1.1 (the resolved path and the three ways); an owner who wants every team item of the folder unbound puts `{}` there |
+| no team file at the resolved location, and at least one item of the folder has a team | the text of chapter 01 section 1.1 (the resolved path and the three ways); an owner who wants every team item of the folder unbound puts `{}` there |
 | the team file unreadable or not an object | `<path> cannot be read (<reason>); fix it, or write {} to unbind every team item on purpose` |
 | the clone is shallow | chapter 05 section 2 |
 | an item's header cannot be read | `<owner>/<name>/<path>: the header cannot be read (<reason>); restore it with git and run backlog team migrate again` |
@@ -205,10 +223,11 @@ The migration takes no action (no item, no file, nothing in the backlog) when an
 | the JSON file name is taken | `<path>.json exists; remove it or rename it` |
 | a symbolic link in a folder | today's path safety text |
 | an entry of the team file fails validation (for example one still in today's shape) | `team <t> fails validation in <path>; rewrite it and run backlog team validate --team <t> first` (R18) |
+| a JSON file name would be longer than the file system allows (a `.json` name is two bytes longer than its `.md` name; ENAMETOOLONG) | `<path>.md: the JSON file name would be too long; shorten the item's name in markdown and run again` (review D L6) |
 
 After a successful migration every reader reads only `.json` items. A `.md` file with a front-matter block that appears in `phases/` or
 `archive/` later (a branch merged from before the migration) stops every command with the text of section 2, and `backlog team migrate`
-converts it.
+converts it. The stop file `phases/000-migrated-to-json.md` of section 3 is the one `.md` name the new release ignores.
 
 ## 6. No compatibility path after the cut-over (ruling R18)
 
@@ -225,6 +244,7 @@ fails with a text that names the way forward, and nothing reads it. The toleranc
 | a done producer without hand-off records satisfies a dependency edge (`src/team/handoff.js:53-57`) | no coded edge at all; a team that wants that reading writes it as a rule (entry plan Task 6) |
 | the environment variables without the prefix (TEAM_NAME, BACKLOG_AGENT, ...) | not read (ruling R20, no alias): a session that still sets only the old names has no team and no agent, and the command says so with the three-ways text |
 | a team entry in today's shape (`lead`, `members`, `review`) | fails validation; its team commands and the migration take no action |
+| an older release of the CLI on a migrated folder | stops on the stop file of section 3 with exit 2; `backlogSchemaVersion` 2 keeps the self-update from crossing the change silently (question 7) |
 
 ## 7. Scenarios for the BDD plan
 
@@ -236,7 +256,9 @@ gets its parent number", "two split lines: the first wins", "a split item whose 
 priority order", "absent created and updated_by", "an unreadable header stops the migration", "two items with one number stop the
 migration", "a shallow clone stops the migration", "the folder gets its counter from its whole history", "a second run says nothing to
 migrate", "a second run after a team entry is removed unbinds its items", "a markdown item after the migration stops a command",
-"validate runs on a markdown backlog and checks the file only", "an entry in today's shape stops the migration and nothing is written",
+"validate runs on a markdown backlog and checks the file only", "setup runs on a markdown backlog and recommends the migration", "a folder
+with no team item migrates without a team file", "an older release refuses a migrated folder because of the stop file", "a second run that
+converts nothing keeps migrated_at", "an entry in today's shape stops the migration and nothing is written",
 "migrate without a team or --show-all stops with the three-ways text", "the field report lists a missing, an invalid and an undeclared
 field", "--ask on a terminal repairs one field and records it", "--ask without a terminal is refused", "a repository with only .smooth-backlog.json stops with the move text", "a session with only the
 unprefixed variables gets the three-ways text".

@@ -22,9 +22,15 @@ Git keeps that fact even when the file, the counter or the commit's effect is un
 **The high-water mark of a folder** is the highest of:
 
 1. every number in the name of an item file ever added or renamed under `<owner>/<name>/phases/` or `<owner>/<name>/archive/` in the
-   history of every ref the clone holds (`git log --all --diff-filter=AR --name-only -- <owner>/<name>`);
-2. every value of `last` ever committed to `<owner>/<name>/numbers.json` in that history;
+   history of every ref the clone holds, merge commits included (`git log --all -m --diff-filter=AR --name-only -- <owner>/<name>`;
+   without `-m` git shows no change of a merge commit, so an item a person created while resolving a merge would be missed, review C M2);
+2. every value of `last` ever committed to `<owner>/<name>/numbers.json` in that history (also with `-m`);
 3. the item files and `numbers.json` of the working tree (a number the command itself just wrote).
+
+A number above 1 000 000 000 is never a real item number (R12 expects tens of thousands of items). A file name in the history with such a
+number is ignored, and an item file in the working tree with such a number is an unreadable item: every command of the folder stops with
+exit 2 naming it until it is renamed or removed (review C M3: past 2^53 two allocations would otherwise get the same number; spike test "a
+file-name number above the bound ...").
 
 **Allocation** (`backlog new`, `backlog team new`, a renumbering; `backlog move` now moves only between branches of one folder and keeps
 the number, chapter 04 section 9): the high-water mark plus 1; the command
@@ -40,6 +46,7 @@ it and validate can compare it; it is never trusted alone.
 | `numbers.json` lowered by hand, or deleted | clause 2 reads every value it ever had | same test |
 | another clone published a number, then deleted the item, before this clone pushed its own item with that number | publication (section 3) compares with the upstream high-water mark, not with the files present | "another clone published and deleted the same number ..." (team command) and "the same race through a user command ..." |
 | two clones create at once | publication renumbers the later one | "two clones create at once ..." |
+| a number held only by a merge commit, then deleted | clause 1 reads merge commits (`-m`) | "a number that exists only in a merge commit ..." |
 
 **Shallow clones.** A shallow clone holds part of the history, so it cannot prove a number unused. Every command that allocates a number
 refuses in a shallow clone: exit 2, `❌ backlog: the backlog clone is shallow, so numbers cannot be proven unused: run git fetch --unshallow`
@@ -53,8 +60,13 @@ item creations, which is the size of the backlog, not of the code history.
 backlog repository's main branch should refuse force pushes. For a backlog kept inside a code repository (`backlog_repository: .backlog`),
 items follow code branches: two branches that never saw each other can both hand out the next number. Publication of a branch onto its
 upstream is covered by section 3; a merge of two code branches made with git outside the CLI is not, and the first CLI command after such a
-merge finds two items with one number (validate reports it, chapter 08 section 8) and renumbers the item whose creation commit is newer, as
-today's renumbering does for added files.
+merge finds two items with one number. What then happens is question 3 of `decisions.md`, applied provisionally as option A: when both
+items have no team, the next writing command renumbers the one whose creation commit is newer, as today's renumbering does for added files
+(its file name, `seq`, slug, heading and the references of items without a team follow it); when either item has a team, nothing is
+renumbered: `backlog team validate` reports the duplicate as an error and every team command of that folder stops with exit 2, `❌ backlog:
+number <n> of <owner>/<name> is held by <slug a> and <slug b>; give one of them a free number (backlog update <slug> --show-all --seq <n>),
+then run the command again`, until a person renumbers one of them. A team item is never renumbered by the CLI on its own, so no reference
+inside a team-defined field ever points at the wrong item (review C M1).
 
 ## 3. Publication: the number must be above the upstream mark
 
@@ -62,8 +74,9 @@ Context: a number is handed out in a local clone and becomes final only when it 
 moment of publication, on the upstream state.
 
 - **Team commands** (`backlog team new`, `backlog team update`, `backlog team pop`) never rebase a local change of a folder upstream also
-  changed: the local commit is dropped (`git reset --keep` to upstream) and the whole command runs again on the upstream files; when upstream
-  changed only other folders, the commit is rebased as it is (chapter 04 section 6). Either way the number is above the upstream mark.
+  changed: only the command's own commit is dropped (`git reset --keep HEAD~1`), today's pull brings upstream in, and the whole command
+  runs again on the upstream files; when upstream changed only other folders, the commit is rebased as it is (chapter 04 section 6,
+  question 2). Either way the number is above the upstream mark.
   A re-run allocates from the upstream high-water mark, so a team creation can never collide.
 - **User commands** keep today's rebase. After the rebase, every item file the local unpublished commits added whose number is not above
   the upstream high-water mark (computed on the upstream ref only) is renumbered above it, whether or not a file holds the number now; the
@@ -71,13 +84,15 @@ moment of publication, on the upstream state.
   `src/shared/sync.js:183`, on `depends_on`, `parent` and the body). A rebase conflict on `numbers.json` is resolved by taking the larger
   `last`; today's `repairConflicts` (`src/shared/sync.js:253`) refuses any conflict outside item files and the index, so it gains this one
   case (a code change).
-- Only items created by the command being published are renumbered. A team item is never renumbered (a team creation is re-run instead),
-  so no reference inside a team-defined field ever has to follow a renumbering.
+- Only items created by the command being published are renumbered. A team item is never renumbered (a team creation is re-run instead,
+  and a duplicate after a merge stops the team commands, section 2), so no reference inside a team-defined field ever has to follow a
+  renumbering.
 
 ## 4. Other commands and numbers
 
-- **`backlog update <item> --seq <n>`** (the repair of an item's number, items without a team): refused unless `n` is above the high-water
-  mark; the item takes `n`. A lower number could be one a deleted item held. Text:
+- **`backlog update <item> --seq <n>`** (the repair of an item's number: items without a team, and a team item with `--show-all`, R19):
+  refused unless `n` is above the high-water mark; the item takes `n`. Today's refusal while another item's `depends_on` names the
+  number (`src/shared/sync.js:361-366`) stays. A lower number could be one a deleted item held. Text:
   `❌ --seq <n> is not above the highest number ever used in <owner>/<name> (<mark>); numbers are never reused`.
 - **Archive, `backlog clean`, the `delete` effect** remove or move files and never lower the mark.
 - **Migration** (chapter 06) writes `numbers.json` for the repository folder it converts, with `last` = the folder's high-water mark from
@@ -114,8 +129,10 @@ learns an entry's owner from the item file it already loads.
 
 ## 7. Proof and scenarios for the BDD plan
 
-The spike proves sections 2 to 4 on real git (`node --test numbers.test.mjs`, 7 tests). The BDD plan (entry plan Task 3) adds, with the CLI
+The spike proves sections 2 to 4 on real git (`node --test numbers.test.mjs`, 12 tests). The BDD plan (entry plan Task 3) adds, with the CLI
 itself: "two clones create an item at once" (both paths), "another clone published and cleaned a number before this push", "git revert of a
 creation", "a shallow clone refuses `backlog new`", "`--seq` below the mark is refused", "migrate seeds its folder from the folder's history",
-"a duplicate number after a code-branch merge is renumbered", "a user priority change leaves team entries in place", "a team's place effect
+"a duplicate number of two items without a team after a code-branch merge is renumbered", "a duplicate number that involves a team item
+stops the folder's team commands until a person renumbers it", "a number created inside a merge commit is not handed out again", "an item
+file named with a number above the bound stops the folder", "a user priority change leaves team entries in place", "a team's place effect
 leaves user entries in place".

@@ -1,12 +1,12 @@
 # Team rules engine: the BDD and test plan
 
-Context: entry plan Task 3 asks for the scenarios and the test plan before the code. The design already holds the scenarios: the 262 cases
-of design/rule-cases.json (each a given state, a command and the expected exit, rule, text and changes) and the named scenarios of
-chapters 01, 04, 05 and 06 that need files and git. This file maps every one of them to the batch of `00-priority-order.md` that makes it
-pass, the test file that holds it and its kind; lists the existing tests each batch breaks or rewrites; and defines the real-execution
-checks of backlog item 153. The kinds: **unit** (a module called in the test process, no files), **integration** (the real `backlog`
-command on temporary folders and git repositories), **BDD** (a Gherkin scenario of features/*.feature, run by .agents/test/features.test.js
-in both storage locations).
+Context: entry plan Task 3 asks for the scenarios and the test plan before the code. The design holds the scenarios: the 288 cases of
+design/rule-cases.json (each a given state, a command and the expected exit, rule, text and changes) and the named scenarios of chapters
+01, 04, 05 and 06 that need files and git. This file maps every one of them to the batch of `00-priority-order.md` that makes it pass, the
+test file that holds it and its kind; checks review D's count of the existing tests and maps each group to its batch; and defines the
+real-execution checks of backlog item 153. The kinds: **unit** (a module called in the test process, no files), **integration** (the real
+`backlog` command on temporary folders and git repositories), **BDD** (a Gherkin scenario of features/*.feature, run by
+.agents/test/features.test.js in both storage locations).
 
 ## 1. Where the tests live
 
@@ -24,7 +24,7 @@ in both storage locations).
 
 ## 2. Every scenario, its batch, its test file and its kind
 
-### 2.1 The cases of rule-cases.json, by prefix (262 cases)
+### 2.1 The cases of rule-cases.json, by prefix (288 cases)
 
 | prefix | cases | run kinds (count) | batch that makes them pass | test file | kind |
 |---|---|---|---|---|---|
@@ -33,59 +33,78 @@ in both storage locations).
 | XP (extreme programming) | 20 | update 14, new 3, pop 1, filter 2 | B08, B09; replay B13, B14 | as above | unit, integration |
 | SOL (single agent) | 12 | update 6, new 3, pop 2, filter 1 | B08, B09; replay B13, B14 | as above | unit, integration |
 | PAT (the pattern catalogue) | 57 | update 50, new 2, pop 3, filter 2 | B08, B09; replay B13, B14 | as above | unit, integration |
-| COD (coded CLI behaviour) | 15 | resolve 5 (COD-01 to COD-04, COD-13), new 4 (COD-05, COD-08, COD-09, COD-12), update 4 (COD-10, COD-11, COD-14, COD-15), user-show 2 (COD-06, COD-07) | resolve: B12; new and update: B08, replay B13, B14; user-show: B17 | team-rules-cases, team-commands, user-visibility | unit, integration |
-| VAL (checks of the file) | 21 | validate | B10 | team-rules-cases; the command form in team-validate (B12) | unit, integration |
+| COD (coded CLI behaviour) | 16 | resolve 6 (COD-01 to COD-04, COD-13, COD-16), new 4 (COD-05, COD-08, COD-09, COD-12), update 4 (COD-10, COD-11, COD-14, COD-15), user-show 2 (COD-06, COD-07) | resolve: B12; new and update: B08, replay B13, B14; user-show: B17 | team-rules-cases, team-commands, user-visibility | unit, integration |
+| VAL (checks of the file) | 35 | validate | B10 (VAL-20 and VAL-33 also prove B07's subset) | team-rules-cases; the command form in team-validate (B12) | unit, integration |
 | VAL-EX (the five templates validate clean) | 5 | validate | B10 | team-rules-cases | unit |
-| INL (inline team files: edge cases) | 5 | update 4 (INL-02 to INL-05), pop 1 (INL-01) | INL-05 (the pattern that hangs a backtracking engine): B07 for the matcher, B08 end to end; INL-02 to INL-04: B08; INL-01: B09 | team-safe-regex, team-rules-cases | unit |
-| R14 (`--show-all` on team commands) | 9 | inputs | B12 | team-rules-cases; the refusals through the commands in team-validate | unit, integration |
+| INL (inline team files: edge cases) | 11 | update 9 (INL-02 to INL-08, INL-10, INL-11), pop 2 (INL-01, INL-09) | INL-05 (the pattern that hangs a backtracking engine): B07 for the matcher, B08 end to end; the other update cases (malformed forms, the team and archive effects, the foreign form of an own reference): B08; INL-01 and INL-09 (pop stops on a broken rule): B09 | team-safe-regex, team-rules-cases | unit |
+| R14 (`--show-all` on team commands; design question "2026-11-09 round 12, question 5") | 10 | inputs | B12 | team-rules-cases; the refusals through the commands in team-validate | unit, integration |
 | R15 (flag before variable) | 3 | inputs 2 (R15-01, R15-02), update 1 (R15-03) | B12; R15-03: B08, replay B14 | team-rules-cases, team-commands | unit, integration |
 | R16 (user commands and team items) | 3 | user-show 1 (R16-01), user-ref 2 (R16-02, R16-03) | B17 | user-visibility | integration |
 | R17 (the migration's field report) | 2 | migrate-check 1 (R17-01), migrate-ask 1 (R17-02) | B24 | team-rules-cases (R17-01), team-migrate (R17-02 on a terminal and without one) | unit, integration |
 | R19 (user writes on team items) | 2 | user-set | B18 | user-visibility | integration |
-| R19A (the team-session guard) | 2 | user-show | B20 | user-visibility | integration |
-| R22 (where the team file is) | 5 | teams-file | B02 | team-rules-cases, team-file-location | unit |
+| R19A (the team-session guard) | 3 | user-show | B20 | user-visibility | integration |
+| R22 (where the team file is; R22-07 is question 1, R22-08 is question 6 of round 12) | 8 | teams-file | B02 | team-rules-cases, team-file-location | unit |
 | R24 (own folder) | 2 | update 1 (R24-01), new 1 (R24-02) | B08 in the evaluator; B21 through the commands with a real foreign folder | team-rules-cases, team-commands | unit, integration |
-| R25 (setup's advice) | 4 | setup-advice | B26 | team-rules-cases; the real setup in shared-setup | unit, integration |
-| total | 262 | | | | |
+| R25 (setup's report) | 4 | setup-advice | B26 | team-rules-cases; the real setup in shared-setup | unit, integration |
+| total | 288 | new and update 180, pop and filter 26, validate 40, the rest 42 | | | |
 
-### 2.2 The scenarios of chapter 01 (the team file)
+### 2.2 The scenarios of chapter 01 (the team file and setup)
 
-| scenario | batch | test file | kind |
-|---|---|---|---|
-| the location: the `teams_file` key wins, else the repository folder of a configured backlog repository, else .backlog/teams.json | B02 (resolution), B11 (on load) | team-file-location, team-load | unit, integration |
-| a missing file stops the command with the resolved path and the three ways, and writes nothing | B11 | team-load | integration |
-| a team file that is a symbolic link is refused | B11 | team-load | integration |
-| the first load validates, writes the SHA into .backlog/config.json and the record; within 24 hours the copy is used | B11 | team-load | integration |
-| a SHA in the configuration that differs from the record (another branch, a pull) makes the file read and validated again | B11 | team-load | integration |
-| after 24 hours an invalid file stops the command; the SHA and the record are not updated | B11 | team-load | integration |
-| `backlog team validate` always validates in full, refreshes the record and writes the SHA | B12 | team-validate | integration |
-| the record lists the valid teams: a valid team proceeds, an invalid team takes no action | B11, through a command in B13 | team-load, team-commands | integration |
-| a read-only checkout and an unwritable state folder: the command proceeds, validating in full each time, silently | B11 | team-load | integration |
-| setup copies the five generic templates into .backlog/team-templates and says so | B25 | shared-setup | integration |
-| a second setup replaces an edited copy and removes a file the person added there | B25 | shared-setup | integration |
+The fifteen scenarios of the spike's teams-load.test.mjs become integration tests in .agents/test/team-load.test.js (B11), except where a
+command is named; the four of setup.test.mjs go to .agents/test/shared-setup.test.js.
+
+| scenario | batch | test file |
+|---|---|---|
+| the location: the `teams_file` key wins, else the repository folder of a backlog outside the repository, else .backlog/teams.json | B02 (resolution), B11 (on load) | team-file-location, team-load |
+| a missing file stops the command with the resolved path and the three ways, and writes nothing | B11 | team-load |
+| a team file that is a symbolic link is refused | B11 | team-load |
+| a `teams_file` reached through a symbolic-link folder inside the repository is refused | B11 | team-load |
+| the first load validates, writes the SHA into .backlog/config.json and the record; within 24 hours the copy is used | B11 | team-load |
+| a SHA in the configuration that differs from the record (another branch, a pull) makes the file read and validated again | B11 | team-load |
+| after 24 hours an invalid file stops the command; the SHA and the record are not updated | B11 | team-load |
+| a record dated in the future (clock change) is stale: the file is read again | B11 | team-load |
+| a refused team command writes nothing: no SHA, no record, no copy, even when another team of the file is valid | B11, through a command in B13 | team-load, team-commands |
+| `backlog team validate` always validates in full, refreshes the record and writes the SHA | B12 | team-validate |
+| the record lists the valid teams: a valid team proceeds, an invalid team takes no action (question 4 of round 12) | B11, through a command in B13 | team-load, team-commands |
+| a read-only checkout and an unwritable state folder: the command proceeds, validating in full each time, silently | B11 | team-load |
+| an unparsable .backlog/config.json stops every command and is never overwritten | B02 (user commands), B11 (team commands) | team-file-location, team-load |
+| a repository input that names another repository: that repository's team file; the SHA goes to the per-user record (question 1 of round 12) | B11 | team-load |
+| a backlog found without a configuration: the team file is in its repository folder and no configuration is created (question 6 of round 12) | B11 | team-load |
+| setup copies the five generic templates into .backlog/team-templates and says so | B25 | shared-setup |
+| a second setup replaces an edited copy and removes a file the person added there | B25 | shared-setup |
+| setup reports the migration until the folder is migrated, then states when (no version comparison) | B26 | shared-setup |
+| `migrated_at` records when the folder was migrated: a later run that converts nothing keeps it | B22 | team-migrate |
 
 ### 2.3 The scenarios of chapter 04 section 6 (two clones, team commands) and chapter 05 section 7 (numbers and the index)
 
-| scenario | batch | test file | kind |
-|---|---|---|---|
-| two members claim one item at once: one succeeds, the other is refused by the claim rule | B15 | team-concurrency | integration (two clones of one bare repository) |
-| two children are added to one parent at once: the parent's children list holds both | B15 | team-concurrency | integration |
-| two claims that together pass a team limit: the second is refused by the limit rule | B15 | team-concurrency | integration |
-| two creations at once: two numbers | B15 | team-concurrency | integration |
-| an item changed three times during a step past the time budget: exit 3 | B15 | team-concurrency | integration |
-| upstream changed only another repository folder: the team command is not run again, its commit is rebased | B15 | team-concurrency | integration |
-| two clones create an item at once, through `backlog new` | B04 | numbers | integration |
-| two clones create an item at once, through `backlog team new` | B15 | team-concurrency | integration |
-| another clone published and cleaned (deleted) a number before this push: a team command takes the next number | B15 | team-concurrency | integration |
-| the same race through a user command: the number is renumbered above upstream | B04 | numbers | integration |
-| deleting the newest item does not give its number again | B03 | numbers | integration |
-| `git revert` of a creation, and a lowered or deleted numbers.json, do not give the number again | B03 | numbers | integration |
-| a shallow clone refuses `backlog new` | B03 | numbers | integration |
-| `backlog update <item> --seq <n>` below the mark is refused | B03 | numbers | integration |
-| the migration seeds its folder from the folder's history | B22 | team-migrate | integration |
-| a duplicate number after a code-branch merge is reported by validate and renumbered by the next writing command | B12 (report), B04 (renumbering) | team-validate, numbers | integration |
-| a user priority change leaves team entries in place | B19 | shared-index | integration |
-| a team's `place` effect leaves user entries in place | B19 | team-commands | integration |
+All are integration tests on two clones of one bare repository unless the row says otherwise.
+
+| scenario | batch | test file |
+|---|---|---|
+| two members claim one item at once: one succeeds, the other is refused by the claim rule | B15 | team-concurrency |
+| two children are added to one parent at once: the parent's children list holds both | B15 | team-concurrency |
+| two claims that together pass a team limit: the second is refused by the limit rule | B15 | team-concurrency |
+| two creations at once: two numbers | B15 | team-concurrency |
+| an item changed during a step past half of the time budget: exit 3 | B15 | team-concurrency |
+| a team re-run drops only the command's own commit; a person's unpushed commit and uncommitted change are kept (question 2 of round 12) | B15 | team-concurrency |
+| a person's uncommitted change to a file of the command's commit blocks the reset: exit 3 with the text | B15 | team-concurrency |
+| upstream changed only another repository folder: the team command is not run again, its commit is rebased | B15 | team-concurrency |
+| two clones create an item at once, through `backlog new` | B04 | numbers |
+| another clone published and cleaned (deleted) a number before this push: a team command takes the next number | B15 | team-concurrency |
+| the same race through a user command: the number is renumbered above upstream | B04 | numbers |
+| deleting the newest item does not give its number again | B03 | numbers |
+| `git revert` of a creation, and a lowered or deleted numbers.json, do not give the number again | B03 | numbers |
+| a number that exists only in a merge commit is never handed out again | B03 | numbers |
+| an item file named with a number above the bound stops the folder, and the number is never part of the mark | B03 | numbers |
+| a shallow clone refuses `backlog new` | B03 | numbers |
+| `backlog update <item> --seq <n>` below the mark is refused | B03 | numbers |
+| the migration seeds its folder from the folder's history | B22 | team-migrate |
+| a duplicate number of two items without a team after a code-branch merge is renumbered (question 3 of round 12) | B04 | numbers |
+| a duplicate number that involves a team item stops the folder's team commands until a person renumbers it (question 3 of round 12) | B12 (validate reports it), B13 (the stop) | team-validate, team-commands |
+| a lead's uncommitted team file in the folder is not committed by the next writing command (staging of owned paths) | B04 | shared-sync |
+| a user priority change leaves team entries in place | B19 | shared-index |
+| a team's `place` effect leaves user entries in place | B19 | team-commands |
+| clean leaves the index entries of team items in place | B19 | shared-move-archive |
 
 ### 2.4 The scenarios of chapter 06 section 7 (the migration)
 
@@ -97,7 +116,8 @@ All are integration tests in .agents/test/team-migrate.test.js, on fixture folde
 | an open item of a team with an entry is converted | B22 |
 | an item of a team without an entry is unbound with the record | B23 |
 | an archived item of a team without an entry is unbound and otherwise unchanged | B23 |
-| no team file at the resolved location stops the migration, naming the path and the three ways | B22 |
+| no team file at the resolved location, with a team item in the folder, stops the migration, naming the path and the three ways | B22 |
+| a folder with no team item migrates without a team file | B22 |
 | an unreadable team file stops the migration | B22 |
 | the migration converts only the folder of its repository | B22 |
 | a foreign dependency on a folder still in markdown reads as unresolved and stops nothing | B22 |
@@ -108,12 +128,16 @@ All are integration tests in .agents/test/team-migrate.test.js, on fixture folde
 | absent created and updated_by become null and empty text | B22 |
 | an unreadable header stops the migration | B22 |
 | two items with one number stop the migration | B22 |
+| a JSON file name that would be too long stops the migration | B22 |
 | a shallow clone stops the migration | B22 |
 | the folder gets its counter from its whole history | B22 |
 | a second run says nothing to migrate | B22 |
+| a second run that converts nothing keeps `migrated_at` | B22 |
 | a second run after a team entry is removed unbinds its items | B23 |
 | a markdown item after the migration stops a command | B22 (the stop text itself is B06) |
+| an older release refuses a migrated folder because of the stop file (question 7 of round 12) | B22 (today's reader run on the migrated fixture) |
 | validate runs on a markdown backlog and checks the file only | B22 |
+| setup runs on a markdown backlog and recommends the migration | B26 (in shared-setup) |
 | an entry in today's shape stops the migration and nothing is written | B22 |
 | migrate without a team or `--show-all` stops with the three-ways text | B22 |
 | the field report lists a missing, an invalid and an undeclared field | B24 |
@@ -122,7 +146,6 @@ All are integration tests in .agents/test/team-migrate.test.js, on fixture folde
 | a repository with only the root configuration file of earlier builds stops with the move text | B28 (in storage-location) |
 | a session with only the unprefixed variables gets the three-ways text | B01 (in env-prefix) |
 | the index entries whose status copy changes are counted in the summary | B23 |
-| setup on a markdown backlog recommends the migration (ruling R25) | B26 (in shared-setup) |
 
 ### 2.5 The BDD features
 
@@ -135,96 +158,110 @@ Context: features/*.feature describe the product in Gherkin and run in both stor
 | features/storage.feature, features/items.feature, features/integrity.feature | B06 | the steps read JSON item files (features/steps/cli.js reads `.md` files and parses their header today) |
 | a new features/team-rules.feature | B16 | a lead reads `backlog team query rules` and `backlog team query steps`, edits the team file, runs `backlog team validate` and sees a finding with its fix |
 | a new features/show-all.feature | B18 | a person lists without and with `--show-all`, and archives the item of a team that no longer exists |
-| a new features/migrate.feature | B24 | the owner previews with `--dry-run`, migrates, reads the field report |
+| a new features/migrate.feature | B24 | the owner previews with `--dry-run`, migrates, reads the field report; an older release refuses the migrated folder |
 
 ## 3. The existing tests each batch breaks or rewrites
 
-Context: .agents/test holds 75 test files with 1135 tests on 2026-11-10 at commit 0128400 (933 in 74 files run one by one with Node 24,
-plus the 202 BDD runs of features.test.js, 101 scenarios in each of two locations; every one passes). The searches that sorted them, to be
-run again by each batch's implementing agent because a file can mention a form without depending on it: the old variable names (B01); `.md`
-item paths, front matter and the header codec (B06); nextSeq, `--seq` and renumber (B03, B04); command lines starting with `team` (B13 to
-B16); the flags and commands the design removes on those lines (B14, B27). Totals: B14 deletes 20 files with 218 tests (their behaviour is
-now rules of the templates, proven by the cases); B27 deletes 4 files with 80 tests (unit tests of removed modules); B28 deletes one file
-with 6 tests; 6 files with 52 tests are not expected to change.
+Context: review D (section 4) classified the 819 test declarations of the 75 test files of .agents/test (1135 tests at run time, because
+loops expand them) into six groups and named two shared helper files that carry most of the change. This plan checked each figure on
+commit 0128400 by searching each declaration's own block, and maps each group to its batch.
 
-| test file | tests | batches that change it, and how |
-|---|---|---|
-| .agents/test/commands-documented.test.js | 3 | every batch that changes help: COMMANDS.md regenerated |
-| .agents/test/features.test.js | 202 | B06 (steps read JSON files), B14 (team.feature, team-flow.feature, agents.feature rewritten on the parallel example), B17, B27 (team-define.feature deleted) |
-| .agents/test/fields.test.js | 3 | B06: backlog fields prints the built-in definition |
-| .agents/test/install-script.test.js | 3 | none expected |
-| .agents/test/new-ask.test.js | 9 | B01 rename; B06 JSON file; B24 reuses its child process for migrate --ask |
-| .agents/test/no-child-process-proof.test.js | 4 | B01 rename |
-| .agents/test/no-private-details.test.js | 3 | B01 rename; B06 JSON file |
-| .agents/test/package.test.js | 2 | B01 rename; B06 JSON file |
-| .agents/test/plain-team-env.test.js | 7 | B01 rename; B20 rewrite: the team variable now stops every user command |
-| .agents/test/plain-team-items.test.js | 12 | B17 rewrite: a user command does not see a team item (today it refuses one) |
-| .agents/test/release-pr.test.js | 4 | none expected |
-| .agents/test/release.test.js | 9 | B06 JSON file |
-| .agents/test/removed-forms.test.js | 2 | B27 adds the removed command lines |
-| .agents/test/router.test.js | 6 | B01 rename; B12 the six team words; B20 the session guard |
-| .agents/test/script-runs.test.js | 6 | B01 rename |
-| .agents/test/shared-audit.test.js | 16 | B03/B04 numbers; B06 JSON file; B13 to B16 team command lines rewritten |
-| .agents/test/shared-changed.test.js | 13 | B01 rename; B03/B04 numbers; B06 JSON file |
-| .agents/test/shared-checkout.test.js | 5 | B01 rename; B06 JSON file |
-| .agents/test/shared-fixtures.test.js | 1 | B01 rename |
-| .agents/test/shared-foreign-deps.test.js | 4 | B21 rewrite: foreign references are not followed and stop nothing |
-| .agents/test/shared-frontmatter.test.js | 45 | kept: the markdown reader survives for the migration (B22); its dump tests go in B28 if dump has no caller left |
-| .agents/test/shared-handoff-close.test.js | 9 | B27 delete (unit tests of a removed module) |
-| .agents/test/shared-handoff-commands.test.js | 13 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-handoff-core.test.js | 21 | B27 delete (unit tests of a removed module) |
-| .agents/test/shared-handoff-e2e.test.js | 22 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-handoff-gate.test.js | 8 | B27 delete (unit tests of a removed module) |
-| .agents/test/shared-help.test.js | 21 | B12, B14, B16 help texts; B27 removed commands |
-| .agents/test/shared-index.test.js | 9 | B03/B04 numbers; B06 JSON file |
-| .agents/test/shared-item-keys.test.js | 5 | B01 rename; B06 JSON file |
-| .agents/test/shared-legacy-fields.test.js | 6 | B28 delete: the old key spellings are read only by the migration (B22 keeps one test) |
-| .agents/test/shared-list.test.js | 7 | none expected |
-| .agents/test/shared-long-name.test.js | 1 | B01 rename; B06 JSON file |
-| .agents/test/shared-move-archive.test.js | 43 | B06 file names; B03 numbers; B21: --to-repository tests removed |
-| .agents/test/shared-new.test.js | 46 | B01 rename; B03/B04 numbers; B06 JSON file; B13 to B16 team command lines rewritten |
-| .agents/test/shared-no-classes.test.js | 3 | B06 JSON file |
-| .agents/test/shared-origin-setting.test.js | 10 | B01 rename; B28: the root configuration file |
-| .agents/test/shared-query.test.js | 25 | B01 rename; B03/B04 numbers; B06 JSON file; B13 to B16 team command lines rewritten |
-| .agents/test/shared-read-commands.test.js | 9 | none expected (its matches are user-command flags) |
-| .agents/test/shared-repair.test.js | 7 | B06 JSON file |
-| .agents/test/shared-routed-commands.test.js | 8 | none expected |
-| .agents/test/shared-safety.test.js | 26 | B01 rename; B06 JSON file; B13 to B16 team command lines rewritten |
-| .agents/test/shared-session-continue.test.js | 9 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-session-names.test.js | 2 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-session-review.test.js | 11 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-setup.test.js | 5 | B01 rename; B25 and B26 add tests; B28 root configuration file |
-| .agents/test/shared-severity.test.js | 2 | B01 rename; B06 JSON file |
-| .agents/test/shared-stale.test.js | 15 | B01 rename; B03/B04 numbers; B06 JSON file |
-| .agents/test/shared-store.test.js | 23 | B01 rename; B03/B04 numbers; B06 JSON file |
-| .agents/test/shared-symlinked-parent.test.js | 4 | B06 JSON file |
-| .agents/test/shared-sync-db.test.js | 48 | B01 rename; B03/B04 numbers; B06 JSON file; B13 to B16 team command lines rewritten |
-| .agents/test/shared-sync.test.js | 30 | B01 rename; B03/B04 numbers; B06 JSON file |
-| .agents/test/shared-team-compat.test.js | 5 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-done.test.js | 2 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-flow.test.js | 26 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-lead-pop.test.js | 15 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-lifecycle.test.js | 10 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-plan.test.js | 10 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-pop.test.js | 19 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-scope.test.js | 9 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-stages.test.js | 15 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-status-order.test.js | 7 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-teams.test.js | 6 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-team-work.test.js | 20 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-twostage.test.js | 2 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-unrefined-claim.test.js | 6 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/shared-update.test.js | 43 | B01 rename; B03/B04 numbers; B06 JSON file; B13 to B16 team command lines rewritten |
-| .agents/test/shared-wip.test.js | 9 | B14 delete (today's team command lines; the behaviour is now rules of the example files, proven by the cases); the file goes whole |
-| .agents/test/skill-commands.test.js | 4 | B06 JSON file |
-| .agents/test/storage-location.test.js | 15 | B01 rename; B28: the root configuration file stops with the move text |
-| .agents/test/team-boundary.test.js | 16 | B17 rewrite (user side), B14 rewrite (team side) |
-| .agents/test/team-cli.test.js | 15 | B12 router tests; B14 rewrite to the step form; B27 define and workflow lines |
-| .agents/test/team-spelling-docs.test.js | 3 | B29 documentation words |
-| .agents/test/update-notice.test.js | 8 | B01 rename; B13 to B16 team command lines rewritten |
-| .agents/test/upgrade.test.js | 21 | none expected |
-| .agents/test/workflow.test.js | 42 | B27 delete (unit tests of a removed module) |
-| total | 1135 | |
+**The two helper files first.** .agents/test/shared-fixtures.js sets the unprefixed home and origin-URL variables for nearly every test
+(its `env()`, lines 89 to 100) and routes user command lines that carry team flags to `backlog team update --set-team` (its `cli()` and
+the helpers before it, lines 105 to 181, with teamNew, intoTeam and teamMembers after it); .agents/test/shared-concurrency.js writes markdown items. Checked: both hold. B01 rewrites `env()` first, so most
+variable changes need no change in the tests themselves; B06 rewrites shared-concurrency.js first; B14 removes the routing of `cli()`
+together with the team tests that use it.
+
+| group | review D: files, declarations | checked in this plan | batch and action |
+|---|---|---|---|
+| team behaviour moves into rules | 31, 301 | the same 31 files and 301 declarations | B14 deletes the command-level files (their behaviour is now rules of the templates, proven by the cases); B27 deletes the unit tests of removed modules (shared-handoff-core, shared-handoff-gate, shared-handoff-close, workflow). Six files of the group are rewritten instead of deleted, against review D's "delete": plain-team-items (B17) and plain-team-env (B20) because their rulings invert their assertions; team-boundary (B17, user side) and team-cli (B12, B14) because part of their subject stays; skill-commands and team-spelling-docs (B16) because they guard the documentation, which still needs a guard; shared-foreign-deps is replaced by R24 tests in B21 |
+| help and command documentation | 2, 21 | the same | rewritten with each help change (B12, B14, B16, B27, B29) |
+| removed command, flag or file in user-command files | 9, 37 | the same 9 files and 37 declarations, with one correction: the 4 declarations review D gave to the root configuration file in shared-audit (2), shared-safety (1) and shared-store (1) use `backlog move --to-repository`. So: moving to another repository, 6 files and 30 declarations (shared-move-archive 15, shared-sync-db 9, shared-stale 2, shared-audit 2, shared-safety 1, shared-store 1); the root configuration file, 3 files and 7 declarations (shared-origin-setting 5, shared-setup 1, storage-location 1) | B21 deletes the move tests; B28 rewrites the root-configuration tests to the move text |
+| markdown item format | 32, 223 (19 of the files also touch team items) | not reproduced exactly: the figure depends on what counts as a dependency on the format. A narrower search (item paths under phases/ or archive/, file names of the form NNN-slug.md, the header codec) finds 23 files and 134 declarations. The three last groups together are 460 declarations in both counts, so the two counts differ only in where the edge is drawn | B06 rewrites them to JSON and plans with review D's 223 as the upper bound. Of the 33 declarations of shared-frontmatter, review D counts 32 as tests of today's markdown reader: they stay as tests of the migration's reader (B22); shared-item-keys and shared-legacy-fields test stored spellings and retired keys and are deleted or turned into migration tests (B28) |
+| unprefixed variable only | 16, 32 | 23 files and 47 declarations with the narrower markdown search (the same edge as above) | B01 renames them |
+| none of the above | 35, 205 (an upper bound) | 35 files and 279 declarations with the narrower search | kept |
+
+The table below gives every test file with its declarations, its tests at run time (Node 24, run file by file on 2026-11-10, all
+passing), the groups of its declarations by the search of this plan, and the batch that changes it.
+
+| test file | declarations | tests at run time | group (declarations) | batch and action |
+|---|---|---|---|---|
+| .agents/test/commands-documented.test.js | 3 | 3 | help 3 | rewritten with each help change; COMMANDS.md regenerated |
+| .agents/test/features.test.js | 1 | 202 | unaffected 1 | the runner is unchanged; the feature files change (section 2.5) |
+| .agents/test/fields.test.js | 3 | 3 | unaffected 2; markdown item 1 | B06 rewrite to JSON |
+| .agents/test/install-script.test.js | 3 | 3 | unaffected 3 | kept |
+| .agents/test/new-ask.test.js | 9 | 9 | unaffected 8; variable only 1 | B01 rename |
+| .agents/test/no-child-process-proof.test.js | 4 | 4 | variable only 4 | B01 rename |
+| .agents/test/no-private-details.test.js | 3 | 3 | variable only 3 | B01 rename |
+| .agents/test/package.test.js | 2 | 2 | variable only 1; unaffected 1 | B01 rename |
+| .agents/test/plain-team-env.test.js | 7 | 7 | team behaviour 7 | B20 rewrite: the team variable now stops every user command (today user commands ignore it) |
+| .agents/test/plain-team-items.test.js | 12 | 12 | team behaviour 12 | B17 rewrite: a user command does not see a team item (today it refuses one) |
+| .agents/test/release-pr.test.js | 4 | 4 | unaffected 4 | kept |
+| .agents/test/release.test.js | 9 | 9 | unaffected 9 | kept |
+| .agents/test/removed-forms.test.js | 2 | 2 | unaffected 2 | kept |
+| .agents/test/router.test.js | 6 | 6 | unaffected 4; variable only 2 | B01 rename |
+| .agents/test/script-runs.test.js | 3 | 6 | variable only 3 | B01 rename |
+| .agents/test/shared-audit.test.js | 16 | 16 | removed (move to another repository) 2; markdown item 10; unaffected 4 | B06 rewrite to JSON; B21 delete the move tests |
+| .agents/test/shared-changed.test.js | 13 | 13 | unaffected 9; markdown item 3; variable only 1 | B01 rename; B06 rewrite to JSON |
+| .agents/test/shared-checkout.test.js | 5 | 5 | variable only 3; unaffected 1; markdown item 1 | B01 rename; B06 rewrite to JSON |
+| .agents/test/shared-fixtures.test.js | 1 | 1 | variable only 1 | B01 rename |
+| .agents/test/shared-foreign-deps.test.js | 4 | 4 | team behaviour 4 | B21 deleted and replaced by the R24 tests (foreign references are not followed and stop nothing) |
+| .agents/test/shared-frontmatter.test.js | 33 | 45 | unaffected 29; markdown item 4 | kept as tests of the migration's markdown reader (B22) |
+| .agents/test/shared-handoff-close.test.js | 9 | 9 | team behaviour 9 | B27 deleted with the module it tests |
+| .agents/test/shared-handoff-commands.test.js | 13 | 13 | team behaviour 13 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-handoff-core.test.js | 21 | 21 | team behaviour 21 | B27 deleted with the module it tests |
+| .agents/test/shared-handoff-e2e.test.js | 22 | 22 | team behaviour 22 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-handoff-gate.test.js | 5 | 8 | team behaviour 5 | B27 deleted with the module it tests |
+| .agents/test/shared-help.test.js | 18 | 21 | help 18 | rewritten with each help change (B12, B14, B16, B27, B29) |
+| .agents/test/shared-index.test.js | 9 | 9 | unaffected 7; markdown item 2 | B06 rewrite to JSON |
+| .agents/test/shared-item-keys.test.js | 5 | 5 | unaffected 2; markdown item 2; variable only 1 | B01 rename; B06 rewrite to JSON; B28: the tests of stored spellings and retired keys deleted or turned into migration tests |
+| .agents/test/shared-legacy-fields.test.js | 6 | 6 | unaffected 4; markdown item 2 | B06 rewrite to JSON; B28: the tests of stored spellings and retired keys deleted or turned into migration tests |
+| .agents/test/shared-list.test.js | 7 | 7 | unaffected 7 | kept |
+| .agents/test/shared-long-name.test.js | 1 | 1 | variable only 1 | B01 rename |
+| .agents/test/shared-move-archive.test.js | 40 | 43 | markdown item 15; unaffected 10; removed (move to another repository) 15 | B06 rewrite to JSON; B21 delete the move tests |
+| .agents/test/shared-new.test.js | 31 | 46 | unaffected 21; markdown item 8; variable only 2 | B01 rename; B06 rewrite to JSON |
+| .agents/test/shared-no-classes.test.js | 3 | 3 | unaffected 3 | kept |
+| .agents/test/shared-origin-setting.test.js | 10 | 10 | removed (root configuration file) 5; variable only 5 | B01 rename; B28 rewrite to the move text |
+| .agents/test/shared-query.test.js | 23 | 25 | markdown item 6; unaffected 15; variable only 2 | B01 rename; B06 rewrite to JSON |
+| .agents/test/shared-read-commands.test.js | 9 | 9 | markdown item 1; unaffected 8 | B06 rewrite to JSON |
+| .agents/test/shared-repair.test.js | 7 | 7 | unaffected 4; markdown item 3 | B06 rewrite to JSON |
+| .agents/test/shared-routed-commands.test.js | 8 | 8 | unaffected 8 | kept |
+| .agents/test/shared-safety.test.js | 26 | 26 | unaffected 23; variable only 1; markdown item 1; removed (move to another repository) 1 | B01 rename; B06 rewrite to JSON; B21 delete the move tests |
+| .agents/test/shared-session-continue.test.js | 9 | 9 | team behaviour 9 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-session-names.test.js | 2 | 2 | team behaviour 2 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-session-review.test.js | 11 | 11 | team behaviour 11 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-setup.test.js | 5 | 5 | markdown item 2; unaffected 2; removed (root configuration file) 1 | B06 rewrite to JSON; B28 rewrite to the move text |
+| .agents/test/shared-severity.test.js | 2 | 2 | markdown item 1; variable only 1 | B01 rename; B06 rewrite to JSON |
+| .agents/test/shared-stale.test.js | 15 | 15 | markdown item 9; unaffected 2; variable only 2; removed (move to another repository) 2 | B01 rename; B06 rewrite to JSON; B21 delete the move tests |
+| .agents/test/shared-store.test.js | 23 | 23 | variable only 1; unaffected 5; markdown item 16; removed (move to another repository) 1 | B01 rename; B06 rewrite to JSON; B21 delete the move tests |
+| .agents/test/shared-symlinked-parent.test.js | 4 | 4 | markdown item 1; unaffected 3 | B06 rewrite to JSON |
+| .agents/test/shared-sync-db.test.js | 32 | 48 | markdown item 10; removed (move to another repository) 9; unaffected 8; variable only 5 | B01 rename; B06 rewrite to JSON; B21 delete the move tests |
+| .agents/test/shared-sync.test.js | 30 | 30 | markdown item 15; unaffected 14; variable only 1 | B01 rename; B06 rewrite to JSON |
+| .agents/test/shared-team-compat.test.js | 5 | 5 | team behaviour 5 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-done.test.js | 2 | 2 | team behaviour 2 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-flow.test.js | 1 | 26 | team behaviour 1 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-lead-pop.test.js | 15 | 15 | team behaviour 15 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-lifecycle.test.js | 10 | 10 | team behaviour 10 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-plan.test.js | 10 | 10 | team behaviour 10 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-pop.test.js | 19 | 19 | team behaviour 19 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-scope.test.js | 9 | 9 | team behaviour 9 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-stages.test.js | 15 | 15 | team behaviour 15 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-status-order.test.js | 7 | 7 | team behaviour 7 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-teams.test.js | 6 | 6 | team behaviour 6 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-team-work.test.js | 20 | 20 | team behaviour 20 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-twostage.test.js | 2 | 2 | team behaviour 2 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-unrefined-claim.test.js | 6 | 6 | team behaviour 6 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/shared-update.test.js | 40 | 43 | markdown item 20; unaffected 18; variable only 2 | B01 rename; B06 rewrite to JSON |
+| .agents/test/shared-wip.test.js | 9 | 9 | team behaviour 9 | B14 deleted whole: today's team command lines; the behaviour is now rules of the templates, proven by the cases |
+| .agents/test/skill-commands.test.js | 4 | 4 | team behaviour 4 | B16 rewritten to the new team command list (a documentation guard; it imports today's team flags) |
+| .agents/test/storage-location.test.js | 15 | 15 | markdown item 1; unaffected 11; removed (root configuration file) 1; variable only 2 | B01 rename; B06 rewrite to JSON; B28 rewrite to the move text |
+| .agents/test/team-boundary.test.js | 16 | 16 | team behaviour 16 | B17 rewrite of the user side; the team side deleted in B14 |
+| .agents/test/team-cli.test.js | 15 | 15 | team behaviour 15 | B12 router tests rewritten; B14 the step form; B27 the define and workflow lines deleted |
+| .agents/test/team-spelling-docs.test.js | 3 | 3 | team behaviour 3 | B16 rewritten to the new team command list (a documentation guard) |
+| .agents/test/update-notice.test.js | 8 | 8 | unaffected 6; variable only 2 | B01 rename |
+| .agents/test/upgrade.test.js | 21 | 21 | unaffected 21 | kept |
+| .agents/test/workflow.test.js | 12 | 42 | team behaviour 12 | B27 deleted with the module it tests |
+| total | 819 | 1135 | | |
 
 ## 4. The real-execution checks of backlog item 153
 

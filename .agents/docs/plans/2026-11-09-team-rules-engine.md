@@ -40,7 +40,7 @@ them at its start.
   - [x] B10 the checks of the team file (R11, R18; chapter 08 sections 2 to 6, chapter 03 sections 3, 4 and 14)
   - [x] B11 validation on load (R18, R21, R22; chapter 01 sections 1.1 and 4; round 12, questions 1, 4 and 6)
 - [ ] Task 6: The team commands on the evaluator (item 152; phase 3).
-  - [ ] B12 the team router, the inputs, `backlog team validate` (R3b, R11, R14, R15, R18, R21; chapter 01 section 5, chapter 04 sections 1 and 5, chapter 08; round 12, questions 1, 4 and 5)
+  - [x] B12 the team router, the inputs, `backlog team validate` (R3b, R11, R14, R15, R18, R21; chapter 01 section 5, chapter 04 sections 1 and 5, chapter 08; round 12, questions 1, 4 and 5)
   - [ ] B13 `backlog team new` (R1, R2, R5, R12; chapter 04 section 2, chapter 05)
   - [ ] B14 the step commands: `backlog team update`, `query check`, `pop`, `query plan` (R1, R2, R10, R15; chapter 04 sections 3 to 5, chapter 07 section 6)
   - [ ] B15 running again on the upstream files (R1, R12, R24; chapter 04 sections 6 and 7, chapter 05 section 3; round 12, question 2)

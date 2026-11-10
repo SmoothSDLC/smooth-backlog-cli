@@ -3,7 +3,7 @@
 // The items are read with backlog list all-branches --json (the one reader), whose rows carry their branch.
 // shortcut: each step starts a process and pulls the repository again, which is fine for the tens of items an import moves.
 import { spawnSync } from 'node:child_process';
-import { isFinished, isOpen } from './status.js';
+import { isArchived, isFinished, isOpen } from './status.js';
 import { redact } from './safety.js';
 import { IMPORT_HIGHER_TEAM } from './team-items.js';
 
@@ -28,7 +28,7 @@ export async function run(plan) {
   if (here.failed) return stop(here.failed, 'nothing was changed');
   const branch = here.data.branch;
   if (plan.kind === 'archive-done') {
-    const finished = (here.data.phases ?? []).filter(x => x.branch === branch && isFinished(x.status) && x.status !== 'archived').sort(bySeq);
+    const finished = (here.data.phases ?? []).filter(x => x.branch === branch && isFinished(x.status) && !isArchived(x)).sort(bySeq);
     if (!finished.length) { say(`ℹ️  nothing to archive: no finished item on branch ${branch ?? '(none)'}`); return 0; }
     const done = [];
     for (const item of finished) {
@@ -44,7 +44,7 @@ export async function run(plan) {
   const rows = here.data.phases ?? [];
   const open = rows.filter(x => x.branch === plan.source && isOpen(x.status)).sort(bySeq);
   if (!open.length) { // a name that no item carries is most likely a typo: say so (the exit code stays 0, as for a branch without open items)
-    say(rows.some(x => x.branch === plan.source && x.status !== 'archived') ? `ℹ️  nothing to import: branch ${plan.source} has no open items` : `ℹ️  nothing to import: no item of branch ${plan.source} in this backlog (check the name)`);
+    say(rows.some(x => x.branch === plan.source && !isArchived(x)) ? `ℹ️  nothing to import: branch ${plan.source} has no open items` : `ℹ️  nothing to import: no item of branch ${plan.source} in this backlog (check the name)`);
     return 0;
   }
   if (plan.higher) { // --higher places the items first in the queue, which a team item takes only from backlog team update: refused before anything is moved

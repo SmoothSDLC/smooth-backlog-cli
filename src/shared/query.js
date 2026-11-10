@@ -16,11 +16,11 @@ import { asList } from './text.js';
 import { foreignItem, isForeign, undoneDependencies } from './dependencies.js';
 import { seam } from './seam.js';
 import { lifted } from './status.js';
-import { isFinished, isOpen } from './status.js';
+import { isArchived, isFinished, isOpen } from './status.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'changed', 'branches'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'only'];
-const ONLY = { new: r => r.status === 'pending' || r.status === 'new', open: r => isOpen(r.status), done: r => isFinished(r.status) && r.status !== 'archived', archive: r => r.status === 'archived' };
+const ONLY = { new: r => r.status === 'pending' || r.status === 'new', open: r => isOpen(r.status), done: r => isFinished(r.status) && !isArchived(r), archive: r => isArchived(r) };
 
 // argparse. --events takes an optional value (const "*"); shortcut: no unique-prefix abbreviations.
 // `team` adds its flags: { bool, value, choices: { flag: [words] } }.
@@ -54,7 +54,7 @@ const repr = s => redact(s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}
 function findings(rows, repo) {
   const out = { foreign: [], untagged: [] };
   for (const r of rows) {
-    if (r.status === 'archived') continue;
+    if (isArchived(r)) continue;
     if (!r.repository || !r.branch) out.untagged.push(r);
     else if (r.repository !== repo) out.foreign.push(r);
   }
@@ -168,7 +168,7 @@ async function query(argv, team, branchColumn) {
   {
     const { handoff: h, rows, items } = index.rows(folder);
     const critical = () => index.open(rows).filter(r => r.severity === 'critical');
-    const bad = findings(rows.filter(r => r.status != null && r.status !== 'archived'), repo);
+    const bad = findings(rows.filter(r => r.status != null && !isArchived(r)), repo);
     const excluded = new Set(Object.values(bad).flat().map(r => r.id));
     const lines = findingLines(bad, repo);
     if (!a.json && lines.length && (a.next || !plain)) lines.forEach(say); // findings lead the queue views only
@@ -185,7 +185,7 @@ async function query(argv, team, branchColumn) {
 
     if (a.branches) { // one line per branch of this repository: its open and its finished (not archived) items
       const by = Object.create(null); // a branch is named by its item: __proto__ is a name like any other
-      for (const r of rows.filter(x => !excluded.has(x.id) && x.repository === repo && x.branch && x.status !== 'archived')) {
+      for (const r of rows.filter(x => !excluded.has(x.id) && x.repository === repo && x.branch && !isArchived(x))) {
         const c = (by[r.branch] ??= { branch: r.branch, open: 0, done: 0 });
         if (isOpen(r.status)) c.open++; else c.done++;
       }

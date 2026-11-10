@@ -95,14 +95,14 @@ test('archive engages on a team item that is not closed, with and without --forc
 test('archive bites only on an open team item: --force still archives an open item without a team', () => {
   const f = build(); const plain = f.item('Plain job');
   f.ok(['archive', plain, '--force']);
-  assert.equal(f.fm(plain).status, 'archived');
+  assert.equal(f.fm(plain).status, 'pending');
 });
 test('archive and archive done keep working for a closed team item (finished-item storage)', () => {
   const f = build(); const one = f.item('Closed one', { team: true, closed: true }); const two = f.item('Closed two', { team: true, closed: true });
   f.ok(['archive', one]);
-  assert.equal(f.fm(one).status, 'archived');
+  assert.equal(f.fm(one).status, 'closed');
   assert.match(f.ok(['archive', 'done']).stdout, new RegExp(`archived 1 finished item\\(s\\): ${two}`));
-  assert.equal(f.fm(two).status, 'archived');
+  assert.equal(f.fm(two).status, 'closed');
 });
 
 test('move keeps working for an item with a team (it files the item, no team rule): the team fields stay', () => {

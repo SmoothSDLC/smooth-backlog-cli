@@ -9,7 +9,7 @@ import { readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { asList, strip } from '../shared/text.js';
 import { itemSlug, load } from '../shared/store.js';
-import { normalise } from '../shared/status.js';
+import { isArchived, normalise } from '../shared/status.js';
 
 const HEX40 = /^[0-9a-f]{40}$/i; // git commit ids are hex, any case
 const empty = v => !v || !String(v).trim();
@@ -100,7 +100,7 @@ export function dependentsOf(folder, repoId, producerFm) {
       const items = load(join(home, owner, name));
       for (const it of items) {
         const status = Object.hasOwn(it.fm, 'status') ? it.fm.status : 'pending';
-        if (status === 'archived') continue;
+        if (isArchived(it)) continue;
         const namesProducer = asList(it.fm.depends_on).some(dep => repo === repoId
           ? (seqNum !== null && digit(dep) === seqNum) || (producerSlug !== null && dep === producerSlug)
           : seqNum !== null && dep.startsWith(`${repoId}#`) && digit(dep.slice(repoId.length + 1)) === seqNum);

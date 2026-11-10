@@ -61,7 +61,7 @@ Items are selected by their number (`1`) or slug (`001-fix-the-login-redirect`).
 
 ## Statuses
 
-An item carries one status word. An item outside a team has free text: `closed`, `done` and `archived` finish it, every
+An item carries one status word. `backlog archive` writes none: an archived item keeps the status it had and is archived by where it is stored (the `archive/` folder). An item outside a team has free text: `closed`, `done` and `archived` finish it (`archived` only for items archived by an earlier version), every
 other word (`pending`, `in progress`, `blocked on vendor`) keeps it in the queue, and `backlog update <item> --status
 <word>` sets it (hyphens and underscores stand for spaces: `in_progress`). The items of a team follow one order,
 `new`, `refining`, `refined`, `refinement review`, `ready`, `in progress`, `ready for review`, `reviewing`, `ready for

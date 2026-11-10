@@ -9,7 +9,7 @@ import { itemSlug } from './item-file.js';
 import { itemSelector } from './safety.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
-import { isOpen as workflowOpen } from './status.js';
+import { isArchived, isOpen as workflowOpen } from './status.js';
 
 export const file = folder => join(folder, 'index.json');
 export const exists = folder => existsSync(file(folder));
@@ -202,7 +202,7 @@ export function rows(folder, items = store.load(folder)) {
     const fm = i.fm; const v = (k, d) => (k in fm ? fm[k] : d);
     return {
       id: n + 1, handoff_id: 1, slug: slugOf(i), seq: num(v('seq', 0)), name: txt(v('name', '')), objective: txt(v('objective', '')), summary: txt(v('summary', '')),
-      status: v('status', 'pending'), severity: fm.severity || 'normal', priority: i.path.startsWith('phases/') ? position.get(slugOf(i)) ?? null : null, path: i.path, sha: i.sha256,
+      status: isArchived(i) ? 'archived' : v('status', 'pending'), severity: fm.severity || 'normal', priority: i.path.startsWith('phases/') ? position.get(slugOf(i)) ?? null : null, path: i.path, sha: i.sha256,
       branch: fm.branch || '', commit_sha: fm.commit || '', location: fm.location || '', repository: fm.repository || '', size_score: num(v('size_score', 0)),
       created_at: v('created', at), updated_at: v('updated', at), completed_at: v('completed', null),
     };

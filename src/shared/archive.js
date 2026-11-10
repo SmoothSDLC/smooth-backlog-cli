@@ -7,6 +7,7 @@ import { join, relative, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { find, rows as itemRows } from './index.js';
 import { assertInside, git, redact } from './safety.js';
+import { isArchived } from './status.js';
 import { readItemFile } from './item-file.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -92,7 +93,7 @@ export async function run(argv) {
 async function archive(a, rows, { repo, folder, guard }) {
   const row = find(rows, a.phase);
   if (!row) return refuse(`no phase ${pyStr(a.phase)}`);
-  if (row.status === 'archived') { say(`ℹ️  ${row.slug} already archived`); return 0; }
+  if (isArchived(row)) { say(`ℹ️  ${row.slug} already archived`); return 0; }
   const src = join(folder, row.path);
   await assertInside(folder, src); // the file is inside the folder, no symlink on the way
   const { fm, body } = readItemFile(src);
@@ -111,7 +112,7 @@ async function archive(a, rows, { repo, folder, guard }) {
   if ((await git(['mv', '--', from, to], folder)).code) { // archive.py:39-49: a file git does not track yet moves plainly
     try { renameSync(src, join(folder, to)); } catch { return refuse(`could not archive ${row.slug}: the file move failed`); }
   }
-  store.write({ path: join(folder, to), fm: { ...fm, status: 'archived' }, body }, folder);
+  store.write({ path: join(folder, to), fm, body }, folder);
   // archiving removes an item from the backlog -> planning event: it leaves the index and the remainder re-densifies to 0..M-1
   store.addEvent(folder, to, { event: 'archived', branch: row.branch, commitSha: row.commit_sha, note: `${row.slug} -> ${to}` });
   const order = store.reflow(folder, { branches: [row.branch] });

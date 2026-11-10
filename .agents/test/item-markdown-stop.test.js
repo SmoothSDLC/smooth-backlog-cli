@@ -129,6 +129,6 @@ test('archive works on an item that has no status key', t => {
   const r = w.run('archive', '1', '--force');
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const archived = JSON.parse(execFileSync('git', ['ls-files', 'archive'], { cwd: w.folder, encoding: 'utf8' }).split('\n').filter(Boolean).map(f => readFileSync(join(w.folder, f), 'utf8'))[0]);
-  assert.equal(archived.fields.status, 'archived');
+  assert.equal(archived.fields.status, undefined); // archive writes no status word
   assert.equal(archived.body, body, 'archiving keeps the body');
 });

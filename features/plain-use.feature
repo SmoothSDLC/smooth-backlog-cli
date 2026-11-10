@@ -30,7 +30,9 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
     And I run `backlog update 1 --status done`
     When I run `backlog archive 1`
     Then the command succeeds
-    And item 1 has status "archived"
+    And item 1 has status "closed"
+    When I run `backlog list archive`
+    Then the output contains "001-archive-me"
 
   Scenario: a single agent claims a plain item, works it and closes it
     Given an item "Plain agent work" exists

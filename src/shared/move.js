@@ -12,7 +12,7 @@ import { die, pyStr, refuse, say, usage, valueLike, withBacklog } from './archiv
 import { itemFileName, readItemFile } from './item-file.js';
 import { record as recordNumber } from './numbers.js';
 import { find } from './index.js';
-import { isOpen } from './status.js';
+import { isArchived, isOpen } from './status.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -97,7 +97,7 @@ async function move(a, rows, ctx) {
   if (!a.phase) throw usage('name the item, or use --all-open-of-branch');
   const r = find(rows, a.phase);
   if (!r) return refuse(`no item ${pyStr(a.phase)} in the backlog of ${repo}`);
-  if (r.status === 'archived') return refuse(`${r.slug} is archived and cannot be moved (archived items are read-only)`);
+  if (isArchived(r)) return refuse(`${r.slug} is archived and cannot be moved (archived items are read-only)`);
   if (a['to-branch']) { // move.py:93-98
     const refusal = await branchRefusal(a['to-branch'], repo);
     if (refusal) return refuse(refusal);

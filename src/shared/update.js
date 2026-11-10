@@ -8,7 +8,7 @@ import { BacklogError } from '../errors.js';
 import { itemSlug, readItemFile } from './item-file.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { repairUnreadable } from './repair.js';
-import { isOpen, lifted, normalise } from './status.js';
+import { isArchived, isOpen, lifted, normalise } from './status.js';
 import { assertInside, itemSelector, redact } from './safety.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -210,7 +210,7 @@ async function change(a, folder, repo, team) {
   if (!a.phase) return refuse('phase is required (or use --replan "id,id,...")');
   const row = findItem(rows, a.phase);
   if (!row) return refuse(`no phase ${pyStr(a.phase)} (create it with backlog new)`);
-  if (row.status === 'archived') return refuse(`${row.slug} is archived and cannot be edited (archived items are read-only)`); // covers --claim, --request-review, --review and --close too
+  if (isArchived(row)) return refuse(`${row.slug} is archived and cannot be edited (archived items are read-only)`); // covers --claim, --request-review, --review and --close too
 
   const path = join(folder, row.path);
   await assertInside(folder, path); // no symlink between the folder and the item file

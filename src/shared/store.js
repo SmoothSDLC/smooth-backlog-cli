@@ -18,7 +18,7 @@ import { highWater, numberOf, MAX_SEQ, tooBig } from './numbers.js';
 import { seam } from './seam.js';
 import { asList } from './text.js';
 import { lifted } from './status.js';
-import { derivedKeys, dropsLegacy, isOpen } from './status.js';
+import { derivedKeys, dropsLegacy, isArchived, isOpen } from './status.js';
 
 const expand = p => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 export const configDir = () => process.env.XDG_CONFIG_HOME || join(homedir(), '.config'); //
@@ -383,7 +383,7 @@ export function findings(dir) {
   const out = { foreign: [], untagged: [] };
   const folderRepo = resolve(dir).split(sep).slice(-2).join('/');
   for (const i of load(dir)) {
-    if (!i.path.startsWith('phases/') || statusOf(i) === null || statusOf(i) === 'archived') continue;
+    if (!i.path.startsWith('phases/') || statusOf(i) === null || isArchived(i)) continue;
     if (!i.fm.repository || !i.fm.branch) out.untagged.push(i);
     else if (i.fm.repository !== folderRepo) out.foreign.push(i);
   }

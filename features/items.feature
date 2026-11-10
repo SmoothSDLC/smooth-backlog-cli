@@ -61,7 +61,9 @@ Feature: Items - a person creates, reads, changes and finishes backlog items
     And the output contains "not 'closed'"
     When I run `backlog archive 1 --force`
     Then the command succeeds
-    And item 1 has status "archived"
+    And item 1 has status "pending"
+    When I run `backlog list archive`
+    Then the output contains "001-still-open"
 
   Scenario: a finished item can be reopened into the queue
     Given an item "Done" exists

@@ -330,7 +330,7 @@ test('review P2: failed create, note and archive each roll back; successful retr
     assert.equal(retried.status, 0, retried.stdout + retried.stderr);
   }
   const row = store.load(join(clone(t, bare), 'acme', 'demo')).find(i => i.fm.name === 'local job');
-  assert.equal(row.fm.phase, '002-local-job'); assert.equal(row.fm.status, 'archived');
+  assert.equal(row.fm.phase, '002-local-job'); assert.equal(row.fm.status, 'pending');
   assert.equal(row.path, archivedRel('002-local-job', 'phases'));
   const events = row.fm.events.map(store.parseEvent);
   assert.equal(events.filter(e => e.event === 'archived').length, 1);

@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import * as handoff from '../../src/team/handoff.js';
 import { foreignItem } from '../../src/shared/dependencies.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
-import { itemPath, writeItem, itemText, writeUnreadableItem, UNREADABLE_ITEM_MESSAGE } from './shared-fixtures.js';
+import { archivedPath, itemPath, writeItem, itemText, writeUnreadableItem, UNREADABLE_ITEM_MESSAGE } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -171,7 +171,7 @@ test('059.1: dependentsOf finds the same folder by seq and slug, another folder 
   item(home, 'acme', 'app', producer);
   item(home, 'acme', 'app', { seq: 6, phase: '006-by-seq', status: 'pending', depends_on: [5] });
   item(home, 'acme', 'app', { seq: 7, phase: '007-by-slug', status: 'pending', depends_on: ['005-producer'] });
-  item(home, 'acme', 'app', { seq: 8, phase: '008-archived', status: 'archived', depends_on: [5] });
+  writeItem(archivedPath(join(home, 'acme', 'app'), '008-archived'), { seq: 8, phase: '008-archived', status: 'closed', depends_on: [5] }, 'x\n'); // archived by its path
   item(home, 'acme', 'app', { seq: 9, phase: '009-foreign-spelling', status: 'pending', depends_on: ['acme/app#5'] }); // the same folder names the producer by seq or slug only
   item(home, 'acme', 'app', { seq: 10, phase: '010-zero-padded', status: 'pending', depends_on: ['005'] }); // the local seq, zero-padded spelling
   item(home, 'acme', 'lib', { seq: 2, phase: '002-cross-repo', status: 'pending', depends_on: ['acme/app#5'] });

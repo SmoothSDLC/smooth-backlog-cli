@@ -645,7 +645,8 @@ Usage:
   backlog archive <item> [--force] [--dry-run]
 
 Archives an item given by number or slug: the item leaves the work queue, is kept as archived in the backlog
-repository and its status becomes archived; the output names it by its slug. The command records an event and
+repository and keeps the status it had: an item is archived by where it is stored, no status word says so (an item archived by an earlier
+version, which holds the status archived, reads the same). The output names it by its slug. The command records an event and
 renumbers the remaining backlog to 0..M-1, because archiving takes the item off the backlog. Archiving an item
 that is already archived does nothing and says so. The command refuses when the item does not exist, or when its
 status is not closed and --force was not given. A closed item of a team is archived like any other; a team item that is not closed is

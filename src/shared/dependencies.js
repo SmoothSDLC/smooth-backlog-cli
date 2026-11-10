@@ -5,7 +5,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import * as index from './index.js';
 import { itemSlug, readItemFile } from './item-file.js';
 import { itemSelector } from './safety.js';
-import { isFinished, lifted } from './status.js';
+import { isArchived, isFinished, lifted } from './status.js';
 import { load } from './store.js';
 import { asList } from './text.js';
 
@@ -48,7 +48,7 @@ export function foreignItem(folder, id, typed = false) { // typed: given on the 
   const named = hits.map(i => ({ ...i, slug: i.fm.phase || itemSlug(i.path) }));
   if (!typed && named.length > 1) return { repository: `${m[1]}/${m[2]}`, seq: null, slug: `number ${m[3]} (names two items: ${named[0].slug} and ${named[1].slug})`, status: 'ambiguous', fm: {} };
   const it = index.pick(named, Number(m[3]));
-  return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || itemSlug(it.path), status: it.fm.status ?? 'pending', fm: it.fm } : null;
+  return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || itemSlug(it.path), status: isArchived(it) ? 'archived' : it.fm.status ?? 'pending', fm: it.fm } : null;
 }
 // does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
 // to it? Returns the reference that closes the cycle, or null. Local entries are read in the folder they are written in.

@@ -107,7 +107,7 @@ test('review P2: a name with --- in it does not hide the closing front-matter de
   const r = run(f, 'archive', [slug, '--force']);
   assert.equal(r.status, 0, r.stderr);
   const moved = fm(f.folder, archivedRel(slug, 'phases'));
-  assert.equal(moved.fm.status, 'archived');
+  assert.equal(moved.fm.status, 'pending');
   assert.equal(moved.fm.name, 'three---dashes');
   assert.equal(rowOf(f.folder, slug).status, 'archived');
 });
@@ -368,7 +368,7 @@ test('075: archive of a done item: git mv, status stamp, reflow, one commit', ()
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, '📦 005-epsilon archived\n   📋 planning event: backlog re-densified to 4 item(s) (P0..P3)\n');
   assert.equal(r.stderr, '');
-  assert.equal(fm(f.folder, archivedRel('005-epsilon', 'phases')).fm.status, 'archived');
+  assert.equal(fm(f.folder, archivedRel('005-epsilon', 'phases')).fm.status, 'done');
   assert.ok(!existsSync(itemPath(f.folder, '005-epsilon')));
   const row = () => { const r = rowOf(f.folder, '005-epsilon'); return { status: r.status, path: r.path }; };
   assert.deepEqual(row(), { status: 'archived', path: archivedRel('005-epsilon', 'phases') });
@@ -533,7 +533,7 @@ test('075: archive --force of an open item: the exact output, the stamp, the row
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, '📦 002-beta archived\n   📋 planning event: backlog re-densified to 3 item(s) (P0..P2)\n');
   assert.equal(r.stderr, '');
-  assert.equal(fm(f.folder, archivedRel('002-beta', 'phases')).fm.status, 'archived');
+  assert.equal(fm(f.folder, archivedRel('002-beta', 'phases')).fm.status, 'pending');
   assert.ok(!existsSync(itemPath(f.folder, '002-beta')));
   const row = () => { const r = rowOf(f.folder, '002-beta'); return { status: r.status, path: r.path }; };
   assert.deepEqual(row(), { status: 'archived', path: archivedRel('002-beta', 'phases') });

@@ -18,7 +18,7 @@ import * as team from './team.js';
 import { asList } from '../shared/text.js';
 import { SCOPES, refinementCap, reviewOffer, teamRows, waitingOn } from './views.js';
 import { wipRefusal } from './wip.js';
-import { isUnstarted } from '../shared/status.js';
+import { isArchived, isUnstarted } from '../shared/status.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'plan', 'claim-now'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'scope'];
@@ -53,7 +53,7 @@ function parse(argv) {
 
 // over the rows: the ids of the rows that are out of every queue.
 function excludedIds(rows, repo) {
-  return new Set(rows.filter(r => r.status !== 'archived' && (!r.repository || !r.branch || r.repository !== repo)).map(r => r.id));
+  return new Set(rows.filter(r => !isArchived(r) && (!r.repository || !r.branch || r.repository !== repo)).map(r => r.id));
 }
 
 //
@@ -358,7 +358,7 @@ async function popCommand(argv) {
   await index.ensure(home, folder);
   try {
     const { rows } = index.rows(folder);
-    const excluded = excludedIds(rows.filter(r => r.status != null && r.status !== 'archived'), repo);
+    const excluded = excludedIds(rows.filter(r => r.status != null && !isArchived(r)), repo);
     return await (a.plan ? plan : pop)(a, { rows, excluded, repo, branch, folder, home });
   } catch (e) {
     if (e instanceof BacklogError) return die(e.message, e.exitCode);

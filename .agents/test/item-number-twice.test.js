@@ -61,11 +61,13 @@ test('a write by slug to one of the pair stops at publication (exit 3) until one
   assert.equal(w.run('update', '008-a', '--summary', 'x').status, 0);
 });
 
-test('--seq renumbers the archived one of a live and an archived pair', t => {
+test('--seq renumbers the live one of a live and an archived pair; the archived one is read-only (read from its path)', t => {
   const w = world(t, true);
-  const r = w.run('update', '008-b', '--seq', '20');
+  const refused = w.run('update', '008-b', '--seq', '20');
+  assert.match(refused.stdout, /archived and cannot be edited/);
+  const r = w.run('update', '008-a', '--seq', '20');
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(readItem(archivedPath(w.folder, '008-b')).fm.seq, 20);
+  assert.equal(readItem(itemPath(w.folder, '008-a')).fm.seq, 20);
   assert.equal(w.run('show', '8').status, 0);
 });
 

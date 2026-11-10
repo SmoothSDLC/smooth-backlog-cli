@@ -175,12 +175,14 @@ function remapDoc(doc, base, moves) {
     changed = true;
     return /^\d+$/.test(String(d)) ? m.next : m.newSlug;
   });
+  const pm = doc.fm.parent !== undefined && String(base?.fm.parent) !== String(doc.fm.parent) && moves.find(m => m.old === Number(doc.fm.parent));
+  if (pm) changed = true;
   let body = doc.body;
   for (const m of moves) {
     const token = `Split from \`${m.slug}\``;
     if (m.slug && body.includes(token) && !(base?.body ?? '').includes(token)) { body = body.replaceAll(token, `Split from \`${m.newSlug}\``); changed = true; }
   }
-  return changed ? { fm: { ...doc.fm, ...(doc.fm.depends_on === undefined ? {} : { depends_on: deps }) }, body } : null;
+  return changed ? { fm: { ...doc.fm, ...(doc.fm.depends_on === undefined ? {} : { depends_on: deps }), ...(pm ? { parent: pm.next } : {}) }, body } : null;
 }
 
 // Rewrites and stages, among `files` (paths from the clone root, changed by the local commits), those whose local references moved. Resolves to what it staged.

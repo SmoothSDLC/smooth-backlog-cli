@@ -57,3 +57,33 @@ test('archive keeps the status; list, update and archive read "archived" from th
     assert.ok(slugs(['list', 'open', '--json']).includes(live) && readItem(itemPath(folder, live)).fm.status === 'pending');
   } finally { rmSync(t, { recursive: true, force: true }); }
 });
+
+// backlog new writes the built-in fields only; a status is stored as typed; fields the definition does not declare are kept and shown.
+test('new writes no review_state or reviewer, --split-from writes parent, done stores closed, a status word stays as typed, an undeclared field is kept and listed', () => {
+  const t = mkdtempSync(join(tmpdir(), 'item-new-done-'));
+  try {
+    const home = sharedBacklog(t); const cons = consumer(t, 'acme', 'demo', 'main'); const folder = join(home, 'acme', 'demo');
+    const run = args => cli(args, { cwd: cons, tmp: t, plain: true });
+    const ok = args => { const r = run(args); assert.equal(r.status, 0, args.join(' ') + r.stdout + r.stderr); return r; };
+    const make = (name, ...more) => createdSlug(ok(['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', ...more]).stdout);
+    const one = make('one'); const two = make('two', '--split-from', '1'); const three = make('three', '--status', 'In_Progress');
+    const fmOf = slug => readItem(itemPath(folder, slug)).fm;
+    for (const k of ['review_state', 'reviewer']) assert.ok(!(k in fmOf(one)), k);
+    assert.ok(!('parent' in fmOf(one)));
+    assert.equal(fmOf(two).parent, 1);
+    assert.match(readItem(itemPath(folder, two)).body, /Split from `001-one`/);
+    assert.equal(fmOf(three).status, 'In_Progress'); // as typed
+    assert.match(run(['new', '--name', 'x', '--force']).stderr, /unrecognized arguments: --force/);
+    ok(['update', '3', '--status', 'done']);
+    assert.equal(fmOf(three).status, 'done'); // as typed, and a finished word
+    assert.deepEqual(JSON.parse(ok(['list', 'done', '--json']).stdout).phases.map(r => r.slug), [three]);
+    ok(['done', '1']);
+    assert.equal(fmOf(one).status, 'closed'); assert.ok(fmOf(one).completed);
+    const rowsOf = () => Object.fromEntries(JSON.parse(ok(['list', '--json']).stdout).phases.map(r => [r.slug, r.review_state]));
+    assert.equal(rowsOf()[two], ''); // none stored: empty
+    changeItem(itemPath(folder, two), { fm: { review_state: 'passed', reviewer: 'rex' } }); // an item of an earlier build
+    assert.equal(rowsOf()[two], 'passed');
+    const shown = JSON.parse(ok(['show', '2', '--json']).stdout).front_matter;
+    assert.equal(shown.review_state, 'passed'); assert.equal(shown.reviewer, 'rex');
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});

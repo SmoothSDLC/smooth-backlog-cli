@@ -296,17 +296,19 @@ test('a conflict on anything else (one item changed by both clones) still aborts
 
 test('review: renumbering the current command remaps LOCAL references (number, slug, split-from), never upstream\'s', async t => {
   const f = fixture(t);
-  putItem(f.folder2, 1, 'alpha'); putItem(f.folder2, 4, 'eta', { depends_on: [1] }); // upstream: its own 1 is alpha
+  putItem(f.folder2, 1, 'alpha'); putItem(f.folder2, 4, 'eta', { depends_on: [1], parent: 1 }); // upstream: its own 1 is alpha
   await sync.commitSettled(f.home2, f.folder2, 'upstream');
   putItem(f.folder, 1, 'beta'); putItem(f.folder, 2, 'gamma', { depends_on: [1] });
   const delta = putItem(f.folder, 3, 'delta', { depends_on: ['001-beta'] });
-  store.write({ path: itemPath(f.folder, delta), fm: { ...store.load(f.folder).find(i => i.fm.phase === delta).fm }, body: '\n# Phase 003 — delta\n\n## Split from `001-beta`. Inherited context:\n' });
+  store.write({ path: itemPath(f.folder, delta), fm: { ...store.load(f.folder).find(i => i.fm.phase === delta).fm, parent: 1 }, body: '\n# Phase 003 — delta\n\n## Split from `001-beta`. Inherited context:\n' });
   await captureStdout(() => sync.commitSettled(f.home, f.folder, 'local'));
   const by = name => store.load(f.folder).find(i => i.fm.name === name);
   assert.equal(by('beta').fm.seq, 5);
   assert.deepEqual(by('gamma').fm.depends_on, [5]);
   assert.deepEqual(by('delta').fm.depends_on, ['005-beta']);
   assert.match(by('delta').body, /Split from `005-beta`/);
+  assert.equal(by('delta').fm.parent, 5, 'the parent field follows the renumbered source');
+  assert.equal(by('eta').fm.parent, 1, "upstream's parent keeps its number");
   assert.deepEqual(by('eta').fm.depends_on, [1], "upstream's reference to its own item 1 keeps its number");
   assert.equal(git(f.home, 'status', '--porcelain'), '');
 });

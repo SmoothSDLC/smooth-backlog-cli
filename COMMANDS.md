@@ -167,14 +167,14 @@ Options:
       appended to the end of the backlog. The backlog is renumbered to 0..N-1 around the item, because adding
       work is a planning event.
   --status STATUS
-      The status the item starts in, as free text (done means closed); the default is pending.
+      The status the item starts in, any word, stored exactly as typed (closed, done and archived are the finished words; every other word is open); the default is pending.
   --severity {normal,critical}
       The default is normal. Critical means a finding about repository corruption, data loss, the source of truth
       or security. It puts the item at priority 0 (unless --priority is given) and makes backlog list and backlog next print it in
       a loud banner so that it is never buried.
   --split-from ITEM
-      Create a sibling item that inherits the context of this item (a number or a slug). The command refuses when
-      the item does not exist.
+      Create a sibling item that inherits the context of this item (a number or a slug). The new item's parent field holds the
+      number of that item, and its body names it and carries its text. The command refuses when the item does not exist.
   --description DESCRIPTION, --body BODY
       The description of the item (--body is the same option under its earlier word): the initial body of the item, the hand-over content for whoever does it. When the body has no "Definition of
       done" heading or line with checkable lines, a placeholder checklist is added.
@@ -190,8 +190,6 @@ Options:
       The layer of the item: 1 to 5, or the word process.
   --chunk
       Chunk work: small pieces done between items (the front matter key chunk: true).
-  --force
-      Write the item even when an item of that name already exists. Without it the command refuses.
   --dry-run
       Say which item would be created and change nothing: nothing is written and nothing is committed.
   --ask
@@ -216,7 +214,7 @@ branch        text                    the branch of the caller                  
 created       time                    the time of creation                                 the CLI                                                                                            When the item was created
 updated       time                    the time of the last change                          the CLI                                                                                            When the item last changed
 updated_by    text                    the agent named, else the user of the configuration  the CLI                                                                                            Who changed the item last
-status        text                    pending                                              backlog new --status, backlog update --status, backlog update --claim and --release, backlog done  Where the item is, a free word stored as typed; closed, done and archived finish an item
+status        text                    pending                                              backlog new --status, backlog update --status, backlog update --claim and --release, backlog done  Where the item is, a free word stored exactly as typed; the finished words are closed, done and archived
 objective     text                    the title                                            backlog new --objective, backlog update --objective                                                The result the item delivers, one line
 summary       text                    empty                                                backlog new --summary, backlog update --summary                                                    Several sentences about what the item is for; it routes new work to the right item
 location      text                    empty                                                backlog update --location                                                                          Free text: where the work is
@@ -225,7 +223,7 @@ severity      text: normal, critical  normal                                    
 owner         text                    the user of the configuration                        the CLI, backlog update --claim and --release                                                      The agent working on the item; outside a team, the user the item belongs to
 owned_since   time                    empty                                                the CLI                                                                                            When the agent took the item; empty while nobody holds it
 depends_on    items                   empty list                                           backlog new --depends-on, backlog update --set-depends-on                                          The items that must be finished first
-parent        item                    none                                                 backlog new --split-from (written from the split-link batch on; not written yet)                   The item this one was split from
+parent        item                    none                                                 backlog new --split-from                                                                           The item this one was split from
 estimate_min  number                  empty                                                backlog new --estimate, backlog update --set-estimate                                              Minutes of work, a whole number
 complexity    text                    empty                                                backlog new --complexity, backlog update --set-complexity                                          low, medium or high
 layer         text                    empty                                                backlog new --layer, backlog update --set-layer                                                    1 to 5 or process
@@ -284,9 +282,9 @@ SMOOTH_BACKLOG_CLI_RUN_HOOK names an executable, and no child process when the v
 
 Options:
   --status STATUS
-      The new status, any word (hyphens and underscores stand for spaces: in_progress). closed (or done) finishes the item
-      and completes it; archived is refused (backlog archive moves a finished item); any other word is free text and keeps
-      the item open.
+      The new status, any word, stored exactly as typed (in_progress stays in_progress). closed finishes the item and completes
+      it; done and archived are finished words too, but only closed sets the completion time; archived is refused (backlog archive
+      moves a finished item); any other word is free text and keeps the item open.
   --branch BRANCH
       Refused by design: the branch of an item is not changed here. Use backlog move --to-branch instead.
   --commit COMMIT
@@ -408,7 +406,7 @@ backlog done — finish one item that has no team
 Usage:
   backlog done <item>
 
-Finishes the item given by number or slug. It runs backlog update <item> --status done: the status becomes closed, the completion time is set,
+Finishes the item given by number or slug. It runs backlog update <item> --status closed: the status becomes closed, the completion time is set,
 the rest of the queue of the branch is renumbered, and the change records who made it and when. Every other argument after the item is passed on
 to backlog update (see backlog update --help), so its refusals and its output are those of update: an item that does not exist, an item
 that has a team (it is closed with backlog team update) and an item that someone else changed since this agent last read it (exit 5) are refused.
@@ -723,7 +721,7 @@ queue order (priority 0 is next), then the finished ones. Each row shows the ite
 archived are finished, every other word is open), priority and name, then its summary and every dependency on an item of another repository.
 Items that are not on the queue because they name another repository or no branch are reported as findings above the queue. Open items of a
 branch that no longer exists on the origin wait for a decision and are listed after the queue. With --json the command prints the data itself,
-without any wrapper; each row also carries claimed_by and review_state, from the item's front matter.
+without any wrapper; each row also carries claimed_by and review_state, as stored in the item's file (empty when the item holds none).
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the

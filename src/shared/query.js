@@ -15,8 +15,7 @@ import * as sync from './sync.js';
 import { asList } from './text.js';
 import { foreignItem, isForeign, undoneDependencies } from './dependencies.js';
 import { seam } from './seam.js';
-import { lifted } from './status.js';
-import { isArchived, isFinished, isOpen } from './status.js';
+import { isArchived, isFinished, isOpen, lifted } from './status.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'changed', 'branches'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'only'];
@@ -286,7 +285,7 @@ async function query(argv, team, branchColumn) {
     }
     if (a.json) {
       // who holds each item and whether it is in review, so no caller reads the item files for them
-      const fmOf = r => lifted(readItemFile(resolve(folder, String(r.path)))).fm;
+      const fmOf = r => { const doc = readItemFile(resolve(folder, String(r.path))); return (doc.fm.team ? lifted(doc) : doc).fm; }; // a team's item shows the derived state; any other the stored one
       const itemFields = r => { const f = fmOf(r); return { ...r, claimed_by: f.claimed_by ?? '', review_state: f.review_state ?? '' }; };
       const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map(x => (x && typeof x === 'object' ? itemFields(x) : x)) : v])); // bare files stay paths
       dump({ handoff: h, repository: repo, branch: redact(branch), phases: shown.map(itemFields), gone_branch_items: gone.map(itemFields), findings: each(bad) });

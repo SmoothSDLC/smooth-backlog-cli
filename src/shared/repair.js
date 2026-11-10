@@ -6,7 +6,6 @@ import { say, refuse } from './archive.js';
 import { dumpItem, parseItem, readItemText } from './item-file.js';
 import { git, itemSelector } from './safety.js';
 import * as store from './store.js';
-import { normalise } from './status.js';
 import { highWater } from './numbers.js';
 
 const INTEGERS = ['seq', 'size_score'];
@@ -54,8 +53,8 @@ export async function repairUnreadable(a, folder, bad) {
       if (value !== Number(/^\d+/.exec(slug)?.[0]) && value <= high) return refuse(`--seq ${value} is not above the highest number ever used in ${folder.split(/[\\/]/).slice(-2).join('/')} (${high}); numbers are never reused`);
       a.seqRepaired = true; // the update that follows need not check the number again
     }
-    if (key === 'status' && !normalise(value)) return refuse('--status needs a word');
-    text = setField(text, key, key === 'status' ? normalise(value) : value);
+    if (key === 'status' && !String(value).trim()) return refuse('--status needs a word');
+    text = setField(text, key, value);
   }
   store.writeText(abs, text, folder);
   const still = store.unreadable(folder);

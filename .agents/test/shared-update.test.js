@@ -107,7 +107,7 @@ test('a folder whose items carry the rank of an earlier build gets its index at 
 
 test('a bare number is the item number, never the database row id', t => {
   const f = seed();
-  const r = run(f, ['2', '--status', 'in_progress']);
+  const r = run(f, ['2', '--status', 'in progress']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^✅ 002-beta updated/);
   assert.equal(fm(f, itemName('002-beta')).fm.status, 'in progress');
@@ -126,7 +126,7 @@ test('order of work: pull first, then change, write, log the event, commit and p
   changeItem(itemPath(join(other, 'acme', 'demo'), '004-delta'), { fm: { summary: 'remote summary' } });
   git(other, 'commit', '-q', '-am', 'remote edit');
   git(other, 'push', '-q');
-  const r = run(f, ['4', '--status', 'in_progress', '--note', 'go']);
+  const r = run(f, ['4', '--status', 'in progress', '--note', 'go']);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(fm(f, itemName('004-delta')).fm.summary, 'remote summary'); // the pull happened before the item was read and rewritten
   const log = git(f.home, 'log', '--format=%s', '-1');
@@ -429,7 +429,7 @@ const step = (f, args) => {
 
 test('field updates (status, location, commit, summary, name, objective, note)', () => {
   const f = seed();
-  const r = step(f, ['2', '--status', 'in_progress', '--location', 'src/a.js', '--commit', 'abc1234', '--summary', 'Neue Zusammenfassung ☕',
+  const r = step(f, ['2', '--status', 'in progress', '--location', 'src/a.js', '--commit', 'abc1234', '--summary', 'Neue Zusammenfassung ☕',
     '--name', 'Beta 2', '--objective', 'Obj: "quoted" it\'s', '--note', 'working on it']);
   assert.match(r.stdout, /^✅ 002-beta updated \(status=in progress, commit=abc1234, location=src\/a\.js, summary=/);
   step(f, ['002-beta', '--seq', '77', '--size_score', '5']);
@@ -440,7 +440,7 @@ test('field updates (status, location, commit, summary, name, objective, note)',
 test('--append adds the text after a blank line and a final newline', () => {
   const f = seed();
   step(f, ['1', '--append', 'extra line\n\n  indented\n- [ ] item']);
-  step(f, ['1', '--append', '## Definition of done\n- [ ] checked', '--status', 'in_progress']);
+  step(f, ['1', '--append', '## Definition of done\n- [ ] checked', '--status', 'in progress']);
 });
 
 test('--priority moves the item to that rank and re-densifies, with a planning_event', () => {
@@ -452,30 +452,31 @@ test('--priority moves the item to that rank and re-densifies, with a planning_e
   step(f, ['6', '--priority', '0']); // a done item is in no queue
 });
 
-test('--status done completes, stamps completed, re-prioritizes and prints the planning-event lines', () => {
+test('--status closed completes, stamps completed, re-prioritizes and prints the planning-event lines', () => {
   const f = seed();
-  const r = step(f, ['2', '--status', 'done']);
+  const r = step(f, ['2', '--status', 'closed']);
   assert.match(r.stdout, /PLANNING EVENT — completing work RE-PRIORITIZES the backlog/);
   assert.match(fm(f, itemName('002-beta')).fm.completed, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
-  step(f, ['1', '--status', 'done', '--note', 'n']);
-  step(f, ['3', '--status', 'done', '--priority', '0']);
-  step(f, ['4', '--status', 'done']); // empties the backlog down to item 5
-  step(f, ['6', '--status', 'done']); // already done: completed stays
+  step(f, ['1', '--status', 'closed', '--note', 'n']);
+  step(f, ['3', '--status', 'closed', '--priority', '0']);
+  step(f, ['4', '--status', 'closed']); // empties the backlog down to item 5
+  step(f, ['6', '--status', 'closed']); // already finished: completed stays
 });
 
-test('--status takes any word on an item outside a team: a free word keeps it in the queue, closed (or done) takes it out', () => {
+test('--status takes any word on an item outside a team: a free word keeps it in the queue and is stored as typed, closed or done takes it out', () => {
   const f = seed();
   const queue = () => index.open(index.rows(f.folder).rows).map(r => r.slug);
   assert.ok(queue().includes('001-alpha'));
   assert.equal(step(f, ['1', '--status', 'blocked on vendor']).status, 0);
   assert.equal(fm(f, itemName('001-alpha')).fm.status, 'blocked on vendor');
   assert.ok(queue().includes('001-alpha'), 'a free-text word is open');
-  assert.equal(step(f, ['1', '--status', 'in-progress']).status, 0); // typed with a hyphen, stored as the word
-  assert.equal(fm(f, itemName('001-alpha')).fm.status, 'in progress');
+  assert.equal(step(f, ['1', '--status', 'In-Progress']).status, 0); // stored exactly as typed
+  assert.equal(fm(f, itemName('001-alpha')).fm.status, 'In-Progress');
+  assert.ok(queue().includes('001-alpha'));
   assert.equal(step(f, ['2', '--status', 'closed']).status, 0);
   assert.ok(!queue().includes('002-beta'));
-  assert.equal(step(f, ['1', '--status', 'done']).status, 0); // done is closed
-  assert.equal(fm(f, itemName('001-alpha')).fm.status, 'closed');
+  assert.equal(step(f, ['1', '--status', 'done']).status, 0); // done is a finished word and stays done
+  assert.equal(fm(f, itemName('001-alpha')).fm.status, 'done');
   assert.ok(!queue().includes('001-alpha'));
 });
 
@@ -523,7 +524,7 @@ test('a replan leaves no event; the order itself is the record', () => {
 test('--dry-run prints the plan and changes and commits nothing', () => {
   const f = seed();
   const before = snapshot(f);
-  const r = step(f, ['2', '--status', 'done', '--dry-run']);
+  const r = step(f, ['2', '--status', 'closed', '--dry-run']);
   assert.match(r.stdout, /^ℹ️  \[dry-run\] 002-beta: would set \{'status': 'closed'\}; COMPLETE -> re-prioritize backlog\n$/);
   step(f, ['3', '--priority', '1', '--name', "It's \"x\"", '--seq', '9', '--dry-run']);
   step(f, ['3', '--append', 'x', '--dry-run']);

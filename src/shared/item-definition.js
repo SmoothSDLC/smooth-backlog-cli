@@ -13,7 +13,7 @@ export const ENVELOPE = [
 ];
 
 export const FIELDS = [
-  ['status', 'text', [], 'pending', 'backlog new --status, backlog update --status, backlog update --claim and --release, backlog done', 'Where the item is, a free word stored as typed; closed, done and archived finish an item'],
+  ['status', 'text', [], 'pending', 'backlog new --status, backlog update --status, backlog update --claim and --release, backlog done', 'Where the item is, a free word stored exactly as typed; the finished words are closed, done and archived'],
   ['objective', 'text', [], 'the title', 'backlog new --objective, backlog update --objective', 'The result the item delivers, one line'],
   ['summary', 'text', [], 'empty', 'backlog new --summary, backlog update --summary', 'Several sentences about what the item is for; it routes new work to the right item'],
   ['location', 'text', [], 'empty', 'backlog update --location', 'Free text: where the work is'],
@@ -22,7 +22,7 @@ export const FIELDS = [
   ['owner', 'text', [], 'the user of the configuration', 'the CLI, backlog update --claim and --release', 'The agent working on the item; outside a team, the user the item belongs to'],
   ['owned_since', 'time', [], 'empty', 'the CLI', 'When the agent took the item; empty while nobody holds it'],
   ['depends_on', 'items', [], 'empty list', 'backlog new --depends-on, backlog update --set-depends-on', 'The items that must be finished first'],
-  ['parent', 'item', [], 'none', 'backlog new --split-from (written from the split-link batch on; not written yet)', 'The item this one was split from'],
+  ['parent', 'item', [], 'none', 'backlog new --split-from', 'The item this one was split from'],
   ['estimate_min', 'number', [], 'empty', 'backlog new --estimate, backlog update --set-estimate', 'Minutes of work, a whole number'],
   ['complexity', 'text', [], 'empty', 'backlog new --complexity, backlog update --set-complexity', 'low, medium or high'],
   ['layer', 'text', [], 'empty', 'backlog new --layer, backlog update --set-layer', '1 to 5 or process'],

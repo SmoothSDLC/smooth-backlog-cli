@@ -149,14 +149,17 @@ test('query --status --json rows carry claimed_by and review_state', () => {
   ok(f, ['update', reviewed, '--request-review', 'any', '--note', 'commit abc', '--by', 'bob']); // it waits: bob may pull new work
   ok(f, ['show', held, '--agent', 'bob']); ok(f, ['update', held, '--claim', 'bob']);
   const rows = Object.fromEntries(JSON.parse(ok(f, ['list', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
-  assert.deepEqual(rows[held], ['bob', 'none']);
-  assert.deepEqual(rows[reviewed], ['bob', 'requested']);
-  assert.deepEqual(rows[free], ['', 'none']);
+  assert.deepEqual(rows[held], ['bob', '']); // an item without a team stores none
+  assert.deepEqual(rows[reviewed], ['bob', '']); // the stored value: a team step, not this view, derives the state
+  assert.deepEqual(rows[free], ['', '']);
   ok(f, ['show', reviewed, '--agent', 'zed']); ok(f, ['update', reviewed, '--start-review', '--by', 'zed']);
   const file = itemPath(f.folder, free); // a front matter without the two keys: '' (written by hand here, never by the CLI)
   const stored = readStored(file); for (const k of ['owner', 'owned_since', 'review_state']) delete stored.fm[k]; writeStored(file, stored.fm, stored.body);
   const again = Object.fromEntries(JSON.parse(ok(f, ['list', '--json']).stdout).phases.map(r => [r.slug, [r.claimed_by, r.review_state]]));
-  assert.deepEqual([again[reviewed], again[free]], [['bob', 'in_review'], ['', '']]);
+  assert.deepEqual([again[reviewed], again[free]], [['bob', ''], ['', '']]);
+  changeItem(itemPath(f.folder, reviewed), { fm: { review_state: 'in_review' } }); // a value stored in the file is shown as it is
+  const stored2 = Object.fromEntries(JSON.parse(ok(f, ['list', '--json']).stdout).phases.map(r => [r.slug, r.review_state]));
+  assert.equal(stored2[reviewed], 'in_review');
 });
 
 test('team pop: an unclaimed in-progress work item is taken; no output names a file of the backlog', () => {

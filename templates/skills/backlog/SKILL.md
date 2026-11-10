@@ -16,7 +16,7 @@ metadata:
 # Repository backlog
 
 The backlog of this repository and branch: items with a number, a name, an objective, a rank in the queue of its branch (P0 is next) and a
-status (pending, in_progress, done, archived). The CLI is the only interface to the backlog: read and change it through
+status (a free word stored as typed; closed, done and archived are the finished words, every other word is open). The CLI is the only interface to the backlog: read and change it through
 `backlog` commands, never through its files. `backlog --help` lists the commands; `backlog <command> --help` is the
 contract of each (also in references/commands.md). Where the items live is a setting of the repository (inside it, or
 in a backlog repository shared by many); it changes no command, and every change is committed and pushed by the CLI.
@@ -43,7 +43,7 @@ exit code; `backlog upgrade disable` turns the weekly check off, `backlog upgrad
   the item since your read is refused (exit 5) until you read it again.
 - Reviews, refinement and hand-offs are team steps: see Team work. `backlog update` refuses every change of an item that belongs to a team, and so do `done`, `update --replan` naming it, `archive` of a team item that is not closed, `import --higher` and `clean` (one line, exit 1, nothing written); `move`, `archive` of a closed team item and `archive done` work on it like on any other.
 - An item that cannot be read: every command names it and the field; `backlog update <item> --<field> <value>` sets the field again, `backlog update <item> --restore` brings back its previous version.
-- Finish: `backlog done <item>` (the same as `backlog update <item> --status done`) or `backlog update <item> --close --summary "<what was delivered>"`; `backlog archive <item>`
+- Finish: `backlog done <item>` (the same as `backlog update <item> --status closed`) or `backlog update <item> --close --summary "<what was delivered>"`; `backlog archive <item>`
   keeps a finished item out of the queue (it keeps the item's status: an item is archived by where it is stored, no status word says so; `backlog archive done` archives every finished item of the branch); `backlog move <item> --to-branch <name>` moves it to another branch;
   `backlog import --branch <source> [--higher]` brings the open items of another branch here; `backlog clean [all-branches]` removes every item of the branch (or of every branch) after a typed yes.
 

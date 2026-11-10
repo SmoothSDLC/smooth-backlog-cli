@@ -46,12 +46,12 @@ test('--status done is refused on a team item: its status moves by the team step
   assert.equal(status(f), 'in progress');
 });
 
-test('--status done on an old teamless item without review_refs closes it without a review', () => {
+test('--status closed on an old teamless item without review_refs closes it without a review', () => {
   const f = fixture('old item without review_refs', []);
   const { fm, body } = readItem(f.file); // as an old item looks: none of the team keys (depends_on is not one)
   for (const k of ['work_class', 'review_classes', 'claimed_by', 'claimed_at', 'review_state', 'reviewer']) delete fm[k];
   writeItem(f.file, fm, body);
-  const r = update(f, [f.slug, '--status', 'done']);
+  const r = update(f, [f.slug, '--status', 'closed']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(status(f), 'closed');
 });

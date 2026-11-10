@@ -138,10 +138,11 @@ test('new: writes the item, records its history, commits as "acme/demo: new --na
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   const [item] = items(f);
   assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'repository', 'branch', 'created', 'updated', 'updated_by', 'status', 'objective', 'summary', 'location', 'commit',
-    'severity', 'claimed_by', 'owner', 'claimed_at', 'depends_on', 'review_state', 'reviewer', 'events']); // the envelope of the file first, then the fields in the order of the definition (B06c1: the header order of the markdown file is gone)
+    'severity', 'claimed_by', 'owner', 'claimed_at', 'depends_on', 'events']); // the envelope of the file first, then the fields in the order of the definition (B06c1: the header order of the markdown file is gone)
   assert.deepEqual({ ...item.fm, created: 0, updated: 0, updated_by: 0, commit: 0, events: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
     status: 'pending', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0, updated_by: 0,
-    depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '', owner: defaultUser(f.cons), events: 0 });
+    depends_on: [], claimed_by: '', claimed_at: '', owner: defaultUser(f.cons), events: 0 });
+  assert.ok(!('review_state' in item.fm) && !('reviewer' in item.fm) && !('parent' in item.fm), 'an item without a team holds exactly the built-in fields');
   assert.equal(item.fm.commit, git(f.cons, 'rev-parse', 'HEAD'));
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
   assert.equal(subject(f), SUBJECT.newName('Alpha job'));
@@ -229,7 +230,7 @@ test('review P2: review refs go through checkRefs: an absolute or ..-crossing re
   assert.ok(!existsSync(join(f.folder, 'backlog.db')), 'the database is not even opened');
 });
 
-test('review P2: a file with the name of the next item is never replaced: the item takes the next free number, with or without --force', t => {
+test('review P2: a file with the name of the next item is never replaced: the item takes the next free number, and --force no longer exists', t => {
   const f = fixture(t);
   const path = itemPath(f.folder, '001-alpha-job');
   mkdirSync(join(f.folder, 'phases'), { recursive: true });
@@ -238,9 +239,10 @@ test('review P2: a file with the name of the next item is never replaced: the it
   assert.equal(first.status, 0, first.stderr);
   assert.ok(readFileSync(path, 'utf8').includes('SEEDED BODY'));
   const forced = node(f, [...NONE, '--force']);
-  assert.equal(forced.status, 0, forced.stderr);
+  assert.equal(forced.status, 2);
+  assert.match(forced.stderr, /unrecognized arguments: --force/);
   assert.ok(readFileSync(path, 'utf8').includes('SEEDED BODY'));
-  assert.deepEqual(items(f).map(i => i.path).sort(), [itemRel('001-alpha-job'), itemRel('002-alpha-job'), itemRel('003-alpha-job')]);
+  assert.deepEqual(items(f).map(i => i.path).sort(), [itemRel('001-alpha-job'), itemRel('002-alpha-job')]);
 });
 
 test('review P1: new whose index write is refused removes the file it wrote and commits nothing', t => {
@@ -328,6 +330,7 @@ test('075: --split-from copies the objective, summary and body of the source and
   const [, child] = items(a);
   assert.equal(child.fm.name, '1-cont'); assert.equal(child.fm.objective, 'parent objective'); assert.equal(child.fm.summary, 'parent summary');
   assert.deepEqual(child.fm.depends_on, [1]);
+  assert.equal(child.fm.parent, 1); // the number of the source, besides the inherited text of the body
   assert.equal(child.body, '\n# Phase 002 — 1-cont\n\n**Objective:** parent objective\n\n\n## Split from `001-parent`. Inherited context:\n\n# Phase 001 — Parent\n\n**Objective:** parent objective\n\n\nParent body with ünï\n\n## Definition of done\n- [ ] a\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
   assert.equal(subject(a), SUBJECT.newSplitFrom('1'));
   const [parent] = items(a);
@@ -387,7 +390,7 @@ test('075: team new: every flag, appended: the item carries the carried context,
   assert.deepEqual(fmNorm(item.fm), { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
     status: 'new', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', team: 't1', refiner: '', stage: 'refining', owner: '',
     created: 0, updated: 0, updated_by: 0, chunk: true, review_refs: ['references/review/code.md', 'references/review/tests.example.md'],
-    estimate_min: 30, complexity: 'medium', layer: '3', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
+    estimate_min: 30, complexity: 'medium', layer: '3', depends_on: [], claimed_by: '', claimed_at: '', review_state: 'none' });
   assert.equal(item.body, '\n# Phase 001 — Alpha job\n\n**Objective:** do alpha\n\n\n## Carried context (from the original ask)\n\nfrom the ask\n\n\nSome body\n\n## Definition of done\n- [ ] it works\n');
 });
 
@@ -462,9 +465,9 @@ test('057: the help of new, archive and move names no folder or item file', t =>
 test('--status starts an item in that status (free text outside a team); the default stays pending', t => {
   const f = fixture(t);
   assert.equal(node(f, [...NONE, '--status', 'in progress']).status, 0);
-  assert.equal(node(f, ['--name', 'Beta job', '--objective', 'o', '--summary', 's', '--status', 'Done']).status, 0);
+  assert.equal(node(f, ['--name', 'Beta job', '--objective', 'o', '--summary', 's', '--status', 'Done']).status, 0); // stored exactly as typed
   assert.equal(node(f, ['--name', 'Gamma job', '--objective', 'o', '--summary', 's']).status, 0);
-  assert.deepEqual(items(f).map(i => i.fm.status).sort(), ['closed', 'in progress', 'pending']);
+  assert.deepEqual(items(f).map(i => i.fm.status).sort(), ['Done', 'in progress', 'pending']);
 });
 
 test('--status with --team is refused: a team item starts in its own first status', t => {

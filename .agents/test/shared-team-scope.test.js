@@ -240,7 +240,7 @@ test('075: the claimable, reviewable and blocked views print their exact rows, a
     "claimed_by": "",
     "claimed_at": "",
     "review_state": "none",
-    "reviewer": "",
+    "reviewer": null,
     "estimate_min": 5,
     "complexity": "low",
     "layer": null,

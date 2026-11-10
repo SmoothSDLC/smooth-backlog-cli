@@ -226,7 +226,7 @@ async function change(a, folder, repo, team) {
     const outside = team?.refuseOutside(row); // a session bound to another repository or branch is told so first
     if (outside) return refuse(outside);
     if (fm.team) return refuse(team ? NO_STATUS_FLAG : OF_A_TEAM);
-    a.status = normalise(a.status);
+    if (team) a.status = normalise(a.status); // a team's step reads its words in the stored spelling; the user command stores the word as typed
     if (a.status === 'archived') return refuse("--status 'archived': backlog archive moves a finished item to archive/");
   }
   let seqTaken = null; // a --seq above the mark: numbers.json follows it

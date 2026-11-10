@@ -40,8 +40,8 @@ function build(withFindings) {
   newItem(f, 'Beta', '--severity', 'critical');
   newItem(f, 'Gamma');
   newItem(f, 'Delta');
-  setStatus(f, '003-gamma', 'in_progress');
-  setStatus(f, '004-delta', 'done');
+  setStatus(f, '003-gamma', 'in progress');
+  setStatus(f, '004-delta', 'closed');
   git(cons, 'checkout', '-q', '-b', 'feature');
   newItem(f, 'Feat');
   git(cons, 'checkout', '-q', 'main');
@@ -131,7 +131,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "updated_at": "TS",
       "completed_at": null,
       "claimed_by": "",
-      "review_state": "none"
+      "review_state": ""
     },
     {
       "id": 1,
@@ -155,7 +155,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "updated_at": "TS",
       "completed_at": null,
       "claimed_by": "",
-      "review_state": "none"
+      "review_state": ""
     },
     {
       "id": 3,
@@ -179,7 +179,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "updated_at": "TS",
       "completed_at": null,
       "claimed_by": "",
-      "review_state": "none"
+      "review_state": ""
     },
     {
       "id": 4,
@@ -203,7 +203,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "updated_at": "TS",
       "completed_at": "TS",
       "claimed_by": "",
-      "review_state": "none"
+      "review_state": ""
     }
   ],
   "gone_branch_items": [
@@ -229,7 +229,7 @@ test('075: --status --json prints handoff, repository, branch, phases, gone_bran
       "updated_at": "TS",
       "completed_at": null,
       "claimed_by": "",
-      "review_state": "none"
+      "review_state": ""
     }
   ],
   "findings": {
@@ -358,7 +358,7 @@ test('075: --status --all and --branch: every branch in the queue, the gone item
       id: 5, handoff_id: 1, slug: '005-feat', seq: 5, name: 'Feat', objective: 'Caf\u00e9 \u2615 Feat', summary: 'sum Feat',
       status: 'pending', severity: 'normal', priority: 0, path: itemRel('005-feat'), sha: 'SHA', branch: 'feature', commit_sha: 'SHA',
       location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
-      claimed_by: '', review_state: 'none'
+      claimed_by: '', review_state: ''
     }],
     gone_branch_items: [],
     findings: {
@@ -402,7 +402,7 @@ test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
 test('075: --phase prints the full item (row, front matter, body) by slug and by number; not found is exit 1 on stdout', () => {
   const f = fx();
   const beta = { id: 2, handoff_id: 1, slug: '002-beta', seq: 2, name: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', priority: 0, path: itemRel('002-beta'), sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
-    front_matter: { phase: '002-beta', seq: 2, title: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', last_updated: 'TS', last_updated_by: 'UPD', depends_on: [], owner: defaultUser(f.cons), owned_since: '', review_state: 'none', reviewer: '' },
+    front_matter: { phase: '002-beta', seq: 2, title: 'Beta', objective: 'Caf\u00e9 \u2615 Beta', summary: 'sum Beta', status: 'pending', severity: 'critical', repository: 'acme/demo', branch: 'main', commit: 'SHA', location: '', created: 'TS', last_updated: 'TS', last_updated_by: 'UPD', depends_on: [], owner: defaultUser(f.cons), owned_since: '' },
     body: '\n# Phase 002 — Beta\n\n**Objective:** Caf\u00e9 \u2615 Beta\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n' };
   // the item carries its history (events) in its front matter: compared apart from the rest
   const noEvents = j => { const { events, ...fm } = j.front_matter; return [{ ...j, front_matter: fm }, events]; };
@@ -410,7 +410,7 @@ test('075: --phase prints the full item (row, front matter, body) by slug and by
   assert.deepEqual(bySlug, beta, 'by slug');
   assert.match(betaEvents[0], /^TS planning_event - - added 002-beta at rank 0/);
   const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal', priority: 2, path: itemRel('003-gamma'),
-    front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, title: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal' } };
+    front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, title: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal', review_state: 'none' } }; // a word of the order carries the derived state
   gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
   const [byNumber, events] = noEvents(normJson(view(f, ['show', '3']).stdout));
   assert.deepEqual(byNumber, gamma, 'by number');
@@ -453,7 +453,7 @@ test('075: --critical lists the open critical items (JSON and text) and says so 
     + '⚠️ ========================================================================\n');
   assert.deepEqual(normJson(view(f, ['list', 'critical', '--json']).stdout).map(x => [x.slug, x.severity, x.priority]), [['002-beta', 'critical', 0]]);
   const g = build(false);
-  setStatus(g, '002-beta', 'done');
+  setStatus(g, '002-beta', 'closed');
   assert.equal(view(g, ['list', 'critical']).stdout, '✅ no open CRITICAL items on the backlog\n');
   assert.deepEqual(normJson(view(g, ['list', 'critical', '--json']).stdout), []);
 });

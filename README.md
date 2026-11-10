@@ -126,7 +126,7 @@ The same five rules hold wherever the items live:
 
 | Command | Purpose |
 |---|---|
-| `backlog new --name <text> [options]` | Add an item; `--split-from <item>` makes a sibling with its context; `--ask` asks on a terminal for the title, objective, summary and body you did not give (refused without a terminal, exit 2) |
+| `backlog new --name <text> [options]` | Add an item; `--status <word>` is stored exactly as typed; `--split-from <item>` makes a sibling with its context and sets `parent`; `--ask` asks on a terminal for the title, objective, summary and body you did not give (refused without a terminal, exit 2) |
 | `backlog update <item> [options]` | Change fields, body, status, priority of an item without a team; claim, release, close |
 | `backlog done <item>` | Finish an item that has no team |
 | `backlog list [new\|open\|done\|archive\|branches\|critical\|all-branches]` | The full stack of this branch (open items in queue order, then the finished ones), one kind of item, the branches, the critical items, or every branch |

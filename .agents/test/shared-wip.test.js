@@ -68,7 +68,7 @@ test('034: each of the five levels refuses the claim past its limit; the lead\'s
   assert.deepEqual([fm.wip_override, fm.wip_override_by], ['the release needs it today', 'lead']);
   f.limits({ overall: 1 });
   assert.match(f.run('other', ['update', o, '--claim', 'dan'], 1).stdout, /overall work-in-progress limit/); // only the owner's file changes overall
-  assert.match(f.run('other', ['update', o, '--status', 'in_progress', '--by', 'dan'], 1).stdout, /overall work-in-progress limit/); // a status change starts work too
+  assert.match(f.run('other', ['update', o, '--status', 'in progress', '--by', 'dan'], 1).stdout, /overall work-in-progress limit/); // a status change starts work too
   // a limits file that cannot be read holds nobody (owner 2026-10-30), and says so
   writeFileSync(join(f.home, 'wip-limits.json'), '{ not json');
   assert.match(f.run('other', ['update', o, '--claim', 'dan']).stderr, /wip-limits\.json cannot be read or is no JSON .*no work-in-progress limit applies until it is fixed/);
@@ -130,7 +130,7 @@ test('034: a reclaim of an item set back to pending is a start; a combined start
   assert.match(f.run('demo', ['update', a, '--claim', 'amy'], 1).stdout, /the repository work-in-progress limit of acme\/demo is 1/);
   f.limits({ team: 1 });
   f.run('demo', ['update', b, '--set-team', 't1']);
-  assert.match(f.run('demo', ['update', c, '--status', 'in_progress', '--set-team', 't1', '--by', 'cat'], 1).stdout, /the team work-in-progress limit of t1 is 1/);
+  assert.match(f.run('demo', ['update', c, '--status', 'in progress', '--set-team', 't1', '--by', 'cat'], 1).stdout, /the team work-in-progress limit of t1 is 1/);
 });
 
 test('034: a branch limit is keyed owner/name:branch', () => {

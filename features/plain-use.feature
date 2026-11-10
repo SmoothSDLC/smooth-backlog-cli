@@ -13,7 +13,7 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
 
   Scenario: a person finishes their own item
     Given an item "Finish me" exists
-    When I run `backlog update 1 --status done`
+    When I run `backlog update 1 --status closed`
     Then the command succeeds
     And item 1 has status "closed"
     And the queue is empty
@@ -27,7 +27,7 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
 
   Scenario: archive a finished item
     Given an item "Archive me" exists
-    And I run `backlog update 1 --status done`
+    And I run `backlog update 1 --status closed`
     When I run `backlog archive 1`
     Then the command succeeds
     And item 1 has status "closed"
@@ -47,7 +47,7 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
   Scenario: finishing a plain item closes the gap in the queue
     Given an item "A" exists
     And an item "B" exists
-    When I run `backlog update 1 --status done`
+    When I run `backlog update 1 --status closed`
     Then the command succeeds
     And the queue is 2
     And item 2 has priority 0

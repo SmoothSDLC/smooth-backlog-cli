@@ -12,7 +12,6 @@ import { assertInside, git, redact, slugify } from './safety.js';
 import { addEvent, branch as callerBranch, folder as repoFolder, nextSeqFor, now, reflow, repoId, resolveHome, cloneLocked, undoOnThrow, write } from './store.js';
 import { highWater, record as recordNumber } from './numbers.js';
 import { commitSettled, pull } from './sync.js';
-import { normalise } from './status.js';
 import { seam } from './seam.js';
 import { foreignItem, isForeign } from './dependencies.js';
 
@@ -23,7 +22,7 @@ const pad = n => String(n).padStart(3, '0');
 const OPTIONS = {
   name: 's', title: 's', status: 's', objective: 's', summary: 's', description: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
   'depends-on': 's', estimate: 'i', chunk: true,
-  complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], force: true, 'dry-run': true, ask: true,
+  complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], 'dry-run': true, ask: true,
 };
 const NEGATIVE = /^-(\d+|\d*\.\d+)$/;
 const optionLike = s => s.startsWith('-') && s !== '-' && !NEGATIVE.test(s) && !s.includes(' ');
@@ -178,11 +177,10 @@ async function create(argv, { home, folder, repo, scope, team, floor = 0 }) {
     slug = `${pad(seq)}-${slugify(name)}`;
     rel = `phases/${itemFileName(slug)}`;
     const path = join(folder, rel);
-    if (existsSync(path) && !a.force) return refuse(`${slug} exists (pass --force)`);
 
     const objective = a.objective || inherited.objective || name;
     const fm = {
-      phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: team ? 'new' : a.status !== undefined ? normalise(a.status) : 'pending', severity,
+      phase: slug, seq, name, objective, summary: a.summary || inherited.summary || '', status: team ? 'new' : a.status !== undefined ? a.status : 'pending', severity,
       repository: repo, branch: scope.branch || callerBranch(process.cwd()),
       commit: (await git(['rev-parse', '--verify', '--quiet', 'HEAD'], process.cwd())).stdout.trim(), location: '', created: now(), updated: now(), updated_by: actor(),
     };
@@ -190,7 +188,8 @@ async function create(argv, { home, folder, repo, scope, team, floor = 0 }) {
     if (a.chunk) fm.chunk = true;
     team?.reviewRefs(fm, t);
     for (const [k, v] of [['estimate_min', a.estimate], ['complexity', a.complexity], ['layer', a.layer]]) if (v !== undefined) fm[k] = v;
-    Object.assign(fm, { depends_on: deps, claimed_by: '', claimed_at: '', review_state: 'none', reviewer: '' });
+    Object.assign(fm, { depends_on: deps, claimed_by: '', claimed_at: '' });
+    if (src && !team) fm.parent = src.seq;
     if (!fm.team) fm.owner = configUser(); // an item outside a team belongs to the user of the configuration
     const parts = [`\n# Phase ${pad(seq)} — ${name}\n`, `**Objective:** ${objective}\n`];
     if (a.context) parts.push(`\n## Carried context (from the original ask)\n\n${a.context}\n`);

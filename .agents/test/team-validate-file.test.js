@@ -138,7 +138,7 @@ test('item definition: status', () => {
 test('a field without a description is a warning, never an error', () => {
   const f = good(); delete f.t.item.status.description;
   const found = validate(f);
-  assert.deepEqual(found, [{ severity: 'warning', team: 't', path: 'item.status', rule: null, problem: 'status has no description; agents read the descriptions', fix: 'add "description": "<what the field holds>"' }]);
+  assert.deepEqual(found.filter(f => f.path === 'item.status'), [{ severity: 'warning', team: 't', path: 'item.status', rule: null, problem: 'status has no description; agents read the descriptions', fix: 'add "description": "<what the field holds>"' }]);
   assert.deepEqual(errors(found), []);
 });
 

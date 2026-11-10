@@ -40,7 +40,7 @@ test('rule: it is an object, has an id that is a text and unique, and only the k
   one({ id: undefined }, 'rules.table[0]: the rule has no id');
   one({ id: '' }, 'rules.table[0]: the rule has no id');
   one({ id: 5 }, 'rules.table[0].id: the id must be a text');
-  assert.deepEqual(problems(rule(), rule()), ['rules.table[1]: the id r is used twice']);
+  assert.deepEqual(problems(rule(), rule({ step: 'stop' })), ['rules.table[1]: the id r is used twice']);
   one({ extra: 1 }, 'rules.table[0].extra: extra is not a key of a rule');
 });
 
@@ -53,7 +53,7 @@ test('step: a word, a list of words or *, none of them a flag name of the CLI', 
 });
 
 test('outcome: exactly one of deny and do; deny and say are texts; do is an object', () => {
-  const t = [{ id: 'r', step: 'go' }, { id: 'r', step: 'go', deny: 'x', do: {} }].map((r, i) => ({ ...r, id: `r${i}` }));
+  const t = [{ id: 'r', step: 'go' }, { id: 'r', step: 'go', deny: 'x', do: {} }].map((r, i) => ({ ...r, id: `r${i}`, step: `go${i}` }));
   assert.deepEqual(problems(...t), ['rules.table[0]: a rule has exactly one outcome: deny or do', 'rules.table[1]: a rule has exactly one outcome: deny or do']);
   one({ do: undefined, deny: 5 }, 'rules.table[0].deny: deny must be a text');
   one({ do: 5 }, 'rules.table[0].do: do must be an object of effects');
@@ -282,6 +282,6 @@ test('long lists are named in part and a file with a hundred thousand values and
   for (const f of found.slice(0, 3)) assert.ok(f.problem.length < 200 && f.fix.length < 300, f.problem);
   assert.match(found.at(-1).fix, /use one of v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, and 99990 more/);
   const many = entry([rule({ when: { is: ['$item.status', 'x'] } })]); many.people = Object.fromEntries(Array.from({ length: N }, (_, i) => [`p${i}`, [`r${i}`]]));
-  many.rules.table = Array.from({ length: 3000 }, (_, i) => rule({ id: `r${i}`, when: { in: ['boss', '$caller.roles'] } }));
+  many.rules.table = Array.from({ length: 3000 }, (_, i) => rule({ id: `r${i}`, step: `s${i}`, when: { in: ['boss', '$caller.roles'] } }));
   const s = Date.now(); assert.equal(errors(validate({ t: many })).length, 3000); assert.ok(Date.now() - s < 8000);
 });

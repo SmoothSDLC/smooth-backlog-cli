@@ -3,9 +3,9 @@
 // ctx = { team, entry, say, keys }: `entry` and `entry.rules` are objects, but `rules.table` may be of any type (validate.js has already reported a wrong type), so
 // every read here is guarded. `say(path, rule, problem, fix, severity = 'error')` adds a finding of the team; `keys(object, kind, path, rule = null)` reports the keys
 // of an object that its kind does not allow. Nothing here throws: a rule that cannot be walked (nested too deeply) is one finding.
-import { ENVELOPE, FLAGS, FUNCTIONS, LIST, NAMES, PAIR, Refusal, TESTS, asList, num } from './expression.js';
+import { ENVELOPE, FLAGS, FUNCTIONS, LIST, NAMES, PAIR, Refusal, TESTS, asList, num, stepMatches } from './expression.js';
 import { compile } from './safe-regex.js';
-import { typed } from './step.js';
+import { stepArgs, typed } from './step.js';
 import { closest, isObj } from './validate.js';
 
 const NAME = /^[a-z][a-z0-9_-]*$/;
@@ -214,4 +214,99 @@ export function checkRules({ team, entry, say, keys }) {
     }
     return undefined;
   });
+
+  checkShadowing(table, say);
+  checkPop(entry, say, keys, cond, table);
+  checkFilters(entry, say, keys, cond);
+  warn(entry, say);
+}
+
+// Shadowing: an earlier rule that names every step of a later one and whose every clause is a clause of the later one decides first in every case the later one
+// matches. Clauses are the members of a top-level `all` or the one condition, compared without key order; an earlier `in` covers a later `is` of one of its values.
+// What only logic could prove (>= 3 above >= 5) is not found.
+const canonical = x => JSON.stringify(x, (_, v) => (isObj(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
+const clauses = w => (!isObj(w) ? [] : Array.isArray(w.all) ? w.all : [w]);
+// Each clause once, in the forms the comparison needs: its canonical text, and for `in` and `is` the compared value and the values.
+const clauseInfo = c => ({ text: canonical(c), in: isObj(c) && Array.isArray(c.in) && Array.isArray(c.in[1]) ? { of: canonical(c.in[0]), values: new Set(c.in[1].map(canonical)) } : null,
+  is: isObj(c) && Array.isArray(c.is) ? { of: canonical(c.is[0]), value: canonical(c.is[1]) } : null });
+const covers = (p, q) => p.text === q.text || (p.in !== null && q.is !== null && p.in.of === q.is.of && p.in.values.has(q.is.value));
+const stepWords = r => (typeof r.step === 'string' ? [r.step] : Array.isArray(r.step) && r.step.every(s => typeof s === 'string') ? r.step : []);
+
+function checkShadowing(table, say) {
+  const infos = table.map(r => { try { return isObj(r) && stepWords(r).length > 0 && (!has(r, 'when') || isObj(r.when)) ? clauses(r.when).map(clauseInfo) : null; } catch { return null; } });
+  table.forEach((r, n) => {
+    if (!infos[n]) return;
+    const p = table.slice(0, n).find((e, m) => infos[m] && stepWords(r).every(s => stepMatches(stepWords(e), s)) && infos[m].every(c => infos[n].some(d => covers(c, d))));
+    if (p) say(`rules.table[${n}]`, typeof r.id === 'string' ? r.id : null, `rule ${r.id} can never decide: rule ${p.id} above it matches every case it matches`, `move ${r.id} above ${p.id}, or narrow ${p.id}`);
+  });
+}
+
+// A condition nested so deeply that walking it overflows the stack: the evaluator could not run it either.
+const guarded = (path, rule, say, fn) => { try { fn(); } catch (err) { say(path, rule, `the condition cannot be checked (${err instanceof RangeError ? 'it is nested too deeply' : err.name})`, 'flatten the condition'); } };
+
+// Pop entries: an id of its own, one existing step (not * and not new: a pop entry acts on an existing item) and an optional condition.
+function checkPop(entry, say, keys, cond, table) {
+  const pop = entry.rules.pop;
+  if (!Array.isArray(pop)) return;
+  const ids = new Set();
+  pop.forEach((o, n) => {
+    const at = `rules.pop[${n}]`;
+    if (!isObj(o)) return say(at, null, 'a pop entry must be an object', 'write {"id": "<id>", "step": "<step>", "when": <condition>}');
+    const id = typeof o.id === 'string' && o.id ? o.id : null;
+    keys(o, 'pop', at, id);
+    if (id === null) say(at, null, has(o, 'id') ? 'the id of a pop entry must be a text' : 'the pop entry has no id', 'give every pop entry its own id: the history prints it');
+    else if (ids.has(id)) say(at, id, `the id ${id} is used twice among the pop entries`, 'give every pop entry its own id');
+    else ids.add(id);
+    const s = o.step;
+    if (typeof s !== 'string' || !s) say(`${at}.step`, id, 'a pop entry names one step as a word', 'write "step": "<step>"');
+    else if (s === '*' || s === 'new') say(`${at}.step`, id, `${s === '*' ? 'a pop entry names one step, not *' : 'new creates an item; a pop entry acts on an existing one'}`, 'name a step of rules.table');
+    else if (!table.some(r => isObj(r) && stepMatches(stepWords(r), s))) say(at, id, `no rule names the step ${s}`, 'name a step of rules.table');
+    guarded(`${at}.when`, id, say, () => has(o, 'when') && cond(o.when, `${at}.when`, { rule: id, it: false, nest: false }));
+  });
+}
+
+// Filters: a field-style name and a condition that is required.
+function checkFilters(entry, say, keys, cond) {
+  const filters = entry.rules.filters;
+  if (!isObj(filters)) return;
+  for (const [name, f] of Object.entries(filters)) {
+    const at = `rules.filters.${name}`;
+    if (!NAME.test(name)) say(at, null, `${name} is not a filter name: lowercase letters, digits, - and _, starting with a letter`, 'rename the filter');
+    if (!isObj(f)) { say(at, null, 'a filter must be an object with a when', 'write {"description": "...", "when": <condition>}'); continue; }
+    keys(f, 'filter', at);
+    if (!has(f, 'when')) say(at, null, 'the filter has no when', 'add "when": <condition>');
+    else guarded(`${at}.when`, null, say, () => cond(f.when, `${at}.when`, { rule: null, it: false, nest: false }));
+  }
+}
+
+// Warnings: a role or a field nothing reads, a step no rule allows, a step pop offers whose rules take an argument. They never refuse.
+const everyString = (x, out = []) => { if (typeof x === 'string') out.push(x); else if (x && typeof x === 'object') Object.values(x).forEach(v => everyString(v, out)); return out; };
+
+function warn(entry, say) {
+  const { rules, people, item } = entry;
+  const table = Array.isArray(rules.table) ? rules.table.filter(isObj) : [];
+  const pops = Array.isArray(rules.pop) ? rules.pop.filter(isObj) : [];
+  const filters = isObj(rules.filters) ? Object.values(rules.filters).filter(isObj) : [];
+  try {
+    const whens = [...table, ...pops, ...filters].map(r => r.when);
+    const literals = new Set(everyString(whens));
+    const read = new Set(['status']);
+    for (const s of everyString([table, pops, filters])) for (const [, f] of s.matchAll(/\$(?:item|it)\.([a-z0-9_-]+)/g)) read.add(f);
+    if (isObj(people)) {
+      const seen = new Set();
+      for (const [name, roles] of Object.entries(people)) for (const r of Array.isArray(roles) ? roles : []) if (typeof r === 'string' && !seen.has(r) && seen.add(r) && !literals.has(r)) say(`people.${name}`, null, `the role ${r} is read by no rule, pop entry or filter`, 'remove it, or keep it as documentation', 'warning');
+    }
+    if (isObj(item)) for (const f of Object.keys(item)) if (!read.has(f) && !ENVELOPE.includes(f)) say(`item.${f}`, null, `${f} is read by no rule`, 'data only is allowed; nothing reads it', 'warning');
+    const named = [...new Set(table.flatMap(stepWords))].filter(s => s !== '*');
+    for (const s of named) {
+      if (table.some(r => has(r, 'do') && stepMatches(stepWords(r), s))) continue;
+      const n = rules.table.findIndex(r => isObj(r) && stepWords(r).includes(s));
+      say(`rules.table[${n}]`, typeof rules.table[n].id === 'string' ? rules.table[n].id : null, `no rule allows the step ${s}; it is always refused`, 'add a rule with do, or remove the step', 'warning');
+    }
+    pops.forEach(o => {
+      if (typeof o.step !== 'string' || !o.step) return;
+      const allowing = { rules: { table: table.filter(r => has(r, 'do')) } };
+      for (const a of stepArgs(allowing, o.step)) say(`rules.pop[${rules.pop.indexOf(o)}]`, typeof o.id === 'string' ? o.id : null, `pop cannot give --${a} to the step ${o.step}; the pop entry can only be refused`, 'a pop entry offers a step that needs no argument', 'warning');
+    });
+  } catch { /* nested too deeply: the rule check reports it */ }
 }

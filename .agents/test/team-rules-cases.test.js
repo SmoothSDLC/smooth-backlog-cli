@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Refusal, defaultOf } from '../../src/team/rules/expression.js';
-import { EFFECTS, create, step } from '../../src/team/rules/step.js';
+import { create, step } from '../../src/team/rules/step.js';
+import { filter, pop } from '../../src/team/rules/pop.js';
 
 const read = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
 const { cases } = read('./fixtures/team-rules/rule-cases.json');
@@ -10,10 +11,10 @@ const FILES = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 's
 const NOW = '2026-11-09T12:00:00Z';
 
 // What this harness supports; a case outside it is left to the part that adds it, and the count below says how many run.
-const RUN_KINDS = ['update', 'new'];
-const EXPECTED = ['exit', 'text', 'rule', 'items', 'max_ms', 'place', 'say', 'delete', 'archived', 'bound', 'branch'];
-// 179 cases run: the cases file holds 180 runnable ones, and COD-05 (a new without an agent) tests the agent text of the input resolution, which is not the evaluator's.
-const RUN_COUNT = 179;
+const RUN_KINDS = ['update', 'new', 'pop', 'filter'];
+const EXPECTED = ['exit', 'text', 'rule', 'items', 'max_ms', 'place', 'say', 'delete', 'archived', 'bound', 'branch', 'action', 'item', 'entry', 'filter'];
+// 205 cases run: the cases file holds 206 runnable ones, and COD-05 (a new without an agent) tests the agent text of the input resolution, which is not the evaluator's.
+const RUN_COUNT = 205;
 const LEFT_OUT = ['COD-05'];
 
 const defaults = entry => Object.fromEntries(Object.entries(entry.item).map(([f, d]) => [f, defaultOf(d)]));
@@ -24,13 +25,8 @@ const items = (given, team, entry) => given.items.map(i => ({ seq: i.seq, slug: 
 
 const fileOf = c => (c.rule_set === 'inline' ? c.given.team_file : FILES[c.rule_set]);
 const teamOf = (c, file) => c.command.flags?.team ?? Object.keys(file)[0];
-// The deciding rule is the one the case names; it may use only the supported effects.
 function supported(c) {
-  if (LEFT_OUT.includes(c.id) || !RUN_KINDS.includes(c.command.run) || Object.keys(c.expect).some(k => !EXPECTED.includes(k))) return false;
-  const id = c.expect.rule ?? c.rule;
-  if (!id) return true;
-  const file = fileOf(c); const rule = file[teamOf(c, file)].rules.table.find(r => r.id === id);
-  return Object.keys(rule?.do ?? {}).every(k => EFFECTS.includes(k));
+  return !LEFT_OUT.includes(c.id) && RUN_KINDS.includes(c.command.run) && Object.keys(c.expect).every(k => EXPECTED.includes(k));
 }
 // The caller: the agent flag wins over the environment variable (stand-in for the real resolution).
 const callerOf = cmd => {
@@ -48,14 +44,18 @@ for (const c of ran) {
     try {
       const ctx = { entry, team, caller: callerOf(cmd), items: all, args: cmd.args ?? {}, session: { repository: 'acme/app', branch: 'main', ...cmd.session }, now: NOW };
       // The number of a new item: the caller's counter or the highest number of the folder, plus one.
+      if (cmd.run === 'pop') { const p = pop({ ...ctx, order: c.given.order }); got = { exit: p.action === 'idle' ? 3 : 0, action: p.action, item: p.item, entry: p.entry }; }
+      else if (cmd.run === 'filter') got = { exit: 0, filter: filter(ctx, cmd.step) };
+      else {
       const r = cmd.run === 'new' ? create(ctx, Math.max(c.given.last ?? 0, ...all.filter(i => i.repository === 'acme/app').map(i => i.seq)) + 1)
         : step({ ...ctx, step: cmd.step, item: all.find(i => i.seq === cmd.item && i.repository === 'acme/app') });
       got = { exit: 0, rule: r.rule, items: r.items, place: r.place, say: r.say, delete: r.delete };
+      }
     } catch (e) { if (!(e instanceof Refusal)) throw e; got = { exit: e.exitCode, rule: e.rule, text: e.message }; }
     assert.equal(JSON.stringify(all), before, 'the items were changed');
     const want = c.expect;
     assert.equal(got.exit, want.exit, JSON.stringify(got));
-    for (const k of ['text', 'rule']) if (k in want) assert.deepEqual(got[k], want[k], k);
+    for (const k of ['text', 'rule', 'action', 'item', 'entry', 'filter']) if (k in want) assert.deepEqual(got[k], want[k], k);
     for (const [seq, fields] of Object.entries(want.items ?? {})) for (const [f, v] of Object.entries(fields)) assert.deepEqual(got.items.get(Number(seq)).fields[f], v, `item ${seq} field ${f}`);
     for (const k of ['place', 'say', 'delete']) if (k in want) assert.deepEqual(got[k], want[k], k);
     for (const seq of want.archived ?? []) assert.equal(got.items.get(seq).archived, true, `item ${seq} archived`);

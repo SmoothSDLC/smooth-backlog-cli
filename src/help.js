@@ -24,6 +24,8 @@ Usage:
   backlog team new --team <team> --agent <name> --name <text> [options]   Add an item of a team (it starts in stage refining); --review-refs, --split-from, --ask
   backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
   backlog team update <item> --team <team> --agent <name> <step>   One team step: claim, release, request-review, review, close, ...
+  backlog team validate [--team <team> | --show-all] [--json]   Check the team file and this repository's items against it
+  backlog team migrate --team <team>               Convert the items to the team format (not available yet)
   backlog team define --file <team.json>           Register a team (lead, members, reviewers, review stages) in the backlog configuration
   backlog team workflow --file <flow.json>         Register a flow definition; --show <name> prints one
   backlog move <item> --to-branch <name>           Move an item to another branch (or --to-repository)
@@ -73,7 +75,7 @@ Who: SMOOTH_BACKLOG_CLI_AGENT names the agent running the command (--by, --claim
 records who made it and when. A write to an item that someone else changed since this agent last read it is refused
 (exit 5) until the agent reads it again (backlog show <item> --agent <you>).
 
-Teams: the commands that know a team (pop, new, update, query, define, workflow) are under backlog team; backlog team --help describes
+Teams: the commands that know a team (pop, new, update, query, validate, migrate, define, workflow) are under backlog team; backlog team --help describes
 them. The commands above know nothing of teams.
 
 Update notice: when a person runs a command at a terminal (standard error is a terminal), the command also checks the package

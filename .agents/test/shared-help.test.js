@@ -19,7 +19,7 @@ sharedBacklog(t);
 const cons = consumer(t, 'acme', 'demo', 'main');
 const backlog = (...args) => cli(args, { cwd: cons, tmp: t });
 
-const TEAM = ['team', 'team pop', 'team new', 'team update', 'team query', 'team define', 'team workflow']; // the help of the team code lives with it
+const TEAM = ['team', 'team pop', 'team new', 'team update', 'team query', 'team define', 'team workflow', 'team validate', 'team migrate']; // the help of the team code lives with it
 const COMMANDS = ['new', 'update', 'list', 'show', 'history', 'changes', 'next', 'next all-branches', 'done', 'fields', ...TEAM, 'move', 'archive', 'archive done', 'import', 'clean'];
 const ALL = { ...HELP, ...teamHelp };
 const ROUTED = COMMANDS.filter(c => !c.startsWith('team ') && !c.includes(' ')); // the commands of the router (a word of a command has its own help, not its own row)

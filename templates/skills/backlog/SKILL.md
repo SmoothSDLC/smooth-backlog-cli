@@ -78,6 +78,7 @@ SMOOTH_BACKLOG_CLI_AGENT stand in); the step flags below are taken with `backlog
   --handoff-verification "<text>" [--handoff-outputs ... --handoff-pickup ... --handoff-risks ...] --by <you>`; the lead `--accept-handoff <dependent> --checks "<what>" --by <lead>` or
   `--reject-handoff <dependent> --reason "<why>" --by <lead>`; a producer closes when each dependent's hand-off is accepted.
 - Limits: `wip-limits.json` in the backlog folder; `backlog team query --team <team> --wip` shows the counts.
+- Check the team file: after editing the team's rules, run `backlog team validate --team <team>` (`--show-all` for every team, `--json` for a list). It checks the file and this repository's items against it and prints each problem with a fix; exit 2 means an error, and no team command runs until the whole file is valid.
 
 ## Gotchas
 

@@ -1,15 +1,17 @@
-// The help of backlog team and its subcommands: teamHelp['team'], ['team pop'], ['team new'], ['team update'], ['team query'], ['team define'], ['team workflow'].
+// The help of backlog team and its subcommands: teamHelp['team'], ['team pop'], ['team new'], ['team update'], ['team query'], ['team define'], ['team workflow'], ['team validate'], ['team migrate'].
 // Only this file and the team code name the team environment and configuration; src/shared/router.js prints the entry of the subcommand named.
 import { SHARED, HELP_FLAG } from '../shared/help-parts.js';
 
 export const teamHelp = {
-  'team': `backlog team — the commands that know a team: pop, new, update, query, define, workflow
+  'team': `backlog team — the commands that know a team: pop, new, update, query, validate, migrate, define, workflow
 
 Usage:
   backlog team pop --team <name> --agent <name> [--dry-run] [--json]
   backlog team new --team <name> --agent <name> --name <text> [options]
   backlog team update <item> --team <name> --agent <name> <step> [options]
   backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--scope branch|repo|all] [--json]
+  backlog team validate [--team <name> | --show-all] [--json]
+  backlog team migrate --team <name>
   backlog team define --file <team.json> [--json]
   backlog team workflow --file <flow.json> [--json]
   backlog team workflow --show <name>
@@ -550,6 +552,70 @@ of the backlog repository failed or the change was not published.
 
 Example:
   backlog team workflow --show default
+`,
+
+  'team validate': `backlog team validate — check the team file and the items of this repository against it
+
+Usage:
+  backlog team validate [--team <name> | --show-all] [--repository <owner/name>] [--json]
+
+backlog team validate reads the team file in full and checks it: the shape of the file, the people, the item definition and every rule,
+pop entry and filter. It then checks the items of this repository's folder of the backlog against their team (an item whose team has no
+entry, a field value the definition does not allow, a field it does not declare, a reference to an item that does not exist, a number
+that differs from the file name) and the folder's numbers.json against the history. Every finding says where it is, which rule, why it is
+a problem and what would fix it. A lead runs it after editing the team file, before committing it.
+
+Scenario: a lead added a review step to the team web in teams.json and runs backlog team validate --team web in the working copy of
+the repository that holds the team file. The command prints the findings of the file's shape and of the entry of web and its items.
+When another team's entry has an error it says so in one line, because no team command runs until the whole file is valid.
+
+The file is found as the team commands find it: the "teams_file" key of .backlog/config.json, else <backlog repository>/<owner>/<name>/teams.json
+when the "backlog_repository" key names a folder outside the repository, else .backlog/teams.json. A team is given as --team, else
+SMOOTH_BACKLOG_CLI_TEAM_NAME, else the "team" key of .backlog/config.json. With --team and --show-all together --team decides.
+The command does not update the backlog repository and publishes nothing. It writes the SHA of the file into .backlog/config.json
+(key teams_file_sha, so that the lead commits it with the edit) when the whole file is valid, and the per-user validation record; for
+another repository named by --repository (or SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY) only the record. A backlog whose items are still
+markdown is checked on the file only, and the command says to run backlog team migrate first.
+
+Options:
+  --team NAME
+      Print the findings of the file's shape and of this team's entry and items.
+  --show-all
+      Print the findings of every team (the whole file).
+  --repository OWNER/NAME
+      Validate the team file of another repository of the backlog repository (only the record is written).
+  --json
+      Print the findings as a JSON list of {severity, team, path, rule, problem, fix} and nothing else.
+${HELP_FLAG}
+
+Exit codes:
+  0  No error; warnings may be printed.
+  1  The named team has no entry in the file.
+  2  The file has at least one error (the whole file counts, not only the named team), is not JSON, is missing, or the input is invalid.
+
+Example:
+  backlog team validate --team web
+`,
+
+  'team migrate': `backlog team migrate — convert the items of a backlog to the team format (not available yet)
+
+Usage:
+  backlog team migrate --team <name> [--ask]
+
+backlog team migrate will convert the markdown items of this repository's folder to JSON items and bind them to a team. It reads its
+inputs as the other team commands do (a missing team is exit 2) and then answers that it is not available yet.
+
+Options:
+  --team NAME
+      The team the items are bound to.
+  --ask
+      Reserved for the conversion.
+${HELP_FLAG}
+
+Exit codes: 2 the inputs are invalid, or the command is not available yet.
+
+Example:
+  backlog team migrate --team web
 `,
 
 };

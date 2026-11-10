@@ -1,7 +1,7 @@
 // The load of the team file before a team command acts (the first step of every team command): where the file is, whether the validated
 // copy of the last 24 hours can be used, else read, hash and validate the whole file. Only errors refuse; warnings never do. A command
 // that is refused writes nothing; one that proceeds writes the SHA of the file into the repository's .backlog/config.json (or, for another
-// repository's file, only into the per-user record), the validated copy and the record. Nothing calls this yet.
+// repository's file, only into the per-user record), the validated copy and the record.
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
@@ -64,9 +64,11 @@ function readTeamFile(path, top, home, shown) {
   }
 }
 
-// team: a team name, or null for every team (--show-all). full: `backlog team validate`, which always reads, validates and refreshes.
-// Returns { file, from: 'record' | 'disk' } and, with full, the findings (errors and warnings) too.
-export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, now, full = false }) {
+// team: a team name, or null for every team (--show-all). full: `backlog team validate`, which always reads, validates and refreshes; a file
+// that is not JSON is then a finding, not a refusal. deferSha: the SHA is not written into the configuration by this call but by persistSha(),
+// which the caller runs when its command has gone through (a refused command never writes it).
+// Returns { file, from: 'record' | 'disk', shown, persistSha } (shown: the file as a message names it) and, with full, the findings (errors and warnings) too.
+export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, now, full = false, deferSha = false }) {
   const cfg = readConfig(top);
   const { path, shaIn, how } = teamsFile({ top, home, repo, workRepo, cfg });
   // A message names the file as the person wrote it: relative to the repository when it is inside, never an absolute path of this machine.
@@ -88,11 +90,12 @@ export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, no
     if (copy && sha(copy) === recorded && rec.sha === recorded && age >= 0 && age < DAY) {
       const { file } = readTeamsText(copy.toString('utf8'));
       const valid = rec.valid_teams.split(',');
-      if (file && (team === null ? Object.keys(file).every(t => valid.includes(t)) : valid.includes(team))) return { file, from: 'record' };
+      if (file && (team === null ? Object.keys(file).every(t => valid.includes(t)) : valid.includes(team))) return { file, from: 'record', shown, persistSha: () => {} };
     }
   }
   if (!bytes) bytes = readTeamFile(path, top, home, shown);
   const read = bytes.failed ? { finding: { problem: '' } } : readTeamsText(bytes.toString('utf8'));
+  if (full && !bytes.failed && read.finding) return { file: null, from: 'disk', shown, findings: [read.finding], persistSha: () => {} };
   if (bytes.failed || read.finding) {
     const m = !bytes.failed && read.finding.problem.match(/^teams\.json is not JSON \((.*)\)$/s);
     throw refuse(`${shown} cannot be read (${bytes.failed || (m ? m[1] : 'it is not a JSON object')}); fix it and ${fix}`);
@@ -107,14 +110,15 @@ export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, no
     if (errs.length) throw refuse(`${shown} fails validation${bad.length ? ` for ${bad.join(', ')}` : ''}; no team command runs until the whole file is valid; run backlog team validate --show-all`);
     if (team !== null && !Object.hasOwn(file, team)) throw refuse(`team ${team} has no entry in ${shown} (teams: ${Object.keys(file).join(', ')})`, 1);
   }
+  let persistSha = () => {};
   if (!errs.length) {
     const hash = sha(bytes);
-    if (shaIn === 'config') writeSha(top, hash);
+    if (shaIn === 'config') { persistSha = () => writeSha(top, hash); if (!deferSha) persistSha(); }
     try {
       mkdirSync(paths.dir, { recursive: true, mode: 0o700 });
       atomicWrite(paths.copy, bytes, { mode: 0o600 });
       atomicWrite(paths.record, JSON.stringify({ sha: hash, valid_teams: Object.keys(file).join(','), validated_at: now }), { mode: 0o600 });
     } catch { /* a state folder that cannot be written: every command validates in full, silently */ }
   }
-  return full ? { file, from: 'disk', findings } : { file, from: 'disk' };
+  return full ? { file, from: 'disk', shown, persistSha, findings } : { file, from: 'disk', shown, persistSha };
 }

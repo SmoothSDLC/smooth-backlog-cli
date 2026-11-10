@@ -139,6 +139,8 @@ The same five rules hold wherever the items live:
 | `backlog team new --team <team> --agent <name> --name <text> [options]` | Add an item of a team (stage refining); `--review-refs`, `--split-from`; `--ask` also asks for the review documents |
 | `backlog team update <item> --team <team> --agent <name> <step>` | One team step: claim, release, review, close, ... |
 | `backlog team query --team <team> --agent <name> <view>` | The team views (claimable, reviewable, blocked, decisions, plan, wip) and the read options of the team rules (`--phase`, `--status`, `--events`, `--branch`, ...) |
+| `backlog team validate [--team <team> \| --show-all] [--json]` | Check the team file in full and this repository's items and numbers against it; every finding says where, why and how to fix it (exit 2 on an error, warnings never) |
+| `backlog team migrate --team <team>` | Reserved for converting the items to the team format; answers that it is not available yet |
 | `backlog team define --file <team.json>` | Register a team in the backlog configuration |
 | `backlog team workflow --file <flow.json>` | Register a flow definition; `--show <name>` prints one |
 | `backlog move <item> --to-branch <name>` | Move an item to another branch (or `--to-repository`) |

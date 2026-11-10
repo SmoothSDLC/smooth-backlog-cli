@@ -16,7 +16,9 @@ import { strip } from '../shared/text.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
-export const SUBS = ['pop', 'new', 'update', 'query', 'define', 'workflow'];
+export const SUBS = ['pop', 'new', 'update', 'query', 'define', 'workflow', 'validate', 'migrate'];
+// The words the refusal names; define and workflow stay routed but are not named.
+const WORDS = ['new', 'update', 'pop', 'query', 'validate', 'migrate'];
 const say = text => process.stdout.write(`${redact(text)}\n`);
 
 // Takes --team and --agent out of argv (both forms); the rest is passed on in order.
@@ -82,7 +84,9 @@ export async function run(argv) {
 
 async function dispatch(argv) {
   const sub = argv[0];
-  if (!SUBS.includes(sub)) return die(`team needs a subcommand (${SUBS.join(', ')}): backlog team update <item> --team <name> --agent <name> ...`);
+  if (!SUBS.includes(sub)) return die(`team needs a subcommand (${WORDS.join(', ')}): backlog team validate --team <name>`);
+  if (sub === 'validate') return (await import('./validate-command.js')).run(argv.slice(1));
+  if (sub === 'migrate') return (await import('./validate-command.js')).pending('migrate', argv.slice(1), ['ask']);
   setTeamsHome(resolveHome().home); // reads the team configuration of the backlog
   if (sub === 'define') return define(argv.slice(1));
   if (sub === 'workflow') return workflow(argv.slice(1));

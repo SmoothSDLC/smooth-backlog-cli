@@ -257,3 +257,17 @@ test('team define keeps review_only, a list of names within the members, in the 
   assert.equal(good.status, 0, good.stdout + good.stderr);
   assert.deepEqual(teams(f)[TEAM.name].review_only, ['bob']);
 });
+
+test('the router names the six words for an unknown word, answers migrate after its inputs, and still routes define and workflow', () => {
+  const f = fixture();
+  const unknown = run(f, ['team', 'frobnicate']);
+  assert.equal(unknown.status, 2); assert.match(unknown.stderr, /team needs a subcommand \(new, update, pop, query, validate, migrate\)/);
+  assert.doesNotMatch(unknown.stderr, /define|workflow/);
+  const noTeam = run(f, ['team', 'migrate'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: '' });
+  assert.equal(noTeam.status, 2); assert.match(noTeam.stderr, /a team command needs a team/);
+  const migrate = run(f, ['team', 'migrate', '--team', 't1']);
+  assert.equal(migrate.status, 2); assert.match(migrate.stderr, /team migrate is not available yet/);
+  const shown = run(f, ['team', 'workflow', '--show', 'team']);
+  assert.equal(shown.status, 0, shown.stdout + shown.stderr);
+  assert.match(run(f, ['team', 'define']).stderr, /cannot read|no JSON|expected/);
+});

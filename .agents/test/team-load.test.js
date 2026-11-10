@@ -280,3 +280,26 @@ test('with no configuration at all the new .backlog/config.json is what the stor
   loadTeams({ top, home: join(top, '.backlog'), repo: 'local/repository', stateDir: join(root, 'state'), team: 'solo', now: T0 });
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(top, ...CFG), 'utf8'))), [...Object.keys(JSON.parse(FIRST_USE_CONFIG)), 'teams_file_sha']);
 });
+
+test('a full load of a file that is not JSON returns the finding and the name shown, and writes nothing', t => {
+  const w = world(t);
+  w.put('{ nope');
+  const got = w.load(null, T0, true);
+  assert.equal(got.file, null);
+  assert.equal(got.shown, join('.backlog', 'teams.json'));
+  assert.deepEqual(got.findings.map(f => [f.severity, f.team]), [['error', null]]);
+  assert.match(got.findings[0].problem, /^teams\.json is not JSON \(/);
+  assert.equal(w.cfg().teams_file_sha, undefined);
+  assert.equal(existsSync(w.paths().dir), false);
+  assert.throws(() => w.load('solo', T0), refused(2)); // any other load still refuses
+});
+
+test('with deferSha the SHA reaches the configuration only when persistSha runs', t => {
+  const w = world(t);
+  w.put(twoTeams());
+  const got = loadTeams({ top: w.top, home: w.home, repo: 'local/repository', stateDir: w.stateDir, team: 'solo', now: T0, deferSha: true });
+  assert.equal(w.cfg().teams_file_sha, undefined);
+  assert.equal(existsSync(w.paths().record), true);
+  got.persistSha();
+  assert.match(w.cfg().teams_file_sha, /^[0-9a-f]{64}$/);
+});

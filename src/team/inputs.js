@@ -1,6 +1,6 @@
 // The inputs of a team command: which team it acts for, who calls it, the session, the repository and the branch it acts on.
 // Each input is read from the flag, then the environment variable, then (the team only) the configuration passed in as data.
-// An empty value counts as not given. Nothing here reads a file, the configuration or git.
+// Values are trimmed: an empty value, or one of only spaces, counts as not given. Nothing here reads a file, the configuration or git.
 import { Refusal } from './rules/expression.js';
 
 // The reserved flag names are the one list of rules/expression.js (FLAGS); nothing here repeats it.
@@ -10,12 +10,22 @@ export { FLAGS } from './rules/expression.js';
 export const SHOW_ALL = ['query', 'query <item>', 'query rules', 'validate', 'migrate'];
 const ONE_TEAM_QUERY = ['plan', 'check', 'filter', 'steps'];
 
+// The reserved flags that take a value; the word after one of them (without `=`) is its value, not a positional.
+const VALUE_FLAGS = ['team', 'agent', 'session', 'repository', 'branch'];
+
 // The form of a command from its words, with or without the leading `team`: `query`, `query <item>`, `query rules`, `query plan`, ...
+// Flags may stand anywhere: the first word that is not a flag or a flag's value decides.
 export function formOf(argv) {
-  const [first, ...rest] = argv[0] === 'team' ? argv.slice(1) : argv;
+  const words = argv[0] === 'team' ? argv.slice(1) : argv;
+  const positional = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (!w.startsWith('--')) { if (w.startsWith('-')) continue; positional.push(w); continue; }
+    if (!w.includes('=') && VALUE_FLAGS.includes(w.slice(2))) i++;
+  }
+  const [first, word] = positional;
   if (first !== 'query') return first;
-  const word = rest[0];
-  if (!word || word.startsWith('-')) return 'query';
+  if (!word) return 'query';
   return ['rules', ...ONE_TEAM_QUERY].includes(word) ? `query ${word}` : 'query <item>';
 }
 

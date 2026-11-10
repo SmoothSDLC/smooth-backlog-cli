@@ -62,3 +62,33 @@ test('formOf maps the words of a query to its form, with or without the leading 
 test('the reserved flag names are one list', () => {
   assert.deepEqual([...FLAGS].sort(), ['agent', 'ask', 'branch', 'dry-run', 'help', 'json', 'repository', 'session', 'show-all', 'team', 'version']);
 });
+
+test('formOf finds the form past flags placed before it, and past the value of a value flag', () => {
+  assert.equal(formOf(['query', '--show-all', 'plan']), 'query plan');
+  assert.equal(formOf(['query', '--team', 'web', '50']), 'query <item>');
+  assert.equal(formOf(['query', '--team=web', 'rules']), 'query rules');
+  assert.equal(formOf(['team', 'query', '--json', 'rules']), 'query rules');
+  assert.equal(formOf(['team', 'query', '--agent', 'a1', '--json']), 'query');
+  refused({ command: formOf(['query', '--show-all', 'plan']), flags: { 'show-all': true } }, /backlog team query plan acts for one team/);
+});
+
+test('formOf for the other words and an empty argv', () => {
+  for (const w of ['validate', 'migrate', 'new']) { assert.equal(formOf(['team', w]), w); assert.equal(formOf([w, '--json']), w); }
+  assert.equal(formOf([]), undefined);
+  assert.equal(formOf(['team']), undefined);
+});
+
+test('a value of only spaces counts as not given', () => {
+  refused({ command: 'query', flags: { team: '  ' }, env: { [V('TEAM_NAME')]: ' ' }, config: { team: '   ' } }, /needs a team/);
+  const r = resolveInputs({ command: 'query', flags: { team: 'web', repository: '  ', branch: ' ' }, env: { [V('TEAM_REPOSITORY')]: 'acme/app' } });
+  assert.deepEqual([r.repository, r.branch], ['acme/app', '']);
+});
+
+test('--show-all with an empty --team acts over every team', () => {
+  assert.deepEqual(resolveInputs({ command: 'query', flags: { 'show-all': true, team: '' } }).all, true);
+  refused({ command: 'new', flags: { 'show-all': true, team: ' ' } }, /--show-all acts over every team/);
+});
+
+test('a repository valid in the variable but invalid in the flag is refused: the flag wins', () => {
+  refused({ command: 'query', flags: { team: 'web', repository: 'bad' }, env: { [V('TEAM_REPOSITORY')]: 'acme/app' } }, /expected owner\/name/);
+});

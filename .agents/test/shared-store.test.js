@@ -455,7 +455,7 @@ test('075: findings: an item of another repository is foreign, an item without r
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout.replace(f.folder, '<folder>'),
-    `⚠️  CRITICAL: phases/004-foreign.md says repository acme/other but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 004-foreign --to-repository\n`
+    `⚠️  CRITICAL: ${itemRel('004-foreign')} says repository acme/other but is in the folder of acme/demo; it is out of the queue. Move it: backlog move 004-foreign --to-repository\n`
     + `⚠️  item 005-untagged records no repository or branch; it is out of the queue until its repository and branch are filled in\n`
     + '📋 acme/demo — branch main\n'
     + `   objective: phase anchor (no document)\n`

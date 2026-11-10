@@ -32,7 +32,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     And I run `backlog update 1 --claim alice`
     When I run `backlog update 1 --release alice`
     Then the command succeeds
-    And item 1 has owner ""
+    And item 1 has owned_since ""
     And item 1 has status "pending"
 
   Scenario: a stale view is refused - the agent reads the item again first

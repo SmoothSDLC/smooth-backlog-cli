@@ -36,7 +36,7 @@ test('the check finds the removed spellings', () => {
   assert.ok(!spelling('update', REMOVED.update).test('backlog team update 1 --request-review any'));
 });
 
-test('backlog fields says the team fields are set by backlog team new', () => {
-  const text = cli(['fields'], {}).stdout;
-  for (const key of ['team', 'review_refs']) assert.match(text.split('\n').find(l => l.startsWith(key)), /backlog team new/, key);
+test('backlog fields lists the definition of an item without a team: no team rows', () => {
+  const keys = cli(['fields'], {}).stdout.split('\n').map(l => l.split(' ')[0]);
+  for (const key of ['team', 'review_refs', 'claimed_by', 'claimed_at']) assert.ok(!keys.includes(key), key);
 });

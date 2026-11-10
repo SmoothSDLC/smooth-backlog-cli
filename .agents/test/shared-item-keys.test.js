@@ -109,6 +109,7 @@ test('a claim writes the claimer as owner and the time as owned_since; a release
 test('backlog fields lists the new keys and no earlier one', () => {
   const f = fixture();
   const keys = JSON.parse(ok(f, ['fields', '--json']).stdout).map(r => r.key);
-  assert.deepEqual(NEW_KEYS.filter(k => !keys.includes(k)), []);
-  assert.deepEqual(OLD_KEYS.filter(k => keys.includes(k)), []);
+  // the definition names the keys the item file stores: the holder as owner and owned_since, the envelope as name, updated and updated_by
+  assert.deepEqual(['owner', 'owned_since', 'name', 'updated', 'updated_by'].filter(k => !keys.includes(k)), []);
+  assert.deepEqual(['claimed_by', 'claimed_at', 'title', 'last_updated', 'last_updated_by'].filter(k => keys.includes(k)), []);
 });

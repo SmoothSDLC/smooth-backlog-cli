@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FIELDS } from '../../src/shared/fields.js';
+import { ENVELOPE, FIELDS } from '../../src/shared/item-definition.js';
 import { cli, consumer, createdSlug, itemPath, sharedBacklog, readStored } from './shared-fixtures.js';
 
 const dirs = [];
@@ -20,17 +20,19 @@ function fixture() {
 const run = (f, args) => cli(args, { cwd: f.cons, tmp: f.t });
 const fm = (f, slug) => readStored(itemPath(f.folder, slug)).fm;
 
-test('backlog fields prints one line per field with the five columns; --json lists the same fields', () => {
+test('backlog fields prints one line per key with the five columns, the file keys first; --json lists the same rows', () => {
   const f = fixture();
   const r = run(f, ['fields']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const lines = r.stdout.trimEnd().split('\n');
-  assert.equal(lines.length, FIELDS.length + 1);
-  assert.match(lines[0], /^key\s+shown as\s+meaning\s+set by\s+required$/);
-  for (const [i, field] of FIELDS.entries()) for (const cell of field) assert.ok(lines[i + 1].includes(cell), `${field[0]}: ${cell}`);
-  assert.ok(lines.some(l => /^title\s+title\s/.test(l)) && lines.some(l => /^summary\s+summary\s/.test(l)) && lines.some(l => /^body\s+description\s/.test(l)));
+  assert.equal(lines.length, ENVELOPE.length + FIELDS.length + 1);
+  assert.match(lines[0], /^key\s+type\s+default\s+set by\s+meaning$/);
+  for (const [i, field] of [...ENVELOPE, ...FIELDS].entries()) for (const cell of [field[0], field[3], field[4], field[5]]) assert.ok(lines[i + 1].includes(cell), `${field[0]}: ${cell}`);
+  assert.match(lines[1], /^seq\s/);
+  assert.ok(lines.some(l => /^severity\s+text: normal, critical\s/.test(l)) && lines.some(l => /^owned_since\s+time\s/.test(l)));
   const json = JSON.parse(run(f, ['fields', '--json']).stdout);
-  assert.deepEqual(json.map(x => x.key), FIELDS.map(x => x[0]));
+  assert.deepEqual(json.map(x => x.key), [...ENVELOPE, ...FIELDS].map(x => x[0]));
+  assert.deepEqual(Object.keys(json[0]), ['key', 'type', 'default', 'set by', 'meaning']);
   assert.equal(run(f, ['fields', 'x']).status, 2);
 });
 

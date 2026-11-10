@@ -31,7 +31,7 @@ Usage:
   backlog archive done                             Archive every finished item of this branch
   backlog import --branch <source> [--higher]      Move the open items of another branch here; --higher puts them first in the queue
   backlog clean [all-branches]                     Remove every item of this branch (or of every branch) after a typed yes
-  backlog fields [--json]                          The item template: every field, what it is for, who sets it
+  backlog fields [--json]                          The item template: every key and field, its type and default, who sets it, what it is for
   backlog setup [--ask]                            Point this repository at its backlog folder and deploy the backlog skill
   backlog upgrade [check|auto|off|disable|<version>]  Update the backlog program itself
   backlog <command> --help                         Every option of the command, what it does, and an example
@@ -579,14 +579,15 @@ Example:
 Usage:
   backlog fields [--json]
 
-Prints one line per field of an item, with five columns: the key the item file carries, the name the field is shown under, what it
-means, who sets it, and when it is required. It reads nothing and changes nothing.
+Prints the built-in definition of an item without a team, one line per key, with five columns: the key the item file carries, its
+type (with the words a text field is meant to hold), its default, who sets it, and what it means. The keys every item file carries
+(seq, slug, name, repository, branch, created, updated, updated_by) come first, then the fields. It reads nothing and changes nothing.
 
 ${SHARED}
 
 Options:
   --json
-      Print the table as a list of objects, one per field.
+      Print the table as a list of objects, one per key, with the five column names as keys.
 ${HELP_FLAG}
 
 ${EXIT}

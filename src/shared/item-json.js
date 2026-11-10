@@ -3,6 +3,7 @@
 // under 'events' as lines 'time event branch commit note') and a body text. Nothing maps a retired or an old key: the codec writes what
 // the header object holds (the migration, chapter 06, maps). Switched on nowhere yet.
 import { redact } from './safety.js';
+import { BUILT_IN_ORDER } from './item-definition.js';
 
 // An unreadable item: the message and error.field name the key, as an unreadable front-matter header does.
 const bad = (key, what) => Object.assign(new Error(redact(`item file: ${key} ${what}`)), { field: key });
@@ -12,8 +13,8 @@ const ENVELOPE = ['seq', 'phase', 'name', 'team', 'repository', 'branch', 'creat
 const NOT_FIELDS = new Set([...ENVELOPE, 'events']);
 // The keys a 'fields' object may not hold: every key of the file proper (the header's 'phase' is the slug, so it is not among them).
 const FILE_KEYS = new Set(['seq', 'slug', 'name', 'team', 'repository', 'branch', 'created', 'updated', 'updated_by', 'events']);
-// The built-in definition of items without a team, in the order of chapter 02 section 4.
-const BUILT_IN = ['status', 'objective', 'summary', 'location', 'commit', 'severity', 'owner', 'owned_since', 'depends_on', 'parent', 'estimate_min', 'complexity', 'layer', 'chunk', 'size_score', 'completed'];
+// The fields of the built-in definition of items without a team, in its order.
+const BUILT_IN = BUILT_IN_ORDER;
 const HISTORY_KEYS = ['at', 'by', 'session', 'step', 'changes', 'note'];
 
 // A whole file that cannot be read: no key is named, as for an unreadable front-matter header.

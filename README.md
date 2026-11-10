@@ -134,7 +134,7 @@ The same five rules hold wherever the items live:
 | `backlog next` / `backlog next all-branches` | The next item of this branch, whole / of every branch |
 | `backlog history [<item>]` | The events of one item, or the latest 50 of the backlog |
 | `backlog changes` | Which items changed since your last use |
-| `backlog fields` | The item template: every field, what it is for, who sets it |
+| `backlog fields` | The item template: every key and field, its type and default, who sets it, what it is for |
 | `backlog team pop --team <team> --agent <name>` | What one agent of a team does next, marked as theirs, with the whole item |
 | `backlog team new --team <team> --agent <name> --name <text> [options]` | Add an item of a team (stage refining); `--review-refs`, `--split-from`; `--ask` also asks for the review documents |
 | `backlog team update <item> --team <team> --agent <name> <step>` | One team step: claim, release, review, close, ... |

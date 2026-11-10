@@ -149,13 +149,14 @@ otherwise (decision D-19: a status is stored exactly as typed); the default word
 | `status` | text | `pending`; `closed`, `done` and `archived` close an item for `backlog list done`, `backlog list open` and the index order | `backlog new --status`, `backlog update --status`, `backlog done` writes `closed` (decision D-33; today `backlog done` passes the word `done`, which `normalise` stores as `closed`, reference finding F9) |
 | `objective`, `summary`, `location`, `commit` | text | empty (the commit of HEAD at creation for `commit`) | `backlog new`, `backlog update` |
 | `severity` | text, values `normal`, `critical` | `normal` | `backlog new --severity` (a critical item is placed first) |
-| `claimed_by`, `claimed_at` | text, time | empty | `backlog update --claim <name>` writes both, `--release` empties them (the names the code uses, `src/shared/plain-step.js:39,46`) |
-| `owner` | text | the user identity at creation | `backlog new` (the user the item belongs to, `src/shared/new.js:192`) |
+| `owner`, `owned_since` | text, time | `owner`: the user identity at creation; `owned_since`: empty | `backlog new` writes `owner` (the user the item belongs to, `src/shared/new.js:192`); `backlog update --claim <name>` writes both, `--release` empties both. The file stores the holder under these two keys; the code reads them as `claimed_by` and `claimed_at` (`src/shared/item-file.js`) |
 | `depends_on` | items | empty list | `backlog new --depends-on`, `backlog update --set-depends-on` |
 | `parent` | item | null | `backlog new --split-from <item>` (new: the split link, owner ruling on split items) |
 | `estimate_min`, `complexity`, `layer`, `chunk` | number, text, text, boolean | empty | the existing flags of `backlog new` and `backlog update` |
 | `size_score` | number | empty | `backlog update --size_score`, and the repair of an unreadable item (`src/shared/store.js:253`; review D L1) |
 | `completed` | time | empty | `backlog done`, `backlog update --close` |
+
+The owner is the agent working on the item, the old key `claimed_by` was renamed `owner` and its time `owned_since`, and there is no separate creator (owner decision of 2026-11-06).
 
 `backlog new` writes only these fields (no team keys, finding F10 removed): it no longer writes `review_state` and `reviewer` (review is
 team behaviour, R1 and R3). A user item's `depends_on` and `parent` are data: stored, checked for existence and cycles inside the own

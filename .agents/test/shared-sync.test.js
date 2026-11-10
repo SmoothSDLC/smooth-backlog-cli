@@ -138,8 +138,9 @@ test('renumber: the later pusher gets nextSeq in file name, phase, seq and headi
   assert.equal(out, 'renumbered 001 -> 002\n');
   assert.deepEqual(result, [[1, 2]]);
   const beta = store.load(f.folder2).find(i => i.fm.name === 'beta');
-  assert.equal(beta.fm.events[0], line, 'the history survives a renumbering');
-  assert.match(beta.fm.events[1], / renumbered .*001 -> 002/);
+  assert.deepEqual(beta.fm.events[0], line, 'the history survives a renumbering');
+  assert.equal(beta.fm.events[1].step, 'renumbered');
+  assert.match(beta.fm.events[1].note, /001 -> 002/);
   assert.equal(beta.fm.events.length, 2);
   assert.equal(beta.path, itemRel('002-beta'));
   assert.equal(beta.fm.phase, '002-beta'); assert.equal(beta.fm.seq, 2);
@@ -415,7 +416,7 @@ test('review P2: refusing a legacy stack preserves all commits and unrelated sta
   assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').includes('stray.txt'), false);
   assert.equal(git(f.home, 'ls-files', '--stage', '--', 'stray.txt'), staged);
   assert.equal(readFileSync(join(f.home, 'stray.txt'), 'utf8'), 'private staged work');
-  assert.deepEqual(store.load(f.folder).flatMap(i => (i.fm.events ?? []).map(store.parseEvent)).filter(e => e.event === 'note').map(e => e.note).sort(), ['local one', 'local two']);
+  assert.deepEqual(store.load(f.folder).flatMap(i => i.fm.events ?? []).filter(e => e.step === 'note').map(e => e.note).sort(), ['local one', 'local two']);
 });
 
 test('pull: incoming commits preserve unrelated staged and unstaged versions separately', async t => {

@@ -124,7 +124,7 @@ test('new: the planning event of a creation is recorded on the new item', t => {
   assert.equal(node(f, NONE).status, 0);
   const ev = cli(['history', '1'], { cwd: f.cons, tmp: f.dir });
   assert.equal(ev.status, 0, ev.stderr);
-  assert.match(ev.stdout, /planning_event branch= commit= added 001-alpha-job at rank end; backlog re-densified to 1 item\(s\)/);
+  assert.match(ev.stdout, / new {12}\S+ {2}slug: null -> 001-alpha-job, .* added 001-alpha-job at rank end; backlog re-densified to 1 item\(s\)/);
 });
 
 test('new: writes the item, records its history, commits as "acme/demo: new --name Alpha job" and pushes', t => {
@@ -148,7 +148,7 @@ test('new: writes the item, records its history, commits as "acme/demo: new --na
   assert.equal(subject(f), SUBJECT.newName('Alpha job'));
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.bare, 'rev-parse', 'main'));
   assert.equal(git(f.home, 'status', '--porcelain'), '');
-  assert.deepEqual(item.fm.events.map(e => store.parseEvent(e).event), ['planning_event']);
+  assert.deepEqual(item.fm.events.map(e => e.step), ['new']);
   assert.equal(git(f.cons, 'status', '--porcelain'), '', 'a backlog repository: nothing is written into the consuming repository');
   assert.ok(!existsSync(join(f.cons, '.backlog')));
 });
@@ -334,7 +334,7 @@ test('075: --split-from copies the objective, summary and body of the source and
   assert.equal(child.body, '\n# Phase 002 — 1-cont\n\n**Objective:** parent objective\n\n\n## Split from `001-parent`. Inherited context:\n\n# Phase 001 — Parent\n\n**Objective:** parent objective\n\n\nParent body with ünï\n\n## Definition of done\n- [ ] a\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n');
   assert.equal(subject(a), SUBJECT.newSplitFrom('1'));
   const [parent] = items(a);
-  assert.deepEqual(parent.fm.events.map(store.parseEvent).filter(e => e.event === 'split').map(e => e.note), ['spawned sibling 002-1-cont']);
+  assert.deepEqual(parent.fm.events.filter(e => e.step === 'split').map(e => e.note), ['spawned sibling 002-1-cont']);
 });
 
 const SCENARIOS = {

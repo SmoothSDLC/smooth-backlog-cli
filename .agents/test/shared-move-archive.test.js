@@ -440,9 +440,9 @@ test('move --to-repository: the item brings its own history, once, with no prefi
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'a history'); git(f.home, 'push', '-q');
   assert.equal(run(f, 'move', ['7', '--to-repository', 'other/proj']).status, 0);
   const events = fm(f.other, itemRel('002-eta')).fm.events;
-  assert.deepEqual(events.filter(l => l.includes('carried note')), [line]);
-  assert.ok(events.some(l => l.includes(' moved_in ')), 'the arrival is recorded in the item');
-  assert.ok(events.every(l => !l.includes('[from ')), events.join('\n'));
+  assert.deepEqual(events.filter(e => e.note === 'carried note'), [line]);
+  assert.ok(events.some(e => e.step === 'moved_in'), 'the arrival is recorded in the item');
+  assert.ok(events.every(e => !e.note.includes('[from ')), JSON.stringify(events));
 });
 
 test('075: move --to-repository: new number in the target, source file gone, one published commit for both folders', () => {

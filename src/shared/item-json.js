@@ -1,6 +1,6 @@
 // The JSON item codec (design chapter 02, sections 2.1 to 2.5 and 4). Two pure functions between the JSON text of an item file and the
 // in-memory item the code holds today: a header object (name, updated, updated_by, claimed_by, ...; the slug under 'phase'; the history
-// under 'events' as lines 'time event branch commit note') and a body text. Nothing maps a retired or an old key: the codec writes what
+// under 'events' as entries { at, by, session, step, changes, note }) and a body text. Nothing maps a retired or an old key: the codec writes what
 // the header object holds (the migration, chapter 06, maps). Switched on nowhere yet.
 import { redact } from './safety.js';
 import { BUILT_IN_ORDER } from './item-definition.js';
@@ -21,15 +21,14 @@ const HISTORY_KEYS = ['at', 'by', 'session', 'step', 'changes', 'note'];
 const unreadable = what => new Error(redact(`item file ${what}`));
 const json = v => JSON.stringify(v === undefined ? null : v);
 
-// One event line 'time event branch commit note' as a history entry: the note is everything after the event, unchanged.
-function entryOf(line) {
-  if (typeof line !== 'string') throw bad('events', 'holds an entry that is not text');
-  const i = line.indexOf(' ');
-  const j = i < 0 ? -1 : line.indexOf(' ', i + 1);
-  return { at: i < 0 ? line : line.slice(0, i), by: '', session: '', step: i < 0 ? '' : j < 0 ? line.slice(i + 1) : line.slice(i + 1, j), changes: {}, note: j < 0 ? '' : line.slice(j + 1) };
+// One history entry as the file holds it. An entry written before the entries carried by, session and changes lacks them: they read as empty.
+function entryOf(e, where) {
+  if (e === null || typeof e !== 'object' || Array.isArray(e)) throw bad(where, 'is not an object');
+  for (const k of ['at', 'step', 'note']) if (typeof e[k] !== 'string') throw bad(`${where}.${k}`, 'is missing or not text');
+  for (const k of ['by', 'session']) if (e[k] !== undefined && typeof e[k] !== 'string') throw bad(`${where}.${k}`, 'is not text');
+  if (e.changes !== undefined && (e.changes === null || typeof e.changes !== 'object' || Array.isArray(e.changes))) throw bad(`${where}.changes`, 'is not an object');
+  return { at: e.at, by: e.by ?? '', session: e.session ?? '', step: e.step, changes: e.changes ?? {}, note: e.note };
 }
-// The line back: at + ' ' + step + ' ' + note (a trailing empty part is not written).
-const lineOf = e => { const p = [e.at, e.step, e.note]; while (p.length > 1 && p[p.length - 1] === '') p.pop(); return p.join(' '); };
 
 export function toItemJson(fm, body) {
   const h = fm ?? {};
@@ -51,7 +50,7 @@ export function toItemJson(fm, body) {
   ].map(([k, v]) => `  "${k}": ${json(v)}`);
   lines.push(`  "fields": ${fields.length ? `{\n${fields.map(k => `    ${json(k)}: ${json(h[k])}`).join(',\n')}\n  }` : '{}'}`);
   lines.push(`  "body": ${json(String(body ?? ''))}`);
-  const history = (h.events ?? []).map(l => { const e = entryOf(l); return `    { ${HISTORY_KEYS.map(k => `"${k}": ${json(e[k])}`).join(', ')} }`; });
+  const history = (h.events ?? []).map((l, i) => { const e = entryOf(l, `events[${i}]`); return `    { ${HISTORY_KEYS.map(k => `"${k}": ${json(e[k])}`).join(', ')} }`; });
   lines.push(`  "history": ${history.length ? `[\n${history.join(',\n')}\n  ]` : '[]'}`);
   return `{\n${lines.join(',\n')}\n}\n`;
 }
@@ -79,11 +78,7 @@ export function fromItemJson(text) { // an editor may add a byte-order mark: it 
     if (FILE_KEYS.has(k)) throw bad(`fields.${k}`, 'names a key of the file');
     if (k === '__proto__') throw bad('fields.__proto__', 'is not a key an item may hold');
   }
-  const events = doc.history.map((e, i) => {
-    if (!isObj(e)) throw bad(`history[${i}]`, 'is not an object');
-    for (const k of HISTORY_KEYS) if ((k === 'changes' ? !isObj(e[k]) : typeof e[k] !== 'string')) throw bad(`history[${i}].${k}`, `is missing or not ${k === 'changes' ? 'an object' : 'text'}`);
-    return lineOf(e);
-  });
+  const events = doc.history.map((e, i) => entryOf(e, `history[${i}]`));
   // A null envelope value (an empty updated_by) is an absent key, so that reading what was written gives back the header object that was given.
   // The envelope keys come first (in the order of the header of earlier items), then the fields, then the history.
   const fm = {};

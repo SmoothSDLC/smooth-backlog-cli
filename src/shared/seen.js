@@ -26,7 +26,9 @@ const operation = new AsyncLocalStorage();
 
 // One scope follows the clone lock through pulls, all repository folders and
 // publication retries. Ranking callers cannot forget to pass a guard callback.
-export const guarded = fn => operation.getStore() ? fn() : operation.run({ guard: [], created: new Set() }, fn);
+export const guarded = fn => operation.getStore() ? fn() : operation.run({ guard: [], created: new Set(), trail: new Map() }, fn);
+// what the running command did to each item file it wrote (store.js builds the history entry from it)
+export const trail = () => operation.getStore()?.trail;
 export const created = (folder, path) => operation.getStore()?.created.add(join(folder, path));
 // the slug of the item the running command created (new), for the status line
 export const primarySlug = () => { const c = operation.getStore()?.created; return c?.size ? itemSlug([...c][0]) : null; };

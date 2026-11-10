@@ -930,7 +930,9 @@ backlog history — print the events of one item, or the latest 50 of the backlo
 Usage:
   backlog history [<item>]
 
-Prints the history that is kept in the item files, newest first, one line per event: the time, the event, the branch, the commit and the note.
+Prints the history that is kept in the item files, newest first, one line per entry. Every command that changes an item adds one entry to it: the time, the step (the event the command recorded), who made it, the keys that changed
+as key: before -> after (a key that did not exist reads null; updated, updated_by and the history itself are not listed) and the note (--note, else the planning sentence of the command). An entry of an item made before
+entries carried a writer and the changes prints as it did: the time, the event, the branch, the commit and the note.
 With an item (number or slug) it prints the events of that item. Without one it prints the latest 50 events of the backlog, archived items
 included. The command refuses (exit 1) when the item does not exist. It prints text only: --json is refused (exit 2). It never changes an item.
 
@@ -1577,7 +1579,8 @@ Options:
       command, as every read does).
   --events [EVENTS]
       The history of the items, kept in the item files. With an item (number or slug) it prints the events of that
-      item, newest first; without one it prints the latest 50 events of the backlog, archived items included.
+      item, newest first; without one it prints the latest 50 events of the backlog, archived items included. Each line is the time, the step, who made
+      the entry, the keys that changed (key: before -> after) and the note.
   --by-branch BY_BRANCH
       The items recorded on this branch.
   --only {new,open,done,archive}

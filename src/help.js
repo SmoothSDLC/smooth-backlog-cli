@@ -15,7 +15,7 @@ Usage:
   backlog update --replan "<id,id,...>"            Set the order of the queue
   backlog list [new|open|done|archive|branches|critical|all-branches] [--json]   The items of this branch (the full stack by default), one kind of item, the branches, the critical items, or every branch
   backlog show <item>[,<item>...] [--agent <name>] [--json]   One item whole: its row, front matter and body
-  backlog history [<item>]                         The events of one item, or the latest 50 of the backlog
+  backlog history [<item>]                         The history of one item (who changed what, from and to), or the latest 50 entries of the backlog
   backlog changes [--agent <name>] [--json]        Which items changed since your last use
   backlog next [--json]                            The next item of this branch
   backlog next all-branches [--json]               The next item over every branch of this repository
@@ -399,7 +399,9 @@ Example:
 Usage:
   backlog history [<item>]
 
-Prints the history that is kept in the item files, newest first, one line per event: the time, the event, the branch, the commit and the note.
+Prints the history that is kept in the item files, newest first, one line per entry. Every command that changes an item adds one entry to it: the time, the step (the event the command recorded), who made it, the keys that changed
+as key: before -> after (a key that did not exist reads null; updated, updated_by and the history itself are not listed) and the note (--note, else the planning sentence of the command). An entry of an item made before
+entries carried a writer and the changes prints as it did: the time, the event, the branch, the commit and the note.
 With an item (number or slug) it prints the events of that item. Without one it prints the latest 50 events of the backlog, archived items
 included. The command refuses (exit 1) when the item does not exist. It prints text only: --json is refused (exit 2). It never changes an item.
 

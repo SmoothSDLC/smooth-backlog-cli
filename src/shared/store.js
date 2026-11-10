@@ -9,10 +9,10 @@ import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { BacklogError, operation } from '../errors.js';
 import { asChild, locked } from '../storage.js';
-import { dumpItem as dump, eventLine, hasFrontMatter, isItemName, itemFileName, itemSlug, parseItem as parse, readItemFile, readItemText } from './item-file.js';
+import { dumpItem as dump, hasFrontMatter, isItemName, itemFileName, itemSlug, parseItem as parse, readItemFile, readItemText, toFileKeys, entriesOf } from './item-file.js';
 import { repoIdFromUrl } from './safety.js';
 import * as index from './index.js';
-import { actor, created, guarded } from './seen.js';
+import { actor, created, guarded, trail } from './seen.js';
 import { CONFIG, configuredHome, NEUTRAL_NAME, originSetting, topOf } from './setup.js';
 import { highWater, numberOf, MAX_SEQ, tooBig } from './numbers.js';
 import { seam } from './seam.js';
@@ -222,13 +222,35 @@ export function recoverJournal(home) {
 const RETIRED_KEYS = [['work', 'class'].join('_'), ['review', 'classes'].join('_'), 'priority'];
 const LEGACY_KEYS = ['stage', 'review_state']; // the word in status says what these said; an item that carries a word does not write them
 
-export function write(item, root) {
+// The keys of the file that differ between two in-memory items, as { key: [before, after] } (a key that is absent reads null; the slug is under 'slug').
+// updated and updated_by are the entry's own at and by, and the history is what the entry joins: none of the three is a change.
+const STAMPS = new Set(['updated', 'updated_by', 'events']);
+function changesOf(before, after) {
+  const a = before ? toFileKeys(before) : {}, b = toFileKeys(after), out = {};
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (!STAMPS.has(k) && JSON.stringify(a[k] ?? null) !== JSON.stringify(b[k] ?? null)) out[k === 'phase' ? 'slug' : k] = [a[k] ?? null, b[k] ?? null];
+  }
+  return out;
+}
+// The one history entry of the running command for an item (addEvent declared its step and note): who and when, what changed, the note.
+// The session is only the caller's SMOOTH_BACKLOG_CLI_SESSION (never the agent name that lifecycle falls back to). No change and no note: no entry.
+function entryOf(d, fm) {
+  const changes = changesOf(d.before, fm);
+  return Object.keys(changes).length || d.note ? { at: d.at, by: actor(), session: process.env.SMOOTH_BACKLOG_CLI_SESSION ?? '', step: d.step, changes, note: d.note } : null;
+}
+
+export const write = (item, root) => writeItem(trail(), item, root);
+function writeItem(t, item, root) {
   item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k) && !(LEGACY_KEYS.includes(k) && (dropsLegacy(item.fm) || derivedKeys(item.fm).has(k))))) };
   const inferred = /^(.*?)[/\\](?:phases|archive)[/\\]/.exec(item.path)?.[1];
   const base = root ?? (inferred || dirname(item.path));
   assertFolder(base);
   assertNoSymlinks(base, item.path);
   index.seed(base);
+  const key = resolve(item.path);
+  if (t && !t.has(key)) t.set(key, { before: existsSync(item.path) ? (() => { try { return readItemFile(item.path).fm; } catch { return null; } })() : null }); // what the command found
+  const d = t?.get(key);
+  if (d?.step) item.fm.events = [...entriesOf(item.fm).slice(0, d.base), ...[d.entry = entryOf(d, item.fm)].filter(Boolean)]; // one entry per command, rebuilt by every write of it
   if (!existsSync(item.path)) created(base, relative(base, item.path));
   note(item.path);
   atomicWrite(item.path, dump(item.fm, item.body));
@@ -392,15 +414,18 @@ export function findings(dir) {
 
 //
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-export { eventLine, hasFrontMatter, isItemName, itemFileName, itemSlug, parseEvent, storedFm } from './item-file.js'; // the event record of an item's history is written by item-file.js
-// Appends one event line to the item file's `events` list. The file is re-read first (the command may have written it a moment ago).
-export function addEvent(folder, path, { event, branch = '', commitSha = '', note = '' }) {
+export { hasFrontMatter, isItemName, itemFileName, itemSlug, parseEvent, storedFm } from './item-file.js'; // the event record of an item's history is written by item-file.js
+// Declares the step and the note of the running command's history entry for an item and rewrites the file, which gains the entry (write builds it).
+// The first event names the step; a later one (the planning sentence) is the note only when the command has none. The file is re-read first.
+export function addEvent(folder, path, { event, note = '' }) {
   const abs = join(folder, path);
   const { fm, body } = readItemFile(abs);
-  const line = eventLine({ ts: now(), event, branch, commitSha, note });
-  fm.events = [...asList(fm.events), line];
-  write({ path: abs, fm, body }, folder);
-  return line;
+  const t = trail() ?? new Map(); // outside a command: this call alone is the command
+  const d = t.get(resolve(abs)) ?? t.set(resolve(abs), { before: fm }).get(resolve(abs));
+  if (!d.step) { d.step = event; d.base = entriesOf(fm).length; d.at = now(); d.note = ''; }
+  d.note ||= String(note).replace(/\s+/g, ' ').trim();
+  writeItem(t, { path: abs, fm, body }, folder);
+  return d.entry;
 }
 // the one way an item write marks itself: when, and by whom (see seen.js)
 export function stamp(fm) {

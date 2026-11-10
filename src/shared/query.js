@@ -6,7 +6,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { readItemFile, storedFm } from './item-file.js';
+import { entriesOf, readItemFile, storedFm } from './item-file.js';
 import * as index from './index.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
@@ -45,6 +45,14 @@ const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact
 const say = text => process.stdout.write(`${text}\n`);
 // Python json.dumps(indent=2): ensure_ascii escapes every non-ASCII UTF-16 unit.
 const dump = v => say(JSON.stringify(v, null, 2).replace(/[\u007f-￿]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`));
+// One history entry as a line: '  <at>  <step padded 14> <by>  <changes as key: before -> after, ...> <note>'. An entry of an item made before the entries
+// has no by: it prints as it did, the part of its note after the step being the branch, the commit and the note.
+const shown = v => (typeof v === 'string' ? v : JSON.stringify(v));
+function historyLine(e) {
+  if (!e.by) { const o = store.parseEvent(`${e.at} ${e.step} ${e.note}`); return `  ${o.ts}  ${String(o.event).padEnd(14)} branch=${o.branch} commit=${String(o.commit_sha).slice(0, 7)} ${o.note}`; }
+  const changes = Object.entries(e.changes).map(([k, [before, after]]) => `${k}: ${shown(before)} -> ${shown(after)}`).join(', ');
+  return `  ${e.at}  ${String(e.step).padEnd(14)} ${e.by}  ${[changes, e.note].filter(Boolean).join(' ')}`.trimEnd();
+}
 const sha7 = r => String(r.commit_sha ?? '').slice(0, 7);
 const pad = (v, n) => String(v).padStart(n);
 const repr = s => redact(s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}'`);
@@ -256,9 +264,9 @@ async function query(argv, team, branchColumn) {
       }
       // newest first: the lines of one item are appended in time order, so reversing first keeps equal timestamps in that order
       const events = items.filter(i => path === null || i.path === path)
-        .flatMap(i => asList(i.fm.events).map(store.parseEvent)).reverse().sort((x, y) => (x.ts < y.ts ? 1 : x.ts > y.ts ? -1 : 0));
+        .flatMap(i => entriesOf(i.fm)).reverse().sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
       if (path === null) events.length = Math.min(events.length, 50);
-      for (const e of events) say(`  ${e.ts}  ${String(e.event).padEnd(14)} branch=${e.branch} commit=${sha7(e)} ${e.note}`);
+      for (const e of events) say(historyLine(e));
       return 0;
     }
 

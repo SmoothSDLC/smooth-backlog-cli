@@ -408,15 +408,15 @@ test('075: --phase prints the full item (row, front matter, body) by slug and by
   const noEvents = j => { const { events, ...fm } = j.front_matter; return [{ ...j, front_matter: fm }, events]; };
   const [bySlug, betaEvents] = noEvents(normJson(view(f, ['show', '002-beta']).stdout));
   assert.deepEqual(bySlug, beta, 'by slug');
-  assert.match(betaEvents[0], /^TS planning_event - - added 002-beta at rank 0/);
+  assert.match(betaEvents[0], /^TS new added 002-beta at rank 0/);
   const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal', priority: 2, path: itemRel('003-gamma'),
     front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, title: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal' } };
   gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
   const [byNumber, events] = noEvents(normJson(view(f, ['show', '3']).stdout));
   assert.deepEqual(byNumber, gamma, 'by number');
   assert.equal(events.length, 2);
-  assert.match(events[0], /^TS planning_event - - added 003-gamma/);
-  assert.match(events[1], /^TS state_change main \S+ set status=in progress$/);
+  assert.match(events[0], /^TS new added 003-gamma/);
+  assert.match(events[1], /^TS state_change/);
   assert.deepEqual(noEvents(normJson(view(f, ['show', '003']).stdout))[0], gamma, 'zero-padded numbers resolve to the same item');
   assert.match(view(f, ['show', 'nope'], 1).stdout, /no phase 'nope'/);
 });
@@ -430,7 +430,7 @@ test('history reads the item history from the items, newest first, archived item
   assert.equal(one.status, 0, one.stderr);
   const lines = one.stdout.split('\n').filter(Boolean);
   assert.ok(lines[0].includes('second note') && lines.some(l => l.includes('first note')), one.stdout);
-  assert.match(lines[0], /^ {2}\d{4}-\d\d-\d\dT\S+ {2}\S.{13} branch=\S* commit=\S* /);
+  assert.match(lines[0], /^ {2}\d{4}-\d\d-\d\dT\S+ {2}\S.{13} \S+ {2}second note$/);
   assert.equal(run('archive', '4').status, 0);
   const arch = run('history', '4');
   assert.equal(arch.status, 0, arch.stderr);
@@ -439,7 +439,7 @@ test('history reads the item history from the items, newest first, archived item
   assert.ok(all.stdout.includes('second note') && all.stdout.includes('archived'), all.stdout);
   // the database is not the source: an event that exists only in a file is listed
   const file = itemPath(f.folder, '002-beta');
-  changeItem(file, { fm: { events: ['2020-01-01T00:00:00Z note - - only in the file', ...readHeader(file, 'events')] } });
+  changeItem(file, { fm: { events: [{ at: '2020-01-01T00:00:00Z', by: '', session: '', step: 'note', changes: {}, note: '- - only in the file' }, ...readHeader(file, 'events')] } });
   assert.match(run('history', '2').stdout, /only in the file/);
   assert.equal(run('history', '99').status, 1);
 });
@@ -462,17 +462,14 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
   const f = fx();
   // the history comes from the items; events logged within one second have no order between items, so the lines are compared as a set
   const sorted = out => norm(out).split('\n').filter(Boolean).sort();
-  assert.deepEqual(sorted(view(f, ['history']).stdout), [
-    '  TS  planning_event branch= commit= added 001-alpha at rank end; backlog re-densified to 1 item(s)',
-    '  TS  planning_event branch= commit= added 002-beta at rank 0; backlog re-densified to 2 item(s)',
-    '  TS  planning_event branch= commit= added 003-gamma at rank end; backlog re-densified to 3 item(s)',
-    '  TS  planning_event branch= commit= added 004-delta at rank end; backlog re-densified to 4 item(s)',
-    '  TS  planning_event branch= commit= added 005-feat at rank end; backlog re-densified to 1 item(s)',
-    '  TS  planning_event branch= commit= completed 004-delta; backlog re-prioritized to 3 item(s)',
-    '  TS  state_change   branch=main commit=SHA set status=closed',
-    '  TS  state_change   branch=main commit=SHA set status=in progress',
-  ]);
-  assert.match(view(f, ['history', '002-beta']).stdout, /^ {2}\S+ {2}planning_event branch= commit= added 002-beta at rank 0.*\n$/, 'one item: only its own lines');
+  const lines = sorted(view(f, ['history']).stdout);
+  assert.equal(lines.length, 7);
+  for (const [n, slug, rank] of [[1, '001-alpha', 'end'], [2, '002-beta', '0'], [3, '003-gamma', 'end'], [4, '004-delta', 'end'], [5, '005-feat', 'end']]) {
+    assert.ok(lines.some(l => new RegExp(`^ {2}TS {2}new {12}driver-\\d {2}slug: null -> ${slug}, seq: null -> ${n}, .* added ${slug} at rank ${rank}; backlog re-densified to \\d item\\(s\\)$`).test(l)), slug);
+  }
+  assert.ok(lines.some(l => /^ {2}TS {2}state_change {3}driver-5 {2}status: pending -> in progress, review_state: none -> null$/.test(l)));
+  assert.ok(lines.some(l => /^ {2}TS {2}state_change {3}driver-6 {2}status: pending -> closed, .*completed: null -> TS completed 004-delta; backlog re-prioritized to 3 item\(s\)$/.test(l)));
+  assert.match(view(f, ['history', '002-beta']).stdout, /^ {2}\S+ {2}new {12}\S+ {2}slug: null -> 002-beta, .* added 002-beta at rank 0.*\n$/, 'one item: only its own lines');
   assert.equal(norm(reader(f, ['--by-branch', 'main']).stdout),
     '  [  1] 001-alpha                    pending      commit=SHA \n'
     + '  [  2] 002-beta                     pending      commit=SHA \n'

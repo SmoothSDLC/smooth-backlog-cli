@@ -1,4 +1,4 @@
-// The JSON item codec: byte-exact text, fixed order, round trip over the shared fixtures, unreadable cases, history lines.
+// The JSON item codec: byte-exact text, fixed order, round trip over the shared fixtures, unreadable cases, history entries.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -8,13 +8,15 @@ import { parseItem } from '../../src/shared/frontmatter.js';
 
 const FIXTURES = fileURLToPath(new URL('./fixtures/shared/', import.meta.url));
 
+const E = (at, step, note) => ({ at, by: '', session: '', step, changes: {}, note }); // an entry that carries no writer and no changes
+
 test('a user item with every built-in field gives these exact bytes', () => {
   const fm = {
     phase: '042-add-the-login-form', seq: 42, name: 'Add the login form', repository: 'acme/app', branch: 'main',
     created: '2026-11-09T10:00:00Z', updated: '2026-11-09T11:20:00Z', updated_by: 'ann',
     status: 'pending', objective: 'o', summary: 's', location: 'src/', commit: 'abc123', severity: 'normal', owner: 'ann', owned_since: '2026-11-09T11:00:00Z',
     depends_on: [41], parent: null, estimate_min: 40, complexity: 'low', layer: 'cli', chunk: true, size_score: 3, completed: '',
-    events: ['2026-11-09T10:00:00Z new main abc123 first'],
+    events: [{ at: '2026-11-09T10:00:00Z', by: 'ann', session: 's1', step: 'new', changes: { status: [null, 'pending'], severity: ['low', 'normal'] }, note: 'first' }],
   };
   assert.equal(toItemJson(fm, '# Phase 42\n'), `{
   "seq": 42,
@@ -45,14 +47,14 @@ test('a user item with every built-in field gives these exact bytes', () => {
   },
   "body": "# Phase 42\\n",
   "history": [
-    { "at": "2026-11-09T10:00:00Z", "by": "", "session": "", "step": "new", "changes": {}, "note": "main abc123 first" }
+    { "at": "2026-11-09T10:00:00Z", "by": "ann", "session": "s1", "step": "new", "changes": {"status":[null,"pending"],"severity":["low","normal"]}, "note": "first" }
   ]
 }
 `);
 });
 
 test('a team item puts undeclared keys after the built-in ones, in alphabetical order', () => {
-  const fm = { zeta: [1, 'a'], phase: '007-x', seq: 7, name: 'X', team: 'parallel', repository: 'acme/app', branch: 'b', created: null, updated: 'u', updated_by: 'm1', alpha: false, status: 'closed', events: ['t a - - '] };
+  const fm = { zeta: [1, 'a'], phase: '007-x', seq: 7, name: 'X', team: 'parallel', repository: 'acme/app', branch: 'b', created: null, updated: 'u', updated_by: 'm1', alpha: false, status: 'closed', events: [E('t', 'a', '- - ')] };
   assert.equal(toItemJson(fm, ''), `{
   "seq": 7,
   "slug": "007-x",
@@ -94,7 +96,7 @@ test('an item with no history, a null created and no team', () => {
 });
 
 test('the order is fixed whatever the insertion order of the header object', () => {
-  const a = { phase: 'p', seq: 1, name: 'n', repository: 'r', branch: 'b', created: 'c', updated: 'u', updated_by: 'w', status: 's', owner: 'o', zz: 1, aa: 2, events: ['t e x'] };
+  const a = { phase: 'p', seq: 1, name: 'n', repository: 'r', branch: 'b', created: 'c', updated: 'u', updated_by: 'w', status: 's', owner: 'o', zz: 1, aa: 2, events: [E('t', 'e', 'x')] };
   const b = Object.fromEntries(Object.entries(a).reverse());
   assert.equal(toItemJson(a, 'x'), toItemJson(b, 'x'));
 });
@@ -106,6 +108,7 @@ test('every item file of the shared fixtures reads back as it was given', () => 
     const item = parseItem(readFileSync(FIXTURES + n, 'utf8'));
     // The .md fixtures lack the keys the JSON item requires (seq, slug, name, repository, branch, updated); the test supplies them, the codec does not.
     item.fm = { seq: 1, phase: '001-x', name: 'n', repository: 'r', branch: 'b', updated: 'u', ...item.fm };
+    if (item.fm.events) item.fm.events = item.fm.events.map(l => { const [at, step, ...note] = l.split(' '); return E(at, step, note.join(' ')); }); // an event line of the markdown fixtures, as an entry
     const text = toItemJson(item.fm, item.body);
     assert.deepEqual(fromItemJson(text), { fm: item.fm, body: item.body }, n);
     assert.equal(toItemJson(fromItemJson(text).fm, fromItemJson(text).body), text, n);
@@ -113,7 +116,7 @@ test('every item file of the shared fixtures reads back as it was given', () => 
 });
 
 test('a written item with a team, a history and a writer reads back as given', () => {
-  const fm = { phase: '042-x', seq: 42, name: 'X', team: 'parallel', repository: 'acme/app', branch: 'main', created: 'c', updated: 'u', updated_by: 'w', status: 'new', k: { n: [1] }, events: ['t1 new main abc note one', 't2 done - -'] };
+  const fm = { phase: '042-x', seq: 42, name: 'X', team: 'parallel', repository: 'acme/app', branch: 'main', created: 'c', updated: 'u', updated_by: 'w', status: 'new', k: { n: [1] }, events: [E('t1', 'new', 'note one'), { at: 't2', by: 'w', session: 's', step: 'done', changes: { status: ['new', 'closed'] }, note: '' }] };
   assert.deepEqual(fromItemJson(toItemJson(fm, 'b\n')), { fm, body: 'b\n' });
 });
 
@@ -122,14 +125,20 @@ test('a missing team, a null created and an empty updated_by give no key', () =>
   for (const k of ['team', 'created', 'updated_by', 'events']) assert.equal(k in fm, false, k);
 });
 
-test('one history entry per line, and the line is rebuilt as at + step + note', () => {
-  const events = ['2026-11-09T10:00:00Z new main abc a note with  spaces', '2026-11-09T10:01:00Z claim - - '];
+test('one history entry per line, kept whole', () => {
+  const events = [{ at: '2026-11-09T10:00:00Z', by: 'ann', session: '', step: 'new', changes: { name: [null, 'n'], depends_on: [[1], []] }, note: 'a note with  spaces' }, E('2026-11-09T10:01:00Z', 'claim', '')];
   const text = toItemJson({ phase: 'p', seq: 1, name: 'n', repository: 'r', branch: 'b', updated: 'u', events }, '');
   assert.equal(text.split('\n').filter(l => l.includes('"at"')).length, 2);
   assert.deepEqual(fromItemJson(text).fm.events, events);
 });
 
-const good = () => JSON.parse(toItemJson({ phase: 'p', seq: 1, name: 'n', repository: 'r', branch: 'b', created: 'c', updated: 'u', updated_by: 'w', events: ['t e x'] }, 'b'));
+test('an entry written without by, session or changes reads with them empty', () => {
+  const doc = JSON.parse(toItemJson({ phase: 'p', seq: 1, name: 'n', repository: 'r', branch: 'b', updated: 'u' }, ''));
+  doc.history = [{ at: 't', step: 'new', note: 'main abc first' }];
+  assert.deepEqual(fromItemJson(JSON.stringify(doc)).fm.events, [E('t', 'new', 'main abc first')]);
+});
+
+const good = () => JSON.parse(toItemJson({ phase: 'p', seq: 1, name: 'n', repository: 'r', branch: 'b', created: 'c', updated: 'u', updated_by: 'w', events: [E('t', 'e', 'x')] }, 'b'));
 const unreadable = [
   ['not JSON', 'not json', undefined],
   ['not an object', '[1]', undefined],
@@ -171,6 +180,8 @@ const refused = [
   ['updated_by a number', { ...header(), updated_by: 3 }, 'updated_by'],
   ['a header key named slug', { ...header(), slug: 'x' }, 'slug'],
   ['events not a list', { ...header(), events: 'x' }, 'events'],
+  ['an event that is a line of text', { ...header(), events: ['t e x'] }, 'events[0]'],
+  ['an entry without a step', { ...header(), events: [{ at: 't', note: '' }] }, 'events[0].step'],
 ];
 for (const [what, h, key] of refused) {
   test(`the writer refuses a header with ${what}`, () => {

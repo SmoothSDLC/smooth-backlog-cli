@@ -320,10 +320,8 @@ async function change(a, folder, repo, team) {
   if (seqTaken !== null) recordNumber(folder, seqTaken);
   store.write({ path, fm, body }, folder);
   a.wrote = { slug: row.slug, path: row.path };
-  store.addEvent(folder, row.path, {
-    event, branch: fm.branch || '', commitSha: fm.commit || '',
-    note: a.note || `set ${Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ')}`,
-  });
+  // the entry's changes carry the field edits; a body edit has none, so without --note it names itself (the headline of the text a step appended, the section edit, an append), and a planning sentence below is the note of the rest
+  store.addEvent(folder, row.path, { event, note: a.note || (todo.text ? todo.headline : a.section !== undefined ? `set ${strip(a.section)}=${changes[strip(a.section)]}` : a.append ? 'appended to the body' : '') });
 
   // --- the planning event: a move-to-rank, or completion re-densifying the remaining backlog. The index entry of the item (name, status) follows the
   // file in every case: reflow makes the index right against the files, and writes only the index.

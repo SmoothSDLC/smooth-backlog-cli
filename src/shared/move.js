@@ -78,7 +78,7 @@ async function toBranch(folder, r, branch, note, { repo, guard, wrote }) {
   store.stamp(fm);
   store.write({ path, fm, body }, folder);
   wrote.push({ slug: r.slug, path: r.path });
-  store.addEvent(folder, r.path, { event: 'moved_branch', branch, note: `${r.slug}: branch '${old}' -> '${branch}'${note ? ` (${note})` : ''}` });
+  store.addEvent(folder, r.path, { event: 'moved_branch', note: `${r.slug}: branch '${old}' -> '${branch}'${note ? ` (${note})` : ''}` });
 }
 
 async function move(a, rows, ctx) {
@@ -135,12 +135,12 @@ async function move(a, rows, ctx) {
   const seq = store.nextSeqFor(tdir, itemFileName(tail)); // never a number whose file name the target already holds
   const slug = `${String(seq).padStart(3, '0')}${tail}`;
   store.stamp(Object.assign(fm, { phase: slug, seq, repository: target }));
-  fm.events = [...asList(fm.events), store.eventLine({ ts: store.now(), event: 'moved_in', branch: fm.branch, note: `from ${repo} as ${r.slug}` })]; // the history travels in the file
   const copy = join(tdir, 'phases', itemFileName(slug));
   // all or nothing: a throw anywhere below restores both backlogs (items and indexes)
   await store.undoOnThrow(tdir, async () => {
     recordNumber(tdir, seq); // the number is recorded in the target's numbers.json, committed with the item
-    store.write({ path: copy, fm, body }, tdir);
+    store.write({ path: copy, fm, body }, tdir); // the history travels in the file
+    store.addEvent(tdir, join('phases', itemFileName(slug)), { event: 'moved_in', note: `from ${repo} as ${r.slug}` });
     store.note(src);
     rmSync(src);
     store.reflow(folder, { branches: [r.branch] }); // the item leaves the order of the source

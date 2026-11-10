@@ -67,6 +67,6 @@ Feature: Queue - priorities, dependencies, branches
     When I run `backlog history 1`
     Then the command succeeds
     And the output contains "started"
-    And the output contains "branch="
+    And the output contains "status: pending -> in progress"
     When I run `backlog show 1 --json`
     Then the JSON field front_matter.events has 1 or more entries

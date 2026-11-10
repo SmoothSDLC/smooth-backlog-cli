@@ -62,7 +62,7 @@ Feature: Read commands - list, show, history, changes and next all-branches read
     Given an item "Alpha" exists
     When I run `backlog history`
     Then the command succeeds
-    And the output contains "planning_event"
+    And the output contains "added 001-alpha"
     When I run `backlog history 1`
     Then the command succeeds
     When I run `backlog history 7`

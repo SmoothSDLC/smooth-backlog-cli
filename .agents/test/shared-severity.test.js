@@ -29,7 +29,7 @@ test('046: --severity changes the field, is published with an event, and refuses
   assert.equal(readItem(file).fm.severity, 'normal');
   const bare = spawnSync('git', ['-C', home, 'remote', 'get-url', 'origin'], { encoding: 'utf8' }).stdout.trim();
   assert.equal(itemOfText(spawnSync('git', ['--git-dir', bare, 'show', `main:acme/demo/${itemRel('001-loud-item')}`], { encoding: 'utf8' }).stdout).fm.severity, 'normal'); // pushed
-  assert.match(run(['history', '1']).stdout, /severity=normal/); // the event
+  assert.match(run(['history', '1']).stdout, /severity: critical -> normal/); // the entry
   assert.equal(run(['list', 'critical']).stdout.includes('001-loud-item'), false);
   const bad = run(['update', '1', '--severity', 'urgent', '--by', 'tester']);
   assert.equal(bad.status, 2, bad.stdout + bad.stderr);

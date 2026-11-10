@@ -132,7 +132,7 @@ The same five rules hold wherever the items live:
 | `backlog list [new\|open\|done\|archive\|branches\|critical\|all-branches]` | The full stack of this branch (open items in queue order, then the finished ones), one kind of item, the branches, the critical items, or every branch |
 | `backlog show <item>[,<item>...]` | One item whole: its row, front matter and body; `--agent <name>` records that the agent has read it |
 | `backlog next` / `backlog next all-branches` | The next item of this branch, whole / of every branch |
-| `backlog history [<item>]` | The events of one item, or the latest 50 of the backlog |
+| `backlog history [<item>]` | The history of one item (who changed what, from and to), or the latest 50 entries of the backlog |
 | `backlog changes` | Which items changed since your last use |
 | `backlog fields` | The item template: every key and field, its type and default, who sets it, what it is for |
 | `backlog team pop --team <team> --agent <name>` | What one agent of a team does next, marked as theirs, with the whole item |

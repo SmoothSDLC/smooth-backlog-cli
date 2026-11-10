@@ -424,7 +424,8 @@ Options:
       command, as every read does).
   --events [EVENTS]
       The history of the items, kept in the item files. With an item (number or slug) it prints the events of that
-      item, newest first; without one it prints the latest 50 events of the backlog, archived items included.
+      item, newest first; without one it prints the latest 50 events of the backlog, archived items included. Each line is the time, the step, who made
+      the entry, the keys that changed (key: before -> after) and the note.
   --by-branch BY_BRANCH
       The items recorded on this branch.
   --only {new,open,done,archive}

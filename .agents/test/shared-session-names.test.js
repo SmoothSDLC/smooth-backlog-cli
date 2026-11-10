@@ -49,7 +49,7 @@ const teamItem = (f, name) => { // a refined team item (stage ready): nothing is
   return s;
 };
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === itemRel(slug)).fm;
-const events = (f, slug) => itemFm(f, slug).events.map(store.parseEvent);
+const events = (f, slug) => itemFm(f, slug).events;
 
 test('082: an agent name with colons (082aa:01) is stored in claimed_by, the event log, the commit subject and accepted by --by and --claim', () => {
   const f = fixture();
@@ -58,7 +58,7 @@ test('082: an agent name with colons (082aa:01) is stored in claimed_by, the eve
   // the front matter carries the name
   assert.equal(itemFm(f, s).claimed_by, A1);
   // the event log records it
-  const claimed = events(f, s).find(e => e.event === 'claimed');
+  const claimed = events(f, s).find(e => e.step === 'claimed');
   assert.ok(claimed, 'the claimed event is in the log');
   assert.ok(claimed.note.includes(`Claimed by ${A1}`), claimed.note);
   // the commit subject carries the name

@@ -209,7 +209,7 @@ async function create(argv, { home, folder, repo, scope, team, floor = 0 }) {
       order = reflow(folder, { slug, target: priority, branches: [fm.branch] });
       rank = Object.fromEntries(order)[slug];
       if (src) addEvent(folder, src.path, { event: 'split', note: `spawned sibling ${slug}` });
-      addEvent(folder, rel, { event: 'planning_event', note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
+      addEvent(folder, rel, { event: 'new', note: `added ${slug} at rank ${priority ?? 'end'}; backlog re-densified to ${order.length} item(s)` });
       where = priority === undefined ? 'appended' : `inserted at P${priority}`;
     });
   }

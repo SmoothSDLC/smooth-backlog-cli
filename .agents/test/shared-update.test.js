@@ -83,7 +83,7 @@ test('update --priority changes the index and no other item file; the item itsel
   assert.notEqual(readFileSync(join(f.folder, 'index.json'), 'utf8'), indexBefore, 'the order is in the index');
   assert.equal(rankOf(f, '002-beta'), 0);
   assert.equal(rankOf(f, '001-alpha'), 1);
-  assert.match(parse(after[itemName('002-beta')]).fm.events.at(-1), / planning_event /);
+  assert.match(parse(after[itemName('002-beta')]).fm.events.at(-1).note, /^002-beta is now |^moved 002-beta -> P0/);
 });
 
 test('a folder whose items carry the rank of an earlier build gets its index at the first write; the items lose the key when they are next written', () => {
@@ -135,8 +135,8 @@ test('order of work: pull first, then change, write, log the event, commit and p
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   const item = fm(f, itemName('004-delta')).fm;
   assert.equal(item.status, 'in progress');
-  const e = store.parseEvent(item.events.at(-1));
-  assert.deepEqual([e.event, e.note], ['state_change', 'go']);
+  const e = item.events.at(-1);
+  assert.deepEqual([e.step, e.note, e.changes.status], ['state_change', 'go', ['pending', 'in progress']]);
   const head = git(f.home, 'show', '--stat', '--format=', 'HEAD');
   assert.doesNotMatch(head, /backlog\.db/);
   assert.match(head, new RegExp(reEscape(`acme/demo/${itemRel('004-delta')}`)));
@@ -602,7 +602,7 @@ test('update --section edits one body section and nothing else, through every ed
   assert.match(body(), /## Evidence\n\n- first proof\n\n## Tasks\n\n- b\n- a\n$/);
   assert.ok(body().startsWith(before.trimEnd()), 'the text before the edited sections is byte-identical');
   assert.equal(fm(f, itemName('001-alpha')).fm.name, 'Name alpha', 'the front matter fields stay');
-  assert.match(fm(f, itemName('001-alpha')).fm.events.at(-1), /set Tasks=move-line/);
+  assert.match(fm(f, itemName('001-alpha')).fm.events.at(-1).note, /set Tasks=move-line/);
   const other = readFileSync(itemPath(f.folder, '002-beta'), 'utf8');
   ok2(f, '6'); // a finished item takes the edit too, and no other item is written
   assert.equal(readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), other);

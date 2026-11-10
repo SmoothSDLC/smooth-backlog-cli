@@ -332,8 +332,8 @@ test('review P2: failed create, note and archive each roll back; successful retr
   const row = store.load(join(clone(t, bare), 'acme', 'demo')).find(i => i.fm.name === 'local job');
   assert.equal(row.fm.phase, '002-local-job'); assert.equal(row.fm.status, 'pending');
   assert.equal(row.path, archivedRel('002-local-job', 'phases'));
-  const events = row.fm.events.map(store.parseEvent);
-  assert.equal(events.filter(e => e.event === 'archived').length, 1);
+  const events = row.fm.events;
+  assert.equal(events.filter(e => e.step === 'archived').length, 1);
   assert.equal(events.filter(e => e.note.includes('LOCAL_ARCHIVE_EVIDENCE')).length, 1);
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
 });

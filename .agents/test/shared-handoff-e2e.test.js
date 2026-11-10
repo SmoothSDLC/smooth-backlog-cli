@@ -3,10 +3,10 @@
 // the CLI in a fixture backlog; the stored front matter is read with parse and decoded with 059.1's decodeList.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, itemPath, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog, changeItem } from './shared-fixtures.js';
 import { decodeList, edgeState } from '../../src/team/handoff.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
 
@@ -404,7 +404,7 @@ test('059.V2: a producer closed before this rule (no handoffs key) is not re-che
   assert.equal(fm(f, p).status, 'closed');
   // a producer closed before the rule has no handoffs key: remove the one this rule records, to stand in for it
   const path = itemFile(f, p);
-  writeFileSync(path, readFileSync(path, 'utf8').replace(/^handoffs:.*\n/m, ''));
+  changeItem(path, { fm: { handoffs: undefined } });
   assert.ok(!('handoffs' in fm(f, p)));
   const d = make(f, 'dependent item', '--depends-on', seq(p));
   ok(f, ['show', p, '--agent', 'producer']);

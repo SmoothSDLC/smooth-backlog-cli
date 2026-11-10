@@ -5,10 +5,10 @@
 // join their card ids with colons (t07:09:1a). Local bare repos only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, itemPath, itemRel, sharedBacklog, teamMembers } from './shared-fixtures.js';
+import { cli, consumer, itemPath, itemRel, sharedBacklog, teamMembers, changeItem } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 
 const TEAM = 't07:09:1a';
@@ -76,7 +76,7 @@ test('082: a continuation of an item without session_authors keeps the earlier h
   ok(f, ['update', s, '--claim', A1]);
   // an item claimed before session_authors existed: the list is not in the file
   const file = itemPath(f.folder, s);
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
+  changeItem(file, { fm: { session_authors: undefined } });
   assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
   ok(f, ['update', s, '--claim', A2]); // the continuation
   const fm = itemFm(f, s);

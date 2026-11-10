@@ -7,7 +7,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSyn
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape, changeItem } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
@@ -169,7 +169,7 @@ for (const [title, args] of [['list', ['list', 'all-branches']], ['new', NEW('be
     assert.equal(cli(NEW('alpha job'), { cwd: a.cons, tmp: a.tmp }).status, 0);
     assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
     const file = itemPath(b.folder, '001-alpha-job');
-    writeFileSync(file, readFileSync(file, 'utf8').replace(/^summary: .*$/m, 'summary: "LOCAL EDIT"')); // an uncommitted edit of b
+    changeItem(file, { fm: { summary: 'LOCAL EDIT' } }); // an uncommitted edit of b
     assert.equal(cli(['update', '1', '--summary', 'REMOTE EDIT'], { cwd: a.cons, tmp: a.tmp }).status, 0); // upstream changes the same line
     const head = gitIn(bare, 'rev-parse', 'main');
     const r = cli(args, { cwd: b.cons, tmp: b.tmp });
@@ -642,7 +642,7 @@ test('item 045: an item without a phase field keeps the identity of its file nam
   const { b, bare, result } = await race(t, [NEW('alpha')],
     [...NEW('dependent'), '--depends-on', '001-alpha'], ['update', '1', '--seq', '5'], { afterSeed: a => {
       const file = itemPath(a.folder, '001-alpha');
-      writeFileSync(file, readFileSync(file, 'utf8').replace(/^phase: .*\n/m, '')); // an older file: its slug is its file name
+      changeItem(file, { fm: { phase: undefined } }); // an older file: its slug is its file name
       gitIn(a.home, 'commit', '-qam', 'an item without a phase field'); gitIn(a.home, 'push', '-q');
     } });
   rejectedPublication(t, b, bare, result, /depends on.*001-alpha/);

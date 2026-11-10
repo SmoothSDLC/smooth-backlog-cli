@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archivedPath, archivedRel, breakIndex, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
+import { archivedPath, archivedRel, breakIndex, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, changeItem } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/frontmatter.js';
@@ -400,7 +400,7 @@ test('review P2: archive inserts status: archived into an item whose front matte
 test('review P2: move adds the keys it sets (branch, repository) to an item whose front matter lacks them, and the item is listed in the index of its new place', () => {
   const f = seed();
   const p = itemPath(f.folder, '002-beta');
-  writeFileSync(p, readFileSync(p, 'utf8').replace(/^(branch|repository|priority): .*\n/gm, ''));
+  changeItem(p, { fm: { branch: undefined, repository: undefined, priority: undefined } });
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'no keys'); git(f.home, 'push', '-q');
   assert.equal(run(f, 'move', ['2', '--to-branch', 'release']).status, 0);
   assert.equal(fm(f.folder, itemRel('002-beta')).fm.branch, 'release');

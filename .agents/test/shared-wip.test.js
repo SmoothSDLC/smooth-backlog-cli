@@ -5,10 +5,10 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, sharedBacklog, readItem, changeItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -92,7 +92,7 @@ test('034: query --wip prints the counts and the stale items; a renumbering leav
   const [a, b, c] = ['one', 'two', 'three'].map(n => f.make('demo', n));
   f.run('demo', ['update', a, '--claim', 'amy']);
   const file = itemPath(join(f.home, 'acme', 'demo'), a);
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^last_updated: .*$/m, 'last_updated: "2026-01-01T00:00:00Z"')); // old: stale
+  changeItem(file, { fm: { updated: '2026-01-01T00:00:00Z' } }); // old: stale
   const text = f.run('demo', ['team', 'query', '--team', 't1', '--wip']).stdout;
   assert.match(text, /repository +acme\/demo +1 \/ 5/);
   assert.match(text, /stale \(no change of their own for more than 1 h\): 1/);

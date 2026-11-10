@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, archivedPath, reEscape } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, archivedPath, reEscape, changeItem } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
 import { gitIn } from './shared-concurrency.js';
 
@@ -25,7 +25,7 @@ const NEW = (name, ...more) => ['new', '--name', name, '--objective', 'o', '--su
 const FULL = (name, ...more) => NEW(name, '--review-refs', 'references/review/docs.md', '--estimate', '5', '--body', '## Definition of done\n- [ ] x', ...more);
 function finish(s, slug) {
   const path = itemPath(s.folder, slug);
-  writeFileSync(path, readFileSync(path, 'utf8').replace(/^status: .*$/m, 'status: done'));
+  writeFileSync(path, readFileSync(path, 'utf8').replace(/^status: .*$/m, 'status: done')); // the text is the input: a later check matches `status: done` exactly
   assert.equal(s.run(['list', 'all-branches']).status, 0); // ingests the edit
 }
 const out = r => `${r.stdout}${r.stderr}`;
@@ -238,7 +238,7 @@ test('review P2: the cycle check follows the outgoing edges of an item whose fil
   const s = solo(t);
   for (const n of ['alpha job', 'beta job']) assert.equal(s.run(NEW(n)).status, 0);
   const path = itemPath(s.folder, '002-beta-job');
-  writeFileSync(path, readFileSync(path, 'utf8').replace(/^phase: .*\n/m, ''));
+  changeItem(path, { fm: { phase: undefined } });
   assert.equal(s.run(['list', 'all-branches']).status, 0); // ingests the edit
   assert.equal(s.run(['update', '2', '--set-depends-on', '1']).status, 0);
   const r = s.run(['update', '1', '--set-depends-on', '2']);

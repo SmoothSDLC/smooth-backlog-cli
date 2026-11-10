@@ -5,10 +5,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, intoTeam, itemPath, itemRel, sharedBacklog, teamMembers, GIT_IDENTITY } from './shared-fixtures.js';
+import { cli, consumer, intoTeam, itemPath, itemRel, sharedBacklog, teamMembers, GIT_IDENTITY, changeItem } from './shared-fixtures.js';
 import { mkdirSync } from 'node:fs';
 import * as store from '../../src/shared/store.js';
 
@@ -169,7 +169,7 @@ test('082: a reassignment keeps the former holder blocked: the legacy item keeps
   ok(f, ['update', s, '--claim', A1]);
   // an item claimed before session_authors existed: the list is not in the file
   const file = itemPath(f.folder, s);
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
+  changeItem(file, { fm: { session_authors: undefined } });
   assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
   ok(f, ['update', s, '--reassign', A2, '--by', 'lead', '--reason', 'the earlier session ended']);
   const fm = itemFm(f, s);
@@ -189,7 +189,7 @@ test('082: a legacy item keeps its original author in session_authors across eve
   // after a lead's review request erased the original author of such an item).
   const legacy = (f, s) => {
     const file = itemPath(f.folder, s);
-    writeFileSync(file, readFileSync(file, 'utf8').replace(/^session_authors:\n(?:- .*\n)*/m, ''));
+    changeItem(file, { fm: { session_authors: undefined } });
     assert.equal(itemFm(f, s).session_authors, undefined, 'the fixture item has no session_authors');
   };
   const refuse = (f, s, by) => no(f, ['update', s, '--start-review', '--by', by], 'the same session cannot review its own work');
@@ -218,7 +218,7 @@ test('082: a legacy item keeps its original author in session_authors across eve
     }, (f, s) => refuse(f, s, A1)],
     ['a team pop continuation claim', (f, s) => {
       // the lead's own work item carries no stage (the team's split items do): the pop continues it
-      const file = itemPath(f.folder, s); writeFileSync(file, readFileSync(file, 'utf8').replace(/^(stage|refiner): .*\n/mg, ''));
+      const file = itemPath(f.folder, s); changeItem(file, { fm: { stage: undefined, refiner: undefined } });
       const p = run(f, ['team', 'pop', '--team', 't1', '--json'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: A2, SMOOTH_BACKLOG_CLI_AGENT: A2 });
       assert.equal(p.status, 0, p.stdout + p.stderr);
       return [A1, A2];

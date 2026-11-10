@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { cli, consumer, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog, readItem, changeItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -29,7 +29,7 @@ const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdou
 // another team takes an item: the one place a refining slice changes team, written to the file the way an earlier build left it
 const moveTeam = (f, slug, team) => {
   const file = itemPath(f.folder, slug);
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^team: .*$/m, `team: ${team}`));
+  changeItem(file, { fm: { team } });
   for (const args of [['add', '-A'], ['commit', '-q', '-m', 'move team'], ['push', '-q']]) spawnSync('git', args, { cwd: f.home, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
 };
 const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
@@ -240,7 +240,7 @@ test('an item without depends_on names it', () => {
   const f = fixture();
   const s = make(f, 'hand edited item');
   const file = itemPath(f.folder, s);
-  writeFileSync(file, readFileSync(file, 'utf8').replace(/^depends_on:.*\n/m, '').replace(/^review_refs:\n(?:- .*\n)*/m, '').replace(/^review_refs:.*\n/m, ''));
+  changeItem(file, { fm: { depends_on: undefined, review_refs: undefined } });
   const x = JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--phase', s, '--json']).stdout);
   assert.deepEqual(x.missing, ['review_refs', 'depends_on']);
 });

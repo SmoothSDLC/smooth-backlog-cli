@@ -1,0 +1,70 @@
+{
+  "parallel": {
+    "people": {
+      "lead-1": ["lead"],
+      "member-1": ["member"],
+      "member-2": ["member"],
+      "member-3": ["member"]
+    },
+    "item": {
+      "status": {"type": "text", "default": "new", "values": ["new", "splitting", "ready", "in progress", "checking", "passed", "closed"], "final": ["closed"], "description": "Where the item is in the team's flow."},
+      "estimate": {"type": "number", "default": 0, "description": "Minutes of work, review included."},
+      "holder": {"type": "person", "default": "", "description": "The member working on the item."},
+      "checker": {"type": "person", "default": "", "description": "The member checking the holder's work."},
+      "parent": {"type": "item", "default": null, "description": "The item this one was split from."},
+      "children": {"type": "items", "default": [], "description": "The items split from this one; filled by the step that creates a child."},
+      "depends_on": {"type": "items", "default": [], "description": "Items that must be closed before this one is claimed."},
+      "handoff": {"type": "text", "default": "", "description": "The hand-off note of the stage that ended last; emptied when the next stage ends."},
+      "rounds": {"type": "number", "default": 0, "description": "How many checks rejected the work."}
+    },
+    "rules": {
+      "table": [
+        {"id": "members-only", "step": "*", "when": {"empty": "$caller.roles"}, "deny": "{$caller} is not a person of team {$team.name}"},
+        {"id": "new-needs-estimate", "step": "new", "when": {"empty": "$arg.estimate"}, "deny": "a new item needs --estimate <minutes>"},
+        {"id": "new-size-cap", "step": "new", "when": {"not": {"<=": ["$arg.estimate", 60]}}, "deny": "an item is at most 60 minutes of work (got {$arg.estimate}); split it"},
+        {"id": "new-child-parent-splitting", "step": "new", "when": {"all": [{"not": {"empty": "$arg.parent"}}, {"not": {"every": {"items": "$arg.parent", "match": {"is": ["$it.status", "splitting"]}}}}]}, "deny": "children are added only to an item in status splitting (item {$arg.parent})"},
+        {"id": "new-child", "step": "new", "when": {"not": {"empty": "$arg.parent"}}, "do": {"set": {"status": "ready", "estimate": "$arg.estimate", "parent": "$arg.parent", "depends_on": "$arg.after"}, "related": [{"items": "$arg.parent", "add": {"children": "$item.seq"}}], "place": {"before": "$arg.parent"}}},
+        {"id": "new", "step": "new", "do": {"set": {"estimate": "$arg.estimate"}}},
+        {"id": "split-lead-only", "step": ["split-start", "split-done"], "when": {"not": {"in": ["lead", "$caller.roles"]}}, "deny": "only the lead splits an item"},
+        {"id": "split-start", "step": "split-start", "when": {"is": ["$item.status", "new"]}, "do": {"set": {"status": "splitting"}}},
+        {"id": "split-done-needs-children", "step": "split-done", "when": {"empty": "$item.children"}, "deny": "item {$item.seq} has no child yet; add one with backlog team new --parent {$item.seq}"},
+        {"id": "split-done", "step": "split-done", "when": {"is": ["$item.status", "splitting"]}, "do": {"set": {"status": "ready"}}},
+        {"id": "wait-for-children", "step": ["claim", "close", "abandon"], "when": {"some": {"items": "$item.children", "match": {"not": {"is": ["$it.status", "closed"]}}}}, "deny": "item {$item.seq} waits for its children ({$item.children}) to close"},
+        {"id": "claim-not-ready", "step": "claim", "when": {"not": {"is": ["$item.status", "ready"]}}, "deny": "only a ready item is claimed (item {$item.seq} is {$item.status})"},
+        {"id": "claim-dependencies", "step": ["claim", "close"], "when": {"some": {"items": "$item.depends_on", "match": {"not": {"any": [{"is": ["$it.status", "closed"]}, {"is": ["$it.archived", true]}]}}}}, "deny": "item {$item.seq} waits for its dependencies ({$item.depends_on}) to close"},
+        {"id": "claim-lead", "step": "claim", "when": {"in": ["lead", "$caller.roles"]}, "deny": "the lead does not claim work; a member does"},
+        {"id": "claim-limit-person", "step": "claim", "when": {">=": [{"count": {"items": "$team.items", "match": {"all": [{"is": ["$it.holder", "$caller"]}, {"is": ["$it.status", "in progress"]}]}}}, 1]}, "deny": "{$caller} already works on an item; finish or release it first"},
+        {"id": "claim-limit-team", "step": "claim", "when": {">=": [{"count": {"items": "$team.items", "match": {"is": ["$it.status", "in progress"]}}}, 3]}, "deny": "the team already has 3 items in progress"},
+        {"id": "claim", "step": "claim", "do": {"set": {"status": "in progress", "holder": "$caller"}}},
+        {"id": "release-who", "step": "release", "when": {"not": {"any": [{"is": ["$caller", "$item.holder"]}, {"in": ["lead", "$caller.roles"]}]}}, "deny": "only the holder ({$item.holder}) or the lead releases item {$item.seq}"},
+        {"id": "release", "step": "release", "when": {"is": ["$item.status", "in progress"]}, "do": {"set": {"status": "ready", "holder": ""}, "note": {"heading": "Released", "text": "$arg.note"}}},
+        {"id": "hand-to-check-holder", "step": "hand-to-check", "when": {"not": {"is": ["$caller", "$item.holder"]}}, "deny": "only the holder ({$item.holder}) hands item {$item.seq} to the check"},
+        {"id": "hand-to-check-note", "step": "hand-to-check", "when": {"empty": "$arg.note"}, "deny": "hand-to-check needs --note \"<what was done, why, and what the checker needs>\""},
+        {"id": "hand-to-check", "step": "hand-to-check", "when": {"is": ["$item.status", "in progress"]}, "do": {"set": {"status": "checking", "handoff": "$arg.note", "checker": ""}, "note": {"heading": "Hand-off", "text": "$arg.note"}}},
+        {"id": "check-not-own", "step": ["start-check", "check"], "when": {"is": ["$caller", "$item.holder"]}, "deny": "{$caller} cannot check its own work"},
+        {"id": "start-check-handoff", "step": "start-check", "when": {"empty": "$item.handoff"}, "deny": "item {$item.seq} has no hand-off note from the stage that ended; the holder writes it with hand-to-check --note"},
+        {"id": "start-check", "step": "start-check", "when": {"all": [{"is": ["$item.status", "checking"]}, {"empty": "$item.checker"}]}, "do": {"set": {"checker": "$caller"}}},
+        {"id": "check-who", "step": "check", "when": {"not": {"any": [{"is": ["$caller", "$item.checker"]}, {"in": ["lead", "$caller.roles"]}]}}, "deny": "the checker of item {$item.seq} is {$item.checker}; start the check first"},
+        {"id": "check-verdict", "step": "check", "when": {"not": {"in": ["$arg.verdict", ["pass", "reject"]]}}, "deny": "check needs --verdict pass or --verdict reject"},
+        {"id": "check-comments", "step": "check", "when": {"empty": "$arg.comments"}, "deny": "check needs --comments \"<the findings>\""},
+        {"id": "check-round-cap", "step": "check", "when": {"all": [{"is": ["$arg.verdict", "reject"]}, {">=": ["$item.rounds", 2]}, {"not": {"in": ["lead", "$caller.roles"]}}]}, "deny": "item {$item.seq} was rejected {$item.rounds} times; the lead records the next verdict"},
+        {"id": "check-reject", "step": "check", "when": {"is": ["$arg.verdict", "reject"]}, "do": {"set": {"status": "in progress", "rounds": {"plus": ["$item.rounds", 1]}, "handoff": "", "checker": ""}, "note": {"heading": "Check rejected", "text": "$arg.comments"}}},
+        {"id": "check-pass", "step": "check", "do": {"set": {"status": "passed", "handoff": ""}, "note": {"heading": "Check passed", "text": "$arg.comments"}}},
+        {"id": "close-holder", "step": "close", "when": {"not": {"is": ["$caller", "$item.holder"]}}, "deny": "only the holder ({$item.holder}) closes item {$item.seq}"},
+        {"id": "close", "step": "close", "when": {"is": ["$item.status", "passed"]}, "do": {"set": {"status": "closed"}, "place": "last"}},
+        {"id": "archive", "step": "archive", "when": {"all": [{"in": ["lead", "$caller.roles"]}, {"is": ["$item.status", "closed"]}]}, "do": {"archive": true}},
+        {"id": "adopt", "step": "adopt", "when": {"all": [{"empty": "$item.team"}, {"in": ["lead", "$caller.roles"]}]}, "do": {"team": "$team.name", "set": {"status": "new"}}},
+        {"id": "abandon", "step": "abandon", "when": {"all": [{"in": ["lead", "$caller.roles"]}, {"not": {"empty": "$arg.reason"}}]}, "do": {"set": {"status": "closed", "holder": ""}, "note": {"heading": "Abandoned", "text": "$arg.reason"}}}
+      ],
+      "pop": [
+        {"id": "lead-splits", "step": "split-start", "when": {"in": ["lead", "$caller.roles"]}},
+        {"id": "member-checks", "step": "start-check"},
+        {"id": "member-claims", "step": "claim"}
+      ],
+      "filters": {
+        "waiting": {"description": "Ready items that wait for a child or a dependency.", "when": {"all": [{"is": ["$item.status", "ready"]}, {"any": [{"some": {"items": "$item.children", "match": {"not": {"is": ["$it.status", "closed"]}}}}, {"some": {"items": "$item.depends_on", "match": {"not": {"is": ["$it.status", "closed"]}}}}]}]}},
+        "in-progress": {"description": "Items a member works on.", "when": {"is": ["$item.status", "in progress"]}}
+      }
+    }
+  }
+}

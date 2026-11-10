@@ -1,0 +1,40 @@
+{
+  "xp": {
+    "people": {
+      "prog-1": ["programmer"],
+      "prog-2": ["programmer"],
+      "prog-3": ["programmer"],
+      "customer-1": ["customer"]
+    },
+    "item": {
+      "status": {"type": "text", "default": "story", "values": ["story", "test written", "pairing", "integrated", "accepted"], "final": ["accepted"], "description": "Where the story is."},
+      "test_ref": {"type": "text", "default": "", "description": "The failing test written before the code."},
+      "driver": {"type": "person", "default": "", "description": "The programmer at the keyboard."},
+      "navigator": {"type": "person", "default": "", "description": "The programmer reviewing as the code is written."},
+      "integration": {"type": "text", "default": "", "description": "The commit that integrated the story."}
+    },
+    "rules": {
+      "table": [
+        {"id": "members-only", "step": "*", "when": {"empty": "$caller.roles"}, "deny": "{$caller} is not a person of team {$team.name}"},
+        {"id": "new-customer-only", "step": "new", "when": {"not": {"in": ["customer", "$caller.roles"]}}, "deny": "the customer writes the stories"},
+        {"id": "new", "step": "new", "do": {"set": {"status": "story"}}},
+        {"id": "test-first-needs-test", "step": "write-test", "when": {"empty": "$arg.test"}, "deny": "write-test needs --test \"<the failing test>\""},
+        {"id": "write-test", "step": "write-test", "when": {"all": [{"is": ["$item.status", "story"]}, {"in": ["programmer", "$caller.roles"]}]}, "do": {"set": {"status": "test written", "test_ref": "$arg.test"}}},
+        {"id": "pair-test-first", "step": "pair", "when": {"not": {"is": ["$item.status", "test written"]}}, "deny": "a pair starts only after the failing test (story {$item.seq} is {$item.status})"},
+        {"id": "pair-needs-navigator", "step": "pair", "when": {"any": [{"empty": "$arg.navigator"}, {"is": ["$arg.navigator", "$caller"]}, {"not": {"in": ["programmer", {"roles_of": "$arg.navigator"}]}}]}, "deny": "pair needs --navigator <another programmer>"},
+        {"id": "pair-one-at-a-time", "step": "pair", "when": {">=": [{"count": {"items": "$team.items", "match": {"all": [{"is": ["$it.status", "pairing"]}, {"any": [{"in": ["$it.driver", ["$caller", "$arg.navigator"]]}, {"in": ["$it.navigator", ["$caller", "$arg.navigator"]]}]}]}}}, 1]}, "deny": "{$caller} or {$arg.navigator} is already in a pair"},
+        {"id": "pair", "step": "pair", "do": {"set": {"status": "pairing", "driver": "$caller", "navigator": "$arg.navigator"}}},
+        {"id": "integrate-pair-only", "step": "integrate", "when": {"not": {"in": ["$caller", ["$item.driver", "$item.navigator"]]}}, "deny": "only the pair ({$item.driver}, {$item.navigator}) integrates story {$item.seq}"},
+        {"id": "integrate-needs-commit", "step": "integrate", "when": {"not": {"regex": ["$arg.commit", "^[0-9a-f]{7,40}$"]}}, "deny": "integrate needs --commit <the integrated commit>"},
+        {"id": "integrate", "step": "integrate", "when": {"is": ["$item.status", "pairing"]}, "do": {"set": {"status": "integrated", "integration": "$arg.commit"}}},
+        {"id": "accept", "step": "accept", "when": {"all": [{"in": ["customer", "$caller.roles"]}, {"is": ["$item.status", "integrated"]}]}, "do": {"set": {"status": "accepted"}, "place": "last"}},
+        {"id": "archive", "step": "archive", "when": {"is": ["$item.status", "accepted"]}, "do": {"archive": true}}
+      ],
+      "pop": [],
+      "filters": {
+        "to-pair": {"description": "Stories with a failing test and no pair.", "when": {"is": ["$item.status", "test written"]}},
+        "to-accept": {"description": "Integrated stories the customer has not accepted.", "when": {"is": ["$item.status", "integrated"]}}
+      }
+    }
+  }
+}

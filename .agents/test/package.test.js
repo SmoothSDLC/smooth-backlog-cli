@@ -10,6 +10,7 @@ test('the packed npm artifact installs offline and runs with its bundled templat
   const [pack] = JSON.parse(await runNpm(['pack', '--json', '--pack-destination', f.dir], { cwd: source }));
   assert.ok(pack.files.some(x => x.path === 'templates/skills/backlog/scripts/install-backlog-cli.sh'));
   assert.ok(pack.files.some(x => x.path === 'COMMANDS.md'));
+  assert.ok(['scrum', 'extreme-programming', 'parallel', 'single-agent', 'patterns'].every(n => pack.files.some(x => x.path === `templates/teams/${n}.json`)));
   assert.ok(pack.files.some(x => x.path === 'CHANGELOG.md'));
   assert.equal(pack.files.some(x => x.path.startsWith('.agents/')), false);
   const prefix = join(f.dir, 'install');

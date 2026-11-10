@@ -105,6 +105,8 @@ test('every item file of the shared fixtures reads back as it was given', () => 
   assert.ok(names.length >= 6);
   for (const n of names) {
     const item = parseItem(readFileSync(FIXTURES + n, 'utf8'));
+    // The .md fixtures lack the keys the JSON item requires (seq, slug, name, repository, branch, updated); the test supplies them, the codec does not.
+    item.fm = { seq: 1, phase: '001-x', name: 'n', repository: 'r', branch: 'b', updated: 'u', ...item.fm };
     const text = toItemJson(item.fm, item.body);
     assert.deepEqual(fromItemJson(text), { fm: item.fm, body: item.body }, n);
     assert.equal(toItemJson(fromItemJson(text).fm, fromItemJson(text).body), text, n);
@@ -123,25 +125,60 @@ test('a missing team, a null created and an empty updated_by give no key', () =>
 
 test('one history entry per line, and the line is rebuilt as at + step + note', () => {
   const events = ['2026-11-09T10:00:00Z new main abc a note with  spaces', '2026-11-09T10:01:00Z claim - - '];
-  const text = toItemJson({ events }, '');
+  const text = toItemJson({ phase: 'p', seq: 1, name: 'n', repository: 'r', branch: 'b', updated: 'u', events }, '');
   assert.equal(text.split('\n').filter(l => l.includes('"at"')).length, 2);
   assert.deepEqual(fromItemJson(text).fm.events, events);
 });
 
 const good = () => JSON.parse(toItemJson({ phase: 'p', seq: 1, name: 'n', repository: 'r', branch: 'b', created: 'c', updated: 'u', updated_by: 'w', events: ['t e x'] }, 'b'));
 const unreadable = [
-  ['not JSON', 'not json', 'file'],
-  ['not an object', '[1]', 'file'],
-  ['null', 'null', 'file'],
-  ...[['seq', '1'], ['slug', 5], ['name', []], ['team', 5], ['repository', {}], ['branch', 1], ['created', 1], ['updated', true], ['updated_by', 1], ['fields', []], ['fields', 'x'], ['body', null], ['history', {}]]
+  ['not JSON', 'not json', undefined],
+  ['not an object', '[1]', undefined],
+  ['null', 'null', undefined],
+  ...[['seq', '1'], ['slug', 5], ['name', []], ['team', 5], ['repository', {}], ['branch', 1], ['created', 1], ['seq', null], ['slug', null], ['name', null], ['repository', null], ['branch', null], ['updated', null], ['updated_by', null], ['updated', true], ['updated_by', 1], ['fields', []], ['fields', 'x'], ['body', null], ['history', {}]]
     .map(([k, v]) => [`${k} of the wrong type`, JSON.stringify({ ...good(), [k]: v }), k]),
   ['a missing envelope key', JSON.stringify((({ branch, ...r }) => r)(good())), 'branch'],
-  ['a field named like an envelope key', JSON.stringify({ ...good(), fields: { name: 'x' } }), 'fields.name'],
+  ...['seq', 'slug', 'name', 'team', 'repository', 'branch', 'created', 'updated', 'updated_by', 'events']
+    .map(k => [`a field named ${k}`, JSON.stringify({ ...good(), fields: { [k]: 'x' } }), `fields.${k}`]),
+  ['a field named __proto__', JSON.stringify({ ...good(), fields: JSON.parse('{"__proto__": {"x": 1}}') }).replace('"fields":{}', '"fields":{"__proto__":{"x":1}}'), 'fields.__proto__'],
+  ['changes that is a list', JSON.stringify({ ...good(), history: [{ ...good().history[0], changes: [] }] }), 'history[0].changes'],
   ['a history entry that is not an object', JSON.stringify({ ...good(), history: ['x'] }), 'history[0]'],
   ['a history entry with a wrong key', JSON.stringify({ ...good(), history: [{ ...good().history[0], step: 3 }] }), 'history[0].step'],
 ];
 for (const [what, text, key] of unreadable) {
   test(`unreadable item: ${what} names ${key}`, () => {
-    assert.throws(() => fromItemJson(text), e => e.field === key && e.message.includes(key));
+    assert.throws(() => fromItemJson(text), e => e.field === key && (key === undefined || e.message.includes(key)));
   });
 }
+
+test('a field named phase is allowed and cannot replace the slug', () => {
+  const doc = { ...good(), fields: { phase: 'x' } };
+  assert.equal(fromItemJson(JSON.stringify(doc)).fm.phase, 'p');
+});
+
+test('a __proto__ field does not reach the prototype', () => {
+  const text = JSON.stringify(good()).replace('"fields":{}', '"fields":{"__proto__":{"polluted":1}}');
+  assert.ok(text.includes('__proto__'));
+  assert.throws(() => fromItemJson(text), e => e.field === 'fields.__proto__');
+  assert.equal({}.polluted, undefined);
+});
+
+const header = () => ({ phase: 'p', seq: 1, name: 'n', repository: 'r', branch: 'b', created: null, updated: 'u' });
+const refused = [
+  ...['seq', 'phase', 'name', 'repository', 'branch', 'updated'].map(k => [`${k} missing`, (({ [k]: _, ...r }) => r)(header()), k === 'phase' ? 'slug' : k]),
+  ['seq as text', { ...header(), seq: '007' }, 'seq'], ['seq fractional', { ...header(), seq: 1.5 }, 'seq'],
+  ['name a number', { ...header(), name: 2024 }, 'name'], ['team a number', { ...header(), team: 5 }, 'team'],
+  ['branch null', { ...header(), branch: null }, 'branch'], ['created a number', { ...header(), created: 3 }, 'created'],
+  ['updated_by a number', { ...header(), updated_by: 3 }, 'updated_by'],
+  ['a header key named slug', { ...header(), slug: 'x' }, 'slug'],
+  ['events not a list', { ...header(), events: 'x' }, 'events'],
+];
+for (const [what, h, key] of refused) {
+  test(`the writer refuses a header with ${what}`, () => {
+    assert.throws(() => toItemJson(h, ''), e => e.field === key && e.message.includes(key));
+  });
+}
+
+test('a phase key in the header is the slug, never a field', () => {
+  assert.equal(JSON.parse(toItemJson(header(), '')).fields.phase, undefined);
+});

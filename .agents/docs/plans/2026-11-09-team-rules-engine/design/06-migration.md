@@ -134,18 +134,15 @@ text pattern of `backlog new --ask` (`src/shared/new.js:106`): exit 2,
 4. Build each JSON file with the mapping of chapter 02 section 5 and the rules of section 4.
 5. Check the whole folder before writing anything (section 5).
 6. Write every JSON file, remove every converted `.md` file, write the folder's `numbers.json` (chapter 05 section 4; its high-water mark
-   includes every number the folder's history ever held), the folder's index, and the stop file for older releases (below), all through the
+   includes every number the folder's history ever held), the folder's index, all through the
    journal; commit once; push. Then write `migrated_at` and `migrated_by_version` into `.backlog/config.json` (section 2.0).
 
-**The stop file for older releases** (question 7 of `decisions.md`, applied provisionally). A release older than the cut-over reads only
-`*.md` items (`src/shared/store.js:285`), so on a migrated folder it sees no item: `backlog new` would hand out number 1 again
-(`nextSeq`, `src/shared/store.js:299`) and the index reconcile would drop every entry. Such releases keep running on machines whose
-self-update refuses a release with another `backlogSchemaVersion` (`src/upgrade.js:140`), and after a rollback of an installation. The
-migration therefore writes `phases/000-migrated-to-json.md` in the folder: a front-matter block that today's reader cannot parse
-(`---` / `this folder holds JSON items: use a release of the CLI with backlogSchemaVersion 2 or later` / `---`), so every command of an
-older release stops on that folder with exit 2 (`src/shared/store.js:257-266`) before it reads or writes anything. The new release ignores
-exactly that one file name. `package.json` gets `backlogSchemaVersion: 2` in the cut-over, so the self-update of an older installation
-names the manual update instead of installing it silently (review D H3).
+**Older releases** (question 7 of `decisions.md`; rulings R18 and the owner rule of 2026-11-07: no backwards compatibility anywhere,
+upgrade and migrate or fail). The migration writes nothing for a release older than the cut-over and the new release holds no code for
+one: no marker file, no changed schema number. Stated consequence: such a release reads only `*.md` items (`src/shared/store.js:285`), so
+on a migrated folder it sees no item, would hand out number 1 again (`nextSeq`, `src/shared/store.js:299`) and would drop the index
+entries. Every installation that writes to a folder is therefore upgraded before that folder is migrated; this is a step of the person who
+migrates (the landing strategy of the implementation plan), not behaviour of the CLI.
 7. Print the field report (section 2.1); with `--ask`, run section 2.2.
 
 ## 4. Data issues of real backlogs
@@ -227,7 +224,7 @@ The migration takes no action (no item, no file, nothing in the backlog) when an
 
 After a successful migration every reader reads only `.json` items. A `.md` file with a front-matter block that appears in `phases/` or
 `archive/` later (a branch merged from before the migration) stops every command with the text of section 2, and `backlog team migrate`
-converts it. The stop file `phases/000-migrated-to-json.md` of section 3 is the one `.md` name the new release ignores.
+converts it.
 
 ## 6. No compatibility path after the cut-over (ruling R18)
 
@@ -244,7 +241,7 @@ fails with a text that names the way forward, and nothing reads it. The toleranc
 | a done producer without hand-off records satisfies a dependency edge (`src/team/handoff.js:53-57`) | no coded edge at all; a team that wants that reading writes it as a rule (entry plan Task 6) |
 | the environment variables without the prefix (TEAM_NAME, BACKLOG_AGENT, ...) | not read (ruling R20, no alias): a session that still sets only the old names has no team and no agent, and the command says so with the three-ways text |
 | a team entry in today's shape (`lead`, `members`, `review`) | fails validation; its team commands and the migration take no action |
-| an older release of the CLI on a migrated folder | stops on the stop file of section 3 with exit 2; `backlogSchemaVersion` 2 keeps the self-update from crossing the change silently (question 7) |
+| an older release of the CLI on a migrated folder | nothing is built for it (section 3, question 7): every installation is upgraded before the folder is migrated |
 
 ## 7. Scenarios for the BDD plan
 
@@ -257,7 +254,7 @@ priority order", "absent created and updated_by", "an unreadable header stops th
 migration", "a shallow clone stops the migration", "the folder gets its counter from its whole history", "a second run says nothing to
 migrate", "a second run after a team entry is removed unbinds its items", "a markdown item after the migration stops a command",
 "validate runs on a markdown backlog and checks the file only", "setup runs on a markdown backlog and recommends the migration", "a folder
-with no team item migrates without a team file", "an older release refuses a migrated folder because of the stop file", "a second run that
+with no team item migrates without a team file", "a second run that
 converts nothing keeps migrated_at", "an entry in today's shape stops the migration and nothing is written",
 "migrate without a team or --show-all stops with the three-ways text", "the field report lists a missing, an invalid and an undeclared
 field", "--ask on a terminal repairs one field and records it", "--ask without a terminal is refused", "a repository with only .smooth-backlog.json stops with the move text", "a session with only the

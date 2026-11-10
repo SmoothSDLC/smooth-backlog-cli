@@ -15,11 +15,13 @@ section 4), so a broken rule set is never used. This chapter lists every check a
 - `backlog team validate --show-all` — the same, printing every team's findings (a scenario: the owner checks the whole file before the
   migration).
 - `--json` — the same findings as a list, for a script or an agent.
-- Every run refreshes the per-user validation record of chapter 01 section 4 (the SHA of what it read, the valid teams, now) when at least
-  one team is valid, and writes the file's SHA into `.backlog/config.json` (key `teams_file_sha`) when it changed, so the lead commits the
-  SHA with the edit (ruling R22); where chapter 01 section 1.1 keeps the SHA in the per-user record instead, only the record changes. It
-  writes nothing else (ruling R5: the team file is only read). Validity is per team (question 4, provisional B): the exit code and the
-  findings follow the named team's entry and the file's shape, and a run for one team never refuses because of another team's entry.
+- Every run refreshes the per-user validation record of chapter 01 section 4 (the SHA of what it read, the valid teams, now) when the
+  whole file is valid, and writes the file's SHA into `.backlog/config.json` (key `teams_file_sha`) when it changed, so the lead commits the
+  SHA with the edit (ruling R22); for a repository input that names another repository (chapter 01 section 1.1) only the record changes. It
+  writes nothing else (ruling R5: the team file is only read). The whole file must be valid (R18; question 4, owner decision 2026-11-09:
+  A): `--team <name>` prints the named team's findings and, when another entry has an error, one line naming those teams (`❌ <path>:
+  the entries of <teams> have errors; no team command runs until the whole file is valid; run backlog team validate --show-all`); the
+  exit code follows the whole file.
 - No file at the resolved location: the text of chapter 01 section 1.1 (the resolved path and the three ways to define it), exit 2.
 - On a backlog whose items are still markdown (before `backlog team migrate`), validate runs sections 3 to 6 on the file and prints
   `ℹ️  the items are markdown: run backlog team migrate, then validate checks them too`; sections 7 and 8 need JSON items (chapter 06
@@ -125,7 +127,6 @@ filter, `do`, `related` entry, `note`, `place` and quantifier.
 | an open item's field value is not among the field's `values` (for example after a status word was removed from the definition) | error | `<path>: status "refining" is not a value of status of team <t>` (add the value back, or move the item with a step) |
 | an item carries a field the definition does not declare | warning | `<path>: field <f> is not declared by the item definition of team <t>; rules cannot read it` |
 | an `item` or `items` field names no item (a deleted or cleaned item), or a foreign `owner/name#seq` that does not resolve (its folder unreadable, still markdown, or without that item; ruling R24) | warning | `<path>: field depends_on names no item 99` (the item's other steps still work; a step that writes the field must drop the number) |
-| two items of one folder hold one number (after a merge of code branches, chapter 05 section 2) | error | `<owner>/<name>: number <n> is held by <slug a> and <slug b>` (question 3, provisional A: when neither has a team, the next writing command renumbers the newer one; when either has a team, the folder's team commands stop until a person gives one of them a free number with `backlog update <slug> --show-all --seq <n>`) |
 | an item's JSON `seq` differs from the number of its file name (a hand edit) | error | `<path>: seq <s> differs from the file name's number <n>` (restore the file; the mark reads file names only, review C section 5) |
 
 ## 8. Numbers

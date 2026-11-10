@@ -12,7 +12,7 @@ definition inside it is chapter 02, the rule set chapter 03, and the checks of `
 - **Written by** a person or an agent of the team, by hand or with its own tools, and committed and pushed with git like any other file of
   the repository that holds it. The CLI never creates, rewrites, registers or migrates it (owner ruling R5). No CLI command reads a
   template; `backlog setup` only copies the generic ones into the repository so that a person can start from one (section 1.2, R23). The
-  CLI writes only the file's SHA, into `.backlog/config.json` (R22, section 4), or into the per-user record where section 1.1 says so.
+  CLI writes only the file's SHA, into `.backlog/config.json` (R22, section 4), or, for a repository input that names another repository, into the per-user record (section 1.1).
 - **Read by** the team commands only (through the validated copy of section 4 while the record is fresh): `backlog team new`, `backlog team update`, `backlog team query`, `backlog team pop` (each reads the
   entry of its own team), `backlog team validate` and `backlog team migrate` (read the whole file; chapter 06). No user command opens the
   file (owner ruling R3).
@@ -24,7 +24,7 @@ definition inside it is chapter 02, the rule set chapter 03, and the checks of `
 ### 1.1 Where the file is (owner ruling R22)
 
 Context: the actionable repository is the repository whose folder of the backlog a team command acts on. It is the working copy's
-repository, unless the repository input of section 5 names another one (question 1 of `decisions.md`, applied provisionally: the input
+repository, unless the repository input of section 5 names another one (question 1 of `decisions.md`, owner decision 2026-11-09: the input
 defines the actionable repository). The working copy's `.backlog/config.json` (committed in every branch, created by `backlog setup` or by
 the first command) already names where the backlog folder is (key `backlog_repository`, a path relative to the repository, `.backlog`
 meaning inside it). Two keys are added beside it.
@@ -42,22 +42,24 @@ Below and in the other chapters, `teams.json` names the team file wherever this 
 
 **Resolution order** (cases R22-01 to R22-08):
 
-0. when the repository input names another repository than the working copy's (question 1, provisional A): that repository's folder in
+0. when the repository input names another repository than the working copy's (question 1, owner decision A): that repository's folder in
    the backlog folder, `<backlog folder>/<owner>/<name>/teams.json`; the working copy's `teams_file` key describes the working copy's
    repository and does not apply (case R22-07);
 1. the `teams_file` key, when present: the file can live anywhere it names;
-2. else, when the backlog folder the CLI resolves lies outside the actionable repository, however the CLI found it (a configuration key
-   `backlog_repository` or `backlog_origin_url`, SMOOTH_BACKLOG_CLI_HOME, SMOOTH_BACKLOG_CLI_ORIGIN_URL, or the per-user record that
-   `backlog setup` writes; question 6, provisional A, case R22-08): the root of the repository's own folder in it,
+2. else, when the configuration defines a backlog repository folder, that is, its `backlog_repository` key names a folder outside the
+   actionable repository (R22, read literally on the owner's word of 2026-11-09, question 6): the root of the repository's own folder in it,
    `<backlog folder>/<owner>/<name>/teams.json`, beside that folder's `index.json`, `numbers.json` and `phases/` (never the root of the
    whole backlog repository, which holds the folders of many repositories). "Outside" compares path segments: a folder named `..backlog`
    inside the repository is inside it (case R22-06);
-3. else `.backlog/teams.json` in the actionable repository.
+3. else `.backlog/teams.json` in the actionable repository. A backlog folder the CLI found another way (a session variable, the per-user
+   record that `backlog setup` writes) is not a configured one: only the configuration decides, so the default applies (case R22-08). A
+   public repository therefore names a private location in its configuration (`teams_file`, or a `backlog_repository` outside the
+   repository); the default would publish the team's rules, and the CLI adds no mechanism against it (R22).
 
-**Where the SHA is kept.** In the working copy's `.backlog/config.json` (R22) when that file exists and the working copy is the actionable
-repository. Otherwise (no configuration in the working copy, or a repository input that names another repository) the SHA is the `sha` of
-the per-user record of section 4: the CLI never creates `.backlog/config.json` only to hold the SHA, and never writes a key about another
-repository into the working copy's configuration (questions 1 and 6; review D H4, H5).
+**Where the SHA is kept.** In the working copy's `.backlog/config.json` (R22) when the working copy is the actionable repository; the CLI
+creates the file when it does not exist. For a repository input that names another repository the SHA is the `sha` of the per-user record
+of section 4: the CLI never writes a key about another repository into the working copy's configuration (question 1, owner decision A;
+review D H5).
 
 **Path safety** (today's rules of `src/shared/store.js`, applied to one more file): a relative path is resolved against the top of the
 actionable repository; the file itself must be a plain file, never a symbolic link (exit 2, `❌ backlog: <path> is a symbolic link; the
@@ -68,7 +70,7 @@ reads it.
 **Missing file.** Every team command, `backlog team validate` and `backlog team migrate` included, stops with exit 2 and takes no action
 when no file is at the resolved location (the one exception: the migration of a folder in which no item has a team needs no team file,
 chapter 06 section 5); the text names the resolved path and the three ways (case R22-05):
-`❌ backlog: no team file at <resolved path>; name one with the "teams_file" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the backlog folder lies outside the repository, else at .backlog/teams.json`
+`❌ backlog: no team file at <resolved path>; name one with the "teams_file" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the "backlog_repository" key names a folder outside the repository, else at .backlog/teams.json`
 
 **Branch specificity.** With the file inside the actionable repository (the default `.backlog/teams.json`, or a `teams_file` inside it),
 every branch has its own copy and its own `teams_file_sha`, so a branch can try new rules without touching the others. A team command uses
@@ -158,12 +160,12 @@ no file and nothing in the backlog. Ruling R21 fixes how often the file is valid
 valid validation is missing or older than 24 hours. This section designs that procedure; chapter 08 lists the checks themselves.
 
 **Where each value lives.** The SHA of the validated file is kept in the actionable repository's `.backlog/config.json`, key
-`teams_file_sha` (R22), or in the per-user record where section 1.1 says so. The record of the last valid validation (the valid teams and its time) and the validated copy of the file live in the
+`teams_file_sha` (R22), or in the per-user record for a repository input that names another repository (section 1.1). The record of the last valid validation (the valid teams and its time) and the validated copy of the file live in the
 user's per-user state, the folder the CLI already uses for its per-user records (`$XDG_CONFIG_HOME`, else `~/.config`):
 `smooth-backlog-cli/teams-validation/<key>.json` and `<key>.teams.json`, where `<key>` is the first 16 hexadecimal characters of the
 SHA-256 of the team file's absolute path. They stay per user for two reasons: R21 says a command with a fresh record proceeds without
 reading the file, which needs the validated copy somewhere, and a date that changes every day would otherwise be a change of the committed
-configuration every day. The per-user record holds `sha` (of the copy), `valid_teams` (the names of the teams whose entries passed, as one
+configuration every day. The per-user record holds `sha` (of the copy), `valid_teams` (the names of the teams of the valid file, as one
 comma-separated text) and `validated_at` (ISO 8601 UTC). Every write is atomic (a temporary file renamed).
 
 **The procedure** (every team command except `backlog team validate`):
@@ -178,18 +180,15 @@ comma-separated text) and `validated_at` (ISO 8601 UTC). Every write is atomic (
 4. Otherwise it reads the team file and validates the whole file (chapter 08 sections 3 to 6). It decides first whether the command
    proceeds (steps 5 to 7). Only a command that proceeds writes anything: the copy and the per-user record (the SHA of what it read, the
    valid teams, now), and `teams_file_sha` into `.backlog/config.json` when none is recorded or the recorded one differs. A refused command
-   writes nothing at all, not even when another team of the file is valid (R18 and lead decision c of R21; review C H1, spike test "a
-   refused team command writes nothing"). `backlog team validate` keeps its own rule (lead decision b): it refreshes the record and the
-   SHA whenever at least one team is valid. The CLI prints nothing about the record or the SHA.
+   writes nothing at all (R18 and lead decision c of R21; review C H1, spike test "a refused team command writes nothing").
+   `backlog team validate` (lead decision b) refreshes the record and the SHA when the whole file is valid. The CLI prints nothing about the record or the SHA.
 5. No file at the resolved location: the text of section 1.1. A file that is not JSON or not an object: exit 2, `❌ backlog: <path> cannot be
    read (<reason>); fix it and run backlog team validate --team <team>`. There is no silent empty default (finding F7 of the reference
    inventory, removed).
-6. No entry for the team: exit 1, `❌ team <team> has no entry in <path> (teams: <names>)`.
-7. The team's entry fails validation: exit 2, `❌ backlog: team <team> fails validation in <path>; run backlog team validate --team
-   <team>`; for `--show-all`, any team failing: `❌ backlog: <path> fails validation for <teams>; run backlog team validate --show-all`.
-   Nothing is written. A team whose entry passes runs even when another team's entry fails (question 4, provisional B: validity per team;
-   the SHA still covers the whole file): the record of R21 lists the valid teams one by one, which only makes sense if validity is per team.
-   The migration is the exception: it converts every item of every team, so every entry must pass (chapter 06 section 3).
+6. The file fails validation, in any entry: exit 2, `❌ backlog: <path> fails validation for <teams>; no team command runs until the
+   whole file is valid; run backlog team validate --show-all`. Nothing is written. The whole file must be valid (R18; question 4, owner
+   decision 2026-11-09: A): a finding in one team's entry stops every team command of every team of that file, the migration included.
+7. No entry for the team: exit 1, `❌ team <team> has no entry in <path> (teams: <names>)`.
 8. The entry is used for the whole command. A command that runs again on the upstream files (chapter 04 section 6) loads again by the same
    procedure, so within the 24 hours it uses the same copy.
 
@@ -230,7 +229,7 @@ An explicit flag always wins, and a flag that differs from the variable is not r
 | team | `--team <name>` | SMOOTH_BACKLOG_CLI_TEAM_NAME | the `team` key of `.backlog/config.json` | the command stops (below), unless `--show-all` is given where it is accepted. An empty value counts as not given at each of the three places: `backlog setup` writes `"team": ""` into every configuration (case COD-16, review D L5) |
 | agent | `--agent <name>` | SMOOTH_BACKLOG_CLI_AGENT | none | `new`, `update`, `pop` stop with exit 2 `❌ backlog: this team command needs the agent: give --agent <name>, or set the SMOOTH_BACKLOG_CLI_AGENT variable`; `query`, `validate` and `migrate` (without `--ask`) work without a caller |
 | session | `--session <id>` | SMOOTH_BACKLOG_CLI_SESSION | none | `$session.id` is empty |
-| repository | `--repository <owner/name>` | SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY | none | the repository of the working copy. The value is the actionable repository (question 1, provisional A): the folder of the backlog the command acts on, its team file (section 1.1, step 0) and `$session.repository`. A value that is not `owner/name` stops the command: exit 2, `❌ backlog: SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY='<value>': expected owner/name` (today's check, `src/team/team.js:44`) |
+| repository | `--repository <owner/name>` | SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY | none | the repository of the working copy. The value is the actionable repository (question 1, owner decision A): the folder of the backlog the command acts on, its team file (section 1.1, step 0) and `$session.repository`. A value that is not `owner/name` stops the command: exit 2, `❌ backlog: SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY='<value>': expected owner/name` (today's check, `src/team/team.js:44`) |
 | branch | `--branch <name>` | SMOOTH_BACKLOG_CLI_TEAM_BRANCH | none | the current branch of the working copy; `$session.branch`. On a detached HEAD with no branch given, `new`, `update` and `pop` stop: exit 2, `❌ backlog: HEAD is detached: check out a branch, or give --branch <name> (SMOOTH_BACKLOG_CLI_TEAM_BRANCH)` (today `src/team/pop.js:153`); `query` and `validate` work |
 
 When no team is given by any of the three ways the command stops with exit 2 and exactly:
@@ -239,12 +238,12 @@ When no team is given by any of the three ways the command stops with exit 2 and
 command, `backlog team validate` and `backlog team migrate` included (R14). Team commands never read the operating system user or the
 `user` key of the configuration (R3b); the writer recorded in an item (`updated_by`, history `by`) is the agent.
 
-**`--show-all`** (R14; which commands take it is question 5, applied provisionally as option A) makes a command act over every team
+**`--show-all`** (R14; question 5, owner decision 2026-11-09: B) makes a command act over every team
 instead of one. It is accepted by `backlog team query` (its list form, `query <item>` and `query rules`), `backlog team validate` and
 `backlog team migrate`. It is refused by `backlog team new`, `backlog team update`
 and `backlog team pop`, which each act on one item for one team: exit 2, `❌ backlog: --show-all acts over every team; backlog team <command>
-acts for one team: give --team <name> instead` (cases R14-01 to R14-03). Given with `--team`: exit 2, `❌ backlog: --show-all acts over
-every team: give it or --team <name>, not both` (case R14-07). Given while SMOOTH_BACKLOG_CLI_TEAM_NAME is set, the flag wins (R15) and the
+acts for one team: give --team <name> instead` (cases R14-01 to R14-03). Given with `--team`, on any team command, `--team` decides and
+`--show-all` is ignored (case R14-07). Given while SMOOTH_BACKLOG_CLI_TEAM_NAME is set, the flag wins (R15) and the
 variable is ignored (cases R14-04 to R14-06). The query forms that evaluate one team's rules (`query plan`, `query check`, `query filter`,
 `query steps`) refuse it like `new` (case R14-10).
 

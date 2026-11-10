@@ -258,3 +258,24 @@ SMOOTH_BACKLOG_CLI_TEST_SELF (`src/team/pop.js:20`).
 Spike after round 5: 26 more cases in `rule-cases.json` (288 in all), `numbers.test.mjs` 12 tests (4 more), `teams-load.test.mjs` 15
 (6 more), `setup.test.mjs` 4 (1 more); `node --test` in `evaluator-spike/` runs 320 tests, all passing. Lines: `evaluator.mjs` 408,
 `safe-regex.mjs` 108, `numbers.mjs` 80, `teams-load.mjs` 94, `setup.mjs` 31.
+
+## Round 6: the owner's answers to the seven questions of round 12 (2026-11-09)
+
+Context: round 5 applied the seven questions of `decisions.md` provisionally with the lead's recommendation. The owner answered on
+2026-11-09 and pointed out that several had been decided before; three of the provisional choices contradicted rulings (per-team validity
+against R18, a team file location that did not come from the configuration against R22, a marker for older releases against the rule of no
+backwards compatibility). This round applies the answers; `decisions.md` records each.
+
+| question | answer | what changed |
+|---|---|---|
+| 1 the repository input | A (as applied) | wording only: no longer provisional |
+| 2 publishing when another agent published first | B: only the command's own commit is pushed | chapter 04 sections 6 and 9, chapter 05 section 3; `publishByRerun` builds the commit on the upstream branch when a person's commits lie below it, pushes that commit and rebases the local branch; the two tests of review C H3 and ADV-23 now prove the person's commit stays local |
+| 3 a duplicate number after a merge | outside the CLI's scope (the owner's words are in `decisions.md`) | chapter 05 sections 2, 3 and 7: no renumbering, no stop of the folder, only the refusal of the ambiguous number; the row removed from chapter 08 section 7 |
+| 4 a broken entry of one team | A: the whole file must be valid | chapter 01 section 4 (steps 4, 6 and 7), chapter 08 section 1; `loadTeams` refuses every team on any finding and records only a valid file; the per-team tests replaced |
+| 5 `--show-all` with `--team` | B: `--team` decides | chapter 01 section 5, chapter 04 sections 1 and 5; `resolveInputs`; case R14-07 now expects the team |
+| 6 the default team file location | ruling R22 as written | chapter 01 section 1.1 (resolution step 2, where the SHA is kept, the missing-file text); `teamsFile` reads the `backlog_repository` key only and the SHA goes into `.backlog/config.json`, created when missing; case R22-08 and the text of R22-05 |
+| 7 older releases | nothing is built for them (R18, the rule of 2026-11-07) | chapter 06 sections 3, 5, 6 and 7: the stop file and the schema number change are removed; the consequence is stated |
+
+Coverage after the round: the rows that waited for these answers have a terminal state (`coverage-counts.tsv`: 2114 rows, 49 deferred,
+all of them the user-command questions of `reference/08-owner-questions.md`). Spike: 288 cases, `node --test` in `evaluator-spike/` runs
+320 tests, all passing.

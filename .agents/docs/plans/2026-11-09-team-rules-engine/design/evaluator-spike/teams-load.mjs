@@ -23,25 +23,27 @@ export function readConfig(top) {
 // a path below a root, compared by segments: a folder named "..backlog" is inside (review C L3)
 const below = (root, p) => { const r = relative(root, p); return r === '' || !(r === '..' || r.startsWith(`..${sep}`) || isAbsolute(r)); };
 
-// top: the working copy's repository; home: the backlog folder the CLI resolved (however it was resolved: a configuration key, the
-// session variable or the per-user record, question 6); repo: owner/name of the actionable repository (the repository input when given,
-// question 1); workRepo: owner/name of the working copy. shaIn says where the SHA of R21 is kept: the working copy's configuration when
-// it exists and belongs to the actionable repository, else the per-user record (the CLI never creates .backlog/config.json for it).
-export function teamsFile({ top, home, repo, workRepo = repo, cfg, exists = true }) {
-  if (cfg === undefined) ({ cfg, exists } = readConfig(top));
+// top: the working copy's repository; home: the backlog folder the CLI resolved; repo: owner/name of the actionable repository (the
+// repository input when given, owner decision 2026-11-09 on question 1); workRepo: owner/name of the working copy. Only the
+// configuration decides the location (R22, owner 2026-11-09 on question 6): a backlog folder found another way (the session variable,
+// the per-user record) does not count as defined. shaIn says where the SHA of R21 is kept: the working copy's .backlog/config.json
+// (created when it does not exist), except for a repository input naming another repository, whose SHA is in the per-user record.
+export function teamsFile({ top, home, repo, workRepo = repo, cfg }) {
+  if (cfg === undefined) ({ cfg } = readConfig(top));
   const folder = join(home, ...repo.split('/'), 'teams.json');
   if (repo !== workRepo) return { path: folder, how: 'the repository input', shaIn: 'record' };
-  const shaIn = exists ? 'config' : 'record';
+  const shaIn = 'config';
   if (typeof cfg.teams_file === 'string' && cfg.teams_file.trim()) return { path: resolve(top, cfg.teams_file.trim()), how: 'the teams_file key', shaIn };
-  if (!below(top, home)) return { path: folder, how: 'the backlog repository folder', shaIn };
+  const named = typeof cfg.backlog_repository === 'string' ? cfg.backlog_repository.trim() : '';
+  if (named && !below(top, resolve(top, named))) return { path: folder, how: 'the backlog repository folder', shaIn };
   return { path: join(top, '.backlog', 'teams.json'), how: 'the default .backlog/teams.json', shaIn };
 }
-export const missingText = path => `no team file at ${path}; name one with the "teams_file" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the backlog folder lies outside the repository, else at .backlog/teams.json`;
+export const missingText = path => `no team file at ${path}; name one with the "teams_file" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the "backlog_repository" key names a folder outside the repository, else at .backlog/teams.json`;
 export const recordPaths = (stateDir, file) => { const key = sha(file).slice(0, 16); const d = join(stateDir, 'smooth-backlog-cli', 'teams-validation'); return { dir: d, record: join(d, `${key}.json`), copy: join(d, `${key}.teams.json`) }; };
 function writeSha(top, value) { // the one key the CLI writes into the committed configuration (R22); a read-only checkout is skipped silently
   const { cfg } = readConfig(top);
   if (cfg.teams_file_sha === value) return;
-  try { writeFileSync(join(top, `${CONFIG}.tmp`), `${JSON.stringify({ ...cfg, teams_file_sha: value }, null, 2)}\n`); renameSync(join(top, `${CONFIG}.tmp`), join(top, CONFIG)); } catch { /* not writable */ }
+  try { mkdirSync(join(top, '.backlog'), { recursive: true }); writeFileSync(join(top, `${CONFIG}.tmp`), `${JSON.stringify({ ...cfg, teams_file_sha: value }, null, 2)}\n`); renameSync(join(top, `${CONFIG}.tmp`), join(top, CONFIG)); } catch { /* not writable */ }
 }
 // the file and every folder between its root (the repository or the backlog folder that holds it) and the file: never a symbolic link
 function assertPlain(path, roots) {
@@ -53,8 +55,8 @@ function assertPlain(path, roots) {
 
 // team: a team name, or null for --show-all. full: backlog team validate (always reads, validates and refreshes).
 export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, now, full = false }) {
-  const { cfg, exists } = readConfig(top);
-  const { path, shaIn } = teamsFile({ top, home, repo, workRepo, cfg, exists });
+  const { cfg } = readConfig(top);
+  const { path, shaIn } = teamsFile({ top, home, repo, workRepo, cfg });
   const paths = recordPaths(stateDir, path);
   let rec; try { rec = JSON.parse(tryRead(paths.record)); } catch { rec = null; }
   const recorded = shaIn === 'config' ? cfg.teams_file_sha : rec?.sha;
@@ -74,15 +76,15 @@ export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, no
   let file; try { file = JSON.parse(text); } catch (e) { throw new Refusal(`${path} cannot be read (${e.message}); fix it and run backlog team validate`, 2); }
   if (!file || typeof file !== 'object' || Array.isArray(file)) throw new Refusal(`${path} cannot be read (it is not a JSON object); fix it and run backlog team validate`, 2);
   const findings = validate(file);
-  const bad = new Set(findings.map(f => f.team));
-  const valid = Object.keys(file).filter(t => !bad.has(t));
-  // the refusal comes first: a refused command writes nothing, no SHA, no record, no copy (R18, review C H1)
+  const bad = [...new Set(findings.map(f => f.team))].filter(Boolean);
+  const valid = Object.keys(file);
+  // The whole file must be valid (R18, owner decision 2026-11-09 on question 4): a finding in any entry stops every team command of every
+  // team. The refusal comes first: a refused command writes nothing, no SHA, no record, no copy (review C H1).
   if (!full) {
-    if (team === null) { if (bad.size) throw new Refusal(`${path} fails validation for ${[...bad].join(', ')}; run backlog team validate --show-all`, 2); }
-    else if (!(team in file)) throw new Refusal(`team ${team} has no entry in ${path} (teams: ${Object.keys(file).join(', ')})`, 1);
-    else if (bad.has(team)) throw new Refusal(`team ${team} fails validation in ${path}; run backlog team validate --team ${team}`, 2);
+    if (findings.length) throw new Refusal(`${path} fails validation${bad.length ? ` for ${bad.join(', ')}` : ''}; no team command runs until the whole file is valid; run backlog team validate --show-all`, 2);
+    if (team !== null && !(team in file)) throw new Refusal(`team ${team} has no entry in ${path} (teams: ${Object.keys(file).join(', ')})`, 1);
   }
-  if (valid.length) { // the SHA, the record and the copy change only after a validation that found valid teams (lead decision c)
+  if (!findings.length) { // the SHA, the record and the copy change only after a validation that found the whole file valid (lead decision c)
     if (shaIn === 'config') writeSha(top, sha(text));
     try {
       mkdirSync(paths.dir, { recursive: true });

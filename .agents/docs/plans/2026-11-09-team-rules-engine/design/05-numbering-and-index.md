@@ -60,13 +60,12 @@ item creations, which is the size of the backlog, not of the code history.
 backlog repository's main branch should refuse force pushes. For a backlog kept inside a code repository (`backlog_repository: .backlog`),
 items follow code branches: two branches that never saw each other can both hand out the next number. Publication of a branch onto its
 upstream is covered by section 3; a merge of two code branches made with git outside the CLI is not, and the first CLI command after such a
-merge finds two items with one number. What then happens is question 3 of `decisions.md`, applied provisionally as option A: when both
-items have no team, the next writing command renumbers the one whose creation commit is newer, as today's renumbering does for added files
-(its file name, `seq`, slug, heading and the references of items without a team follow it); when either item has a team, nothing is
-renumbered: `backlog team validate` reports the duplicate as an error and every team command of that folder stops with exit 2, `❌ backlog:
-number <n> of <owner>/<name> is held by <slug a> and <slug b>; give one of them a free number (backlog update <slug> --show-all --seq <n>),
-then run the command again`, until a person renumbers one of them. A team item is never renumbered by the CLI on its own, so no reference
-inside a team-defined field ever points at the wrong item (review C M1).
+merge finds two items with one number. A merge made outside the CLI is outside the CLI's scope (question 3 of `decisions.md`, owner
+2026-11-09: "The behavior of merging is outside the scope of the CLI. The user will have to figure it out."): the CLI has no repair for it.
+It renumbers nothing, stops no folder because of it and `backlog team validate` does not look for it. The person who merged gives one of
+the two items a free number (`backlog update <slug> --show-all --seq <n>`). Until then a command that is given the number alone cannot
+tell which item is meant and stops, changing nothing: exit 2, `❌ backlog: number <n> names two items, <slug a> and <slug b>; name the item
+by its slug`. This is the plain refusal of an ambiguous name, not a rule about merges, and commands on other items are not affected.
 
 ## 3. Publication: the number must be above the upstream mark
 
@@ -75,8 +74,8 @@ moment of publication, on the upstream state.
 
 - **Team commands** (`backlog team new`, `backlog team update`, `backlog team pop`) never rebase a local change of a folder upstream also
   changed: only the command's own commit is dropped (`git reset --keep HEAD~1`), today's pull brings upstream in, and the whole command
-  runs again on the upstream files; when upstream changed only other folders, the commit is rebased as it is (chapter 04 section 6,
-  question 2). Either way the number is above the upstream mark.
+  runs again on the upstream files; when upstream changed only other folders, the commit is kept as it is. The push sends the command's
+  own commit alone (chapter 04 section 6; question 2, owner decision 2026-11-09: B). Either way the number is above the upstream mark.
   A re-run allocates from the upstream high-water mark, so a team creation can never collide.
 - **User commands** keep today's rebase. After the rebase, every item file the local unpublished commits added whose number is not above
   the upstream high-water mark (computed on the upstream ref only) is renumbered above it, whether or not a file holds the number now; the
@@ -84,8 +83,8 @@ moment of publication, on the upstream state.
   `src/shared/sync.js:183`, on `depends_on`, `parent` and the body). A rebase conflict on `numbers.json` is resolved by taking the larger
   `last`; today's `repairConflicts` (`src/shared/sync.js:253`) refuses any conflict outside item files and the index, so it gains this one
   case (a code change).
-- Only items created by the command being published are renumbered. A team item is never renumbered (a team creation is re-run instead,
-  and a duplicate after a merge stops the team commands, section 2), so no reference inside a team-defined field ever has to follow a
+- Only items created by the command being published are renumbered. A team item is never renumbered (a team creation is re-run
+  instead), so no reference inside a team-defined field ever has to follow a
   renumbering.
 
 ## 4. Other commands and numbers
@@ -132,7 +131,7 @@ learns an entry's owner from the item file it already loads.
 The spike proves sections 2 to 4 on real git (`node --test numbers.test.mjs`, 12 tests). The BDD plan (entry plan Task 3) adds, with the CLI
 itself: "two clones create an item at once" (both paths), "another clone published and cleaned a number before this push", "git revert of a
 creation", "a shallow clone refuses `backlog new`", "`--seq` below the mark is refused", "migrate seeds its folder from the folder's history",
-"a duplicate number of two items without a team after a code-branch merge is renumbered", "a duplicate number that involves a team item
-stops the folder's team commands until a person renumbers it", "a number created inside a merge commit is not handed out again", "an item
+"after a code-branch merge that left two items with one number, a command given that number stops and names both slugs, and nothing is
+renumbered", "a number created inside a merge commit is not handed out again", "an item
 file named with a number above the bound stops the folder", "a user priority change leaves team entries in place", "a team's place effect
 leaves user entries in place".

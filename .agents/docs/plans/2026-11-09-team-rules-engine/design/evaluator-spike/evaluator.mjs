@@ -221,9 +221,8 @@ const V = name => `SMOOTH_BACKLOG_CLI_${name}`;
 export const SHOW_ALL = ['query', 'validate', 'migrate']; // the team commands that may act over every team; new, update and pop act on one item for one team
 export function resolveInputs({ command, flags = {}, env = {}, config = {} }) {
   const agent = flags.agent || env[V('AGENT')] || ''; // the flag first, then the variable; a flag that differs from the variable wins (R15)
-  if (flags['show-all']) {
+  if (flags['show-all'] && !flags.team) { // given together, --team decides and --show-all is ignored (owner decision 2026-11-09 on question 5)
     if (!SHOW_ALL.includes(command)) throw new Refusal(`--show-all acts over every team; backlog team ${command} acts for one team: give --team <name> instead`, 2);
-    if (flags.team) throw new Refusal('--show-all acts over every team: give it or --team <name>, not both', 2);
     return { team: null, all: true, agent };
   }
   const team = flags.team || env[V('TEAM_NAME')] || config.team;

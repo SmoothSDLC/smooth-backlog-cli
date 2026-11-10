@@ -9748,6 +9748,7 @@
    "id": "R14-07",
    "rule_set": null,
    "rule": null,
+   "note": "question 5 (owner decision 2026-11-09: B): given together, --team decides and --show-all is ignored",
    "given": {
     "items": []
    },
@@ -9760,8 +9761,9 @@
     }
    },
    "expect": {
-    "exit": 2,
-    "text": "--show-all acts over every team: give it or --team <name>, not both"
+    "exit": 0,
+    "team": "web",
+    "all": false
    }
   },
   {
@@ -10255,7 +10257,7 @@
    },
    "expect": {
     "exit": 2,
-    "text": "no team file at /work/app/.backlog/teams.json; name one with the \"teams_file\" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the backlog folder lies outside the repository, else at .backlog/teams.json"
+    "text": "no team file at /work/app/.backlog/teams.json; name one with the \"teams_file\" key of .backlog/config.json, or put it at <backlog repository>/<owner>/<name>/teams.json when the \"backlog_repository\" key names a folder outside the repository, else at .backlog/teams.json"
    }
   },
   {
@@ -11766,7 +11768,7 @@
    "id": "R14-10",
    "rule_set": null,
    "rule": null,
-   "note": "question 5 (provisional A): the query forms that evaluate one team refuse --show-all",
+   "note": "question 5 (owner decision 2026-11-09): the query forms that evaluate one team refuse --show-all",
    "given": {
     "items": []
    },
@@ -11809,7 +11811,7 @@
    "id": "R22-07",
    "rule_set": null,
    "rule": null,
-   "note": "question 1 (provisional A): a repository input that differs from the working copy names the actionable repository; its team file is its folder in the backlog folder, and the working copy keys do not apply",
+   "note": "question 1 (owner decision 2026-11-09: A): a repository input that differs from the working copy names the actionable repository; its team file is its folder in the backlog folder, and the working copy keys do not apply",
    "given": {
     "items": []
    },
@@ -11834,7 +11836,7 @@
    "id": "R22-08",
    "rule_set": null,
    "rule": null,
-   "note": "question 6 (provisional A): a backlog folder found through the session variable or the per-user record, with no configuration in the repository, also puts the team file in the backlog repository folder",
+   "note": "question 6 (ruling R22, read literally on the owner's word of 2026-11-09): a backlog folder found through the session variable or the per-user record, with no configuration in the repository, is not a configured backlog repository; the team file is the default .backlog/teams.json",
    "given": {
     "items": []
    },
@@ -11847,8 +11849,8 @@
    },
    "expect": {
     "exit": 0,
-    "path": "/elsewhere/backlog/acme/app/teams.json",
-    "how": "the backlog repository folder"
+    "path": "/work/app/.backlog/teams.json",
+    "how": "the default .backlog/teams.json"
    }
   },
   {

@@ -30,6 +30,8 @@ test('the location: the teams_file key wins, else the repository folder of a con
   assert.equal(teamsFile({ top, home: join(top, '.backlog'), repo: 'local/repository' }).path, join(top, '.backlog', 'teams.json'));
   set({ backlog_repository: '../backlog' });
   assert.equal(teamsFile({ top, home: join(root, 'backlog'), repo: 'acme/app' }).path, join(root, 'backlog', 'acme', 'app', 'teams.json'));
+  set({}); // a backlog folder found without the key (the session variable, the per-user record) does not count as defined (R22)
+  assert.equal(teamsFile({ top, home: join(root, 'backlog'), repo: 'acme/app' }).path, join(top, '.backlog', 'teams.json'));
   set({ backlog_repository: '../backlog', teams_file: '../private/web-teams.json' });
   assert.equal(teamsFile({ top, home: join(root, 'backlog'), repo: 'acme/app' }).path, join(root, 'private', 'web-teams.json'));
 });
@@ -92,12 +94,16 @@ test('backlog team validate always validates in full, refreshes the record and w
   assert.deepEqual(Object.keys(w.load('solo', T1).file.solo.people), ['agent-1', 'agent-3']);
 });
 
-test('the record lists the valid teams: a valid team proceeds, an invalid team takes no action', t => {
+test('the whole file must be valid: one broken entry stops every team of the file (R18, owner decision 2026-11-09 on question 4)', t => {
   const w = world(t);
   w.put(twoTeams(true));
+  const text = `${w.file()} fails validation for other; no team command runs until the whole file is valid; run backlog team validate --show-all`;
+  assert.throws(() => w.load('solo', T0), e => e.exit === 2 && e.message === text);
+  assert.throws(() => w.load('other', T0), e => e.exit === 2 && e.message === text);
+  assert.throws(() => w.load(null, T0), e => e.exit === 2 && e.message === text);
+  w.put(twoTeams());
   assert.equal(w.load('solo', T0).from, 'disk');
-  assert.throws(() => w.load('other', T0), e => e.exit === 2 && e.message === `team other fails validation in ${w.file()}; run backlog team validate --team other`);
-  assert.throws(() => w.load(null, T0), e => /fails validation for other/.test(e.message));
+  assert.throws(() => w.load('nobody', T0), e => e.exit === 1 && /has no entry/.test(e.message));
 });
 
 test('a read-only checkout and an unwritable state folder: the command proceeds, validating in full each time, silently', t => {
@@ -114,15 +120,17 @@ test('a read-only checkout and an unwritable state folder: the command proceeds,
   assert.equal(sha, undefined);
 });
 
-// round 5: the adversarial tests of review C that hold (ADV-01 to ADV-04), and the provisional answers to questions 1 and 6
-test('a refused team command writes nothing: no SHA, no record, no copy, even when another team of the file is valid (review C H1)', t => {
+// round 5: the adversarial tests of review C that hold (ADV-01 to ADV-04), and the owner's answers to questions 1 and 6
+test('a refused team command writes nothing: no SHA, no record, no copy, also for a team whose own entry is valid (review C H1)', t => {
   const w = world(t);
   w.put(twoTeams(true));
   assert.throws(() => w.load('other', T0), e => e.exit === 2);
+  assert.throws(() => w.load('solo', T0), e => e.exit === 2);
+  assert.equal(w.load(null, T0, true).findings.length > 0, true); // backlog team validate reports, and records nothing for an invalid file
   assert.equal(w.cfg().teams_file_sha, undefined);
   assert.equal(existsSync(recordPaths(w.stateDir, w.file()).record), false);
   assert.equal(existsSync(recordPaths(w.stateDir, w.file()).copy), false);
-  assert.throws(() => w.load(null, T0), e => e.exit === 2); // --show-all needs every team
+  assert.throws(() => w.load(null, T0), e => e.exit === 2);
   assert.equal(w.cfg().teams_file_sha, undefined);
 });
 
@@ -151,7 +159,7 @@ test('a record dated in the future (clock skew) is stale: the file is read again
   assert.throws(() => w.load('solo', T0), e => e.exit === 2 && /cannot be read/.test(e.message));
 });
 
-test('question 1, provisional A: a repository input names the actionable repository; the SHA goes to the per-user record, never into the working copy', t => {
+test('question 1 (owner: A): a repository input names the actionable repository; the SHA goes to the per-user record, never into the working copy', t => {
   const w = world(t);
   const lib = join(w.home, 'acme', 'lib'); mkdirSync(lib, { recursive: true });
   writeFileSync(join(lib, 'teams.json'), JSON.stringify(twoTeams()));
@@ -161,13 +169,14 @@ test('question 1, provisional A: a repository input names the actionable reposit
   assert.equal(load(T1).from, 'record');
 });
 
-test('question 6, provisional A: a backlog found without a configuration puts the team file in its repository folder, and no configuration is created', t => {
+test('question 6 (owner: the literal R22): without a configuration the team file is .backlog/teams.json and the SHA goes into a new .backlog/config.json', t => {
   const root = mkdtempSync(join(tmpdir(), 'teams-noconf-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const top = join(root, 'app'); const home = join(root, 'backlog'); const stateDir = join(root, 'state');
-  mkdirSync(top); mkdirSync(join(home, 'acme', 'app'), { recursive: true });
-  writeFileSync(join(home, 'acme', 'app', 'teams.json'), JSON.stringify(twoTeams()));
+  mkdirSync(join(top, '.backlog'), { recursive: true }); mkdirSync(join(home, 'acme', 'app'), { recursive: true });
+  writeFileSync(join(home, 'acme', 'app', 'teams.json'), '{ not read');
+  writeFileSync(join(top, '.backlog', 'teams.json'), JSON.stringify(twoTeams()));
   const load = now => loadTeams({ top, home, repo: 'acme/app', stateDir, team: 'solo', now });
   assert.equal(load(T0).from, 'disk');
-  assert.throws(() => readFileSync(join(top, '.backlog', 'config.json')), { code: 'ENOENT' });
+  assert.match(JSON.parse(readFileSync(join(top, '.backlog', 'config.json'), 'utf8')).teams_file_sha, /^[0-9a-f]{64}$/);
   assert.equal(load(T1).from, 'record');
 });

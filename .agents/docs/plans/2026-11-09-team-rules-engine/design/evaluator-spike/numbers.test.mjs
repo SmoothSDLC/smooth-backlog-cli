@@ -122,7 +122,7 @@ test('a file-name number above the bound is an unreadable item, and never part o
   assert.deepEqual([allocate(a, F, 'x'), allocate(a, F, 'y')], [1, 2]);
 });
 
-test("a team re-run drops only the command's own commit: a person's unpushed commit in another folder stays (review C H3, question 2)", t => {
+test("a team re-run drops only the command's own commit and publishes only that: a person's unpushed commit stays local (review C H3, question 2 = B)", t => {
   const { a, clone } = world(t);
   const b = clone('b');
   allocate(a, F, 'alpha'); commit(a, 'A 1'); git(a, 'push', '-q');
@@ -131,19 +131,23 @@ test("a team re-run drops only the command's own commit: a person's unpushed com
   let got;
   publishByRerun(b, () => { got = allocate(b, F, 'beta'); commit(b, 'B team again'); }, F);
   assert.equal(got, 2);
-  assert.match(git(b, 'log', '--format=%s'), /person draft/);
-  // provisional answer A of question 2: the person's commit is published with the change, as today's in-repository mode does
-  assert.match(git(b, 'log', '--format=%s', 'origin/main'), /person draft/);
+  assert.deepEqual(git(b, 'log', '--format=%s', 'origin/main').trim().split('\n'), ['B team again', 'A 1', 'base']); // only the command's commit is published
+  assert.deepEqual(git(b, 'log', '--format=%s').trim().split('\n'), ['person draft', 'B team again', 'A 1', 'base']); // the person's commit stays, unpushed, on top
+  assert.equal(git(b, 'status', '--porcelain').trim(), '');
+  assert.equal(git(a, 'pull', '-q') || items(a).length, 2);
 });
 
-test('upstream changed only another folder: the commit is rebased as it is, and the push carries the branch as today (review C ADV-23, question 2)', t => {
+test("upstream changed only another folder: the command is not run again, and only its own commit is published (review C ADV-23, question 2 = B)", t => {
   const { a, clone } = world(t);
   const b = clone('b');
   allocate(a, 'acme/other', 'theirs'); commit(a, 'other folder'); git(a, 'push', '-q');
   mkdirSync(join(b, 'acme', 'third'), { recursive: true }); writeFileSync(join(b, 'acme', 'third', 'draft.txt'), 'mine'); commit(b, 'person draft');
   allocate(b, F, 'mine'); commit(b, 'B 1');
+  writeFileSync(join(b, 'acme', 'third', 'notes.txt'), 'not committed');
   let reran = false;
   publishByRerun(b, () => { reran = true; }, F);
   assert.equal(reran, false);
-  assert.match(git(b, 'log', '--format=%s', 'origin/main'), /person draft/); // under option B of question 2 only "B 1" would be published
+  assert.deepEqual(git(b, 'log', '--format=%s', 'origin/main').trim().split('\n'), ['B 1', 'other folder', 'base']);
+  assert.deepEqual(git(b, 'log', '--format=%s').trim().split('\n'), ['person draft', 'B 1', 'other folder', 'base']);
+  assert.match(git(b, 'status', '--porcelain'), /notes\.txt/); // an uncommitted change of the person survives
 });

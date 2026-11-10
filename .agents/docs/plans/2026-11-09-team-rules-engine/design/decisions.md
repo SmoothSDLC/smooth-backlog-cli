@@ -1,10 +1,10 @@
-# Decisions for the owner (team rules engine design)
+# Decisions of the owner (team rules engine design)
 
 Context: the owner's rulings R1 to R25 settle almost everything in this design. Two reviews of the round-4 design (`review-c.md`,
-`review-d.md`) found seven points that the rulings do not decide and that change what people and agents see, so they are the owner's to
-choose. Each has been applied to the design provisionally, with the lead's recommendation, so the design is complete and consistent as it
-stands; each entry lists the files that change if the owner chooses another option. Nothing else is open: every other finding was fixed or
-rejected with evidence in `review-response.md`, round 5.
+`review-d.md`) raised seven points, labelled "2026-11-09 round 12, question 1" to "question 7". All seven are closed (2026-11-09): four by
+the owner's answer when asked, one by the owner's statement that it is outside the CLI's scope, and two by rulings that already decided
+them, which the lead had not applied. The design follows the answers below; nothing here is open. Each entry keeps the scenario, the
+problem and the options that were considered, then the answer and where the design states it.
 
 ## 2026-11-09 round 12, question 1: what the repository input of a team command means
 
@@ -32,12 +32,9 @@ command reads and writes, and `$session.repository` all follow from it. The work
   `acme/lib` runs in a checkout of `acme/lib`. The scope is then simple and the same for every command, and no rule of one repository can
   meet the items of another. Sessions that today set the variable to another repository than their checkout must change where they run.
 
-Recommendation: option A, applied provisionally. It keeps today's way of handing work to a team of another repository working and still
-meets R22 and R24, because the rules and the items always come from the same repository.
-
-Applied provisionally; if the owner chooses another option these files change: `01-team-file.md` (sections 1.1 and 5),
-`04-team-commands.md` (section 9), `06-migration.md` (section 2.0), `evaluator-spike/teams-load.mjs`, `evaluator-spike/teams-load.test.mjs`,
-`rule-cases.json` (case R22-07), `coverage/make-coverage.mjs`.
+**Answer (owner, 2026-11-09): option A.** The input defines the repository the command acts on. The ruling carried forward from the earlier
+rounds already kept the repository input as an input and a flag of every team command. Design: `01-team-file.md` sections 1.1 and 5,
+`04-team-commands.md` section 9, case R22-07.
 
 ## 2026-11-09 round 12, question 2: what a team command publishes when another agent published first
 
@@ -64,12 +61,9 @@ choice is only in what the re-run drops and what the push sends; the rules, the 
   without their action. This needs new publication code for team commands only, so team commands and user commands would publish
   differently in the same checkout, and the person's local branch must then be rebased onto what the command pushed.
 
-Recommendation: option A, applied provisionally. It closes the data loss the reviews found and keeps today's publication, which user
-commands share.
-
-Applied provisionally; if the owner chooses another option these files change: `04-team-commands.md` (sections 6 and 9),
-`05-numbering-and-index.md` (section 3), `evaluator-spike/numbers.mjs` (`publishByRerun`), `evaluator-spike/numbers.test.mjs` (the two
-tests named after review C H3 and ADV-23).
+**Answer (owner, 2026-11-09): option B.** A team command publishes only its own commit; a person's unpushed commits stay local. This
+replaces the lead's earlier recommendation of option A. Design: `04-team-commands.md` sections 6 and 9, `05-numbering-and-index.md`
+section 3, spike `numbers.mjs` (`publishByRerun`) and its two tests.
 
 ## 2026-11-09 round 12, question 3: a duplicate item number after two code branches are merged
 
@@ -97,11 +91,11 @@ name, `seq`, the slug, the heading and the references of items without a team).
 - **Option C: never renumber; stop every command.** Any duplicate stops every command of the folder, user and team, until a person
   renumbers one item. Nothing is ever changed automatically, but user commands lose today's automatic repair.
 
-Recommendation: option A, applied provisionally. It keeps today's repair where it is safe and never rewrites a team's references on a
-guess.
-
-Applied provisionally; if the owner chooses another option these files change: `05-numbering-and-index.md` (sections 2, 3 and 7),
-`08-validate.md` (section 7), `coverage/make-coverage.mjs`.
+**Answer (owner, 2026-11-09), in the owner's words: "The behavior of merging is outside the scope of the CLI. The user will have to
+figure it out."** None of the three options is taken: the CLI renumbers nothing after such a merge, stops no folder because of it and
+validate does not look for it. The lead's consequence, kept as small as possible: a command given a number that two items hold cannot
+tell which is meant, names both slugs and stops, changing nothing. Design: `05-numbering-and-index.md` section 2; the row is removed from
+`08-validate.md` section 7.
 
 ## 2026-11-09 round 12, question 4: when one team's entry in the team file is broken
 
@@ -122,10 +116,9 @@ findings stop a command.
 - **Option A: the whole file.** Any finding in any entry stops every team command of every team in that file. The reading of R18 is the
   literal one, and a broken file is noticed by everyone at once; one team's mistake stops all the others until it is fixed.
 
-Recommendation: option B, applied provisionally. It follows the record that R21 asks for and keeps teams independent.
-
-Applied provisionally; if the owner chooses another option these files change: `01-team-file.md` (section 4, steps 3, 4 and 7),
-`08-validate.md` (section 1), `evaluator-spike/teams-load.mjs` (`loadTeams`), `evaluator-spike/teams-load.test.mjs` (the per-team tests).
+**Answer (owner, 2026-11-09): option A, the whole file.** This is the wording of R18; the lead's earlier per-team recommendation departed
+from it. Any finding in any entry stops every team command of every team of that file. Design: `01-team-file.md` section 4,
+`08-validate.md` section 1, spike `teams-load.mjs` (`loadTeams`) and its tests.
 
 ## 2026-11-09 round 12, question 5: which team commands take `--show-all`
 
@@ -146,11 +139,8 @@ with a text that names the right flag. The spike's `resolveInputs` holds the lis
 - **Option B: the same commands, but `--team` wins.** Given together, `--team` decides and `--show-all` is ignored. No command line is
   refused for the combination, but a person who typed `--show-all` silently sees one team only.
 
-Recommendation: option A, applied provisionally. A command line that asks for two contradicting things is more likely a mistake than a
-wish, and R15 forbids refusing a flag because of a variable, not this.
-
-Applied provisionally; if the owner chooses another option these files change: `01-team-file.md` (section 5), `04-team-commands.md`
-(sections 1 and 5), `evaluator-spike/evaluator.mjs` (`resolveInputs`), `rule-cases.json` (cases R14-01 to R14-10).
+**Answer (owner, 2026-11-09): option B.** The same commands accept `--show-all`; given together with `--team`, `--team` decides and
+`--show-all` is ignored. Design: `01-team-file.md` section 5, `04-team-commands.md` sections 1 and 5, spike `resolveInputs`, case R14-07.
 
 ## 2026-11-09 round 12, question 6: where the team file is when the repository has no backlog configuration
 
@@ -175,11 +165,11 @@ when one exists, else into the per-user record.
   and the CLI writes the SHA into a new `.backlog/config.json`. The rule is the literal reading of R22 and needs no knowledge of how the
   backlog was found; repositories without a configuration keep their team's rules in the code and get a new committed file.
 
-Recommendation: option A, applied provisionally. It keeps the team's rules beside the items they govern and creates no file in a code
-repository that did not ask for one.
-
-Applied provisionally; if the owner chooses another option these files change: `01-team-file.md` (section 1.1),
-`evaluator-spike/teams-load.mjs` (`teamsFile`), `evaluator-spike/teams-load.test.mjs`, `rule-cases.json` (case R22-08).
+**Answer: already decided by ruling R22 and the owner rule of 2026-11-07, which correspond to option B.** The owner said on 2026-11-09 that this had
+been answered before; the lead's earlier recommendation of option A contradicted the ruling. Only the repository's `.backlog/config.json`
+defines the location: the `teams_file` key, else the repository's folder of a `backlog_repository` outside the repository, else
+`.backlog/teams.json`; the SHA is written into `.backlog/config.json`. A public repository names a private location in its configuration;
+the design adds no mechanism (R22). Design: `01-team-file.md` section 1.1, spike `teamsFile`, case R22-08.
 
 ## 2026-11-09 round 12, question 7: protecting a migrated folder from older releases of the CLI
 
@@ -202,8 +192,7 @@ parse (`src/shared/store.js:257-266`). The migration can use that: it writes one
 - **Option B: nothing.** The migration writes no extra file and the schema number stays. The folder holds only items, but an older
   release on any machine can reuse numbers and wipe the queue order of a migrated folder until every installation is updated.
 
-Recommendation: option A, applied provisionally. R12 promises that a number is never reused, and only the stop file keeps that promise
-against releases that are already installed.
-
-Applied provisionally; if the owner chooses another option these files change: `06-migration.md` (sections 3, 5, 6 and 7), and in the
-cut-over itself `package.json` (`backlogSchemaVersion`).
+**Answer: already decided by ruling R18 and the owner rule of 2026-11-07 (no backwards compatibility anywhere; upgrade and migrate or
+fail), which correspond to option B.** This is the lead's reading of those rulings, taken after the owner said on 2026-11-09 that the open points had
+been answered before; it is reversible on the owner's word. Nothing is built for older releases; every installation is upgraded before a
+folder is migrated. Design: `06-migration.md` sections 3 and 6.

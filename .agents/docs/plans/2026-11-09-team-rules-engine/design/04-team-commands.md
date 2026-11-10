@@ -27,7 +27,7 @@ flags of today's `backlog team update` (`--claim`, `--start-review`, ...; each i
 
 A word after `backlog team` that is none of `new`, `update`, `pop`, `query`, `validate`, `migrate` is refused with exit 2 naming the six
 (as today, `src/team/cli.js:85`). Every team command takes the inputs of chapter 01 section 5 (`--team`, `--agent`, `--session`, `--repository`, `--branch`) and `--json`;
-`--show-all` is accepted by `query`, `validate` and `migrate` only (chapter 01 section 5; question 5, provisional A).
+`--show-all` is accepted by `query`, `validate` and `migrate` only (chapter 01 section 5; question 5, owner decision 2026-11-09: given with `--team`, `--team` decides and the flag is ignored).
 `--help` of every command reads nothing and writes nothing, as the command matrix says of every `--help`: it documents the generic form
 and points to `backlog team query steps --team <name>` for a team's steps and their arguments (review C M11). So a broken or missing team
 file never makes help fail, and help never writes the SHA.
@@ -82,7 +82,7 @@ JSON payloads are raw, as today. Whether every `--json` answer gets an envelope 
 |---|---|---|---|
 | no team from flag, variable or configuration | `❌ backlog: a team command needs a team: give --team <name>, or set the SMOOTH_BACKLOG_CLI_TEAM_NAME variable, or set the "team" key in .backlog/config.json` | 2 | COD-01, COD-13 |
 | no agent (new, update, pop) | `❌ backlog: this team command needs the agent: give --agent <name>, or set the SMOOTH_BACKLOG_CLI_AGENT variable` | 2 | COD-05 |
-| `--show-all` on `new`, `update`, `pop` (or a one-team query form); `--show-all` with `--team` | chapter 01 section 5 (question 5) | 2 | R14-01 to R14-03, R14-07, R14-10 |
+| `--show-all` without `--team` on `new`, `update`, `pop` (or a one-team query form) | chapter 01 section 5 (question 5) | 2 | R14-01 to R14-03, R14-10 |
 | `.backlog/config.json` exists but cannot be read | chapter 01 section 1.1; nothing is written, the file is never replaced | 2 | spike `teams-load.test.mjs` |
 | `teams.json` unreadable, team without entry, the team's entry fails validation (schema, a condition with two keys, a rule naming an undeclared field) | chapter 01 section 4; nothing is written, not even the SHA or the record | 2, 1, 2 | INL-03; spike `teams-load.test.mjs` |
 | a rule whose test or function has the wrong form (a file that skipped validation) | chapter 03 section 4; pop stops instead of answering idle | 2 | INL-07, INL-09 |
@@ -108,18 +108,25 @@ the backlog clone and the whole `.backlog` folder in a code repository (`src/sha
 lead's unvalidated draft of the team file with the next agent's step (review D H2). The SHA and the migration record in
 `.backlog/config.json` are committed by a person, as chapter 01 section 4 says; `backlog setup` keeps committing what it writes.
 
-**Team commands: one outcome when another agent published first** (question 2 of `decisions.md`, applied provisionally as option A).
+**Team commands: one outcome when another agent published first** (question 2 of `decisions.md`, owner decision 2026-11-09: B, publish only the command's own commit).
 When the push is refused because upstream moved, the CLI looks at what upstream changed. If upstream changed no file of the command's own
 repository folder (and not its team file), nothing the command read has changed (ruling R24: a command reads only its own folder, apart
-from read-only references to single items of other folders), so today's `git pull --rebase --autostash` rebases its commit and it is
-pushed as it is (spike test "upstream changed only another repository folder ..."). If upstream changed its folder, the CLI does not rebase
+from read-only references to single items of other folders), so its commit is kept as it is and
+published (spike test "upstream changed only another repository folder ..."). If upstream changed its folder, the CLI does not rebase
 the step's commit. It drops only its own commit, which is HEAD (`git reset --keep HEAD~1`; today's `mine` of `src/shared/sync.js`), runs
 today's pull with rebase, and runs the whole command again on the upstream files: it reads `teams.json` again, evaluates the step again,
 allocates the number again (chapter 05 section 3) and writes again. A person's own unpushed commits and uncommitted changes are never
-dropped (review C H3, review D H1; spike test "a team re-run drops only the command's own commit"). The push then publishes the branch as
-today: in a backlog inside the code repository, the person's own unpushed commits go with the change, as they do today
-(`src/shared/sync.js:412`, `:499`); in the backlog clone, likewise for a person's unpushed commit of another folder, since no command stops
-because of another folder (R24). The command ends with the result of the last run: exit 0 when the table allows the step on the fresh
+dropped (review C H3, review D H1; spike test "a team re-run drops only the command's own commit"). The push then sends the command's own commit
+and nothing else. When no commit of a person lies below it, that is the plain push of the branch. When a person's unpushed commits lie
+below it (code commits in a backlog inside the code repository, a commit of another folder in the backlog clone), the CLI builds the same
+change as one commit on top of the upstream branch without touching the working tree (`git merge-tree --write-tree`, `git commit-tree`),
+pushes that commit (`git push <remote> <commit>:refs/heads/<branch>`) and rebases the local branch onto it with `--autostash`: the
+command's local commit is the same change and drops out, and the person's commits stay local, unpushed, on top (spike tests "... publishes
+only that" and "... only its own commit is published"). Nothing of a person is published without their action. If the command's change
+cannot be placed on the upstream branch without a conflict (a person's unpushed commit changed the same item file), nothing is published,
+the commit stays local and the command stops with exit 3, `❌ backlog: your unpushed commits change <path>; push or drop them and run the
+step again`. This is new publication code for team commands only; user commands keep today's publication (chapter 05 section 3), which
+in a backlog inside the code repository pushes the branch with the person's commits (`src/shared/sync.js:412`, `:499`). The command ends with the result of the last run: exit 0 when the table allows the step on the fresh
 items, exit 1 with the deciding rule's refusal when it does not (another agent claimed the item, a limit filled up). Between two runs it
 waits a random time below 50 ms x 2 to the power of the attempt (at most 3.2 s), so that writers that collided do not collide again in
 step. It keeps trying for at most half of the clone lock's time budget (SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS, 120 s by default), so a command
@@ -229,11 +236,11 @@ command against the rule; `review-response.md` rounds 4 and 5 list each violatio
 | item files, `numbers.json`, `index.json` | one set per repository folder; a command writes only those of its own folder (chapter 05) |
 | `backlog team migrate` | converts only its own folder, with its own repository's team file (chapter 06 section 2); records the run in its own repository's `.backlog/config.json` (chapter 06 section 2.0) |
 | `backlog team validate` | the repository's team file and the items of its own folder (chapter 08 section 7) |
-| the actionable repository | the working copy's repository, or the one the repository input names (question 1, provisional A); the command reads and writes that one folder and loads that repository's team file (chapter 01 section 1.1), never a second folder |
+| the actionable repository | the working copy's repository, or the one the repository input names (question 1, owner decision A); the command reads and writes that one folder and loads that repository's team file (chapter 01 section 1.1), never a second folder |
 | `backlog team new`, `update`, `pop`, `query` | the team's items of the own folder (`$team.items`, chapter 03 section 5); a foreign dependency `owner/name#seq` is read for that one item only. An unresolved one (folder unreadable, still markdown, item absent) reads as a missing item; nothing coded stops because of it, and whether a step is refused is the team's rule: the parallel example's `claim-dependencies` treats it as not closed, so a claim waits (case R24-01; a rule can tell a missing item by its empty fields, chapter 03 section 4). A foreign reference is never checked on a write (case R24-02) |
 | `backlog new --depends-on`, `backlog update --set-depends-on` | references inside the own folder are checked for existence and cycles as today; a foreign `owner/name#seq` is only checked to be well formed: today's existence check (`src/shared/new.js:154`, `src/shared/update.js:268`) and cycle walk through other folders (`src/shared/update.js:273`) are removed (review D M1) |
 | the conflict guard before every read and write (`refuseConflicts`, `src/shared/sync.js:67-75`) | looks only at the own folder's paths (and `*.json` instead of `*.md`): a conflict in another folder of the clone no longer stops the command (review D M1) |
-| the unpublished-commit guard (`refuseUnpublished`, `src/shared/sync.js:79-84`) | looks only at commits that touch the own folder: a person's unpublished commit in another folder no longer stops the command; it is published with the next push (question 2, section 6) |
+| the unpublished-commit guard (`refuseUnpublished`, `src/shared/sync.js:79-84`) | looks only at commits that touch the own folder: a person's unpublished commit in another folder no longer stops the command; a team command leaves it unpushed (question 2, section 6), a user command publishes it with the branch as today |
 | the journal (`recoverJournal`, `src/shared/store.js:199-215`) and the rollback of a failed publication (`undoCommit`, `src/shared/sync.js:421-441`) | the one stated exception: they may touch another folder's files, but only to put back the bytes the command itself recorded before it changed them, so the clone ends as it was |
 | `backlog clean`, `backlog import`, `backlog archive`, `backlog update --show-all`, `backlog list --show-all` | the own folder only; `--show-all` adds the team items of the own folder, never other folders (chapter 04 section 8) |
 | `backlog move` | between branches of the own folder only. Moving an item to another repository's folder is removed: it wrote a second folder and took a number from that folder's counter. A person who wants the work in another repository files a new item there (`backlog new` run in that repository) and archives this one |
@@ -241,7 +248,7 @@ command against the rule; `review-response.md` rounds 4 and 5 list each violatio
 | chunk work across repositories (today's `backlog.scope`, offers from other folders) | not offered: it reads other folders' items for work (coverage rows of chunk work now SKIP under R24) |
 | the clone lock | one lock per clone, because a git clone has one index and one working tree: a command of one folder waits while a command of another folder writes. It delays, never changes another folder. A command that waits longer than the lock's time budget ends with exit 3, a stop caused by another folder's command; this is the accepted limit of one clone per user (review C L8), and the re-run budget of half the lock budget (section 6) keeps it rare |
 | `git pull --rebase --autostash` of the backlog clone | brings every folder's upstream changes into the working tree; this is harmless because no command reads another folder's files (beyond single-item references) and the command's own commits touch only its folder, so they cannot conflict with another folder's changes. Staging names the command's own paths only (section 6: item files, `index.json`, `numbers.json`; never the team file, the templates or the configuration) |
-| a re-run (section 6) | drops only the command's own commit (`git reset --keep HEAD~1`), never a person's commit or change in any folder |
+| a re-run and its publication (section 6) | drops only the command's own commit (`git reset --keep HEAD~1`) and pushes only the command's own commit; never drops or publishes a person's commit or change in any folder |
 | a conflict outside the folder | can only come from a commit or an uncommitted change the CLI did not make (a person's own work in the clone, rebased or put back by the autostash). The command then publishes nothing: it aborts the rebase, puts the autostash back, keeps its own commit local and stops with exit 3, `❌ backlog: <path> outside <owner>/<name> conflicts with upstream; this command changes only its own folder: resolve the conflict in the backlog clone and run it again` |
 | the validated copy and the per-user record (chapter 01 section 4) | per team file, so per repository; no other repository's record is read or written |
 | `.backlog/config.json` | the actionable repository's own file only (the SHA, the migration record) |

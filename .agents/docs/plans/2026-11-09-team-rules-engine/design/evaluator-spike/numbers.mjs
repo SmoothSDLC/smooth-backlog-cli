@@ -36,19 +36,29 @@ export function allocate(cwd, folder, name) {
   return n;
 }
 
-// Team commands (question 2, provisional A): when upstream changed the command's own folder, only the command's own commit (HEAD) is
-// dropped (git reset --keep HEAD~1; a person's commits and uncommitted changes stay), today's pull with rebase brings upstream in, and the
-// whole command runs again on the upstream files; when upstream changed only other folders, nothing the command read changed (R24), so
-// the pull rebases its commit as it is. The push publishes the branch as today: a person's own unpushed commits go with it.
+// Team commands (owner decision 2026-11-09 on question 2: publish only the command's own commit). When upstream changed the command's
+// own folder, only the command's own commit (HEAD) is dropped (git reset --keep HEAD~1; a person's commits and uncommitted changes stay),
+// the pull with rebase brings upstream in, and the whole command runs again on the upstream files; when upstream changed only other
+// folders, nothing the command read changed (R24) and the commit is kept as it is. The push then sends the command's own commit alone:
+// when a person's unpushed commits lie below it, the commit is rebuilt on the upstream branch (git merge-tree, git commit-tree; the
+// working tree is not touched), that commit is pushed, and the local branch is rebased onto it, so the person's commits stay local.
 export function publishByRerun(cwd, rerun, folder) {
   git(cwd, 'fetch', '-q');
   if (Number(git(cwd, 'rev-list', '--count', 'HEAD..@{u}').trim())) {
     const touched = folder === undefined || git(cwd, 'diff', '--name-only', 'HEAD...@{u}', '--', folder).trim() !== '';
-    if (touched) git(cwd, 'reset', '-q', '--keep', 'HEAD~1');
-    git(cwd, 'pull', '-q', '--rebase', '--autostash');
-    if (touched) rerun();
+    if (touched) { git(cwd, 'reset', '-q', '--keep', 'HEAD~1'); git(cwd, 'pull', '-q', '--rebase', '--autostash'); rerun(); }
   }
-  git(cwd, 'push', '-q');
+  const [remote, ...rest] = git(cwd, 'rev-parse', '--abbrev-ref', '@{u}').trim().split('/');
+  const up = git(cwd, 'rev-parse', '@{u}').trim();
+  let own = git(cwd, 'rev-parse', 'HEAD').trim();
+  if (git(cwd, 'rev-parse', 'HEAD~1').trim() !== up) {
+    let tree;
+    try { tree = git(cwd, 'merge-tree', '--write-tree', '--merge-base', 'HEAD~1', up, 'HEAD').trim().split('\n')[0]; }
+    catch { throw Object.assign(new Error("the command's commit cannot be placed on the upstream branch without a conflict; nothing is published"), { exit: 3 }); }
+    own = git(cwd, 'commit-tree', tree, '-p', up, '-m', git(cwd, 'log', '-1', '--format=%B').trim()).trim();
+  }
+  git(cwd, 'push', '-q', remote, `${own}:refs/heads/${rest.join('/')}`);
+  if (own !== git(cwd, 'rev-parse', 'HEAD').trim()) git(cwd, 'rebase', '-q', '--autostash', own); // the command's local commit is the same change and drops out
 }
 
 // User commands: rebase (a conflict on numbers.json takes the larger value), then every item the local commits added whose number is

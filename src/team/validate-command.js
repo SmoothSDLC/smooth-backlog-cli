@@ -8,7 +8,8 @@ import { foreignItem } from '../shared/dependencies.js';
 import { numberOf } from '../shared/numbers.js';
 import { redact } from '../shared/safety.js';
 import { readConfig, topOf } from '../shared/setup.js';
-import { configDir, folder, repoId, resolveHome } from '../shared/store.js';
+import * as sync from '../shared/sync.js';
+import { cloneLocked, configDir, folder, hasFrontMatter, isItemName, repoId, resolveHome } from '../shared/store.js';
 import { resolveInputs } from './inputs.js';
 import { itemFindings, numberFindings } from './rules/validate-items.js';
 import { errors } from './rules/validate.js';
@@ -16,9 +17,6 @@ import { loadTeams } from './teams-load.js';
 
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
-// the item files are JSON; a markdown file with a front-matter header is an item of the older format
-const isItemName = name => name.endsWith('.json');
-const hasFrontMatter = text => /^\uFEFF?---\r?\n/.test(text);
 const VALUE = ['team', 'agent', 'session', 'repository', 'branch'];
 
 // The flags of the words that read the inputs: the five that take a value, --json and --show-all, and the booleans the word adds.
@@ -78,9 +76,17 @@ export async function run(argv) {
   try { return await validate(argv); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
 }
 
+// Like every read of the backlog it pulls first (a failed pull warns and the answer comes from the local copy), under the clone's lock.
 async function validate(argv) {
   const { top, inputs } = readInputs('validate', argv);
   const { home } = resolveHome();
+  return cloneLocked(home, async () => {
+    await sync.pull(home, { read: true });
+    return check(argv, top, inputs, home);
+  });
+}
+
+function check(argv, top, inputs, home) {
   const workRepo = repoId(process.cwd());
   const repo = inputs.repository || workRepo;
   const { file, shown, findings } = loadTeams({ top, home, repo, workRepo, stateDir: configDir(), team: inputs.team, now: new Date().toISOString(), full: true });
@@ -88,8 +94,10 @@ async function validate(argv) {
 
   // each line: the finding and what stands before its problem. The file's own: its shape and, with a team named, that team's; the entries of the others only count.
   const fileSays = f => `${shown}: ${f.team ? `${f.team}${f.path ? `.${f.path}` : ''}${f.rule ? ` (rule ${f.rule})` : ''}: ` : ''}`;
-  const out = (inputs.all ? findings : findings.filter(f => f.team === null || f.team === inputs.team)).map(f => ({ f, at: fileSays(f) }));
-  const others = inputs.all ? [] : [...new Set(errors(findings).map(f => f.team).filter(t => t && t !== inputs.team))];
+  // a file that cannot be read has one finding that names the file already: "<file> is not JSON (...)"
+  const out = (inputs.all ? findings : findings.filter(f => f.team === null || f.team === inputs.team)).map(f => (file ? { f, at: fileSays(f) } : { f, at: '', text: f.problem.replace(/^teams\.json /, `${shown} `) }));
+  const otherErrors = inputs.all ? [] : errors(findings).filter(f => f.team && f.team !== inputs.team);
+  const others = [...new Set(otherErrors.map(f => f.team))];
   if (others.length) {
     const problem = `the entries of ${others.join(', ')} have errors; no team command runs until the whole file is valid`;
     out.push({ f: { severity: 'error', team: null, path: '', rule: null, problem, fix: 'run backlog team validate --show-all' }, at: `${shown}: `, oneLine: `${problem}; run backlog team validate --show-all` });
@@ -112,14 +120,15 @@ async function validate(argv) {
     }
   }
 
-  const errs = out.filter(({ f }) => f.severity === 'error').length;
+  // the one line about the other entries is not counted; their own errors are
+  const errs = out.filter(({ f, oneLine }) => !oneLine && f.severity === 'error').length + otherErrors.length;
   if (argv.includes('--json')) { say(JSON.stringify(out.map(({ f }) => f), null, 2)); return errs ? 2 : 0; }
-  for (const { f, at, oneLine } of out) {
-    say(`${f.severity === 'error' ? '❌ ' : '⚠️  '}${at}${oneLine ?? f.problem}`);
+  for (const { f, at, oneLine, text } of out) {
+    say(`${f.severity === 'error' ? '❌ ' : '⚠️  '}${at}${oneLine ?? text ?? f.problem}`);
     if (!oneLine) say(`   fix: ${f.fix}`);
   }
   if (markdown) say('ℹ️  the items are markdown: run backlog team migrate, then validate checks them too');
-  say(`${errs ? '❌' : '✅'} ${shown}: ${plural(file ? Object.keys(file).length : 0, 'team')}, ${plural(errs, 'error')}, ${plural(out.length - errs, 'warning')}`);
+  say(`${errs ? '❌' : '✅'} ${shown}: ${file ? `${plural(Object.keys(file).length, 'team')}, ` : ''}${plural(errs, 'error')}, ${plural(out.filter(({ f }) => f.severity === 'warning').length, 'warning')}`);
   return errs ? 2 : 0;
 }
 

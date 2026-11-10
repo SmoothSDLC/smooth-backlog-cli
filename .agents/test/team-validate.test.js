@@ -2,11 +2,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { teamHelp } from '../../src/team/help.js';
 import { missingText } from '../../src/team/teams-file.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const BIN = resolve(new URL('../../bin/backlog.js', import.meta.url).pathname);
 const read = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
@@ -77,6 +78,10 @@ test('--team names the broken other entry in one line and exits 2; the other ent
   assert.equal(r.status, 2);
   assert.ok(r.stdout.includes('❌ .backlog/teams.json: the entries of bad have errors; no team command runs until the whole file is valid; run backlog team validate --show-all\n'), r.stdout);
   assert.doesNotMatch(r.stdout, /shipped/);
+  assert.match(r.stdout.trimEnd().split('\n').at(-1), /^❌ \.backlog\/teams\.json: 2 teams, 1 error, \d+ warnings?$/); // the real error of the other entry counts; the line about it does not
+  const json = JSON.parse(w.run(['validate', '--team', 'good', '--json']).stdout);
+  assert.deepEqual(json.filter(f => f.severity === 'error'), [{ severity: 'error', team: null, path: '', rule: null, problem: 'the entries of bad have errors; no team command runs until the whole file is valid', fix: 'run backlog team validate --show-all' }]);
+  assert.ok(json.every(f => ['severity', 'team', 'path', 'rule', 'problem', 'fix'].every(k => k in f) && (f.team === null || f.team === 'good')));
   const all = w.run(['validate', '--show-all']);
   assert.equal(all.status, 2);
   assert.match(all.stdout, /bad\.rules\.table\[0\].*shipped is not a value of status/);
@@ -116,7 +121,11 @@ test('a file that is not JSON is a finding, exit 2, and nothing is written', t =
   const before = w.cfg();
   const r = w.run(['validate', '--team', 'good']);
   assert.equal(r.status, 2);
-  assert.match(r.stdout, /^❌ \.backlog\/teams\.json: teams\.json is not JSON \(.+\)\n {3}fix: correct the syntax at that place\n❌ \.backlog\/teams\.json: 0 teams, 1 error, 0 warnings\n$/);
+  const [first, fix, last, ...rest] = r.stdout.split('\n');
+  assert.match(first, /^❌ \.backlog\/teams\.json is not JSON \(Expected property name or '\}' in JSON at position 2.*\)$/);
+  assert.equal(fix, '   fix: correct the syntax at that place');
+  assert.equal(last, '❌ .backlog/teams.json: 1 error, 0 warnings'); // no team count: the file was not parsed
+  assert.deepEqual(rest, ['']);
   assert.equal(w.cfg(), before);
   assert.equal(existsSync(w.cfgDir), false);
 });
@@ -246,4 +255,83 @@ test('the router: an unknown word names the six words, migrate resolves its inpu
   assert.match(migrate.stderr, /team migrate is not available yet/);
   assert.equal(w.run(['validate', '--team', 'good', 'extra']).status, 2);
   assert.equal(w.run(['validate', '--team', 'good', '--dry-run']).status, 2);
+});
+
+test('unknown arguments are refused with exit 2 on standard error and nothing on standard output', t => {
+  const w = world(t);
+  w.put({ good: GOOD });
+  for (const args of [['validate', '--team', 'good', '--bogus'], ['validate', '--team', 'good', '--ask'], ['migrate', '--team', 'good', '--bogus']]) {
+    const r = w.run(args);
+    assert.equal(r.status, 2, args.join(' '));
+    assert.equal(r.stdout, '');
+    assert.match(r.stderr, new RegExp(`^❌ backlog: unrecognized arguments: ${args.at(-1)}\\n$`));
+  }
+});
+
+test('--json carries the item and number findings with the same keys', t => {
+  const w = world(t);
+  w.put({ good: GOOD });
+  w.item('phases', '005-x.json', doc(6, 'good', { status: 'open', stage: 'x' }));
+  w.item('.', 'numbers.json', '{"last":1}\n');
+  git(w.top, 'add', '-A'); git(w.top, 'commit', '-q', '-m', 'items');
+  const r = w.run(['validate', '--team', 'good', '--json']);
+  assert.equal(r.status, 2);
+  const found = JSON.parse(r.stdout);
+  const keys = f => Object.keys(f).join();
+  assert.ok(found.every(f => keys(f) === 'severity,team,path,rule,problem,fix'), r.stdout);
+  assert.ok(found.some(f => f.severity === 'error' && f.path === 'local/repository/phases/005-x.json' && /^seq 6 differs/.test(f.problem)));
+  assert.ok(found.some(f => f.severity === 'warning' && f.path === 'local/repository/numbers.json' && /says 1, but number \d+ was used/.test(f.problem)));
+});
+
+test('a markdown file that starts with a horizontal rule is not an item of the old format', t => {
+  const w = world(t);
+  w.put({ good: GOOD });
+  w.item('phases', 'README.md', '---\n\nJust a note under a rule.\n');
+  const r = w.run(['validate', '--team', 'good']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.doesNotMatch(r.stdout, /markdown/);
+});
+
+// a consumer repository whose backlog is the shared clone, with its own origin to change from a second clone
+function shared(t) {
+  const tmp = mkdtempSync(join(tmpdir(), 'team-validate-pull-'));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const home = sharedBacklog(tmp);
+  const cons = consumer(tmp, 'acme', 'demo', 'main');
+  mkdirSync(join(cons, '.backlog'), { recursive: true });
+  writeFileSync(join(cons, '.backlog', 'config.json'), '{"backlog_repository": "../../home"}\n');
+  const bare = join(tmp, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
+  const other = join(tmp, 'other');
+  const id = ['-c', 'user.name=t', '-c', 'user.email=t@t'];
+  spawnSync('git', ['clone', '-q', bare, other]);
+  const push = (path, text) => {
+    mkdirSync(join(other, path, '..'), { recursive: true });
+    writeFileSync(join(other, path), text);
+    spawnSync('git', [...id, 'add', '-A'], { cwd: other });
+    spawnSync('git', [...id, 'commit', '-q', '-m', 'change'], { cwd: other });
+    assert.equal(spawnSync('git', ['push', '-q', 'origin', 'HEAD'], { cwd: other }).status, 0);
+  };
+  return { tmp, home, cons, bare, push, run: args => cli(['team', 'validate', ...args], { cwd: cons, tmp }) };
+}
+
+test('validate updates the backlog repository first: a team file and an item that only the origin holds are seen', t => {
+  const s = shared(t);
+  assert.equal(s.run(['--team', 'good']).status, 2); // nothing yet: no team file
+  s.push('acme/demo/teams.json', JSON.stringify({ good: GOOD }));
+  s.push('acme/demo/phases/001-x.json', JSON.stringify(doc(2, 'good', { status: 'open' })));
+  const r = s.run(['--team', 'good']);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stdout, /^❌ acme\/demo\/phases\/001-x\.json: seq 2 differs from the file name's number 1$/m);
+  assert.match(r.stdout, /teams\.json: 1 team, 1 error/);
+});
+
+test('when the origin cannot be reached validate warns and answers from the local copy', t => {
+  const s = shared(t);
+  s.push('acme/demo/teams.json', JSON.stringify({ good: GOOD }));
+  assert.equal(s.run(['--team', 'good']).status, 0);
+  renameSync(s.bare, `${s.bare}-gone`);
+  const r = s.run(['--team', 'good']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stderr, /origin offline, local backlog updates may be behind/);
+  assert.match(r.stdout, /1 team, 0 errors/);
 });

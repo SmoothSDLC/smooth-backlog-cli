@@ -572,7 +572,7 @@ When another team's entry has an error it says so in one line, because no team c
 The file is found as the team commands find it: the "teams_file" key of .backlog/config.json, else <backlog repository>/<owner>/<name>/teams.json
 when the "backlog_repository" key names a folder outside the repository, else .backlog/teams.json. A team is given as --team, else
 SMOOTH_BACKLOG_CLI_TEAM_NAME, else the "team" key of .backlog/config.json. With --team and --show-all together --team decides.
-The command does not update the backlog repository and publishes nothing. It writes the SHA of the file into .backlog/config.json
+Like every read of the backlog it first updates the backlog repository (when that cannot be done it warns and answers from the local copy); it publishes nothing. It writes the SHA of the file into .backlog/config.json
 (key teams_file_sha, so that the lead commits it with the edit) when the whole file is valid, and the per-user validation record; for
 another repository named by --repository (or SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY) only the record. A backlog whose items are still
 markdown is checked on the file only, and the command says to run backlog team migrate first.

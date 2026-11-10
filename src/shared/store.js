@@ -392,7 +392,7 @@ export function findings(dir) {
 
 //
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-export { eventLine, itemFileName, itemSlug, parseEvent, storedFm } from './item-file.js'; // the event record of an item's history is written by item-file.js
+export { eventLine, hasFrontMatter, isItemName, itemFileName, itemSlug, parseEvent, storedFm } from './item-file.js'; // the event record of an item's history is written by item-file.js
 // Appends one event line to the item file's `events` list. The file is re-read first (the command may have written it a moment ago).
 export function addEvent(folder, path, { event, branch = '', commitSha = '', note = '' }) {
   const abs = join(folder, path);

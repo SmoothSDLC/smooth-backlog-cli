@@ -41,6 +41,16 @@ const SUPPORTED = [
   ['\\[x\\]', '[x]', 'x'],
   ['\\\\', 'a\\b', 'ab'],
   ['^(a+)+$', 'aaa', 'aab'],
+  ['^[-a]$', '-', 'b'],
+  ['^[a-]$', 'a', 'b'], // a trailing - is a literal: the design text names no such class, this is the module's behaviour
+  ['^[\\D]$', 'a', '1'],
+  ['^[\\W]$', '-', 'a'],
+  ['^[\\S]$', 'a', ' '],
+  ['^[\\dx]$', 'x', 'y'],
+  ['^[\\dx]$', '5', 'y'],
+  ['(^a|b$)', 'ab...', 'xay'],
+  ['(^a|b$)', '...b', 'xay'],
+  ['(^a|b$)', 'xxb', 'bx'],
 ];
 
 for (const [pattern, yes, no] of SUPPORTED) {
@@ -49,6 +59,24 @@ for (const [pattern, yes, no] of SUPPORTED) {
     assert.equal(matches(pattern, no), false);
   });
 }
+
+test('\\w and \\W are opposites on an underscore, a digit, a letter, a hyphen and a space', () => {
+  for (const ch of ['_', '7', 'k']) { assert.equal(matches('^\\w$', ch), true); assert.equal(matches('^\\W$', ch), false); }
+  for (const ch of ['-', ' ']) { assert.equal(matches('^\\w$', ch), false); assert.equal(matches('^\\W$', ch), true); }
+});
+
+test('\\s and \\S are opposites on a space, a tab, a newline and a letter', () => {
+  for (const ch of [' ', '\t', '\n']) { assert.equal(matches('^\\s$', ch), true); assert.equal(matches('^\\S$', ch), false); }
+  assert.equal(matches('^\\s$', 'k'), false);
+  assert.equal(matches('^\\S$', 'k'), true);
+});
+
+test('a hyphen first or last in a class is a literal', () => {
+  assert.equal(matches('^[-a]$', '-'), true);
+  assert.equal(matches('^[-a]$', 'a'), true);
+  assert.equal(matches('^[-a]$', 'b'), false);
+  assert.equal(matches('^[a-]$', '-'), true);
+});
 
 test('a match may start at every position and the empty pattern matches', () => {
   assert.equal(matches('', 'anything'), true);
@@ -85,6 +113,9 @@ const REFUSED = [
   ['+', 'a quantifier has nothing to repeat (at character 1)'],
   ['a{101}', 'a counted repetition is at most 100 (at character 5)'],
   ['a{3,2}', 'a counted repetition is at most 100 (at character 5)'],
+  ['a??', 'a lazy quantifier is not supported (at character 2)'],
+  ['\\9', '\\9 is not supported (at character 1)'],
+  ['a{101,}', 'a counted repetition is at most 100 (at character 6)'],
   ['a{1,101}', 'a counted repetition is at most 100 (at character 7)'],
 ];
 
@@ -140,6 +171,6 @@ test('case INL-05: ^(a+)+$ on 5001 characters answers at once, with no match', (
   const result = test_(text);
   const ms = Number(process.hrtime.bigint() - start) / 1e6;
   assert.equal(result, false);
-  assert.ok(ms < 1000, `took ${ms} ms`);
+  assert.ok(ms < 500, `took ${ms} ms`);
   assert.equal(test_('a'.repeat(5000)), true);
 });

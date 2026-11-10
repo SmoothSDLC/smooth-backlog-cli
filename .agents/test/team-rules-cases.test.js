@@ -44,12 +44,14 @@ for (const c of ran) {
     try {
       const ctx = { entry, team, caller: callerOf(cmd), items: all, args: cmd.args ?? {}, session: { repository: 'acme/app', branch: 'main', ...cmd.session }, now: NOW };
       // The number of a new item: the caller's counter or the highest number of the folder, plus one.
-      if (cmd.run === 'pop') { const p = pop({ ...ctx, order: c.given.order }); got = { exit: p.action === 'idle' ? 3 : 0, action: p.action, item: p.item, entry: p.entry }; }
-      else if (cmd.run === 'filter') got = { exit: 0, filter: filter(ctx, cmd.step) };
+      if (cmd.run === 'pop') {
+        const p = pop({ ...ctx, order: c.given.order });
+        got = { exit: p.action === 'idle' ? 3 : 0, action: p.action, item: p.item, entry: p.entry };
+      } else if (cmd.run === 'filter') got = { exit: 0, filter: filter(ctx, cmd.step) };
       else {
-      const r = cmd.run === 'new' ? create(ctx, Math.max(c.given.last ?? 0, ...all.filter(i => i.repository === 'acme/app').map(i => i.seq)) + 1)
-        : step({ ...ctx, step: cmd.step, item: all.find(i => i.seq === cmd.item && i.repository === 'acme/app') });
-      got = { exit: 0, rule: r.rule, items: r.items, place: r.place, say: r.say, delete: r.delete };
+        const r = cmd.run === 'new' ? create(ctx, Math.max(c.given.last ?? 0, ...all.filter(i => i.repository === 'acme/app').map(i => i.seq)) + 1)
+          : step({ ...ctx, step: cmd.step, item: all.find(i => i.seq === cmd.item && i.repository === 'acme/app') });
+        got = { exit: 0, rule: r.rule, items: r.items, place: r.place, say: r.say, delete: r.delete };
       }
     } catch (e) { if (!(e instanceof Refusal)) throw e; got = { exit: e.exitCode, rule: e.rule, text: e.message }; }
     assert.equal(JSON.stringify(all), before, 'the items were changed');

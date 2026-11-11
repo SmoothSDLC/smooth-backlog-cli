@@ -1,40 +1,85 @@
-// `backlog team query`: the read views of the reader (src/shared/query.js) plus the views of a team (claimable, reviewable, blocked, decisions, plan, wip).
-// src/shared/query.js runs the query; this module is the `team` object it asks.
-import { existsSync } from 'node:fs';
-import { run as runQuery } from '../shared/query.js';
-import { formOf } from './inputs.js';
-import { missingFields } from './lifecycle.js';
-import { run as plan } from './queue.js';
-import { SCOPES, teamView } from './views.js';
-import { wipView } from './wip.js';
+// `backlog team query`: every form of the command goes through this one router. check and plan have their own modules; the list (the open items of a team in queue order),
+// `query <item>` (one item, whole) and `query filter <name>` (the items a filter of the team's rules selects) are read here. Nothing is written in the backlog and nothing is
+// published; like every read of the team file the command writes the validated copy, the record and the SHA.
+import { BacklogError } from '../errors.js';
+import { find } from '../shared/index.js';
+import { redact } from '../shared/safety.js';
+import { readConfig, topOf } from '../shared/setup.js';
+import { cloneLocked, configDir, folder as folderOf, now, repoId, resolveHome } from '../shared/store.js';
+import { parseArgs } from './args.js';
+import { VALUE, formOf, resolveInputs } from './inputs.js';
+import { contextOf } from './item.js';
+import { redactDeep, say } from './json-out.js';
+import { printList } from './list.js';
+import { pullFolder } from './pull.js';
+import { Refusal } from './rules/expression.js';
+import { filter, queue } from './rules/pop.js';
+import { sessionOf } from './session.js';
+import { showItem } from './show.js';
+import { loadTeams } from './teams-load.js';
 
-export const hooks = {
-  bool: ['claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip'],
-  value: ['lead', 'agents', 'scope'],
-  choices: { scope: SCOPES },
-  early(a, argv, { die }) {
-    if (a.agents && !a.plan) return die('--agents goes with --plan (the team members present)');
-    if (a.plan) return plan(argv); // queue.js repeats the preamble of the query for its own flags
-    return undefined;
-  },
-  afterPull(a, { home, say, dump }) {
-    if (!a.wip) return undefined;
-    const v = wipView(home);
-    if (a.json) { dump(v); return 0; }
-    say(`📊 work in progress — ${v.limits_file}${existsSync(v.limits_file) ? '' : ' (none: no limits)'}`);
-    for (const c of v.counts) say(`   ${c.level.padEnd(10)} ${String(c.key).padEnd(48)} ${String(c.count).padStart(3)}${c.limit === null ? '' : ` / ${c.limit}${c.count >= c.limit ? '  ⚠️ at the limit' : ''}`}`);
-    say(`   stale (no change of their own for more than ${v.stale_hours} h): ${v.stale.length}`);
-    for (const x of v.stale) say(`      - ${x.item} ${x.slug} (${x.holder || 'nobody'}, updated ${x.updated})`);
-    return 0;
-  },
-  view: (a, ctx) => (a.claimable || a.reviewable || a.blocked || a.decisions ? teamView(a, ctx) : undefined),
-  missing: file => (file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null),
-};
+const invalid = text => new BacklogError('INVALID_INPUT', text);
 
-// check and plan are the rules engine's; every other word is still the old views.
 export async function run(argv) {
   const form = formOf(['query', ...argv]);
   if (form === 'query check') return (await import('./check.js')).run(argv);
   if (form === 'query plan') return (await import('./plan.js')).run(argv);
-  return runQuery(argv, { team: hooks });
+  try { return await read(argv, form); } catch (e) {
+    if (!(e instanceof BacklogError)) throw e;
+    process.stderr.write(`❌ backlog: ${redact(e.message)}\n`);
+    return e.exitCode;
+  }
+}
+
+async function read(argv, form) {
+  const { positionals, flags } = parseArgs(argv, [...VALUE, 'json', 'show-all'], { steps: false });
+  if (form === 'query rules' || form === 'query steps') throw invalid(`team ${form} is not available yet`);
+  const name = form === 'query filter' ? positionals[1] : undefined;
+  if (form === 'query filter' && !name) throw invalid('team query filter needs a filter name: backlog team query filter <name> --team <name>');
+  const wanted = form === 'query filter' ? 2 : form === 'query <item>' ? 1 : 0;
+  if (positionals.length > wanted) throw invalid(`unrecognized arguments: ${positionals.slice(wanted).join(' ')}`);
+  const top = topOf(process.cwd());
+  if (!top) throw invalid('run this from inside a git repository (the repository whose backlog you want)');
+  const inputs = resolveInputs({ command: form, flags, env: process.env, config: readConfig(top) });
+  const workRepo = repoId(process.cwd());
+  const repo = inputs.repository || workRepo;
+  const session = sessionOf({ inputs, repo });
+  const { home } = resolveHome();
+  const folder = folderOf(home, repo);
+  const refused = text => { say(`❌ ${text}`); return 1; };
+
+  return cloneLocked(home, async () => {
+    await pullFolder(home, folder, { read: true });
+    const loaded = loadTeams({ top, home, repo, workRepo, stateDir: configDir(), team: inputs.team, now: new Date().toISOString() });
+    const contextFor = team => contextOf({ folder, entry: loaded.file[team], team, caller: inputs.agent, args: {}, session, now: now(), branch: inputs.branch || undefined });
+    const teams = inputs.all ? Object.keys(loaded.file) : [inputs.team];
+
+    if (form === 'query <item>') {
+      const { own } = contextFor(teams[0] ?? inputs.team);
+      const ident = positionals[0];
+      const row = find(own.map(i => ({ seq: i.seq, slug: i.slug })), ident);
+      if (!row) return refused(`no item ${ident}`);
+      const item = own.find(i => i.seq === row.seq && i.slug === row.slug);
+      if (!inputs.all && item.team !== inputs.team) return refused(item.team ? `item ${item.seq} belongs to team ${item.team}` : `item ${item.seq} belongs to no team`);
+      const entry = loaded.file[item.team] ?? { item: {} }; // an item of no team, or of a team the file does not hold, shows every field as undeclared
+      if (flags.json) say(JSON.stringify(redactDeep(showItem(item, entry, { json: true }))), true);
+      else say(showItem(item, entry));
+      return 0;
+    }
+
+    const rows = [];
+    for (const team of teams) {
+      const { ctx } = contextFor(team);
+      const entry = loaded.file[team];
+      let items = queue(ctx);
+      if (form === 'query filter') {
+        let keep;
+        try { keep = new Set(filter(ctx, name)); } catch (e) { if (e instanceof Refusal && e.exitCode === 1) return refused(e.message); throw e; }
+        items = items.map((item, rank) => ({ item, rank })).filter(r => keep.has(r.item.seq));
+      } else items = items.map((item, rank) => ({ item, rank }));
+      rows.push(...items.map(r => ({ ...r, entry })));
+    }
+    printList(rows, { json: flags.json, all: inputs.all, team: inputs.team });
+    return 0;
+  });
 }

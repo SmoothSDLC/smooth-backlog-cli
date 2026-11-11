@@ -68,7 +68,7 @@ test('the order of the queue is every open item\'s, not the bound ones only', ()
   assert.deepEqual(rows(f).filter(r => r.status === 'pending').sort((a, b) => a.priority - b.priority).map(r => r.slug), ['003-three', '001-one', '002-two']);
 });
 
-test('an unreadable team configuration warns under backlog team and nowhere else', () => {
+test('an unreadable team configuration is reported under backlog team and nowhere else', () => {
   const f = fixture();
   ok(f, NEW('first'), {});
   writeFileSync(join(f.home, 'teams.json'), '{ not json');
@@ -77,6 +77,8 @@ test('an unreadable team configuration warns under backlog team and nowhere else
     assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
     assert.doesNotMatch(r.stderr, /no JSON/, `${args[0]} does not read the team configuration`);
   }
+  mkdirSync(join(f.cons, '.backlog'), { recursive: true });
+  writeFileSync(join(f.cons, '.backlog', 'teams.json'), '{ not json'); // the team file the team commands read
   const team = cli(['team', 'query', '--team', 't1'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'ann' }, plain: true });
-  assert.match(team.stderr, /teams\.json cannot be read or is no JSON/);
+  assert.match(team.stderr, /teams\.json cannot be read/);
 });

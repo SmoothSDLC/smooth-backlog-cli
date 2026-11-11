@@ -303,6 +303,28 @@ test('the harness runs every pop case it can, none silently dropped: 15 pop case
   assert.deepEqual(cases.filter(c => c.command.run === 'pop' && EVALUATOR_ONLY.includes(c.id)).map(c => c.id), ['INL-01', 'INL-09']);
 });
 
+// ---- filter: the nine filter cases through `backlog team query filter <name> --json`: the items printed are the numbers the case expects, in queue order, and nothing is written.
+const viaFilter = cases.filter(c => c.command.run === 'filter');
+for (const c of viaFilter) {
+  test(`${c.id}: ${c.rule} through backlog team query filter`, t => {
+    const file = fileOf_(c); const team = Object.keys(file)[0]; const entry = file[team];
+    const w = world(t, file);
+    const run = JSON.parse(JSON.stringify(substitution(w, c)(c)));
+    seed(w, run, team, entry, x => x);
+    const before = snapshot(w.folder);
+    const r = w.run(['filter', run.command.step, ...commandLine(run.command, team), '--json'], run.command.env ?? {}, 'query');
+    assert.equal(r.status, run.expect.exit, `${r.stdout}${r.stderr}`);
+    assert.equal(r.stderr, '');
+    assert.deepEqual(JSON.parse(r.stdout).map(d => d.seq), run.expect.filter);
+    assert.deepEqual(snapshot(w.folder), before);
+    assert.equal(git(w.home, 'status', '--short'), '');
+  });
+}
+
+test('the harness runs every filter case, none silently dropped: 9 filter cases through the command', () => {
+  assert.deepEqual(viaFilter.map(c => c.id).sort(), ['PAR-54', 'PAR-55', 'PAT-45', 'PAT-46', 'SCR-26', 'SCR-27', 'SOL-11', 'XP-18', 'XP-19']);
+});
+
 // Every file under a folder with its bytes: a refused command must leave this exactly as it was.
 function snapshot(dir) {
   const out = {};

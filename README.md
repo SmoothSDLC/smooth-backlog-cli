@@ -105,7 +105,7 @@ the team's entry), `new` (files an item of the team in stage refining, and split
 - **The status order** of a team's items is the flow's (see Statuses). **The item template** is `backlog fields`, and
   `backlog new --help` carries the same table.
 
-The team options are not options of the user commands: the team steps of `backlog update`, the team views of `backlog team query` and
+The team options are not options of the user commands: the team steps of `backlog update` and
 `--team` and `--review-refs` of `backlog new` are refused as unrecognized arguments, and a team's item is refused by `backlog update`.
 `backlog pop` and `backlog work` are gone: `backlog team pop` replaces both. It takes the first step the team's pop table offers the agent, as one published commit, and prints the item; `--lead`, `--scope`, `--all` and `--claim-now` no longer exist.
 
@@ -139,7 +139,7 @@ The same five rules hold wherever the items live:
 | `backlog team pop --team <team> --agent <name>` | What one agent of a team does next: the first step the team's pop table offers, taken for the agent, with the whole item |
 | `backlog team new --team <team> --agent <name> --name <text> [--<argument> <value>]...` | Add an item of a team: the team's rules for the step `new` decide, and the number is taken only when they allow it; the arguments are the ones the rules read (`--estimate`, `--parent`, ...) |
 | `backlog team update <item> <step> --team <team> --agent <name> [--<argument> <value>]...` | One step of the team's rules on an item: the rules decide, a refusal names the rule and writes nothing; the arguments are the ones the rules read (`--note`, ...) |
-| `backlog team query --team <team> --agent <name> <view>` | `backlog team query check <item> <step>` (the rules' answer for a step, nothing taken), `backlog team query plan` (what `pop` would offer each person) and the team views (claimable, reviewable, blocked, decisions, wip) and the read options of the team rules (`--phase`, `--status`, `--events`, `--branch`, ...) |
+| `backlog team query --team <team> [--branch <name>]` | `backlog team query` (the team's open items in queue order; `--show-all` for every team), `backlog team query <item>` (one item whole), `backlog team query filter <name>` (the items a filter of the team's rules selects), `backlog team query check <item> <step>` (the rules' answer for a step, nothing taken) and `backlog team query plan` (what `pop` would offer each person); the old views and read options of the team rules (`--claimable`, `--phase`, `--status`, ...) are gone |
 | `backlog team validate [--team <team> \| --show-all] [--json]` | Check the team file in full and this repository's items and numbers against it; every finding says where, why and how to fix it (exit 2 on an error, warnings never) |
 | `backlog team migrate --team <team>` | Reserved for converting the items to the team format; answers that it is not available yet |
 | `backlog team define --file <team.json>` | Register a team in the backlog configuration |

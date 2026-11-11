@@ -106,8 +106,7 @@ test('a word list or next does not know is refused, and so is every option of th
   }
 });
 
-test('list and team query run the one reader', () => {
+test('list runs the one reader', () => {
   const read = file => readFileSync(new URL(`../../src/${file}`, import.meta.url), 'utf8');
-  assert.match(read('team/query.js'), /import \{ run as runQuery \} from '\.\.\/shared\/query\.js'/);
   assert.match(read('shared/read.js'), /from '\.\/query\.js'/);
 });

@@ -3,7 +3,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { hooks as teamQuery } from '../../src/team/query.js';
 import { TEAM_BOOL, TEAM_VALUE, cli } from './shared-fixtures.js';
 
 const root = new URL('../../', import.meta.url).pathname;
@@ -12,7 +11,7 @@ const DOCS = ['COMMANDS.md', 'README.md', ...files('templates').filter(f => /\.(
 // what only `backlog team <command>` takes, per plain command
 const REMOVED = {
   update: [...TEAM_VALUE, ...TEAM_BOOL, 'set-team'],
-  query: [...teamQuery.bool, ...teamQuery.value],
+  query: ['claimable', 'reviewable', 'blocked', 'decisions', 'plan', 'wip', 'lead', 'agents', 'scope'], // the retired views of backlog team query: the words documents must not show
   new: ['team', 'review-refs'],
 };
 // the plain command word, not the word of `backlog team update`, followed on the same line by one of its removed options

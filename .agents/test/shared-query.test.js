@@ -1,9 +1,9 @@
 // Tests for src/shared/query.js - cli-parity job 12 (QUERY): the read views (next, critical, show, history, --json), through backlog list, show, next
-// and history; the options no plain command takes (--status, --branch, --by-branch) are still read through the old views of backlog team query until they are replaced. Local bare repos only (shared-fixtures.js).
+// and history. Local bare repos only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, reEscape, changeItem, readHeader, ENVELOPE } from './shared-fixtures.js';
@@ -33,8 +33,6 @@ function build(withFindings) {
   const t = mkdtempSync(join(tmpdir(), 'query-test-'));
   dirs.push(t);
   const home = sharedBacklog(t);
-  appendFileSync(join(home, '.git', 'info', 'exclude'), 'teams.json\n'); // local configuration, not part of the published backlog
-  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [] } })); // the options of the reader are those of backlog team query, which names a configured team
   const cons = consumer(t, 'acme', 'demo', 'main');
   const f = { t, home, cons, folder: join(home, 'acme', 'demo') };
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
@@ -69,8 +67,6 @@ function view(f, args, status = 0, cwd = f.cons) {
   if (status === 0) assert.equal(n.stderr, '', `${args.join(' ')}: a successful read prints nothing to stderr`);
   return n;
 }
-// The options of the reader that no plain command takes (--branch, --by-branch, --status) are those of the old views of backlog team query.
-const reader = (f, args, status = 0, cwd = f.cons) => view(f, ['team', 'query', '--team', 't1', ...args], status, cwd);
 // The parts that differ between runs: timestamps, hex shas (any length, 7 or more chars) and the writing agent id.
 const norm = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS')
   .replace(/commit=[0-9a-f]+/g, 'commit=SHA')
@@ -324,50 +320,11 @@ test('075: --status text: the findings, the critical banner, the queue and the g
     + '      - 005-feat (branch feature) Feat\n');
 });
 
-test('075: --status --all and --branch: every branch in the queue, the gone item in its own branch only', () => {
+test('075: list all-branches: every branch in the queue, the gone-branch item with it', () => {
   const f = fx();
-  assert.equal(reader(f, ['--status', '--all']).stdout, // backlog list all-branches prints the same rows with the branch of each at the end (shared-list.test.js)
-    STATUS_FINDINGS
-    + '📋 acme/demo — branch (all)\n'
-    + '   objective: phase anchor (no document)\n'
-    + '   phases (5) — work queue order, P0 = next:\n'
-    + '   • [  2] 002-beta                     pending      P  0 ⚠️CRIT  Beta\n'
-    + '        ↳ sum Beta\n'
-    + '   • [  5] 005-feat                     pending      P  0  Feat\n'
-    + '        ↳ sum Feat\n'
-    + '   • [  1] 001-alpha                    pending      P  1  Alpha\n'
-    + '        ↳ sum Alpha\n'
-    + '   🔄 [  3] 003-gamma                    in progress  P  2  Gamma\n'
-    + '        ↳ sum Gamma\n'
-    + '   ✅ [  4] 004-delta                    closed       P  4  Delta\n'
-    + '        ↳ sum Delta\n');
-  assert.equal(reader(f, ['--status', '--branch', 'feature']).stdout,
-    STATUS_FINDINGS
-    + '📋 acme/demo — branch feature\n'
-    + '   objective: phase anchor (no document)\n'
-    + '   phases (1) — work queue order, P0 = next:\n'
-    + '   • [  5] 005-feat                     pending      P  0  Feat\n'
-    + '        ↳ sum Feat\n');
   const v = JSON.parse(view(f, ['list', 'all-branches', '--json']).stdout);
   assert.deepEqual(v.phases.map(x => [x.slug, x.branch, x.priority]), [['002-beta', 'main', 0], ['005-feat', 'feature', 0], ['001-alpha', 'main', 1], ['003-gamma', 'main', 2], ['004-delta', 'main', 4]]);
   assert.deepEqual(v.gone_branch_items, [], 'with --all the gone-branch item is in the queue');
-  // the branch view's JSON, whole: the handoff, the branch, that branch's queue only, no gone-branch items, and the findings
-  assert.deepEqual(normJson(reader(f, ['--status', '--branch', 'feature', '--json']).stdout), {
-    handoff: { id: 1, slug: 'BACKLOG', title: 'Backlog', objective: 'phase anchor (no document)', path: '', sha: '', status: 'active', source_context: '', created_at: 'TS', updated_at: 'TS' },
-    repository: 'acme/demo',
-    branch: 'feature',
-    phases: [{
-      id: 5, handoff_id: 1, slug: '005-feat', seq: 5, name: 'Feat', objective: 'Caf\u00e9 \u2615 Feat', summary: 'sum Feat',
-      status: 'pending', severity: 'normal', priority: 0, path: itemRel('005-feat'), sha: 'SHA', branch: 'feature', commit_sha: 'SHA',
-      location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null,
-      claimed_by: '', review_state: ''
-    }],
-    gone_branch_items: [],
-    findings: {
-      foreign: [{ id: 6, handoff_id: 1, slug: '006-foreign', seq: 6, name: 'foreign', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 3, path: itemRel('006-foreign'), sha: 'SHA', branch: 'main', commit_sha: 'SHA', location: '', repository: 'other/thing', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }],
-      untagged: [{ id: 7, handoff_id: 1, slug: '007-untagged', seq: 7, name: 'untagged', objective: 'o', summary: 's', status: 'pending', severity: 'normal', priority: 0, path: itemRel('007-untagged'), sha: 'SHA', branch: '', commit_sha: 'SHA', location: '', repository: 'acme/demo', size_score: 0, created_at: 'TS', updated_at: 'TS', completed_at: null, claimed_by: '', review_state: '' }]
-    }
-  });
 });
 
 test('075: --next --json prints the queue head; --next text prints the findings and the item', () => {
@@ -383,7 +340,6 @@ test('075: --next --json prints the queue head; --next text prints the findings 
   assert.ok(shown.startsWith(STATUS_FINDINGS + NEXT_HEADER), 'the findings and the item');
   assert.ok(shown.includes('--- front matter ---\nphase: 002-beta') && shown.includes('--- body ---\n# Phase 002'), shown);
   view(f, ['next', 'all-branches']);
-  assert.equal(JSON.parse(reader(f, ['--next', '--branch', 'feature', '--json']).stdout).slug, '005-feat');
 });
 
 test('`backlog next` is --next', () => {
@@ -391,14 +347,6 @@ test('`backlog next` is --next', () => {
   const n = cli(['next'], { cwd: f.cons, tmp: f.t });
   assert.equal(n.status, 0, n.stderr);
   assert.equal(n.stdout, view(f, ['next']).stdout);
-});
-
-test('an empty queue prints {} (JSON) or the info line, exit 0', () => {
-  const f = fx();
-  const text = reader(f, ['--next', '--branch', 'nowhere']).stdout; // the fixture's findings banners come first
-  assert.match(text, new RegExp(`^⚠️  CRITICAL: ${reEscape(itemRel('006-foreign'))} says repository other/thing`));
-  assert.ok(text.endsWith('\nℹ️  no actionable item for acme/demo, branch nowhere; --all shows every branch\n'), text);
-  assert.equal(reader(f, ['--next', '--branch', 'nowhere', '--json']).stdout.trim(), '{}');
 });
 
 test('075: --phase prints the full item (row, front matter, body) by slug and by number; not found is exit 1 on stdout', () => {
@@ -463,7 +411,7 @@ test('075: --critical lists the open critical items (JSON and text) and says so 
   assert.deepEqual(normJson(view(g, ['list', 'critical', '--json']).stdout), []);
 });
 
-test('075: --events (all, and for one item) and --by-branch: the exact lines', () => {
+test('075: history (all, and for one item): the exact lines', () => {
   const f = fx();
   // the history comes from the items; events logged within one second have no order between items, so the lines are compared as a set
   const sorted = out => norm(out).split('\n').filter(Boolean).sort();
@@ -475,13 +423,6 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
   assert.ok(lines.some(l => /^ {2}TS {2}update {9}driver-5 {2}status: pending -> in progress$/.test(l)));
   assert.ok(lines.some(l => /^ {2}TS {2}update {9}driver-6 {2}status: pending -> closed, .*completed: null -> TS completed 004-delta; backlog re-prioritized to 3 item\(s\)$/.test(l)));
   assert.match(view(f, ['history', '002-beta']).stdout, /^ {2}\S+ {2}new {12}\S+ {2}added 002-beta at rank 0.*\n$/, 'one item: only its own lines');
-  assert.equal(norm(reader(f, ['--by-branch', 'main']).stdout),
-    '  [  1] 001-alpha                    pending      commit=SHA \n'
-    + '  [  2] 002-beta                     pending      commit=SHA \n'
-    + '  [  3] 003-gamma                    in progress  commit=SHA \n'
-    + '  [  4] 004-delta                    closed       commit=SHA \n'
-    + '  [  6] 006-foreign                  pending      commit=SHA \n');
-  assert.equal(norm(reader(f, ['--by-branch', 'feature']).stdout), '  [  5] 005-feat                     pending      commit=SHA \n');
 });
 
 test('075: a repository without a backlog folder prints the info line or {}, exit 0', () => {
@@ -525,7 +466,7 @@ test('a read view pulls first: an item pushed from another clone is shown, and n
   assert.notEqual(git(f.home, 'rev-parse', 'HEAD'), before);
   assert.equal(git(f.home, 'status', '--porcelain'), '');
   const files = git(f.home, 'ls-files', '-s');
-  for (const args of [['next'], ['list'], ['show', '1'], ['history'], ['list', 'critical'], ['team', 'query', '--team', 't1', '--by-branch', 'main']]) cli(args, { cwd: f.cons, tmp: f.t });
+  for (const args of [['next'], ['list'], ['show', '1'], ['history'], ['list', 'critical']]) cli(args, { cwd: f.cons, tmp: f.t });
   assert.equal(git(f.home, 'ls-files', '-s'), files);
   assert.equal(git(f.home, 'status', '--porcelain'), '');
 });
@@ -563,7 +504,7 @@ test('--branches counts the open and the done items of each branch of this repos
 
 test('an unknown flag is exit 2', () => {
   const f = fx();
-  for (const args of [['list', '--bogus'], ['team', 'query', '--team', 't1', '--bogus']]) {
+  for (const args of [['list', '--bogus']]) {
     const n = cli(args, { cwd: f.cons, tmp: f.t });
     assert.equal(n.status, 2, args.join(' '));
     assert.match(n.stderr, /unrecognized arguments: --bogus/);
@@ -600,7 +541,7 @@ test('review P2: a symlink in the item folder is refused, and the file outside i
 test('review P2: input echoed in a diagnostic is redacted (flags, missing items)', () => {
   const f = build(false);
   const url = 'https://user:review_dummy@host/path';
-  for (const args of [['list', `--bogus=${url}`], ['show', url], ['history', url], ['team', 'query', '--team', 't1', `--branch=${url}`, '--bogus']]) {
+  for (const args of [['list', `--bogus=${url}`], ['show', url], ['history', url]]) {
     const n = cli(args, { cwd: f.cons, tmp: f.t });
     assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));
     assert.notEqual(n.status, 0, args.join(' '));
@@ -613,15 +554,4 @@ test('review P3: --json escapes U+007F and non-ASCII as \\u escapes', () => {
   const item = store.load(f.folder).find(i => i.fm.phase === '001-alpha');
   store.write({ path: join(f.folder, item.path), fm: { ...item.fm, name: 'a\x7fb \x80 é' }, body: item.body }, f.folder);
   assert.match(view(f, ['show', '1', '--json']).stdout, /"name": "a\\u007fb \\u0080 \\u00e9"/);
-});
-
-test('review P2 (second): input echoed in a normal result is redacted too (--branch and --agent in every view)', () => {
-  const f = build(false);
-  const url = 'https://user:review_dummy@host/path';
-  for (const args of [['team', 'query', '--team', 't1', '--next', '--branch', url], ['team', 'query', '--team', 't1', '--next', '--branch', url, '--json'], ['team', 'query', '--team', 't1', '--status', '--branch', url], ['team', 'query', '--team', 't1', '--status', '--branch', url, '--json'],
-    ['team', 'query', '--team', 't1', '--claimable', '--branch', url], ['team', 'query', '--team', 't1', '--reviewable', '--agent', 'amy', '--branch', url]]) {
-    const n = cli(args, { cwd: f.cons, tmp: f.t });
-    assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));
-    assert.ok(n.stdout.length > 0, `${args.join(' ')} printed nothing (${n.stderr})`);
-  }
 });

@@ -63,12 +63,13 @@ SMOOTH_BACKLOG_CLI_AGENT stand in).
   list of the team's steps. The rules decide: a refusal prints its reason and the id of the rule (exit 1) and writes nothing; a step no rule names, or an argument the step does not take, is refused
   with the list of what the team has (exit 2). A step is published as the command's own commit, so another agent's step on the same item never overwrites yours: when it was first, yours runs
   again on the new files. Act only as yourself: the agent is the caller, and another agent's item is the lead's to hand on by the team's own steps.
-- Lead: `backlog team pop --team <team> --agent <you>` takes the step the team's pop table offers the lead (a lead's entry of the table, for the team's work item, for example); `backlog team query plan --team <team>` is the dispatch plan (what `pop` would offer each person; nothing is taken) and `backlog team query check <item> <step> --team <team>` the rules' answer for a step on an item without taking it and `backlog team query --team <team> --decisions` the questions waiting for the owner; split an
+- Lead: `backlog team pop --team <team> --agent <you>` takes the step the team's pop table offers the lead (a lead's entry of the table, for the team's work item, for example); `backlog team query plan --team <team>` is the dispatch plan (what `pop` would offer each person; nothing is taken) and `backlog team query check <item> <step> --team <team>` the rules' answer for a step on an item without taking it and `backlog team query filter <name> --team <team>` the items a filter of the team's rules selects (the team file names them); split an
   item only when it is too big for one member (`backlog team new --team <team> --agent <you> --name "<name>" --parent <item>` adds a child when the team's rules take `--parent`).
 - Member: `backlog team pop --team <team> --agent <you> --json` takes the one next step of the team's pop table for you, publishes it as one commit and prints `{"action", "item", "entry", "rule", "item_file"}`
   (idle: `{"action":"idle"}`, exit 3, and only idle exits 3; a push or pull that fails exits 1); `--dry-run` answers without writing. Carry the work on with `backlog team update <item> <step>`, as the team's
   rules for that step say.
-- Limits: `wip-limits.json` in the backlog folder; `backlog team query --team <team> --wip` shows the counts.
+- Read: `backlog team query --team <team>` lists the team's open items in queue order (`--branch <name>` for one branch, `--show-all` for every team), and `backlog team query <item> --team <team>` prints one item whole (`--json` prints the item document).
+- Limits: `wip-limits.json` in the backlog folder.
 - Check the team file: after editing the team's rules, run `backlog team validate --team <team>` (`--show-all` for every team, `--json` for a list). It checks the file and this repository's items against it and prints each problem with a fix; exit 2 means an error, and no team command runs until the whole file is valid.
 
 ## Gotchas

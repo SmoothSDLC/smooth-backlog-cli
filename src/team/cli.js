@@ -5,53 +5,17 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { atomicWrite } from '../storage.js';
 import { BacklogError } from '../errors.js';
-import { readConfig, topOf } from '../shared/setup.js';
 import { redact } from '../shared/safety.js';
 import { cloneLocked, resolveHome } from '../shared/store.js';
 import * as sync from '../shared/sync.js';
-import { forgetTeamsConfig, installSeam, openItemsOf, setSessionTeam, setTeamsHome, teamEntry, teamsConfig, validateTeam } from './team.js';
-import { strip } from '../shared/text.js';
+import { forgetTeamsConfig, installSeam, openItemsOf, setTeamsHome, teamEntry, teamsConfig, validateTeam } from './team.js';
 import { redactDeep, say } from './json-out.js';
-import { formOf } from './inputs.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 export const SUBS = ['pop', 'new', 'update', 'query', 'define', 'workflow', 'validate', 'migrate'];
 // The words the refusal names; define and workflow stay routed but are not named.
 const WORDS = ['new', 'update', 'pop', 'query', 'validate', 'migrate'];
-
-// Takes --team and --agent out of argv (both forms); the rest is passed on in order.
-export function split(argv) {
-  const rest = []; const got = {};
-  for (let i = 0; i < argv.length; i++) {
-    const [flag, eq] = argv[i].startsWith('--') ? argv[i].slice(2).split(/=(.*)/s) : [null];
-    if (flag !== 'team' && flag !== 'agent') { rest.push(argv[i]); continue; }
-    const v = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('--') ? undefined : argv[++i]);
-    if (v === undefined) throw new Error(`argument --${flag}: expected one argument`);
-    got[flag] = strip(v);
-  }
-  return { rest, got };
-}
-
-// {team, agent}: the flag, else the environment, else the repository configuration; both are required.
-export function resolve(got, { agentOptional = false } = {}) {
-  const top = topOf(process.cwd());
-  const cfg = top ? readConfig(top) : {};
-  const team = got.team || strip(process.env.SMOOTH_BACKLOG_CLI_TEAM_NAME || '') || strip(String(cfg.team ?? ''));
-  const agent = got.agent || strip(process.env.SMOOTH_BACKLOG_CLI_AGENT || '') || strip(String(cfg.user ?? ''));
-  if (!team) throw new Error('a team command needs --team <name> (or SMOOTH_BACKLOG_CLI_TEAM_NAME, or a team in .backlog/config.json)');
-  if (!agent && !agentOptional) throw new Error('a team command needs --agent <name> (or SMOOTH_BACKLOG_CLI_AGENT, or a user in .backlog/config.json)');
-  return { team, agent };
-}
-
-// a team without an entry in the configuration is refused with the text of the workflow
-const unconfigured = team => { process.stdout.write(`❌ ${loadWorkflow('team').refusals.team_not_configured.replace('<team>', team)}\n`); return 1; };
-
-// The views of `backlog team query`: the agent is passed on only when it was named, as the views behaved before.
-async function query(rest, { team }, got) {
-  if (!teamsConfig()[team]) return unconfigured(team);
-  return (await import('./query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])]);
-}
 
 export async function run(argv) {
   try { return await dispatch(argv); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
@@ -65,15 +29,11 @@ async function dispatch(argv) {
   if (sub === 'new') return (await import('./new.js')).run(argv.slice(1)); // the rules engine: the old seam below is not installed for it
   if (sub === 'update') return (await import('./update.js')).run(argv.slice(1)); // the same
   if (sub === 'pop') return (await import('./pop.js')).run(argv.slice(1)); // the rules engine, as new and update
-  if (sub === 'query' && ['query check', 'query plan'].includes(formOf(argv))) return (await import('./query.js')).run(argv.slice(1)); // the rules engine: no old seam
+  if (sub === 'query') return (await import('./query.js')).run(argv.slice(1)); // the rules engine: every query form, no old seam
   installSeam(); // the routes below are the old commands, which read the earlier words
   setTeamsHome(resolveHome().home); // reads the team configuration of the backlog
   if (sub === 'define') return define(argv.slice(1));
   if (sub === 'workflow') return workflow(argv.slice(1));
-  let split_; let who;
-  try { split_ = split(argv.slice(1)); who = resolve(split_.got, { agentOptional: sub === 'query' }); } catch (e) { return die(e.message); } // the views read: a named agent switches them to the team rules, none is needed
-  setSessionTeam(who.team); // the command's team is the session's: its items are the only ones in reach
-  if (sub === 'query') return query(split_.rest, who, split_.got);
   return die(`team ${sub} is not available yet`);
 }
 

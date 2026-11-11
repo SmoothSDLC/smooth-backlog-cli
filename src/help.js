@@ -22,7 +22,7 @@ Usage:
   backlog done <item>                              Finish an item that has no team (backlog update <item> --status closed)
   backlog team pop --team <team> --agent <name>    What one agent of a team does next: the first step the team's pop table offers, taken for the agent, with the whole item (--dry-run: only answered)
   backlog team new --team <team> --agent <name> --name <text> [--<argument> <value>]...   Add an item of a team: the team's rules for the step new decide; the number is taken only when it is allowed
-  backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
+  backlog team query [<item> | filter <name> | check <item> <step> | plan] --team <team>   The team's open items, one item whole, a filter's items, the rules' answer for a step, the hand-out plan
   backlog team update <item> <step> --team <team> --agent <name> [--<argument> <value>]...   One step of the team's rules on an item (claim, release, review, close, ...); the rules decide
   backlog team validate [--team <team> | --show-all] [--json]   Check the team file and this repository's items against it
   backlog team migrate --team <team>               Convert the items to the team format (not available yet)

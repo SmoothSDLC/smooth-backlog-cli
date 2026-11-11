@@ -125,9 +125,15 @@ step(/^the JSON output has (\d+) items?$/, (w, n) => { const v = JSON.parse(w.la
 // item facts, read back through the CLI
 const read = (w, item) => {
   const before = w.last; // reading an item is not the command under test: the last result stays
-  const r = w.run(['show', item, '--json'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'reader' } });
+  const env = { SMOOTH_BACKLOG_CLI_AGENT: 'reader' };
+  const r = w.run(['show', item, '--json'], { env });
+  if (r.status !== 0) { // the user commands do not see an item of a team: the team query reads it
+    const q = w.run(['team', 'query', item, '--show-all', '--json'], { env });
+    w.last = before;
+    assert.equal(q.status, 0, `cannot read item ${item}: ${output(r)}${output(q)}`);
+    const d = JSON.parse(q.stdout); return { ...d, ...d.fields, front_matter: d.fields };
+  }
   w.last = before;
-  assert.equal(r.status, 0, `cannot read item ${item}: ${output(r)}`);
   const v = JSON.parse(r.stdout); return { ...v, ...derivedFm(v.front_matter) };
 };
 step(/^item (\S+) has (\w+) "([^"]*)"$/, (w, item, field, value) => { const v = read(w, item); assert.ok(field in v, `item ${item} has no field ${field}: ${Object.keys(v)}`); assert.equal(String(v[field] ?? ''), value, `${field} of ${item}: ${JSON.stringify(v[field])}`); });

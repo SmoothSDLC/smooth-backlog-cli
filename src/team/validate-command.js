@@ -8,7 +8,7 @@ import { redact } from '../shared/safety.js';
 import { readConfig, topOf } from '../shared/setup.js';
 import * as sync from '../shared/sync.js';
 import { cloneLocked, configDir, folder, repoId, resolveHome } from '../shared/store.js';
-import { resolveInputs } from './inputs.js';
+import { VALUE, resolveInputs } from './inputs.js';
 import { readItems } from './item.js';
 import { itemFindings, numberFindings } from './rules/validate-items.js';
 import { errors } from './rules/validate.js';
@@ -16,7 +16,6 @@ import { loadTeams } from './teams-load.js';
 
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
-const VALUE = ['team', 'agent', 'session', 'repository', 'branch'];
 
 // The flags of the words that read the inputs: the five that take a value, --json and --show-all, and the booleans the word adds.
 // No positional word is taken. Returns { top, inputs }.

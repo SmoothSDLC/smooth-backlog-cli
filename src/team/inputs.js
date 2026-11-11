@@ -11,7 +11,7 @@ export const SHOW_ALL = ['query', 'query <item>', 'query rules', 'validate', 'mi
 const ONE_TEAM_QUERY = ['plan', 'check', 'filter', 'steps'];
 
 // The reserved flags that take a value; the word after one of them (without `=`) is its value, not a positional.
-const VALUE_FLAGS = ['team', 'agent', 'session', 'repository', 'branch'];
+export const VALUE = ['team', 'agent', 'session', 'repository', 'branch'];
 
 // The form of a command from its words, with or without the leading `team`: `query`, `query <item>`, `query rules`, `query plan`, ...
 // Flags may stand anywhere: the first word that is not a flag or a flag's value decides.
@@ -21,7 +21,7 @@ export function formOf(argv) {
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     if (!w.startsWith('--')) { if (w.startsWith('-')) continue; positional.push(w); continue; }
-    if (!w.includes('=') && VALUE_FLAGS.includes(w.slice(2))) i++;
+    if (!w.includes('=') && VALUE.includes(w.slice(2))) i++;
   }
   const [first, word] = positional;
   if (first !== 'query') return first;

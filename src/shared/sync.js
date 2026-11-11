@@ -312,6 +312,7 @@ async function repairConflicts(home, t, folders, names, renumbered, committed) {
         const own = Math.max(...moves.filter(m => m.folder === name).map(m => m.next));
         if (counters.has(path)) writeFileSync(join(home, path), counterText(Math.max(own, await lastOf(path, 2), await lastOf(path, 3)))); else if (existsSync(join(home, path))) recordNumber(join(home, name), own); else continue;
         await must(home, ['add', '--', lit(path)], `stage ${path}`);
+        committed.add(path); // the repair changed it: it is the command's own path, as the undo and the own-commit rule need
         counters.delete(path);
       }
       for (const path of counters) { // a conflicted record of a folder that renumbered nothing
@@ -509,17 +510,21 @@ export async function ownCommit(home, subject, committed) {
 // The words that name the command's kept commit and the two non-interactive ways out. The commit named is the first one with the command's
 // subject whose every changed path is one the command wrote: a person's commit with the same subject is never named.
 export async function keptParts(home, t, subject, committed) {
-  let sha;
+  let sha; let named = false;
   for (const l of (await g(home, ['log', '--format=%h %s', t.clone ? `${t.ref}..HEAD` : '-20'])).stdout.split('\n')) {
     const at = l.indexOf(' ');
     if (l.slice(at + 1) !== subject) continue;
+    named = true;
     const files = paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', l.slice(0, at)]));
     if (files.length && files.every(p => committed.has(p))) { sha = l.slice(0, at); break; }
   }
+  // no commit of the range has the command's subject at all: it dropped out of the rebase because the same change is already upstream
+  const gone = !named;
   const what = sha ? `the command's commit ${sha}` : `the command's commit (it could not be identified: see git -C ${home} log)`;
   const push = `git -C ${home} push origin HEAD:${t.branch}`;
   const advice = `publish with: ${push}${sha ? `  or take the command's change back with: git -C ${home} revert --no-edit ${sha}  and then publish with that push (if the revert stops on a conflict: git -C ${home} revert --abort, then publish with the push alone)` : ''}`;
-  return { what, advice };
+  const state = gone ? 'the command\'s change is already upstream, your own commit was not published and nothing was rolled back' : `${what} is kept on the branch under your own commit and nothing was rolled back`;
+  return { what, advice: gone ? `publish your commit with: ${push}` : advice, state, gone };
 }
 
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
@@ -655,8 +660,8 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
             // branch is pushed as it is, what lay below the command's commit travels with it)
             const ahead = Number((await g(home, ['rev-list', '--count', `${t.ref}..HEAD`])).stdout.trim());
             if (ahead > 0 && (mine ? !await ownTop() : t.clone)) {
-              const { what, advice } = mine ? await keptParts(home, t, subject, committed) : { what: '', advice: `publish with: git -C ${home} push origin HEAD:${t.branch}` };
-              throw Object.assign(new BacklogError('SYNC_FAILED', `The change was not published in ${home}: your own commit appeared on the branch while the command ran. ${mine ? `${what[0].toUpperCase()}${what.slice(1)} is kept on the branch under your own commit and nothing was rolled back` : 'It is kept unpublished and nothing was rolled back'}. To finish, ${advice}`, 3), { keep: true });
+              const { state, advice } = mine ? await keptParts(home, t, subject, committed) : { state: '', advice: `publish with: git -C ${home} push origin HEAD:${t.branch}` };
+              throw Object.assign(new BacklogError('SYNC_FAILED', `The change was not published in ${home}: your own commit appeared on the branch while the command ran. ${mine ? `${state[0].toUpperCase()}${state.slice(1)}` : 'It is kept unpublished and nothing was rolled back'}. To finish, ${advice}`, 3), { keep: true });
             }
             const ps = await g(home, ['push', '-q', 'origin', `HEAD:refs/heads/${t.branch}`]);
             if (ps.code) { err = `push failed: ${ps.stderr.slice(0, 300)}`; if (i < 2) await delay(1000 * (1 + i)); continue; }
@@ -677,11 +682,11 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       // clone: when nothing of a person's lies between the fetched remote and the command's commit, the branch also goes to the remote, as a failed pull needs
       const to = own ? (t.clone && ahead === 1 && !stale ? t.ref : 'HEAD~1') : t.clone && !stale && ahead === 0 ? t.ref : 'HEAD';
       if (mine && !own && ahead > 0) { // a person's commit lies on top of the command's: nothing is taken back, the text says so
-        const { what, advice } = await keptParts(home, t, subject, committed);
+        const { what, advice, state, gone } = await keptParts(home, t, subject, committed);
         await undoCommit(to, e);
-        if (stale) { e.message += `; your own commit lies on top of ${what}, which is kept unpublished on the branch: read the item again before publishing, then ${advice}`; throw e; }
+        if (stale) { e.message += gone ? `; ${state}: read the item again before publishing, then ${advice}` : `; your own commit lies on top of ${what}, which is kept unpublished on the branch: read the item again before publishing, then ${advice}`; throw e; }
         const cause = /has unpublished commits:/.test(e.message) ? 'your own commit appeared on the branch while the command ran' : e.message.replace(/[;,]? the local branch and working tree were rolled back.*$/s, '');
-        throw new BacklogError('SYNC_FAILED', `${cause}. The change was not published; ${what} is kept on the branch under your own commit and nothing was rolled back. To finish, ${advice}`, 3);
+        throw new BacklogError('SYNC_FAILED', `${cause}. The change was not published; ${state}. To finish, ${advice}`, 3);
       }
       await undoCommit(to, e);
       throw e;

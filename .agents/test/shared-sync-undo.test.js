@@ -319,6 +319,58 @@ test('backlog clone: a renumbering with a dependent item followed by a refused p
   assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=no'), '');
 });
 
+test('backlog clone: a command that committed nothing never publishes a commit of a person that appeared meanwhile', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  const origin = git(f.home, 'ls-remote', 'origin', 'main').split('\t')[0];
+  const person = () => { put(join(f.home, 'acme', 'other', 'p.txt'), 'person\n'); git(f.home, 'add', 'acme/other/p.txt'); git(f.home, 'commit', '-qm', 'person: other', '--', 'acme/other/p.txt'); };
+  const e = await failure(sync.commit(f.home, f.folder, 'nothing', person));
+  assert.equal(e?.exitCode, 3);
+  assert.equal(git(f.home, 'ls-remote', 'origin', 'main').split('\t')[0], origin, 'nothing reached the origin');
+  assert.match(subjects(f.home), /person: other/);
+  assert.match(e.message, /It is kept unpublished and nothing was rolled back\. To finish, publish with: git -C \S+ push origin HEAD:main/);
+});
+
+test('code repository: a person\'s commit below the command\'s commit is pushed with it, as the branch is pushed as it is', async t => {
+  const f = modes['code repository'](t);
+  const repo = join(f.home, '..');
+  await sync.pull(f.home);
+  put(join(repo, 'code2.js'), 'person\n'); git(repo, 'add', 'code2.js'); git(repo, 'commit', '-qm', 'person: code');
+  item(f.folder, 2, 'beta');
+  await sync.commitSettled(f.home, f.folder, 'add beta');
+  assert.equal(git(repo, 'rev-parse', 'HEAD'), git(repo, 'ls-remote', 'origin', 'main').split('\t')[0], 'the origin has both commits');
+  assert.match(subjects(repo, 2), /person: code/);
+});
+
+test('code repository: a command that committed nothing still pushes a person\'s pending commit, as before', async t => {
+  const f = modes['code repository'](t);
+  const repo = join(f.home, '..');
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  put(join(repo, 'code2.js'), 'person\n'); git(repo, 'add', 'code2.js'); git(repo, 'commit', '-qm', 'person: code');
+  await sync.commitSettled(f.home, f.folder, 'nothing to do');
+  assert.equal(git(repo, 'rev-parse', 'HEAD'), git(repo, 'ls-remote', 'origin', 'main').split('\t')[0]);
+});
+
+test('backlog clone: the command\'s change already upstream and a person\'s commit left above the remote: the text says so, nothing is published', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  const home2 = join(f.dir, 'home2'); git(f.dir, 'clone', '-q', f.bare, home2);
+  const change = folder => store.write({ path: itemPath(folder, '001-alpha'), fm: { ...ENVELOPE, phase: '001-alpha', seq: 1, name: 'alpha', status: 'done', repository: 'acme/demo', branch: 'main', updated: '2026-11-01T00:00:00Z' }, body: '\n# same\n' });
+  change(join(home2, 'acme', 'demo')); git(home2, 'add', '-A'); git(home2, 'commit', '-qm', 'same change'); git(home2, 'push', '-q');
+  const origin = git(f.home, 'ls-remote', 'origin', 'main').split('\t')[0];
+  personOnTop(join(f.home, '.git'), ': finish alpha', 'acme/other/p.txt', 'person: other');
+  change(f.folder);
+  const e = await failure(sync.commit(f.home, f.folder, 'finish alpha', () => {}));
+  assert.equal(e?.exitCode, 3, e?.message);
+  assert.match(e.message, /The command's change is already upstream, your own commit was not published and nothing was rolled back\. To finish, publish your commit with: git -C \S+ push origin HEAD:main$/);
+  assert.doesNotMatch(e.message, /could not be identified/);
+  assert.equal(git(f.home, 'ls-remote', 'origin', 'main').split('\t')[0], origin);
+  assert.match(subjects(f.home), /person: other/);
+});
+
 // --- a pull that fails after upstream changed other paths
 function conflictSetup(t, personLine) {
   const f = modes['backlog clone'](t);

@@ -257,11 +257,12 @@ test('query steps lists every step of the table with its arguments and each matc
     assert.deepEqual(JSON.parse(query(w, 'steps', '--team', team, '--json').stdout), expected, name);
     const text = query(w, 'steps', '--team', team);
     assert.equal(text.status, 0, text.stdout + text.stderr);
-    assert.equal(text.stdout, expected.map(e => `${e.step}  takes: ${e.args.map(a => `--${a}`).join(', ')}  rules: ${e.rules.join(', ')}\n`).join(''), name);
+    assert.equal(text.stdout, expected.map(e => `${e.step}  takes: ${e.args.map(a => `--${a}`).join(', ') || 'no argument'}  rules: ${e.rules.join(', ')}\n`).join(''), name);
     assert.deepEqual(snapshot(w.folder), before);
     clean(w);
   }
   const w = world(t);
+  assert.match(query(w, 'steps', ...BASE).stdout, /^adopt {2}takes: no argument {2}rules: /m);
   assert.match(query(w, 'steps', ...BASE).stdout, /^new {2}takes: .*--name.* {2}rules: /m);
 });
 
@@ -340,4 +341,14 @@ test('--help of every team word outside any git repository prints the help, exit
   }
   assert.deepEqual(readdirSync(home), []);
   assert.deepEqual(readdirSync(cwd), []);
+});
+
+test('query rules and query steps read no item: they succeed with a corrupt item file in the folder, which the list refuses', t => {
+  const w = seeded(t, [item(1)]);
+  writeFileSync(join(w.folder, 'phases', '002-broken.json'), '{ not an item');
+  assert.notEqual(query(w, ...BASE).status, 0);
+  for (const word of ['rules', 'steps']) {
+    const r = query(w, word, ...BASE);
+    assert.equal(r.status, 0, `${word}: ${r.stdout}${r.stderr}`);
+  }
 });

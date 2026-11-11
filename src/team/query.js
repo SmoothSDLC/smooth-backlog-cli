@@ -60,7 +60,7 @@ async function read(argv, form) {
       const entry = loaded.file[inputs.team];
       const rows = stepNames(entry).map(step => ({ step, args: stepArgs(entry, step), rules: entry.rules.table.filter(r => r !== null && typeof r === 'object' && stepWords(r).some(w => w === '*' || w === step)).map(r => r.id) }));
       if (flags.json) say(JSON.stringify(redactDeep(rows)), true);
-      else say(rows.map(r => `${r.step}  takes: ${r.args.map(a => `--${a}`).join(', ')}  rules: ${r.rules.join(', ')}`).join('\n'));
+      else say(rows.map(r => `${r.step}  takes: ${r.args.map(a => `--${a}`).join(', ') || 'no argument'}  rules: ${r.rules.join(', ')}`).join('\n'));
       return 0;
     }
     const contextFor = team => contextOf({ folder, entry: loaded.file[team] ?? { item: {} }, team, caller: inputs.agent, args: {}, session, now: now(), branch: inputs.branch || undefined });

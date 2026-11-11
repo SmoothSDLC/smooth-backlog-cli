@@ -3,12 +3,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, GIT_IDENTITY, cli, consumer, sharedBacklog } from './shared-fixtures.js';
-import { seam } from '../../src/shared/seam.js';
-import * as teamCli from '../../src/team/cli.js';
 import { toFile } from '../../src/team/item.js';
 
 const read = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
@@ -106,7 +104,7 @@ test('--name is required (missing, empty, spaces): exit 2 on standard error, not
   assert.deepEqual(w.files(), []);
 });
 
-test('an argument the step does not take is exit 2 with the list of what it takes; a value that does not fit its field is exit 2', t => {
+test('an argument the step does not take is exit 2 with the list of what it takes; a value that does not fit its field is refused by the rules, exit 1', t => {
   const w = world(t);
   let r = w.run([...BASE, '--name', 'x', '--estimate', '5', '--colour', 'red']);
   assert.deepEqual([r.status, r.stdout, r.stderr], [2, '', '❌ backlog: the step new of team parallel takes no --colour (it takes: --after, --estimate, --name, --parent)\n']);
@@ -215,6 +213,25 @@ test('a refused push: exit 3, the clone as before (no file, no counter, no commi
   assert.match(w.sha(), /^[0-9a-f]{64}$/);
 });
 
+test('a failed pull (the backlog\'s origin unreachable): exit 3 before the rules are read, nothing written, the counter not consumed', t => {
+  const w = world(t);
+  const away = `${w.bare}.away`;
+  renameSync(w.bare, away);
+  for (const args of [[...BASE, '--name', 'x', '--estimate', '5'], [...BASE, '--name', 'x']]) { // an allowed step and one the rules would refuse: the pull comes first
+    const r = w.run(args);
+    assert.equal(r.status, 3, r.stdout + r.stderr);
+    assert.equal(r.stdout, '');
+    assert.match(r.stderr, /^❌ backlog: /);
+    assert.deepEqual(w.files(), []);
+    assert.equal(existsSync(join(w.folder, 'numbers.json')), false);
+    assert.equal(git(w.home, 'status', '--short'), '');
+    assert.equal(w.log(w.home), 'init');
+    assert.equal(w.sha(), undefined);
+  }
+  renameSync(away, w.bare);
+  assert.equal(w.run([...BASE, '--name', 'x', '--estimate', '5']).stdout, '✅ created 001-x (seq 1) for team parallel, rule new\n');
+});
+
 // The backlog inside the code repository: the team file lies in the clone, the folder is .backlog/local/repository, a second clone (rb) publishes beside the first (ra).
 function inside(t) {
   const dir = mkdtempSync(join(tmpdir(), 'team-new-in-'));
@@ -265,21 +282,55 @@ test('another clone publishes into the folder while the command pushes: the step
   assert.match(JSON.parse(readFileSync(join(w.ra, '.backlog', 'config.json'), 'utf8')).teams_file_sha, /^[0-9a-f]{64}$/);
 });
 
-test('dispatch level: the new route installs no seam (the old routes do)', async t => {
-  const w = world(t);
-  assert.equal(seam.entry, null);
-  const out = []; const write = process.stdout.write; const cwd = process.cwd(); const keep = { ...process.env };
-  Object.assign(process.env, { SMOOTH_BACKLOG_CLI_HOME: w.home, XDG_CONFIG_HOME: join(w.tmp, 'config'), SMOOTH_BACKLOG_CLI_TEAM_NAME: '', SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: '', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: '', ...GIT_IDENTITY });
-  process.chdir(w.cons);
-  process.stdout.write = chunk => { out.push(String(chunk)); return true; };
-  let code;
-  try { code = await teamCli.run(['new', ...BASE, '--name', 'x', '--estimate', '5']); } finally { process.stdout.write = write; process.chdir(cwd); for (const k of Object.keys(process.env)) if (!(k in keep)) delete process.env[k]; Object.assign(process.env, keep); }
-  assert.equal(code, 0, out.join(''));
-  assert.match(out.join(''), /created 001-x/);
-  assert.equal(seam.entry, null);
-  assert.equal(seam.isMember, null);
-  assert.equal(seam.alsoActive({ status: 'refining', refiner: 'a' }), false);
-  assert.equal(seam.inScope({}), true);
+// A second clone (rb) publishes a new team file (and nothing else) while the command pushes from ra: the hook runs once, before the first push.
+function teamFileUpstream(w, teams) {
+  const staged = join(w.dir, 'teams.staged'); writeFileSync(staged, JSON.stringify(teams));
+  const marker = join(w.dir, 'done');
+  const hook = join(w.ra, '.git', 'hooks', 'pre-push');
+  writeFileSync(hook, `#!/bin/sh\nunset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE\n[ -e '${marker}' ] && exit 0\ntouch '${marker}'\ncd '${w.rb}' && git pull -q --rebase && cp '${staged}' .backlog/teams.json && git add -A && git commit -qm 'new rules' && git push -q\n`);
+  chmodSync(hook, 0o755);
+}
+const withRule = (id, change) => ({ ...PARALLEL, parallel: { ...PARALLEL.parallel, rules: { ...PARALLEL.parallel.rules, table: PARALLEL.parallel.rules.table.map(r => (r.id === id ? change(r) : r)) } } });
+
+test('only the team file changes upstream (it lies in the clone): the step runs again under the new rules and prints their say text', t => {
+  const w = inside(t);
+  teamFileUpstream(w, withRule('new', r => ({ ...r, do: { ...r.do, say: 'file the review for {$item.slug}' } })));
+  const r = w.run(BASE.concat(['--name', 'x', '--estimate', '5']));
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stdout, '✅ created 001-x (seq 1) for team parallel, rule new\nfile the review for 001-x\n');
+  assert.deepEqual(git(w.bare, 'log', '--format=%s', '-3').split('\n'), ['backlog: team new 001-x', 'new rules', 'seed']);
+});
+
+test('the step run again is refused by the new rules: exit 1 with the refusal on standard output, the item not published, no file, no counter', t => {
+  const w = inside(t);
+  teamFileUpstream(w, withRule('new-size-cap', r => ({ ...r, when: { not: { '<=': ['$arg.estimate', 3] } }, deny: 'an item is at most 3 minutes (got {$arg.estimate})' })));
+  const r = w.run(BASE.concat(['--name', 'x', '--estimate', '5']));
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(r.stdout, '❌ an item is at most 3 minutes (got 5) (rule new-size-cap)\n');
+  assert.equal(r.stderr, '');
+  assert.equal(existsSync(join(w.folder, 'phases', '001-x.json')), false);
+  assert.equal(existsSync(join(w.folder, 'numbers.json')), false);
+  assert.deepEqual(git(w.bare, 'log', '--format=%s', '-2').split('\n'), ['new rules', 'seed']);
+  assert.equal(git(w.ra, 'log', '-1', '--format=%s'), 'new rules');
+});
+
+test('the say text of the rule is printed after the line, and is the "say" of --json', t => {
+  const w = world(t, withRule('new', r => ({ ...r, do: { ...r.do, say: 'file the review for {$item.slug}' } })));
+  assert.equal(w.run([...BASE, '--name', 'x', '--estimate', '5']).stdout, '✅ created 001-x (seq 1) for team parallel, rule new\nfile the review for 001-x\n');
+  assert.equal(JSON.parse(w.run([...BASE, '--name', 'y', '--estimate', '5', '--json']).stdout).say, 'file the review for 002-y');
+});
+
+test('dispatch level: the new route installs no seam (the old routes do)', t => {
+  const w = world(t); // a child process: the runner reports through this process's standard output, which a test must not replace
+  const code = `import { seam } from ${JSON.stringify(new URL('../../src/shared/seam.js', import.meta.url).href)}; import * as teamCli from ${JSON.stringify(new URL('../../src/team/cli.js', import.meta.url).href)};
+    const before = seam.entry; const code = await teamCli.run(JSON.parse(process.env.ARGV));
+    process.stdout.write('\\n' + JSON.stringify({ before, code, entry: seam.entry, isMember: seam.isMember, also: seam.alsoActive({ status: 'refining', refiner: 'a' }), scope: seam.inScope({}) }));`;
+  const env = { ...process.env, ...GIT_IDENTITY, SMOOTH_BACKLOG_CLI_HOME: w.home, XDG_CONFIG_HOME: join(w.tmp, 'config'), SMOOTH_BACKLOG_CLI_TEAM_NAME: '', SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: '', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: '', ARGV: JSON.stringify(['new', ...BASE, '--name', 'x', '--estimate', '5']) };
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { cwd: w.cons, encoding: 'utf8', env });
+  assert.equal(r.status, 0, r.stderr);
+  const cut = r.stdout.lastIndexOf('\n'); const out = r.stdout.slice(0, cut); const json = r.stdout.slice(cut + 1);
+  assert.match(out, /created 001-x/);
+  assert.deepEqual(JSON.parse(json), { before: null, code: 0, entry: null, isMember: null, also: false, scope: true });
 });
 
 test('--help is answered by the router before anything is read', t => {

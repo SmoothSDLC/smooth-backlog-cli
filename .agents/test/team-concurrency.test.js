@@ -142,8 +142,8 @@ for (const [mode, make] of Object.entries(worlds)) {
     assert.ok(pulled(b)['002-a']);
   });
 
-  // The clock and the waits are seams: every wait costs 450 ms on the clock, whatever the random draw, and the draw is pinned to its upper end.
-  for (const [wait, reruns] of [[2000, 3], [4000, 5]]) {
+  // The clock and the waits are seams: every wait costs `step` ms on the clock, whatever the random draw, and the draw is pinned to its upper end.
+  for (const [wait, reruns, step] of [[2000, 3, 450], [4000, 5, 450], [14000, 7, 1000]]) { // the last one reaches the 3200 ms cap
     test(`${mode}: an item that changes again and again: every wait is below min(3200, 50 * 2^attempt) and the loop stops once half of the ${wait} ms lock wait has passed`, async t => {
       const { a, b } = make(t);
       const old = process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = String(wait);
@@ -152,7 +152,7 @@ for (const [mode, make] of Object.entries(worlds)) {
       let n = 0; // the other clone changes the item again while every run of the command is under way
       const moving = w => { item(w.folder, 2, 'a'); git(b.root, 'pull', '-q', '--rebase'); item(b.folder, 1, 'alpha', { summary: `v${++n}` }); git(b.root, 'add', '-A'); git(b.root, 'commit', '-qm', `v${n}`); git(b.root, 'push', '-q'); return { message: 'new a' }; };
       let clock = 0; const waits = [];
-      const ca = await begin(a, 'claim', moving, { now: () => clock, sleep: async ms => { waits.push(ms); clock += 450; } });
+      const ca = await begin(a, 'claim', moving, { now: () => clock, sleep: async ms => { waits.push(ms); clock += step; } });
       await assert.rejects(ca.publish(), e => e.exitCode === 3 && /acme\/demo kept changing while claim ran; run it again/.test(e.message));
       assert.equal(ca.runs.again, reruns);
       assert.equal(waits.length, reruns);

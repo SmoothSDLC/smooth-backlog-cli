@@ -150,3 +150,45 @@ test('code repository: a person\'s edit that conflicts with the pull: the comman
 });
 
 function item(folder, seq, name) { store.write({ path: itemPath(folder, `00${seq}-${name}`), fm: { ...ENVELOPE, phase: `00${seq}-${name}`, seq, name, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: '\n# x\n' }); }
+
+// --- a person's own bytes of a file the command rewrites come back, in both ways a user command is taken back (code repository)
+function personEdit(t) {
+  const f = modes['code repository'](t);
+  const own = (seq, name, more = {}) => store.write({ path: itemPath(f.folder, `00${seq}-${name}`), fm: { ...ENVELOPE, phase: `00${seq}-${name}`, seq, name, status: 'pending', repository: 'acme/demo', branch: 'main', ...more }, body: '\n# x\n' });
+  const repo = join(f.home, '..');
+  put(join(repo, 'code.js'), 'x\n'); own(1, 'alpha'); own(2, 'beta');
+  git(repo, 'add', '-A'); git(repo, 'commit', '-qm', 'seed'); git(repo, 'push', '-q');
+  return { f, own, repo };
+}
+async function startCommand({ f, own, repo }) {
+  await sync.pull(f.home);
+  writeFileSync(join(repo, 'code.js'), 'mine\n');
+  own(1, 'alpha', { summary: 'person' }); // the person's uncommitted edit of a file the command rewrites
+  const person = readFileSync(itemPath(f.folder, '001-alpha'), 'utf8');
+  await sync.pull(f.home); // the command's starting snapshot
+  own(1, 'alpha', { summary: 'command' }); rmSync(itemPath(f.folder, '002-beta')); own(3, 'gamma');
+  return person;
+}
+const putBackBack = (w, person) => {
+  assert.equal(readFileSync(itemPath(w.f.folder, '001-alpha'), 'utf8'), person, 'the person\'s bytes are back');
+  assert.ok(existsSync(itemPath(w.f.folder, '002-beta')), 'the deleted item is back');
+  assert.ok(!existsSync(itemPath(w.f.folder, '003-gamma')), 'the created item is gone');
+};
+
+test('code repository: a refused push puts back the person\'s bytes of a file the command rewrote', async t => {
+  const w = personEdit(t);
+  const other = join(w.f.dir, 'b'); git(w.f.dir, 'clone', '-q', w.f.bare, other);
+  const person = await startCommand(w);
+  refuse(w.f.bare);
+  await assert.rejects(sync.commitSettled(w.f.home, w.f.folder, 'change'), /change was not published/);
+  putBackBack(w, person);
+});
+
+test('code repository: an unmerged index after the pull puts back the person\'s bytes and names the next step', async t => {
+  const w = personEdit(t);
+  const other = join(w.f.dir, 'b'); git(w.f.dir, 'clone', '-q', w.f.bare, other);
+  const person = await startCommand(w);
+  writeFileSync(join(other, 'code.js'), 'theirs\n'); git(other, 'add', '-A'); git(other, 'commit', '-qm', 'theirs'); git(other, 'push', '-q');
+  await assert.rejects(sync.commitSettled(w.f.home, w.f.folder, 'change'), /Next: resolve the conflicted files/);
+  putBackBack(w, person);
+});

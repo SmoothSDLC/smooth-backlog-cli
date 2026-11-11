@@ -202,3 +202,36 @@ test('code repository: the origin has no such branch yet and a person\'s unpushe
   assert.equal(git(a.root, 'ls-remote', 'origin', 'feature'), '');
   assert.equal(subjects(a.root, 'HEAD -1'), 'backlog: new beta');
 });
+
+// A person's own bytes of the command's files: the undo puts them back, unless upstream changed the path since the command started.
+const startedWith = async (a, edit) => { await sync.pull(a.home); edit(); await sync.pull(a.home); }; // the person's edit, then the command's starting snapshot
+
+test('code repository: an undone team command puts back a person\'s uncommitted edit of a file it rewrote', async t => {
+  const { a, bare } = modes['code repository'](t);
+  await startedWith(a, () => item(a.folder, 1, 'alpha', { summary: 'person' }));
+  const person = readFileSync(itemPath(a.folder, '001-alpha'), 'utf8');
+  item(a.folder, 1, 'alpha', { summary: 'command' });
+  refuse(bare);
+  await assert.rejects(publishTeam(a.home, a.folder, 'change alpha', opts(a)), /change was not published/);
+  assert.equal(readFileSync(itemPath(a.folder, '001-alpha'), 'utf8'), person);
+});
+
+test('code repository: an undone team command leaves a path the person deleted before it deleted', async t => {
+  const { a, bare } = modes['code repository'](t);
+  await startedWith(a, () => rmSync(itemPath(a.folder, '001-alpha')));
+  item(a.folder, 2, 'beta');
+  refuse(bare);
+  await assert.rejects(publishTeam(a.home, a.folder, 'new beta', opts(a)), /change was not published/);
+  assert.ok(!existsSync(itemPath(a.folder, '001-alpha')), 'the person\'s deletion stays');
+  assert.ok(!existsSync(itemPath(a.folder, '002-beta')), 'the command\'s file is gone');
+  assert.match(git(a.root, 'status', '--porcelain', '--', '.backlog/acme/demo/phases'), /^D .*001-alpha/ /* the helper trims the leading space of an unstaged deletion */);
+});
+
+test('code repository: a re-run undone after upstream changed the path the person edited leaves the upstream version', async t => {
+  const { a, b } = modes['code repository'](t);
+  await startedWith(a, () => item(a.folder, 1, 'alpha', { summary: 'person' }));
+  item(a.folder, 1, 'alpha', { summary: 'command' });
+  publishFrom(b, w => item(w.folder, 1, 'alpha', { summary: 'other' }));
+  await assert.rejects(publishTeam(a.home, a.folder, 'change alpha', opts(a, { attempt: async () => { throw new Error('the rules broke'); } })), /the rules broke/);
+  assert.equal(read(a.folder, '001-alpha').summary, 'other', 'the upstream version, not the person\'s older bytes');
+});

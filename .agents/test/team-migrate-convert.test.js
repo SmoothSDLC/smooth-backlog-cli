@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { checkKept, convertItem } from '../../src/team/migrate-convert.js';
-import { readDoc } from '../../src/shared/item-json.js';
+import { readDoc, writeDoc } from '../../src/shared/item-json.js';
 import { parseEvent } from '../../src/shared/item-file.js';
 
 const FIXTURES = fileURLToPath(new URL('./fixtures/shared/', import.meta.url));
@@ -152,6 +152,37 @@ test('the key-by-key check names the first key that would change, an extra key a
   stops(i => { i.slug = 'x'; }, 'phase');
   stops(i => { i.fields.extra = 1; }, 'extra');
   stops(() => {}, 'body', 'other\n');
+});
+
+test('convertItem refuses a document text that does not hold what the header held (its own call of the check)', () => {
+  const text = md(`${BASE}\nobjective: o\nevents:\n- T claimed`);
+  const faulty = edit => (doc, o) => writeDoc(edit(structuredClone(doc)), o);
+  assert.throws(() => convertItem(text, { write: faulty(d => { d.fields.objective = 'x'; return d; }) }), e => e.field === 'objective' && /objective would change/.test(e.message));
+  assert.throws(() => convertItem(text, { write: faulty(d => { d.history = []; return d; }) }), e => e.field === 'events');
+  assert.throws(() => convertItem(text, { write: faulty(d => { d.body = 'x'; return d; }) }), e => e.field === 'body');
+  assert.doesNotThrow(() => convertItem(text, { write: faulty(d => d) }));
+});
+
+test('a quoted history line with trailing spaces converts and the note keeps them; a tail of spaces after the step is no content', () => {
+  const r = conv(`${BASE}\nevents:\n- 'T claimed main abc some note  '\n- 'T claimed '\n- 'T '`);
+  assert.equal(r.item.history[0].note, 'main abc some note  ');
+  assert.deepEqual(r.item.history.slice(1).map(e => [e.at, e.step, e.note]), [['T', 'claimed', ''], ['T', '', '']]);
+});
+
+test('a holder that is null stays null and an empty one stays empty text', () => {
+  assert.equal(conv(`${BASE}\nowner: ~`).item.fields.owner, null);
+  assert.equal(conv(`${BASE}\nowner:`).item.fields.owner, null);
+  assert.equal(conv(`${BASE}\nowner: ''`).item.fields.owner, '');
+  assert.equal(conv(`${BASE}\nclaimed_by: ''`).item.fields.owner, '');
+  assert.equal(conv(`${BASE}\nowner: ~\nclaimed_by: bob`).item.fields.owner, 'bob');
+});
+
+test('a seq outside 1 to MAX_SEQ is refused, with or without a file name', () => {
+  for (const seq of [0, -1, 1000000001, 2000000000]) {
+    fails(`phase: 001-a\nseq: ${seq}\nname: A`, new RegExp(`seq ${seq} is outside the numbers the CLI can use`));
+    fails(`phase: 001-a\nseq: ${seq}\nname: A`, /seq/, { fileName: '001-a.md' });
+  }
+  assert.equal(conv('phase: 001-a\nseq: 1000000000\nname: A').seq, 1000000000);
 });
 
 test('the module is pure: no disk, no store, no team file', () => {

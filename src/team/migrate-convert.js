@@ -3,7 +3,7 @@
 import { BacklogError } from '../errors.js';
 import { hasFrontMatter, parseMarkdownItem, parseMarkdownRaw, splitBom } from '../shared/item-file.js';
 import { readDoc, writeDoc } from '../shared/item-json.js';
-import { numberOf } from '../shared/numbers.js';
+import { MAX_SEQ, numberOf } from '../shared/numbers.js';
 import { asList } from '../shared/text.js';
 
 // Header keys the migration drops (the order is the index now).
@@ -24,6 +24,8 @@ function entryOf(line) {
   const at = i < 0 ? line : line.slice(0, i), rest = i < 0 ? '' : line.slice(i + 1), j = rest.indexOf(' ');
   return { at, by: '', session: '', step: j < 0 ? rest : rest.slice(0, j), changes: {}, note: j < 0 ? '' : rest.slice(j + 1) };
 }
+// the line is what the entry gives back, or that plus a tail of spaces: the separator with no note after it is no content
+const tailless = (l, back) => l.startsWith(back) && /^ *$/.test(l.slice(back.length));
 const lineOf = e => `${e.at}${e.step || e.note ? ` ${e.step}` : ''}${e.note ? ` ${e.note}` : ''}`;
 
 // The first top-level key the header block writes twice (the reader keeps the last value, which would lose the first).
@@ -42,9 +44,10 @@ function duplicateKey(text) {
 // convertItem(text, { folderRepo, slugs, order, fileName }) -> { slug, seq, doc, json, item, fm, body, warnings }
 //   folderRepo: the repository of the folder (an item without a repository takes it); slugs: Map (or object) slug -> number of every item of the folder, live and archived;
 //   order: the field order of the item's team definition, for writeDoc; fileName: the item's file name (with or without its extension), which seq and phase must match.
+//   write: the writer of the document text (writeDoc; a test passes a faulty one to show the check refuses what it returns).
 //   doc is the document of chapter 02 (later parts change it and write it again); item is readDoc(json); fm and body are the markdown header in the loaded names and the
 //   body as read (the order of a folder without an index is read from fm.priority before it is dropped). warnings lists the depends_on entries that name no item.
-export function convertItem(text, { folderRepo = '', slugs, order = [], fileName } = {}) {
+export function convertItem(text, { folderRepo = '', slugs, order = [], fileName, write = writeDoc } = {}) {
   if (!hasFrontMatter(text)) throw fail('there is no front-matter block');
   let loaded, raw;
   try { loaded = parseMarkdownItem(text); raw = parseMarkdownRaw(text).fm; } catch (e) { throw fail(String(e.message).replace(/^front matter /, ''), e.field); }
@@ -57,6 +60,7 @@ export function convertItem(text, { folderRepo = '', slugs, order = [], fileName
 
   const seq = fm.seq;
   if (!Number.isSafeInteger(seq)) throw fail('seq is missing or not a whole number', 'seq');
+  if (seq < 1 || seq > MAX_SEQ) throw fail(`seq ${seq} is outside the numbers the CLI can use (1 to ${MAX_SEQ})`, 'seq');
   if (empty(fm.name)) throw fail('name is missing', 'name');
   const name = str('name', fm.name);
   const base = fileName === undefined ? undefined : String(fileName).replace(/\.(md|json)$/, '');
@@ -81,7 +85,7 @@ export function convertItem(text, { folderRepo = '', slugs, order = [], fileName
   // the holder: claimed_by and claimed_at fill owner and owned_since only when those are empty; two different names are a failure, nothing is dropped
   const { claimed_by: by, claimed_at: since, owner } = fm;
   if (!empty(owner) && !empty(by) && owner !== by) throw fail('owner and claimed_by both hold a name', 'owner');
-  if (owner !== undefined || by !== undefined) doc.fields.owner = empty(owner) ? (by ?? owner) : owner;
+  if (owner !== undefined || by !== undefined) doc.fields.owner = !empty(owner) ? owner : !empty(by) ? by : (owner !== undefined ? owner : by); // a null or empty holder stays as written
   if (since !== undefined) doc.fields.owned_since = since;
 
   // depends_on: numbers stay numbers, a slug of the folder is that item's number, owner/name#seq and any other entry stay text (the other entries are listed)
@@ -103,7 +107,7 @@ export function convertItem(text, { folderRepo = '', slugs, order = [], fileName
   }
 
   let json, item;
-  try { json = writeDoc(doc, { order }); item = readDoc(json); } catch (e) { throw fail(String(e.message).replace(/^item file:? /, ''), e.field); }
+  try { json = write(doc, { order }); item = readDoc(json); } catch (e) { throw fail(String(e.message).replace(/^item file:? /, ''), e.field); }
 
   checkKept(fm, body, item, slugs);
   return { slug, seq, doc, json, item, fm, body, warnings };
@@ -119,11 +123,11 @@ export function checkKept(fm, body, item, slugs) {
   for (const [k, v] of Object.entries(fm)) {
     if (DROPPED.includes(k)) continue;
     if (k === 'phase') { if (item.slug !== v) lost(k); } else if (k === 'team') { if ((item.team ?? '') !== (v ?? '')) lost(k); } else if (k === 'events') {
-      if (item.history.length !== (v ?? []).length || !(v ?? []).every((l, i) => lineOf(item.history[i]) === l.replace(/ +$/, ''))) lost(k);
+      if (item.history.length !== (v ?? []).length || !(v ?? []).every((l, i) => tailless(l, lineOf(item.history[i])))) lost(k);
     } else if (ENVELOPE.includes(k)) { if (v !== null && item[k] !== v) lost(k); } else if (k === 'depends_on') {
       const back = item.fields.depends_on, was = asList(v);
       if (!Array.isArray(back) || back.length !== was.length || was.some((e, i) => !(typeof back[i] === 'number' ? Number(e) === back[i] || look(slugs, e) === back[i] : back[i] === e))) lost(k);
-    } else if (k === 'claimed_by' || k === 'owner') { if (!empty(v) && item.fields.owner !== v) lost(k); } else if (k === 'claimed_at') { if (!same(item.fields.owned_since, v)) lost(k); } else if (k === 'completed_at' && !('completed' in fm)) {
+    } else if (k === 'claimed_by' || k === 'owner') { if ((!empty(v) || (empty(fm.owner) && empty(fm.claimed_by) && v === (fm.owner !== undefined ? fm.owner : fm.claimed_by))) && item.fields.owner !== v) lost(k); } else if (k === 'claimed_at') { if (!same(item.fields.owned_since, v)) lost(k); } else if (k === 'completed_at' && !('completed' in fm)) {
       if (!same(item.fields.completed, v)) lost(k);
     } else if (!same(item.fields[k], v)) lost(k);
   }

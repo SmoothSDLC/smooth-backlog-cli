@@ -518,7 +518,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
     if (adds.length) await must(home, ['add', '-A', '--', ...adds], `stage ${names.join(', ')}`);
     return lits;
   };
-  const subject = t.clone ? `${names.join(', ')}: ${message}` : `backlog: ${message}`;
+  const subject = (t.clone ? `${names.join(', ')}: ${message}` : `backlog: ${message}`).replace(/\s+/g, ' ').trim(); // one line: git stores a subject trimmed and collapsed, and the undo compares it
   const inBacklog = path => path.startsWith(t.prefix);
   const committed = new Set(); // every path any staging of this command took
   return locked(lockFile(backlogHome), async () => {
@@ -633,18 +633,23 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       // Publication failures take back the command's own commit and nothing else.
       if (e.keep) throw e; // the commit is kept on purpose
       const stale = e.code === 'STALE_ITEM';
-      let to = mine ? 'HEAD~1' : 'HEAD';
-      if (t.clone) { // only the command's own commit is taken back (the one on top, found by its subject): a person's commit under or over it stays
-        const ahead = Number((await g(home, ['rev-list', '--count', `${t.ref}..HEAD`])).stdout.trim());
-        const own = mine && ahead > 0 && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject;
-        // nothing of a person's lies between the fetched remote and the command's commit: the branch also goes to the remote, as a failed pull needs
-        to = own ? (ahead === 1 && !stale ? t.ref : 'HEAD~1') : !stale && ahead === 0 ? t.ref : 'HEAD';
-        if (mine && !own && !stale && ahead > 0) { // a person's commit lies on top of the command's: nothing is taken back, the text says so
-          const sha = (await g(home, ['log', '--format=%h %s', `${t.ref}..HEAD`])).stdout.split('\n').find(l => l.slice(l.indexOf(' ') + 1) === subject)?.split(' ')[0];
-          await undoCommit(to, e);
-          throw new BacklogError('SYNC_FAILED', `${e.message.replace(/[;,]? the local branch and working tree were rolled back.*$/s, '')}. Your own commit lies on top of the command's commit ${sha}, so the command's commit is kept on the branch and nothing was rolled back. `
-            + `Either publish both with: git -C ${home} push origin HEAD:${t.branch}  or drop the command's commit with: git -C ${home} revert --no-edit ${sha}  and run the command again`, 3);
-        }
+      // The top commit is the command's own only when it has the command's subject and changes only paths the command staged or inside its folders;
+      // anything else is a person's commit and is never taken back.
+      const top = mine ? paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', 'HEAD'])) : [];
+      const own = mine && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject
+        && top.length > 0 && top.every(p => committed.has(p) || names.some(n => p.startsWith(`${n}/`)));
+      const ahead = t.clone ? Number((await g(home, ['rev-list', '--count', `${t.ref}..HEAD`])).stdout.trim()) : 1;
+      // clone: when nothing of a person's lies between the fetched remote and the command's commit, the branch also goes to the remote, as a failed pull needs
+      const to = own ? (t.clone && ahead === 1 && !stale ? t.ref : 'HEAD~1') : t.clone && !stale && ahead === 0 ? t.ref : 'HEAD';
+      if (mine && !own && ahead > 0) { // a person's commit lies on top of the command's: nothing is taken back, the text says so
+        const sha = (await g(home, ['log', '--format=%h %s', t.clone ? `${t.ref}..HEAD` : '-20'])).stdout.split('\n').find(l => l.slice(l.indexOf(' ') + 1) === subject)?.split(' ')[0];
+        const what = sha ? `the command's commit ${sha}` : `the command's commit (it could not be identified: see git -C ${home} log)`;
+        const push = `git -C ${home} push origin HEAD:${t.branch}`;
+        const advice = `publish with: ${push}${sha ? `  or take the command's change back with: git -C ${home} revert --no-edit ${sha}  and then publish with that push` : ''}`;
+        await undoCommit(to, e);
+        if (stale) { e.message += `; your own commit lies on top of ${what}, which is kept unpublished on the branch: ${advice}`; throw e; }
+        const cause = /has unpublished commits:/.test(e.message) ? 'your own commit appeared on the branch while the command ran' : e.message.replace(/[;,]? the local branch and working tree were rolled back.*$/s, '');
+        throw new BacklogError('SYNC_FAILED', `${cause}. The change was not published; ${what} is kept on the branch under your own commit and nothing was rolled back. To finish, ${advice}`, 3);
       }
       await undoCommit(to, e);
       throw e;

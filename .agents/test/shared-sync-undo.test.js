@@ -105,9 +105,113 @@ test('backlog clone: a person\'s commit on top of the command\'s commit is never
   assert.equal(e?.exitCode, 3);
   const own = git(f.home, 'log', '--format=%h %s', '-3').split('\n').find(l => /add beta/.test(l)).split(' ')[0];
   assert.doesNotMatch(e.message, /local branch and working tree were rolled back/);
-  assert.match(e.message, new RegExp(`not published in \\S+.*\\. Your own commit lies on top of the command's commit ${own}, so the command's commit is kept on the branch and nothing was rolled back\\. Either publish both with: git -C \\S+ push origin HEAD:main  or drop the command's commit with: git -C \\S+ revert --no-edit ${own}  and run the command again$`));
+  assert.match(e.message, new RegExp(`\\. The change was not published; the command's commit ${own} is kept on the branch under your own commit and nothing was rolled back\\. To finish, publish with: git -C \\S+ push origin HEAD:main  or take the command's change back with: git -C \\S+ revert --no-edit ${own}  and then publish with that push$`));
+  assert.doesNotMatch(e.message, /run the command again|reset --keep/);
   assert.match(git(f.home, 'log', '--format=%s', '-3'), /person: alpha done/);
   assert.equal(readFileSync(alpha, 'utf8'), mine);
+});
+
+// A person's commit made right after the command's own commit (a hook of the clone stands for the person): `subject` ends the command's subject.
+function personOnTop(gitDir, ending, path, personSubject) {
+  const hook = join(gitDir, 'hooks', 'post-commit');
+  writeFileSync(hook, `#!/bin/sh\ncase "$(git log -1 --format=%s)" in *"${ending}") ;; *) exit 0;; esac\nunset GIT_INDEX_FILE\ncd "$(git rev-parse --show-toplevel)"\n[ -e "${path}" ] && exit 0\nmkdir -p "$(dirname "${path}")"\necho person > "${path}"\ngit add "${path}"\ngit -c user.name=P -c user.email=p@example.com commit -q -m "${personSubject}" -- "${path}"\n`);
+  chmodSync(hook, 0o755);
+}
+const subjects = (home, n = 4) => git(home, 'log', '--format=%s', `-${n}`);
+const failure = p => p.then(() => null, x => x);
+
+test('backlog clone: a person\'s commit on top with the command\'s own subject but a path outside its folder is not taken back', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  refuse(f.bare);
+  personOnTop(join(f.home, '.git'), ': add beta', 'acme/other/p.txt', 'acme/demo: add beta');
+  item(f.folder, 2, 'beta');
+  const e = await failure(sync.commitSettled(f.home, f.folder, 'add beta'));
+  assert.equal(e?.exitCode, 3);
+  assert.equal(readFileSync(join(f.home, 'acme', 'other', 'p.txt'), 'utf8'), 'person\n');
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '2', 'both commits are kept');
+  assert.match(e.message, /nothing was rolled back/);
+});
+
+test('backlog clone: the stale refusal (exit 5) keeps a person\'s commit on top and says so', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  const home2 = join(f.dir, 'home2'); git(f.dir, 'clone', '-q', f.bare, home2);
+  const was = JSON.parse(readFileSync(itemPath(f.folder, '001-alpha'), 'utf8')).updated;
+  store.write({ path: itemPath(join(home2, 'acme', 'demo'), '001-alpha'), fm: { ...ENVELOPE, phase: '001-alpha', seq: 1, name: 'alpha', status: 'done', repository: 'acme/demo', branch: 'main' }, body: '\n# theirs\n' });
+  git(home2, 'add', '-A'); git(home2, 'commit', '-qm', 'theirs'); git(home2, 'push', '-q');
+  personOnTop(join(f.home, '.git'), ': add beta', 'acme/other/p.txt', 'person: other');
+  item(f.folder, 2, 'beta');
+  const e = await failure(sync.commitSettled(f.home, f.folder, 'add beta', [{ path: 'acme/demo/phases/001-alpha.json', slug: '001-alpha', was }]));
+  assert.equal(e?.code, 'STALE_ITEM');
+  assert.equal(e.exitCode, 5);
+  assert.match(subjects(f.home), /person: other/);
+  assert.equal(readFileSync(join(f.home, 'acme', 'other', 'p.txt'), 'utf8'), 'person\n');
+  assert.match(e.message, /your own commit lies on top of the command's commit [0-9a-f]+, which is kept unpublished on the branch: publish with: git -C \S+ push origin HEAD:main  or take the command's change back with: git -C \S+ revert --no-edit [0-9a-f]+/);
+});
+
+test('backlog clone: a command that committed nothing never takes back a person\'s commit', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  const person = () => { put(join(f.home, 'acme', 'other', 'p.txt'), 'person\n'); git(f.home, 'add', '-A'); git(f.home, 'commit', '-qm', 'person: other'); throw new Error('stop'); };
+  await assert.rejects(sync.commit(f.home, f.folder, 'nothing', person), /stop/);
+  assert.match(subjects(f.home), /person: other/);
+  assert.equal(readFileSync(join(f.home, 'acme', 'other', 'p.txt'), 'utf8'), 'person\n');
+});
+
+test('backlog clone: a command that committed nothing goes to the fetched remote when it fails after upstream moved', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  const home2 = join(f.dir, 'home2'); git(f.dir, 'clone', '-q', f.bare, home2);
+  put(join(home2, 'acme', 'other', 'u.txt'), 'upstream\n'); git(home2, 'add', '-A'); git(home2, 'commit', '-qm', 'upstream'); git(home2, 'push', '-q');
+  await assert.rejects(sync.commit(f.home, f.folder, 'nothing', () => { throw new Error('stop'); }), /stop/);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'rev-parse', 'origin/main'));
+  assert.equal(git(f.home, 'status', '--porcelain'), '');
+});
+
+test('backlog clone: a command text with a newline or edge spaces is one trimmed subject and a refused push still rolls it back', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  refuse(f.bare);
+  const before = git(f.home, 'rev-parse', 'HEAD');
+  item(f.folder, 2, 'beta');
+  const e = await failure(sync.commitSettled(f.home, f.folder, '  add\nbeta  '));
+  assert.match(e?.message ?? '', /local branch and working tree were rolled back/);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), before);
+});
+
+test('backlog clone: a person\'s commit that appears before the index is made right is kept and the text never advises dropping it', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  item(f.folder, 2, 'beta');
+  const person = () => { put(join(f.home, 'acme', 'other', 'p.txt'), 'person\n'); git(f.home, 'add', 'acme/other/p.txt'); git(f.home, 'commit', '-qm', 'person: other', '--', 'acme/other/p.txt'); item(f.folder, 3, 'gamma'); };
+  const e = await failure(sync.commit(f.home, f.folder, 'add beta', person));
+  assert.equal(e?.exitCode, 3);
+  assert.match(subjects(f.home), /person: other/);
+  assert.doesNotMatch(e.message, /reset --keep|run the command again|undefined/);
+  assert.match(e.message, /your own commit appeared on the branch while the command ran\. The change was not published; the command's commit [0-9a-f]+ is kept/);
+});
+
+test('code repository: a person\'s commit made on top of the command\'s commit during the command is kept', async t => {
+  const f = modes['code repository'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  refuse(f.bare);
+  const repo = join(f.home, '..');
+  personOnTop(join(repo, '.git'), ': add beta', 'code2.js', 'person: code');
+  item(f.folder, 2, 'beta');
+  const e = await failure(sync.commitSettled(f.home, f.folder, 'add beta'));
+  assert.equal(e?.exitCode, 3);
+  assert.match(subjects(repo), /person: code/);
+  assert.equal(readFileSync(join(repo, 'code2.js'), 'utf8'), 'person\n');
+  assert.match(e.message, /nothing was rolled back/);
+  assert.doesNotMatch(e.message, /undefined/);
 });
 
 // --- a pull that fails after upstream changed other paths

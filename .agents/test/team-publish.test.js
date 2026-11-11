@@ -144,13 +144,13 @@ test('code repository: a person\'s unpushed commit of other files never travels 
 });
 
 test('code repository: a person\'s uncommitted change to a file of the commit blocks the re-run: exit 3 naming the path, the commit stays', async t => {
-  const { a, b } = modes['code repository'](t);
+  const { dir, a, b } = modes['code repository'](t);
   await sync.pull(a.home);
   item(a.folder, 1, 'alpha', { summary: 'command' });
   publishFrom(b, w => item(w.folder, 1, 'alpha', { summary: 'other' }));
   // the person edits the item right after the commit is made (a hook of the clone stands for the person): the edit is uncommitted, on top of the commit
   const file = itemPath(a.folder, '001-alpha'); const hook = join(a.root, '.git', 'hooks', 'post-commit');
-  writeFileSync(hook, `#!/bin/sh\n[ -e "${a.dir}/edited" ] || { echo person >> "${file}"; touch "${a.dir}/edited"; }\n`); chmodSync(hook, 0o755);
+  writeFileSync(hook, `#!/bin/sh\n[ -e "${dir}/edited" ] || { echo person >> "${file}"; touch "${dir}/edited"; }\n`); chmodSync(hook, 0o755);
   await assert.rejects(publishTeam(a.home, a.folder, 'change alpha', opts(a, { step: 'update', persist: () => assert.fail('nothing was published') })),
     e => e.exitCode === 3 && /your uncommitted change to .backlog\/acme\/demo\/phases\/001-alpha\.json blocks the re-run of update; commit or stash it and run the step again/.test(e.message));
   assert.equal(subjects(a.root, 'HEAD -1'), 'backlog: change alpha');
@@ -284,4 +284,59 @@ test('a first commit of the branch with an unrelated upstream: the change is bui
   assert.ok(!e || /the change is published; your local branch could not be rebased/.test(e.message), e?.message); // the unrelated local history cannot always be rebased onto it
   const files = git(a.root, 'ls-tree', '-r', '--name-only', 'origin/main');
   assert.ok(files.includes('x.txt') && files.includes('.backlog/acme/demo/phases/001-alpha.json'), files);
+});
+
+// Every failure of the publication exits with the option `exit` (pop passes 1: exit 3 means "nothing to do" to it).
+const exits1 = { exit: 1 };
+const fails1 = (promise, text) => assert.rejects(promise, e => e.exitCode === 1 && text.test(e.message));
+
+test('exit 1: a refused push', async t => {
+  const { a, bare } = modes['code repository'](t);
+  refuse(bare); await sync.pull(a.home); item(a.folder, 2, 'beta');
+  await fails1(publishTeam(a.home, a.folder, 'new beta', opts(a, exits1)), /change was not published/);
+});
+
+test('exit 1: a pull that fails on the re-run', async t => {
+  const { a, b } = modes['code repository'](t);
+  await sync.pull(a.home);
+  put(join(a.root, 'code.js'), 'person\n'); git(a.root, 'commit', '-qam', 'person code'); item(a.folder, 2, 'beta');
+  publishFrom(b, w => { put(join(w.root, 'code.js'), 'other\n'); item(w.folder, 3, 'gamma'); });
+  await fails1(publishTeam(a.home, a.folder, 'new beta', opts(a, exits1)), /could not update/);
+});
+
+test('exit 1: a conflict with a person\'s unpushed commit', async t => {
+  const { a } = modes['code repository'](t);
+  await sync.pull(a.home);
+  item(a.folder, 1, 'alpha', { summary: 'person' }); git(a.root, 'commit', '-qam', 'person edit'); item(a.folder, 1, 'alpha', { summary: 'command' });
+  await fails1(publishTeam(a.home, a.folder, 'change alpha', opts(a, exits1)), /your unpushed commits change/);
+});
+
+test('exit 1: a branch the origin lacks while a person\'s commit lies below', async t => {
+  const { a } = modes['code repository'](t);
+  git(a.root, 'checkout', '-q', '-b', 'feature'); put(join(a.root, 'code.js'), 'person\n'); git(a.root, 'commit', '-qam', 'person code'); item(a.folder, 2, 'beta');
+  await fails1(publishTeam(a.home, a.folder, 'new beta', opts(a, exits1)), /not on the origin yet/);
+});
+
+test('exit 1: no origin remote', async t => {
+  const { a } = modes['code repository'](t);
+  git(a.root, 'remote', 'remove', 'origin'); item(a.folder, 2, 'beta');
+  await fails1(publishTeam(a.home, a.folder, 'new beta', opts(a, exits1)), /no origin remote/);
+});
+
+test('exit 1: the rebase fails after a successful push', async t => {
+  const { a, b } = modes['code repository'](t);
+  await sync.pull(a.home);
+  put(join(a.root, 'code.js'), 'person\n'); git(a.root, 'commit', '-qam', 'person code'); item(a.folder, 2, 'beta');
+  publishFrom(b, w => put(join(w.root, 'code.js'), 'other\n'));
+  await fails1(publishTeam(a.home, a.folder, 'new beta', opts(a, exits1)), /the change is published/);
+});
+
+test('exit 1: a person\'s uncommitted change blocks the re-run', async t => {
+  const { dir, a, b } = modes['code repository'](t);
+  await sync.pull(a.home);
+  item(a.folder, 1, 'alpha', { summary: 'command' });
+  publishFrom(b, w => item(w.folder, 1, 'alpha', { summary: 'other' }));
+  const file = itemPath(a.folder, '001-alpha'); const hook = join(a.root, '.git', 'hooks', 'post-commit');
+  writeFileSync(hook, `#!/bin/sh\n[ -e "${dir}/edited" ] || { echo person >> "${file}"; touch "${dir}/edited"; }\n`); chmodSync(hook, 0o755);
+  await fails1(publishTeam(a.home, a.folder, 'change alpha', opts(a, { ...exits1, step: 'pop' })), /blocks the re-run of pop/);
 });

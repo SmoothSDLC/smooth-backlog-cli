@@ -130,6 +130,7 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
         const kept = await undo();
         if (kept.length) e.message += `; your edit of ${kept.join(', ')} conflicts with the upstream change and is kept in the stash (git -C ${home} stash list), the file itself is the upstream version`;
       }
+      if (e.code === 'SYNC_FAILED') e.exitCode = exit; // every failure of the publication: pop reads exit 3 as idle, so it passes 1
       throw e;
     }
   }, { takeOver: true });

@@ -15,8 +15,8 @@ const POP = ['--team', 'parallel', '--agent', 'member-1'];
 const ISO = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z/g;
 
 // A ready item of the team, written and published.
-const ready = (w, seq, { branch = 'main', body = '', archived = false, slug = `${String(seq).padStart(3, '0')}-item`, status = 'ready' } = {}) => {
-  putItem(w.folder, { seq, slug, name: `item ${seq}`, team: 'parallel', repository: 'acme/app', branch, archived, body, fields: { ...DEFAULTS, status } }, ENTRY);
+const ready = (w, seq, { branch = 'main', body = '', archived = false, slug = `${String(seq).padStart(3, '0')}-item`, status = 'ready', fields = {} } = {}) => {
+  putItem(w.folder, { seq, slug, name: `item ${seq}`, team: 'parallel', repository: 'acme/app', branch, archived, body, fields: { ...DEFAULTS, status, ...fields } }, ENTRY);
 };
 const order = (w, branches) => writeFileSync(index.file(w.folder), index.text({ branches }));
 const entries = seqs => seqs.map(s => ({ seq: s, slug: `${String(s).padStart(3, '0')}-item`, name: `item ${s}`, status: 'ready' }));
@@ -120,6 +120,19 @@ test('a credential in a field is redacted in the text and the JSON, and the JSON
   assert.ok(!json.stdout.includes('hunter2secret'), json.stdout);
   const out = JSON.parse(json.stdout);
   assert.ok(out.item_file.body.includes('café') && out.item_file.body.includes('日本語'));
+});
+
+test('--json is serialized from the redacted values and printed as is: a URL field then an email field keep every field, a credential is still redacted', t => {
+  const w = world(t);
+  ready(w, 1, { fields: { checker: 'http://example.com', handoff: 'me@b.com see https://user:hunter2secret@host/x' } }); w.publish('seed');
+  for (const flags of [['--dry-run', '--json'], ['--json']]) {
+    const r = w.run([...POP, ...flags], {}, 'pop');
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const f = JSON.parse(r.stdout).item_file.fields;
+    assert.equal(f.checker, 'http://example.com');
+    assert.equal(f.handoff, 'me@b.com see https://host/x');
+    assert.ok(!r.stdout.includes('hunter2secret'), r.stdout);
+  }
 });
 
 test('an item number held by a live and an archived item: pop offers the live one once and never the archived one', t => {

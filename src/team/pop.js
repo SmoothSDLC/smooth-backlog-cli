@@ -16,7 +16,8 @@ import { sessionOf } from './session.js';
 import { showItem } from './show.js';
 import { loadTeams } from './teams-load.js';
 
-const say = text => process.stdout.write(`${redact(text)}\n`);
+// JSON is serialized from values showItem already redacted; the text redaction over serialized JSON would eat across its punctuation.
+const say = (text, json) => process.stdout.write(`${json ? text : redact(text)}\n`);
 const invalid = text => new BacklogError('INVALID_INPUT', text);
 
 export async function run(argv) {
@@ -69,11 +70,11 @@ async function popItem(argv) {
     };
 
     const first = await attempt();
-    if (first.idle) { say(first.print); return 3; }
-    if (dry) { say(first.print); return 0; }
+    if (first.idle) { say(first.print, flags.json); return 3; }
+    if (dry) { say(first.print, flags.json); return 0; }
     const r = await publishTeam(home, folder, first.message, { step: first.step, attempt, watch: await watched(home, repo, top, workRepo), persist: () => persistSha(), exit: 1 });
     const done = r.result ?? first;
-    say(done.print);
+    say(done.print, flags.json);
     return done.idle ? 3 : 0;
   });
 }

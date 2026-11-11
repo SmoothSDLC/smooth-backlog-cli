@@ -142,20 +142,26 @@ for (const [mode, make] of Object.entries(worlds)) {
     assert.ok(pulled(b)['002-a']);
   });
 
-  test(`${mode}: an item that changes past half the time budget: exit 3, nothing published, the command's paths put back`, async t => {
-    const { a, b } = make(t);
-    const old = process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = '2000';
-    t.after(() => { if (old === undefined) delete process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; else process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = old; });
-    let n = 0; // the other clone changes the item again while every run of the command is under way
-    const moving = w => { item(w.folder, 2, 'a'); git(b.root, 'pull', '-q', '--rebase'); item(b.folder, 1, 'alpha', { summary: `v${++n}` }); git(b.root, 'add', '-A'); git(b.root, 'commit', '-qm', `v${n}`); git(b.root, 'push', '-q'); return { message: 'new a' }; };
-    let clock = 0;
-    const ca = await begin(a, 'claim', moving, { ...quick, now: () => (clock += 400) });
-    await assert.rejects(ca.publish(), e => e.exitCode === 3 && /acme\/demo kept changing while claim ran; run it again/.test(e.message));
-    assert.ok(ca.runs.again >= 1 && ca.runs.again < 5, `it ran again ${ca.runs.again} times`);
-    assert.equal(ca.persisted(), 0);
-    assert.ok(!existsSync(itemPath(a.folder, '002-a')), 'the command\'s file is gone');
-    assert.ok(!git(b.root, 'ls-tree', '-r', '--name-only', 'origin/main').includes('002-a'), 'nothing of the command is on the origin');
-  });
+  // The clock and the waits are seams: every wait costs 450 ms on the clock, whatever the random draw, and the draw is pinned to its upper end.
+  for (const [wait, reruns] of [[2000, 3], [4000, 5]]) {
+    test(`${mode}: an item that changes again and again: every wait is below min(3200, 50 * 2^attempt) and the loop stops once half of the ${wait} ms lock wait has passed`, async t => {
+      const { a, b } = make(t);
+      const old = process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = String(wait);
+      const random = Math.random; Math.random = () => 0.999;
+      t.after(() => { Math.random = random; if (old === undefined) delete process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; else process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = old; });
+      let n = 0; // the other clone changes the item again while every run of the command is under way
+      const moving = w => { item(w.folder, 2, 'a'); git(b.root, 'pull', '-q', '--rebase'); item(b.folder, 1, 'alpha', { summary: `v${++n}` }); git(b.root, 'add', '-A'); git(b.root, 'commit', '-qm', `v${n}`); git(b.root, 'push', '-q'); return { message: 'new a' }; };
+      let clock = 0; const waits = [];
+      const ca = await begin(a, 'claim', moving, { now: () => clock, sleep: async ms => { waits.push(ms); clock += 450; } });
+      await assert.rejects(ca.publish(), e => e.exitCode === 3 && /acme\/demo kept changing while claim ran; run it again/.test(e.message));
+      assert.equal(ca.runs.again, reruns);
+      assert.equal(waits.length, reruns);
+      waits.forEach((ms, i) => { const bound = Math.min(3200, 50 * 2 ** (i + 1)); assert.ok(ms < bound && ms > bound * 0.99, `wait ${i + 1} is ${ms}, the bound ${bound}`); });
+      assert.equal(ca.persisted(), 0);
+      assert.ok(!existsSync(itemPath(a.folder, '002-a')), 'the command\'s file is gone');
+      assert.ok(!git(b.root, 'ls-tree', '-r', '--name-only', 'origin/main').includes('002-a'), 'nothing of the command is on the origin');
+    });
+  }
 }
 
 test('code repository: the re-run drops the command\'s commit only: a person\'s unpushed commit and uncommitted change stay', async t => {

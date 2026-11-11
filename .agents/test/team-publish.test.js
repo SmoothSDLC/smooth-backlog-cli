@@ -169,3 +169,36 @@ test('code repository: a pull that fails on the re-run puts the commit back, the
   assert.ok(!existsSync(itemPath(a.folder, '002-beta')));
   assert.equal(git(a.root, 'status', '--porcelain', '--untracked-files=no'), '');
 });
+
+test('code repository: the push succeeded and the rebase afterwards fails: the SHA is persisted once, the commit stays, exit 3 says what to run', async t => {
+  const { a, b } = modes['code repository'](t);
+  await sync.pull(a.home);
+  put(join(a.root, 'code.js'), 'person\n'); git(a.root, 'commit', '-qam', 'person code');
+  item(a.folder, 2, 'beta');
+  publishFrom(b, w => put(join(w.root, 'code.js'), 'other\n')); // outside the folder: the commit is built on it, the person's commit then conflicts with it
+  let persisted = 0;
+  await assert.rejects(publishTeam(a.home, a.folder, 'new beta', opts(a, { persist: () => { persisted++; } })),
+    e => e.exitCode === 3 && /the change is published; your local branch could not be rebased onto it: run git pull --rebase/.test(e.message));
+  assert.equal(persisted, 1);
+  assert.equal(subjects(a.root, 'origin/main -1'), 'backlog: new beta');
+  assert.equal(subjects(a.root, 'HEAD -1'), 'backlog: new beta', 'the local commit stays');
+  assert.ok(!existsSync(join(a.root, '.git', 'rebase-merge')), 'no rebase is left half-done');
+});
+
+test('code repository: the origin has no such branch yet: the first push creates it when no unpushed commit of a person lies below', async t => {
+  const { a } = modes['code repository'](t);
+  git(a.root, 'checkout', '-q', '-b', 'feature');
+  item(a.folder, 2, 'beta');
+  assert.equal((await publishTeam(a.home, a.folder, 'new beta', opts(a))).published, true);
+  assert.equal(git(a.root, 'ls-remote', 'origin', 'feature').split('\t')[0], git(a.root, 'rev-parse', 'HEAD'));
+});
+
+test('code repository: the origin has no such branch yet and a person\'s unpushed commit lies below: nothing is published, the commit stays, the text names the branch', async t => {
+  const { a } = modes['code repository'](t);
+  git(a.root, 'checkout', '-q', '-b', 'feature');
+  put(join(a.root, 'code.js'), 'person\n'); git(a.root, 'commit', '-qam', 'person code');
+  item(a.folder, 2, 'beta');
+  await assert.rejects(publishTeam(a.home, a.folder, 'new beta', opts(a)), e => e.exitCode === 3 && /feature is not on the origin yet.*publish feature first/.test(e.message));
+  assert.equal(git(a.root, 'ls-remote', 'origin', 'feature'), '');
+  assert.equal(subjects(a.root, 'HEAD -1'), 'backlog: new beta');
+});

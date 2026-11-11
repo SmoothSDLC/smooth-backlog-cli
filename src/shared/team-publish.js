@@ -2,14 +2,13 @@
 // written its files; publishTeam commits only the paths the command owns (item files, index.json, numbers.json of its folder), publishes only that
 // commit (a person's unpushed commit never travels with it) and undoes only what it wrote. It prints nothing and never reads the team file.
 // Resolves to { published, result } or to { refusal } (the re-run was refused by the rules: nothing written, nothing persisted).
-import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
-import { dirname, join, sep } from 'node:path';
+import { sep } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside } from './safety.js';
 import * as store from './store.js';
-import { abortPull, commitOnly, fail, g, lit, lockFile, must, ownedPaths, pullArgs, refspec, refuseConflicts, takeStart, target } from './sync.js';
+import { abortPull, commitOnly, fail, g, lit, lockFile, must, ownedPaths, pullArgs, refspec, refuseConflicts, restoreOwn, takeStart, target } from './sync.js';
 
 const zs = r => r.stdout.split('\0').filter(Boolean);
 const bare = l => l.slice(':(literal)'.length);
@@ -46,23 +45,8 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
     const undo = async () => {
       if (mine) await must(home, ['reset', '-q', '--soft', 'HEAD~1'], 'take back the unpublished change');
       mine = false;
-      const own = new Set([...committed, ...(await ownedPaths(home, t, names, files)).lits.map(bare)]);
-      const lits = [...own].map(lit);
-      const inHead = new Set(zs(await g(home, ['ls-tree', '-r', '--name-only', '-z', 'HEAD', '--', ...lits])));
-      const indexed = new Set(zs(await g(home, ['ls-files', '-z', '--', ...lits])));
-      const unstage = [...own].filter(p => inHead.has(p) || indexed.has(p));
-      if (unstage.length) await must(home, ['restore', '-q', '--staged', '--source=HEAD', '--', ...unstage.map(lit)], 'take back the unpublished change');
-      const back = [...own].filter(p => inHead.has(p));
-      if (back.length) await must(home, ['restore', '-q', '--worktree', '--source=HEAD', '--', ...back.map(lit)], 'take back the unpublished change');
-      for (const p of own) if (!inHead.has(p)) rmSync(join(home, p), { force: true }); // created by the command
-      const staged = [];
-      for (const [p, prior] of saved?.files ?? []) { // a person's own edit of such a path, unless upstream changed the path meanwhile
-        if (!own.has(p) || !prior || (saved.head && (await g(home, ['diff', '--quiet', saved.head, 'HEAD', '--', lit(p)])).code)) continue;
-        const abs = join(home, p);
-        rmSync(abs, { force: true }); mkdirSync(dirname(abs), { recursive: true });
-        if (prior.link !== undefined) symlinkSync(prior.link, abs); else { writeFileSync(abs, prior.bytes); chmodSync(abs, prior.mode); }
-        if (saved.staged.includes(p)) staged.push(p);
-      }
+      const { wrote } = await restoreOwn(home, t, names, files, committed, saved, true);
+      const staged = wrote.filter(p => saved.staged.includes(p)); // a person's staging of such a path
       if (staged.length) await must(home, ['restore', '-q', '--staged', `--source=${saved.index}`, '--', ...staged.map(lit)], 'restore your staging');
     };
 
@@ -99,6 +83,7 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
 
     try {
       await commitOwn(message);
+      // persist() also when nothing changed: the command succeeded, and it read the team file whose SHA is recorded
       if (!mine || !t.push) { persist(); return { published: false }; } // nothing changed, or pushing is off: the commit stays
       if (t.remote === false) throw keep(`The change was not published from ${home} (no origin remote); it is committed on this branch: add the origin and push, then continue`);
       let result;
@@ -115,12 +100,14 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
           if (!mine) { persist(); return { published: false, result }; }
         }
         const up = await sha(t.ref); // '' when the origin has no such branch yet: the first push creates it
-        const direct = !up || await sha('HEAD~1') === up; // the own commit sits right on upstream: a person's unpushed commit below it would travel with it
+        // the own commit sits right on upstream: a person's unpushed commit below it would travel with it; with no such branch yet, only when no commit below is unpublished
+        if (!up && (await g(home, ['rev-list', 'HEAD~1', '--not', '--remotes'])).stdout.trim()) throw keep(`${t.branch} is not on the origin yet and your unpushed commits would travel with the change: publish ${t.branch} first (git push origin ${t.branch}), then run the step again`);
+        const direct = !up || await sha('HEAD~1') === up;
         const ps = await g(home, ['push', '-q', 'origin', `${direct ? 'HEAD' : await onUpstream(up)}:refs/heads/${t.branch}`]);
         if (ps.code === 0) {
           if (!direct) { // the local commit, the same patch, drops out; a person's commits stay local on top
             await fetch();
-            if ((await g(home, ['rebase', '--autostash', t.ref])).code) { await g(home, ['rebase', '--abort']); throw keep('the change is published; your local branch could not be rebased onto it: run git pull --rebase'); }
+            if ((await g(home, ['rebase', '--autostash', t.ref])).code) { await g(home, ['rebase', '--abort']); persist(); throw keep('the change is published; your local branch could not be rebased onto it: run git pull --rebase'); }
             mine = false;
           }
           persist();

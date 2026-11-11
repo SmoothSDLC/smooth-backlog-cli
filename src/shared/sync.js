@@ -438,6 +438,40 @@ export async function ownedPaths(home, t, names, files) {
   return { lits: [...out].map(lit), adds: [...out].filter(p => !gone.has(p)).map(lit) };
 }
 
+// The bytes the paths of `mine` had before the command ran (the person's own edit of such a path, or a file they had there). guard: leave a path alone
+// that upstream changed since the snapshot. Resolves to the paths it wrote.
+export async function putBack(home, saved, mine, guard = false) {
+  const wrote = [];
+  for (const [path, prior] of saved?.files ?? []) {
+    if (!mine.has(path)) continue;
+    if (guard && prior && saved.head && (await g(home, ['diff', '--quiet', saved.head, 'HEAD', '--', lit(path)])).code) continue;
+    const abs = join(home, path);
+    rmSync(abs, { force: true });
+    if (prior) {
+      mkdirSync(dirname(abs), { recursive: true });
+      if (prior.link !== undefined) symlinkSync(prior.link, abs);
+      else { writeFileSync(abs, prior.bytes); chmodSync(abs, prior.mode); }
+      wrote.push(path);
+    }
+  }
+  return wrote;
+}
+
+// After a command's commit was taken back (soft reset): its own paths go back to HEAD, a file it created is removed, a person's bytes are put back.
+// Every other path is untouched. Resolves to { mine: the own paths, wrote: the paths whose bytes of a person it put back }.
+export async function restoreOwn(home, t, names, files, committed, saved, guard = false) {
+  const mine = new Set([...committed, ...(await ownedPaths(home, t, names, files)).lits.map(l => l.slice(':(literal)'.length))]);
+  const lits = [...mine].map(lit);
+  const inHead = new Set(paths(await g(home, ['ls-tree', '-r', '--name-only', '-z', 'HEAD', '--', ...lits])));
+  const known = [...mine].filter(p => inHead.has(p));
+  const indexed = new Set(paths(await g(home, ['ls-files', '-z', '--', ...lits])));
+  const unstage = [...mine].filter(p => inHead.has(p) || indexed.has(p));
+  if (unstage.length) await must(home, ['restore', '-q', '--staged', '--source=HEAD', '--', ...unstage.map(lit)], 'take back the unpublished change');
+  if (known.length) await must(home, ['restore', '-q', '--worktree', '--source=HEAD', '--', ...known.map(lit)], 'take back the unpublished change');
+  for (const path of mine) if (!inHead.has(path) && !saved?.files.has(path)) rmSync(join(home, path), { force: true }); // created by the command
+  return { mine, wrote: await putBack(home, saved, mine, guard) };
+}
+
 export function takeStart(home) { const saved = starting.get(resolve(home)); starting.delete(resolve(home)); return saved; }
 
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
@@ -474,18 +508,6 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
     const restoreStaging = async paths => {
       if (paths.length) await must(home, ['restore', '--staged', `--source=${saved.index}`, '--', ...paths.map(lit)], 'restore your staging');
     };
-    const putBack = mine => { // the bytes a path of the command had before it ran
-    for (const [path, prior] of saved.files) {
-      if (!mine.has(path)) continue;
-      const abs = join(home, path);
-      rmSync(abs, { force: true });
-      if (prior) {
-        mkdirSync(dirname(abs), { recursive: true });
-        if (prior.link !== undefined) symlinkSync(prior.link, abs);
-        else { writeFileSync(abs, prior.bytes); chmodSync(abs, prior.mode); }
-      }
-    }
-    };
     const undoCommit = async (target, cause) => {
       await g(home, ['rebase', '--abort']);
       const unmerged = paths(await g(home, ['ls-files', '-u', '-z'])).map(e => e.split('\t')[1]).filter((p, i, a) => a.indexOf(p) === i);
@@ -495,7 +517,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
         const inTarget = new Set(paths(await g(home, ['ls-tree', '-r', '--name-only', '-z', sha, '--', ...[...mineSet].map(lit)])));
         const back = [...mineSet].filter(p => inTarget.has(p));
         if (back.length) await g(home, ['restore', '-q', `--source=${sha}`, '--staged', '--worktree', '--', ...back.map(lit)]);
-        putBack(mineSet);
+        await putBack(home, saved, mineSet);
         for (const p of mineSet) if (!inTarget.has(p)) { await g(home, ['rm', '-q', '--cached', '--ignore-unmatch', '--', lit(p)]); rmSync(join(home, p), { force: true }); }
         const stash = (await g(home, ['stash', 'list'])).stdout.trim().split('\n').filter(Boolean)[0];
         const why = cause.message.replace(/[,;]? then run the command again\)?$/, '');
@@ -504,16 +526,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       }
       await must(home, ['reset', '-q', '--soft', target], 'take back the unpublished change');
       // Only the command's own paths go back: a lead's uncommitted team file, the SHA in .backlog/config.json and a person's own edits stay.
-      const mine = new Set([...committed, ...(await ownedPaths(home, t, names, files)).lits.map(l => l.slice(':(literal)'.length))]);
-      const lits = [...mine].map(lit);
-      const inHead = new Set(paths(await g(home, ['ls-tree', '-r', '--name-only', '-z', 'HEAD', '--', ...lits])));
-      const known = [...mine].filter(p => inHead.has(p));
-      const indexed = new Set(paths(await g(home, ['ls-files', '-z', '--', ...lits])));
-      const unstage = [...mine].filter(p => inHead.has(p) || indexed.has(p));
-      if (unstage.length) await must(home, ['restore', '-q', '--staged', '--source=HEAD', '--', ...unstage.map(lit)], 'take back the unpublished change');
-      if (known.length) await must(home, ['restore', '-q', '--worktree', '--source=HEAD', '--', ...known.map(lit)], 'take back the unpublished change');
-      for (const path of mine) if (!inHead.has(path) && !saved.files.has(path)) rmSync(join(home, path), { force: true }); // created by the command
-      putBack(mine);
+      const { mine } = await restoreOwn(home, t, names, files, committed, saved);
       // The reset to the fetched upstream leaves what upstream changed elsewhere looking staged as reverted: those paths follow HEAD.
       const person = new Set([...saved.dirty, ...saved.staged, ...saved.files.keys()]);
       const stray = paths(await must(home, ['diff', '--cached', '--name-only', '--no-renames', '-z', 'HEAD'], 'list the staged paths')).filter(p => !mine.has(p));

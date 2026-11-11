@@ -245,7 +245,7 @@ const importsOf = text => [...text.matchAll(/(?:import|export)\s[^'"`;]*?from\s*
 const NAMES = /SMOOTH_BACKLOG_CLI_TEAM_NAME|SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY|SMOOTH_BACKLOG_CLI_TEAM_BRANCH|SMOOTH_BACKLOG_CLI_TEAM_LEAD|teams\.json/;
 // the modules outside src/team/ that the team code may import
 const SHARED = ['errors.js', 'storage.js', 'shared/dependencies.js', 'shared/help-parts.js', 'shared/index.js', 'shared/new.js', 'shared/numbers.js', 'shared/query.js', 'shared/safety.js', 'shared/seam.js',
-  'shared/seen.js', 'shared/setup.js', 'shared/status.js', 'shared/store.js', 'shared/sync.js', 'shared/text.js', 'shared/update.js', 'shared/wip-limits.js'];
+  'shared/seen.js', 'shared/setup.js', 'shared/status.js', 'shared/store.js', 'shared/sync.js', 'shared/team-publish.js', 'shared/text.js', 'shared/update.js', 'shared/wip-limits.js'];
 const NOT_YET = [];
 
 function breaches(root) {

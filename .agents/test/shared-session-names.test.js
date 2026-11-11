@@ -58,7 +58,7 @@ test('082: an agent name with colons (082aa:01) is stored in claimed_by, the eve
   // the front matter carries the name
   assert.equal(itemFm(f, s).claimed_by, A1);
   // the event log records it
-  const claimed = events(f, s).find(e => e.step === 'claimed');
+  const claimed = events(f, s).find(e => e.note.startsWith('Claimed by'));
   assert.ok(claimed, 'the claimed event is in the log');
   assert.ok(claimed.note.includes(`Claimed by ${A1}`), claimed.note);
   // the commit subject carries the name

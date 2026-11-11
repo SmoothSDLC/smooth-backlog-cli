@@ -441,7 +441,7 @@ test('move --to-repository: the item brings its own history, once, with no prefi
   assert.equal(run(f, 'move', ['7', '--to-repository', 'other/proj']).status, 0);
   const events = fm(f.other, itemRel('002-eta')).fm.events;
   assert.deepEqual(events.filter(e => e.note === 'carried note'), [line]);
-  assert.ok(events.some(e => e.step === 'moved_in'), 'the arrival is recorded in the item');
+  assert.ok(events.some(e => e.step === 'move' && e.note.startsWith('from ')), 'the arrival is recorded in the item');
   assert.ok(events.every(e => !e.note.includes('[from ')), JSON.stringify(events));
 });
 

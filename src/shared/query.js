@@ -50,7 +50,8 @@ const dump = v => say(JSON.stringify(v, null, 2).replace(/[\u007f-￿]/g, c => `
 const shown = v => (typeof v === 'string' ? v : JSON.stringify(v));
 function historyLine(e) {
   if (!e.by) { const o = store.parseEvent(`${e.at} ${e.step} ${e.note}`); return `  ${o.ts}  ${String(o.event).padEnd(14)} branch=${o.branch} commit=${String(o.commit_sha).slice(0, 7)} ${o.note}`; }
-  const changes = Object.entries(e.changes).map(([k, [before, after]]) => `${k}: ${shown(before)} -> ${shown(after)}`).join(', ');
+  const created = Array.isArray(e.changes.seq) && e.changes.seq[0] === null; // an item that did not exist: the entry holds every key, the line says only that it was added
+  const changes = created ? 'added' : Object.entries(e.changes).map(([k, [before, after]]) => `${k}: ${shown(before)} -> ${shown(after)}`).join(', ');
   return `  ${e.at}  ${String(e.step).padEnd(14)} ${e.by}  ${[changes, e.note].filter(Boolean).join(' ')}`.trimEnd();
 }
 const sha7 = r => String(r.commit_sha ?? '').slice(0, 7);

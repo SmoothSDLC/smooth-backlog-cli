@@ -78,7 +78,7 @@ async function toBranch(folder, r, branch, note, { repo, guard, wrote }) {
   store.stamp(fm);
   store.write({ path, fm, body }, folder);
   wrote.push({ slug: r.slug, path: r.path });
-  store.addEvent(folder, r.path, { event: 'moved_branch', note: `${r.slug}: branch '${old}' -> '${branch}'${note ? ` (${note})` : ''}` });
+  store.addEvent(folder, r.path, { event: 'move', note: `${r.slug}: branch '${old}' -> '${branch}'${note ? ` (${note})` : ''}` });
 }
 
 async function move(a, rows, ctx) {
@@ -140,7 +140,7 @@ async function move(a, rows, ctx) {
   await store.undoOnThrow(tdir, async () => {
     recordNumber(tdir, seq); // the number is recorded in the target's numbers.json, committed with the item
     store.write({ path: copy, fm, body }, tdir); // the history travels in the file
-    store.addEvent(tdir, join('phases', itemFileName(slug)), { event: 'moved_in', note: `from ${repo} as ${r.slug}` });
+    store.addEvent(tdir, join('phases', itemFileName(slug)), { event: 'move', note: `from ${repo} as ${r.slug}` });
     store.note(src);
     rmSync(src);
     store.reflow(folder, { branches: [r.branch] }); // the item leaves the order of the source

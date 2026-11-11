@@ -139,8 +139,8 @@ test('renumber: the later pusher gets nextSeq in file name, phase, seq and headi
   assert.deepEqual(result, [[1, 2]]);
   const beta = store.load(f.folder2).find(i => i.fm.name === 'beta');
   assert.deepEqual(beta.fm.events[0], line, 'the history survives a renumbering');
-  assert.equal(beta.fm.events[1].step, 'renumbered');
-  assert.match(beta.fm.events[1].note, /001 -> 002/);
+  assert.equal(beta.fm.events[1].step, 'sync');
+  assert.match(beta.fm.events[1].note, /^renumbered 001 -> 002$/);
   assert.equal(beta.fm.events.length, 2);
   assert.equal(beta.path, itemRel('002-beta'));
   assert.equal(beta.fm.phase, '002-beta'); assert.equal(beta.fm.seq, 2);

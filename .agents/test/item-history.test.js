@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, itemPath, readStored, sharedBacklog } from './shared-fixtures.js';
+import { archivedPath, cli, consumer, itemPath, readStored, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -30,7 +30,7 @@ test('a user command writes one whole entry: when, who, session, step, the chang
   const e = f.history().at(-1);
   assert.equal(f.history().length, 2, 'one entry for the command, not one per planning sentence');
   assert.match(e.at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
-  assert.deepEqual({ ...e, at: 0 }, { at: 0, by: 'ann', session: 's-7', step: 'state_change', changes: { status: ['pending', 'in progress'], severity: ['normal', 'critical'], review_state: ['none', null] }, note: 'going' });
+  assert.deepEqual({ ...e, at: 0 }, { at: 0, by: 'ann', session: 's-7', step: 'update', changes: { status: ['pending', 'in progress'], severity: ['normal', 'critical'], review_state: ['none', null] }, note: 'going' });
 });
 
 test('the session is only SMOOTH_BACKLOG_CLI_SESSION: without it the entry holds none, never the agent name', () => {
@@ -60,9 +60,25 @@ test('backlog history prints the entries: time, step, writer, changes and note; 
   const f = build();
   f.ok(['update', '1', '--summary', 'x', '--note', 'why']);
   const lines = f.ok(['history', '1']).stdout.split('\n').filter(Boolean);
-  assert.match(lines[0], /^ {2}\d{4}-\d\d-\d\dT\S+ {2}state_change {3}ann {2}summary: s -> x why$/);
-  assert.match(lines[1], /^ {2}\S+ {2}new {12}ann {2}slug: null -> 001-alpha, /);
+  assert.match(lines[0], /^ {2}\d{4}-\d\d-\d\dT\S+ {2}update {9}ann {2}summary: s -> x why$/);
+  assert.match(lines[1], /^ {2}\S+ {2}new {12}ann {2}added added 001-alpha at rank end/);
   // an item file of an earlier build: its entries carry no writer, session or changes
   writeFileSync(f.file, JSON.stringify({ ...JSON.parse(readFileSync(f.file, 'utf8')), history: [{ at: '2026-01-01T00:00:00Z', step: 'claimed', note: 'main abc1234567 Claimed by bob' }] }));
   assert.equal(f.ok(['history', '1']).stdout, '  2026-01-01T00:00:00Z  claimed        branch=main commit=abc1234 Claimed by bob\n');
+});
+
+test('the step is the command: done, archive and move name themselves', () => {
+  const f = build();
+  f.ok(['update', '1', '--summary', 'x']);
+  f.ok(['done', '1']);
+  assert.deepEqual(f.history().map(e => e.step), ['new', 'update', 'done']);
+  f.ok(['archive', '1']);
+  const arch = readStored(archivedPath(join(f.file, '..', '..'), '001-alpha', 'phases')).fm.events;
+  assert.equal(arch.at(-1).step, 'archive');
+});
+
+test('backlog history prints a created item as added plus the note, while the entry keeps every key', () => {
+  const f = build();
+  assert.ok(Object.keys(f.history()[0].changes).length > 5);
+  assert.match(f.ok(['history', '1']).stdout, /^ {2}\S+ {2}new {12}ann {2}added added 001-alpha at rank end; backlog re-densified to 1 item\(s\)\n$/);
 });

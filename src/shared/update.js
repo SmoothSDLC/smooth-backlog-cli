@@ -133,13 +133,14 @@ const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 const refuse = message => { say(`❌ ${message}`); return 1; }; // 's refusals: stdout, exit 1
 
-export async function run(argv, { team = null } = {}) {
+export async function run(argv, { team = null, step = 'update' } = {}) {
   if (!team && argv.length === 0) { process.stdout.write((await import('../help.js')).HELP.update); return 2; } // nothing named: the help of update, never an install (backlog upgrade is the self-update)
-  try { return await update(argv, team); } catch (e) { return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); }
+  try { return await update(argv, team, step); } catch (e) { return seen.reportStale(e, die, e instanceof BacklogError ? e.exitCode : 1); }
 }
 
-async function update(argv, team) {
+async function update(argv, team, step) {
   const a = parse(argv, team);
+  a.step = step; // the command that writes the history entry; a team's step keeps its own word
   seen.setActor(a.by ?? a.claim ?? a.release);
   a.named = Boolean(a.by ?? a.claim ?? a.release);
   const { home } = store.resolveHome();
@@ -321,7 +322,7 @@ async function change(a, folder, repo, team) {
   store.write({ path, fm, body }, folder);
   a.wrote = { slug: row.slug, path: row.path };
   // the entry's changes carry the field edits; a body edit has none, so without --note it names itself (the headline of the text a step appended, the section edit, an append), and a planning sentence below is the note of the rest
-  store.addEvent(folder, row.path, { event, note: a.note || (todo.text ? todo.headline : a.section !== undefined ? `set ${strip(a.section)}=${changes[strip(a.section)]}` : a.append ? 'appended to the body' : '') });
+  store.addEvent(folder, row.path, { event: team ? event : a.step, note: a.note || (todo.text ? todo.headline : a.section !== undefined ? `set ${strip(a.section)}=${changes[strip(a.section)]}` : a.append ? 'appended to the body' : '') });
 
   // --- the planning event: a move-to-rank, or completion re-densifying the remaining backlog. The index entry of the item (name, status) follows the
   // file in every case: reflow makes the index right against the files, and writes only the index.

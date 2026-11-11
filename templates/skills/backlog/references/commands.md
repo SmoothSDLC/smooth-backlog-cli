@@ -930,7 +930,7 @@ backlog history — print the events of one item, or the latest 50 of the backlo
 Usage:
   backlog history [<item>]
 
-Prints the history that is kept in the item files, newest first, one line per entry. Every command that changes an item adds one entry to it: the time, the step (the event the command recorded), who made it, the keys that changed
+Prints the history that is kept in the item files, newest first, one line per entry. Every command that changes an item adds one entry to it: the time, the step (the command that wrote the entry: new, update, done, archive, move, repair; a team command keeps its own step word), who made it, the keys that changed
 as key: before -> after (a key that did not exist reads null; updated, updated_by and the history itself are not listed) and the note (--note, else the planning sentence of the command). An entry of an item made before
 entries carried a writer and the changes prints as it did: the time, the event, the branch, the commit and the note.
 With an item (number or slug) it prints the events of that item. Without one it prints the latest 50 events of the backlog, archived items

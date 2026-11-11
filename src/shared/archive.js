@@ -114,7 +114,7 @@ async function archive(a, rows, { repo, folder, guard }) {
   }
   store.write({ path: join(folder, to), fm, body }, folder);
   // archiving removes an item from the backlog -> planning event: it leaves the index and the remainder re-densifies to 0..M-1
-  store.addEvent(folder, to, { event: 'archived', note: `${row.slug} -> ${to}` });
+  store.addEvent(folder, to, { event: 'archive', note: `${row.slug} -> ${to}` });
   const order = store.reflow(folder, { branches: [row.branch] });
   if (order.length) store.addEvent(folder, to, { event: 'planning_event', note: `archived ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
   say(`📦 ${row.slug} archived`);

@@ -136,7 +136,7 @@ test('order of work: pull first, then change, write, log the event, commit and p
   const item = fm(f, itemName('004-delta')).fm;
   assert.equal(item.status, 'in progress');
   const e = item.events.at(-1);
-  assert.deepEqual([e.step, e.note, e.changes.status], ['state_change', 'go', ['pending', 'in progress']]);
+  assert.deepEqual([e.step, e.note, e.changes.status], ['update', 'go', ['pending', 'in progress']]);
   const head = git(f.home, 'show', '--stat', '--format=', 'HEAD');
   assert.doesNotMatch(head, /backlog\.db/);
   assert.match(head, new RegExp(reEscape(`acme/demo/${itemRel('004-delta')}`)));

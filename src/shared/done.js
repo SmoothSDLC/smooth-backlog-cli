@@ -7,5 +7,5 @@ export async function run(argv) {
   let at = 0; while (argv[at] === '--json') at++; // a leading --json belongs to the command
   const item = argv[at];
   if (item === undefined || item.startsWith('-')) throw new BacklogError('INVALID_INPUT', 'done needs an item (usage: backlog done <item>)');
-  return update([...argv.slice(0, at), item, '--status', 'closed', ...argv.slice(at + 1)]);
+  return update([...argv.slice(0, at), item, '--status', 'closed', ...argv.slice(at + 1)], { step: 'done' });
 }

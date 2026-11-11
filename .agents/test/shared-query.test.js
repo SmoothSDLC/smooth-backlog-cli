@@ -416,7 +416,7 @@ test('075: --phase prints the full item (row, front matter, body) by slug and by
   assert.deepEqual(byNumber, gamma, 'by number');
   assert.equal(events.length, 2);
   assert.match(events[0], /^TS new added 003-gamma/);
-  assert.match(events[1], /^TS state_change/);
+  assert.match(events[1], /^TS update/);
   assert.deepEqual(noEvents(normJson(view(f, ['show', '003']).stdout))[0], gamma, 'zero-padded numbers resolve to the same item');
   assert.match(view(f, ['show', 'nope'], 1).stdout, /no phase 'nope'/);
 });
@@ -434,9 +434,9 @@ test('history reads the item history from the items, newest first, archived item
   assert.equal(run('archive', '4').status, 0);
   const arch = run('history', '4');
   assert.equal(arch.status, 0, arch.stderr);
-  assert.match(arch.stdout, /archived/);
+  assert.match(arch.stdout, /archive /);
   const all = run('history');
-  assert.ok(all.stdout.includes('second note') && all.stdout.includes('archived'), all.stdout);
+  assert.ok(all.stdout.includes('second note') && all.stdout.includes('archive '), all.stdout);
   // the database is not the source: an event that exists only in a file is listed
   const file = itemPath(f.folder, '002-beta');
   changeItem(file, { fm: { events: [{ at: '2020-01-01T00:00:00Z', by: '', session: '', step: 'note', changes: {}, note: '- - only in the file' }, ...readHeader(file, 'events')] } });
@@ -465,11 +465,11 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
   const lines = sorted(view(f, ['history']).stdout);
   assert.equal(lines.length, 7);
   for (const [n, slug, rank] of [[1, '001-alpha', 'end'], [2, '002-beta', '0'], [3, '003-gamma', 'end'], [4, '004-delta', 'end'], [5, '005-feat', 'end']]) {
-    assert.ok(lines.some(l => new RegExp(`^ {2}TS {2}new {12}driver-\\d {2}slug: null -> ${slug}, seq: null -> ${n}, .* added ${slug} at rank ${rank}; backlog re-densified to \\d item\\(s\\)$`).test(l)), slug);
+    assert.ok(lines.some(l => new RegExp(`^ {2}TS {2}new {12}driver-\\d {2}added added ${slug} at rank ${rank}; backlog re-densified to \\d item\\(s\\)$`).test(l)), slug);
   }
-  assert.ok(lines.some(l => /^ {2}TS {2}state_change {3}driver-5 {2}status: pending -> in progress, review_state: none -> null$/.test(l)));
-  assert.ok(lines.some(l => /^ {2}TS {2}state_change {3}driver-6 {2}status: pending -> closed, .*completed: null -> TS completed 004-delta; backlog re-prioritized to 3 item\(s\)$/.test(l)));
-  assert.match(view(f, ['history', '002-beta']).stdout, /^ {2}\S+ {2}new {12}\S+ {2}slug: null -> 002-beta, .* added 002-beta at rank 0.*\n$/, 'one item: only its own lines');
+  assert.ok(lines.some(l => /^ {2}TS {2}update {9}driver-5 {2}status: pending -> in progress, review_state: none -> null$/.test(l)));
+  assert.ok(lines.some(l => /^ {2}TS {2}update {9}driver-6 {2}status: pending -> closed, .*completed: null -> TS completed 004-delta; backlog re-prioritized to 3 item\(s\)$/.test(l)));
+  assert.match(view(f, ['history', '002-beta']).stdout, /^ {2}\S+ {2}new {12}\S+ {2}added added 002-beta at rank 0.*\n$/, 'one item: only its own lines');
   assert.equal(norm(reader(f, ['--by-branch', 'main']).stdout),
     '  [  1] 001-alpha                    pending      commit=SHA \n'
     + '  [  2] 002-beta                     pending      commit=SHA \n'

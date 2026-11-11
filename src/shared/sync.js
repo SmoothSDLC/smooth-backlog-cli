@@ -239,7 +239,7 @@ async function renumberFiles(home, t, stream, added) {
     const target = targetOf(path, next);
     await must(home, ['mv', `${name}/${path}`, `${name}/${target}`], `move ${path} to ${target}`);
     store.write({ path: join(folder, target), ...retagged(mine, next) });
-    store.addEvent(folder, target, { event: 'renumbered', note: `${pad(old)} -> ${pad(next)}` });
+    store.addEvent(folder, target, { event: 'sync', note: `renumbered ${pad(old)} -> ${pad(next)}` });
     const counter = existsSync(join(folder, NUMBER_FILE)); // a folder that keeps a number record: it follows the new number
     if (counter) recordNumber(folder, next);
     await must(home, ['add', '--', lit(`${name}/${target}`), ...(counter ? [lit(`${name}/${NUMBER_FILE}`)] : [])], `stage ${target}`);
@@ -296,7 +296,7 @@ async function repairConflicts(home, t, folders, names, renumbered) {
         const rel = path.slice(name.length + 1);
         const old = Number(mine.fm.seq); const next = store.nextSeqFor(folder, posix.basename(rel).replace(/^\d+/, '')); const target = targetOf(rel, next);
         store.write({ path: join(folder, target), ...retagged(mine, next) });
-        store.addEvent(folder, target, { event: 'renumbered', note: `${pad(old)} -> ${pad(next)}` });
+        store.addEvent(folder, target, { event: 'sync', note: `renumbered ${pad(old)} -> ${pad(next)}` });
         await must(home, ['add', '--', lit(`${name}/${target}`)], `stage ${target}`);
         process.stdout.write(`renumbered ${pad(old)} -> ${pad(next)}\n`);
         renumbered.push(pairOf(old, next, folder));

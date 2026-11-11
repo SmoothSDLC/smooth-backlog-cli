@@ -64,8 +64,9 @@ export const current = (folder, items) => (exists(folder) ? read(folder) : fromI
 
 // A folder with items and no index gets its index before the first item is written: a write drops the rank an item kept, which the
 // order is built from.
-export function seed(folder) {
-  const items = exists(folder) ? [] : store.load(folder);
+// items: the folder's items when the caller already holds them (a team command reads raw and never goes through store.load).
+export function seed(folder, held) {
+  const items = exists(folder) ? [] : held ?? store.load(folder);
   if (live(items).length) write(folder, fromItems(items));
 }
 

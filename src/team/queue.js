@@ -1,12 +1,10 @@
-// The pop engine: the member order behind `backlog team pop` (team-pop.js) and the lead's plan view `backlog team query --plan`.
+// The member order of the earlier pop engine, behind the lead's plan view `backlog team query --plan`.
 // (pop) in the earlier scripts order: pull, no-backlog check, branch, connect, findings, then the one next action of the agent,
 // continue > review > claim > refine > chunk > idle (exit 3), over the rows of the items (index.rows) and the item files (views.js, team.js).
-// --claim-now claims through `backlog team update --claim` as runs. Never writes an item itself.
+// Never writes an item itself.
 // shortcut: parse and the findings below repeat query.js (not exported there); fold them in when that file is free.
-import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { BacklogError } from '../errors.js';
 import * as index from '../shared/index.js';
 import { refineHow, missingFields, reviewRefusal, stageOf as stageOfItem } from './lifecycle.js';
@@ -20,7 +18,7 @@ import { SCOPES, refinementCap, reviewOffer, teamRows, waitingOn } from './views
 import { wipRefusal } from './wip.js';
 import { isArchived, isFinished, isUnstarted } from '../shared/status.js';
 
-const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'plan', 'claim-now'];
+const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'plan'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'scope'];
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
 const narrower = (a, b) => (RANK[a] <= RANK[b] ? a : b);
@@ -165,18 +163,6 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
     }
   }
   if (act?.r && act.f === repo) seen.view(me, folder, repo, act.r); // the pop just showed it: the claim below acts on this view
-  if (act?.name === 'claim' && a['claim-now']) {
-    const bin = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
-    const claimTeam = files.get(act.r.path)?.fm.team || team.teamName();
-    const c = spawnSync(process.execPath, [bin, ...(claimTeam ? ['team', 'update', act.r.slug, '--team', claimTeam, '--agent', me, '--claim'] : ['update', act.r.slug, '--claim', me])], { encoding: 'utf8', env: { ...process.env, ...store.lockEnv(home) } });
-    if (c.status !== 0) { // a nonzero exit, a signal or a process that did not start is no claim
-      process.stdout.write(redact((c.stdout ?? '') + (c.stderr ?? '')));
-      return c.status ?? die(`claim of ${act.r.slug} failed: ${c.error ? c.error.message : `the claim process ended by ${c.signal}`}`, 1);
-    }
-    if (c.stderr) process.stderr.write(redact(c.stderr)); // the claim's warnings reach the agent
-    const fm = store.load(folder).find(i => i.path === act.r.path)?.fm ?? {};
-    act = { ...act, say: `claimed for ${me}: start the work and record each step in the item${dod(fm)}` };
-  }
   // the lead's plain work (a continue without a verdict) or a review gives way to its team's refinement review or stale review;
   // its close and rework never do
   const plain = () => !act || act.name === 'review' || (act.name === 'continue' && [undefined, null, '', 'none'].includes(own.find(x => x.r.slug === act.r.slug)?.fm.review_state));
@@ -232,7 +218,7 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
   if (a.json) {
     process.stdout.write(`${dumps(clean({ // redact the values before they are escaped: a cut in the escaped text breaks the JSON
       action: name, item: r ? r.slug : null, ...(name === 'refine' ? { missing: incomplete.get(r.id) } : {}), seq: r ? r.seq : null,
-      repository: f, branch: r ? r.branch : branch, instruction: act.say, claimed: name === 'claim' && Boolean(a['claim-now']),
+      repository: f, branch: r ? r.branch : branch, instruction: act.say,
       blocked: blocked.map(b => ({ item: b.slug, waiting_on: b.text !== undefined ? [b.text] : waitingOn(b.undone) })),
       ...(first.length ? { first } : {}),
       held: held.map(h => ({ item: h.slug, seq: h.fm.seq, state: h.state })),

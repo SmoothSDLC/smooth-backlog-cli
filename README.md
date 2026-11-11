@@ -106,7 +106,7 @@ the team's entry), `new` (files an item of the team in stage refining, and split
 
 The team options are not options of the user commands: the team steps of `backlog update`, the team views of `backlog team query` and
 `--team` and `--review-refs` of `backlog new` are refused as unrecognized arguments, and a team's item is refused by `backlog update`.
-`backlog pop` and `backlog work` are gone: `backlog team pop` replaces both.
+`backlog pop` and `backlog work` are gone: `backlog team pop` replaces both. It takes the first step the team's pop table offers the agent, as one published commit, and prints the item; `--lead`, `--scope`, `--all` and `--claim-now` no longer exist.
 
 ## Where the data lives
 
@@ -135,7 +135,7 @@ The same five rules hold wherever the items live:
 | `backlog history [<item>]` | The history of one item (who changed what, from and to), or the latest 50 entries of the backlog |
 | `backlog changes` | Which items changed since your last use |
 | `backlog fields` | The item template: every key and field, its type and default, who sets it, what it is for |
-| `backlog team pop --team <team> --agent <name>` | What one agent of a team does next, marked as theirs, with the whole item |
+| `backlog team pop --team <team> --agent <name>` | What one agent of a team does next: the first step the team's pop table offers, taken for the agent, with the whole item |
 | `backlog team new --team <team> --agent <name> --name <text> [--<argument> <value>]...` | Add an item of a team: the team's rules for the step `new` decide, and the number is taken only when they allow it; the arguments are the ones the rules read (`--estimate`, `--parent`, ...) |
 | `backlog team update <item> <step> --team <team> --agent <name> [--<argument> <value>]...` | One step of the team's rules on an item: the rules decide, a refusal names the rule and writes nothing; the arguments are the ones the rules read (`--note`, ...) |
 | `backlog team query --team <team> --agent <name> <view>` | The team views (claimable, reviewable, blocked, decisions, plan, wip) and the read options of the team rules (`--phase`, `--status`, `--events`, `--branch`, ...) |

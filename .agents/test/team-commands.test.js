@@ -11,6 +11,7 @@ import { validate, errors } from '../../src/team/rules/validate.js';
 import { defaultOf } from '../../src/team/rules/expression.js';
 import * as index from '../../src/shared/index.js';
 import { step } from '../../src/team/rules/step.js';
+import { pop } from '../../src/team/rules/pop.js';
 import { readItems } from '../../src/team/item.js';
 
 const { cases } = readJson('./fixtures/team-rules/rule-cases.json');
@@ -20,11 +21,12 @@ const fileOf_ = c => (c.rule_set === 'inline' ? c.given.team_file : TEMPLATES[c.
 
 // The inline cases whose team file fails validation: evaluator only. Counted, so a case is never silently dropped.
 const EVALUATOR_ONLY = ['INL-01', 'INL-02', 'INL-03', 'INL-04', 'INL-05', 'INL-06', 'INL-07', 'INL-08', 'INL-09'];
-const RUN_KINDS = ['new', 'update']; // grown by pop
+const RUN_KINDS = ['new', 'update', 'pop'];
 const inlineFails = c => c.rule_set === 'inline' && errors(validate(c.given.team_file)).length > 0;
 const viaCommand = cases.filter(c => RUN_KINDS.includes(c.command.run) && !EVALUATOR_ONLY.includes(c.id));
 const viaNew = viaCommand.filter(c => c.command.run === 'new');
 const viaUpdate = viaCommand.filter(c => c.command.run === 'update');
+const viaPop = viaCommand.filter(c => c.command.run === 'pop');
 
 test('the evaluator-only cases are the nine inline cases whose team file fails validation, none of them a new or update case that runs', () => {
   assert.equal(EVALUATOR_ONLY.length, 9);
@@ -220,6 +222,58 @@ test('the harness runs every update case it can, none silently dropped: 148 upda
   assert.equal(viaUpdate.length, 148);
   assert.equal(new Set(viaUpdate.map(c => c.id)).size, 148);
   assert.equal(viaUpdate.filter(c => c.id.startsWith('INL')).length, 2); // INL-10 and INL-11
+});
+
+// ---- pop: the same cases through `backlog team pop --json`. Compared: the exit, action, item, entry and rule of the answer; the item the step wrote, field by field, against what the
+// evaluator makes of the same items; every other item file byte for byte; an idle answer leaves the whole folder as it was.
+for (const c of viaPop) {
+  test(`${c.id}: ${c.rule ?? 'coded'} through backlog team pop`, t => {
+    const file = fileOf_(c); const team = Object.keys(file)[0]; const entry = file[team];
+    const w = world(t, file);
+    const run = JSON.parse(JSON.stringify(substitution(w, c)(c)));
+    seed(w, run, team, entry, x => x);
+    const before = snapshot(w.folder);
+    const r = w.run([...commandLine(run.command, team), '--json'], run.command.env ?? {}, 'pop');
+    const want = run.expect; const cmd = run.command;
+    assert.equal(r.status, want.exit, `${r.stdout}${r.stderr}`);
+    assert.equal(r.stderr, '');
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.action, want.action);
+    if (want.exit === 3) {
+      assert.deepEqual(out, { action: 'idle' });
+      assert.deepEqual(snapshot(w.folder), before);
+      assert.equal(git(w.home, 'status', '--short'), '');
+      return;
+    }
+    assert.equal(out.item, want.item); assert.equal(out.entry, want.entry);
+    assert.equal(git(w.home, 'status', '--short'), ''); // published
+    const slug = `${String(want.item).padStart(3, '0')}-item`;
+    assert.match(git(w.home, 'log', '-1', '--format=%s'), new RegExp(`team ${want.action} ${slug}$`));
+    const stamped = JSON.parse(readFileSync(fileOf(w.folder, want.item), 'utf8')).updated;
+    const all = itemsOf(run, team, entry);
+    const offer = pop({ entry, team, caller: cmd.flags.agent, items: all, args: {}, order: run.given.order, skip: new Set(), session: { repository: 'acme/app', branch: 'main', commit: git(w.cons, 'rev-parse', 'HEAD'), ...cmd.session }, now: stamped });
+    assert.equal(offer.action, want.action); assert.equal(offer.rule, out.rule);
+    assert.deepEqual(out.item_file, JSON.parse(readFileSync(fileOf(w.folder, want.item), 'utf8')));
+    const written = new Set();
+    for (const [seq, it] of offer.result.items) {
+      if (seq !== want.item && !Object.keys(offer.result.changes.get(seq) ?? {}).length) continue;
+      written.add(seq);
+      const doc = JSON.parse(readFileSync(fileOf(w.folder, seq), 'utf8'));
+      for (const f of new Set([...Object.keys(it.fields), ...Object.keys(doc.fields)])) sameValue(doc.fields[f], it.fields[f], `item ${seq} field ${f} (the evaluator's)`);
+      assert.equal(doc.history.at(-1).step, want.action);
+    }
+    const after = snapshot(w.folder);
+    for (const [p, text] of Object.entries(before)) {
+      const n = Number(p.split('/').at(-1).split('-')[0]);
+      if (/^(phases|archive)\//.test(p) && !written.has(n)) assert.equal(after[p], text, `${p} unchanged`);
+    }
+  });
+}
+
+test('the harness runs every pop case it can, none silently dropped: 15 pop cases through the command', () => {
+  assert.equal(viaPop.length, 15);
+  assert.deepEqual(viaPop.map(c => c.id).sort(), ['PAR-49', 'PAR-50', 'PAR-51', 'PAR-52', 'PAR-53', 'PAR-56', 'PAT-42', 'PAT-43', 'PAT-44', 'SCR-24', 'SCR-25', 'SCR-28', 'SOL-09', 'SOL-10', 'XP-17']);
+  assert.deepEqual(cases.filter(c => c.command.run === 'pop' && EVALUATOR_ONLY.includes(c.id)).map(c => c.id), ['INL-01', 'INL-09']);
 });
 
 // Every file under a folder with its bytes: a refused command must leave this exactly as it was.

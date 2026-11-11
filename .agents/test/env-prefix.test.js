@@ -1,57 +1,33 @@
-// Every environment variable the CLI owns is read only under its SMOOTH_BACKLOG_CLI_ name; the old names are not read (no alias).
-// Local bare repositories only, items made with the CLI.
-import test, { after } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { world } from './team-fixture.js';
 
-const dirs = [];
-after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
+// `backlog team pop` on a fixture of the team commands: the session's own variables are the only team variables it sees (the fixture clears them).
+const run = (t, env) => world(t).run([], env, 'pop');
 
-// the session's own variables are the only team variables a command sees: whatever the test runner's environment holds is cleared
-const CLEARED = Object.fromEntries(['TEAM_NAME', 'TEAM_REPOSITORY', 'TEAM_BRANCH', 'TEAM_LEAD', 'BACKLOG_AGENT', 'BACKLOG_SESSION',
-  'SMOOTH_BACKLOG_CLI_TEAM_NAME', 'SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY', 'SMOOTH_BACKLOG_CLI_TEAM_BRANCH', 'SMOOTH_BACKLOG_CLI_TEAM_LEAD',
-  'SMOOTH_BACKLOG_CLI_AGENT', 'SMOOTH_BACKLOG_CLI_SESSION'].map(k => [k, '']));
-function fixture() {
-  const t = mkdtempSync(join(tmpdir(), 'env-prefix-'));
-  dirs.push(t);
-  const home = sharedBacklog(t);
-  const cons = consumer(t, 'acme', 'demo', 'main');
-  mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(home, 'teams.json'), JSON.stringify({ web: { lead: 'a1', members: ['a1'] } }));
-  const f = { t, cons };
-  const made = cli(['new', '--name', 'first', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: cons, tmp: t, env: CLEARED, plain: true });
-  assert.equal(made.status, 0, made.stdout + made.stderr);
-  return f;
-}
-const run = (f, env) => cli(['team', 'pop'], { cwd: f.cons, tmp: f.t, env: { ...CLEARED, ...env }, plain: true });
-
-test('a session that sets only the old names is not seen: team pop answers that no team is set', () => {
-  const f = fixture();
-  const r = run(f, { TEAM_NAME: 'web', BACKLOG_AGENT: 'a1' });
+test('a session that sets only the old names is not seen: team pop answers that no team is set', t => {
+  const r = run(t, { TEAM_NAME: 'parallel', BACKLOG_AGENT: 'a1' });
   assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /a team command needs --team <name> \(or SMOOTH_BACKLOG_CLI_TEAM_NAME, or a team in \.backlog\/config\.json\)/);
+  assert.match(r.stderr, /a team command needs a team: give --team <name>, or set the SMOOTH_BACKLOG_CLI_TEAM_NAME variable, or set the "team" key in \.backlog\/config\.json/);
 });
 
-test('the same command with the prefixed names behaves as it did with the old names', () => {
-  const f = fixture();
-  const r = run(f, { SMOOTH_BACKLOG_CLI_TEAM_NAME: 'web', SMOOTH_BACKLOG_CLI_AGENT: 'a1' });
+test('the same command with the prefixed names behaves as it did with the old names', t => {
+  const r = run(t, { SMOOTH_BACKLOG_CLI_TEAM_NAME: 'parallel', SMOOTH_BACKLOG_CLI_AGENT: 'a1' });
   assert.equal(r.status, 3, r.stdout + r.stderr); // nothing to offer a1: the idle answer, past the team and agent check
-  assert.match(r.stdout, /idle\s+nothing for a1/);
+  assert.match(r.stdout, /idle: nothing for a1/);
   assert.doesNotMatch(r.stderr, /a team command needs/);
 });
 
-test('an old agent name alone is not the caller: the agent is missing too', () => {
-  const f = fixture();
-  const r = run(f, { SMOOTH_BACKLOG_CLI_TEAM_NAME: 'web', BACKLOG_AGENT: 'a1' });
+test('an old agent name alone is not the caller: the agent is missing too', t => {
+  const r = run(t, { SMOOTH_BACKLOG_CLI_TEAM_NAME: 'parallel', BACKLOG_AGENT: 'a1' });
   assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /a team command needs --agent <name> \(or SMOOTH_BACKLOG_CLI_AGENT, /);
+  assert.match(r.stderr, /this team command needs the agent: give --agent <name>, or set the SMOOTH_BACKLOG_CLI_AGENT variable/);
 });
 
 const OLD = ['TEAM_NAME', 'TEAM_REPOSITORY', 'TEAM_BRANCH', 'TEAM_LEAD', 'BACKLOG_AGENT', 'BACKLOG_SESSION', 'BACKLOG_HOME', 'BACKLOG_ORIGIN_URL',
-  'BACKLOG_LOCK_WAIT_MS', 'BACKLOG_PRIVATE_DENYLIST', 'BACKLOG_RUN_HOOK', 'BACKLOG_RUN_LOCK_HELD', 'BACKLOG_REVIEW_STALE_SECONDS', 'BACKLOG_TEST_SELF'];
+  'BACKLOG_LOCK_WAIT_MS', 'BACKLOG_PRIVATE_DENYLIST', 'BACKLOG_RUN_HOOK', 'BACKLOG_RUN_LOCK_HELD', 'BACKLOG_REVIEW_STALE_SECONDS'];
 const sources = dir => readdirSync(dir).flatMap(n => {
   const p = join(dir, n);
   return statSync(p).isDirectory() ? sources(p) : p.endsWith('.js') ? [p] : [];

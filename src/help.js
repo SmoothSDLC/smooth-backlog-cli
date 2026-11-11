@@ -20,7 +20,7 @@ Usage:
   backlog next [--json]                            The next item of this branch
   backlog next all-branches [--json]               The next item over every branch of this repository
   backlog done <item>                              Finish an item that has no team (backlog update <item> --status closed)
-  backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs (--dry-run: only answered), with the whole item
+  backlog team pop --team <team> --agent <name>    What one agent of a team does next: the first step the team's pop table offers, taken for the agent, with the whole item (--dry-run: only answered)
   backlog team new --team <team> --agent <name> --name <text> [--<argument> <value>]...   Add an item of a team: the team's rules for the step new decide; the number is taken only when it is allowed
   backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
   backlog team update <item> <step> --team <team> --agent <name> [--<argument> <value>]...   One step of the team's rules on an item (claim, release, review, close, ...); the rules decide

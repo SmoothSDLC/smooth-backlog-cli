@@ -617,8 +617,7 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
   const f = build(false);
   const url = 'https://user:review_dummy@host/path';
   for (const args of [['team', 'query', '--team', 't1', '--next', '--branch', url], ['team', 'query', '--team', 't1', '--next', '--branch', url, '--json'], ['team', 'query', '--team', 't1', '--status', '--branch', url], ['team', 'query', '--team', 't1', '--status', '--branch', url, '--json'],
-    ['team', 'query', '--team', 't1', '--claimable', '--branch', url], ['team', 'query', '--team', 't1', '--reviewable', '--agent', 'amy', '--branch', url],
-    ['team', 'pop', '--team', 't1', '--agent', 'x', '--branch', url], ['team', 'pop', '--team', 't1', '--agent', 'x', '--branch', url, '--json'], ['team', 'pop', '--team', 't1', '--agent', url], ['team', 'pop', '--team', 't1', '--agent', url, '--json']]) {
+    ['team', 'query', '--team', 't1', '--claimable', '--branch', url], ['team', 'query', '--team', 't1', '--reviewable', '--agent', 'amy', '--branch', url]]) {
     const n = cli(args, { cwd: f.cons, tmp: f.t });
     assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));
     assert.ok(n.stdout.length > 0, `${args.join(' ')} printed nothing (${n.stderr})`);

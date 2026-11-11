@@ -6,9 +6,8 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import * as store from '../../src/shared/store.js';
 import { teamHelp } from '../../src/team/help.js';
-import { cli, consumer, itemPath, sharedBacklog, readItem, GIT_IDENTITY } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -44,23 +43,6 @@ function make(f, cwd, name, extra = []) {
   assert.equal(t.status, 0, t.stdout + t.stderr);
   return slug;
 }
-const item = (f, slug) => readItem(itemPath(f.folder, slug));
-// ann is a plain member here; popLead asks as the team lead, who does no chunk work.
-const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' };
-const popCli = (f, args, opts = {}) => cli(['team', 'pop', '--team', 't1', '--agent', 'ann', ...args], { cwd: f.cons, tmp: f.t, ...opts, env: { ...LEAD, ...opts.env } });
-
-// The JSON of pop: exit 3 exactly when the action is idle.
-function pop(f, ...args) { return popAs(f, LEAD, ...args); }
-function popLead(f, ...args) { return popAs(f, { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'ann' }, ...args); }
-function popAs(f, env, ...args) {
-  const r = popCli(f, ['--json', ...args], { env });
-  assert.ok([0, 3].includes(r.status), r.stdout + r.stderr);
-  assert.equal(r.stderr, '', r.stdout + r.stderr); // the JSON of a successful pop has no stderr
-  const out = JSON.parse(r.stdout);
-  assert.equal(r.status === 3, out.action === 'idle', r.stdout);
-  return out;
-}
-
 // Without the new flags every query prints what it printed before.
 test('test_no_new_flags_unchanged', () => {
   const f = fixture();
@@ -93,45 +75,9 @@ test('--agents without --plan and --critical stay refused with pop', () => {
   }
 });
 
-// A preload that makes the `update` subprocess of --claim-now fail (a `team update` child of the pop: argv[3]; the pop itself is `team pop`).
-function claimOutcome(kind) {
-  const f = fixture();
-  git(f.cons, 'checkout', '-q', '-b', `pop-${kind}`);
-  const job = make(f, f.cons, 'pop claim fails', []);
-  const hook = join(f.t, 'hook.cjs');
-  writeFileSync(hook, kind === 'killed'
-    ? "if (process.argv[3] === 'update') process.kill(process.pid, 'SIGTERM');\n"
-    : kind === 'late' // the claim is saved in the item file; the process is stopped before its commit
-    ? "const cp = require('node:child_process'); const run = cp.execFile;\ncp.execFile = function (file, args) { if (process.argv[3] === 'update' && file === 'git' && args.includes('commit')) process.kill(process.pid, 'SIGTERM'); return run.apply(this, arguments); };\n"
-    : "if (process.argv[3] === 'update') { process.stderr.write('fatal: https://user:hunter2secret@host/x\\n'); process.exit(1); }\n");
-  const env = { ...LEAD, NODE_OPTIONS: `--require=${hook}` }; // ann a member: the lead never claims
-  const r = cli(['team', 'pop', '--team', 't1', '--agent', 'ann', '--json'], { cwd: f.cons, tmp: f.t, env });
-  return { f, job, r };
-}
-
-test('--claim-now: an interrupted claim process is a failure, not a claim', () => {
-  const { f, job, r } = claimOutcome('killed');
-  assert.notEqual(r.status, 0, r.stdout + r.stderr);
-  assert.ok(!r.stdout.includes('"claimed": true'), r.stdout);
-  assert.match(r.stderr, /claim of .* failed/);
-  assert.ok(!item(f, job).fm.claimed_by);
-});
-
-test('--claim-now: the diagnostics of a failed claim are forwarded with its exit code and without credentials', () => {
-  const { r } = claimOutcome('exits');
-  assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.ok((r.stdout + r.stderr).includes('fatal: https://host/x'), r.stdout + r.stderr);
-  assert.ok(!(r.stdout + r.stderr).includes('hunter2secret'), r.stdout + r.stderr);
-});
-
-test('the exit codes of backlog team pop are described: 3 is idle, 1 a claim that failed', () => {
-  assert.match(teamHelp['team pop'], /1 {2}A claim was refused or could not be run/);
-});
-
-test('pop --scope with an unknown scope exits 2 and names the choices', () => {
-  const f = fixture();
-  const galaxy = cli(['team', 'pop', '--team', 't1', '--agent', 'x', '--scope', 'galaxy'], { cwd: f.cons, tmp: f.t });
-  assert.ok(galaxy.status === 2 && galaxy.stderr.includes("argument --scope: invalid choice: 'galaxy' (choose from 'branch', 'repo', 'all')"), galaxy.stderr);
+test('the exit codes of backlog team pop are described: 3 is idle, 1 a publication or pull that failed', () => {
+  assert.match(teamHelp['team pop'], /1 {2}The step could not be published/);
+  assert.match(teamHelp['team pop'], /3 {2}idle: nothing to do now\. Only the idle answer exits 3/);
 });
 
 test('--roster is refused by pop and by the plan: unrecognized arguments, exit 2', () => {

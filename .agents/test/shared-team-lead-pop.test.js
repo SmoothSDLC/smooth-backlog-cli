@@ -25,21 +25,6 @@ const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
-const pop = (f, env, ...args) => { const r = run(f, ['team', 'pop', '--json', ...args], env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
-
-test('team pop: only the lead, only its team, only itself', () => {
-  const f = fixture();
-  for (const [args, env, text] of [
-    [['team', 'pop'], {}, /needs --team/],
-    [['team'], {}, /needs a subcommand/],
-    [['team', 'pop', '--team', 't1'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't2' }, /team t2 \(SMOOTH_BACKLOG_CLI_TEAM_NAME\), not t1/],
-    [['team', 'pop', '--team', 't1', '--agent', 'ann'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_AGENT: 'bob' }, /you are bob/],
-    [['team', 'pop', '--team', 't1', '--bogus'], {}, /unrecognized arguments: --bogus/],
-  ]) {
-    const r = run(f, args, env);
-    assert.equal(r.status, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.match(r.stderr, text);
-  }
-});
 
 test('query --phase --json names the team fields an item lacks', () => {
   const f = fixture();

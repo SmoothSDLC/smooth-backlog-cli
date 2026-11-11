@@ -31,7 +31,8 @@ export const needsReview = fm => asList(fm.review_refs).length > 0;
 let sessionTeam = '';
 export const setSessionTeam = name => { sessionTeam = strip(name || ''); };
 export const teamName = () => strip(process.env.SMOOTH_BACKLOG_CLI_TEAM_NAME || '') || sessionTeam;
-// One team step as the engine tells an agent to run it: backlog team update <item> --team <team> --agent <agent> <flags>.
+// One team step as the earlier views and instructions still spell it (the flag spelling of the retired update: backlog team update <item> --team <team> --agent <agent> --claim). The
+// step is a word now (backlog team update <item> <step> ...): the views that print this text move to the rules engine, and with them this spelling goes.
 export const teamStep = (item, agent, flags, team = teamName()) => `backlog team update ${item} --team ${team || '<team>'} --agent ${agent} ${flags}`;
 export const inTeam = fm => !teamName() || fm.team === teamName();
 // Beyond the earlier scripts: an item of another repository, offered only as chunk

@@ -9,7 +9,6 @@ import { readConfig, topOf } from '../shared/setup.js';
 import { redact } from '../shared/safety.js';
 import { cloneLocked, resolveHome } from '../shared/store.js';
 import * as sync from '../shared/sync.js';
-import { parse as parsePop } from './pop.js';
 import { forgetTeamsConfig, installSeam, openItemsOf, setSessionTeam, setTeamsHome, teamEntry, teamsConfig, validateTeam } from './team.js';
 import { strip } from '../shared/text.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
@@ -64,6 +63,7 @@ async function dispatch(argv) {
   if (sub === 'migrate') return (await import('./validate-command.js')).pending('migrate', argv.slice(1), ['ask']);
   if (sub === 'new') return (await import('./new.js')).run(argv.slice(1)); // the rules engine: the old seam below is not installed for it
   if (sub === 'update') return (await import('./update.js')).run(argv.slice(1)); // the same
+  if (sub === 'pop') return (await import('./pop.js')).run(argv.slice(1)); // the rules engine, as new and update
   installSeam(); // the routes below are the old commands, which read the earlier words
   setTeamsHome(resolveHome().home); // reads the team configuration of the backlog
   if (sub === 'define') return define(argv.slice(1));
@@ -72,11 +72,6 @@ async function dispatch(argv) {
   try { split_ = split(argv.slice(1)); who = resolve(split_.got, { agentOptional: sub === 'query' }); } catch (e) { return die(e.message); } // the views read: a named agent switches them to the team rules, none is needed
   setSessionTeam(who.team); // the command's team is the session's: its items are the only ones in reach
   if (sub === 'query') return query(split_.rest, who, split_.got);
-  if (sub === 'pop') {
-    parsePop(split_.rest); // a flag this command refuses is refused before anything else
-    if (!teamsConfig()[who.team]) { process.stdout.write(`❌ ${loadWorkflow('team').refusals.team_not_configured.replace('<team>', who.team)}\n`); return 1; }
-    return (await import('./pop.js')).run(who, split_.rest);
-  }
   return die(`team ${sub} is not available yet`);
 }
 

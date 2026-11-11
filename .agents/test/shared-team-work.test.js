@@ -41,7 +41,6 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
 const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
-const work = (f, agent, env, ...args) => { const r = run(f, ['team', 'pop', '--team', env?.SMOOTH_BACKLOG_CLI_TEAM_NAME || 't1', '--agent', agent, '--json', ...args], env?.SMOOTH_BACKLOG_CLI_TEAM_NAME ? { SMOOTH_BACKLOG_CLI_AGENT: agent, ...env } : env); assert.ok([0, 3].includes(r.status), r.stdout + r.stderr); return { ...JSON.parse(r.stdout), status: r.status }; };
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it
 const refined = (f, slug) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => ok(f, ['update', slug, ...a]));
 const TM = agent => ({ SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_AGENT: agent }); // a team session of the agent
@@ -56,26 +55,4 @@ test('query --phase shows the whole item: the row, every front matter field and 
   assert.deepEqual(JSON.parse(ok(f, ['show', s]).stdout), j); // the text view is the same object
 });
 
-test('backlog work on chunk work of another repository prints that item too', () => {
-  const f = fixture();
-  const other = consumer(f.t, 'other', 'thing', 'main');
-  const mine = make(f, 'held here');
-  ok(f, ['update', mine, '--claim', 'zed']); // nothing claimable here
-  writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
-  const r = cli(['new', ...NEW('chunk there'), '--chunk'], { cwd: other, tmp: f.t, env: LEAD });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  const far = r.stdout.split('created phase ')[1].split(' ')[0];
-  const w = work(f, 'ann', {}, '--scope', 'all');
-  assert.deepEqual([w.action, w.item, w.repository, w.front_matter.phase], ['chunk', far, 'other/thing', far]);
-  assert.ok(w.body.includes('Body of chunk there.'), w.body); // the whole item, read from that repository's folder
-});
-
-test('backlog work answers only for the team caller itself', () => {
-  const f = fixture();
-  const x = make(f, 'zed job');
-  ok(f, ['update', x, '--claim', 'zed']);
-  const r = run(f, ['team', 'pop', '--team', 't1', '--agent', 'zed', '--json'], TM('bob'));
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /you are bob \(SMOOTH_BACKLOG_CLI_AGENT\): team pop answers only for yourself, not for zed/);
-});
 

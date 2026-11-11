@@ -138,16 +138,7 @@ test('team workflow registers a flow from JSON, shows it, and refuses a flow tha
   assert.equal(run(f, ['team', 'workflow', '--show', 'trap']).status, 2);
 });
 
-// ---- backlog team pop: one next-action command by role
-const pop = (f, agent, ...args) => run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json', ...args], { SMOOTH_BACKLOG_CLI_AGENT: '' });
 
-test('team pop: a team without an entry is refused, and a refused flag is refused before anything runs', () => {
-  const f = fixture();
-  const r = run(f, ['team', 'pop', '--team', 'ghost', '--agent', 'ann']);
-  assert.equal(r.status, 1); assert.match(r.stdout, /team ghost is not configured in the backlog configuration/);
-  const bad = run(f, ['team', 'pop', '--team', 'ghost', '--agent', 'ann', '--db', 'x']);
-  assert.equal(bad.status, 2); assert.match(bad.stderr, /unrecognized arguments: --db/);
-});
 
 test('no instruction of the engine tells an agent to run a team step through the plain update', async () => {
   const { readFileSync, readdirSync } = await import('node:fs');

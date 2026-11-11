@@ -39,92 +39,63 @@ ${HELP_FLAG}
 
 Exit codes:
   0  The command succeeded: the answer names an item, the step was taken, define or workflow succeeded.
-  1  The step was refused or could not be run: the reason is printed. Also: a synchronisation failure, the item changed before it
-     could be shown (run it again), or the team has no entry in the configuration.
+  1  The step was refused or could not be run: the reason is printed. Also: a synchronisation failure, or the team has no entry in the configuration.
   2  Invalid input: a missing --team or --agent, another team than SMOOTH_BACKLOG_CLI_TEAM_NAME, an agent other than SMOOTH_BACKLOG_CLI_AGENT, no branch (a
      detached HEAD without SMOOTH_BACKLOG_CLI_TEAM_BRANCH), or a definition with problems.
-  3  idle: nothing to do now (pop). The same code is used when the local clone of the backlog repository could not be updated from
-     its origin before the answer.
+  3  idle: nothing to do now (pop; only the idle answer exits 3, a failure of pop is exit 1).
   5  The item was changed by somebody else after this agent last read it (backlog team query --phase <item> --agent <you>).
 
 Example:
   backlog team pop --team cli-1 --agent ann --json
 `,
 
-  'team pop': `backlog team pop — what one agent of a team does next, marked as theirs, with the whole item
+  'team pop': `backlog team pop — what one agent of a team does next: the first step the team's pop table offers, taken for the agent
 
 Usage:
-  backlog team pop --team <name> --agent <name> [--dry-run] [--json] [--lead <name>] [--scope branch|repo|all] [--all] [--branch <name>]
+  backlog team pop [--team <name>] [--agent <name>] [--session <id>] [--repository <owner/name>] [--branch <name>] [--dry-run] [--json]
 
-backlog team pop is the one next-action command. It answers by the agent's role in the team's entry, with exactly one action, the
-first that applies: continue (an item the agent holds and can work on; when its review passed, close it), review (an item another
-agent asks to have reviewed, or a review the agent started), refine (a member: the refinement it has started, or the first-round
-refinement of a team item that nobody refines; the team lead: an incomplete item that lacks required fields), claim (the open item
-with the lowest priority whose dependencies are done and whose hand-offs are accepted, that is no chunk item, is ready when it is a
-team's item, and that nobody holds), refinement-review (the team lead: refined items to send to the refinement review), reassign-review
-(the team lead: a stale review of its team to hand on), stop (a member that handed its item off and waits for a fresh session: end the
-turn), chunk (a small piece of refinement work of at most ten minutes) or idle. An item the agent holds that waits for a verdict or
-for a run is not continued, and the agent claims a new item only when every item it holds waits. Another agent's review request
-comes after the agent's own work, however old it is. Incomplete items are never claimed or reviewed. Only the team's items of this
-repository are continued, reviewed or claimed. The lead never claims an execution item; while its team works the split items its
-answer is idle with the instruction to end the turn without polling (a passed or changes-requested item of the lead's keeps its close or
-rework), and when every item of its team is done it is told to have the work item reviewed and close it.
+Looks at the open items of the team on the session's branch, in the order of the branch's list, and offers the agent the first step of the team's pop table (the list "rules.pop" of the
+team file) whose condition holds and which the team's rules allow on the first item it applies to. The step is taken at once, as the command's own commit "team <step> <slug>" (the same
+rules and the same writing as backlog team update), published, and then the whole item is printed after the step. When the table offers nothing, the answer is idle. A step the rules refuse
+on an item is tried on the next item; a pop table or a rule that is malformed is an error (exit 2), never an idle answer.
 
-In addition the lead gets the team's work item: an item of this repository and branch whose team is the team and that has no stage
-(backlog team new files a new item into a team; the items split from it carry a stage and are the members' work).
-A refined work item (its stage set, its refinement review passed) is an ordinary item any member may claim; team pop offers a work
-item only while its stage is unset, and the lead still refines it and splits it only when it is too big for one member. When the lead
-holds an open work item that has no other item of the team, the answer is continue with that item. When an earlier session of the
-lead's card holds it, the command records the continuation claim first - the new session name as the owner and in session_authors -
-and then answers continue; a refused continuation claim is no success: the earlier session keeps holding and the command stops (exit
-1, the reason on standard error). The final read requires the lead's own session still holding the item: a hand-back or a reassignment
-to another session of the same card between the selection and the final read is no success (exit 1, the item changed before it
-could be shown). Otherwise, with nothing else to do, the command claims for the lead the team's first open, unclaimed work item in
-the work order (priority, then seq) whose claim is accepted (its dependencies are done, no work-in-progress limit is passed), and the
-answer is claim.
+Scenario: the agent member-1 of the team parallel has nothing in hand and asks for work in the working copy of the repository whose backlog holds it: backlog team pop --team parallel
+--agent member-1. The table offers claim on the first ready item (the entry member-claims, the rule that allows the claim); the item is claimed for member-1, the commit is published, and
+the command prints the line "➡️  claim 003-parser (pop entry member-claims, rule claim)" followed by the item. A hook that only looks before the agent acts runs the same command with --dry-run.
 
-The step the answer offers is marked in one locked write: the claim, the start of a refinement or the start of a review. The output
-is the action and the item, what was marked, the one instruction, one line per blocked item, the work items not taken with the
-reason, and the whole item: its front matter and its body. With --json it prints one object: action, item, seq, team, repository,
-branch, instruction, claimed, blocked, held, marked, skipped ({item, reason} of each work item not taken), front_matter and body.
-With --dry-run the command only answers: it writes no claim and no mark (marked is null, claimed false) and does not take the
-lead's work item; the exit codes are the same. A hook that looks before the agent acts uses it; the agent then takes the step itself.
+Output: the line "➡️  <step> <item> (pop entry <id>, rule <id>)", then the item: "[<seq>] <slug>  <name>", the line "team <team>  repository <repository>  branch <branch>", one line "<field>: <value>"
+per field (the team's item definition first, in its order, then the undeclared ones alphabetically), the body, and "history:" with one line per entry (time, step, note, by, changes). Nothing
+leaves the command that contains a credential: every line is redacted. Idle prints "ℹ️  idle: nothing for <agent> in team <team>".
+
+--json prints {"action", "item", "entry", "rule", "item_file"}: the step taken, the item's number, the pop entry and the rule that allowed it, and "item_file", the item's document after
+the step (seq, slug, name, team, repository, branch, created, updated, updated_by, fields, body, history). Idle prints {"action":"idle"}. --dry-run does the same without writing anything,
+in either repository: it prints what the real command would take (the item as it would be after the step), and the origin that cannot be reached is a warning.
 
 ${SHARED}
 
 Options:
   --team NAME
-      The team (pop, update). In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set) it must be that team.
+      The team whose pop table decides (else SMOOTH_BACKLOG_CLI_TEAM_NAME, else the "team" key of .backlog/config.json).
   --agent AGENT
-      The agent the command answers for (pop, update). In a team session (SMOOTH_BACKLOG_CLI_AGENT set) it must be that agent.
+      The agent the command answers for: the caller the rules see and the writer recorded in the item (else SMOOTH_BACKLOG_CLI_AGENT; the "user" key of the configuration is not read).
+  --session ID
+      The session id the rules see as $session.id (else SMOOTH_BACKLOG_CLI_SESSION).
+  --repository OWNER/NAME
+      The repository whose folder of the backlog and team file the command uses (else SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY; else the working copy's).
+  --branch NAME
+      The branch whose queue to use (else SMOOTH_BACKLOG_CLI_TEAM_BRANCH; else the working copy's current branch; a detached HEAD needs one of them). Items of other branches are never offered.
+  --dry-run
+      Only answer: nothing is written, committed or published.
   --json
       Print the answer as JSON.
-  --dry-run
-      Only answer: write no claim and no mark (marked is null, claimed false) and do not take the lead's work item.
-  --lead LEAD
-      pop and --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the
-      environment variable SMOOTH_BACKLOG_CLI_TEAM_LEAD, else the lead of the team in teams.json.
-  --scope {branch,repo,all}
-      pop and the views --claimable, --reviewable and --blocked: how far the agent looks: this branch (the default), every branch of this repository, or also the chunk items
-      of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all
-      in the file backlog.scope of the folder of this repository (default branch).
-  --all
-      pop only: look at every branch, not only the current one.
-  --branch BRANCH
-      pop only: the branch whose queue to use. The default is the branch that is checked out here. A team session bound by
-      SMOOTH_BACKLOG_CLI_TEAM_BRANCH can only use that branch.
 ${HELP_FLAG}
 
 Exit codes:
-  0  The answer names an item (continue, claim, review, refine, chunk, ...) and the step was marked.
-  1  A claim was refused or could not be run (its process failed or was interrupted): its output, or the failure, is shown.
-     After an interruption the claim may already be saved, or even pushed: check the item before running team pop again.
-     Also: a command it ran failed for another reason, a synchronisation failure included (the reason is printed), the item
-     changed before it could be shown (run it again), or the team has no entry in the configuration.
-  2  Invalid input: a missing --team or --agent, another team than SMOOTH_BACKLOG_CLI_TEAM_NAME, an agent other than SMOOTH_BACKLOG_CLI_AGENT, no branch (a
-     detached HEAD without SMOOTH_BACKLOG_CLI_TEAM_BRANCH).
-  3  idle: nothing to do now. The same code is used when the local clone of the backlog repository could not be updated from
-     its origin before the answer.
+  0  A step was offered and taken (or, with --dry-run, would be taken); the item is printed.
+  1  The step could not be published (the push was refused, the branch kept changing) or the backlog could not be updated from its origin: the reason is printed and nothing is left behind.
+  2  Invalid input: a missing team or agent, an argument the command does not take, no branch (a detached HEAD), an invalid team file,
+     or a pop table or rule that is malformed.
+  3  idle: nothing to do now. Only the idle answer exits 3.
 
 Example:
   backlog team pop --team cli-1 --agent ann --json

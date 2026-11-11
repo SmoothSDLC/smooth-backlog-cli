@@ -4,7 +4,7 @@ import { realpathSync } from 'node:fs';
 import * as sync from '../shared/sync.js';
 import { teamsFile } from './teams-load.js';
 
-export const pullFolder = (home, folder) => sync.pull(home);
+export const pullFolder = (home, folder, { read = false } = {}) => sync.pull(home, { read }); // read: the command only reads (--dry-run), so an origin that cannot be reached is a warning
 
 // The repository-relative paths a team command read: its folder and, when it lies inside the clone, the team file (a change of either upstream means the step runs again).
 export async function watched(home, repo, top, workRepo) {

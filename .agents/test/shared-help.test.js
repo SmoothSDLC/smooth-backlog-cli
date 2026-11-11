@@ -108,14 +108,14 @@ test('exit code 3 is described for both cases: the update before the command fai
     assert.match(text, /change was not published.*rolled back/, command);
   }
   assert.match(backlog('move', '--help').stdout, /3 the update of the local clone failed before\nthe move \(nothing was changed\), or the move was not published and was rolled back/);
-  assert.match(backlog('team', 'pop', '--help').stdout, /^ {2}3 {2}idle: nothing to do now\. The same code is used when the local clone/m);
+  assert.match(backlog('team', 'pop', '--help').stdout, /^ {2}3 {2}idle: nothing to do now\. Only the idle answer exits 3/m);
   // the build does what the text says: a command that only reads answers from the local copy with the offline warning
   const broken = mkdtempSync(join(tmpdir(), 'help-exit3-'));
   dirs.push(broken);
   sharedBacklog(broken);
   const demo = consumer(broken, 'acme', 'demo', 'main');
   renameSync(join(broken, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`), join(broken, 'origin-gone.git'));
-  for (const args of [['list'], ['team', 'pop', '--team', 't1', '--agent', 'x']]) {
+  for (const args of [['list']]) { // team pop --dry-run: team-pop.test.js
     const r = cli(args, { cwd: demo, tmp: broken });
     assert.match(r.stderr, /origin offline, local backlog updates may be behind and need manual remediation later/, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
   }
@@ -170,11 +170,13 @@ test('096: the update help says the retired classification keys have no effect a
   }
 });
 
-test('127: the team pop help states a refined work item is claimable by members and team pop offers it only while the stage is unset', () => {
+test('the team pop help states the pop table, the JSON keys, the dry run and that only idle exits 3', () => {
   const flat = backlog('team', 'pop', '--help').stdout.replace(/\s+/g, ' ');
-  assert.match(flat, /A refined work item[^.]*is an ordinary item any member may claim/);
-  assert.match(flat, /only while its stage is unset/);
-  assert.match(flat, /too big for one member/);
+  assert.match(flat, /first step of the team's pop table/);
+  assert.match(flat, /\{"action", "item", "entry", "rule", "item_file"\}/);
+  assert.match(flat, /--dry-run does the same without writing anything/);
+  assert.match(flat, /Only the idle answer exits 3/);
+  assert.doesNotMatch(flat, /--lead|--scope|--claim-now|marked/);
 });
 
 test('the plain help names no team option and ends with the pointer to the team help', () => {

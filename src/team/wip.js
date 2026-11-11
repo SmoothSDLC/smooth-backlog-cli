@@ -2,7 +2,7 @@
 // The overall, repository and branch levels are src/shared/wip-limits.js. The limits file and its shape are described there; the team and
 // agent entries read {"team": 3 | {"default": 3, "t1": 4}, "agent": 2 | {"default": 2, "an agent": 1}, "stale_hours": 48}. The team lead lifts the
 // team and agent limits for one item with a recorded reason
-// (backlog team update <item> --team <team> --agent <lead> --wip-override "<reason>"). One a member is refining (stage refining, a refiner,
+// (backlog team update <item> wip-override --team <team> --agent <lead> --wip-override "<reason>"). One a member is refining (stage refining, a refiner,
 // no claimer) is work in progress too.
 import { limitOf, limits, limitsFile, num, progressItems, wipRefusal as sharedRefusal } from '../shared/wip-limits.js';
 import { heldBy, teamStep } from './team.js';

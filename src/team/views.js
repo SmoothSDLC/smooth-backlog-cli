@@ -79,7 +79,7 @@ const jobFields = fm => [['estimate', fm.estimate_min], ['complexity', fm.comple
 export const waitingOn = undone => undone.map(d => ({ id: d.id, slug: d.item ? d.item.slug : null, status: d.item ? d.item.status : 'missing', claimed_by: d.fm.claimed_by || '', ...(d.foreign && d.item ? { repository: d.item.repository } : {}) }));
 
 // Beyond the earlier scripts: the items that wait in stage review-hitl for an owner decision, with the question
-// (the last "Owner decision needed" section of the item), for the morning report. Answer: backlog team update <item> --team <team> --agent <name> --decision.
+// (the last "Owner decision needed" section of the item), for the morning report. Answer: backlog team update <item> decision --team <team> --agent <name> --decision "<answer>".
 function decisionsView(found, { a, scope, repo, branch, own, say, dump }) {
   const rows = found.map(({ r, fm }) => ({ ...r, team: fm.team || null, decision_requested_by: fm.decision_requested_by || null,
     decision_requested_at: fm.decision_requested_at || null, question: strip(String(fm.decision_question ?? '')) })); // review-hitl came with this build: every decision carries its question

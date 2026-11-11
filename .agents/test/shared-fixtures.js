@@ -12,7 +12,12 @@ import { fromItemJson, toItemJson } from '../../src/shared/item-json.js';
 import { dumpItem, itemFileName, itemSlug, isItemName, parseItem } from '../../src/shared/item-file.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
-import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
+
+// The step flags of the retired spelling `backlog team update <item> --claim ...` (the command takes the step as a word now). The tests that check the plain commands refuse
+// them, that the documents no longer show them, and cli()'s routing of the legacy spelling know them from here.
+export const TEAM_VALUE = ['wip-override', 'waiting', 'set-review-refs', 'request-review', 'review', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reassign-review',
+  'handoff', 'handoff-commit', 'handoff-contract', 'handoff-verification', 'handoff-outputs', 'handoff-pickup', 'handoff-risks', 'accept-handoff', 'reject-handoff', 'checks'];
+export const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'refine-start', 'refine-done', 'request-refinement-review'];
 
 export const BACKLOG_OWNER = 'acme';
 export const BACKLOG_NAME = 'backlog-repo';
@@ -117,7 +122,7 @@ function teamSpelling(args, env, opts) {
   const flags = flagsOf(args);
   const has = list => flags.some(f => list.includes(f));
   const session = Boolean(env.SMOOTH_BACKLOG_CLI_TEAM_NAME || env.SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY || env.SMOOTH_BACKLOG_CLI_TEAM_BRANCH) || has(['team', 'set-team']);
-  if (args[0] === 'update') return session || (opts.team && !has(['claim', 'release'])) || has([...TEAM_VALUE, ...TEAM_BOOL]);
+  if (args[0] === 'update') return false; // `backlog team update <item> <step>` is the rules engine now: no spelling of the plain update reaches it
   if (args[0] === 'new') return session || has(['review-refs']) || ['SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY', 'SMOOTH_BACKLOG_CLI_TEAM_BRANCH'].some(k => env[k]);
   return false;
 }
@@ -144,9 +149,26 @@ function neutralTeam(e, name = 'neutral') {
   if (!cfg[name]) { cfg[name] = {}; writeFileSync(file, JSON.stringify(cfg)); }
   return name;
 }
+// `backlog update <item> --set-team <team> [--status <word>] [--by <agent>]` was how a test gave an item to a team (the retired step flag of `team update`). The command is gone; the spelling still
+// makes the fixture: the team (and the status) are written into the stored file and published, with no rule checked. Any other flag with it is not this spelling (null).
+function setTeamSpelling(args, opts) {
+  const flags = flagsOf(args);
+  if (args[0] !== 'update' || !args[1] || String(args[1]).startsWith('-') || !flags.includes('set-team') || flags.some(f => !['set-team', 'status', 'by'].includes(f))) return null;
+  const file = infoOf(args[1], opts).file;
+  if (!file) return { status: 1, stdout: `❌ no phase '${args[1]}'\n`, stderr: '' };
+  const { fm, body } = readStored(file);
+  const team = valueOf(args, 'set-team'); const status = valueOf(args, 'status');
+  const { team: _, ...rest } = fm;
+  writeStored(file, { ...rest, ...(team ? { team } : {}), ...(status ? { status } : {}) }, body);
+  const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.SMOOTH_BACKLOG_CLI_HOME;
+  git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'set team'); git(home, 'push', '-q');
+  return { status: 0, stdout: `✅ ${itemSlug(file)} updated (team=${team})\n`, stderr: '' };
+}
 export function cli(args = [], opts = {}) {
+  const setTeam = !opts.plain && setTeamSpelling(args, opts);
+  if (setTeam) return setTeam;
   const sessionEnv = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env };
-  const named = !opts.plain && args[0] === 'update' && args[1] && !String(args[1]).startsWith('-') ? args[1] : !opts.plain && args[0] === 'new' ? valueOf(args, 'split-from') : undefined;
+  const named = !opts.plain && args[0] === 'new' ? valueOf(args, 'split-from') : undefined;
   const info = named ? infoOf(named, opts) : {};
   const itemTeam = info.team;
   if (!opts.plain && (itemTeam || teamSpelling(args, sessionEnv, opts))) {
@@ -160,8 +182,12 @@ export function cli(args = [], opts = {}) {
       const at = args.indexOf('--review-refs');
       const made = cli(at < 0 ? args : args.filter((_, i) => i !== at && i !== at + 1), { ...opts, env: via, plain: true });
       if (made.status !== 0 || at < 0) return made;
-      const set = cli(['team', 'update', createdSlug(made.stdout), ...(sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME ? [] : ['--team', neutralTeam(sessionEnv)]), '--set-review-refs', args[at + 1]], { ...opts, env: via, plain: true });
-      return set.status === 0 ? made : set;
+      const file = infoOf(createdSlug(made.stdout), { ...opts, env: via }).file; // the review documents are written into the stored file, as the retired step flag did
+      const { fm, body } = readStored(file);
+      writeStored(file, { ...fm, review_refs: args[at + 1].split(',') }, body);
+      const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.SMOOTH_BACKLOG_CLI_HOME;
+      git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'review refs'); git(home, 'push', '-q');
+      return made;
     }
     // an item without a team is stepped by a session of no particular team: a neutral entry stands in for it
     const teamFlag = !sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME && !flagsOf(args).includes('team') && (valueOf(args, 'set-team') ? neutralTeam(sessionEnv, valueOf(args, 'set-team')) : itemTeam || neutralTeam(sessionEnv));
@@ -223,13 +249,12 @@ export const createdSlug = stdout => {
 // Puts a created item into team `team`, ready to be claimed: `backlog new --team` starts in refinement, and the
 // team views and `backlog team pop` reach only the items of their team.
 export function intoTeam(slug, opts, team = 't1', status = 'ready') { // status '': the team only, the item stays unrefined and incomplete
-  const r = cli(['team', 'update', slug, '--team', team, '--agent', opts.agent ?? 'lead', '--set-team', team, ...(status ? ['--status', status] : [])], { ...opts, env: { ...opts.env, SMOOTH_BACKLOG_CLI_AGENT: '' } }); // opts.env: the caller's own session, so its view
-  if (r.status !== 0) throw new Error(`intoTeam ${slug}: ${r.stdout}${r.stderr}`);
-  const file = status === 'ready' && infoOf(slug, opts).file; // the item is refined: it carries the stage a refined item has
-  if (file) {
-    const { fm, body } = readItem(file);
-    if (!('stage' in fm)) { const next = {}; for (const k of Object.keys(fm)) { next[k] = fm[k]; if (k === 'team') Object.assign(next, { stage: 'ready', refiner: opts.agent ?? 'lead' }); } writeItem(file, next, body); }
-  }
+  const file = infoOf(slug, opts).file;
+  if (!file) throw new Error(`intoTeam ${slug}: no such item`);
+  const { fm, body } = readStored(file); // written into the stored file, as the item of a team looks after the retired step: the team, the status, and the stage and refiner of a refined item
+  writeStored(file, { ...fm, team, ...(status ? { status } : {}), ...(status === 'ready' && !('stage' in fm) ? { stage: 'ready', refiner: opts.agent ?? 'lead' } : {}) }, body);
+  const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.SMOOTH_BACKLOG_CLI_HOME;
+  git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', `team item ${team}`); git(home, 'push', '-q');
   return slug;
 }
 

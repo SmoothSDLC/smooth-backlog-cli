@@ -2,7 +2,7 @@
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -175,13 +175,6 @@ test('127: the team pop help states a refined work item is claimable by members 
   assert.match(flat, /A refined work item[^.]*is an ordinary item any member may claim/);
   assert.match(flat, /only while its stage is unset/);
   assert.match(flat, /too big for one member/);
-});
-
-test('059.V2: the team --close help block names the hand-off close rule, NONE and the legacy exemption', () => {
-  const flat = block(backlog('team', 'update', '--help').stdout, 'close').replace(/\s+/g, ' ');
-  assert.match(flat, /each dependent's hand-off is recorded and accepted/);
-  assert.match(flat, /records handoffs: none/);
-  assert.match(flat, /already (done|closed) is not checked again/);
 });
 
 test('the plain help names no team option and ends with the pointer to the team help', () => {

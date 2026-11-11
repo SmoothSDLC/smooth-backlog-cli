@@ -5,14 +5,13 @@
 // fixture backlog; their front matter is read with store.load. The functions change nothing on disk.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as store from '../../src/shared/store.js';
 import * as handoff from '../../src/team/handoff.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
-import { cli, consumer, itemPath, sharedBacklog, GIT_IDENTITY, writeItem, itemText } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog, writeItem, itemText } from './shared-fixtures.js';
 import { recordHandoff, acceptHandoff, rejectHandoff } from '../../src/team/handoff-commands.js';
 import { installSeam } from '../../src/team/team.js';
 
@@ -65,16 +64,6 @@ function withSession(value, fn) {
     else process.env.SMOOTH_BACKLOG_CLI_SESSION = saved;
   }
 }
-const head = cons => spawnSync('git', ['-C', cons, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
-// The consumer's root commit: the HEAD the item was created at (its commit front matter, new.js).
-const rootCommit = cons => spawnSync('git', ['-C', cons, 'rev-list', '--max-parents=0', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
-// The producer's work: one real commit of the consumer checkout (the work the hand-off names), its sha.
-function workCommit(f) {
-  const p = spawnSync('git', ['-C', f.cons, 'commit', '--allow-empty', '-q', '-m', 'work'], { encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
-  if (p.status !== 0) throw new Error(`git commit: ${(p.stderr || '').trim()}`);
-  return head(f.cons);
-}
-
 test('059.2: recordHandoff records the hand-off for a real dependent, in the stored form, with the method\'s block', () => {
   const f = fixture();
   const p = pair(f);
@@ -174,71 +163,6 @@ test('059.2: recordHandoff refuses an empty or non-40-hex commit, and an empty c
   assert.match(recordHandoff(p.ctx, { dependent: '2', ...RECORD, commit: 'g'.repeat(40) }).refuse, /commit/);
   assert.match(recordHandoff(p.ctx, { dependent: '2', ...RECORD, contract: '   ' }).refuse, /contract/);
   assert.match(recordHandoff(p.ctx, { dependent: '2', ...RECORD, verification: '' }).refuse, /verification/);
-});
-
-test('059.2: the acceptance receipt records the reviewer, the verdict and the hand-off commit - the record\'s commit, which differs from the item\'s commit (lead ruling 2026-10-31)', () => {
-  const f = fixture();
-  const p = pair(f);
-  // the producer's work: a real commit of the consumer checkout - the commit the hand-off record names
-  const work = workCommit(f);
-  // the review operation stores the verdict and the reviewer, but no reviewed commit (lifecycle.js), so
-  // the acceptance does not claim that a commit was reviewed (lead ruling 2026-10-31)
-  ok(f, ['update', p.producer, '--request-review', 'amy', '--note', `review work commit ${work} and its contract`, '--by', 'agent-a']);
-  ok(f, ['update', p.producer, '--start-review', '--by', 'amy']);
-  ok(f, ['update', p.producer, '--review', 'pass', '--by', 'amy', '--comments', 'the exported functions hold; references/review/code.md']);
-  ok(f, ['update', p.producer, '--request-review', 'rex', '--note', `review work commit ${work} and its contract`, '--by', 'agent-a']);
-  ok(f, ['update', p.producer, '--start-review', '--by', 'rex']);
-  ok(f, ['update', p.producer, '--review', 'pass', '--by', 'rex', '--comments', 'the exported functions hold; references/review/code.md']);
-  const ctx = ctxOf(f, 1);
-  assert.equal(ctx.fm.review_state, 'passed', 'the review operation stored the verdict');
-  assert.equal(ctx.fm.reviewer, 'rex', 'the review operation stored the reviewer');
-  // the ruling's test: a hand-off record whose commit differs from the item's commit front matter (the creation HEAD)
-  assert.notEqual(work, ctx.fm.commit, 'the hand-off record\'s commit differs from the item\'s commit front matter');
-  const rec = recordHandoff(ctx, { dependent: '2', commit: work, contract: 'the exported functions', verification: 'npm test: 0 failures', by: 'agent-a' });
-  assert.ok(!rec.refuse, rec.refuse);
-  const r = acceptHandoff({ ...ctx, fm: { ...ctx.fm, ...rec.fm } }, { dependent: '2', checks: 'npm test: 0 failures', by: 'lead', lead: 'lead' });
-  assert.ok(!r.refuse, r.refuse);
-  assert.equal(r.event, 'handoff-accepted');
-  const rcpt = handoff.decodeList(r.fm.handoff_receipts)[0];
-  const record = handoff.decodeList(rec.fm.handoffs)[0];
-  assert.equal(rcpt.digest, record.digest, 'the receipt pins the current record\'s digest');
-  assert.equal(rcpt.result, 'accepted');
-  assert.equal(rcpt.by, 'lead');
-  assert.equal(rcpt.checks, 'npm test: 0 failures');
-  assert.equal(rcpt.reviewer, ctx.fm.reviewer, 'the receipt records the reviewer the review operation stored');
-  assert.equal(rcpt.verdict, ctx.fm.review_state, 'the receipt records the verdict the review operation stored');
-  assert.equal(rcpt.commit, work, 'the receipt names the record\'s commit as the hand-off commit - not the item\'s commit, and nothing calls it reviewed');
-  assert.match(rcpt.commit, /^[0-9a-f]{40}$/);
-  assert.ok(!r.text.includes('REVIEWED_COMMIT'), 'the block does not claim the commit was reviewed (lead ruling 2026-10-31)');
-  // the body block: the method's HANDOFF_ACCEPTED v1 block plus the ruling's reviewer, verdict and hand-off
-  // commit, directly after the receipt block - no blank line (review r2)
-  assert.equal(r.text, handoff.receiptBlock(rcpt, 'acme/demo#1')
-    + `REVIEWER: ${rcpt.reviewer} ; VERDICT: ${rcpt.verdict} ; HANDOFF_COMMIT: ${rcpt.commit}\n`, r.text);
-  // the stored form survives the real front-matter codec
-  const back = parse(itemText({ ...ctx.fm, ...rec.fm, ...r.fm }, ctx.body + rec.text + r.text)).fm;
-  assert.deepEqual(handoff.decodeList(back.handoff_receipts), [rcpt]);
-});
-
-test('059.2: acceptHandoff refuses a hand-off record without a commit, naming the field - no fallback to the item\'s creation commit (lead ruling 2026-10-31)', () => {
-  const f = fixture();
-  const p = pair(f);
-  // no work after the creation: the item's commit front matter is the creation HEAD (new.js)
-  const created = rootCommit(f.cons);
-  assert.equal(ctxOf(f, 1).fm.commit, created, 'the item\'s commit front matter is the creation HEAD (new.js)');
-  // the review passes on the creation HEAD, both stages
-  ok(f, ['update', p.producer, '--request-review', 'amy', '--note', `review commit ${created}`, '--by', 'agent-a']);
-  ok(f, ['update', p.producer, '--start-review', '--by', 'amy']);
-  ok(f, ['update', p.producer, '--review', 'pass', '--by', 'amy', '--comments', 'the exported functions hold; references/review/code.md']);
-  ok(f, ['update', p.producer, '--request-review', 'rex', '--note', `review commit ${created}`, '--by', 'agent-a']);
-  ok(f, ['update', p.producer, '--start-review', '--by', 'rex']);
-  ok(f, ['update', p.producer, '--review', 'pass', '--by', 'rex', '--comments', 'holds; references/review/code.md']);
-  const ctx = ctxOf(f, 1);
-  // a stored-form record without a commit (the record command makes no such record): the acceptance is
-  // refused, naming the missing field - no fallback to the item's creation commit (lead ruling 2026-10-31)
-  const bare = { dependent: '2', commit: '', contract: 'c', verification: 'v', outputs: '', pickup: '', risks: 'NONE', by: 'agent-a', at: '2026-10-31T00:00:00Z', digest: 'd'.repeat(64) };
-  const r = acceptHandoff({ ...ctx, fm: { ...ctx.fm, handoffs: [handoff.encode(bare)] } }, { dependent: '2', checks: 'npm test: 0 failures', by: 'lead', lead: 'lead' });
-  assert.ok(r.refuse, 'a hand-off record without a commit is refused');
-  assert.match(r.refuse, /commit/, 'the refusal names the missing field');
 });
 
 test('059.2: acceptHandoff refuses a missing actor or lead, a non-lead actor, a missing record, empty checks, and a review that has not passed', () => {

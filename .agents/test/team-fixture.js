@@ -16,9 +16,9 @@ const BIN = resolve(import.meta.dirname, '..', '..', 'bin', 'backlog.js');
 const TEAM_VARIABLES = ['TEAM_NAME', 'TEAM_REPOSITORY', 'TEAM_BRANCH', 'AGENT', 'SESSION'].map(n => `SMOOTH_BACKLOG_CLI_${n}`);
 const quiet = Object.fromEntries(TEAM_VARIABLES.map(k => [k, '']));
 
-// The item file of a folder by number (phases/ or archive/): its path, or undefined.
+// The item file of a folder by number (phases/, or archive/phases/ where `backlog archive` and the team commands put an archived item, or archive/): its path, or undefined.
 export function fileOf(folder, seq) {
-  for (const sub of ['phases', 'archive']) {
+  for (const sub of ['phases', join('archive', 'phases'), 'archive']) {
     const dir = join(folder, sub);
     const hit = existsSync(dir) && readdirSync(dir).find(n => n.startsWith(`${String(seq).padStart(3, '0')}-`));
     if (hit) return join(dir, hit);
@@ -29,7 +29,7 @@ export function fileOf(folder, seq) {
 // Writes an item through toFile into <folder>/phases (archive/ when item.archived); item: the evaluator item ({ seq, slug, team, repository, branch, fields, ... }).
 export function putItem(folder, item, entry) {
   const doc = { created: '2026-11-01T00:00:00Z', updated: '2026-11-01T00:00:00Z', updated_by: 'seed', body: '', history: [], ...item };
-  const path = join(folder, item.archived ? 'archive' : 'phases', itemFileName(item.slug));
+  const path = join(folder, ...(item.archived ? ['archive', 'phases'] : ['phases']), itemFileName(item.slug));
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, toFile(doc, entry));
   return path;

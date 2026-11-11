@@ -1,5 +1,4 @@
-// The template skill is the single source of the backlog skill. Every team flag of
-// `backlog update` (the ones a member or the lead uses) and every team command is in SKILL.md; the skill names no
+// The template skill is the single source of the backlog skill. Every team command (a team step is the word after the item of `backlog team update`) is in SKILL.md; the skill names no
 // backlog folder, file, git command or Python script; its description stays as it is (never shortened).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,27 +7,18 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HELP } from '../../src/help.js';
 import { teamHelp } from '../../src/team/help.js';
-import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
 
 const dir = fileURLToPath(new URL('../../templates/skills/backlog/', import.meta.url));
 const skill = readFileSync(join(dir, 'SKILL.md'), 'utf8');
 const files = d => readdirSync(d).flatMap(n => (statSync(join(d, n)).isDirectory() ? files(join(d, n)) : [join(d, n)]));
-// --force (claim while holding another active item) is no member step: one active item per member (spec section 6)
-const NOT_TAUGHT = new Set(['force']);
-
-test('040: every team flag of backlog update and every team command is in the skill', () => {
-  const missing = [...TEAM_VALUE, ...TEAM_BOOL].filter(f => !NOT_TAUGHT.has(f) && !new RegExp(`--${f}(?![\\w-])`).test(skill));
-  assert.deepEqual(missing, [], `flags missing from SKILL.md: ${missing.join(', ')}`);
-  for (const c of ['backlog setup', 'backlog team pop --team <team> --agent', 'backlog show <item> --agent <you>', 'backlog team new --team <team> --agent <you> --name', 'backlog team query --team <team> --plan', 'backlog team query --team <team> --decisions', 'backlog team query --team <team> --wip']) assert.ok(skill.includes(c), c);
-  // every command of help.js and of COMMANDS.md, and every flag of the update help that a team session or the lead uses
+test('040: every team command is in the skill, and a team step is taught as the word after the item', () => {
+  for (const c of ['backlog setup', 'backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...', 'backlog team pop --team <team> --agent', 'backlog show <item> --agent <you>', 'backlog team new --team <team> --agent <you> --name', 'backlog team query --team <team> --plan', 'backlog team query --team <team> --decisions', 'backlog team query --team <team> --wip']) assert.ok(skill.includes(c), c);
+  // every command of help.js and of COMMANDS.md
   const shared = [...new Set([...Object.keys(HELP), ...[...readFileSync(fileURLToPath(new URL('../../COMMANDS.md', import.meta.url)), 'utf8').matchAll(/^### backlog (\S+)$/gm)].map(m => m[1])])];
   assert.ok(shared.length >= 8, shared.join());
   assert.deepEqual(shared.filter(c => !skill.includes(`\`${c}\``) && !skill.includes(`backlog ${c}`)), [], 'every shared-mode command is named');
-  const teamFlags = teamHelp['team update'].split(/\n(?= {2}--)/).filter(b => /\bteam\b|lead|member/.test(b)).map(b => /^ {2}--([\w-]+)/.exec(b)?.[1]).filter(Boolean);
-  assert.ok(teamFlags.length >= 15, teamFlags.join());
-  assert.deepEqual(teamFlags.filter(f => !NOT_TAUGHT.has(f) && !new RegExp(`--${f}(?![\\w-])`).test(skill)), [], 'every flag of the team update help is taught');
-  assert.match(skill, /review request, a changes verdict it gives and its close end its session \(never the lead's\)/);
-  assert.match(skill, /END THE SESSION NOW/);
+  assert.ok(teamHelp['team update'].includes('backlog team update <item> <step>'), 'the help teaches the step as the second word');
+  assert.doesNotMatch(skill, /--(?:request-review|refine-start|set-team|accept-handoff)\b/, 'the skill names no step flag of the retired spelling');
   assert.match(skill, /Act only as yourself/);
 });
 

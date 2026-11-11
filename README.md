@@ -55,7 +55,7 @@ Items are selected by their number (`1`) or slug (`001-fix-the-login-redirect`).
 
 - **Branch isolation:** every item belongs to the branch that was checked out when it was created; `backlog list` shows the queue of the current branch, `backlog list all-branches` every branch the backlog carries (inside the repository the items are committed on their branch, so a branch sees the items it carries), `backlog move <item> --to-branch <name>` moves an item.
 - **Many hands:** a named agent (`SMOOTH_BACKLOG_CLI_AGENT=<name>`, or `--claim <name>`) claims an item; another agent cannot take it; a write to an item that someone else changed since the agent last read it is refused (exit 5) until the agent reads it again (`backlog show <item> --agent <you>`).
-- **Reviews:** a team step, taken with `backlog team update <item> --team <team> --agent <you>`: the holder asks for a review (`--request-review <agent|any> --note "<commits, evidence>"`); another agent records the verdict (`--review complete|reject --by <reviewer> --comments "<findings>"`); the author never reviews its own work.
+- **Reviews:** a team step, taken with `backlog team update <item> <step> --team <team> --agent <you>`: the step is a word the team's rules name (for example the holder's hand-to-check and another member's check), the rules decide whether it is allowed, and the author never reviews its own work.
 - **Teams:** the team rules — refinement before work, review rules before the close, work-in-progress limits — apply to items that belong to a team. Teams, their leads and members and their review rules are configuration in the backlog folder (`teams.json`): for example "an item of team A closes when one member of team A and one member of team B passed the current commit". Nothing about a particular team or agent is built into the CLI. See `backlog update --help` and `backlog team --help`.
 - **Skill for agents:** `backlog setup` deploys the built-in backlog skill (`templates/skills/backlog`) into every agent folder present in the repository (`.agents`, `.claude`, `.github`, `.qwen`), so coding agents learn the commands from the repository itself. It also copies the generic team templates (`templates/teams`: scrum, extreme-programming, parallel, single-agent, patterns) to `.backlog/team-templates`, replacing that folder on every setup and committing it with the configuration; copy one to the team file and edit it there, since no command reads a template.
 
@@ -66,8 +66,8 @@ other word (`pending`, `in progress`, `blocked on vendor`) keeps it in the queue
 <word>` sets it (the word is stored exactly as typed: write `in progress`, not `in_progress`). The items of a team follow one order,
 `new`, `refining`, `refined`, `refinement review`, `ready`, `in progress`, `ready for review`, `reviewing`, `ready for
 external review`, `external review`, `review complete`, `closed`, `archived`, plus the wait `awaiting decision` for an
-owner question; the team steps of `backlog team update` (`--refine-start`, `--claim`, `--request-review`, `--review`, `--close` and the others)
-move the item along it, and `--status` on such an item is refused. The order and the rules of each step are a
+owner question; the earlier team steps (`--refine-start`, `--claim`, `--request-review`, `--review`, `--close` and the others, now steps of `backlog team update <item> <step>`
+that the team's rules define) move the item along it, and `--status` on such an item is refused. The order and the rules of each step are a
 definition file the CLI ships (`templates/workflows/team.json`). Which review stages apply, and how many passes each
 needs, comes from the team's entry in `teams.json` (`review`: a list of `{ "stage": "peer" | "external", "count": n }`;
 without the key both stages apply, an empty list means no review); a team step for a team with no entry is refused. A
@@ -137,7 +137,7 @@ The same five rules hold wherever the items live:
 | `backlog fields` | The item template: every key and field, its type and default, who sets it, what it is for |
 | `backlog team pop --team <team> --agent <name>` | What one agent of a team does next, marked as theirs, with the whole item |
 | `backlog team new --team <team> --agent <name> --name <text> [--<argument> <value>]...` | Add an item of a team: the team's rules for the step `new` decide, and the number is taken only when they allow it; the arguments are the ones the rules read (`--estimate`, `--parent`, ...) |
-| `backlog team update <item> --team <team> --agent <name> <step>` | One team step: claim, release, review, close, ... |
+| `backlog team update <item> <step> --team <team> --agent <name> [--<argument> <value>]...` | One step of the team's rules on an item: the rules decide, a refusal names the rule and writes nothing; the arguments are the ones the rules read (`--note`, ...) |
 | `backlog team query --team <team> --agent <name> <view>` | The team views (claimable, reviewable, blocked, decisions, plan, wip) and the read options of the team rules (`--phase`, `--status`, `--events`, `--branch`, ...) |
 | `backlog team validate [--team <team> \| --show-all] [--json]` | Check the team file in full and this repository's items and numbers against it; every finding says where, why and how to fix it (exit 2 on an error, warnings never) |
 | `backlog team migrate --team <team>` | Reserved for converting the items to the team format; answers that it is not available yet |

@@ -3,10 +3,10 @@
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -19,99 +19,14 @@ function fixture(prefix = 'team-teams-') {
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
-const DOD = "## Definition of done\n\n- [ ] the test's check holds";
-const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
-  '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const LEAD = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' }; // ann, bob and zed are plain members
 const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { ...LEAD, ...env } });
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
-const make = (f, name, ...extra) => ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0];
-const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
 // a team item is refined (a member, the lead's review request, a reviewer's pass) before anyone claims it or is offered it as work
 const refined = (f, slug, cwd = f.cons) => [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']].forEach(a => {
   const r = cli(['update', slug, ...a], { cwd, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 const pop = (f, agent, env) => JSON.parse(run(f, ['team', 'pop', '--team', env?.SMOOTH_BACKLOG_CLI_TEAM_NAME || 't1', '--agent', agent, '--json'], env?.SMOOTH_BACKLOG_CLI_TEAM_NAME ? { SMOOTH_BACKLOG_CLI_AGENT: agent, ...env } : env).stdout); // the team of the session, else t1
-const slugs = (f, args, env) => JSON.parse(ok(f, ['team', 'query', '--team', 't1', ...args, '--json'], env).stdout).map(x => x.slug);
-
-test('the runner sets the team on the work item and claims it for the lead; --set-team "" clears it', () => {
-  const f = fixture();
-  const w = make(f, 'team work item');
-  let r = ok(f, ['update', w, '--set-team', ' t1 ']);
-  assert.match(r.stdout, /updated \(team=t1\)/);
-  ok(f, ['update', w, '--claim', 'lead']);
-  assert.deepEqual([fm(f, w).team, fm(f, w).claimed_by, fm(f, w).stage], ['t1', 'lead', undefined]); // a work item has no stage
-  r = ok(f, ['update', w, '--set-team', '']);
-  assert.match(r.stdout, /updated \(team=none\)/);
-  assert.equal(fm(f, w).team, undefined); // a cleared team is no team key in the file
-});
-
-test('backlog new --team writes the team and starts the item as new; --split-from inherits the team', () => {
-  const f = fixture();
-  const w = make(f, 'team work item');
-  ok(f, ['update', w, '--set-team', 't1']);
-  const a = make(f, 'child a', '--split-from', w);
-  assert.deepEqual([fm(f, a).team, fm(f, a).status, fm(f, a).refiner], ['t1', 'new', '']); // inherited
-  assert.notEqual(pop(f, 'lead', { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }).item, a); // the lead never claims a split item (it is offered its work item)
-  const b = make(f, 'child of another team', '--split-from', w, '--team', 't2');
-  assert.equal(fm(f, b).team, 't2'); // --team wins over the inherited team
-  const c = make(f, 'other team item', '--team', 't2');
-  assert.deepEqual([fm(f, c).team, fm(f, c).status], ['t2', 'new']);
-  const plain = make(f, 'no team');
-  assert.ok(!('team' in fm(f, plain)) && !('stage' in fm(f, plain)));
-  const s = make(f, 'split of an item without team', '--split-from', plain);
-  assert.ok(!('team' in fm(f, s)) && !('stage' in fm(f, s))); // outside a team session a split of a teamless item needs no refinement review
-});
-
-test('with SMOOTH_BACKLOG_CLI_TEAM_NAME set, another team\'s item is never offered: pop, --claimable, --reviewable and --blocked', () => {
-  const f = fixture();
-  writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] }, t2: { review: [{ stage: 'peer' }] } })); // a review is asked for in both teams
-  const [mine, theirs, none] = ['t1 job', 't2 job', 'job without team'].map(n => make(f, n));
-  ok(f, ['update', mine, '--set-team', 't1']);
-  ok(f, ['update', theirs, '--set-team', 't2']);
-  refined(f, mine); refined(f, theirs);
-  const T1 = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' }; const T2 = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't2' };
-  assert.deepEqual(slugs(f, ['--claimable'], T1), [mine]);
-  assert.deepEqual(slugs(f, ['--claimable'], T2), [theirs]);
-  assert.deepEqual(slugs(f, ['--claimable']), [mine]); // --team t1 alone scopes the view the same: never t2's item or the item of no team
-  ok(f, ['update', mine, '--claim', 'bob']);
-  ok(f, ['update', mine, '--request-review', 'any', '--note', 'commit abc']);
-  assert.deepEqual(slugs(f, ['--reviewable', '--agent', 'zed'], T1), [mine]);
-  assert.deepEqual(slugs(f, ['--reviewable', '--agent', 'zed'], T2), []);
-  const p = pop(f, 'zed', T2); // t2's member: the claim of its own item, never the review of t1's
-  assert.deepEqual([p.action, p.item, p.claimed], ['claim', theirs, true]);
-  const q = pop(f, 'zed', T2);
-  assert.ok(q.item !== mine && q.item !== none, JSON.stringify(q)); // nothing of another team or of no team
-  const dep = make(f, 't2 waits', '--depends-on', theirs.split('-')[0]);
-  ok(f, ['update', dep, '--set-team', 't2']);
-  assert.deepEqual(slugs(f, ['--blocked'], T1), []);
-  assert.deepEqual(slugs(f, ['--blocked'], T2), [dep]);
-});
-
-test('another team\'s chunk item is never offered, in this repository or (--scope all) in another one', () => {
-  const f = fixture();
-  const other = consumer(f.t, 'other', 'thing', 'main');
-  const theirs = make(f, 't2 chunk here', '--chunk');
-  ok(f, ['update', theirs, '--set-team', 't2']);
-  refined(f, theirs);
-  writeFileSync(join(f.folder, 'backlog.scope'), 'refinement_scope: all\n');
-  const T1 = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' };
-  const popAll = env => JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', 'ann', '--scope', 'all', '--json'], { SMOOTH_BACKLOG_CLI_AGENT: 'ann', ...env }).stdout);
-  const p = pop(f, 'ann', T1);
-  assert.deepEqual([p.action, p.item], ['chunk', null]); // small-chunk work, but not t2's item
-  const newIn = name => { const r = cli(['new', ...NEW(name), '--chunk'], { cwd: other, tmp: f.t, env: LEAD }); assert.equal(r.status, 0, r.stdout + r.stderr); return r.stdout.split('created phase ')[1].split(' ')[0]; };
-  const far = newIn('t2 chunk there');
-  const r = cli(['update', far, '--set-team', 't2'], { cwd: other, tmp: f.t, env: LEAD });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  refined(f, far, other);
-  assert.equal(popAll(T1).item, null);
-  assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all'], T1), []);
-  const free = newIn('chunk of no team there'); // another repository's chunk work without a team stays open to every team
-  assert.equal(popAll(T1).item, free);
-  assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all'], T1), [free]);
-  assert.deepEqual(slugs(f, ['--claimable', '--scope', 'all']), [free]); // --team t1 alone scopes the view the same: not t2's chunk items
-});
-
 test('the lead refines only an incomplete item of its own team', () => {
   const f = fixture();
   const bare = name => { const r = ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none']); return r.stdout.split('created phase ')[1].split(' ')[0]; };
@@ -125,14 +40,3 @@ test('the lead refines only an incomplete item of its own team', () => {
   assert.equal(lead({}).item, mine); // --team t1 alone scopes the pop the same: never t2's item
 });
 
-test('--set-team, --team and a split child of a team item: every step succeeds', () => {
-  const f = fixture('team-teams-js-');
-  const step = (command, args) => { const r = run(f, [command, ...args]); assert.equal(r.status, 0, `${command}: ${r.stdout}${r.stderr}`); };
-  step('new', NEW('work item'));
-  step('update', ['1', '--set-team', 't1']);
-  step('update', ['1', '--claim', 'lead']);
-  step('new', [...NEW('child'), '--split-from', '1']);
-  step('new', [...NEW('other'), '--team', 't2']);
-  step('update', ['3', '--set-team', 't3']); // another team; clearing the team of an item in a stage is refused
-  step('update', ['1', '--set-team', '']);
-});

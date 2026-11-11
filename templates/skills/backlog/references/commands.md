@@ -394,7 +394,7 @@ Example:
   backlog update 18 --status "in progress" --note "Started the help text"
 
 An item that belongs to a team is changed by backlog team update only: this command refuses every change of it, field edits included,
-and a --replan that names it (backlog team update --replan places it).
+and a --replan that names it (the place of a team item is the place effect of its team's rules).
 Team items: backlog team update --help.
 ```
 
@@ -509,7 +509,7 @@ version, which holds the status archived, reads the same). The output names it b
 renumbers the remaining backlog to 0..M-1, because archiving takes the item off the backlog. Archiving an item
 that is already archived does nothing and says so. The command refuses when the item does not exist, or when its
 status is not finished (closed or done) and --force was not given. A closed item of a team is archived like any other; a team item that is not closed is
-refused, with --force too (exit 1, nothing written): it leaves the queue by its team steps (backlog team update --close).
+refused, with --force too (exit 1, nothing written): it leaves the queue by its team's steps (backlog team update <item> <step>).
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
@@ -610,7 +610,7 @@ their original order (each gets priority 0, newest first). The queue of the bran
 the sequence, and the output says what was done before it. When the source has no open item the command says so and exits 0; when no item
 carries the branch name it says so too (check the name). The source cannot be the branch checked out here (exit 2). The command prints text
 only: --json is refused (exit 2). An open item of a team is moved like any other and keeps its team and its state; with --higher it would
-take a place in the queue, which a team item takes only from backlog team update --priority, so --higher refuses the whole import when the
+take a place in the queue, which a team item takes only from the place effect of its team's rules (backlog team update), so --higher refuses the whole import when the
 source has one (exit 1, nothing moved).
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
@@ -1127,7 +1127,7 @@ backlog team — the commands that know a team: pop, new, update, query, validat
 Usage:
   backlog team pop --team <name> --agent <name> [--dry-run] [--json]
   backlog team new --team <name> --agent <name> --name <text> [--<argument> <value>]... [--json]
-  backlog team update <item> --team <name> --agent <name> <step> [options]
+  backlog team update <item> <step> --team <name> --agent <name> [--<argument> <value>]... [--json]
   backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--scope branch|repo|all] [--json]
   backlog team validate [--team <name> | --show-all] [--json]
   backlog team migrate --team <name>
@@ -1135,10 +1135,9 @@ Usage:
   backlog team workflow --file <flow.json> [--json]
   backlog team workflow --show <name>
 
-Only these commands read the team's entry in the backlog configuration (teams.json at the root of the backlog: the lead, the members,
-the external reviewers and the review stages) and the flow it names. The user commands know nothing of teams: they ignore the team environment and the team entries. --team and --agent
-are required on pop, new and update; SMOOTH_BACKLOG_CLI_TEAM_NAME and SMOOTH_BACKLOG_CLI_AGENT stand in for them, then the team and user of .backlog/config.json. A team
-without an entry is refused: "team <team> is not configured in the backlog configuration".
+Only these commands read the team file (teams.json: the "teams_file" key of .backlog/config.json, else .backlog/teams.json; backlog team validate says more) and the team's entry in it. The user commands know nothing of teams: they ignore the team environment and the team entries. --team and --agent
+are required on pop, new and update; SMOOTH_BACKLOG_CLI_TEAM_NAME and SMOOTH_BACKLOG_CLI_AGENT stand in for them, and the "team" key of .backlog/config.json stands in for the team after the variable (new and update
+never read the "user" key of that file: the agent is the flag or the variable). A team without an entry in the team file is refused.
 
 Teams, their leads and members and their review rules are configuration in the backlog folder (teams.json); work-in-progress
 limits are in wip-limits.json. A team session is bound by SMOOTH_BACKLOG_CLI_TEAM_NAME, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BACKLOG_CLI_TEAM_BRANCH (set by the team runner) and
@@ -1331,22 +1330,26 @@ Example:
 ### backlog team update
 
 ```text
-backlog team update — take one team step on an item: claim, release, review, close, hand-off and the refinement steps
+backlog team update — take one step of the team's rules on an item: claim, release, review, close, ...
 
 Usage:
-  backlog team update <item> --team <name> --agent <name> <step> [options]
+  backlog team update <item> <step> [--team <name>] [--agent <name>] [--<argument> <value>]... [--json]
 
-Runs one team step on an item: --claim, --release, --waiting, --waiting-done, --request-review, --start-review, --review, --close,
---handoff, --accept-handoff, --reject-handoff, --reassign, --reassign-review, --refine-start, --refine-done,
---request-refinement-review, --refinement-review, --request-decision, --decision, --wip-override, with the options of those steps.
-The field options of backlog update (--append, --note, --set-estimate, --set-depends-on, ...; backlog update --help) work here too and are
-checked against the team rules. A user command refuses every change of a team's item, field edits included: this command is the one way to change one. A call takes at most one team step (--claim, --release, --request-review, --start-review, --review,
---close, --waiting, --waiting-done, --handoff, --accept-handoff, --reject-handoff). A team item is claimed only when its
-refinement review passed (stage ready); an item that lacks required fields is only refined; the team's review rules are met before
-the close. A team's item closes when the review rules of its team (teams.json) are met for the item's current work commit.
-A session with SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY (and SMOOTH_BACKLOG_CLI_TEAM_BRANCH) set works only on items of that repository and branch: every change to another item is
-refused, field edits and --append as much as team steps. In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set, SMOOTH_BACKLOG_CLI_AGENT=<name>) a member acts only as
-itself: its claim, release, refinement, review and close of an item name itself, never another agent.
+Runs the step <step> on the item <item> (its number or its slug; an archived item is found too and refused). The team's rules decide: the first rule of the team's table that
+names the step and whose condition holds decides, and a step no rule allows is refused. A refusal prints its reason with the id of the rule that gave it, exits 1 and writes
+nothing. An allowance applies the rule's effects (fields of the item, related items such as a parent's list of children, the place in the queue, a note in the item's body, the team,
+the branch, archiving or deleting the item), commits and publishes only the command's own commit, "team <step> <slug>", and then prints the change.
+
+The step is the second word, never an option: a word that no rule of the team names is refused with the list of the team's steps (exit 2; backlog team query steps --team <name>).
+The arguments of a step are the names its rules read as $arg.<name>; --<argument> <value> gives one (the value is the next word, or follows an equals sign, may hold spaces or be
+negative; a repeated argument takes the last value). An argument the step does not take is refused with the list of what it takes (exit 2). The caller is the agent (--agent, else
+SMOOTH_BACKLOG_CLI_AGENT; it is a name, not a proof); the team is --team, else SMOOTH_BACKLOG_CLI_TEAM_NAME, else the "team" key of .backlog/config.json. The team file must be valid as a
+whole (backlog team validate). An item of another team, an item that is archived and an item that has no team and that the rule does not bind to the team are refused. Nothing checks
+that the item was read first: the step is decided on the items as they are now, and when another clone published first the step runs again on the new files.
+
+Scenario: the agent member-1 of the team parallel starts work on item 12 and, when it is done, hands it to a second member to check. It runs
+backlog team update 12 claim --team parallel --agent member-1 in the working copy of the repository whose backlog holds the work, and later backlog team update 12 hand-to-check
+--team parallel --agent member-1 --note "tests pass"; the team's rule claim-dependencies would have refused the first while an item that 12 depends on is open.
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
@@ -1356,154 +1359,36 @@ SMOOTH_BACKLOG_CLI_RUN_HOOK names an executable, and no child process when the v
 
 Options:
   --team NAME
-      The team the step is for. In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set) it must be that team.
+      The team whose rules decide.
   --agent AGENT
-      The agent that takes the step. In a team session (SMOOTH_BACKLOG_CLI_AGENT set) it must be that agent. A bare --claim or --release
-      takes the agent.
-  --claim AGENT
-      Take the item for an agent . The command refuses when another agent holds the item, when an item
-      in its depends_on is not done, or when a split item (with or without a team) or a team's item is not in stage
-      ready (its refinement review has not passed). A team item without a stage (a team's work item, or one written
-      before the stage field existed) is unrefined, stage refining: only the team lead's own claim of its team's work
-      item (backlog team pop, to split it; never a split slice) is accepted; for every other agent the refusal names --refine-start. An
-      item without a team and without the split marker has no stage (solo work) and is claimable;
-      otherwise the item becomes in progress and claimed by that agent. An agent or team name may contain letters,
-      digits, a period, an underscore, a hyphen and a colon (a session counter after a colon, as in worker:3, names a session of that worker);
-      the name works in the front matter, the event log, the commit subject and
-      every --claim, --release and --by value. The claiming session joins the item's session_authors list; the
-      sessions in that list, and the one who asked for the review, never review the item. A new session of the same
-      card - a name sharing the <item><card> part before the colon - continues an item its earlier session claimed
-      (a rework after a review, or the close): the claim records the new session name on the item, with no takeover
-      and no lead reassignment.
-  --force
-      Together with --claim: claim although the agent already holds active items (never before stage ready).
-  --waiting WHAT
-      Record that the holder of the item (named with --by) waits for something asynchronous, for example a workflow run or a
-      deployment. The wait is cleared by the next --note, --review, --close or --request-review of the item, or by
-      --waiting-done .
-  --waiting-done
-      Clear the wait of the item .
-  --set-review-refs PATHS
-      Set the review_refs of the item (its definition of done), as comma-separated paths in the review-documents repository.
-  --wip-override REASON
-      The team lead lifts the team and agent work-in-progress limits for this one item, with the reason recorded in
-      the item (wip_override, wip_override_by, wip_override_at); --by <lead>. The overall, repository and branch limits
-      stay: only the owner changes them, in wip-limits.json of the backlog repository.
-  --set-team NAME
-      Set the team that owns the item; an empty NAME clears it. The team runner sets it on the work item it hands the team
-      lead, and claims that item for the lead; items split from it inherit the team.
-  --refine-start
-      A team member starts refining the item (--by <agent>): only a team's item in stage refining, or without a stage (unrefined),
-      that nobody claims or already refines. A split slice without a team joins the refining session's team (SMOOTH_BACKLOG_CLI_TEAM_NAME) here. The stages
-      before any work are refining, refined, refinement-review and ready.
-  --refine-done
-      The refiner finished (--by <the refiner>, --note "<what you refined>"): stage refined. Refused while a team field or
-      the definition of done is missing.
-  --request-refinement-review
-      The team lead sends a refined item to the refinement review (--by <lead>): stage refinement-review.
-  --refinement-review {complete,reject}
-      Record the refinement verdict, --by <reviewer> with --comments "<findings; thread or session id>": complete makes the
-      item ready, reject sends it back to refining (pass and changes are accepted for complete and reject). The reviewer is a member of a team the refinement_review rule of
-      the item's team names (teams.json); without such a rule, anyone.
-  --request-decision QUESTION
-      The item needs an owner decision (--by <agent>): stage review-hitl, the question is written in the item (what, why,
-      how it came up, the options and a recommendation). Nobody claims it, or an item that depends on it, until the answer.
-  --decision ANSWER
-      The owner's answer to the item's question: written in the item as DECISION <date>: <answer>, and the item goes back
-      to stage refining, where the lead re-refines it with the decision.
-  --reassign AGENT
-      The team lead only (--by <lead>, --reason "<why>"): take the item from the agent that holds it and give it to AGENT.
-      The former holder stays in the item's session_authors list (the new holder joins), so the self-review block
-      survives the hand-off. In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set, SMOOTH_BACKLOG_CLI_AGENT=<name>) a member acts only as itself: its
-      claim, release, refinement, review and close of an item name itself, never another agent.
-  --reassign-review AGENT
-      The team lead only (--by <lead>, --reason "<why>"): hand the review of the item on to AGENT (not its author), for
-      example a stale review; a member never takes over another agent's review.
-  --reason REASON
-      Why the lead reassigns or releases another agent's item or review (--reassign, --reassign-review, or
-      --release AGENT --by <lead>), or rejects a hand-off (--reject-handoff).
-  --release AGENT
-      Give the item back, pending and unclaimed . Only AGENT itself, or the team lead with --by <lead> and
-      --reason, releases it. The release keeps the holder in session_authors (seeded for an item written before the
-      list existed), so the holder's self-review block stands.
-  --request-review AGENT|any
-      Ask an agent, or any agent, for a review; --note says what to review . The output ends with the
-      instruction to end the session now, printed after the change is published: a review request, a reject verdict
-      (--review reject) and a close each end the agent's session, so its next task starts in a fresh one (not for the
-      team lead).
-  --start-review
-      Record that the agent named by --by starts the requested review (review_state in_review, reviewer and review_started are
-      set). Other agents skip it unless the review was started more than 20 minutes ago . The self-review rule
-      is per session: the session that claimed the item or asked for the review (recorded in session_authors, kept on
-      release like review_author) is refused with "the same session cannot review its own work; a new session may"; a new
-      session, with a new name, may start the review . Every claim, reassign, release and review request
-      seeds the list from the item's current holder and review requester, so an item written before the list existed
-      keeps the self-review block of its earlier sessions.
-  --review {complete,reject}
-      Record a review verdict (pass and changes are accepted for complete and reject); it needs --by and --comments. A complete is recorded against the item's work commit
-      (work_commit) - the requester's HEAD at its review request (--request-review records it; a later request after a
-      pass keeps it) - so the reviewer's checkout and other items' commits on the branch move nothing; the item's own
-      new work (a later commit whose subject names the item as a producer at the start - the item number alone, or
-      joined with another item's number by "and") moves the work commit, so the review runs again; a close or
-      --status closed whose commit lookup fails is refused fail closed, and the refusal records the reason. A reject
-      verdict clears every recorded pass, keeps the finding in the item's review history and sends the item back to work. A team's item closes when the review rules
-      of its team (teams.json: each rule names a team and how many of its members must pass) are met for the current
-      work commit; a reviewer never reviews in the author's session; an item without a team needs no rule.
-  --handoff DEPENDENT
-      The producer records its hand-off for DEPENDENT, one of the item's dependents; only the item's claimer does
-      (--by <you> or the claim). It replaces any earlier hand-off for the same dependent, which makes an earlier
-      receipt of the team lead stale. It needs --handoff-commit, --handoff-contract and --handoff-verification.
-  --handoff-commit COMMIT
-      The 40-hex commit id the hand-off is pinned to. Required with --handoff.
-  --handoff-contract CONTRACT
-      The contract of the hand-off, in text. Required with --handoff.
-  --handoff-verification VERIFICATION
-      How the hand-off is verified, in text. Required with --handoff.
-  --handoff-outputs OUTPUTS
-      The outputs of the work the hand-off carries. Optional with --handoff.
-  --handoff-pickup PICKUP
-      How the dependent picks the work up. Optional with --handoff.
-  --handoff-risks RISKS
-      The open risks of the hand-off. The default is NONE. Optional with --handoff.
-  --accept-handoff DEPENDENT
-      The team lead accepts the producer's hand-off for DEPENDENT. It needs --by <lead> and --checks
-      "<what was checked>"; the producer's review must have passed. It records a receipt that pins the current
-      hand-off record; a re-recorded hand-off makes it stale.
-  --reject-handoff DEPENDENT
-      The team lead rejects the producer's hand-off for DEPENDENT. It needs --by <lead> and --reason "<why>"; it
-      records a receipt that pins the current hand-off record.
-  --checks CHECKS
-      The checks the team lead did before accepting a hand-off (--accept-handoff).
-  --by AGENT
-      The agent that reviews (--start-review, --review), refines (--refine-start, --refine-done), requests or records the
-      refinement review, records the hand-off (--handoff) or accepts or rejects one (--accept-handoff,
-      --reject-handoff), or closes (--close) the item .
-  --comments COMMENTS
-      The review findings (--review); they must cite one of the review references of the item .
-  --close
-      Complete the item; --summary says what was delivered. A team's item closes when the review rules of its team
-      (teams.json) are met for the item's current work commit; the refusal names the unmet rule. Outside a team the
-      person or agent running the command closes it. The owner closes without a review on a written decision
-      (--by owner --reason "<the decision>"), recorded as an owner decision, even for a team item still in its
-      refinement stages . Only the claimer closes its item, else the team lead (--by <lead>);
-      never the reviewer. An item that other items depend on closes only when each dependent's hand-off is recorded
-      and accepted (--handoff, then the lead's --accept-handoff); the refusal lists every open dependent, the state
-      of its hand-off and the next command. An item without dependents closes and records handoffs: none. An item
-      already done is not checked again.
-  --status STATUS
-      Refused: the status of a team item moves by the steps above (claim, request-review, start-review, review, close), never by a
-      value. The refusal names those steps and writes nothing.
-  --dry-run
-      Say what would change and change nothing: no file is written and nothing is committed.
+      The agent that takes the step: the caller the rules see and the writer recorded in the item and its history.
+  --session ID
+      The session id the rules see as $session.id (else SMOOTH_BACKLOG_CLI_SESSION).
+  --repository OWNER/NAME
+      The repository whose folder of the backlog and team file the command uses (else SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY; else the working copy's).
+  --branch NAME
+      The branch the step acts on, as the rules see $session.branch (else SMOOTH_BACKLOG_CLI_TEAM_BRANCH; else the working copy's current branch; a detached HEAD needs one of them).
+  --<argument> VALUE
+      An argument of the step as the team's rules define it.
+  --json
+      Print {"item", "step", "rule", "changes", "related", "say"} instead of the lines. "changes" holds { field: [before, after] } of the item, "related" the same per related item
+      (by number), "say" the text of the rule that allowed the step, or an empty text.
   --help
       Print this text and exit. Nothing is read or changed.
 
-Exit codes: 0 the step was taken (--dry-run: it would be); 1 refused (the reason on standard output, ❌ ...); 2 invalid input; 3 the
-update of the backlog repository failed before the change, or the change was not published and was rolled back; 5 the item was changed
-by somebody else after this agent last read it (backlog team query --phase <item> --agent <you>).
+On success the command prints "<slug>: <step> (rule <id>)" with a check mark in front, then one line "   <field>: <before> -> <after>" per change of the item in the order of the item
+definition (an empty text is shown as "", a list as JSON), one line "   item <number>: <field>: <before> -> <after>" per related item changed, then the text the rule says, if any.
+
+Exit codes:
+  0  The step was taken and published.
+  1  The team's rules refused the step (the reason and the rule id are printed on standard output), there is no such item, or the team has no entry in the team file.
+  2  Invalid input: no team, no agent, no item or no step word, a step no rule names, an argument the step does not take, an unknown option (--ask, --dry-run and --show-all are refused),
+     a value that does not fit its field, a number that two items hold, a detached HEAD with no branch given, or a team file that is missing, unreadable or invalid.
+  3  The repository that holds the items could not be synchronised with its origin: nothing was changed, or the change was not
+     published and was rolled back (an item of another agent published first: the step runs again on the new files, and fails with this code only when it keeps changing).
 
 Example:
-  backlog team update 18 --team cli-1 --agent ann --claim
+  backlog team update 12 claim --team parallel --agent member-1
 ```
 
 ### backlog team query

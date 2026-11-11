@@ -1,23 +1,20 @@
 // `backlog team new --name <text> [--<argument> <value>]...`: the step `new` of the team's rules on a fresh item. The number is taken from the counter only when the
 // rules allow the step; the item is written, committed and published as the command's own commit (src/shared/team-publish.js), and printed after that.
-import { isAbsolute, relative } from 'node:path';
-import { realpathSync } from 'node:fs';
 import { BacklogError } from '../errors.js';
 import { highWater } from '../shared/numbers.js';
 import { redact, slugify } from '../shared/safety.js';
 import { readConfig, topOf } from '../shared/setup.js';
 import { cloneLocked, configDir, folder as folderOf, itemFileName, now, repoId, resolveHome } from '../shared/store.js';
-import * as sync from '../shared/sync.js';
 import { publishTeam } from '../shared/team-publish.js';
 import { apply } from './apply.js';
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { contextOf, nextSeqOf } from './item.js';
-import { pullFolder } from './pull.js';
+import { pullFolder, watched } from './pull.js';
 import { Refusal } from './rules/expression.js';
 import { create } from './rules/step.js';
 import { sessionOf } from './session.js';
-import { loadTeams, teamsFile } from './teams-load.js';
+import { loadTeams } from './teams-load.js';
 
 const say = text => process.stdout.write(`${redact(text)}\n`);
 const invalid = text => new BacklogError('INVALID_INPUT', text);
@@ -37,17 +34,6 @@ function printed({ built, result, number, team, json }) {
     return JSON.stringify({ item: number, slug, rule: built.rule, changes: result.changes.get(number) ?? {}, related: Object.fromEntries([...result.changes].filter(([s]) => s !== number)), say: result.say ?? '' });
   }
   return [`✅ created ${slug} (seq ${number}) for team ${team}, rule ${built.rule}`, ...(result.say ? [result.say] : [])].join('\n');
-}
-
-// The repository-relative paths the command read: its folder and, when it lies inside the clone, the team file (a change of either upstream means the step runs again).
-async function watched(home, repo, top, workRepo) {
-  const t = await sync.target(home);
-  const watch = [`${t.prefix}${repo}`];
-  try {
-    const rel = relative(realpathSync(t.root), realpathSync(teamsFile({ top, home, repo, workRepo }).path));
-    if (!rel.startsWith('..') && !isAbsolute(rel)) watch.push(rel);
-  } catch { /* the team file is not in the clone: nothing to watch */ }
-  return watch;
 }
 
 async function newItem(argv) {

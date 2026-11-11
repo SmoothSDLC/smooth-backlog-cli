@@ -44,16 +44,6 @@ export function resolve(got, { agentOptional = false } = {}) {
   return { team, agent };
 }
 
-// A bare --claim or --release takes the agent as its value.
-function withAgent(rest, agent) {
-  const out = [];
-  for (let i = 0; i < rest.length; i++) {
-    out.push(rest[i]);
-    if (['--claim', '--release'].includes(rest[i]) && (rest[i + 1] === undefined || rest[i + 1].startsWith('--'))) out.push(agent);
-  }
-  return out;
-}
-
 // a team without an entry in the configuration is refused with the text of the workflow
 const unconfigured = team => { process.stdout.write(`❌ ${loadWorkflow('team').refusals.team_not_configured.replace('<team>', team)}\n`); return 1; };
 
@@ -61,13 +51,6 @@ const unconfigured = team => { process.stdout.write(`❌ ${loadWorkflow('team').
 async function query(rest, { team }, got) {
   if (!teamsConfig()[team]) return unconfigured(team);
   return (await import('./query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])]);
-}
-
-async function update(rest, { team, agent }) {
-  if (!teamsConfig()[team]) return unconfigured(team);
-  const args = withAgent(rest, agent);
-  if (!args.some(x => x === '--by' || x.startsWith('--by=') || x === '--claim' || x === '--release')) args.push('--by', agent);
-  return (await import('./update.js')).run(args);
 }
 
 export async function run(argv) {
@@ -80,6 +63,7 @@ async function dispatch(argv) {
   if (sub === 'validate') return (await import('./validate-command.js')).run(argv.slice(1));
   if (sub === 'migrate') return (await import('./validate-command.js')).pending('migrate', argv.slice(1), ['ask']);
   if (sub === 'new') return (await import('./new.js')).run(argv.slice(1)); // the rules engine: the old seam below is not installed for it
+  if (sub === 'update') return (await import('./update.js')).run(argv.slice(1)); // the same
   installSeam(); // the routes below are the old commands, which read the earlier words
   setTeamsHome(resolveHome().home); // reads the team configuration of the backlog
   if (sub === 'define') return define(argv.slice(1));
@@ -87,7 +71,6 @@ async function dispatch(argv) {
   let split_; let who;
   try { split_ = split(argv.slice(1)); who = resolve(split_.got, { agentOptional: sub === 'query' }); } catch (e) { return die(e.message); } // the views read: a named agent switches them to the team rules, none is needed
   setSessionTeam(who.team); // the command's team is the session's: its items are the only ones in reach
-  if (sub === 'update') return update(split_.rest, who);
   if (sub === 'query') return query(split_.rest, who, split_.got);
   if (sub === 'pop') {
     parsePop(split_.rest); // a flag this command refuses is refused before anything else

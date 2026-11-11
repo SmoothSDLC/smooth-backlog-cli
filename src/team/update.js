@@ -1,107 +1,88 @@
-// `backlog team update`: the item flags of `backlog update` plus the steps of a team (claims, reviews, stages, hand-offs, the lead's
-// work-in-progress override). src/shared/update.js runs the edit; this module is the `team` object it asks at each place a team rule applies.
-import { checkRefs } from '../shared/safety.js';
-import * as store from '../shared/store.js';
-import { run as runUpdate } from '../shared/update.js';
-import { foreignItem, isForeign } from '../shared/dependencies.js';
-import { isArchived, isFinished, isOpen } from '../shared/status.js';
-import { inProgress } from '../shared/wip-limits.js';
-import { asList, rstrip, strip } from '../shared/text.js';
-import { caller, closeNow, headline, missingFields, reviewRefusal, runCloseGate, shutdown, step } from './lifecycle.js';
-import { heldBy, teamLead, teamRefusal } from './team.js';
-import { wipRefusal } from './wip.js';
+// `backlog team update <item> <step> [--<argument> <value>]...`: one step of the team's rules on an existing item. The rules decide; a refusal writes nothing. An allowance
+// is applied (src/team/apply.js) and published as the command's own commit (src/shared/team-publish.js), and printed after that.
+import { BacklogError } from '../errors.js';
+import { find } from '../shared/index.js';
+import { redact } from '../shared/safety.js';
+import { readConfig, topOf } from '../shared/setup.js';
+import { cloneLocked, configDir, folder as folderOf, now, repoId, resolveHome } from '../shared/store.js';
+import { publishTeam } from '../shared/team-publish.js';
+import { apply } from './apply.js';
+import { parseArgs } from './args.js';
+import { VALUE, resolveInputs } from './inputs.js';
+import { contextOf } from './item.js';
+import { pullFolder, watched } from './pull.js';
+import { Refusal } from './rules/expression.js';
+import { step } from './rules/step.js';
+import { sessionOf } from './session.js';
+import { stepNames } from './steps.js';
+import { loadTeams } from './teams-load.js';
 
-export const TEAM_VALUE = ['wip-override', 'waiting', 'set-review-refs', 'request-review', 'review', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reassign-review',
-  'handoff', 'handoff-commit', 'handoff-contract', 'handoff-verification', 'handoff-outputs', 'handoff-pickup', 'handoff-risks', 'accept-handoff', 'reject-handoff', 'checks'];
-export const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'refine-start', 'refine-done', 'request-refinement-review'];
+const say = text => process.stdout.write(`${redact(text)}\n`);
+const invalid = text => new BacklogError('INVALID_INPUT', text);
 
-// A claim the publication checks again against the merged files, because its eligibility depends on other files: the dependencies are done,
-// no work-in-progress limit is exceeded by a concurrent start elsewhere, and the agent holds no other active item (unless --force or a reclaim).
-// verify answers the reason, or nothing.
-const claimOf = (agent, claim) => ({ ...claim, agent, verify({ item, items, folder, name, find, slug }) {
-  for (const d of asList(item.fm.depends_on)) {
-    const target = isForeign(d) ? foreignItem(folder, d) : find(d);
-    if (!target || !(isArchived(target) || isFinished(isForeign(d) ? target.status : target.fm.status))) return `${slug(item)} dependencies not done: ${d}`;
+export async function run(argv) {
+  try { return await updateItem(argv); } catch (e) {
+    if (!(e instanceof BacklogError)) throw e;
+    process.stderr.write(`❌ backlog: ${redact(e.message)}\n`);
+    return e.exitCode;
   }
-  const wip = claim.reclaim ? null : wipRefusal(folder, name, item.fm, agent, slug(item));
-  if (wip) return `${slug(item)}: ${wip}`;
-  if (!claim.skipActiveLimit) {
-    // items held by an earlier session of the same card count (the continuation keeps the one-active-item rule across the card's sessions)
-    const held = items.filter(i => i !== item && i.path.startsWith('phases/') && isOpen(i.fm.status ?? 'pending')
-      && heldBy(i.fm.claimed_by, agent) && !['requested', 'in_review'].includes(i.fm.review_state) && !i.fm.wait_on);
-    if (held.length) return `${agent} holds ${held.length} active item(s): ${held.map(slug).join(', ')}; pull new work only when every item you hold waits; --force overrides`;
-  }
-  return undefined;
-} });
+}
 
-export const hooks = {
-  value: [...TEAM_VALUE, 'set-team'],
-  bool: TEAM_BOOL,
-  choices: { review: ['complete', 'reject'], 'refinement-review': ['complete', 'reject', 'limit'] },
-  // the earlier words of a verdict are synonyms of the two words
-  verdict: { flags: ['review', 'refinement-review'], words: { pass: 'complete', changes: 'reject' } },
-  refuseOutside: teamRefusal,
-  // a new session of the same card reclaims the in-progress item (the continuation, no new work to start); the active-item limit of
-  // the other items of the card still applies, checked against heldBy when the claim is published
-  claims: (a, fm, folder, row) => (a.claim ? [claimOf(a.claim, { folder, path: row.path, skipActiveLimit: Boolean(a.force) || fm.claimed_by === a.claim, reclaim: heldBy(fm.claimed_by, a.claim) && fm.status === 'in progress' })] : []),
-  startRefusal: (a, { folder, repo, fm, slug }) => wipRefusal(folder, repo, { ...fm, team: a['set-team'] !== undefined ? strip(a['set-team']) : fm.team }, fm.claimed_by || a.by || caller(), slug),
-  begin: (fm, body) => ({ incomplete: missingFields(fm, body), before: { team: fm.team, stage: fm.stage } }), // as the item is before this call
-  // the refusal text, or nothing
-  fieldsBefore(a, { fm, folder, repo, slug, changes }) {
-    if (a['wip-override'] !== undefined) { // the lead lifts the team and agent limits for this item, with a recorded reason
-      const who = a.by || caller();
-      if (caller() && caller() !== who) return `${slug}: you are ${caller()} (SMOOTH_BACKLOG_CLI_AGENT): a member acts only as itself, not as ${who}`;
-      if (who !== teamLead()) return `${slug}: only the team lead (${teamLead()}) lifts the team and agent work-in-progress limits for an item (got ${who || 'nobody'}; --by <lead>)`;
-      const reason = strip(a['wip-override']);
-      if (!reason) return `${slug}: --wip-override needs the reason`;
-      Object.assign(fm, { wip_override: reason, wip_override_by: who, wip_override_at: store.now() });
-      changes.wip_override = reason;
-    }
-    if (a['set-team'] !== undefined) {
-      const name = strip(a['set-team']);
-      if (!name && fm.stage) return `${slug}: an item in stage ${fm.stage} keeps a team (the stages are team work); set another team instead`; // beyond the earlier scripts
-      if (name && name !== fm.team && inProgress(fm)) { // work in progress joins a team only within its limit
-        const full = wipRefusal(folder, repo, { ...fm, team: name }, fm.claimed_by || fm.refiner || '', slug);
-        if (full) return `${slug}: in progress, and in team ${name}: ${full}`;
-      }
-      fm.team = name; changes.team = name || 'none';
-    }
-    return undefined;
-  },
-  fieldsAfter(a, { fm, changes }) {
-    if (a['set-review-refs'] === undefined) return;
-    const refs = asList(a['set-review-refs']);
-    checkRefs(refs); // before any assignment
-    fm.review_refs = refs;
-    changes.review_refs = refs.join(',');
-  },
-  step(a, ctx) {
-    const todo = step(a, { ...ctx, before: ctx.begun.before, incomplete: ctx.begun.incomplete });
-    if (todo.text) todo.headline = headline(todo.text);
-    return todo;
-  },
-  after(a, { fm, body, event }) {
-    if (fm.wait_on && event !== 'waiting' && (strip(a.note ?? '') || ['review_requested', 'reviewed', 'closed'].includes(event))) { // the holder's next step on the item ends its wait
-      fm.wait_on = '';
-      return `${rstrip(body)}\n\nWAIT DONE ${store.now()} (next step on the item)\n`;
-    }
-    return body;
-  },
-  // --status closed is a close: the review rules of the item's team must be met for the current work commit (as --close); the refusal names the
-  // unmet rule. The owner's decision closes with --close --by owner --reason. The close gate runs on the pre-transition status: while a
-  // dependent's edge is not accepted the completion is refused the same way as --close; with no dependents the gate records handoffs: none.
-  closeStatus({ fm, statusBefore, folder, repo, slug }) {
-    const refusal = reviewRefusal(fm);
-    if (refusal) return { refuse: `${slug}: ${refusal}` };
-    return runCloseGate({ fm, statusBefore, folder, repo, slug });
-  },
-  notice: (a, { event, fm, slug }) => (event === 'reviewed' && a.review === 'complete' ? (fm.status === 'review complete' ? closeNow(fm, slug) : `   ➡️  NEXT: the item is now ${fm.status}`) : ''),
-  // the hand-off to review, a changes verdict and a close end the agent's session (the lead is no member): the agent it ends, or ''
-  ender(a, { event, holder }) {
-    const e = event === 'review_requested' ? a.by || caller() || holder : event === 'reviewed' && a.review === 'reject' ? a.by : event === 'closed' ? a.by || holder : '';
-    return e && e !== teamLead() ? e : '';
-  },
-  shutdown,
-};
+const show = v => (typeof v === 'string' ? (v === '' ? '""' : v) : JSON.stringify(v ?? null));
+const lines = (changes, order, indent) => Object.entries(changes)
+  .sort(([a], [b]) => (order.indexOf(a) + 1 || order.length + 1) - (order.indexOf(b) + 1 || order.length + 1))
+  .map(([f, [before, after]]) => `${indent}${f}: ${show(before)} -> ${show(after)}`);
 
-export const run = argv => runUpdate(argv, { team: hooks });
+// What the command prints once the change is published: the line, the item's changes in the definition's order, one line per related item changed, the say text; --json the raw payload.
+function printed({ built, result, item, name, entry, json }) {
+  const related = Object.fromEntries([...result.changes].filter(([s]) => s !== item.seq));
+  const own = result.changes.get(item.seq) ?? {};
+  if (json) return JSON.stringify({ item: item.seq, step: name, rule: built.rule, changes: own, related, say: result.say ?? '' });
+  const order = Object.keys(entry.item);
+  return [`✅ ${item.slug}: ${name} (rule ${built.rule})`, ...lines(own, order, '   '),
+    ...Object.entries(related).filter(([, c]) => Object.keys(c).length).map(([s, c]) => `   item ${s}: ${lines(c, order, '').join('; ')}`),
+    ...(result.say ? [result.say] : [])].join('\n');
+}
+
+async function updateItem(argv) {
+  const { positionals, flags, args } = parseArgs(argv, [...VALUE, 'json', 'show-all']);
+  if (positionals.length !== 2) throw invalid(positionals.length < 2 ? 'team update needs an item and a step: backlog team update <item> <step> [--<argument> <value>]...' : `unrecognized arguments: ${positionals.slice(2).join(' ')}`);
+  const [ident, name] = positionals;
+  const top = topOf(process.cwd());
+  if (!top) throw invalid('run this from inside a git repository (the repository whose backlog you want)');
+  const inputs = resolveInputs({ command: 'update', flags, env: process.env, config: readConfig(top) });
+  const workRepo = repoId(process.cwd());
+  const repo = inputs.repository || workRepo;
+  const session = sessionOf({ inputs, repo });
+
+  const { home } = resolveHome();
+  const folder = folderOf(home, repo);
+  return cloneLocked(home, async () => {
+    await pullFolder(home, folder);
+    let persistSha = () => {}; // the SHA of the team file the latest run read; publishTeam writes it after the last successful publication
+    const attempt = async () => {
+      const loaded = loadTeams({ top, home, repo, workRepo, stateDir: configDir(), team: inputs.team, now: new Date().toISOString(), deferSha: true });
+      persistSha = loaded.persistSha;
+      const entry = loaded.file[inputs.team];
+      const at = now();
+      const { ctx, view, own } = contextOf({ folder, entry, team: inputs.team, caller: inputs.agent, args, session, now: at, branch: session.branch });
+      const row = find(own.map(i => ({ seq: i.seq, slug: i.slug })), ident); // every live and archived item of the folder; a number two items hold is refused
+      if (!row) return { refusal: `no item ${ident}` };
+      const names = stepNames(entry);
+      if (!names.includes(name)) throw invalid(`team ${inputs.team} has no step ${name} (steps: ${names.join(', ')})`);
+      const item = own.find(i => i.seq === row.seq && i.slug === row.slug);
+      let result;
+      try { result = step({ ...ctx, step: name, item }); } catch (e) { if (e instanceof Refusal && e.exitCode === 1) return { refusal: e.message }; throw e; }
+      const message = `team ${name} ${item.slug}`;
+      const built = await apply({ home, folder, repo, branch: session.branch, entry, file: loaded.file, team: inputs.team, view, result, args, caller: inputs.agent, session, now: at, step: name, seq: item.seq, message });
+      return { message, print: printed({ built, result, item, name, entry, json: flags.json }) };
+    };
+
+    const first = await attempt();
+    if (first.refusal) { say(`❌ ${first.refusal}`); return 1; } // nothing was written
+    const r = await publishTeam(home, folder, first.message, { step: name, attempt, watch: await watched(home, repo, top, workRepo), persist: () => persistSha() });
+    if (r.refusal) { say(`❌ ${r.refusal}`); return 1; } // the step run again on the upstream files was refused
+    say((r.result ?? first).print);
+    return 0;
+  });
+}

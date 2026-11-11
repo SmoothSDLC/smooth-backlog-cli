@@ -4,19 +4,16 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, readItem, itemSlugs, itemNames, slugOfName, GIT_IDENTITY, writeUnreadableItem, UNREADABLE_ITEM_MESSAGE, ENVELOPE } from './shared-fixtures.js';
+import { cli, consumer, itemPath, sharedBacklog, readItem, itemSlugs, GIT_IDENTITY, ENVELOPE } from './shared-fixtures.js';
 import * as index from '../../src/shared/index.js';
-import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
 import * as team from '../../src/team/team.js';
 import { asList } from '../../src/shared/text.js';
 
 team.installSeam(); // this file calls the old team code in this process
-import { shutdown } from '../../src/team/lifecycle.js';
-
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
   if (p.status !== 0) throw new Error(`git ${args.join(' ')}: ${p.stderr}`);
@@ -47,127 +44,6 @@ const update = (f, args, env) => {
 };
 const history = (f, item) => cli(['history', item], { cwd: f.cons, tmp: f.t });
 const item = (f, slug) => readItem(itemPath(f.folder, slug));
-
-// A complete team item: review refs, an estimate, a definition of done.
-const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
-const COMMIT = 'def45678def45678def45678def45678def45678'; // a 40-hex commit for the hand-off record
-function newArgs(name, extra = []) {
-  const has = k => extra.includes(k);
-  const out = ['--name', name, '--objective', 'o', '--summary', 's', ...(has('--depends-on') ? [] : ['--depends-on', 'none'])];
-  // A team item names its review documents; the default is references/review/code.md. '--no-review-refs' (this helper's own flag) makes an item without any.
-  const bare = has('--no-review-refs'); extra = extra.filter(x => x !== '--no-review-refs');
-  if (!has('--review-refs') && !bare) out.push('--review-refs', 'references/review/code.md');
-  if (!has('--estimate')) out.push('--estimate', '5', '--complexity', 'low');
-  return [...out, '--body', DOD, ...extra];
-}
-function make(f, name, extra = []) {
-  const args = newArgs(name, extra);
-  const r = cli(['new', ...args], { cwd: f.cons, tmp: f.t });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  return intoTeam(createdSlug(r.stdout), { cwd: f.cons, tmp: f.t }, 't1', extra.includes('--no-review-refs') ? '' : 'ready'); // an item without review documents stays unrefined
-}
-
-test('claim, review and close lifecycle (port of test_claim_review_close_lifecycle)', () => {
-  const f = fixture();
-  const ok = (...args) => { const r = update(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
-  const refused = (...args) => { const r = update(f, args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };
-  const first = make(f, 'dependency first', []);
-  const seq = first.split('-')[0];
-  const job = make(f, 'the job', ['--review-refs', 'references/review/code.md', '--depends-on', seq]);
-  let { fm } = item(f, job);
-  assert.deepEqual(fm.review_refs, ['references/review/code.md']);
-  assert.ok(!('work_class' in fm) && !('review_classes' in fm)); // no class field is written
-  assert.deepEqual(fm.depends_on, [Number(seq)]);
-  assert.equal(fm.claimed_by, '');
-  assert.equal(fm.status, 'ready');
-
-  assert.ok(refused(job, '--claim', 'ann').includes(`${first} (status ready`)); // dependency not done
-  ok(first, '--claim', 'bob');
-  ok(first, '--request-review', 'any', '--note', 'tests written'); // every complete item is reviewed
-  ok(first, '--review', 'pass', '--by', 'ann', '--comments', 'fine per references/review/code.md');
-  // the close gate - first has a dependent (the job): the claimer records the hand-off, the lead accepts it
-  const jobseq = Number(job.split('-')[0]);
-  ok(first, '--handoff', jobseq, '--handoff-commit', COMMIT, '--handoff-contract', 'the job consumes the parser',
-    '--handoff-verification', 'the parser test passes', '--by', 'bob');
-  const accept = update(f, [first, '--accept-handoff', jobseq, '--checks', 'the record pins the commit', '--by', 'lead'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' });
-  assert.equal(accept.status, 0, accept.stdout + accept.stderr);
-  ok(first, '--close', '--summary', 'tests written');
-
-  ok(job, '--claim', 'ann');
-  assert.ok(refused(job, '--claim', 'bob').includes('claimed by ann')); // held by another agent
-  ok(job, '--request-review', 'any', '--note', 'commit abc1234, deployed evidence in run 13');
-  assert.ok(refused(job, '--review', 'pass', '--by', 'ann', '--comments', 'fine').includes('cannot review its own work'));
-  ok(job, '--review', 'changes', '--by', 'bob', '--comments', 'missing a test for the empty input (references/review/code.md)');
-  assert.equal(item(f, job).fm.status, 'in progress');
-  assert.match(item(f, job).fm.review_history.at(-1), / peer reject bob .*: missing a test for the empty input/);
-  ok(job, '--request-review', 'amy', '--note', 'commit def5678 adds the test', '--by', 'ann');
-  ok(job, '--review', 'pass', '--by', 'amy', '--comments', 'test present, all green (references/review/code.md)');
-  ok(job, '--close', '--summary', 'feature delivered with tests');
-
-  const text = readFileSync(itemPath(f.folder, job), 'utf8');
-  ({ fm } = item(f, job));
-  assert.equal(fm.status, 'closed');
-  assert.equal(fm.summary, 'feature delivered with tests');
-  assert.ok(!('review_state' in fm) && !('stage' in fm)); // the word says it; the two earlier fields are not written
-  for (const line of ['Claimed by ann at', '## Review requested by ann at', '(reviewer: any)', 'commit abc1234',
-    '## Review by bob: REJECT', 'missing a test for the empty input (references/review/code.md)',
-    '## Review by amy: COMPLETE', '## Closed by ann at']) assert.ok(text.includes(line), line);
-  const ev = history(f, job).stdout;
-  for (const e of ['claimed', 'review_requested', 'reviewed', 'closed']) assert.ok(ev.includes(` ${e} `), `${e}: ${ev}`);
-  assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
-});
-
-test('team session: SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY binds the repository, a step on another scope is refused', () => {
-  const f = fixture();
-  const s = make(f, 'scoped job', []);
-  const inScope = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
-  const out = update(f, [s, '--claim', 'ann'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'other' });
-  assert.equal(out.status, 1);
-  assert.equal(out.stdout, `❌ ${s}: this item belongs to repository acme/demo branch main, but this team session is bound to acme/demo branch other (SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY/SMOOTH_BACKLOG_CLI_TEAM_BRANCH): a team works only on its own items; read other scopes with backlog team query --scope, never claim or change them\n`);
-  assert.equal(item(f, s).fm.claimed_by, '');
-  const ok = update(f, [s, '--claim', 'ann'], inScope);
-  assert.equal(ok.status, 0, ok.stdout + ok.stderr);
-  assert.match(readFileSync(itemPath(f.folder, s), 'utf8'), /Claimed by ann at \S+ repository=acme\/demo branch=main cwd=/);
-  assert.equal(update(f, [s, '--note', 'x'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: '../x' }).status, 2);
-});
-
-test('team scope guards every mutating update path, not only the team steps ', () => {
-  const f = fixture();
-  const s = make(f, 'scoped edits', []);
-  const file = itemPath(f.folder, s);
-  const outside = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'other' };
-  const inside = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
-  const before = readFileSync(file, 'utf8');
-  for (const args of [['--summary', 'x'], ['--status', 'in_progress'], ['--status', 'done'], ['--priority', '0'], ['--append', 'more text'],
-    ['--set-estimate', '9'], ['--set-chunk', 'yes'], ['--note', 'n'], ['--claim', 'ann']]) {
-    const out = update(f, [s, ...args], outside);
-    assert.equal(out.status, 1, `${args}: ${out.stdout}${out.stderr}`);
-    assert.match(out.stdout, /^❌ .*this item belongs to repository acme\/demo branch main, but this team session is bound to acme\/demo branch other/, args.join(' '));
-    assert.equal(update(f, [s, ...args, '--dry-run'], outside).status, 1, `${args} --dry-run`);
-    assert.equal(readFileSync(file, 'utf8'), before, `${args}: the file is untouched`);
-  }
-  assert.equal(update(f, [s, '--summary', 'edited inside'], inside).status, 0);
-  assert.equal(update(f, [s, '--append', 'body text'], inside).status, 0);
-  assert.equal(item(f, s).fm.summary, 'edited inside');
-  assert.ok(readFileSync(file, 'utf8').includes('body text'));
-  assert.equal(update(f, [s, '--claim', 'ann'], inside).status, 0);
-  assert.match(readFileSync(join(process.cwd(), 'COMMANDS.md'), 'utf8'), /works only on items of that repository and branch/);
-});
-
-test('an incomplete item is only refined: no claim, no note', () => {
-  const f = fixture();
-  const r = cli(['new', '--name', 'bare', '--objective', 'o', '--summary', 's', '--depends-on', 'none'], { cwd: f.cons, tmp: f.t });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  const slug = createdSlug(r.stdout);
-  const T = { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' }; // outside a team an incomplete item is claimed like any other
-  assert.equal(update(f, [slug, '--set-team', 't1'], T).status, 0);
-  const out = update(f, [slug, '--claim', 'ann'], T);
-  assert.equal(out.status, 1);
-  assert.match(out.stdout, new RegExp(`^❌ ${slug}: incomplete item, missing review_refs, estimate_min, definition_of_done: only the team lead \\(lead\\) refines it, not ann`)); // `team update` names its agent
-  assert.equal(update(f, [slug, '--release', 'ann'], T).status, 1); // a release is not work: only its own refusal
-  assert.match(update(f, [slug, '--release', 'ann'], T).stdout, /only the team lead \(lead\) refines it, not ann/); // `team update` names its agent
-  assert.equal(update(f, [slug, '--set-estimate', '5', '--by', 'lead'], T).status, 0); // refining is allowed (the lead refines)
-});
 
 test('team.js: lists, chunk items, review documents', () => {
   assert.deepEqual(asList(' a, b ,,c '), ['a', 'b', 'c']);
@@ -218,124 +94,3 @@ test('team.js: held items, the claim rule, undone dependencies on a folder', () 
   assert.deepEqual(undone.map(d => team.describeDependency(d)), ['001-a (status in progress, claimed by ann)', 'nothing (no such item in this backlog)', '005-e (status in progress, claimed by bob)']);
 });
 
-test('a holder whose item file has malformed front matter still blocks a second claim: the error propagates and nothing is written', () => {
-  const f = fixture();
-  const a = make(f, 'held job', []);
-  const b = make(f, 'second job', []);
-  assert.equal(update(f, [a, '--claim', 'ann']).status, 0);
-  const held = itemPath(f.folder, a);
-  writeUnreadableItem(held); // the held item's header can no longer be read
-  assert.throws(() => team.heldItems(f.folder, 'ann'), UNREADABLE_ITEM_MESSAGE);
-  const files = () => itemSlugs(f.folder).map(s => readFileSync(itemPath(f.folder, s), 'utf8'));
-  const before = files();
-  const out = update(f, [b, '--claim', 'ann']);
-  assert.notEqual(out.status, 0, out.stdout + out.stderr);
-  assert.deepEqual(files(), before, 'no item file changed, no event was logged');
-  rmSync(held);
-  assert.deepEqual(team.heldItems(f.folder, 'ann'), [], 'a genuinely missing file is {} (item_fm: p.exists() else {})');
-});
-
-test('the lifecycle steps, in order: each succeeds or is refused with the expected exit status, a refusal changes nothing', () => {
-  const n = fixture();
-  const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
-  const snapshot = f => {
-    const files = {};
-    for (const name of itemNames(f.folder)) files[name] = JSON.stringify(readItem(itemPath(f.folder, slugOfName(name)))).replace(TS, 'TS');
-    const cols = ['id', 'slug', 'seq', 'status', 'priority', 'branch', 'commit_sha', 'completed_at'];
-    return { files, phases: index.rows(f.folder).rows.map(r => JSON.stringify(Object.fromEntries(cols.map(c => [c, r[c]])))) };
-  };
-  const both = (args, env, want) => {
-    const before = want === 1 ? snapshot(n) : null;
-    const rn = update(n, args, env);
-    assert.equal(rn.status, want, `${args.join(' ')}: ${rn.stdout}${rn.stderr}`);
-    // a member's hand-off, changes verdict or close ends with the shutdown line
-    const ends = args.includes('--request-review') || args.includes('--close') || (args.includes('--review') && args.includes('changes'));
-    const line = rn.stdout.match(/\n(🛑 (\w+): .*)\n$/);
-    if (line) { // exactly the shutdown text, to a member of the fixture, on a step that ends a session
-      assert.ok(ends && ['bob', 'zed', 'ann'].includes(line[2]), `${args.join(' ')}: an unexpected shutdown line`);
-      assert.equal(line[1], shutdown(line[2]));
-    }
-    if (before) assert.deepEqual(snapshot(n), before, `${args.join(' ')}: a refusal changes nothing`);
-    return rn;
-  };
-  const [A, B, C] = [['dependency first', []], ['the job', ['--review-refs', 'references/review/code.md', '--depends-on', '1']], ['third', []]].map(([name, extra]) => make(n, name, extra));
-
-  both([B, '--claim', 'ann'], undefined, 1); // dependency not done
-  both([A, '--claim', 'bob'], undefined, 0);
-  both([A, '--claim', 'ann'], undefined, 1); // held by another agent
-  both([C, '--claim', 'bob'], undefined, 1); // bob holds an active item
-  both([C, '--claim', 'bob', '--force'], undefined, 0); // recorded in the claim line
-  both([C, '--release', 'ann'], undefined, 1);
-  both([C, '--release', 'bob'], undefined, 0);
-  both([A, '--request-review', 'any'], undefined, 1); // a note is needed
-  both([A, '--request-review', 'any', '--note', 'tests written'], undefined, 0);
-  both([A, '--start-review'], undefined, 1);
-  both([A, '--start-review', '--by', 'bob'], undefined, 1); // not its own work
-  both([A, '--start-review', '--by', 'ann'], undefined, 0);
-  both([A, '--start-review', '--by', 'zed'], undefined, 1); // in review by ann
-  both([A, '--review', 'pass', '--by', 'ann'], undefined, 1); // comments needed
-  both([A, '--review', 'pass', '--by', 'ann', '--comments', 'fine'], undefined, 1); // cites no review ref
-  both([A, '--review', 'pass', '--by', 'ann', '--comments', 'fine per references/review/code.md'], undefined, 0);
-  both([A, '--waiting', 'workflow run 9', '--by', 'bob'], undefined, 0);
-  both([A, '--waiting', 'again', '--by', 'ann'], undefined, 1);
-  both([A, '--waiting-done', '--by', 'bob'], undefined, 0);
-  both([A, '--waiting', 'workflow run 10', '--by', 'bob'], undefined, 0);
-  both([A, '--claim', 'bob', '--release', 'bob'], undefined, 1); // one team step at a time
-  // the close gate - A has a dependent (B): the claimer records the hand-off, the lead accepts it
-  both([A, '--handoff', Number(B.split('-')[0]), '--handoff-commit', COMMIT, '--handoff-contract', 'B consumes the parser',
-    '--handoff-verification', 'the parser test passes', '--by', 'bob'], undefined, 0);
-  both([A, '--accept-handoff', Number(B.split('-')[0]), '--checks', 'the record pins the commit', '--by', 'lead'], { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' }, 0);
-  both([A, '--close', '--summary', 'tests written'], undefined, 0); // a wait is cleared by the next step
-  both([A, '--dry-run', '--waiting-done'], undefined, 0);
-  both([B, '--claim', 'ann'], undefined, 0);
-  both([B, '--set-review-refs', 'references/review/code.md,x/y.md'], undefined, 0);
-  both([B, '--request-review', 'bob', '--note', 'commit def5678'], undefined, 0);
-  both([B, '--review', 'changes', '--by', 'bob', '--comments', 'no refs cited'], undefined, 1);
-  both([B, '--review', 'changes', '--by', 'bob', '--comments', 'add a test (references/review/code.md)'], undefined, 0);
-  both([B, '--waiting', 'ci', '--by', 'ann', '--note', 'x'], undefined, 0);
-  both([B, '--note', 'the holder continues', '--by', 'ann'], undefined, 0); // ends the wait; the holder writes it, as the same explicit actor that wrote above
-  both([B, '--request-review', 'bob', '--note', 'commit 9999999'], undefined, 0);
-  both([B, '--review', 'pass', '--by', 'bob', '--comments', 'good (references/review/code.md)'], undefined, 0);
-  // the reviewer never closes
-  let held = snapshot(n);
-  const byReviewer = update(n, [B, '--close', '--by', 'bob', '--summary', 'delivered'], { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' });
-  assert.deepEqual([byReviewer.status, byReviewer.stdout], [1, `❌ ${B}: only the claimer (ann) closes it, else the team lead (lead); not bob\n`]);
-  assert.deepEqual(snapshot(n), held); // refused: nothing changed
-  both([B, '--close', '--by', 'ann', '--summary', 'delivered'], undefined, 0);
-  both([C, '--claim', 'ann', '--note', 'n'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'other' }, 1); // outside the team scope
-  both([C, '--claim', 'ann'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' }, 0);
-  both([C, '--release', 'ann'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo' }, 0);
-  both([C, '--claim', 'bob'], undefined, 0);
-  both([C, '--dry-run', '--release', 'bob'], undefined, 0);
-  both([C, '--request-review', 'any', '--note', 'ready'], undefined, 0);
-  both([C, '--start-review', '--by', 'ann'], undefined, 1); // ann claimed C before its release: the same session cannot review
-  both([C, '--start-review', '--by', 'zed'], undefined, 0); // a new session starts it
-  // a stale review is handed on by the team lead (--reassign-review), never taken over
-  held = snapshot(n);
-  const stale = update(n, [C, '--start-review', '--by', 'rex'], { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS: '-1' });
-  assert.equal(stale.status, 1, stale.stdout + stale.stderr);
-  assert.match(stale.stdout, new RegExp(`^❌ ${C}: in review by zed since \\S+; review another item \\(the review is stale: the team lead hands it on with backlog team update <item> --team t1 --agent lead --reassign-review <agent> --reason "<why>"\\)\\n$`));
-  assert.deepEqual(snapshot(n), held); // refused: nothing changed
-  // the class options are gone: unrecognized, exit 2
-  const gone = update(n, [C, '--claim', 'ann', '--set-work-class', 'docs']);
-  assert.deepEqual([gone.status, gone.stderr], [2, '❌ backlog: unrecognized arguments: --set-work-class\n']);
-});
-
-test('075: the successful lifecycle steps print exactly what they record', t => {
-  const f = fixture();
-  const norm = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS').replace(f.cons, '<cwd>');
-  const step = (args, expected) => { const r = update(f, args); assert.equal(r.status, 0, r.stdout + r.stderr); assert.equal(r.stderr, ''); assert.equal(norm(r.stdout), expected); };
-  const STOP = a => `🛑 ${a}: END THE SESSION NOW. Reply with text only and make no further tool call; your next task starts in a fresh session.\n`;
-  const job = make(f, 'lifecycle job', []);
-  step([job, '--claim', 'ann'], `✅ ${job} updated (claimed=Claimed by ann at TS repository=acme/demo branch=main cwd=<cwd>)\n`);
-  step([job, '--request-review', 'any', '--note', 'ready'], `✅ ${job} updated (review_requested=Review requested by ann at TS (reviewer: any))\n${STOP('ann')}`);
-  step([job, '--start-review', '--by', 'amy'], `✅ ${job} updated (review_started=Review started by amy at TS)\n`);
-  step([job, '--review', 'pass', '--by', 'amy', '--comments', 'ok per references/review/code.md'],
-    `✅ ${job} updated (reviewed=Review by amy: COMPLETE (TS))\n   ➡️  CLOSE NOW: ann closes it (backlog team update ${job} --team t1 --agent ann --close --summary "<outcome>"); if the claimer has not, the team lead closes it when available (backlog team update ${job} --team t1 --agent <lead> --close --summary ...)\n`);
-  step([job, '--close', '--summary', 'delivered with tests'],
-    `✅ ${job} updated (summary=delivered with tests, closed=Closed by ann at TS)\n   ✋ PLANNING EVENT — completing work RE-PRIORITIZES the backlog (a re-rank, not a -1).\n      backlog now empty — no actionable phase remains.\n      the team lead re-evaluates the order (backlog update --replan, --priority); not you\n${STOP('ann')}`);
-  const w = make(f, 'lifecycle waiting job', []);
-  step([w, '--claim', 'zed'], `✅ ${w} updated (claimed=Claimed by zed at TS repository=acme/demo branch=main cwd=<cwd>)\n`);
-  step([w, '--waiting', 'run 9', '--by', 'zed'], `✅ ${w} updated (waiting=WAITING TS zed: run 9)\n`);
-  step([w, '--waiting-done', '--by', 'zed'], `✅ ${w} updated (wait_done=WAIT DONE TS zed)\n`);
-});

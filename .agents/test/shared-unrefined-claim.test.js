@@ -40,53 +40,10 @@ const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.statu
 const no = (f, args, text, env) => { const r = run(f, args, env); assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`); assert.ok(r.stdout.includes(text), `${args.join(' ')}: ${r.stdout}`); return r; };
 const make = (f, name) => createdSlug(ok(f, ['new', ...NEW(name)]).stdout);
 const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
-const teamItem = f => { const s = make(f, 'unrefined team item'); ok(f, ['update', s, '--set-team', 't1']); return s; }; // team set, no stage
+ // team set, no stage
 const pop = (f, agent) => JSON.parse(run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json'], T1).stdout);
 const claimable = (f, env) => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--claimable', '--json'], env).stdout).map(x => x.slug);
 const plan = f => JSON.parse(ok(f, ['team', 'query', '--team', 't1', '--plan', '--agents', 'amy,ada,zed', '--json'], T1).stdout);
-
-test('a member cannot claim a team item without a stage: the refusal names --refine-start, and nothing is written', () => {
-  const f = fixture();
-  const s = teamItem(f);
-  const r = no(f, ['update', s, '--claim', 'amy'], 'claim needs ready or in progress');
-  assert.ok(r.stdout.includes('--agent <you> --refine-start') && r.stdout.includes('refine it first'), r.stdout);
-  no(f, ['update', s, '--claim', 'amy', '--force'], '--refine-start'); // --force does not pass the stages
-  assert.deepEqual([fm(f, s).claimed_by, fm(f, s).stage], ['', undefined]);
-});
-
-test("the team lead's own claim of its team's work item is allowed (backlog team pop takes it to split it)", () => {
-  const f = fixture();
-  const s = teamItem(f);
-  ok(f, ['update', s, '--claim', 'lead']);
-  assert.equal(fm(f, s).claimed_by, 'lead');
-});
-
-test("the team lead's claim of a team split slice without a stage is refused, naming --refine-start", () => {
-  const f = fixture();
-  const s = make(f, 'legacy split slice');
-  ok(f, ['update', s, '--set-team', 't1', '--append', 'Split from `parent-item`. Inherited context: none']);
-  no(f, ['update', s, '--claim', 'lead'], '--refine-start');
-  assert.equal(fm(f, s).claimed_by, '');
-});
-
-test('--refine-start accepts a team item without a stage', () => {
-  const f = fixture();
-  const s = teamItem(f);
-  ok(f, ['update', s, '--refine-start', '--by', 'amy']);
-  assert.deepEqual([fm(f, s).status, fm(f, s).refiner], ['refining', 'amy']);
-});
-
-test('pop offers an unrefined team item as refine, never as claim; query --claimable and --plan do not offer it', () => {
-  const f = fixture();
-  const s = teamItem(f);
-  const p = pop(f, 'amy');
-  assert.deepEqual([p.action, p.item], ['refine', s], JSON.stringify(p));
-  assert.ok(p.marked.includes('--refine-start'), p.marked); // team pop starts the refinement it offers: never a claim
-  assert.deepEqual([fm(f, s).status, fm(f, s).refiner, fm(f, s).claimed_by], ['refining', 'amy', '']);
-  assert.deepEqual(claimable(f, T1), []);
-  assert.deepEqual(claimable(f, {}), []);
-  assert.deepEqual(plan(f), []);
-});
 
 test('an item without a team and without the split marker stays claimable: no stage is solo work, ready; no team view lists it', () => {
   const f = fixture();

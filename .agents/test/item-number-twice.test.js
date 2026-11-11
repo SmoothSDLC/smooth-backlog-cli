@@ -82,21 +82,3 @@ test('an item that stores the number in depends_on is not stopped: it is no refu
   assert.equal(w.run('move', '9', '--to-repository', 'x/y').stderr.includes('names two items'), false); // the stored edge of 010-d to 8 does not stop a move of another item
 });
 
-test('team views and pop on a folder with an ambiguous stored dependency do not stop', t => {
-  const w = world(t, false, true);
-  const env = { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_AGENT: 'lead' };
-  const run = (...args) => cli(args, { cwd: w.cons, tmp: w.dir, env });
-  const made = run('new', '--name', 'team work', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
-    '--estimate', '5', '--complexity', 'low', '--body', 'Body.\n\n## Definition of done\n\n- [ ] it holds');
-  assert.equal(made.status, 0, made.stdout + made.stderr);
-  const slug = /created phase (\S+)/.exec(made.stdout)?.[1];
-  assert.equal(run('update', slug, '--set-team', 't1').status, 0);
-  const file = itemPath(w.folder, slug);
-  const { fm, body } = readItem(file);
-  writeItem(file, { ...fm, depends_on: [8] }, body);
-  w.git('add', '-A'); w.git('commit', '-q', '-m', 'edge'); w.git('push', '-q');
-  for (const args of [['team', 'pop', '--team', 't1'], ['team', 'query', '--team', 't1']]) {
-    const r = run(...args);
-    assert.ok([0, 3].includes(r.status) && !/names two items, 008-a and 008-b; name the item/.test(r.stdout + r.stderr), `${args.join(' ')}: ${r.status} ${r.stdout}${r.stderr}`);
-  }
-});

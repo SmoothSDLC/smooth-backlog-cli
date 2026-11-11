@@ -23,7 +23,7 @@ Usage:
   backlog team pop --team <team> --agent <name>    What one agent of a team does next, marked as theirs (--dry-run: only answered), with the whole item
   backlog team new --team <team> --agent <name> --name <text> [--<argument> <value>]...   Add an item of a team: the team's rules for the step new decide; the number is taken only when it is allowed
   backlog team query --team <team> --agent <name> <view>   The team views: --claimable, --reviewable, --blocked, --decisions, --plan, --wip
-  backlog team update <item> --team <team> --agent <name> <step>   One team step: claim, release, request-review, review, close, ...
+  backlog team update <item> <step> --team <team> --agent <name> [--<argument> <value>]...   One step of the team's rules on an item (claim, release, review, close, ...); the rules decide
   backlog team validate [--team <team> | --show-all] [--json]   Check the team file and this repository's items against it
   backlog team migrate --team <team>               Convert the items to the team format (not available yet)
   backlog team define --file <team.json>           Register a team (lead, members, reviewers, review stages) in the backlog configuration
@@ -287,7 +287,7 @@ Example:
   backlog update 18 --status "in progress" --note "Started the help text"
 
 An item that belongs to a team is changed by backlog team update only: this command refuses every change of it, field edits included,
-and a --replan that names it (backlog team update --replan places it).
+and a --replan that names it (the place of a team item is the place effect of its team's rules).
 Team items: backlog team update --help.
 `,
 
@@ -537,7 +537,7 @@ their original order (each gets priority 0, newest first). The queue of the bran
 the sequence, and the output says what was done before it. When the source has no open item the command says so and exits 0; when no item
 carries the branch name it says so too (check the name). The source cannot be the branch checked out here (exit 2). The command prints text
 only: --json is refused (exit 2). An open item of a team is moved like any other and keeps its team and its state; with --higher it would
-take a place in the queue, which a team item takes only from backlog team update --priority, so --higher refuses the whole import when the
+take a place in the queue, which a team item takes only from the place effect of its team's rules (backlog team update), so --higher refuses the whole import when the
 source has one (exit 1, nothing moved).
 
 ${SHARED}
@@ -650,7 +650,7 @@ version, which holds the status archived, reads the same). The output names it b
 renumbers the remaining backlog to 0..M-1, because archiving takes the item off the backlog. Archiving an item
 that is already archived does nothing and says so. The command refuses when the item does not exist, or when its
 status is not finished (closed or done) and --force was not given. A closed item of a team is archived like any other; a team item that is not closed is
-refused, with --force too (exit 1, nothing written): it leaves the queue by its team steps (backlog team update --close).
+refused, with --force too (exit 1, nothing written): it leaves the queue by its team's steps (backlog team update <item> <step>).
 
 ${SHARED}
 

@@ -53,31 +53,20 @@ A team's items follow the team rules configured in `teams.json` of the backlog f
 `review` rules (how many members of which team must pass the current work commit before the close) and
 `refinement_review` rules. A team session is bound by SMOOTH_BACKLOG_CLI_TEAM_NAME, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BACKLOG_CLI_TEAM_BRANCH; the caller is
 SMOOTH_BACKLOG_CLI_AGENT and acts only as itself. Every command here is a `backlog team` command and takes `--team <team> --agent <you>` (SMOOTH_BACKLOG_CLI_TEAM_NAME and
-SMOOTH_BACKLOG_CLI_AGENT stand in); the step flags below are taken with `backlog team update <item> --team <team> --agent <you>`.
+SMOOTH_BACKLOG_CLI_AGENT stand in).
 
 - File an item of the team: `backlog team new --team <team> --agent <you> --name "<name>" [--<argument> <value>]...`; the team's rules for the step new decide
   whether it is allowed and which arguments they take (`--estimate <minutes>`, `--parent <item>`, ...); a refusal prints its reason (exit 1) and writes nothing.
   `backlog team new --help` says what is printed.
-- Review: `--request-review <agent|any> --note "<commits, evidence>"`, then the reviewer's `--start-review --by <reviewer>` and
-  `--review pass|changes --by <reviewer> --comments "<findings>"`; the author never reviews its own work.
-- Lead: `backlog team pop --team <team> --agent <you>` takes the team's work item (and gives the lead its next action); split it only when it is too big for
-  one member (`backlog team new --team <team> --agent <you> --name "<name>" --parent <item>` adds a child when the team's rules take `--parent`); `backlog team query --team <team> --plan` is the dispatch plan; `--request-refinement-review
-  --by <you>` sends a refined item to its refinement review; `--request-decision "<question>" --by <you>` asks the owner
-  (`backlog team query --team <team> --decisions`; the owner answers with `--decision "<answer>"`); `--reassign <agent> --reason "<why>"
-  --by <you>` hands an item on and `--reassign-review <agent> --reason "<why>" --by <you>` a stale review;
-  `--wip-override "<reason>" --by <you>` lifts a work-in-progress limit for one item; `--set-team <team>` gives an item without a team
-  to a team and `--set-chunk yes` makes it chunk work any member does between items. Act only as yourself: another
-  agent's item or review is the lead's to hand on.
-- Member: `backlog team pop --team <team> --agent <you> --json` gives the one next action and marks the item as yours. Refine an item in
-  stage refining (`--refine-start --by <you>`, `--set-review-refs`, `--set-estimate`, `--set-complexity`,
-  `--set-depends-on`, `--append` a definition of done, `--refine-done --by <you> --note "<what>"`); a refinement
-  reviewer records `--refinement-review pass|changes --by <reviewer> --comments "<findings>"`; a ready item is claimed,
-  worked (`--append`, `--waiting "<what>" --by <you>`, `--waiting-done`), reviewed and closed by its claimer. A member's
-  review request, a changes verdict it gives and its close end its session (never the lead's): the output's last line
-  says END THE SESSION NOW - reply with text only and make no further tool call.
-- Hand-offs: a producer records `--handoff <dependent> --handoff-commit <sha> --handoff-contract "<text>"
-  --handoff-verification "<text>" [--handoff-outputs ... --handoff-pickup ... --handoff-risks ...] --by <you>`; the lead `--accept-handoff <dependent> --checks "<what>" --by <lead>` or
-  `--reject-handoff <dependent> --reason "<why>" --by <lead>`; a producer closes when each dependent's hand-off is accepted.
+- Take a step on an item: `backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...`. The step is a word the team's rules name (claim, release,
+  hand-to-check, review, close, ... as the team's file defines them) and the arguments are the names its rules read (`--note "<text>"`, `--verdict pass`, ...); `backlog team query steps --team <team>`
+  lists them. The rules decide: a refusal prints its reason and the id of the rule (exit 1) and writes nothing; a step no rule names, or an argument the step does not take, is refused
+  with the list of what the team has (exit 2). A step is published as the command's own commit, so another agent's step on the same item never overwrites yours: when it was first, yours runs
+  again on the new files. Act only as yourself: the agent is the caller, and another agent's item is the lead's to hand on by the team's own steps.
+- Lead: `backlog team pop --team <team> --agent <you>` takes the team's work item (and gives the lead its next action); `backlog team query --team <team> --plan` is the dispatch plan and `backlog team query --team <team> --decisions` the questions waiting for the owner; split an
+  item only when it is too big for one member (`backlog team new --team <team> --agent <you> --name "<name>" --parent <item>` adds a child when the team's rules take `--parent`).
+- Member: `backlog team pop --team <team> --agent <you> --json` gives the one next action and marks the item as yours; carry it out with `backlog team update <item> <step>`, as the team's
+  rules for that step say.
 - Limits: `wip-limits.json` in the backlog folder; `backlog team query --team <team> --wip` shows the counts.
 - Check the team file: after editing the team's rules, run `backlog team validate --team <team>` (`--show-all` for every team, `--json` for a list). It checks the file and this repository's items against it and prints each problem with a fix; exit 2 means an error, and no team command runs until the whole file is valid.
 

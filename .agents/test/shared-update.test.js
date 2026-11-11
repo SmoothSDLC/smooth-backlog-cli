@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, rmSync, w
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedPath, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY, writeItem, changeItem, ENVELOPE } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY, writeItem, changeItem, ENVELOPE } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
@@ -212,56 +212,6 @@ test('review P2: --summary="two words" and --append="extra text" are options wit
 
 // ---------------------------------------------------------------- review fixes (job 15)
 
-// An item that a team can claim: a review document, an estimate and a definition of done.
-function claimable(f) {
-  const r = run(f, ['2', '--set-review-refs', 'references/review/tests.md', '--set-estimate', '10', '--append', '## Definition of done\n- [ ] x']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-}
-
-test('review P1 (job 15): two processes cannot both claim an unclaimed item; a claim waits for the run lock', async () => {
-  const f = seed();
-  claimable(f);
-  const w = await waitsForRunLock(f, ['update', '2', '--claim', 'ann'], () => fm(f, itemName('002-beta')).fm.claimed_by);
-  assert.deepEqual(w.during, { exited: false, same: true }, 'the claim waits while another command holds the lock');
-  assert.equal(w.result.status, 0, w.result.stdout + w.result.stderr);
-  const g = seed();
-  claimable(g);
-  const both = await Promise.all(['ann', 'amy'].map(who => cliAsync(['update', '2', '--claim', who], { cwd: g.cons, tmp: g.t }).done));
-  assert.deepEqual(both.map(r => r.status).sort(), [0, 1], both.map(r => r.stdout + r.stderr).join('\n'));
-  const winner = both[0].status === 0 ? 'ann' : 'amy';
-  assert.equal(fm(g, itemName('002-beta')).fm.claimed_by, winner);
-  assert.equal(git(g.home, 'status', '--porcelain'), '');
-  assert.equal(git(g.home, 'rev-parse', 'origin/main'), git(g.home, 'rev-parse', 'HEAD'));
-});
-
-test('review P2 (job 15): --set-review-refs goes through checkRefs: an absolute or ..-crossing ref is refused and nothing is written', () => {
-  const f = seed();
-  const before = readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8');
-  const head = git(f.home, 'rev-parse', 'HEAD');
-  for (const ref of ['../../outside/tests.md', '/outside/tests.md']) {
-    const r = run(f, ['5', '--set-review-refs', ref]);
-    assert.notEqual(r.status, 0, ref);
-    assert.match(r.stdout + r.stderr, /review ref .* (is absolute|contains '\.\.')/);
-  }
-  assert.equal(readFileSync(itemPath(f.folder, '005-epsilon'), 'utf8'), before);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
-});
-
-test('review P2: update on an archived item is refused for every flag that goes through it, and writes nothing', () => {
-  const f = seed();
-  assert.equal(cli(['archive', '2', '--force'], { cwd: f.cons, tmp: f.t }).status, 0);
-  const file = archivedPath(f.folder, '002-beta', 'phases');
-  const before = readFileSync(file, 'utf8');
-  const head = git(f.home, 'rev-parse', 'HEAD');
-  for (const args of [['002-beta', '--summary', 'new'], ['2', '--status', 'done'], ['002-beta', '--claim', 'me'], ['002-beta', '--request-review', 'rex'], ['002-beta', '--close']]) {
-    const r = run(f, args);
-    assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stdout, /002-beta is archived and cannot be edited \(archived items are read-only\)/, args.join(' '));
-  }
-  assert.equal(readFileSync(file, 'utf8'), before);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
-});
-
 test('review P1: update whose index write is refused restores the file, and commits nothing', () => {
   const f = seed();
   breakIndex(f.home, f.folder);
@@ -280,19 +230,6 @@ test('review P2: after two clones picked one number, the merged queue is re-dens
   assert.equal(run(f, ['1', '--summary', 'touch']).status, 0);
   const ranks = actionableRanks(f);
   assert.deepEqual(ranks, ranks.map((_, i) => i));
-});
-
-test('review P1: update of an item of another team (field edit, note, append) is refused and writes nothing', () => {
-  const f = seed();
-  const text = readFileSync(itemPath(f.folder, '002-beta'), 'utf8');
-  const head = git(f.home, 'rev-parse', 'HEAD');
-  for (const args of [['2', '--summary', 'x'], ['2', '--note', 'x'], ['2', '--append', 'x'], ['2', '--priority', '0'], ['2', '--section', 'Evidence', '--add-line', 'x']]) {
-    const r = cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'release' } });
-    assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stdout, /team session is bound/);
-  }
-  assert.equal(readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), text);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
 for (const [title, args] of [['list', ['list', 'all-branches']], ['next', ['next']], ['pop', ['team', 'pop', '--team', 't1', '--agent', 'ann']]]) {
@@ -385,26 +322,6 @@ for (const status of ['pending', 'in_progress']) {
   });
 }
 
-test('review P1: a bound team session reorders and re-ranks only its own items: --replan naming another team is refused, other files are never written', () => {
-  const f = seed();
-  git(f.cons, 'push', '-q', 'origin', 'HEAD:refs/heads/release');
-  for (const n of ['2', '3']) assert.equal(cli(['move', n, '--to-branch', 'release'], { cwd: f.cons, tmp: f.t }).status, 0); // two items of the team's branch; the rest stay on main
-  const team = { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'release' };
-  const t = args => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: team });
-  const others = () => JSON.stringify(itemNames(f.folder).filter(n => !/^00[23]/.test(n)).map(n => readFileSync(itemPath(f.folder, slugOfName(n)), 'utf8')));
-  const [before, head] = [others(), git(f.home, 'rev-parse', 'HEAD')];
-  const refused = t(['--replan', '1,3']);
-  assert.equal(refused.status, 1, refused.stdout + refused.stderr);
-  assert.match(refused.stdout, /001-alpha.*team session is bound to acme\/demo branch release/);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
-  const [a, b] = [rankOf(f, '002-beta'), rankOf(f, '003-gamma')];
-  assert.equal(t(['--replan', '003-gamma,002-beta']).status, 0);
-  assert.deepEqual([rankOf(f, '003-gamma'), rankOf(f, '002-beta')], [a, b], 'the team items trade the ranks they hold');
-  Object.assign(process.env, team); // the re-ranks of completion, --priority and the other commands go through store.reflow
-  try { store.reflow(f.folder, { slug: '003-gamma', target: 0 }); store.reflow(f.folder); } finally { for (const k of Object.keys(team)) delete process.env[k]; }
-  assert.equal(others(), before, 'no file of another team was written');
-});
-
 // The item files, the mirror rows and events, and the commits: what a command may change.
 const TS = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ/g;
 const norm = s => String(s).replace(TS, 'TS').replace(/,?"updated_by":"[^"]*"/g, '');
@@ -480,16 +397,6 @@ test('--status takes any word on an item outside a team: a free word keeps it in
   assert.ok(!queue().includes('001-alpha'));
 });
 
-test('--status on an item of a team is refused: its status moves by the team steps, and nothing is written', () => {
-  const f = seed();
-  assert.equal(step(f, ['1', '--set-team', 't1']).status, 0);
-  const before = readFileSync(itemPath(f.folder, '001-alpha'), 'utf8');
-  const r = step(f, ['1', '--status', 'closed']);
-  assert.equal(r.status, 1, r.stdout);
-  assert.match(r.stdout, /backlog team update takes no --status: the status of a team item moves by its steps/);
-  assert.equal(readFileSync(itemPath(f.folder, '001-alpha'), 'utf8'), before);
-});
-
 test('an item without a team that carries the earlier fields is read and written as stored: no word is translated and no field is dropped', () => {
   const f = seed();
   const file = itemPath(f.folder, '003-gamma'); // status in_progress
@@ -549,14 +456,6 @@ test('invalid command lines exit 2 or 1', () => {
   assert.equal(step(f, ['2', '--status']).status, 2);
   assert.equal(step(f, ['2', '--set-complexity', 'huge']).status, 2);
   assert.equal(step(f, ['2', '--priority', 'abc']).status, 1); // a priority that is not a number is refused
-});
-
-test('--note on an item that waits clears the wait with a WAIT DONE line', () => {
-  const f = seed();
-  const noted = cli(['update', '4', '--note', 'workflow finished'], { cwd: f.cons, tmp: f.t, team: true }); // the wait is a team's: the note is a step of `backlog team update`
-  assert.equal(noted.status, 0, noted.stdout + noted.stderr);
-  assert.equal(fm(f, itemName('004-delta')).fm.wait_on, '');
-  assert.match(fm(f, itemName('004-delta')).body, /\n\nWAIT DONE \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \(next step on the item\)\n$/);
 });
 
 test('refinement flags --set-review-refs --set-chunk --set-estimate --set-complexity --set-layer --set-depends-on', () => {

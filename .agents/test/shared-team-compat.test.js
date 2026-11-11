@@ -2,10 +2,10 @@
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, intoTeam, itemPath, sharedBacklog, readItem, readStored, writeStored } from './shared-fixtures.js';
+import { cli, consumer, intoTeam, itemPath, sharedBacklog, readItem, readStored } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 
 const dirs = [];
@@ -33,7 +33,6 @@ const handoff = (f, slug, job, claimer) => {
   const r = cli(['update', slug, '--accept-handoff', String(Number(job.split('-')[0])), '--checks', 'verified', '--by', 'lead'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'lead', SMOOTH_BACKLOG_CLI_SESSION: '', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
 };
-const refused = (f, ...args) => { const r = run(f, 'update', args); assert.equal(r.status, 1, r.stdout + r.stderr); return r.stdout; };
 const q = (f, ...args) => { const r = run(f, 'team', ['query', '--team', 't1', ...args, '--json']); assert.equal(r.status, 0, r.stdout + r.stderr); return JSON.parse(r.stdout).map(x => x.slug); };
 const item = (f, slug) => readItem(itemPath(f.folder, slug));
 
@@ -51,29 +50,6 @@ function make(f, name, extra = []) {
   return r.stdout.split('created phase ')[1].split(' ')[0];
 }
 const makeTeam = (f, name, extra = []) => intoTeam(make(f, name, extra), { cwd: f.cons, tmp: f.t }); // the team views reach only the items of their team
-
-test('test_new_item_refusals: refusals at creation, the class options are gone, release only by the holder', () => {
-  const f = fixture();
-  const count = () => { try { return readdirSync(join(f.folder, 'phases')).length; } catch { return 0; } }; // no folder before the first item
-  const base = ['--name', 'x', '--objective', 'o', '--summary', 's'];
-  let p = run(f, 'new', base); // outside a team an item needs no --depends-on
-  assert.equal(p.status, 0, p.stdout + p.stderr);
-  const before = count();
-  for (const flag of ['--work-class', '--review-classes']) { // work and review classes are gone
-    p = run(f, 'new', [...base, '--depends-on', 'none', flag, 'docs']);
-    assert.ok(p.status === 2 && p.stderr.includes('unrecognized arguments'), p.stdout + p.stderr);
-  }
-  p = run(f, 'new', [...base, '--depends-on', 'no-such-item']);
-  assert.ok(p.status === 1 && p.stdout.includes("no item 'no-such-item'"), p.stdout + p.stderr);
-  assert.equal(count(), before);
-  const s = makeTeam(f, 'released only by its holder', ['--depends-on', 'none']);
-  assert.ok(run(f, 'team', ['query', '--team', 't1', '--reviewable']).stderr.includes('--reviewable needs --agent'));
-  // after the first item: a refused creation leaves no backlog (and no empty db) behind, and query needs one
-  ok(f, s, '--claim', 'bob');
-  assert.ok(refused(f, s, '--release', 'ann').includes('claimed by bob, not by ann'));
-  ok(f, s, '--release', 'bob');
-  assert.equal(item(f, s).fm.claimed_by, ''); // the release cleared the claim
-});
 
 test('test_item_without_team_fields_keeps_working: an item written before team work stays visible, and in no team view', () => {
   const f = fixture();
@@ -97,26 +73,6 @@ test('test_item_without_team_fields_keeps_working: an item written before team w
   ok(f, s, '--status', 'done', '--by', 'smooth'); // read and write run as the same explicit actor (the CI runner's USER differs)
 });
 
-test('test_claim_review_close_lifecycle: the query views along the lifecycle (the part job 15 left out)', () => {
-  const f = fixture();
-  const first = makeTeam(f, 'dependency first', []);
-  const seq = first.split('-')[0];
-  const job = makeTeam(f, 'the job', ['--review-refs', 'docs/review/code.md', '--depends-on', seq]);
-  assert.ok(q(f, '--blocked').includes(job) && !q(f, '--claimable').includes(job));
-  assert.ok(refused(f, job, '--claim', 'bob').includes(`${first} (status ready`)); // dependency not done
-  ok(f, first, '--claim', 'ann');
-  run(f, 'show', [first, '--agent', 'ann']); // the claimer re-reads; the claimer closes, as the same explicit actor
-  handoff(f, first, job, 'ann');
-  run(f, 'show', [first, '--agent', 'ann']); // the claimer re-reads
-  ok(f, first, '--close', '--summary', 'tests written', '--by', 'ann');
-  assert.ok(!q(f, '--blocked').includes(job));
-  assert.ok(q(f, '--claimable').includes(job));
-
-  ok(f, job, '--claim', 'bob');
-  ok(f, job, '--request-review', 'any', '--note', 'commit abc1234, deployed evidence in run 13');
-  assert.ok(q(f, '--reviewable', '--agent', 'ann').includes(job) && !q(f, '--reviewable', '--agent', 'bob').includes(job)); // any member but the author
-});
-
 test('--reviewable needs --agent; the text view lists the item with its dependencies', () => {
   const f = fixture();
   const a = makeTeam(f, 'first', []);
@@ -133,28 +89,3 @@ test('--reviewable needs --agent; the text view lists the item with its dependen
   assert.deepEqual(waiting, [{ id: String(Number(a.split('-')[0])), slug: a, status: 'ready', claimed_by: '' }]);
 });
 
-test('an item with old work_class and review_classes fields behaves exactly like one without them ', () => {
-  const f = fixture();
-  const plain = makeTeam(f, 'plain job');
-  const old = makeTeam(f, 'old job');
-  const path = itemPath(f.folder, old);
-  // as a class-era item looks: the keys are written straight into the file (store.write drops them)
-  const seeded = readStored(path); writeStored(path, { work_class: ['chunk', 'docs'], review_classes: ['security'], ...seeded.fm }, seeded.body);
-  assert.ok('work_class' in readStored(path).fm && 'review_classes' in readStored(path).fm, 'the seeded file carries both keys');
-  run(f, 'show', [old, '--agent', 'me']); // the file changed behind the CLI: read it again before the writes below
-  const pop = agent => JSON.parse(run(f, 'team', ['pop', '--team', 't1', '--agent', agent, '--json']).stdout); // team pop claims what it offers
-  // the team view of both items is the same but for identity, rank and time stamps
-  const IDENTITY = ['id', 'slug', 'seq', 'name', 'objective', 'summary', 'priority', 'path', 'sha', 'created_at', 'updated_at'];
-  const rows = JSON.parse(run(f, 'team', ['query', '--team', 't1', '--claimable', '--json']).stdout).map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !IDENTITY.includes(k))));
-  assert.equal(rows.length, 2);
-  assert.deepEqual(rows[1], rows[0]);
-  assert.deepEqual(q(f, '--claimable'), [plain, old]); // both complete and claimable: no class makes either chunk work
-  const first = pop('ann');
-  assert.deepEqual([first.action, first.item, first.claimed], ['claim', plain, true]);
-  const second = pop('eve'); // work_class chunk does not make it a chunk item
-  assert.deepEqual([second.action, second.item, second.claimed], ['claim', old, true]);
-  for (const s of [plain, old]) {
-    ok(f, s, '--request-review', 'any', '--note', 'ready');
-    assert.ok(q(f, '--reviewable', '--agent', 'zed').includes(s), s); // any member but the author reviews; no review class counts
-  }
-});

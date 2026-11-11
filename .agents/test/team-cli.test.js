@@ -34,21 +34,6 @@ function ready(f) {
   return s;
 }
 
-test('team update claims for the agent; --team is required', () => {
-  const f = fixture();
-  const s = ready(f);
-  run(f, ['show', s, '--agent', 'zz']);
-  const missing = run(f, ['team', 'update', s, '--agent', 'ann', '--claim'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: '' });
-  assert.equal(missing.status, 2); assert.match(missing.stderr, /--team/);
-  assert.equal(fm(f, s).status, 'ready');
-  run(f, ['show', s, '--agent', 'ann']);
-  const c = run(f, ['team', 'update', s, '--team', 't1', '--agent', 'ann', '--claim']);
-  assert.equal(c.status, 0, c.stdout + c.stderr);
-  assert.equal(c.stderr, '');
-  assert.equal(fm(f, s).status, 'in progress');
-  assert.equal(fm(f, s).claimed_by, 'ann');
-});
-
 test('the plain update refuses a team step and names the flag; a status word on a team item is refused', () => {
   const f = fixture();
   const s = createdSlug(run(f, ['new', ...NEW('plain')]).stdout);
@@ -59,18 +44,6 @@ test('the plain update refuses a team step and names the flag; a status word on 
   const t = run(f, ['team', 'update', s, '--team', 't1', '--agent', 'ann', '--status', 'closed']);
   assert.notEqual(t.status, 0);
   assert.equal(fm(f, s).status, 'pending');
-});
-
-test('team update runs a step with the agent and no notice', () => {
-  const f = fixture();
-  const s = createdSlug(run(f, ['new', ...NEW('step')]).stdout);
-  run(f, ['update', s, '--set-team', 't1']);
-  run(f, ['show', s, '--agent', 'ann']);
-  const r = run(f, ['team', 'update', s, '--team', 't1', '--agent', 'ann', '--refine-start']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(r.stderr, '');
-  assert.equal(fm(f, s).status, 'refining');
-  assert.equal(fm(f, s).refiner, 'ann');
 });
 
 // ---- backlog team define / workflow
@@ -147,86 +120,8 @@ test('team workflow registers a flow from JSON, shows it, and refuses a flow tha
   assert.equal(run(f, ['team', 'workflow', '--show', 'trap']).status, 2);
 });
 
-// ---- backlog team query: the team views
-test('the team views run under team query; the plain query does not know them; a team without an entry is refused', () => {
-  const f = fixture();
-  ready(f);
-  for (const view of ['--claimable', '--reviewable', '--blocked', '--decisions', '--plan', '--wip']) {
-    const plain = plainRun(f, ['list', view]);
-    assert.equal(plain.status, 2, `${view}: ${plain.stdout}${plain.stderr}`);
-    assert.match(plain.stderr, new RegExp(`unrecognized arguments: ${view}`));
-    assert.equal(plain.stdout, '');
-  }
-  const viewed = run(f, ['team', 'query', '--team', 't1', '--claimable', '--json']);
-  assert.equal(viewed.status, 0, viewed.stdout + viewed.stderr);
-  assert.deepEqual(JSON.parse(viewed.stdout).map(x => x.name), ['item']);
-  assert.equal(run(f, ['team', 'query', '--team', 't1', '--agent', 'ann', '--claimable', '--json']).status, 0);
-  const ghost = run(f, ['team', 'query', '--team', 'ghost', '--claimable']);
-  assert.equal(ghost.status, 1); assert.match(ghost.stdout, /team ghost is not configured in the backlog configuration/);
-});
-
 // ---- backlog team pop: one next-action command by role
 const pop = (f, agent, ...args) => run(f, ['team', 'pop', '--team', 't1', '--agent', agent, '--json', ...args], { SMOOTH_BACKLOG_CLI_AGENT: '' });
-
-test('team pop: the lead claims the work item and sees it whole, then a member has nothing to take; pop and work are not commands', () => {
-  const f = fixture();
-  const w = createdSlug(run(f, ['new', ...NEW('work item')]).stdout);
-  assert.equal(run(f, ['update', w, '--set-team', 't1']).status, 0);
-  const lead = pop(f, 'lead');
-  assert.equal(lead.status, 0, lead.stdout + lead.stderr);
-  const out = JSON.parse(lead.stdout);
-  assert.deepEqual([out.action, out.item, out.team, out.claimed, out.marked], ['claim', w, 't1', true, 'claimed for lead']);
-  assert.ok(out.body.includes('Definition of done') && out.front_matter.owner === 'lead');
-  assert.equal(fm(f, w).claimed_by, 'lead');
-  const member = pop(f, 'ann');
-  assert.equal(member.status, 0, member.stdout + member.stderr); // the lead holds the only work item: a member with nothing to take does chunk work
-  assert.deepEqual([JSON.parse(member.stdout).action, JSON.parse(member.stdout).item], ['chunk', null]);
-  for (const gone of ['pop', 'work']) {
-    const r = run(f, [gone, '--agent', 'ann']);
-    assert.equal(r.status, 2); assert.match(r.stderr, /is not a backlog command \(new, update, list, team, next, fields, move, archive, show, history, changes, done, clean, import, setup, upgrade\)/);
-  }
-});
-
-test('team pop: a member whose item waits for its review is idle; the next member starts the review, marked reviewing', () => {
-  const f = fixture();
-  writeFileSync(join(f.home, 'teams.json'), JSON.stringify({ t1: { lead: 'lead', members: ['ann', 'bob', 'zed'], review: [{ stage: 'peer', count: 1 }] } })); // one member must review
-  const s = ready(f);
-  const claimed = JSON.parse(pop(f, 'zed').stdout);
-  assert.deepEqual([claimed.action, claimed.item], ['claim', s]);
-  run(f, ['show', s, '--agent', 'zed']);
-  assert.equal(run(f, ['team', 'update', s, '--team', 't1', '--agent', 'zed', '--request-review', 'any', '--note', 'commit abc']).status, 0);
-  const idle = pop(f, 'zed');
-  assert.equal(idle.status, 0, idle.stdout + idle.stderr); // a review request ends its work on the item: chunk work is left
-  assert.equal(JSON.parse(idle.stdout).action, 'chunk');
-  const review = JSON.parse(pop(f, 'bob').stdout);
-  assert.deepEqual([review.action, review.item], ['review', s]);
-  assert.match(review.marked, /--start-review --agent bob/);
-  assert.deepEqual([fm(f, s).status, fm(f, s).reviewer], ['reviewing', 'bob']);
-});
-
-test('team pop --dry-run answers without claiming or marking: the item stays unheld, and the same pop without it claims', () => {
-  const f = fixture();
-  const s = ready(f);
-  const look = pop(f, 'ann', '--dry-run');
-  assert.equal(look.status, 0, look.stdout + look.stderr);
-  const out = JSON.parse(look.stdout);
-  assert.deepEqual([out.action, out.item, out.claimed, out.marked], ['claim', s, false, null]);
-  assert.equal(fm(f, s).claimed_by, '');
-  const take = JSON.parse(pop(f, 'ann').stdout);
-  assert.deepEqual([take.action, take.claimed, take.marked, fm(f, s).claimed_by], ['claim', true, 'claimed for ann', 'ann']);
-});
-
-test('team pop and team update reach only the items of --team: an item of no team is not offered, and its claim is refused', () => {
-  const f = fixture();
-  const plain = createdSlug(run(f, ['new', ...NEW('plain item')]).stdout); // no team
-  const idle = pop(f, 'ann');
-  assert.equal(idle.status, 0, idle.stdout + idle.stderr);
-  assert.deepEqual([JSON.parse(idle.stdout).action, JSON.parse(idle.stdout).item, fm(f, plain).claimed_by], ['chunk', null, '']);
-  run(f, ['show', plain, '--agent', 'ann']);
-  const r = run(f, ['team', 'update', plain, '--team', 't1', '--agent', 'ann', '--claim'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: '' });
-  assert.equal(r.status, 1); assert.match(r.stdout, /belongs to no team; this session's team t1 claims only its own team's items/);
-  assert.equal(fm(f, plain).claimed_by, '');
-});
 
 test('team pop: a team without an entry is refused, and a refused flag is refused before anything runs', () => {
   const f = fixture();
@@ -238,7 +133,7 @@ test('team pop: a team without an entry is refused, and a refused flag is refuse
 
 test('no instruction of the engine tells an agent to run a team step through the plain update', async () => {
   const { readFileSync, readdirSync } = await import('node:fs');
-  const { TEAM_BOOL, TEAM_VALUE } = await import('../../src/team/update.js');
+  const { TEAM_BOOL, TEAM_VALUE } = await import('./shared-fixtures.js');
   const dir = new URL('../../src/shared/', import.meta.url);
   const step = new RegExp(`backlog update [^\`'"\\n]*--(?:${[...TEAM_BOOL, ...TEAM_VALUE].filter(f => f !== 'by').join('|')})(?![\\w-])`);
   for (const name of readdirSync(dir).filter(n => n.endsWith('.js') && n !== 'aliases.js')) {

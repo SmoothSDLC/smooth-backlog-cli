@@ -72,14 +72,6 @@ test('done bites only on a team item: an item without a team is finished', () =>
   assert.equal(f.fm(plain).status, 'closed');
 });
 
-test('update --replan engages on a team item it names: refused, nothing written; backlog team update --replan is the door', () => {
-  const f = build(); const plain = f.item('Plain job'); const team = f.item('Team job', { team: true });
-  const before = f.state();
-  REFUSED(f.run(['update', '--replan', `${team},${plain}`]), `use backlog team update --replan: ${team} belongs to a team`);
-  assert.equal(f.state(), before);
-  f.ok(['team', 'update', '--replan', `${team},${plain}`, '--team', 't1', '--agent', 'lead']);
-  assert.deepEqual(JSON.parse(f.ok(['list', '--json']).stdout).phases.map(r => r.slug), [team, plain]);
-});
 test('update --replan bites only on a team item it names: a replan of items without a team goes through', () => {
   const f = build(); const first = f.item('First'); const second = f.item('Second'); const team = f.item('Team job', { team: true });
   f.ok(['update', '--replan', second]);

@@ -3,9 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { TEAM_BOOL, TEAM_VALUE } from '../../src/team/update.js';
 import { hooks as teamQuery } from '../../src/team/query.js';
-import { cli } from './shared-fixtures.js';
+import { TEAM_BOOL, TEAM_VALUE, cli } from './shared-fixtures.js';
 
 const root = new URL('../../', import.meta.url).pathname;
 const files = dir => readdirSync(join(root, dir)).flatMap(n => (statSync(join(root, dir, n)).isDirectory() ? files(join(dir, n)) : [join(dir, n)]));

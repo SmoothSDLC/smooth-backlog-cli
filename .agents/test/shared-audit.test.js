@@ -134,20 +134,6 @@ test('review: update --seq refuses a number another item holds (archived ones in
   assert.equal(s.run(['update', '2', '--seq', '7']).status, 0);
 });
 
-test('review: releasing a claim after --request-review does not let the author review her own work', t => {
-  const s = solo(t);
-  const made = s.run(FULL('alpha job')); assert.equal(made.status, 0, out(made));
-  for (const args of [['update', '1', '--claim', 'alice'], ['update', '1', '--request-review', 'bob', '--note', 'please look'], ['update', '1', '--release', 'alice']]) {
-    const r = s.run(args); assert.equal(r.status, 0, out(r));
-  }
-  const own = s.run(['update', '1', '--review', 'pass', '--by', 'alice', '--comments', 'references/review/docs.md']);
-  assert.equal(own.status, 1, out(own)); assert.match(out(own), /cannot review its own work/);
-  const start = s.run(['update', '1', '--start-review', '--by', 'alice']);
-  assert.equal(start.status, 1, out(start));
-  const other = s.run(['update', '1', '--review', 'pass', '--by', 'bob', '--comments', 'checked against references/review/docs.md']);
-  assert.equal(other.status, 0, out(other)); // another agent still can
-});
-
 test('review: a clone whose upstream is origin/side and push.default=upstream still publishes to origin/main', t => {
   const s = solo(t);
   const bare = join(s.tmp, 'origins', BACKLOG_OWNER, `${BACKLOG_NAME}.git`);
@@ -203,20 +189,6 @@ test('review: a scalar comma depends_on ("1,2") counts as two references in move
   assert.equal(seq.status, 1, out(seq)); assert.match(out(seq), /003-gamma-job depends on 002-beta-job/);
   const cyc = s.run(['update', '1', '--set-depends-on', '3']); // 3 -> "1,2" -> 1
   assert.equal(cyc.status, 1, out(cyc)); assert.match(out(cyc), /cycle/);
-});
-
-test('review: after the author released her claim, pop and query --reviewable still do not offer her the review of her own work', t => {
-  const s = solo(t);
-  writeFileSync(join(s.home, 'teams.json'), JSON.stringify({ t1: { review: [{ stage: 'peer' }] } })); // t1 asks one peer review of its work
-  assert.equal(s.run(FULL('alpha job')).status, 0);
-  assert.equal(s.run(['update', '1', '--set-team', 't1', '--status', 'ready']).status, 0); // the team views and team pop reach only the items of t1
-  for (const args of [['update', '1', '--claim', 'alice'], ['update', '1', '--request-review', 'bob', '--note', 'look'], ['update', '1', '--release', 'alice']]) assert.equal(s.run(args).status, 0);
-  const rev = who => s.run(['team', 'query', '--team', 't1', '--reviewable', '--agent', who]);
-  assert.doesNotMatch(rev('alice').stdout, /001-alpha-job/);
-  assert.match(rev('bob').stdout, /001-alpha-job/);
-  const pop = who => s.run(['team', 'pop', '--team', 't1', '--json', '--agent', who]);
-  const mine = pop('alice'); assert.doesNotMatch(mine.stdout, /"action":\s*"review"/, mine.stdout);
-  const theirs = pop('bob'); assert.match(theirs.stdout, /"action":\s*"review"/, theirs.stdout + theirs.stderr);
 });
 
 test('review P2: the cycle check follows the outgoing edges of an item whose file has no phase field (slug from the file name, as ingestion)', t => {

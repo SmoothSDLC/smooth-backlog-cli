@@ -113,7 +113,7 @@ function queueOrder(folder, entry, team, items, view, session, branch) {
   return order;
 }
 
-// The context a step is evaluated in, and the queue order of the team: { ctx, order, view }. The items are the folder's (live and archived) and the foreign
+// The context a step is evaluated in, the queue order of the team and the folder's own items: { ctx, order, view, own }. The items are the folder's (live and archived) and the foreign
 // ones the step can reach, each read once; branch limits the queue to one branch (absent: every branch).
 export function contextOf({ folder, entry, team, caller, args, session, now, branch }) {
   const own = readItems(folder).items;
@@ -121,7 +121,7 @@ export function contextOf({ folder, entry, team, caller, args, session, now, bra
   const foreign = references(entry, team, items, args).filter(id => !id.startsWith(`${session.repository}#`)).map(id => foreignRaw(folder, id)).filter(Boolean);
   const view = own.map(r => viewOf(r.item, r.path));
   const order = queueOrder(folder, entry, team, items, view, session, branch);
-  return { ctx: { entry, team, caller, items: [...items, ...foreign], args, session, now, order }, order, view };
+  return { ctx: { entry, team, caller, items: [...items, ...foreign], args, session, now, order }, order, view, own: items };
 }
 
 // The number of a new item: one above the highest number the folder ever held (its history, numbers.json, every item file and seq of the view) and above floor, a

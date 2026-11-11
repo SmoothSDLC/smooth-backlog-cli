@@ -1,6 +1,6 @@
 // The cases of the rules (fixtures/team-rules/rule-cases.json) through the real team commands: each case is set up as a folder of items, a team file and a command
-// line, run as a child process, and the exit, the printed text and the written items are compared. `new` is replayed here; the update and pop cases are added by
-// the commands that run them. A case whose team file fails validation cannot run through a command (the command refuses the file before it evaluates): those are
+// line, run as a child process, and the exit, the printed text and the written items are compared. `new` and `update` are replayed here; the pop cases are added by
+// the command that runs them. A case whose team file fails validation cannot run through a command (the command refuses the file before it evaluates): those are
 // EVALUATOR_ONLY and stay with team-rules-cases.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,6 +10,8 @@ import { TEMPLATES, fileOf, git, inside, putItem, readJson, world } from './team
 import { validate, errors } from '../../src/team/rules/validate.js';
 import { defaultOf } from '../../src/team/rules/expression.js';
 import * as index from '../../src/shared/index.js';
+import { step } from '../../src/team/rules/step.js';
+import { readItems } from '../../src/team/item.js';
 
 const { cases } = readJson('./fixtures/team-rules/rule-cases.json');
 const NOW = '2026-11-01T00:00:00Z';
@@ -18,15 +20,19 @@ const fileOf_ = c => (c.rule_set === 'inline' ? c.given.team_file : TEMPLATES[c.
 
 // The inline cases whose team file fails validation: evaluator only. Counted, so a case is never silently dropped.
 const EVALUATOR_ONLY = ['INL-01', 'INL-02', 'INL-03', 'INL-04', 'INL-05', 'INL-06', 'INL-07', 'INL-08', 'INL-09'];
-const RUN_KINDS = ['new']; // grown by update and pop
+const RUN_KINDS = ['new', 'update']; // grown by pop
 const inlineFails = c => c.rule_set === 'inline' && errors(validate(c.given.team_file)).length > 0;
 const viaCommand = cases.filter(c => RUN_KINDS.includes(c.command.run) && !EVALUATOR_ONLY.includes(c.id));
+const viaNew = viaCommand.filter(c => c.command.run === 'new');
+const viaUpdate = viaCommand.filter(c => c.command.run === 'update');
 
-test('the evaluator-only cases are the nine inline cases whose team file fails validation, none of them a new case', () => {
+test('the evaluator-only cases are the nine inline cases whose team file fails validation, none of them a new or update case that runs', () => {
   assert.equal(EVALUATOR_ONLY.length, 9);
   assert.deepEqual(cases.filter(c => c.command.run !== 'validate' && inlineFails(c)).map(c => c.id).sort(), [...EVALUATOR_ONLY].sort());
   assert.ok(cases.filter(c => c.command.run === 'new').every(c => !EVALUATOR_ONLY.includes(c.id) && !inlineFails(c)));
   assert.equal(cases.filter(c => c.command.run === 'new').length, 25);
+  assert.equal(cases.filter(c => c.command.run === 'update').length, 155);
+  assert.deepEqual(cases.filter(c => c.command.run === 'update' && EVALUATOR_ONLY.includes(c.id)).map(c => c.id), ['INL-02', 'INL-03', 'INL-04', 'INL-05', 'INL-06', 'INL-07', 'INL-08']);
 });
 
 // The items of a case as files: the definition's defaults unless the case is raw (the harness of the evaluator does the same).
@@ -50,25 +56,35 @@ function seed(w, c, team, entry, subst) {
   if (touched.size || c.given.order) w.publish('seed');
 }
 
-// session.commit: the two shas a case names are replaced by the head commits of the working copy (two commits, the second is HEAD).
+// The two things a case names that a real run cannot have: session.commit (the two shas it names are replaced by the head commits of the working copy: two commits, the
+// second is HEAD, or the first when the session names it) and the clock (the cases are written at CASE_NOW; every time stamp of that day is moved so that it stands to the real time as it stood to CASE_NOW, and an expected
+// time stamp is compared within two minutes of that).
+const DAY = /^2026-11-09T\d\d:\d\d:\d\dZ$/;
+const CASE_NOW = '2026-11-09T12:00:00Z'; // the time the cases are written at
+const shifted = ts => new Date(Date.now() - (Date.parse(CASE_NOW) - Date.parse(ts))).toISOString().replace(/\.\d+Z$/, 'Z');
 function substitution(w, c) {
-  if (!/abc1234|def5678/.test(JSON.stringify(c))) return v => v;
-  git(w.cons, 'commit', '-q', '--allow-empty', '-m', 'one'); const one = git(w.cons, 'rev-parse', 'HEAD');
-  git(w.cons, 'commit', '-q', '--allow-empty', '-m', 'two'); const two = git(w.cons, 'rev-parse', 'HEAD');
-  const swap = v => (typeof v === 'string' ? v.replaceAll('abc1234', one).replaceAll('def5678', two) : Array.isArray(v) ? v.map(swap) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, swap(x)])) : v);
+  let one = 'abc1234'; let two = 'def5678';
+  if (/abc1234|def5678/.test(JSON.stringify(c))) {
+    git(w.cons, 'commit', '-q', '--allow-empty', '-m', 'one'); one = git(w.cons, 'rev-parse', 'HEAD');
+    git(w.cons, 'commit', '-q', '--allow-empty', '-m', 'two'); two = git(w.cons, 'rev-parse', 'HEAD');
+    if (c.command.session?.commit === 'abc1234') git(w.cons, 'reset', '-q', '--hard', one); // the commit the session names is the one the working copy is at
+  }
+  const swap = v => (typeof v === 'string' ? (DAY.test(v) ? shifted(v) : v.replaceAll('abc1234', one).replaceAll('def5678', two)) : Array.isArray(v) ? v.map(swap) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, swap(x)])) : v);
   return swap;
 }
+const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/;
+const sameValue = (got, want, what) => (typeof want === 'string' && ISO.test(want) && typeof got === 'string' && ISO.test(got) ? assert.ok(Math.abs(Date.parse(got) - Date.parse(want)) < 120000, `${what}: ${got} is not near ${want}`) : assert.deepEqual(got, want, what));
 
 // The command line of a case: the team is the first key of the file, the agent comes from flags.agent, every other flag and argument is passed by name.
 function commandLine(cmd, team) {
   const flags = { team, ...cmd.flags };
-  const line = [];
+  const line = cmd.run === 'update' ? [String(cmd.item), cmd.step] : [];
   for (const [k, v] of Object.entries({ ...flags, ...(cmd.session?.id ? { session: cmd.session.id } : {}) })) line.push(`--${k}`, ...(v === true ? [] : [String(v)]));
   for (const [k, v] of Object.entries(cmd.args ?? {})) line.push(`--${k}`, String(v));
   return line;
 }
 
-for (const c of viaCommand) {
+for (const c of viaNew) {
   test(`${c.id}: ${c.rule ?? 'coded'} through backlog team new`, t => {
     const file = fileOf_(c); const team = Object.keys(file)[0]; const entry = file[team];
     const w = world(t, file);
@@ -118,8 +134,92 @@ for (const c of viaCommand) {
 }
 
 test('the harness runs every new case it can, none silently dropped: 25 new cases through the command', () => {
-  assert.equal(viaCommand.length, 25);
-  assert.equal(new Set(viaCommand.map(c => c.id)).size, 25);
+  assert.equal(viaNew.length, 25);
+  assert.equal(new Set(viaNew.map(c => c.id)).size, 25);
+});
+
+// ---- update: the same cases through `backlog team update <item> <step>`. What is compared: the exit and the text of the case; the fields the case names; and every
+// written item, field by field and in its place (live, archived, deleted), against what the evaluator makes of the same items at the time the command stamped; every
+// other item file byte for byte as it was seeded; a refused command leaves the whole folder as it was.
+const itemsOf = (c, team, entry) => c.given.items.map(i => ({ seq: i.seq, slug: `${String(i.seq).padStart(3, '0')}-item`, name: i.name ?? `item ${i.seq}`, team: i.team ?? team,
+  repository: i.repository ?? 'acme/app', branch: i.branch ?? 'main', archived: Boolean(i.archived), body: i.body ?? '', fields: { ...(!c.given.raw && (i.team ?? team) === team ? defaultsOf(entry) : {}), ...i.fields } }));
+
+for (const c of viaUpdate) {
+  test(`${c.id}: ${c.rule ?? 'coded'} through backlog team update`, t => {
+    const file = fileOf_(c); const team = Object.keys(file)[0]; const entry = file[team];
+    const w = world(t, file);
+    const run = JSON.parse(JSON.stringify(substitution(w, c)(c)));
+    seed(w, run, team, entry, x => x);
+    const before = snapshot(w.folder);
+    const r = w.run(commandLine(run.command, team), run.command.env ?? {}, 'update');
+    const want = run.expect; const cmd = run.command;
+    assert.equal(r.status, want.exit, `${r.stdout}${r.stderr}`);
+    if (want.exit !== 0) {
+      if (want.exit === 1) { assert.equal(r.stdout, `❌ ${want.text}\n`); assert.equal(r.stderr, ''); }
+      if (want.exit === 2) { assert.equal(r.stderr, `❌ backlog: ${want.text}\n`); assert.equal(r.stdout, ''); }
+      assert.equal(existsSync(join(w.cons, '.backlog', 'config.json')), false); // a refused command writes no SHA
+      assert.equal(git(w.home, 'status', '--short'), '');
+      assert.deepEqual(snapshot(w.folder), before);
+      return;
+    }
+    assert.equal(r.stderr, '');
+    assert.equal(git(w.home, 'status', '--short'), ''); // published
+    const slug = `${String(cmd.item).padStart(3, '0')}-item`;
+    assert.match(git(w.home, 'log', '-1', '--format=%s'), new RegExp(`team ${cmd.step} ${slug}$`));
+    const lines = r.stdout.trimEnd().split('\n');
+    assert.equal(lines[0], `✅ ${slug}: ${cmd.step} (rule ${want.rule})`);
+    if (want.say !== undefined) assert.ok(lines.includes(want.say), `the say text is printed: ${r.stdout}`);
+
+    // the evaluator on the same items, at the time the command stamped
+    const kept = fileOf(w.folder, cmd.item); // a step that deletes its item leaves no file to read the time from
+    const stamped = kept ? JSON.parse(readFileSync(kept, 'utf8')).updated : new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+    const all = itemsOf(run, team, entry);
+    const result = step({ entry, team, step: cmd.step, caller: cmd.flags.agent, items: all, args: cmd.args ?? {}, session: { repository: 'acme/app', branch: 'main', commit: git(w.cons, 'rev-parse', 'HEAD'), ...cmd.session }, now: stamped, item: all.find(i => i.seq === cmd.item && i.repository === 'acme/app') });
+    assert.equal(result.rule, want.rule);
+    for (const [seq, fields] of Object.entries(want.items ?? {})) {
+      const got = JSON.parse(readFileSync(fileOf(w.folder, seq), 'utf8')).fields;
+      for (const [f, v] of Object.entries(fields)) sameValue(got[f], v, `item ${seq} field ${f}`);
+    }
+    const written = new Set();
+    for (const [seq, it] of result.items) {
+      const own = seq === cmd.item;
+      if (!own && !Object.keys(result.changes.get(seq) ?? {}).length) continue;
+      written.add(seq);
+      const path = fileOf(w.folder, seq);
+      if (own && result.delete) { assert.equal(path, undefined, `item ${seq} is deleted`); continue; }
+      assert.ok(path, `item ${seq} is written`);
+      assert.equal(path.includes('/archive/'), it.archived, `item ${seq} archived`);
+      const doc = JSON.parse(readFileSync(path, 'utf8'));
+      for (const f of new Set([...Object.keys(it.fields), ...Object.keys(doc.fields)])) sameValue(doc.fields[f], it.fields[f], `item ${seq} field ${f} (the evaluator's)`);
+      assert.equal(doc.team ?? '', it.team, `item ${seq} team`);
+      assert.equal(doc.branch, it.branch, `item ${seq} branch`);
+      assert.equal(doc.history.at(-1).step, cmd.step);
+    }
+    for (const seq of want.archived ?? []) assert.ok(fileOf(w.folder, seq).includes('/archive/'), `item ${seq} archived`);
+    for (const [seq, tm] of Object.entries(want.bound ?? {})) assert.equal(JSON.parse(readFileSync(fileOf(w.folder, seq), 'utf8')).team ?? '', tm, `item ${seq} team`);
+    for (const [seq, b] of Object.entries(want.branch ?? {})) assert.equal(JSON.parse(readFileSync(fileOf(w.folder, seq), 'utf8')).branch, b, `item ${seq} branch`);
+    if (want.delete) assert.equal(fileOf(w.folder, cmd.item), undefined);
+    const after = snapshot(w.folder);
+    for (const [p, text] of Object.entries(before)) { // every item file the step did not write is as seeded
+      const n = Number(p.split('/').at(-1).split('-')[0]);
+      if (/^(phases|archive)\//.test(p) && !written.has(n)) assert.equal(after[p], text, `${p} unchanged`);
+    }
+    if (want.place) {
+      const slugs = index.read(w.folder).branches.main.map(e => e.seq);
+      const [kind, target] = Object.entries(want.place)[0];
+      const at = slugs.indexOf(cmd.item);
+      if (kind === 'before') assert.equal(slugs[at + 1], Number(target));
+      if (kind === 'after') assert.equal(slugs[at - 1], Number(target));
+      if (kind === 'first') assert.equal(at, 0);
+      if (kind === 'last') assert.equal(at, slugs.length - 1);
+    }
+  });
+}
+
+test('the harness runs every update case it can, none silently dropped: 148 update cases through the command', () => {
+  assert.equal(viaUpdate.length, 148);
+  assert.equal(new Set(viaUpdate.map(c => c.id)).size, 148);
+  assert.equal(viaUpdate.filter(c => c.id.startsWith('INL')).length, 2); // INL-10 and INL-11
 });
 
 // Every file under a folder with its bytes: a refused command must leave this exactly as it was.

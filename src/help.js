@@ -168,7 +168,7 @@ ${EXIT}
 Example:
   backlog new --name "Fix login" --objective "An expired cookie no longer blocks sign-in" --summary "Login cookie handling" --depends-on none
 
-A team's items are filed by backlog team new, and a split of a team's item is refused here.
+A team's items are filed by backlog team new, and a team's item is not seen here, so it cannot be split (--split-from: no phase '<item>').
 Team items: backlog team new --help.
 `,
 
@@ -479,8 +479,7 @@ Usage:
 
 Finishes the item given by number or slug. It runs backlog update <item> --status closed: the status becomes closed, the completion time is set,
 the rest of the queue of the branch is renumbered, and the change records who made it and when. Every other argument after the item is passed on
-to backlog update (see backlog update --help), so its refusals and its output are those of update: an item that does not exist, an item
-that has a team (it is closed with backlog team update) and an item that someone else changed since this agent last read it (exit 5) are refused.
+to backlog update (see backlog update --help), so its refusals and its output are those of update: an item that does not exist (an item that has a team is not seen: no phase '<item>') and an item that someone else changed since this agent last read it (exit 5) are refused.
 
 ${SHARED}
 

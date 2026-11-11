@@ -36,11 +36,7 @@ rules - refinement before work, the team's review rules before the close, work-i
 in the backlog folder). Teams, their leads and members and their review rules are configuration in the backlog folder
 (`teams.json`); a team session is bound by `SMOOTH_BACKLOG_CLI_TEAM_NAME`, `SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY` and `SMOOTH_BACKLOG_CLI_TEAM_BRANCH`. An item without a team is
 not bound by them. An item of a team is filed by `backlog team new` and changed by `backlog team update` only;
-`backlog update` refuses every change of it, and so do the other user commands that would change its team state (status, claim,
-review, refinement, dependencies, its place in the team's queue, its deletion): `done`, `update --replan` naming it, `archive` of a
-team item that is not closed (also with `--force`), `import --higher` and `clean`. A refusal is one line on standard output, exit 1,
-and nothing is written. `move`, `archive` of a closed team item and `archive done` only file or store an item and work on a team item
-like on any other.
+A user command does not see an item that belongs to a team: `list`, `next`, `show`, `history` and the counts leave it out, the queue and the priorities count only the other items, and a command that names it answers as for an item that does not exist (`no phase '<item>'`). An item that lists a team item in `depends_on` reads as depending on a missing item. `clean` still refuses to remove a team item in its scope.
 
 ## Output and exit codes
 
@@ -252,7 +248,7 @@ Exit codes:
 Example:
   backlog new --name "Fix login" --objective "An expired cookie no longer blocks sign-in" --summary "Login cookie handling" --depends-on none
 
-A team's items are filed by backlog team new, and a split of a team's item is refused here.
+A team's items are filed by backlog team new, and a team's item is not seen here, so it cannot be split (--split-from: no phase '<item>').
 Team items: backlog team new --help.
 ```
 
@@ -408,8 +404,7 @@ Usage:
 
 Finishes the item given by number or slug. It runs backlog update <item> --status closed: the status becomes closed, the completion time is set,
 the rest of the queue of the branch is renumbered, and the change records who made it and when. Every other argument after the item is passed on
-to backlog update (see backlog update --help), so its refusals and its output are those of update: an item that does not exist, an item
-that has a team (it is closed with backlog team update) and an item that someone else changed since this agent last read it (exit 5) are refused.
+to backlog update (see backlog update --help), so its refusals and its output are those of update: an item that does not exist (an item that has a team is not seen: no phase '<item>') and an item that someone else changed since this agent last read it (exit 5) are refused.
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the

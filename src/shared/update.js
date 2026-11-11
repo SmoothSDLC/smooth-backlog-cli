@@ -246,7 +246,9 @@ async function change(a, folder, repo, team) {
         ?? store.load(folder).filter(index.sees).find(i => Number(i.fm.seq) === n && i.fm.phase !== row.slug)?.fm.phase;
       if (held) return refuse(`--seq ${n} is already item ${held}; the number must stay unique`);
       const own = a.seqRepaired; // the repair of an unreadable seq decided the number before it wrote it
-      const by = own ? [] : store.load(folder).filter(index.sees).filter(i => i.fm.phase !== row.slug && asList(i.fm.depends_on).some(d => d === row.slug || (/^\d+$/.test(String(d)) && Number(d) === Number(row.seq)))).map(i => i.fm.phase ?? i.path);
+      const dependents = own ? [] : store.load(folder).filter(i => i.fm.phase !== row.slug && asList(i.fm.depends_on).some(d => d === row.slug || (/^\d+$/.test(String(d)) && Number(d) === Number(row.seq))));
+      const by = dependents.filter(index.sees).map(i => i.fm.phase ?? i.path);
+      if (dependents.length > by.length) return refuse(`an item this command does not see depends on ${row.slug}, which a new number would leave it pointing at nothing; the number stays`); // never names the unseen item
       if (by.length) return refuse(`${by.join(', ')} depend${by.length > 1 ? '' : 's'} on ${row.slug}, which a new number would leave them pointing at nothing; clear or repoint them first: update <dependent> --set-depends-on <ids|none>`);
       const high = store.mark(folder);
       if (n <= high && !own) return refuse(`--seq ${n} is not above the highest number ever used in ${repo} (${high}); numbers are never reused`);

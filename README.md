@@ -101,7 +101,7 @@ the team's entry), `new` (files an item of the team in stage refining, and split
   `backlog new --help` carries the same table.
 
 The team options are not options of the user commands: the team steps of `backlog update` and
-`--team` and `--review-refs` of `backlog new` are refused as unrecognized arguments, and a team's item is refused by `backlog update`.
+`--team` and `--review-refs` of `backlog new` are refused as unrecognized arguments, and a team's item is not seen by `backlog update` (no phase '<item>').
 `backlog pop` and `backlog work` are gone: `backlog team pop` replaces both. It takes the first step the team's pop table offers the agent, as one published commit, and prints the item; `--lead`, `--scope`, `--all` and `--claim-now` no longer exist.
 
 ## Where the data lives

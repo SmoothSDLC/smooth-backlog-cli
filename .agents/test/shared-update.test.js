@@ -507,9 +507,10 @@ test('review P1: --replan naming an item of a team does not see it; a replan nev
   const files = () => JSON.stringify(['002-beta', '003-gamma'].map(n => readFileSync(itemPath(f.folder, n), 'utf8')));
   const before = files();
   assert.equal(run(f, ['--replan', '1,3']).status, 0); // the team item named is not seen: only the item outside a team is led
-  const [a, d] = [rankOf(f, '001-alpha'), rankOf(f, '004-delta')];
+  const order = () => index.read(f.folder).branches.main.map(e => e.slug);
+  assert.deepEqual(order(), ['001-alpha', '002-beta', '003-gamma', '004-delta', '005-epsilon', '006-zeta']);
   assert.equal(run(f, ['--replan', '004-delta,001-alpha']).status, 0);
-  assert.ok(rankOf(f, '004-delta') < rankOf(f, '001-alpha') && a < d, 'the two items outside a team trade their places');
+  assert.deepEqual(order(), ['004-delta', '002-beta', '003-gamma', '001-alpha', '005-epsilon', '006-zeta'], 'the two items outside a team trade their places, the team entries stay');
   assert.equal(files(), before, 'no file of a team item was written');
 });
 

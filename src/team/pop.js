@@ -54,13 +54,15 @@ async function popItem(argv) {
       throw e;
     }
     let persistSha = () => {}; // the SHA of the team file the latest run read; publishTeam writes it after the last successful publication
+    const offered = new Set(); // the items earlier rounds of this command offered: a round that ran again does not offer them again
     const attempt = async () => {
       const loaded = loadTeams({ top, home, repo, workRepo, stateDir: configDir(), team: inputs.team, now: new Date().toISOString(), deferSha: true });
       persistSha = loaded.persistSha;
       const entry = loaded.file[inputs.team];
       const at = now();
       const { ctx, view } = contextOf({ folder, entry, team: inputs.team, caller: inputs.agent, args: {}, session, now: at, branch: session.branch });
-      const offer = pop({ ...ctx, skip: new Set() });
+      const offer = pop({ ...ctx, skip: new Set(offered) });
+      if (offer.action !== 'idle') offered.add(offer.item);
       const show = built => printed({ offer, built, entry, team: inputs.team, agent: inputs.agent, json: flags.json });
       if (offer.action === 'idle') return { idle: true, print: show() };
       const message = `team ${offer.action} ${view.find(v => v.fm.seq === offer.item && v.path.startsWith('phases/')).fm.phase}`;

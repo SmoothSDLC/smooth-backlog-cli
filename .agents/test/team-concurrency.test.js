@@ -12,6 +12,9 @@ import * as sync from '../../src/shared/sync.js';
 import { record } from '../../src/shared/numbers.js';
 import { BacklogError } from '../../src/errors.js';
 import { publishTeam } from '../../src/shared/team-publish.js';
+import { TEMPLATES, inside, putItem } from './team-fixture.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 for (const [k, v] of Object.entries(GIT_IDENTITY)) process.env[k] = v;
 const git = (cwd, ...args) => {
@@ -215,4 +218,106 @@ test('code repository: the re-run drops the command\'s commit only: a person\'s 
   assert.equal(git(a.root, 'log', '--format=%s', 'origin/main').split('\n').filter(s => s.startsWith('person')).length, 0, 'and were not published');
   assert.equal(git(a.root, 'show', 'HEAD:code2.js'), 'y');
   assert.equal(git(a.root, 'show', 'origin/main:.backlog/acme/demo/phases/002-a.json').length > 0, true);
+});
+
+// ---- The real commands on two clones of one origin (the backlog lives inside the code repository). The second clone (rb) runs its command from a hook of the
+// first clone's push, so that it publishes after the first command read the files and before it pushed: no timing is left to chance.
+const BIN = fileURLToPath(new URL('../../bin/backlog.js', import.meta.url));
+const ENTRY = TEMPLATES.parallel.parallel;
+const BASE = ['--team', 'parallel', '--agent', 'member-1'];
+const quote = a => `'${String(a).replaceAll("'", "'\\''")}'`;
+const job = (seq, fields = {}) => ({ seq, slug: `${String(seq).padStart(3, '0')}-job`, name: 'job', team: 'parallel', repository: 'local/repository', branch: 'main', fields: { status: 'ready', estimate: 5, holder: '', checker: '', parent: null, children: [], depends_on: [], handoff: '', rounds: 0, ...fields } });
+function seeded(t, items) {
+  const w = inside(t);
+  for (const i of items) putItem(w.folder, i, ENTRY);
+  git(w.ra, 'add', '-A'); git(w.ra, 'commit', '-qm', 'items'); git(w.ra, 'push', '-q'); git(w.rb, 'pull', '-q');
+  return w;
+}
+// the second clone's command, as shell text for a hook; its exit code and output are left beside the clones
+const other = (w, verb, args, env = {}) => `cd ${quote(w.rb)} && env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE XDG_CONFIG_HOME=${quote(join(w.dir, 'xdg-b'))} SMOOTH_BACKLOG_CLI_HOME= ${Object.entries(env).map(([k, v]) => `${k}=${v}`).join(' ')} ${quote(process.execPath)} ${quote(BIN)} team ${verb} ${args.map(quote).join(' ')} > ${quote(join(w.dir, 'rb.out'))} 2>&1; echo $? > ${quote(join(w.dir, 'rb.code'))}`;
+// a direct change of the other clone's checkout, published; `edit` is shell text run in the clone's top
+const otherPublishes = (w, edit) => `cd ${quote(w.rb)} && git pull -q --rebase && ${edit} && git add -A && git commit -qm other && git push -q`;
+// the first clone's pre-push hook runs `script` once (`always`: at every push)
+function onPush(w, script, always = false) {
+  const marker = join(w.dir, 'hook-ran'); const hook = join(w.ra, '.git', 'hooks', 'pre-push');
+  writeFileSync(hook, `#!/bin/sh\nunset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE\n${always ? '' : `[ -e ${quote(marker)} ] && exit 0\ntouch ${quote(marker)}\n`}${script}\n`);
+  chmodSync(hook, 0o755);
+}
+const rbCode = w => Number(readFileSync(join(w.dir, 'rb.code'), 'utf8'));
+const origin = (w, path) => JSON.parse(git(w.bare, 'show', `main:.backlog/local/repository/${path}`));
+const phases = w => git(w.bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(f => f.includes('/phases/')).map(f => f.split('/').pop());
+const bump = (w, seq) => `node -e "const f=process.argv[1],fs=require('fs'),d=JSON.parse(fs.readFileSync(f));d.fields.estimate=Date.now()%100000;fs.writeFileSync(f,JSON.stringify(d))" ${quote(join(w.rb, '.backlog', 'local', 'repository', 'phases', `00${seq}-job.json`))}`;
+
+test('commands: two clones claim one item at once: the first to publish wins, the other is refused by the rule on the published file', t => {
+  const w = seeded(t, [job(1)]);
+  onPush(w, other(w, 'update', ['1', 'claim', '--team', 'parallel', '--agent', 'member-2']));
+  const r = w.run(['1', 'claim', ...BASE], {}, 'update');
+  assert.equal(rbCode(w), 0);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /only a ready item is claimed \(item 1 is in progress\) \(rule claim-not-ready\)/);
+  assert.equal(origin(w, 'phases/001-job.json').fields.holder, 'member-2');
+  assert.equal(git(w.ra, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'no commit of the refused command is left');
+});
+
+test('commands: two clones add a child to one parent at once: the parent lists both', t => {
+  const w = seeded(t, [job(1, { status: 'splitting' })]);
+  onPush(w, other(w, 'new', ['--team', 'parallel', '--agent', 'member-2', '--name', 'second', '--estimate', '20', '--parent', '1']));
+  const r = w.run([...BASE, '--name', 'first', '--estimate', '20', '--parent', '1'], {}, 'new');
+  assert.equal(r.status, 0, r.stdout + r.stderr); assert.equal(rbCode(w), 0);
+  assert.deepEqual(origin(w, 'phases/001-job.json').fields.children.sort(), [2, 3]);
+  assert.equal(phases(w).length, 3);
+});
+
+test('commands: two clones start work for the same member at once: the second is refused by the limit', t => {
+  const w = seeded(t, [job(1), job(2)]);
+  onPush(w, other(w, 'update', ['2', 'claim', ...BASE]));
+  const r = w.run(['1', 'claim', ...BASE], {}, 'update');
+  assert.equal(rbCode(w), 0);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /member-1 already works on an item.*\(rule claim-limit-person\)/);
+  assert.deepEqual([1, 2].map(n => origin(w, `phases/00${n}-job.json`).fields.holder), ['', 'member-1']);
+});
+
+test('commands: two clones create an item at once: two different numbers', t => {
+  const w = inside(t);
+  onPush(w, other(w, 'new', ['--team', 'parallel', '--agent', 'member-2', '--name', 'b', '--estimate', '20']));
+  const r = w.run([...BASE, '--name', 'a', '--estimate', '20'], {}, 'new');
+  assert.equal(r.status, 0, r.stdout + r.stderr); assert.equal(rbCode(w), 0);
+  assert.deepEqual(phases(w).map(f => f.slice(0, 3)).sort(), ['001', '002']);
+});
+
+// every push meets an upstream change of another item: the command stops once its budget has passed and publishes nothing
+for (const [verb, args, code] of [['update', ['1', 'claim', ...BASE], 3], ['pop', BASE, 1]]) {
+  test(`commands: upstream that moves at every push: ${verb} exits ${code} with "kept changing" and publishes nothing`, t => {
+    const w = seeded(t, [...[1, 2, 3, 4, 5, 6, 7, 8].map(n => job(n)), job(9, { status: 'new' })]); // enough ready items that pop's skip never empties the queue
+    onPush(w, otherPublishes(w, bump(w, 9)), true);
+    const r = w.run(args, { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '2000' }, verb);
+    assert.equal(r.status, code, r.stdout + r.stderr);
+    assert.match(r.stderr, /kept changing while \w+ ran/);
+    assert.equal(origin(w, 'phases/001-job.json').fields.holder, '', 'nothing of the command is published');
+    assert.equal(git(w.ra, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'no commit of the command is left');
+    assert.equal(JSON.parse(readFileSync(join(w.folder, 'phases', '001-job.json'), 'utf8')).fields.holder, '', 'nor a file');
+  });
+}
+
+test('commands: pop that meets an upstream change of another item runs again and offers the second item of the queue, not the first', t => {
+  const w = seeded(t, [job(1), job(2), job(3, { status: 'new' })]);
+  onPush(w, otherPublishes(w, bump(w, 3)));
+  const r = w.run(BASE, {}, 'pop');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /^➡️  claim 002-job /);
+  assert.deepEqual([1, 2].map(n => origin(w, `phases/00${n}-job.json`).fields.holder), ['', 'member-1']);
+});
+
+test('commands: a person\'s commit on top of the command\'s commit is never taken back, whatever the other clone published', t => {
+  const w = seeded(t, [job(1), job(2)]);
+  const hook = join(w.ra, '.git', 'hooks', 'post-commit'); // a hook stands for the person: a commit right after the command's own
+  writeFileSync(hook, `#!/bin/sh\ncase "$(git log -1 --format=%s)" in *"team claim 001-job") ;; *) exit 0;; esac\nunset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE\n[ -e ${quote(join(w.ra, 'person.txt'))} ] && exit 0\n( ${otherPublishes(w, bump(w, 2))} )\ncd ${quote(w.ra)} && echo person > person.txt && git add person.txt && git -c user.name=P -c user.email=p@example.com commit -q -m "person: file" -- person.txt\n`);
+  chmodSync(hook, 0o755);
+  const r = w.run(['1', 'claim', ...BASE], {}, 'update');
+  assert.equal(r.status, 3, r.stdout + r.stderr);
+  assert.match(r.stderr, /nothing was rolled back/);
+  assert.deepEqual(git(w.ra, 'log', '--format=%s', '-2').split('\n'), ['person: file', 'backlog: team claim 001-job']);
+  assert.equal(JSON.parse(readFileSync(join(w.folder, 'phases', '001-job.json'), 'utf8')).fields.holder, 'member-1', 'the command\'s change is still there');
+  assert.equal(origin(w, 'phases/001-job.json').fields.holder, '', 'and nothing of it is published');
 });

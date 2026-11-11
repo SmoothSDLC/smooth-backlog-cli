@@ -60,6 +60,7 @@ Looks at the open items of the team on the session's branch, in the order of the
 team file) whose condition holds and which the team's rules allow on the first item it applies to. The step is taken at once, as the command's own commit "team <step> <slug>" (the same
 rules and the same writing as backlog team update), published, and then the whole item is printed after the step. When the table offers nothing, the answer is idle. A step the rules refuse
 on an item is tried on the next item; a pop table or a rule that is malformed is an error (exit 2), never an idle answer.
+When another clone published first and changed what pop read, pop runs again on the new files and does not offer an item an earlier round of the same command offered.
 
 Scenario: the agent member-1 of the team parallel has nothing in hand and asks for work in the working copy of the repository whose backlog holds it: backlog team pop --team parallel
 --agent member-1. The table offers claim on the first ready item (the entry member-claims, the rule that allows the claim); the item is claimed for member-1, the commit is published, and

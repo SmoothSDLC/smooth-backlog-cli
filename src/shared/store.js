@@ -96,6 +96,7 @@ export function folder(home, repoId) {
 const held = new Set();
 const lockPath = home => join(stateDir(home), 'smooth-backlog-cli-run.lock');
 export const lockEnv = home => ({ SMOOTH_BACKLOG_CLI_RUN_LOCK_HELD: `${lockPath(home)}:${process.pid}` });
+export const lockWait = () => (Number(process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS) > 0 ? Number(process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS) : 120000);
 export function cloneLocked(home, fn) {
   const path = lockPath(home);
   if (held.has(path)) return guarded(fn);
@@ -107,7 +108,7 @@ export function cloneLocked(home, fn) {
     held.add(path);
     recoverJournal(home); // a killed predecessor's half-done change goes first
     try { return await guarded(fn); } finally { held.delete(path); }
-  }, { wait: Number(process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS) > 0 ? Number(process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS) : 120000, takeOver: true });
+  }, { wait: lockWait(), takeOver: true });
 }
 
 export function git(args, cwd) {

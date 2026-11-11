@@ -28,6 +28,18 @@ test('no document shows a plain update, query or new with an option that only a 
   assert.deepEqual(found, []);
 });
 
+// The step flags of the retired spelling and the pointer to a listing of steps that no command gives yet: no help text, no document shows them with `backlog team update`.
+const RETIRED = [...TEAM_VALUE, ...TEAM_BOOL, 'set-team', 'decision', 'replan', 'priority', 'close', 'status'];
+const retiredUpdate = new RegExp(`team update\\b[^\\n]*?--(?:${RETIRED.join('|')})(?![\\w-])`);
+test('no help text and no document shows backlog team update with a retired step flag, or names a listing of steps that does not exist (remove the second check when it does)', () => {
+  const helps = [[], ['team'], ['team', 'update'], ['team', 'new'], ['team', 'pop'], ['team', 'query'], ['update']].map(h => [`help ${h.join(' ')}`, cli([...h, '--help'], {}).stdout]);
+  const docs = [...DOCS.filter(f => /(COMMANDS|README|SKILL)\.md$/.test(f) || /references\/commands\.md$/.test(f))].map(f => [f, readFileSync(join(root, f), 'utf8')]);
+  const found = [];
+  for (const [where, text] of [...helps, ...docs]) text.split('\n').forEach((line, i) => { if (retiredUpdate.test(line) || /query steps/.test(line)) found.push(`${where}:${i + 1}: ${line.trim().slice(0, 120)}`); });
+  assert.deepEqual(found, []);
+  assert.ok(helps.every(([w, t]) => t.length > 100), 'every help text was read');
+});
+
 test('the check finds the removed spellings', () => {
   for (const [cmd, line] of [['update', 'backlog update 1 --request-review any'], ['query', 'run backlog query --claimable'], ['new', 'backlog new --team t1'], ['update', 'update <item> --set-team x']]) {
     assert.ok(spelling(cmd, REMOVED[cmd]).test(line), line);

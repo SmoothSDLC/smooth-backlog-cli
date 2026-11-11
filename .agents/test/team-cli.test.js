@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -44,6 +44,24 @@ test('the plain update refuses a team step and names the flag; a status word on 
   const t = run(f, ['team', 'update', s, '--team', 't1', '--agent', 'ann', '--status', 'closed']);
   assert.notEqual(t.status, 0);
   assert.equal(fm(f, s).status, 'pending');
+});
+
+test('the team views run under team query; the plain list does not know them (exit 2, nothing on standard output); a team without an entry is refused', () => {
+  const f = fixture();
+  const s = createdSlug(run(f, ['new', ...NEW('item')]).stdout);
+  intoTeam(s, { cwd: f.cons, tmp: f.t });
+  for (const view of ['--claimable', '--reviewable', '--blocked', '--decisions', '--plan', '--wip']) {
+    const plain = plainRun(f, ['list', view]);
+    assert.equal(plain.status, 2, `${view}: ${plain.stdout}${plain.stderr}`);
+    assert.match(plain.stderr, new RegExp(`unrecognized arguments: ${view}`));
+    assert.equal(plain.stdout, '');
+  }
+  const viewed = run(f, ['team', 'query', '--team', 't1', '--claimable', '--json']);
+  assert.equal(viewed.status, 0, viewed.stdout + viewed.stderr);
+  assert.deepEqual(JSON.parse(viewed.stdout).map(x => x.name), ['item']);
+  assert.equal(run(f, ['team', 'query', '--team', 't1', '--agent', 'ann', '--claimable', '--json']).status, 0);
+  const ghost = run(f, ['team', 'query', '--team', 'ghost', '--claimable']);
+  assert.equal(ghost.status, 1); assert.match(ghost.stdout, /team ghost is not configured in the backlog configuration/);
 });
 
 // ---- backlog team define / workflow

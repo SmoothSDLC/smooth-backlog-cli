@@ -59,8 +59,8 @@ SMOOTH_BACKLOG_CLI_AGENT stand in).
   whether it is allowed and which arguments they take (`--estimate <minutes>`, `--parent <item>`, ...); a refusal prints its reason (exit 1) and writes nothing.
   `backlog team new --help` says what is printed.
 - Take a step on an item: `backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...`. The step is a word the team's rules name (claim, release,
-  hand-to-check, review, close, ... as the team's file defines them) and the arguments are the names its rules read (`--note "<text>"`, `--verdict pass`, ...); `backlog team query steps --team <team>`
-  lists them. The rules decide: a refusal prints its reason and the id of the rule (exit 1) and writes nothing; a step no rule names, or an argument the step does not take, is refused
+  hand-to-check, review, close, ... as the team's file defines them) and the arguments are the names its rules read (`--note "<text>"`, `--verdict pass`, ...); a word no rule names is refused with the
+  list of the team's steps. The rules decide: a refusal prints its reason and the id of the rule (exit 1) and writes nothing; a step no rule names, or an argument the step does not take, is refused
   with the list of what the team has (exit 2). A step is published as the command's own commit, so another agent's step on the same item never overwrites yours: when it was first, yours runs
   again on the new files. Act only as yourself: the agent is the caller, and another agent's item is the lead's to hand on by the team's own steps.
 - Lead: `backlog team pop --team <team> --agent <you>` takes the team's work item (and gives the lead its next action); `backlog team query --team <team> --plan` is the dispatch plan and `backlog team query --team <team> --decisions` the questions waiting for the owner; split an

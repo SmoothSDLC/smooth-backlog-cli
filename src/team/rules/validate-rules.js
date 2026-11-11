@@ -5,6 +5,7 @@
 // of an object that its kind does not allow. Nothing here throws: a rule that cannot be walked (nested too deeply) is one finding.
 import { ENVELOPE, FLAGS, FUNCTIONS, LIST, NAMES, PAIR, Refusal, TESTS, asList, num, stepMatches } from './expression.js';
 import { compile } from './safe-regex.js';
+import { stepWords } from '../steps.js';
 import { stepArgs, typed } from './step.js';
 import { TYPES, closest, isObj } from './validate.js';
 
@@ -253,7 +254,6 @@ const clauses = w => (!isObj(w) ? [] : Array.isArray(w.all) ? w.all : [w]);
 const clauseInfo = c => ({ text: canonical(c), in: isObj(c) && Array.isArray(c.in) && Array.isArray(c.in[1]) ? { of: canonical(c.in[0]), values: new Set(c.in[1].map(canonical)) } : null,
   is: isObj(c) && Array.isArray(c.is) ? { of: canonical(c.is[0]), value: canonical(c.is[1]) } : null });
 const covers = (p, q) => p.text === q.text || (p.in !== null && q.is !== null && p.in.of === q.is.of && p.in.values.has(q.is.value));
-const stepWords = r => (typeof r.step === 'string' ? [r.step] : Array.isArray(r.step) && r.step.every(s => typeof s === 'string') ? r.step : []);
 
 function checkShadowing(table, say) {
   // Per rule, once: its clauses, its step words as a set and whether it names every step.

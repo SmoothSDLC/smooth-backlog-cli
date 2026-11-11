@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, itemPath, sharedBacklog, readItem, writeItem } from './shared-fixtures.js';
+import { cli, consumer, intoTeam, itemPath, sharedBacklog, readItem, writeItem } from './shared-fixtures.js';
+import { OF_A_TEAM } from '../../src/shared/team-items.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -38,4 +39,15 @@ test('--status closed on an old teamless item without review_refs closes it with
   const r = update(f, [f.slug, '--status', 'closed']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(status(f), 'closed');
+});
+
+test('--status done is refused on a team item: its status moves by the team steps, and nothing is written', () => {
+  const f = fixture('reviewed job', ['--review-refs', 'docs/review/code.md']);
+  intoTeam(f.slug, { cwd: f.cons, tmp: f.t }, 't1', 'in progress');
+  const before = readItem(f.file);
+  const r = update(f, [f.slug, '--status', 'done']);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(r.stdout, `❌ ${OF_A_TEAM}\n`);
+  assert.equal(status(f), 'in progress');
+  assert.deepEqual(readItem(f.file), before);
 });

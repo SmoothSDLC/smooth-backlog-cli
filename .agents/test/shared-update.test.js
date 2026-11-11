@@ -7,12 +7,13 @@ import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, rmSync, w
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, breakIndex, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY, writeItem, changeItem, ENVELOPE } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, archivedPath, breakIndex, cli, consumer, intoTeam, itemName, itemPath, itemRel, sharedBacklog, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY, writeItem, changeItem, ENVELOPE } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
 import { editSection } from '../../src/shared/update.js';
+import { OF_A_TEAM, REPLAN_TEAM } from '../../src/shared/team-items.js';
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -458,14 +459,95 @@ test('invalid command lines exit 2 or 1', () => {
   assert.equal(step(f, ['2', '--priority', 'abc']).status, 1); // a priority that is not a number is refused
 });
 
-test('refinement flags --set-review-refs --set-chunk --set-estimate --set-complexity --set-layer --set-depends-on', () => {
+test('review P2: update on an archived item is refused for every flag that goes through it, and writes nothing', () => {
   const f = seed();
-  step(f, ['2', '--set-review-refs', 'references/review/code.md,references/review/tests.md', '--set-chunk', 'yes', '--set-estimate', '30',
-    '--set-complexity', 'high', '--set-layer', '3', '--set-depends-on', '1,003-gamma']);
-  step(f, ['2', '--set-depends-on', 'none', '--set-layer', 'process']);
-  step(f, ['2', '--set-depends-on', '99']);
-  step(f, ['2', '--set-chunk', 'no']);
-  step(f, ['2', '--set-review-refs', 'docs/notes.md']);
+  assert.equal(cli(['archive', '2', '--force'], { cwd: f.cons, tmp: f.t }).status, 0);
+  const file = archivedPath(f.folder, '002-beta', 'phases');
+  const before = readFileSync(file, 'utf8');
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  for (const args of [['002-beta', '--summary', 'new'], ['2', '--status', 'done'], ['002-beta', '--claim', 'me'], ['002-beta', '--release', 'me'], ['002-beta', '--close', '--summary', 'x'], ['002-beta', '--priority', '0']]) {
+    const r = run(f, args);
+    assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /002-beta is archived and cannot be edited \(archived items are read-only\)/, args.join(' '));
+  }
+  assert.equal(readFileSync(file, 'utf8'), before);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+});
+
+test('an item archived with --force counts as finished for a claim: it keeps its status, the path says archived', () => {
+  const f = seed();
+  assert.equal(run(f, ['2', '--set-depends-on', '1']).status, 0);
+  assert.equal(cli(['show', '2', '--agent', 'ada'], { cwd: f.cons, tmp: f.t }).status, 0);
+  assert.match(run(f, ['2', '--claim', 'ada']).stdout, /dependencies not done/); // open and live: blocks
+  assert.equal(cli(['archive', '1', '--force'], { cwd: f.cons, tmp: f.t }).status, 0);
+  assert.equal(readItem(archivedPath(f.folder, '001-alpha', 'phases')).fm.status, 'pending');
+  const claim = run(f, ['2', '--claim', 'ada']);
+  assert.equal(claim.status, 0, claim.stdout + claim.stderr);
+});
+
+// An item that belongs to a team is changed by its team's steps only: the plain update refuses every change of it, with one line, and writes nothing.
+const teamed = (f, ...seqs) => seqs.map(n => intoTeam(`00${n}-${['', 'alpha', 'beta', 'gamma'][n]}`, { cwd: f.cons, tmp: f.t }));
+
+test('review P1: update of an item of a team (field edit, note, append, rank, section) is refused and writes nothing', () => {
+  const f = seed();
+  teamed(f, 2);
+  const text = readFileSync(itemPath(f.folder, '002-beta'), 'utf8');
+  const head = git(f.home, 'rev-parse', 'HEAD');
+  for (const args of [['2', '--summary', 'x'], ['2', '--note', 'x'], ['2', '--append', 'x'], ['2', '--priority', '0'], ['2', '--section', 'Evidence', '--add-line', 'x']]) {
+    const r = run(f, args);
+    assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
+    assert.equal(r.stdout, `❌ ${OF_A_TEAM}\n`);
+  }
+  assert.equal(readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), text);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+});
+
+test('review P1: --replan naming an item of a team is refused and writes nothing; a replan of items outside any team never writes the files of the team\'s items', () => {
+  const f = seed();
+  teamed(f, 2, 3);
+  const files = () => JSON.stringify(['002-beta', '003-gamma'].map(n => readFileSync(itemPath(f.folder, n), 'utf8')));
+  const [before, head] = [files(), git(f.home, 'rev-parse', 'HEAD')];
+  const refused = run(f, ['--replan', '1,3']);
+  assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+  assert.equal(refused.stdout, `❌ ${REPLAN_TEAM(['003-gamma'])}\n`);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+  const [a, d] = [rankOf(f, '001-alpha'), rankOf(f, '004-delta')];
+  assert.equal(run(f, ['--replan', '004-delta,001-alpha']).status, 0);
+  assert.ok(rankOf(f, '004-delta') < rankOf(f, '001-alpha') && a < d, 'the two items outside a team trade their places');
+  assert.equal(files(), before, 'no file of a team item was written');
+});
+
+test('--status on an item of a team is refused: its status moves by the team steps, and nothing is written', () => {
+  const f = seed();
+  teamed(f, 1);
+  const before = readFileSync(itemPath(f.folder, '001-alpha'), 'utf8');
+  const r = run(f, ['1', '--status', 'closed']);
+  assert.equal(r.status, 1, r.stdout);
+  assert.equal(r.stdout, `❌ ${OF_A_TEAM}\n`);
+  assert.equal(readFileSync(itemPath(f.folder, '001-alpha'), 'utf8'), before);
+});
+
+test('refinement flags --set-chunk --set-estimate --set-complexity --set-layer --set-depends-on are stored; --set-review-refs is refused as unrecognized: exit 2, its text, nothing written', () => {
+  const f = seed();
+  const before = snapshot(f);
+  const gone = run(f, ['2', '--set-review-refs', 'references/review/code.md,references/review/tests.md']);
+  assert.equal(gone.status, 2, gone.stdout + gone.stderr);
+  assert.equal(gone.stderr, '❌ backlog: unrecognized arguments: --set-review-refs\n');
+  assert.equal(gone.stdout, '');
+  assert.deepEqual(snapshot(f), before);
+  const set = run(f, ['2', '--set-chunk', 'yes', '--set-estimate', '30', '--set-complexity', 'high', '--set-layer', '3', '--set-depends-on', '1,003-gamma']);
+  assert.equal(set.status, 0, set.stdout + set.stderr);
+  assert.match(set.stdout, /^✅ 002-beta updated \(chunk=yes, estimate_min=30, complexity=high, layer=3, depends_on=1,003-gamma\)\n/);
+  const got = fm(f, '002-beta').fm;
+  assert.deepEqual([got.chunk, got.estimate_min, got.complexity, got.layer, got.depends_on], [true, 30, 'high', '3', [1, '003-gamma']]);
+  const none = run(f, ['2', '--set-depends-on', 'none', '--set-layer', 'process']);
+  assert.equal(none.status, 0, none.stdout + none.stderr);
+  assert.deepEqual([fm(f, '002-beta').fm.depends_on, fm(f, '002-beta').fm.layer], [[], 'process']);
+  const missing = run(f, ['2', '--set-depends-on', '99']);
+  assert.equal(missing.status, 1);
+  assert.equal(missing.stdout, "❌ --set-depends-on: no item '99' in this backlog\n");
+  assert.equal(run(f, ['2', '--set-chunk', 'no']).status, 0);
+  assert.equal(fm(f, '002-beta').fm.chunk, false);
 });
 
 test('editSection changes one block and no other byte; a missing block is created at the end', () => {

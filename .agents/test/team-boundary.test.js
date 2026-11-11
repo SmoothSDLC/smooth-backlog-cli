@@ -5,9 +5,10 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, stat
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as index from '../../src/shared/index.js';
-import { TEAM_BOOL, TEAM_VALUE, cli, consumer, createdSlug, itemPath, sharedBacklog, teamNew } from './shared-fixtures.js';
+import { TEAM_BOOL, TEAM_VALUE, cli, consumer, createdSlug, damageItem, itemPath, readStored, sharedBacklog, teamNew, writeStored } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -191,4 +192,22 @@ test('the guard finds a plain command reading a team variable, a team import, an
   const found = breaches(copy);
   assert.equal(found.length, 3, found.join('\n'));
   assert.ok(found.some(x => x.startsWith('shared/store.js')) && found.some(x => x.startsWith('shared/move.js')) && found.some(x => x.startsWith('team/pop.js')), found.join('\n'));
+});
+
+test('a plain update still restores an unreadable team item: --restore names no change, it runs before the item is read', () => {
+  const f = fixture();
+  const s = teamItem(f);
+  const git = (...a) => execFileSync('git', a, { cwd: f.home, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  const { fm: was, body } = readStored(file(f, s));
+  writeStored(file(f, s), { ...was, summary: 'good one' }, body); // the last good version, committed and published
+  git('add', '-A'); git('commit', '-q', '-m', 'good one'); git('push', '-q');
+  assert.equal(fm(f, s).summary, 'good one');
+  damageItem(file(f, s), 'name');
+  git('add', '-A'); git('commit', '-q', '-m', 'damaged'); git('push', '-q');
+  const refused = run(f, ['update', s, '--summary', 'other']); // any other command stops at the unreadable item
+  assert.notEqual(refused.status, 0, refused.stdout);
+  const r = run(f, ['update', s, '--restore']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(fm(f, s).summary, 'good one');
+  assert.equal(fm(f, s).team, 't1');
 });

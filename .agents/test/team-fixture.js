@@ -9,9 +9,11 @@ import { BACKLOG_NAME, BACKLOG_OWNER, GIT_IDENTITY, cli, env as cliEnv, consumer
 import { toFile } from '../../src/team/item.js';
 import { itemFileName } from '../../src/shared/store.js';
 
+// A child that hangs fails its test (spawnSync kills it and reports no status) and does not hang the suite.
+export const CHILD_TIMEOUT = 60000;
 export const readJson = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
 export const TEMPLATES = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 'single-agent', 'patterns'].map(n => [n, readJson(`../../templates/teams/${n}.json`)]));
-export const git = (cwd, ...a) => { const p = spawnSync('git', a, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } }); if (p.status) throw new Error(`git ${a.join(' ')}: ${p.stderr}`); return p.stdout.trim(); };
+export const git = (cwd, ...a) => { const p = spawnSync('git', a, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY }, timeout: CHILD_TIMEOUT }); if (p.status) throw new Error(`git ${a.join(' ')}: ${p.stderr}`); return p.stdout.trim(); };
 const BIN = resolve(import.meta.dirname, '..', '..', 'bin', 'backlog.js');
 const TEAM_VARIABLES = ['TEAM_NAME', 'TEAM_REPOSITORY', 'TEAM_BRANCH', 'AGENT', 'SESSION'].map(n => `SMOOTH_BACKLOG_CLI_${n}`);
 const quiet = Object.fromEntries(TEAM_VARIABLES.map(k => [k, '']));
@@ -53,7 +55,7 @@ export function world(t, teams = TEMPLATES.parallel, { prefix = 'team-world-' } 
   const teamFile = join(cons, '.backlog', 'teams.json');
   writeFileSync(teamFile, typeof teams === 'string' ? teams : JSON.stringify(teams));
   const folder = join(home, 'acme', 'app');
-  const run = (args, extra = {}, verb = 'new') => cli(['team', verb, ...args], { cwd: cons, tmp, plain: true, env: { ...quiet, ...extra } });
+  const run = (args, extra = {}, verb = 'new', timeout = CHILD_TIMEOUT) => cli(['team', verb, ...args], { cwd: cons, tmp, plain: true, timeout, env: { ...quiet, ...extra } });
   const files = () => (existsSync(join(folder, 'phases')) ? readdirSync(join(folder, 'phases')).sort() : []);
   const item = seq => JSON.parse(readFileSync(fileOf(folder, seq), 'utf8'));
   const config = () => JSON.parse(readFileSync(join(cons, '.backlog', 'config.json'), 'utf8'));
@@ -75,6 +77,6 @@ export function inside(t, teams = TEMPLATES.parallel) {
   git(ra, 'add', '-A'); git(ra, 'commit', '-qm', 'seed'); git(ra, 'push', '-q', '-u', 'origin', 'main');
   git(dir, 'clone', '-q', bare, rb);
   const folder = join(ra, '.backlog', 'local', 'repository');
-  const run = (args, extra = {}, verb = 'new') => spawnSync(process.execPath, [BIN, 'team', verb, ...args], { cwd: ra, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY, SMOOTH_BACKLOG_CLI_HOME: '', XDG_CONFIG_HOME: join(dir, 'xdg'), ...quiet, ...extra } });
+  const run = (args, extra = {}, verb = 'new', timeout = CHILD_TIMEOUT) => spawnSync(process.execPath, [BIN, 'team', verb, ...args], { cwd: ra, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY, SMOOTH_BACKLOG_CLI_HOME: '', XDG_CONFIG_HOME: join(dir, 'xdg'), ...quiet, ...extra }, timeout });
   return { dir, bare, ra, rb, folder, teamFile, run, records: () => recordsOf(join(dir, 'xdg')), refuse: refuser(bare) };
 }

@@ -71,7 +71,7 @@ answer is idle with the instruction to end the turn without polling (a passed or
 rework), and when every item of its team is done it is told to have the work item reviewed and close it.
 
 In addition the lead gets the team's work item: an item of this repository and branch whose team is the team and that has no stage
-(backlog team update <item> --team <name> --agent <you> --set-team <name> gives an item to a team, and backlog team new files a new one; the items split from it carry a stage and are the members' work).
+(backlog team new files a new item into a team; the items split from it carry a stage and are the members' work).
 A refined work item (its stage set, its refinement review passed) is an ordinary item any member may claim; team pop offers a work
 item only while its stage is unset, and the lead still refines it and splits it only when it is too big for one member. When the lead
 holds an open work item that has no other item of the team, the answer is continue with that item. When an earlier session of the
@@ -145,7 +145,7 @@ The item gets the number one above the highest number the repository's backlog e
 the step takes are the names its rules read as $arg.<name> (--estimate and --parent, for example); --name is always one of them and is required. Any other
 --<argument> <value> is refused with the list of what the step takes (exit 2). A value may hold spaces or be a negative number. The caller is the agent
 (--agent, else SMOOTH_BACKLOG_CLI_AGENT; it is a name, not a proof); the team is --team, else SMOOTH_BACKLOG_CLI_TEAM_NAME, else the "team" key of
-.backlog/config.json. The team's steps and what each takes: backlog team query steps --team <name>. The team file must be valid as a whole
+.backlog/config.json. The team's steps are the words its rules name in the team file (rules.table). The team file must be valid as a whole
 (backlog team validate); the "user" key of the configuration is never read.
 
 Scenario: the agent member-1 of the team parallel files a job of 45 minutes. It runs backlog team new --team parallel --agent member-1 --name "Parser" --estimate 45 in the
@@ -197,7 +197,7 @@ names the step and whose condition holds decides, and a step no rule allows is r
 nothing. An allowance applies the rule's effects (fields of the item, related items such as a parent's list of children, the place in the queue, a note in the item's body, the team,
 the branch, archiving or deleting the item), commits and publishes only the command's own commit, "team <step> <slug>", and then prints the change.
 
-The step is the second word, never an option: a word that no rule of the team names is refused with the list of the team's steps (exit 2; backlog team query steps --team <name>).
+The step is the second word, never an option: a word that no rule of the team names is refused with the list of the team's steps (exit 2).
 The arguments of a step are the names its rules read as $arg.<name>; --<argument> <value> gives one (the value is the next word, or follows an equals sign, may hold spaces or be
 negative; a repeated argument takes the last value). An argument the step does not take is refused with the list of what it takes (exit 2). The caller is the agent (--agent, else
 SMOOTH_BACKLOG_CLI_AGENT; it is a name, not a proof); the team is --team, else SMOOTH_BACKLOG_CLI_TEAM_NAME, else the "team" key of .backlog/config.json. The team file must be valid as a
@@ -330,7 +330,7 @@ Options:
       Open items that wait for dependencies that are not done, with the status and holder of each dependency .
   --decisions
       The items that wait in stage review-hitl for an owner decision, each with its question, for the morning report; with
-      --all every branch. Answer one with backlog team update <item> --team <team> --agent <you> --decision "<answer>".
+      --all every branch. Answer one with the step of the team's rules that takes the answer: backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]....
   --wip
       The work in progress of the whole backlog repository against its limits (wip-limits.json at its top folder:
       overall, repository, branch, team, agent, each a number or {"default": n, "<key>": n} with the key owner/name, the

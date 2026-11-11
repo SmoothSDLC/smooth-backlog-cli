@@ -7,7 +7,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSyn
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape, changeItem, readItem, ENVELOPE } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemName, itemPath, itemRel, itemOfText, sharedBacklog, archivedRel, itemNames, archivedPath, reEscape, changeItem, readItem, ENVELOPE } from './shared-fixtures.js';
 import { cliAsync, gitIn, sleep } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
@@ -249,6 +249,40 @@ test('review P2: update records its published identity when an added item is ren
   assert.equal(stale.status, 5, stale.stdout + stale.stderr);
   assert.equal(gitIn(bare, 'rev-parse', 'main'), head);
   assert.equal(gitIn(b.home, 'status', '--porcelain'), '');
+  assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
+});
+
+test('review P2: a destination-renumbered move caches the moved item and refuses a subsequent stale summary overwrite', async t => {
+  const [a, b, { bare }] = writers(t);
+  const mover = process.env.SMOOTH_BACKLOG_CLI_AGENT || configUser(a.cons); // cliAsync uses the inherited actor
+  for (const name of ['alpha', 'gamma']) assert.equal(cli(NEW(name), { cwd: a.cons, tmp: a.tmp }).status, 0);
+  assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
+  const [destA, destB] = [consumer(a.tmp, 'new', 'place'), consumer(b.tmp, 'new', 'place')]; // each writer's clone of the destination repository
+  const hold = holdFirstPush(b);
+  const move = cliAsync(['move', '1', '--to-repository', 'new/place'], { cwd: b.cons, tmp: b.tmp });
+  await hold.held();
+  let collision;
+  try {
+    collision = cli(NEW('delta'), { cwd: destA, tmp: a.tmp }); // another clone files item 1 of the destination
+  } finally { hold.release(); }
+  const moved = await move.done;
+  assert.equal(collision.status, 0, collision.stdout + collision.stderr);
+  assert.equal(moved.status, 0, moved.stdout + moved.stderr);
+  assert.match(moved.stdout, /renumbered 001 -> 002/);
+  const path = `new/place/${itemRel('002-alpha')}`;
+  assert.equal(itemOfText(gitIn(bare, 'show', `main:${path}`)).fm.phase, '002-alpha');
+  assert.equal(gitIn(b.home, 'rev-parse', 'HEAD'), gitIn(bare, 'rev-parse', 'main'));
+
+  const changed = cli(['update', '002-alpha', '--summary', 'remote summary', '--by', 'other-writer'], { cwd: destA, tmp: a.tmp });
+  assert.equal(changed.status, 0, changed.stdout + changed.stderr);
+  const head = gitIn(bare, 'rev-parse', 'main');
+  // Do not query the destination first: the move itself must have recorded what the mover wrote.
+  const stale = cli(['update', '002-alpha', '--summary', 'stale summary', '--by', mover], { cwd: destB, tmp: b.tmp });
+  assert.equal(stale.status, 5, stale.stdout + stale.stderr);
+  assert.match(stale.stderr, /item 002-alpha was changed by other-writer .* after you last read it/);
+  assert.equal(gitIn(bare, 'rev-parse', 'main'), head, 'the stale write published nothing');
+  assert.equal(itemOfText(gitIn(bare, 'show', `main:${path}`)).fm.summary, 'remote summary');
+  assert.equal(gitIn(b.home, 'status', '--porcelain', '--untracked-files=no'), '');
   assert.equal(gitIn(b.home, 'rev-list', '--count', 'origin/main..HEAD'), '0');
 });
 
@@ -622,6 +656,14 @@ test('publication identity: an upstream archived sequence colliding with an exis
     store.write({ path: archivedPath(a.folder, '005-other'), fm: { ...ENVELOPE, phase: '005-other', seq: 5, status: 'archived' }, body: '\narchived\n' }, a.folder);
   });
   rejectedPublication(t, b, bare, result, /seq.*5.*005-other/);
+});
+
+test('publication graph: a claim is refused when its completed dependency reopens upstream', async t => {
+  const { b, bare, result } = await race(t,
+    // the dependent exists before the producer is finished; b's claim reaches its push and the upstream reopen refuses it
+    [NEW('dependency'), [...NEW('work'), '--depends-on', '1'], ['update', '1', '--claim', 'prod'], ['show', '1', '--agent', 'prod'], ['update', '1', '--status', 'done', '--by', 'prod']],
+    ['update', '1', '--status', 'pending', '--priority', '99'], ['update', '2', '--claim', 'amy']);
+  rejectedPublication(t, b, bare, result, /dependencies not done/);
 });
 
 test('publication safety: upstream conflict markers abort an otherwise disjoint write', async t => {

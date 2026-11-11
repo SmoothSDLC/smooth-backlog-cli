@@ -38,6 +38,32 @@ function fixture(repos = ['demo']) {
   return { t, home, cons, run, make, limits, refine };
 }
 
+test('034: the overall level refuses a claim and a status change that start work; only the exact word \'in progress\' starts; a limits file that cannot be read holds nobody', () => {
+  const f = fixture(['demo', 'other']);
+  const a = f.make('demo', 'one');
+  const o = f.make('other', 'elsewhere');
+  f.run('demo', ['update', a, '--claim', 'amy']);
+  f.limits({ overall: 1 });
+  assert.match(f.run('other', ['update', o, '--claim', 'dan'], 1).stdout, /the overall work-in-progress limit.* is 1 and 1 item\(s\) are in progress/); // only the owner's file changes overall
+  assert.match(f.run('other', ['update', o, '--status', 'in progress', '--by', 'dan'], 1).stdout, /the overall work-in-progress limit.* is 1 and 1 item\(s\) are in progress/); // a status change starts work too
+  // only the exact word 'in progress' counts: a typed in_progress is an ordinary open word that starts nothing and counts for nothing
+  assert.equal(f.run('other', ['update', o, '--status', 'in_progress', '--by', 'dan']).status, 0);
+  assert.equal(readItem(itemPath(join(f.home, 'acme', 'other'), o)).fm.status, 'in_progress');
+  // a limits file that cannot be read holds nobody (owner 2026-10-30), and says so
+  writeFileSync(join(f.home, 'wip-limits.json'), '{ not json');
+  assert.match(f.run('other', ['update', o, '--claim', 'dan']).stderr, /wip-limits\.json cannot be read or is no JSON .*no work-in-progress limit applies until it is fixed/);
+});
+
+test('034: a reclaim of an item set back to pending is a start: the repository limit counts it', () => {
+  const f = fixture();
+  const [a, b] = ['one', 'two'].map(n => f.make('demo', n));
+  f.run('demo', ['update', a, '--claim', 'amy']);
+  f.run('demo', ['update', a, '--status', 'pending', '--by', 'amy']);
+  f.limits({ repository: 1 });
+  f.run('demo', ['update', b, '--claim', 'bob']);
+  assert.match(f.run('demo', ['update', a, '--claim', 'amy'], 1).stdout, /the repository work-in-progress limit of acme\/demo is 1/);
+});
+
 test('034: query --wip prints the counts and the stale items; a renumbering leaves updated of the re-ranked items', () => {
   const f = fixture();
   f.limits({ repository: 5, stale_hours: 1 });

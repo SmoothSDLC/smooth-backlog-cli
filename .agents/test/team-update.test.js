@@ -5,9 +5,12 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { TEMPLATES, fileOf, git, inside, putItem, world } from './team-fixture.js';
+import { CHILD_TIMEOUT, TEMPLATES, fileOf, git, inside, putItem, world } from './team-fixture.js';
 import { GIT_IDENTITY } from './shared-fixtures.js';
 import { stepNames } from '../../src/team/steps.js';
+import { validate, errors } from '../../src/team/rules/validate.js';
+import * as index from '../../src/shared/index.js';
+import { mkdirSync } from 'node:fs';
 
 const PARALLEL = TEMPLATES.parallel; const ENTRY = PARALLEL.parallel;
 const BASE = ['--team', 'parallel', '--agent', 'member-1'];
@@ -291,7 +294,7 @@ test('dispatch level: the update route installs no seam (the old routes do)', t 
     const before = seam.entry; const code = await teamCli.run(JSON.parse(process.env.ARGV));
     process.stdout.write('\\n' + JSON.stringify({ before, code, entry: seam.entry, isMember: seam.isMember, also: seam.alsoActive({ status: 'refining', refiner: 'a' }), scope: seam.inScope({}) }));`;
   const env = { ...process.env, ...GIT_IDENTITY, ...w.env, SMOOTH_BACKLOG_CLI_TEAM_NAME: '', SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: '', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: '', ARGV: JSON.stringify(['update', '1', 'claim', ...BASE]) };
-  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { cwd: w.cons, encoding: 'utf8', env });
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { cwd: w.cons, encoding: 'utf8', env, timeout: CHILD_TIMEOUT });
   assert.equal(r.status, 0, r.stderr);
   const cut = r.stdout.lastIndexOf('\n'); const out = r.stdout.slice(0, cut); const json = r.stdout.slice(cut + 1);
   assert.match(out, /001-job: claim/);
@@ -305,4 +308,43 @@ test('--help is answered by the router before anything is read, and says the ste
   assert.match(r.stdout, /^backlog team update — /);
   assert.match(r.stdout, /backlog team update <item> <step>/);
   assert.equal(existsSync(join(w.cons, '.backlog', 'config.json')), false);
+});
+
+// A team whose table also has a step for each place a rule can give: first, last, before and after another item.
+const PLACING = { parallel: { ...ENTRY, rules: { ...ENTRY.rules, table: [...ENTRY.rules.table, { id: 'top', step: 'top', do: { place: 'first' } }, { id: 'bottom', step: 'bottom', do: { place: 'last' } },
+  { id: 'ahead', step: 'ahead', do: { place: { before: '$arg.target' } } }, { id: 'behind', step: 'behind', do: { place: { after: '$arg.target' } } }] } } };
+
+test('the place a rule gives is where index.json puts the item (first, last, before, after), and no allowed step moves numbers.json', t => {
+  const w = seeded(t, [item(1), item(2), item(3), item(4)], PLACING);
+  const numbers = join(w.folder, 'numbers.json'); mkdirSync(w.folder, { recursive: true });
+  writeFileSync(numbers, `${JSON.stringify({ last: 4 })}\n`);
+  writeFileSync(index.file(w.folder), index.text({ branches: { main: [1, 2, 3, 4].map(seq => ({ seq, slug: `00${seq}-job`, name: 'job', status: 'ready' })) } }));
+  w.publish('seed the order');
+  const order = () => index.read(w.folder).branches.main.map(e => e.seq);
+  const was = readFileSync(numbers, 'utf8');
+  for (const [seq, name, args, want] of [[3, 'top', [], [3, 1, 2, 4]], [1, 'bottom', [], [3, 2, 4, 1]], [4, 'ahead', ['--target', '2'], [3, 4, 2, 1]], [3, 'behind', ['--target', '1'], [4, 2, 1, 3]]]) {
+    const r = update(w, String(seq), name, [...BASE, ...args]);
+    assert.equal(r.status, 0, `${name}: ${r.stdout}${r.stderr}`);
+    assert.deepEqual(order(), want, name);
+    assert.equal(readFileSync(numbers, 'utf8'), was, `${name}: the counter is not moved by a step that makes no item`);
+  }
+  assert.equal(git(w.home, 'status', '--short'), '');
+});
+
+test('a step list with anything but words names no step: the same words for the command and for the check of the rules', () => {
+  const entry = { ...ENTRY, rules: { ...ENTRY.rules, table: [{ id: 'a', step: ['kept', 5], do: {} }, { id: 'b', step: ['listed', 'also'], do: {} }] } };
+  assert.deepEqual(stepNames(entry), ['also', 'listed', 'new']);
+  const found = errors(validate({ parallel: entry })).filter(e => /step must be a word/.test(e.problem));
+  assert.deepEqual(found.map(e => e.path), ['rules.table[0].step']); // the check of the rules names the same rule as the one that names no step
+});
+
+test('a child that never ends is killed at its timeout and fails its test: both runners of the fixture, the backlog beside the code and inside it', t => {
+  const hang = join(world(t).cons, '..', 'hang.cjs');
+  writeFileSync(hang, 'setInterval(() => {}, 1000);\n'); // the command ends, the process does not
+  for (const w of [seeded(t), insideWith(t, [item(1)])]) {
+    const started = Date.now();
+    const r = w.run(['1', 'claim', ...BASE], { NODE_OPTIONS: `--require ${hang}` }, 'update', 4000);
+    assert.ok(r.status === -1 || r.status === null, `killed, no status: ${r.status}`);
+    assert.ok(Date.now() - started < 30000, 'killed at the timeout the runner was given');
+  }
 });

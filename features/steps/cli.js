@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { step } from '../support/gherkin.js';
+import { step, runStep } from '../support/gherkin.js';
 import { TEMPLATES } from '../../.agents/test/team-fixture.js';
 import { damageItem, derivedFm, itemNames, itemPath, readItem, slugOfName, writeItem } from '../../.agents/test/shared-fixtures.js';
 
@@ -28,6 +28,18 @@ step(/^a ready item "([^"]+)" for the team "([^"]+)"$/, (w, name, team) => {
   assert.ok(entry, `no team ${team} in the team file the scenario wrote (${Object.keys(written)})`);
   const { values } = entry.item.status;
   w.seedTeamItem(entry, key, { name, fields: { status: values.includes('ready') ? 'ready' : values[0], ...('estimate' in entry.item ? { estimate: 20 } : {}) } });
+});
+// a stray change in the folder that holds the items, and the checks that a seed commit leaves it alone
+step(/^a stray file is left uncommitted in the backlog repository$/, w => { writeFileSync(join(w.backlogRepo(), 'stray.txt'), 'stray'); });
+step(/^the last commit of the backlog repository changed only item (\d+)$/, (w, n) => {
+  const files = w.gitIn(w.backlogRepo(), 'show', '--name-only', '--format=', 'HEAD').split('\n');
+  assert.equal(files.length, 1, `the last commit changed: ${files}`);
+  assert.ok(files[0].includes(`/${String(n).padStart(3, '0')}-`), `not item ${n}: ${files[0]}`);
+});
+step(/^the stray file is still uncommitted$/, w => assert.match(w.gitIn(w.backlogRepo(), 'status', '--porcelain'), /\?\? stray\.txt/));
+// a check that must fail: the step in backticks is run and has to throw
+step(/^the step `(.+)` fails$/, async (w, text) => {
+  await assert.rejects(() => runStep(text, w), undefined, `the step passed: ${text}`);
 });
 // in the backlog repository the team configuration is a committed file at its root (an empty one when the scenario has not written any)
 step(/^the team configuration is a committed file$/, w => {

@@ -25,7 +25,8 @@ test('git grep for the class words finds nothing in src, COMMANDS.md, README.md,
   // git grep exits 1 with no output when nothing matches (0: a match, 2: an error). The ERE is the
   // lead's amended scope: --classes is covered by the help regex of the two tests above, not by the grep.
   const r = spawnSync('git', ['grep', '-n', '-i', '-E', 'work[_ -]?class|review[_ -]?class',
-    '--', 'src', 'COMMANDS.md', 'README.md', 'templates', 'CHANGELOG.md'], { cwd: repoRoot, encoding: 'utf8' });
+    // the migration is the one module that must name the retired keys: it drops them (design chapter 02 section 5)
+    '--', 'src', ':(exclude)src/team/migrate-convert.js', 'COMMANDS.md', 'README.md', 'templates', 'CHANGELOG.md'], { cwd: repoRoot, encoding: 'utf8' });
   assert.equal(r.status, 1, `git grep exit ${r.status}: ${r.stdout || r.stderr}`);
   assert.equal(r.stdout, '', `git grep found: ${r.stdout}`);
 });

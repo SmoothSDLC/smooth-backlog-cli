@@ -1,0 +1,17 @@
+{
+  "seq": 7,
+  "slug": "007-x",
+  "name": "X",
+  "team": "t1",
+  "repository": "acme/other",
+  "branch": "b",
+  "created": "2026-01-01T00:00:00Z",
+  "updated": "2026-01-02T00:00:00Z",
+  "updated_by": "ann",
+  "fields": {
+    "status": "pending",
+    "objective": "o"
+  },
+  "body": "body\n",
+  "history": []
+}

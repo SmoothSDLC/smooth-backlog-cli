@@ -125,3 +125,10 @@ test('the step of a move is move', () => {
   assert.equal(e.step, 'move');
   assert.deepEqual(e.changes.branch, ['main', 'release']);
 });
+
+test('an update entry that sets seq on an item that had none is printed as a change, not as an addition', () => {
+  const f = build();
+  const doc = JSON.parse(readFileSync(f.file, 'utf8'));
+  writeFileSync(f.file, JSON.stringify({ ...doc, history: [{ at: '2026-01-01T00:00:00Z', by: 'ann', session: '', step: 'update', changes: { seq: [null, 12] }, note: '' }] }));
+  assert.equal(f.ok(['history', '1']).stdout, '  2026-01-01T00:00:00Z  update         ann  seq: null -> 12\n');
+});

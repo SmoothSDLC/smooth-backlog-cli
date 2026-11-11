@@ -251,10 +251,14 @@ function writeItem(t, item, root) {
   const key = resolve(item.path);
   if (t && !t.has(key)) t.set(key, { before: existsSync(item.path) ? (() => { try { return readItemFile(item.path).fm; } catch { return null; } })() : null }); // what the command found
   const d = t?.get(key);
-  if (d?.step) { // one entry per command: a later write of it replaces the command's own entry (or appends it); every other entry of the document stays
-    const own = JSON.stringify(d.entry ?? null);
+  if (d?.step && d.open) { // one entry per command: a later addEvent of it replaces the command's own entry (the newest equal one) or appends it; every other entry of the document stays
+    const at = entriesOf(item.fm).map(e => JSON.stringify(e)).lastIndexOf(JSON.stringify(d.entry ?? null));
     d.entry = entryOf(d, item.fm);
-    item.fm.events = [...entriesOf(item.fm).filter(e => JSON.stringify(e) !== own), ...[d.entry].filter(Boolean)];
+    item.fm.events = [...entriesOf(item.fm).filter((_, i) => i !== at), ...[d.entry].filter(Boolean)];
+  } else if (d?.step) { // a write the publication path makes after the command (a renumbering remapping the references): its own entry, against the file it rewrites; the command's entry stays as it was
+    const disk = existsSync(item.path) ? (() => { try { return readItemFile(item.path).fm; } catch { return null; } })() : null;
+    const changes = changesOf(disk, item.fm);
+    if (Object.keys(changes).length) item.fm.events = [...entriesOf(item.fm), { at: now(), by: actor(), session: process.env.SMOOTH_BACKLOG_CLI_SESSION ?? '', step: 'renumber', changes, note: '' }];
   }
   if (!existsSync(item.path)) created(base, relative(base, item.path));
   note(item.path);
@@ -430,7 +434,8 @@ export function addEvent(folder, path, { event, note = '', before }) { // before
   const text = String(note).replace(/\s+/g, ' ').trim();
   if (!d.step) { if (before) d.before = before; d.step = event; d.at = now(); d.note = ''; d.planning = ''; }
   if (event === 'planning_event') d.planning ||= text; else d.note ||= text;
-  writeItem(t, { path: abs, fm, body }, folder);
+  d.open = true;
+  try { writeItem(t, { path: abs, fm, body }, folder); } finally { d.open = false; }
   return d.entry;
 }
 // the one way an item write marks itself: when, and by whom (see seen.js)

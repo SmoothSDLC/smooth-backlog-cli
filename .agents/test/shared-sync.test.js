@@ -598,5 +598,20 @@ test('a later write of the same command keeps every entry of the document it wri
     store.write({ path, fm: { ...doc.fm, events: [foreign, ...doc.fm.events], summary: 'remapped' }, body: doc.body });
   });
   const events = store.load(f.folder)[0].fm.events;
-  assert.deepEqual(events.map(e => e.note), ['the other clone', 'mine']);
+  assert.deepEqual(events.map(e => e.note), ['the other clone', 'mine', '']);
+  assert.deepEqual(events[1].changes, {}, "the command's entry holds only the command's own changes");
+  assert.deepEqual([events[2].step, Object.keys(events[2].changes)], ['renumber', ['summary']], 'the later writer has an entry of its own');
+});
+
+test('the command\'s own entry is replaced by its last equal one only: an earlier identical entry survives', t => {
+  const f = fixture(t);
+  putItem(f.folder, 1, 'alpha');
+  guarded(() => {
+    store.addEvent(f.folder, itemRel('001-alpha'), { event: 'update', note: 'same' });
+    const own = store.load(f.folder)[0].fm.events[0];
+    const doc = store.load(f.folder)[0];
+    store.write({ path: itemPath(f.folder, '001-alpha'), fm: { ...doc.fm, events: [{ ...own }, own] }, body: doc.body }); // an equal entry before it
+    store.addEvent(f.folder, itemRel('001-alpha'), { event: 'planning_event', note: 'planning' });
+  });
+  assert.equal(store.load(f.folder)[0].fm.events.length, 2);
 });

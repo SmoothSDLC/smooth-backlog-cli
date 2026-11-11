@@ -2,7 +2,7 @@
 // The cases of rule-cases.json that carry place, archived, bound, branch, delete or say are replayed here at the function level.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, statSync, utimesSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import * as index from '../../src/shared/index.js';
@@ -247,4 +247,58 @@ test('a user item that carries a legacy priority keeps its rank when a team comm
   for (const [n, pr] of [[2, 5], [3, 0]]) writeFileSync(join(folder, `phases/${slugOf(n)}.json`), toFile({ ...mk(n, '', { team: 'x', def: {} }, {}, { status: 'pending', priority: pr }) }, entry));
   await run(folder, { file: parallel, team: P, caller: 'lead-1', stepName: 'new', args: { name: 'z', estimate: '30' }, number: 4 });
   assert.ok(order(folder).indexOf(3) < order(folder).indexOf(2), 'priority 0 before priority 5');
+});
+
+test('apply works without seq for a new item: the number is the item', async t => {
+  const folder = scratch(t);
+  putP(folder, pitem(30, { status: 'splitting' }));
+  const { ctx, view } = contextOf({ folder, entry: parallel[P], team: P, caller: 'lead-1', args: { name: 'c', estimate: '30', parent: '30' }, session: SESSION, now: NOW });
+  const result = create(ctx, 31);
+  const done = await apply({ folder, file: parallel, team: P, entry: parallel[P], result, view, number: 31, caller: 'lead-1', session: SESSION, now: NOW, step: 'new' });
+  assert.deepEqual(done.items.map(x => x.seq).sort(), [30, 31]);
+  assert.equal(existsSync(join(folder, done.items.find(x => x.seq === 31).path)), true);
+});
+
+test('openOf: a team named like an object property has no entry, so the built-in words finish its items; another team\'s own final word is respected', () => {
+  const o = openOf({ a: { item: { status: { final: ['x'] } } }, b: { item: { status: { final: ['y'] } } } });
+  for (const team of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) { assert.equal(o({ fm: { team, status: 'closed' } }), false, team); assert.equal(o({ fm: { team, status: 'pending' } }), true, team); }
+  assert.equal(o({ fm: { team: 'a', status: 'x' } }), false); assert.equal(o({ fm: { team: 'a', status: 'y' } }), true);
+  assert.equal(o({ fm: { team: 'b', status: 'y' } }), false); assert.equal(o({ fm: { team: 'b', status: 'x' } }), true);
+});
+
+test('place counts only the team\'s own open entries: t1 u9 t2 t3 with t3 placed before t2 gives t1 u9 t3 t2', () => {
+  const entry = parallel[P]; const other = { status: 'ready' };
+  const items = [pitem(1, other), mk(9, '', { team: P, def: entry }, {}, { status: 'pending' }), pitem(2, other), pitem(3, other)];
+  const view = views(items);
+  const folder = scratch({ after() {} });
+  idx(folder, 1, 9, 2, 3);
+  const b = build({ folder, file: parallel, team: P, entry, result: { rule: 'r', items: new Map([[3, items[3]]]), changes: new Map(), delete: false, say: null, notes: [], place: { before: 2 } }, view, seq: 3, caller: 'a', session: SESSION, now: NOW, step: 's' });
+  assert.deepEqual(b.idx.branches.main.map(e => e.seq), [1, 9, 3, 2]);
+  assert.equal(b.place.skipped, null);
+});
+
+test('an item with earlier history keeps every entry and gains exactly one; a related item without changes is not rewritten (bytes and mtime)', async t => {
+  const folder = scratch(t);
+  const old = [{ at: T0, by: 'ann', session: '', step: 'new', changes: {}, note: '' }, { at: T0, by: 'bob', session: 'x', step: 'claim', changes: { holder: ['', 'bob'] }, note: 'n' }];
+  putP(folder, pitem(10, { status: 'passed', holder: 'member-1', children: [11, 12] }, { history: old }), pitem(11, { status: 'closed', parent: 10 }), pitem(12, { status: 'closed', parent: 10 }));
+  const p11 = join(folder, `phases/${slugOf(11)}.json`);
+  const when = new Date('2020-01-01T00:00:00Z'); utimesSync(p11, when, when);
+  const bytes = readFileSync(p11, 'utf8'); const mtime = statSync(p11).mtimeMs;
+  const { ctx, view } = contextOf({ folder, entry: parallel[P], team: P, caller: 'member-1', args: {}, session: SESSION, now: NOW });
+  const at = n => ctx.items.find(i => i.seq === n);
+  const result = { rule: 'r', items: new Map([[10, { ...at(10), fields: { ...at(10).fields, status: 'closed' } }], [11, at(11)]]), changes: new Map([[10, { status: ['passed', 'closed'] }], [11, {}]]), delete: false, say: null, notes: [], place: null };
+  await apply({ folder, file: parallel, team: P, entry: parallel[P], result, view, seq: 10, caller: 'member-1', session: SESSION, now: NOW, step: 'close' });
+  const h = readItems(folder).items.find(x => x.item.seq === 10).item.history;
+  assert.equal(h.length, 3); assert.deepEqual(h.slice(0, 2), old); assert.equal(h[2].step, 'close');
+  assert.equal(readFileSync(p11, 'utf8'), bytes); assert.equal(statSync(p11).mtimeMs, mtime);
+});
+
+test('a failed archive removes the archive folder it created and nothing else', async t => {
+  if (process.getuid?.() === 0) return t.skip('permissions do not bind root');
+  const folder = scratch(t);
+  putP(folder, pitem(50, { status: 'closed' }));
+  chmodSync(join(folder, 'phases'), 0o555);
+  try { await assert.rejects(run(folder, { file: parallel, team: P, caller: 'lead-1', stepName: 'archive', item: 50 })); } finally { chmodSync(join(folder, 'phases'), 0o755); }
+  assert.equal(existsSync(join(folder, 'archive')), false);
+  assert.equal(existsSync(join(folder, `phases/${slugOf(50)}.json`)), true);
 });

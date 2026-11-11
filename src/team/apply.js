@@ -1,6 +1,6 @@
 // Applies the result of a step to the folder: the items it changed (each with one history entry), the moved or deleted file, the number of a new item, the index.
 // It evaluates nothing, reads no team file, takes no lock, pulls and publishes nothing: the command does, and a throw here puts every path it wrote back.
-import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, rmdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import * as index from '../shared/index.js';
@@ -12,7 +12,7 @@ import { readItems, toFile, viewOf } from './item.js';
 
 // Open, as the index asks it of the view of an item: a team that has an entry in the file finishes an item by that entry's final words, anything else by the built-in ones.
 export const openOf = file => view => {
-  const entry = view.fm.team ? file?.[view.fm.team] : undefined;
+  const entry = view.fm.team && file && Object.hasOwn(file, view.fm.team) ? file[view.fm.team] : undefined; // own keys only: a team called constructor is no entry
   const final = entry ? entry.item?.status?.final ?? [] : FINAL;
   return !final.includes(Object.hasOwn(view.fm, 'status') ? view.fm.status : 'pending');
 };
@@ -22,7 +22,7 @@ const baseOf = path => path.slice(path.lastIndexOf('/') + 1);
 
 // The pure part: from the step's result to the texts to write, the paths, the index and what to print. view: the views of the folder's items (contextOf's);
 // seq: the item the step ran on; number: the number taken from the counter when the item is new; file: the whole team file (other teams' final words).
-export function build({ folder, file, team, entry, result, view, seq = number, number, caller, session, now, step }) {
+export function build({ folder, file, team, entry, result, view, number, seq = number, caller, session, now, step }) {
   const live = n => view.find(v => v.fm.seq === n && v.path.startsWith('phases/'));
   const openFn = openOf({ ...file, [team]: entry });
   const scope = v => v.fm.team === team;
@@ -71,14 +71,17 @@ export function build({ folder, file, team, entry, result, view, seq = number, n
 // Writes what build says, journalled, then the number and the index. Resolves to build's answer.
 export async function apply(args) {
   const { folder } = args;
-  return undoOnThrow(folder, () => {
+  const made = []; // the folders this call created: a failed command leaves none behind (the journal restores files, not folders)
+  const mkdirs = dir => { for (let d = dir; d.length > folder.length && !existsSync(d); d = dirname(d)) made.push(d); mkdirSync(dir, { recursive: true }); }; // deepest first
+  try { return await run(); } catch (e) { for (const d of made) { try { rmdirSync(d); } catch { /* not empty: it holds something else */ } } throw e; }
+  function run() { return undoOnThrow(folder, () => {
     // a folder with items and no index keeps the order its items carried, read raw (never through the user reader, which refuses a field named events)
     if (!index.exists(folder)) index.seed(folder, readItems(folder).items.map(({ path, item }) => { const v = viewOf(item, path); return item.team ? v : { ...v, fm: { ...v.fm, ...(item.fields.priority !== undefined ? { priority: item.fields.priority } : {}) } }; }));
     const b = build(args);
     const touch = rel => { const p = join(folder, rel); assertNoSymlinks(folder, p); return p; };
     for (const x of b.items) {
       const dst = touch(x.path);
-      mkdirSync(dirname(dst), { recursive: true });
+      mkdirs(dirname(dst));
       if (x.from !== null && x.from !== x.path) {
         const src = touch(x.from);
         if (existsSync(dst)) throw new BacklogError('STORAGE_ERROR', `an archived item named ${baseOf(x.path)} already exists; archiving it again would replace that item`, 2);
@@ -91,5 +94,5 @@ export async function apply(args) {
     if (b.number !== null) record(folder, b.number);
     index.write(folder, b.idx);
     return b;
-  });
+  }); }
 }

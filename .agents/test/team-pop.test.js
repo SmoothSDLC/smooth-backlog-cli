@@ -135,6 +135,22 @@ test('--json is serialized from the redacted values and printed as is: a URL fie
   }
 });
 
+test('--json redacts the pop entry id and the rule id of the answer as well as the item', t => {
+  const url = id => `https://user:hunter2secret@host/${id}`;
+  const teams = structuredClone(TEMPLATES.parallel);
+  const e = teams.parallel;
+  const take = o => { o.id = url(o.id); };
+  e.rules.pop.forEach(take); e.rules.table.forEach(take);
+  const w = world(t, teams);
+  ready(w, 1); w.publish('seed');
+  const r = w.run([...POP, '--dry-run', '--json'], {}, 'pop');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!r.stdout.includes('hunter2secret'), r.stdout);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.entry, 'https://host/member-claims');
+  assert.match(out.rule, /^https:\/\/host\/\S+$/);
+});
+
 test('an item number held by a live and an archived item: pop offers the live one once and never the archived one', t => {
   const w = world(t);
   ready(w, 7, { slug: '007-live' }); ready(w, 7, { slug: '007-old', archived: true }); w.publish('seed');

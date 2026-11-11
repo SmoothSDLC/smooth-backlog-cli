@@ -22,7 +22,7 @@
 - The CLI never writes the team file; a user command never reads it; a number is never handed out twice; a refused team command writes nothing in either repository (the provisional exception of open decision 2 below).
 - Every task starts by re-reading every file:line it names with `grep` on the current head; a name that moved is followed, a behaviour that differs from the task's text stops the task.
 
-## Open owner decisions (kept provisional; nothing in this plan decides them)
+## Questions re-validated at the end (kept provisional; nothing in this plan decides them, and none is raised before Task 33 unless it blocks a task)
 
 1. The target branch of the pull request. Task 32 writes the text without naming a target; Task 33 does not open the pull request.
 2. `.backlog/.gitignore` created on the way in: `resolveHome` of `src/shared/store.js` creates it for every command before anything else runs, so a refused team command leaves that one untracked file, against "a refused team command takes no action at all" and design chapter 01 section 4 step 6. Provisional state, kept by every task: the file is created as today and the tests assert the exact leftover status line. The options the owner chooses between: keep it and state the exception in the design (the backlog folder's own ignore file is scaffolding, not an action); create it only when a command proceeds (changes `resolveHome` and every user command; two tests change); remove it in the team undo when this run created it (team commands only).
@@ -599,3 +599,4 @@ Decisions: the help, COMMANDS.md and skill text of `new --status` say that `arch
 - [ ] **Step 3:** `npm test` — 0 fail.
 - [ ] **Step 4:** `FEATURE_LOCATION=local node --test .agents/test/features.test.js` and `FEATURE_LOCATION=remote node --test .agents/test/features.test.js` — 0 fail each, the scenario count of the last task in both.
 - [ ] **Step 5:** `grep -rn "teamNew\|installSeam\|wip-limits\|templates/workflows\|--to-repository\|claim-now" src .agents/test features` prints nothing outside `removed-forms.test.js`.
+- [ ] **Step 6:** Refresh the recorded decisions and the full scope first (`00-owner-rulings.md`, `design/decisions.md`, this plan and the work items of the branch), then re-validate each question of the section above against them and against the code as it now is; a question a recorded decision settles, or that the finished code no longer raises, is closed with its reason. Only the questions still open are presented, all at once, each with the problem, the options and the implementation pattern of each.

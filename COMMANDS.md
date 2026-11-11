@@ -1119,7 +1119,7 @@ Usage:
   backlog team pop --team <name> --agent <name> [--dry-run] [--json]
   backlog team new --team <name> --agent <name> --name <text> [--<argument> <value>]... [--json]
   backlog team update <item> <step> --team <name> --agent <name> [--<argument> <value>]... [--json]
-  backlog team query [<item> | filter <name> | check <item> <step> | plan] [--team <name> | --show-all] [--json]
+  backlog team query [<item> | filter <name> | check <item> <step> | plan | rules | steps] [--team <name> | --show-all] [--json]
   backlog team validate [--team <name> | --show-all] [--json]
   backlog team migrate --team <name>
   backlog team define --file <team.json> [--json]
@@ -1365,6 +1365,8 @@ Usage:
   backlog team query filter <name> --team <name> [--branch <name>] [--json]
   backlog team query check <item> <step> --team <name> [--agent <name>] [--<argument> <value>]... [--json]
   backlog team query plan --team <name> [--json]
+  backlog team query rules [--team <name> | --show-all]
+  backlog team query steps --team <name> [--json]
 
 Every form reads the backlog and the team file and changes nothing in the backlog (the team file's validated copy, its record and its SHA are written, as by every team command); nothing is published.
 
@@ -1395,6 +1397,15 @@ Scenario: before claiming item 12, the agent member-1 of the team parallel asks:
 backlog team query plan lists what backlog team pop would offer each person of the team, in name order, one line each: "<person>: <step> [<number>] <slug> (pop entry <id>, rule <id>)" or
 "<person>: idle". The item offered to one person is not offered to the next. --json prints a list of {"person", "action", "item", "entry", "rule"}, with null for idle. The exit is 0; nothing is
 written; --show-all is refused. Scenario: the lead of the team parallel plans the next hand-outs: backlog team query plan --team parallel
+
+backlog team query rules prints the team's entry of the team file as stored: its people, its item definition and its rules, as JSON indented by two spaces; the text and --json forms print the same. Every string value is
+printed with its credentials redacted (a URL's user and password, a user:token pair), so what is printed can differ from the file in such a value. With --show-all and no --team it prints the whole file's entries, keyed by team name. The item files are not read.
+Scenario: the lead reads the rules before editing the team file: backlog team query rules --team parallel
+
+backlog team query steps lists the steps the team's rules name (the words of every "step" of the rule table, and "new"), one line each, in name order: "<step>  takes: --<argument>, --<argument>  rules: <id>, <id>".
+The arguments are those a rule of the step reads (backlog team update <item> <step> --<argument> <value> takes no other; "takes: no argument" when it reads none; backlog team new always takes --name); the rules are
+the ids of every rule that decides the step, in table order, a rule for every step ("*") among them. --json prints a list of {"step", "args", "rules"}. --show-all is refused (exit 2). The item files are not read.
+Scenario: an agent looks up the steps it can take before asking for one: backlog team query steps --team parallel
 
 The user's read commands (backlog list, show, next, history, changes) have none of the team views.
 

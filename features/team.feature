@@ -28,7 +28,7 @@ Feature: Team - a lead splits work for a team, its members take it and the rules
     And I act as agent "lead-1"
     When I run `backlog team update 1 split-done --team parallel`
     Then the command fails
-    And the output contains "has no child yet; add one with backlog team new --parent 1"
+    And the output contains "has no child yet; add one with backlog team new --parent 1 (rule split-done-needs-children)"
     When I run `backlog team query check 1 split-done --team parallel`
     Then the output contains "refused by rule split-done-needs-children"
 
@@ -46,7 +46,7 @@ Feature: Team - a lead splits work for a team, its members take it and the rules
     When I act as agent "lead-1"
     And I run `backlog team update 1 claim --team parallel`
     Then the command fails
-    And the output contains "the lead does not claim work; a member does"
+    And the output contains "the lead does not claim work; a member does (rule claim-lead)"
     And item 1 has status "ready"
     And item 1 has holder ""
     When I run `backlog team query check 1 claim --team parallel`
@@ -68,7 +68,7 @@ Feature: Team - a lead splits work for a team, its members take it and the rules
     When I act as agent "stranger"
     And I run `backlog team update 1 claim --team parallel`
     Then the command fails
-    And the output contains "stranger is not a person of team parallel"
+    And the output contains "stranger is not a person of team parallel (rule members-only)"
 
   Scenario: the end of the queue is idle
     Given I act as agent "member-1"

@@ -30,7 +30,7 @@ Feature: Team flow - an item goes from a ready state to closed through a claim, 
     And I run `backlog team update 1 hand-to-check --team parallel --note "done"`
     When I run `backlog team update 1 start-check --team parallel`
     Then the command fails
-    And the output contains "member-1 cannot check its own work"
+    And the output contains "member-1 cannot check its own work (rule check-not-own)"
 
   Scenario: a rejected check returns the item to its holder
     Given I act as agent "member-1"
@@ -50,6 +50,7 @@ Feature: Team flow - an item goes from a ready state to closed through a claim, 
     When I run `backlog team update 1 close --team parallel`
     Then the command fails
     And the output contains "❌"
+    And the output contains "no rule of team parallel allows the step close on item 1"
 
   Scenario: two seeded items get distinct numbers
     Given a ready item "Parser" for the team "parallel"

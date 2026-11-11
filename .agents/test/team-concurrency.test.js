@@ -204,6 +204,18 @@ test('code repository: the budget error exits with the option exit (pop exits 1)
   assert.ok(!existsSync(itemPath(a.folder, '002-a')), 'nothing of the command is left');
 });
 
+test('code repository: a git older than 2.40 is refused before anything is written (exit 2)', async t => {
+  const { a } = worlds['code repository'](t);
+  const real = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim();
+  const bin = mkdtempSync(join(tmpdir(), 'oldgit-')); t.after(() => rmSync(bin, { recursive: true, force: true }));
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "git version 2.39.5"; exit 0; fi\nexec ${real} "$@"\n`); chmodSync(join(bin, 'git'), 0o755);
+  const path = process.env.PATH; t.after(() => { process.env.PATH = path; });
+  const ca = await begin(a, 'new', w => { item(w.folder, 2, 'a'); return { message: 'new a' }; }, quick);
+  process.env.PATH = `${bin}:${path}`;
+  await assert.rejects(ca.publish(), e => e.exitCode === 2 && /team commands need git 2\.40 or later \(found 2\.39\.5\)/.test(e.message));
+  assert.equal(git(a.root, 'rev-parse', 'HEAD'), git(a.root, 'rev-parse', 'origin/main'), 'nothing was committed');
+});
+
 test('code repository: the re-run drops the command\'s commit only: a person\'s unpushed commit and uncommitted change stay', async t => {
   const { a, b } = worlds['code repository'](t);
   put(join(a.root, 'code.js'), 'x\n'); git(a.root, 'add', 'code.js'); git(a.root, 'commit', '-qm', 'person code');
@@ -245,7 +257,7 @@ function onPush(w, script, always = false) {
 const rbCode = w => Number(readFileSync(join(w.dir, 'rb.code'), 'utf8'));
 const origin = (w, path) => JSON.parse(git(w.bare, 'show', `main:.backlog/local/repository/${path}`));
 const phases = w => git(w.bare, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(f => f.includes('/phases/')).map(f => f.split('/').pop());
-const bump = (w, seq) => `node -e "const f=process.argv[1],fs=require('fs'),d=JSON.parse(fs.readFileSync(f));d.fields.estimate=Date.now()%100000;fs.writeFileSync(f,JSON.stringify(d))" ${quote(join(w.rb, '.backlog', 'local', 'repository', 'phases', `00${seq}-job.json`))}`;
+const bump = (w, seq) => `node -e "const f=process.argv[1],fs=require('fs'),d=JSON.parse(fs.readFileSync(f));d.fields.estimate+=1;fs.writeFileSync(f,JSON.stringify(d))" ${quote(join(w.rb, '.backlog', 'local', 'repository', 'phases', `${String(seq).padStart(3, '0')}-job.json`))}`; // adds one: each run really changes the file
 
 test('commands: two clones claim one item at once: the first to publish wins, the other is refused by the rule on the published file', t => {
   const w = seeded(t, [job(1)]);
@@ -288,12 +300,12 @@ test('commands: two clones create an item at once: two different numbers', t => 
 // every push meets an upstream change of another item: the command stops once its budget has passed and publishes nothing
 for (const [verb, args, code] of [['update', ['1', 'claim', ...BASE], 3], ['pop', BASE, 1]]) {
   test(`commands: upstream that moves at every push: ${verb} exits ${code} with "kept changing" and publishes nothing`, t => {
-    const w = seeded(t, [...[1, 2, 3, 4, 5, 6, 7, 8].map(n => job(n)), job(9, { status: 'new' })]); // enough ready items that pop's skip never empties the queue
-    onPush(w, otherPublishes(w, bump(w, 9)), true);
+    const w = seeded(t, [...Array.from({ length: 20 }, (_, i) => job(i + 1)), job(21, { status: 'new' })]); // far more ready items than rounds, so pop's skip never empties the queue
+    onPush(w, otherPublishes(w, bump(w, 21)), true);
     const r = w.run(args, { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '2000' }, verb);
     assert.equal(r.status, code, r.stdout + r.stderr);
     assert.match(r.stderr, /kept changing while \w+ ran/);
-    for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) assert.equal(origin(w, `phases/00${n}-job.json`).fields.holder, '', `nothing is published for item ${n}`);
+    for (let n = 1; n <= 20; n++) assert.equal(origin(w, `phases/${String(n).padStart(3, '0')}-job.json`).fields.holder, '', `nothing is published for item ${n}`);
     assert.equal(git(w.ra, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'no commit of the command is left');
     assert.equal(JSON.parse(readFileSync(join(w.folder, 'phases', '001-job.json'), 'utf8')).fields.holder, '', 'nor a file');
   });

@@ -496,6 +496,24 @@ export async function restoreOwn(home, t, names, files, committed, saved, guard 
 
 export function takeStart(home) { const saved = starting.get(resolve(home)); starting.delete(resolve(home)); return saved; }
 
+// The subject of the command's commit: one trimmed line (git stores a subject so, and the undo compares it).
+export const commitSubject = (t, names, text) => (t.clone ? `${names.join(', ')}: ${text}` : `backlog: ${text}`).replace(/\s+/g, ' ').trim();
+
+// True when HEAD is the command's own commit: it has the command's subject, changes at least one path, and every path it changes is one the
+// command wrote (`committed`). Anything else on top is a person's commit and is never taken back, amended or published with the change.
+export async function ownCommit(home, subject, committed) {
+  const top = paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', 'HEAD']));
+  return top.length > 0 && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject && top.every(p => committed.has(p));
+}
+
+// The words that name the command's kept commit and the two non-interactive ways out.
+export async function keptParts(home, t, subject) {
+  const sha = (await g(home, ['log', '--format=%h %s', t.clone ? `${t.ref}..HEAD` : '-20'])).stdout.split('\n').find(l => l.slice(l.indexOf(' ') + 1) === subject)?.split(' ')[0];
+  const what = sha ? `the command's commit ${sha}` : `the command's commit (it could not be identified: see git -C ${home} log)`;
+  const advice = `publish with: git -C ${home} push origin HEAD:${t.branch}${sha ? `  or take the command's change back with: git -C ${home} revert --no-edit ${sha}  and then publish with that push` : ''}`;
+  return { what, advice };
+}
+
 // Commits the folder's changes as "<owner>/<name>: <message>" and pushes them; resolves to the
 // [old, new] pairs renumbered on the way. Recorded only when on origin/main.
 // `folders`: one folder, or several of the same clone that change together (a cross-repository move): ONE commit, pushed once.
@@ -521,14 +539,11 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
     if (adds.length) await must(home, ['add', '-A', '--', ...adds], `stage ${names.join(', ')}`);
     return lits;
   };
-  const subject = (t.clone ? `${names.join(', ')}: ${message}` : `backlog: ${message}`).replace(/\s+/g, ' ').trim(); // one line: git stores a subject trimmed and collapsed, and the undo compares it
+  const subject = commitSubject(t, names, message);
   const inBacklog = path => path.startsWith(t.prefix);
   const committed = new Set(); // every path the command staged, renumbered or repaired
   // The top commit is the command's own only when it has the command's subject and changes only paths the command wrote; anything else is a person's commit.
-  const ownTop = async () => {
-    const top = paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', 'HEAD']));
-    return top.length > 0 && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject && top.every(p => committed.has(p));
-  };
+  const ownTop = () => ownCommit(home, subject, committed);
   return locked(lockFile(backlogHome), async () => {
     if (t.clone) await refuseUnpublished(home, t); // the user's own repository has its own unpushed commits: they are pushed with the change
     const saved = takeStart(home) ?? await snapshot(home);
@@ -619,7 +634,8 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
             settled = renumbered.length;
             await reconcile(fresh);
             await staleCheck(); // reconciliation can add more incidental writes to the guard
-            mine = await foldIn(home, t, await stage(), subject, mine) || mine;
+            const amend = mine && await ownTop(); // a person's commit on top is never amended: the reconciled change becomes a commit of its own (never with the command's subject)
+            mine = await foldIn(home, t, await stage(), mine && !amend ? `${subject}, index reconciled` : subject, amend) || mine;
           }
           await validatePublication(home, t, dirs, dirNames, claims, renumbered);
           await restoreStaging(saved.staged.filter(p => !committed.has(p)));
@@ -646,10 +662,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       // clone: when nothing of a person's lies between the fetched remote and the command's commit, the branch also goes to the remote, as a failed pull needs
       const to = own ? (t.clone && ahead === 1 && !stale ? t.ref : 'HEAD~1') : t.clone && !stale && ahead === 0 ? t.ref : 'HEAD';
       if (mine && !own && ahead > 0) { // a person's commit lies on top of the command's: nothing is taken back, the text says so
-        const sha = (await g(home, ['log', '--format=%h %s', t.clone ? `${t.ref}..HEAD` : '-20'])).stdout.split('\n').find(l => l.slice(l.indexOf(' ') + 1) === subject)?.split(' ')[0];
-        const what = sha ? `the command's commit ${sha}` : `the command's commit (it could not be identified: see git -C ${home} log)`;
-        const push = `git -C ${home} push origin HEAD:${t.branch}`;
-        const advice = `publish with: ${push}${sha ? `  or take the command's change back with: git -C ${home} revert --no-edit ${sha}  and then publish with that push` : ''}`;
+        const { what, advice } = await keptParts(home, t, subject);
         await undoCommit(to, e);
         if (stale) { e.message += `; your own commit lies on top of ${what}, which is kept unpublished on the branch: ${advice}`; throw e; }
         const cause = /has unpublished commits:/.test(e.message) ? 'your own commit appeared on the branch while the command ran' : e.message.replace(/[;,]? the local branch and working tree were rolled back.*$/s, '');

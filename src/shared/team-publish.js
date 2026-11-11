@@ -8,7 +8,7 @@ import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside } from './safety.js';
 import * as store from './store.js';
-import { abortPull, commitOnly, fail, g, layOver, lit, lockFile, must, ownedPaths, pullArgs, refspec, refuseConflicts, restoreOwn, takeStart, target } from './sync.js';
+import { abortPull, commitOnly, commitSubject, keptParts, ownCommit, fail, g, layOver, lit, lockFile, must, ownedPaths, pullArgs, refspec, refuseConflicts, restoreOwn, takeStart, target } from './sync.js';
 
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 const zs = r => r.stdout.split('\0').filter(Boolean);
@@ -27,6 +27,10 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
     const saved = takeStart(home); // the person's files as they were when the command started
     const started = now(); const budget = store.lockWait() / 2;
     let mine = false; // the command's own commit is HEAD
+    let subject = ''; // its subject
+    const own = () => ownCommit(home, subject, committed); // false when a person's commit lies on top of it
+    // a person's commit on top: nothing is taken back or published; the text names the command's commit and the two ways out
+    const keptError = async cause => { const { what, advice } = await keptParts(home, t, subject); return keep(`${cause}. The change was not published; ${what} is kept on the branch under your own commit and nothing was rolled back. To finish, ${advice}`); };
     const sha = async rev => (await g(home, ['rev-parse', '--verify', '-q', rev])).stdout.trim();
     const fetch = () => g(home, ['fetch', '-q', 'origin', refspec(t)]);
 
@@ -36,7 +40,8 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
       for (const l of lits) committed.add(bare(l));
       if (adds.length) await must(home, ['add', '-A', '--', ...adds], `stage ${name}`);
       if (lits.length && (await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
-        const c = await commitOnly(home, lits, ['-m', t.clone ? `${name}: ${text}` : `backlog: ${text}`]);
+        subject = commitSubject(t, names, text);
+        const c = await commitOnly(home, lits, ['-m', subject]);
         if (c.code) throw new BacklogError('SYNC_FAILED', `could not commit in ${home} (${c.stderr.slice(0, 300)}); the change is not recorded`, 3);
         mine = true;
       }
@@ -60,6 +65,7 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
 
     // Upstream changed what the command read: drop the own commit, pull, run the command again, commit what it wrote.
     const rerun = async () => {
+      if (!await own()) throw await keptError('your own commit lies on top of the command\'s commit, so the step was not run again');
       const wrote = zs(await g(home, ['diff', '--name-only', '-z', '--no-renames', 'HEAD~1', 'HEAD']));
       const old = await sha('HEAD');
       const r = await g(home, ['reset', '--keep', 'HEAD~1']);
@@ -102,6 +108,7 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
           if (now() - started >= budget) throw new BacklogError('SYNC_FAILED', `${name.slice(t.prefix.length)} kept changing while ${step} ran; run it again`, exit);
         }
         await fetch();
+        if (!await own()) throw await keptError('your own commit lies on top of the command\'s commit');
         if (await sha(t.ref) && Number((await g(home, ['rev-list', '--count', `HEAD..${t.ref}`])).stdout.trim()) > 0
           && watch.length && await sha('HEAD~1') && zs(await g(home, ['diff', '--name-only', '-z', '--no-renames', `HEAD...${t.ref}`, '--', ...watch.map(lit)])).length) {
           result = await rerun();
@@ -126,6 +133,11 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
         if (await sha(t.ref) === up) throw new BacklogError('SYNC_FAILED', `The change was not published in ${home} (push failed: ${ps.stderr.slice(0, 300)}); the local branch and working tree were rolled back. Fix the cause and retry the command`, 3); // upstream did not move: not a race
       }
     } catch (e) {
+      if (!e.keep && mine && !await own()) { // a person's commit on top: nothing is taken back
+        const k = await keptError(e.message.replace(/[;,]? the local branch and working tree were rolled back.*$/s, ''));
+        k.exitCode = exit;
+        throw k;
+      }
       if (!e.keep) {
         const kept = await undo();
         if (kept.length) e.message += `; your edit of ${kept.join(', ')} conflicts with the upstream change and is kept in the stash (git -C ${home} stash list), the file itself is the upstream version`;

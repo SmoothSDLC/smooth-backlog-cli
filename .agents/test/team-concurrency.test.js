@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { GIT_IDENTITY, ENVELOPE, itemPath, sharedBacklog, BACKLOG_OWNER, BACKLOG_NAME } from './shared-fixtures.js';
@@ -132,6 +132,21 @@ for (const [mode, make] of Object.entries(worlds)) {
     rmSync(itemPath(b.folder, '002-x')); git(b.root, 'add', '-A'); git(b.root, 'commit', '-qm', 'delete x'); git(b.root, 'push', '-q');
     await ca.publish();
     assert.deepEqual(Object.keys(pulled(b)).sort(), ['001-alpha', '003-a']);
+  });
+
+  test(`${mode}: a person's commit on top of the command's commit while the other clone published the folder: the command does not run again and nothing is dropped`, async t => {
+    const { a, b } = make(t);
+    const claim = who => w => { item(w.folder, 1, 'alpha', { owner: who, status: 'active' }); return { message: `claim ${who}` }; };
+    const ca = await begin(a, 'claim', claim('a'), quick); const cb = await begin(b, 'claim', claim('b'), quick);
+    assert.equal((await cb.publish()).published, true);
+    const hook = join(a.root, '.git', 'hooks', 'post-commit'); // a hook stands for the person: a commit right after the command's own
+    writeFileSync(hook, `#!/bin/sh\ncase "$(git log -1 --format=%s)" in *": claim a") ;; *) exit 0;; esac\nunset GIT_INDEX_FILE\ncd "${a.root}"\n[ -e person.txt ] && exit 0\necho person > person.txt\ngit add person.txt\ngit -c user.name=P -c user.email=p@example.com commit -q -m "person: file" -- person.txt\n`);
+    chmodSync(hook, 0o755);
+    await assert.rejects(ca.publish(), e => e.exitCode === 3 && /nothing was rolled back/.test(e.message));
+    assert.equal(ca.runs.again, 0, 'the command did not run again');
+    assert.equal(ca.persisted(), 0);
+    assert.match(git(a.root, 'log', '--format=%s', '-2'), /person: file/);
+    assert.equal(git(a.root, 'rev-list', '--count', 'origin/main..HEAD'), '2');
   });
 
   test(`${mode}: upstream changed only another folder: the command does not run again`, async t => {

@@ -261,6 +261,22 @@ test('backlog clone: a person\'s commit that lands on top before the renumbering
   assert.equal(readFileSync(join(f.home, 'acme', 'other', 'p.txt'), 'utf8'), 'person\n');
 });
 
+test('code repository: a person\'s commit on top is not amended when the reconciled index is folded in; the change gets a commit of its own', async t => {
+  const f = modes['code repository'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  refuse(f.bare);
+  const repo = join(f.home, '..');
+  personOnTop(join(repo, '.git'), ': add beta', 'code2.js', 'person: code');
+  item(f.folder, 2, 'beta');
+  const e = await failure(sync.commit(f.home, f.folder, 'add beta', () => item(f.folder, 3, 'gamma')));
+  assert.equal(e?.exitCode, 3);
+  const person = git(repo, 'log', '--format=%H', '--grep=^person: code$', '-1');
+  assert.equal(git(repo, 'show', '--format=', '--name-only', person), 'code2.js', 'the person\'s commit holds only the person\'s file');
+  assert.match(subjects(repo, 6), /index reconciled/);
+  assert.match(e.message, /nothing was rolled back/);
+});
+
 // --- a pull that fails after upstream changed other paths
 function conflictSetup(t, personLine) {
   const f = modes['backlog clone'](t);

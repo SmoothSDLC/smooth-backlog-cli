@@ -340,3 +340,54 @@ test('exit 1: a person\'s uncommitted change blocks the re-run', async t => {
   writeFileSync(hook, `#!/bin/sh\n[ -e "${dir}/edited" ] || { echo person >> "${file}"; touch "${dir}/edited"; }\n`); chmodSync(hook, 0o755);
   await fails1(publishTeam(a.home, a.folder, 'change alpha', opts(a, { ...exits1, step: 'pop' })), /blocks the re-run of pop/);
 });
+
+// A person's commit made right after the command's own commit (a hook of the clone stands for the person): `ending` ends the command's subject;
+// `on` is 'post-commit' (before anything is pushed) or 'pre-push' (while the push is made).
+function personOnTop(w, on, ending, path, personSubject, dir) {
+  const hook = join(w.root, '.git', 'hooks', on); const mark = join(dir, `person-${on}`);
+  const body = `unset GIT_INDEX_FILE\ncd "${w.root}"\n[ -e "${mark}" ] && exit 0\ntouch "${mark}"\nmkdir -p "$(dirname "${path}")"\necho person > "${path}"\ngit add "${path}"\ngit -c user.name=P -c user.email=p@example.com commit -q -m "${personSubject}" -- "${path}"\n`;
+  writeFileSync(hook, on === 'post-commit' ? `#!/bin/sh\ncase "$(git log -1 --format=%s)" in *"${ending}") ;; *) exit 0;; esac\n${body}` : `#!/bin/sh\n${body}`);
+  chmodSync(hook, 0o755);
+}
+const keptText = /The change was not published; the command's commit [0-9a-f]+ is kept on the branch under your own commit and nothing was rolled back\. To finish, publish with: git -C \S+ push origin HEAD:main  or take the command's change back with: git -C \S+ revert --no-edit [0-9a-f]+  and then publish with that push$/s;
+const personFile = (mode, w) => mode === 'code repository' ? 'code2.js' : 'acme/other/p.txt';
+
+for (const mode of Object.keys(modes)) {
+  for (const exit of [3, 1]) {
+    test(`${mode}: a person's commit on top of the command's commit: nothing is published, nothing is taken back, exit ${exit}, the kept commit is named`, async t => {
+      const { dir, bare, a } = modes[mode](t);
+      await sync.pull(a.home);
+      item(a.folder, 2, 'beta');
+      personOnTop(a, 'post-commit', ': new beta', personFile(mode), 'person: other', dir);
+      const origin = git(a.root, 'rev-parse', 'origin/main');
+      await assert.rejects(publishTeam(a.home, a.folder, 'new beta', opts(a, { exit, persist: () => assert.fail('nothing was published') })), e => e.exitCode === exit && keptText.test(e.message));
+      assert.equal(git(a.root, 'ls-remote', 'origin', 'main').split('\t')[0], origin, 'nothing reached the origin');
+      assert.equal(git(a.root, 'rev-list', '--count', 'origin/main..HEAD'), '2', 'both commits are kept');
+      assert.equal(readFileSync(join(a.root, personFile(mode)), 'utf8'), 'person\n');
+      assert.ok(existsSync(itemPath(a.folder, '002-beta')));
+    });
+  }
+
+  test(`${mode}: a person's commit on top while upstream changed the folder: the command is not run again, nothing is dropped or published`, async t => {
+    const { dir, a, b } = modes[mode](t);
+    await sync.pull(a.home);
+    item(a.folder, 1, 'alpha', { summary: 'command' });
+    publishFrom(b, w => item(w.folder, 1, 'alpha', { summary: 'other' }));
+    personOnTop(a, 'post-commit', ': change alpha', personFile(mode), 'person: other', dir);
+    await assert.rejects(publishTeam(a.home, a.folder, 'change alpha', opts(a, { step: 'update', persist: () => assert.fail('nothing was published') })), e => e.exitCode === 3 && keptText.test(e.message));
+    assert.equal(git(a.root, 'rev-list', '--count', 'origin/main..HEAD'), '2');
+    assert.match(subjects(a.root, 'HEAD -2'), /person: other/);
+  });
+
+  test(`${mode}: a person's commit made while the push is refused is not dropped by the undo`, async t => {
+    const { dir, bare, a } = modes[mode](t);
+    refuse(bare);
+    await sync.pull(a.home);
+    item(a.folder, 2, 'beta');
+    personOnTop(a, 'pre-push', '', personFile(mode), 'person: other', dir);
+    await assert.rejects(publishTeam(a.home, a.folder, 'new beta', opts(a)), e => e.exitCode === 3 && keptText.test(e.message));
+    assert.match(subjects(a.root, 'HEAD -3'), /person: other/);
+    assert.equal(readFileSync(join(a.root, personFile(mode), ''), 'utf8'), 'person\n');
+    assert.match(subjects(a.root, 'HEAD -3'), /new beta/, 'the command\'s commit is kept');
+  });
+}

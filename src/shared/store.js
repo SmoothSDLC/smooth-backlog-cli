@@ -193,7 +193,12 @@ function persistNote(path, prior) {
   persist.files.set(path, bytes === null ? null : Buffer.from(bytes).toString('base64'));
   saveJournal();
 }
+// The paths this command wrote or removed (every write goes through note): what a publication may take as the command's own. wasWritten also reads the clone's real path.
+const written = new Set();
+export const wasWritten = path => written.has(resolve(path)) || (() => { try { return written.has(join(realpathSync(dirname(path)), basename(path))); } catch { return false; } })();
+export const forgetWritten = home => { for (const p of written) if (p.startsWith(resolve(home) + sep)) written.delete(p); }; // the publication of a clone is over
 export function note(path, prior) {
+  written.add(resolve(path));
   const j = journals.at(-1);
   if (j && !j.has(path)) j.set(path, prior !== undefined ? prior : existsSync(path) ? readFileSync(path) : null);
   persistNote(path, prior);

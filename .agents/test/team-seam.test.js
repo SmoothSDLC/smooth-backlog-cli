@@ -20,7 +20,7 @@ const T = '2026-11-09T10:00:00Z';
 const mk = (seq, name, fields) => ({ seq, slug: `${String(seq).padStart(3, '0')}-${name}`, name, team: 'p', repository: 'acme/demo', branch: 'main', created: T, updated: T, updated_by: 'ann', body: `\n# Phase ${String(seq).padStart(3, '0')} — ${name}\n`, fields, history: [] });
 const FIELDS = { status: 'done', priority: 3, stage: 'mine', review_state: 'passed' };
 const fieldsOf = (folder, slug) => JSON.parse(readFileSync(join(folder, 'phases', `${slug}.json`), 'utf8')).fields;
-const put = (folder, item) => { mkdirSync(join(folder, 'phases'), { recursive: true }); writeFileSync(join(folder, 'phases', `${item.slug}.json`), toFile(item, entry)); };
+const put = (folder, item) => { mkdirSync(join(folder, 'phases'), { recursive: true }); const path = join(folder, 'phases', `${item.slug}.json`); store.note(path); writeFileSync(path, toFile(item, entry)); }; // the command's write is recorded, as the store's own writes are
 const git = (cwd, ...a) => { const p = spawnSync('git', a, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } }); if (p.status) throw new Error(p.stderr); return p.stdout.trim(); };
 
 test('importing the team router installs nothing; the old routes install it', () => {

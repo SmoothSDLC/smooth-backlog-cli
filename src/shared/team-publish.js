@@ -38,7 +38,7 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
 
     const commitOwn = async text => {
       await refuseConflicts(home, t);
-      const { lits, adds } = await ownedPaths(home, t, names, files, saved);
+      const { lits, adds } = await ownedPaths(home, t, names, files);
       for (const l of lits) committed.add(bare(l));
       if (adds.length) await must(home, ['add', '-A', '--', ...adds], `stage ${name}`);
       if (lits.length && (await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
@@ -150,5 +150,5 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
   }, { wait: store.lockWait(), takeOver: true }).catch(async e => { // locked out of the lock: the command's own files are taken back (the run lock is still held)
     if (!inside && e.code === 'LOCKED') await restoreOwn(home, t, names, files, new Set(), saved, true);
     throw e;
-  });
+  }).finally(() => store.forgetWritten(home));
 }

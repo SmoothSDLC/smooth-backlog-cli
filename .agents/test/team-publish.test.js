@@ -42,6 +42,7 @@ export const modes = {
   },
 };
 function clones(dir, bare, [rootA, homeA], [rootB, homeB]) {
+  store.forgetWritten(rootA); store.forgetWritten(rootB); // the seeding above wrote in this process: no command is running yet
   const make = (root, home) => ({ root, home, folder: join(home, 'acme', 'demo'), watch: relative(root, join(home, 'acme', 'demo')) });
   return { dir, bare, a: make(rootA, homeA), b: make(rootB, homeB) };
 }
@@ -84,6 +85,25 @@ for (const [mode, make] of Object.entries(modes)) {
     assert.equal(git(a.root, 'show', 'origin/main:' + relative(a.root, alpha).split('\\').join('/')), committed.trim(), 'origin holds the committed bytes');
     assert.equal(readFileSync(alpha, 'utf8'), edited);
     assert.match(git(a.root, 'status', '--porcelain'), /^ ?M .*001-alpha\.json$/m);
+  });
+
+  test(`${mode}: a person's edit that git merges with an upstream change of the same item during the re-run is not published`, async t => {
+    const { a, b } = make(t);
+    const alpha = itemPath(a.folder, '001-alpha');
+    const rel = relative(a.root, alpha).split('\\').join('/');
+    const edited = readFileSync(alpha, 'utf8').replace('"status": "pending"', '"status": "done"');
+    writeFileSync(alpha, edited); // the person's edit, before the command's pull
+    await sync.pull(a.home);
+    item(a.folder, 2, 'beta');
+    publishFrom(b, w => { const p = itemPath(w.folder, '001-alpha'); writeFileSync(p, readFileSync(p, 'utf8').replace('"updated_by": ""', '"updated_by": "bob"')); }); // another line of the same item
+    const r = await publishTeam(a.home, a.folder, 'new beta', opts(a, { attempt: async () => { item(a.folder, 2, 'beta'); return { message: 'new beta' }; } }));
+    assert.equal(r.published, true);
+    assert.ok(!git(a.root, 'show', '--name-only', '--format=', 'HEAD').split('\n').includes(rel), 'the merged file is not in the command\'s commit');
+    assert.match(git(a.root, 'show', `origin/main:${rel}`), /"updated_by": "bob"[\s\S]*"status": "pending"/, 'origin: the upstream change only');
+    const work = readFileSync(alpha, 'utf8');
+    assert.ok(work.includes('"status": "done"') && work.includes('"updated_by": "bob"'), 'the working file holds both edits');
+    assert.match(git(a.root, 'status', '--porcelain'), /^ ?M .*001-alpha\.json$/m);
+    assert.ok(existsSync(itemPath(b.folder, '002-beta')) || git(a.root, 'show', 'origin/main:' + rel.replace('001-alpha', '002-beta')).includes('beta'), 'the command\'s item is published');
   });
 
   test(`${mode}: the lock held past the wait: LOCKED exit 1, the command's item, index.json and numbers.json are taken back`, async t => {

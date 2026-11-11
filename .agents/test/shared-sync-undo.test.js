@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { GIT_IDENTITY, ENVELOPE, holdLock, itemPath, sharedBacklog, BACKLOG_OWNER, BACKLOG_NAME } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
@@ -55,6 +55,29 @@ for (const [mode, make] of Object.entries(modes)) {
     assert.ok(!git(f.home, 'show', '--name-only', '--format=', 'HEAD').split('\n').some(p => p.endsWith('001-alpha.json')), 'the person\'s file is not in the commit');
     assert.equal(readFileSync(alpha, 'utf8'), edited);
     assert.match(git(f.home, 'status', '--porcelain'), /^ ?M .*001-alpha\.json$/m);
+  });
+
+  test(`${mode}: a person's edit that git merges with an upstream change of the same item during the publication is not published`, async t => {
+    const f = make(t);
+    item(f.folder, 1, 'alpha');
+    await sync.commitSettled(f.home, f.folder, 'new alpha');
+    const alpha = itemPath(f.folder, '001-alpha');
+    const top = git(f.home, 'rev-parse', '--show-toplevel');
+    const rel = relative(top, alpha).split('\\').join('/');
+    const edited = readFileSync(alpha, 'utf8').replace('"status": "pending"', '"status": "done"');
+    writeFileSync(alpha, edited); // the person's edit, before the command's pull
+    await sync.pull(f.home);
+    item(f.folder, 2, 'beta');
+    const other = join(f.dir, 'other'); git(f.dir, 'clone', '-q', f.bare, other);
+    const up = join(other, rel); writeFileSync(up, readFileSync(up, 'utf8').replace('"updated_by": ""', '"updated_by": "bob"'));
+    git(other, 'commit', '-qam', 'other clone'); git(other, 'push', '-q');
+    await sync.commitSettled(f.home, f.folder, 'new beta');
+    assert.ok(!git(f.home, 'show', '--name-only', '--format=', 'HEAD').split('\n').includes(rel), 'the merged file is not in the command\'s commit');
+    assert.match(git(f.home, 'show', `origin/main:${rel}`), /"updated_by": "bob"[\s\S]*"status": "pending"/, 'origin: the upstream change only');
+    const work = readFileSync(alpha, 'utf8');
+    assert.ok(work.includes('"status": "done"') && work.includes('"updated_by": "bob"'), 'the working file holds both edits');
+    assert.match(git(f.home, 'status', '--porcelain'), /^ ?M .*001-alpha\.json$/m);
+    assert.match(git(f.home, 'show', `origin/main:${rel.replace('001-alpha', '002-beta')}`), /beta/, 'the command\'s item is published');
   });
 
   test(`${mode}: the lock held past the wait: LOCKED exit 1, the command's item and its index and numbers are taken back`, async t => {
@@ -477,7 +500,7 @@ test('code repository: a person\'s edit that conflicts with the pull: the comman
   const repo = join(f.home, '..'); const b = join(f.dir, 'b'); git(f.dir, 'clone', '-q', f.bare, b);
   await sync.pull(f.home);
   writeFileSync(join(repo, 'code.js'), 'mine\n');
-  rmSync(itemPath(f.folder, '001-alpha')); // the command removes an item
+  store.note(itemPath(f.folder, '001-alpha')); rmSync(itemPath(f.folder, '001-alpha')); // the command removes an item (every command records its removals)
   writeFileSync(join(b, 'code.js'), 'theirs\n'); git(b, 'add', '-A'); git(b, 'commit', '-qm', 'theirs'); git(b, 'push', '-q');
   const e = await sync.commitSettled(f.home, f.folder, 'remove alpha').then(() => null, x => x);
   assert.ok(e, 'the publication failed');

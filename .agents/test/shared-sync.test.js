@@ -384,7 +384,7 @@ test('review P2: commit takes only the repository folder: a file staged elsewher
   await sync.commitSettled(f.home, f.folder, 'seed');
   writeFileSync(join(f.home, 'stray.txt'), 'x');
   git(f.home, 'add', 'stray.txt');
-  rmSync(itemPath(f.folder, '001-alpha'));
+  store.note(itemPath(f.folder, '001-alpha')); rmSync(itemPath(f.folder, '001-alpha')); // the command records its removals
   putItem(f.folder, 3, 'gamma');
   await sync.commitSettled(f.home, f.folder, 'second');
   const onOrigin = git(f.bare, 'ls-tree', '-r', '--name-only', 'main').split('\n');
@@ -393,7 +393,7 @@ test('review P2: commit takes only the repository folder: a file staged elsewher
   assert.equal(onOrigin.includes(`acme/demo/${itemRel('003-gamma')}`), true);
   assert.equal(git(f.home, 'diff', '--cached', '--name-only'), 'stray.txt', 'still staged locally');
   // only a deletion, nothing else, in the folder
-  rmSync(itemPath(f.folder, '002-beta'));
+  store.note(itemPath(f.folder, '002-beta')); rmSync(itemPath(f.folder, '002-beta'));
   await sync.commitSettled(f.home, f.folder, 'third');
   assert.equal(git(f.bare, 'ls-tree', '-r', '--name-only', 'main').includes('002-beta'), false);
   assert.equal(git(f.home, 'diff', '--cached', '--name-only'), 'stray.txt');

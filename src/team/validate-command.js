@@ -8,7 +8,7 @@ import { redact } from '../shared/safety.js';
 import { readConfig, topOf } from '../shared/setup.js';
 import * as sync from '../shared/sync.js';
 import { cloneLocked, configDir, folder, repoId, resolveHome } from '../shared/store.js';
-import { redactDeep, say } from './check.js';
+import { redactDeep, say } from './json-out.js';
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { readItems } from './item.js';

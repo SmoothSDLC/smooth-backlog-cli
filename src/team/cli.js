@@ -11,7 +11,7 @@ import { cloneLocked, resolveHome } from '../shared/store.js';
 import * as sync from '../shared/sync.js';
 import { forgetTeamsConfig, installSeam, openItemsOf, setSessionTeam, setTeamsHome, teamEntry, teamsConfig, validateTeam } from './team.js';
 import { strip } from '../shared/text.js';
-import { redactDeep, say } from './check.js';
+import { redactDeep, say } from './json-out.js';
 import { formOf } from './inputs.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 

@@ -7,7 +7,7 @@ import { readConfig, topOf } from '../shared/setup.js';
 import { cloneLocked, configDir, folder as folderOf, now, repoId, resolveHome } from '../shared/store.js';
 import { publishTeam } from '../shared/team-publish.js';
 import { apply, build } from './apply.js';
-import { redactDeep, say } from './check.js';
+import { redactDeep, say } from './json-out.js';
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { contextOf } from './item.js';
@@ -31,7 +31,7 @@ export async function run(argv) {
 function printed({ offer, built, entry, team, agent, json }) {
   if (offer.action === 'idle') return json ? '{"action":"idle"}' : `ℹ️  idle: nothing for ${agent} in team ${team}`;
   const after = built.items.find(x => x.seq === offer.item).doc;
-  if (json) return JSON.stringify(redactDeep({ action: offer.action, item: offer.item, entry: offer.entry, rule: offer.rule, item_file: showItem(after, entry, { json }) }));
+  if (json) return JSON.stringify({ ...redactDeep({ action: offer.action, item: offer.item, entry: offer.entry, rule: offer.rule }), item_file: showItem(after, entry, { json }) });
   return [`➡️  ${offer.action} ${after.slug} (pop entry ${offer.entry}, rule ${offer.rule})`, showItem(after, entry)].join('\n');
 }
 

@@ -5,7 +5,7 @@ import { redact } from '../shared/safety.js';
 import { readConfig, topOf } from '../shared/setup.js';
 import { cloneLocked, configDir, folder as folderOf, now, repoId, resolveHome } from '../shared/store.js';
 import { parseArgs } from './args.js';
-import { redactDeep, say } from './check.js';
+import { redactDeep, say } from './json-out.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { contextOf } from './item.js';
 import { pullFolder } from './pull.js';

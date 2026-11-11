@@ -7,7 +7,7 @@ import { readConfig, topOf } from '../shared/setup.js';
 import { cloneLocked, configDir, folder as folderOf, now, repoId, resolveHome } from '../shared/store.js';
 import { publishTeam } from '../shared/team-publish.js';
 import { apply } from './apply.js';
-import { redactDeep, say } from './check.js';
+import { redactDeep, say } from './json-out.js';
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { contextOf } from './item.js';

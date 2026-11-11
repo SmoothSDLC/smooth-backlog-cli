@@ -8,6 +8,7 @@ import { cloneLocked, configDir, folder as folderOf, now, repoId, resolveHome } 
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { contextOf } from './item.js';
+import { redactDeep, say } from './json-out.js';
 import { pullFolder } from './pull.js';
 import { Refusal } from './rules/expression.js';
 import { step, stepArgs } from './rules/step.js';
@@ -17,10 +18,6 @@ import { loadTeams } from './teams-load.js';
 import { lines } from './update.js';
 
 const invalid = text => new BacklogError('INVALID_INPUT', text);
-
-// JSON is printed as serialized: each string value is redacted before, never the serialized text (the redaction of text spans JSON punctuation).
-export const redactDeep = v => (typeof v === 'string' ? redact(v) : Array.isArray(v) ? v.map(redactDeep) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, redactDeep(x)])) : v);
-export const say = (text, json) => process.stdout.write(`${json ? text : redact(text)}\n`);
 
 export async function run(argv) {
   try { return await checkItem(argv); } catch (e) {

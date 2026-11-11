@@ -5,7 +5,7 @@ import { join, posix } from 'node:path';
 import { createInterface } from 'node:readline';
 import { BacklogError, input } from '../errors.js';
 import { itemFileName, readItemFile } from './item-file.js';
-import { find as findItem, rows as itemRows } from './index.js';
+import { find as findItem, rows as itemRows, showAll } from './index.js';
 import { actor, check, recordWrites } from './seen.js';
 import { configUser } from './setup.js';
 import { assertInside, git, redact, slugify } from './safety.js';
@@ -23,7 +23,7 @@ const pad = n => String(n).padStart(3, '0');
 const OPTIONS = {
   name: 's', title: 's', status: 's', objective: 's', summary: 's', description: 's', context: 's', priority: 'i', severity: ['normal', 'critical'], 'split-from': 's', body: 's',
   'depends-on': 's', estimate: 'i', chunk: true,
-  complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], 'dry-run': true, ask: true,
+  complexity: ['low', 'medium', 'high'], layer: ['1', '2', '3', '4', '5', 'process'], 'dry-run': true, ask: true, 'show-all': true,
 };
 const NEGATIVE = /^-(\d+|\d*\.\d+)$/;
 const optionLike = s => s.startsWith('-') && s !== '-' && !NEGATIVE.test(s) && !s.includes(' ');
@@ -142,6 +142,7 @@ export async function run(argv, { team = null, io = terminal } = {}) {
 
 async function create(argv, { home, folder, repo, scope, team, floor = 0 }) {
   const a = parseArgs(argv, team?.options);
+  if (a.showAll) showAll(true); // --depends-on and --split-from may name a team item
   const severity = a.severity ?? 'normal';
   const priority = a.priority ?? (severity === 'critical' ? 0 : undefined); // a critical finding jumps the queue (:62)
   if (!a.name && !a.splitFrom) return refuse('--name is required (or --split-from <phase>)');

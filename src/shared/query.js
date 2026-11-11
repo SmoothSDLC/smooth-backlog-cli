@@ -16,7 +16,7 @@ import { isForeign, undoneDependencies, visibleForeign } from './dependencies.js
 import { seam } from './seam.js';
 import { isArchived, isFinished, isOpen, lifted } from './status.js';
 
-const BOOL = ['next', 'status', 'critical', 'json', 'all', 'changed', 'branches'];
+const BOOL = ['next', 'status', 'critical', 'json', 'all', 'changed', 'branches', 'show-all'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'only'];
 const ONLY = { new: r => r.status === 'pending' || r.status === 'new', open: r => isOpen(r.status), done: r => isFinished(r.status) && !isArchived(r), archive: r => isArchived(r) };
 
@@ -145,6 +145,7 @@ export const run = (argv, { branchColumn = false } = {}) => store.cloneLocked(st
 async function query(argv, branchColumn) {
   let a;
   try { a = parse(argv); } catch (e) { return die(e.message); }
+  if (a['show-all']) index.showAll(true); // the team items are seen by every read below
 
   const cwd = process.cwd();
   let repo;
@@ -296,7 +297,7 @@ async function query(argv, branchColumn) {
     for (const r of shown) {
       const mark = { closed: '✅', done: '✅', archived: '📦', 'in progress': '🔄' }[r.status] ?? '•';
       const crit = (r.severity || 'normal') === 'critical' && isOpen(r.status) ? ' ⚠️CRIT' : '';
-      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority ?? '-', 3)}${crit}  ${r.name}${branchColumn ? `  (branch ${redact(r.branch ?? '')})` : ''}`);
+      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority ?? '-', 3)}${crit}  ${r.name}${branchColumn ? `  (branch ${redact(r.branch ?? '')})` : ''}${r.team ? `  (team ${redact(r.team)})` : ''}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
       // a dependency on another repository's item is shown with its state
       { // every status: a done item still shows what it depended on

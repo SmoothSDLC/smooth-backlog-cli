@@ -9,6 +9,7 @@ import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 
 import { dirname, join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { itemFileName, itemSlug, parseItem as parse, readItemFile, readItemText, stripItemExt, storedFm } from './item-file.js';
+import { sees } from './index.js'; // a cycle (index.js imports store.js, which imports this file): used only at run time
 import { configUser } from './setup.js';
 import { now, originRef, repoId, stateDir } from './store.js'; // a cycle (store.js imports this file): used only at run time
 
@@ -120,7 +121,7 @@ export function agentsUsing(home) {
 // reference commit and the current HEAD of the backlog clone: A added, M changed, D removed or
 // archived. A file moved inside the folder (an archive, a renumbering) is one D entry for its
 // old name; the item's author and time come from its new location (or its reference-commit
-// version when it is gone). Held: the agent's name in claimed_by, reviewer or refiner.
+// version when it is gone). Held: the agent's name in claimed_by of an item without a team.
 // Throws when the comparison itself fails (the reference commit is no longer in the clone, or
 // another git error): an empty report would be read as "no changes", and the caller must decide
 // what to do with the reference before it is advanced.
@@ -150,12 +151,13 @@ export function changedSince(home, folder, repo, reference, agent) {
     } else {
       try { fm = readItemFile(join(folder, rel(x.path))).fm; } catch { /* unreadable: no author or time */ }
     }
+    if (!sees({ fm })) continue; // a team item is no change a user command reports unless it was asked to see it
     entries.push({
       slug: stripItemExt(b),
       status: isMove ? 'D' : x.status,
       updated_by: fm.updated_by ?? '',
       updated: fm.updated ?? '',
-      held: fm.claimed_by === agent || fm.reviewer === agent || fm.refiner === agent,
+      held: !fm.team && fm.claimed_by === agent,
     });
   }
   return { held: entries.filter(e => e.held), others: entries.filter(e => !e.held) };

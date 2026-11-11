@@ -50,3 +50,11 @@ test('backlog fields lists the definition of an item without a team: no team row
   const keys = cli(['fields'], {}).stdout.split('\n').map(l => l.split(' ')[0]);
   for (const key of ['team', 'review_refs', 'claimed_by', 'claimed_at']) assert.ok(!keys.includes(key), key);
 });
+
+test('the pop help and the README say a rerun can end pop idle while a ready item exists; the changelog names git 2.40', () => {
+  const read = f => readFileSync(join(root, f), 'utf8');
+  const idle = /rerun[^\n]*idle[^\n]*exit 3[^\n]*ready item/i;
+  assert.match(read('src/team/help.js'), idle);
+  assert.match(read('README.md'), idle);
+  assert.match(read('CHANGELOG.md'), /older git[^\n]*2\.40|git 2\.40[^\n]*refus/i);
+});

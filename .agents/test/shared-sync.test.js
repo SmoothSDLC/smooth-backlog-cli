@@ -12,6 +12,7 @@ import { archivedRel, BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, env, GIT_IDENT
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
+import { guarded } from '../../src/shared/seen.js';
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -139,9 +140,10 @@ test('renumber: the later pusher gets nextSeq in file name, phase, seq and headi
   assert.deepEqual(result, [[1, 2]]);
   const beta = store.load(f.folder2).find(i => i.fm.name === 'beta');
   assert.deepEqual(beta.fm.events[0], line, 'the history survives a renumbering');
-  assert.equal(beta.fm.events[1].step, 'sync');
+  assert.equal(beta.fm.events[1].step, 'renumber');
   assert.match(beta.fm.events[1].note, /^renumbered 001 -> 002$/);
   assert.equal(beta.fm.events.length, 2);
+  assert.deepEqual(Object.keys(beta.fm.events[1].changes).sort(), ['seq', 'slug'], 'only what the renumbering changed, not an addition');
   assert.equal(beta.path, itemRel('002-beta'));
   assert.equal(beta.fm.phase, '002-beta'); assert.equal(beta.fm.seq, 2);
   assert.match(beta.body, /^\n# Phase 002 — beta\n/);
@@ -269,6 +271,9 @@ test('add/add: two clones create the same numbered file name with different bodi
   assert.deepEqual(result, [[1, 2]]);
   const clone = mkdtempSync(join(f.dir, 'verify-')); git(f.dir, 'clone', '-q', f.bare, clone);
   const items = store.load(join(clone, 'acme', 'demo'));
+  const renumbered = items[1].fm.events.at(-1);
+  assert.equal(renumbered.step, 'renumber');
+  assert.deepEqual(Object.keys(renumbered.changes).sort(), ['seq', 'slug'], 'the conflict path records the real before too');
   assert.deepEqual(items.map(i => [i.path, i.fm.seq, i.fm.phase]), [[itemRel('001-alpha'), 1, '001-alpha'], [itemRel('002-alpha'), 2, '002-alpha']]);
   assert.match(items[0].body, /first body/); assert.doesNotMatch(items[0].body, /second body/);
   assert.match(items[1].body, /^\n# Phase 002 — alpha\n\nsecond body\n/);
@@ -580,4 +585,18 @@ test('a command stages only its item files, index.json and numbers.json: a chang
   assert.ok(files.every(x => /(phases\/.+|index\.json|numbers\.json)$/.test(x)), `only owned paths: ${files.join(',')}`);
   assert.equal(readFileSync(join(f.folder, 'teams.json'), 'utf8'), '{"draft":true}\n', 'the draft is untouched');
   assert.deepEqual(git(f.home, 'status', '--porcelain', '--untracked-files=all').split('\n').map(l => l.trim().split(' ').pop()).sort(), ['acme/demo/stray.json', 'acme/demo/team-templates/x.txt', 'acme/demo/teams.json']);
+});
+
+test('a later write of the same command keeps every entry of the document it writes, the other clone\'s included', t => {
+  const f = fixture(t);
+  putItem(f.folder, 1, 'alpha');
+  const path = itemPath(f.folder, '001-alpha');
+  const foreign = { at: '2026-01-01T00:00:00Z', by: 'bob', session: '', step: 'update', changes: { summary: ['a', 'b'] }, note: 'the other clone' };
+  guarded(() => {
+    store.addEvent(f.folder, itemRel('001-alpha'), { event: 'update', note: 'mine' });
+    const doc = store.load(f.folder)[0]; // the file as a rebase leaves it: the other clone's entry next to the command's own
+    store.write({ path, fm: { ...doc.fm, events: [foreign, ...doc.fm.events], summary: 'remapped' }, body: doc.body });
+  });
+  const events = store.load(f.folder)[0].fm.events;
+  assert.deepEqual(events.map(e => e.note), ['the other clone', 'mine']);
 });

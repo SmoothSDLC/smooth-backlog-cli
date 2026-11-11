@@ -17,10 +17,10 @@ export const dumpItem = (fm, body) => toItemJson(toFileKeys(fm), body);
 export { hasFrontMatter, parseMarkdownItem, splitBom, toFileKeys };
 // The history entries of an in-memory item (none: an empty list).
 export const entriesOf = fm => (Array.isArray(fm.events) ? fm.events : []);
-// The history entry as one line, the way show --json prints it: '<at> <step> <note>' (by and changes are not in it).
+// An entry of an earlier build (no writer) as the one line it was: '<at> <step> <note>'.
 export const eventText = e => (typeof e === 'string' ? e : [e.at, e.step, e.note].filter((x, i) => i < 2 || x).join(' '));
-// The stored form of the header for output: the history as lines.
-export const storedFm = fm => { const out = storedMarkdown(fm); if (Array.isArray(out.events)) out.events = out.events.map(eventText); return out; };
+// The stored form of the header for output: the entries as they are; an entry of an earlier build stays the line it was.
+export const storedFm = fm => { const out = storedMarkdown(fm); if (Array.isArray(out.events)) out.events = out.events.map(e => (e.by ? e : eventText(e))); return out; };
 
 // The name scheme of item files: the one place that knows the extension and what a name, a slug and an item path look like.
 export const ITEM_EXT = '.json';

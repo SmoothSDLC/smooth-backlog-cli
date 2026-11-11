@@ -236,7 +236,8 @@ function changesOf(before, after) {
 // The session is only the caller's SMOOTH_BACKLOG_CLI_SESSION (never the agent name that lifecycle falls back to). No change and no note: no entry.
 function entryOf(d, fm) {
   const changes = changesOf(d.before, fm);
-  return Object.keys(changes).length || d.note ? { at: d.at, by: actor(), session: process.env.SMOOTH_BACKLOG_CLI_SESSION ?? '', step: d.step, changes, note: d.note } : null;
+  const note = d.note || (Object.keys(changes).length ? d.planning : ''); // a planning sentence alone is no change
+  return Object.keys(changes).length || note ? { at: d.at, by: actor(), session: process.env.SMOOTH_BACKLOG_CLI_SESSION ?? '', step: d.step, changes, note } : null;
 }
 
 export const write = (item, root) => writeItem(trail(), item, root);
@@ -250,7 +251,11 @@ function writeItem(t, item, root) {
   const key = resolve(item.path);
   if (t && !t.has(key)) t.set(key, { before: existsSync(item.path) ? (() => { try { return readItemFile(item.path).fm; } catch { return null; } })() : null }); // what the command found
   const d = t?.get(key);
-  if (d?.step) item.fm.events = [...entriesOf(item.fm).slice(0, d.base), ...[d.entry = entryOf(d, item.fm)].filter(Boolean)]; // one entry per command, rebuilt by every write of it
+  if (d?.step) { // one entry per command: a later write of it replaces the command's own entry (or appends it); every other entry of the document stays
+    const own = JSON.stringify(d.entry ?? null);
+    d.entry = entryOf(d, item.fm);
+    item.fm.events = [...entriesOf(item.fm).filter(e => JSON.stringify(e) !== own), ...[d.entry].filter(Boolean)];
+  }
   if (!existsSync(item.path)) created(base, relative(base, item.path));
   note(item.path);
   atomicWrite(item.path, dump(item.fm, item.body));
@@ -417,13 +422,14 @@ export const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 export { hasFrontMatter, isItemName, itemFileName, itemSlug, parseEvent, storedFm } from './item-file.js'; // the event record of an item's history is written by item-file.js
 // Declares the step and the note of the running command's history entry for an item and rewrites the file, which gains the entry (write builds it).
 // The first event names the step; a later one (the planning sentence) is the note only when the command has none. The file is re-read first.
-export function addEvent(folder, path, { event, note = '' }) {
+export function addEvent(folder, path, { event, note = '', before }) { // before: the item as it was when the file at this path is not it (a renumbered item written to its new path)
   const abs = join(folder, path);
   const { fm, body } = readItemFile(abs);
   const t = trail() ?? new Map(); // outside a command: this call alone is the command
   const d = t.get(resolve(abs)) ?? t.set(resolve(abs), { before: fm }).get(resolve(abs));
-  if (!d.step) { d.step = event; d.base = entriesOf(fm).length; d.at = now(); d.note = ''; }
-  d.note ||= String(note).replace(/\s+/g, ' ').trim();
+  const text = String(note).replace(/\s+/g, ' ').trim();
+  if (!d.step) { if (before) d.before = before; d.step = event; d.at = now(); d.note = ''; d.planning = ''; }
+  if (event === 'planning_event') d.planning ||= text; else d.note ||= text;
   writeItem(t, { path: abs, fm, body }, folder);
   return d.entry;
 }

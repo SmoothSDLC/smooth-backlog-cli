@@ -408,15 +408,18 @@ test('075: --phase prints the full item (row, front matter, body) by slug and by
   const noEvents = j => { const { events, ...fm } = j.front_matter; return [{ ...j, front_matter: fm }, events]; };
   const [bySlug, betaEvents] = noEvents(normJson(view(f, ['show', '002-beta']).stdout));
   assert.deepEqual(bySlug, beta, 'by slug');
-  assert.match(betaEvents[0], /^TS new added 002-beta at rank 0/);
+  assert.equal(betaEvents[0].step, 'new');
+  assert.match(betaEvents[0].note, /^added 002-beta at rank 0/);
   const gamma = { ...beta, id: 3, seq: 3, slug: '003-gamma', name: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal', priority: 2, path: itemRel('003-gamma'),
     front_matter: { ...beta.front_matter, phase: '003-gamma', seq: 3, title: 'Gamma', objective: 'Caf\u00e9 \u2615 Gamma', summary: 'sum Gamma', status: 'in progress', severity: 'normal' } };
   gamma.body = '\n# Phase 003 — Gamma\n\n**Objective:** Caf\u00e9 \u2615 Gamma\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n';
   const [byNumber, events] = noEvents(normJson(view(f, ['show', '3']).stdout));
   assert.deepEqual(byNumber, gamma, 'by number');
   assert.equal(events.length, 2);
-  assert.match(events[0], /^TS new added 003-gamma/);
-  assert.match(events[1], /^TS update/);
+  assert.equal(events[0].step, 'new');
+  assert.ok(events[0].by, 'the entry object keeps its writer');
+  assert.match(events[0].note, /^added 003-gamma/);
+  assert.equal(events[1].step, 'update');
   assert.deepEqual(noEvents(normJson(view(f, ['show', '003']).stdout))[0], gamma, 'zero-padded numbers resolve to the same item');
   assert.match(view(f, ['show', 'nope'], 1).stdout, /no phase 'nope'/);
 });

@@ -38,7 +38,7 @@ export async function repairUnreadable(a, folder, bad) {
     const old = (await git(['show', `${from}:./${path}`], folder)).stdout;
     try { parseItem(old); } catch { return refuse(`the earlier version of ${slug} cannot be read either`); }
     store.writeText(abs, old, folder);
-    store.addEvent(folder, path, { event: 'repair', note: `restored ${slug} to its version of ${from.slice(0, 7)}` });
+    store.addEvent(folder, path, { event: 'restore', note: `restored ${slug} to its version of ${from.slice(0, 7)}` });
     store.reflow(folder);
     a.guard = []; a.claims = []; a.wrote = { slug, path };
     say(`✅ ${slug} restored to its previous version`);

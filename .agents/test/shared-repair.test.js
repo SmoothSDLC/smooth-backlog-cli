@@ -80,7 +80,7 @@ test('restore: the previous committed version comes back, with a restored event,
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const doc = readItem(w.file);
   assert.equal(doc.fm.summary, 'good one');
-  assert.equal(doc.fm.events.at(-1).step, 'repair');
+  assert.equal(doc.fm.events.at(-1).step, 'restore');
   assert.match(doc.fm.events.at(-1).note, /^restored 001-alpha-job to its version of [0-9a-f]{7}$/);
   assert.equal(w.git('status', '--porcelain'), '');
   assert.equal(w.git('rev-parse', 'HEAD'), w.git('rev-parse', 'origin/main'));

@@ -2,6 +2,7 @@
 // and `backlog history` printing it. Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,7 +20,7 @@ function build() {
   const ok = (args, env) => { const r = run(args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
   ok(['new', '--name', 'Alpha', '--objective', 'o', '--summary', 's', '--depends-on', 'none']);
   const file = itemPath(join(home, 'acme', 'demo'), '001-alpha');
-  return { run, ok, file, history: () => readStored(file).fm.events };
+  return { run, ok, file, cons, history: () => readStored(file).fm.events };
 }
 
 test('a user command writes one whole entry: when, who, session, step, the changed keys before and after, and the note', () => {
@@ -81,4 +82,46 @@ test('backlog history prints a created item as added plus the note, while the en
   const f = build();
   assert.ok(Object.keys(f.history()[0].changes).length > 5);
   assert.match(f.ok(['history', '1']).stdout, /^ {2}\S+ {2}new {12}ann {2}added added 001-alpha at rank end; backlog re-densified to 1 item\(s\)\n$/);
+});
+
+test('the file text of an entry is byte-exact: the keys in order, the changes as before/after pairs, the note', () => {
+  const f = build();
+  f.ok(['update', '1', '--summary', 'x', '--note', 'why'], { SMOOTH_BACKLOG_CLI_SESSION: 's-1' });
+  const at = f.history().at(-1).at;
+  const text = readFileSync(f.file, 'utf8');
+  assert.ok(text.includes(`    { "at": "${at}", "by": "ann", "session": "s-1", "step": "update", "changes": {"summary":["s","x"]}, "note": "why" }`), text);
+});
+
+test('an item whose history is lines of an earlier build keeps them on its next write, and show --json hands them out as they were', () => {
+  const f = build();
+  const doc = JSON.parse(readFileSync(f.file, 'utf8'));
+  writeFileSync(f.file, JSON.stringify({ ...doc, history: [{ at: '2026-01-01T00:00:00Z', step: 'claimed', note: 'main abc1234567 Claimed by bob' }] }));
+  f.ok(['update', '1', '--summary', 'x']);
+  assert.deepEqual(f.history().map(e => [e.at, e.step, e.by]), [['2026-01-01T00:00:00Z', 'claimed', ''], [f.history()[1].at, 'update', 'ann']]);
+  assert.deepEqual(JSON.parse(f.ok(['show', '1', '--json']).stdout).front_matter.events[0], '2026-01-01T00:00:00Z claimed main abc1234567 Claimed by bob');
+});
+
+test('show --json carries the entry objects unchanged', () => {
+  const f = build();
+  f.ok(['update', '1', '--summary', 'x', '--note', 'why'], { SMOOTH_BACKLOG_CLI_SESSION: 's-2' });
+  const events = JSON.parse(f.ok(['show', '1', '--json']).stdout).front_matter.events;
+  assert.deepEqual(events, f.history());
+  assert.deepEqual({ ...events.at(-1), at: 0 }, { at: 0, by: 'ann', session: 's-2', step: 'update', changes: { summary: ['s', 'x'] }, note: 'why' });
+});
+
+test('done on an item that is already closed adds no entry', () => {
+  const f = build();
+  f.ok(['done', '1']);
+  const n = f.history().length;
+  f.ok(['done', '1']);
+  assert.equal(f.history().length, n);
+});
+
+test('the step of a move is move', () => {
+  const f = build();
+  execFileSync('git', ['push', '-q', 'origin', 'HEAD:refs/heads/release'], { cwd: f.cons });
+  f.ok(['move', '1', '--to-branch', 'release']);
+  const e = f.history().at(-1);
+  assert.equal(e.step, 'move');
+  assert.deepEqual(e.changes.branch, ['main', 'release']);
 });

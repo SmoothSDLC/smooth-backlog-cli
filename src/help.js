@@ -218,7 +218,7 @@ Options:
   --restore
       Replace the item by its previous version: its content at the commit before the last one that changed it (the last
       committed content when the file has a local edit). An item with no earlier version is refused, and so is an earlier
-      version that cannot be read either. A restored item records a restored event. This is the way out for an item
+      version that cannot be read either. A restored item records a restore entry. This is the way out for an item
       that cannot be read, next to setting a wrongly typed key of a file that is valid JSON again (backlog update <item> --<key> <value>,
       for name or seq). It takes no other option.
   --append APPEND
@@ -399,7 +399,7 @@ Example:
 Usage:
   backlog history [<item>]
 
-Prints the history that is kept in the item files, newest first, one line per entry. Every command that changes an item adds one entry to it: the time, the step (the command that wrote the entry: new, update, done, archive, move, repair; a team command keeps its own step word), who made it, the keys that changed
+Prints the history that is kept in the item files, newest first, one line per entry. Every command that changes an item adds one entry to it: the time, the step (the command that wrote the entry: new, update, done, archive, move, restore, renumber; a team command keeps its own step word), who made it, the keys that changed
 as key: before -> after (a key that did not exist reads null; updated, updated_by and the history itself are not listed) and the note (--note, else the planning sentence of the command). An entry of an item made before
 entries carried a writer and the changes prints as it did: the time, the event, the branch, the commit and the note.
 With an item (number or slug) it prints the events of that item. Without one it prints the latest 50 events of the backlog, archived items

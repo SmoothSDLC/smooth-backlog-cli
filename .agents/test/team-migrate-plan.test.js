@@ -2,13 +2,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { GIT_IDENTITY, sharedBacklog } from './shared-fixtures.js';
 import { readFolder, planFolder } from '../../src/team/migrate-plan.js';
 import { foreignItem } from '../../src/shared/dependencies.js';
 import { load } from '../../src/shared/store.js';
+import { toItemJson } from '../../src/shared/item-json.js';
+import { readItems } from '../../src/team/item.js';
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -200,4 +202,65 @@ test('a foreign dependency on a folder still in markdown reads as no such item a
   assert.equal(foreignItem(dir, 'acme/other#1'), null);
   assert.throws(() => load(dir), e => e.code === 'MARKDOWN_ITEMS');
   assert.deepEqual(plan(dir).failures, []);
+});
+
+test('an unreadable markdown file stops store.load and readItems as before (the first header wins) and is one line of the plan, with no absolute path', t => {
+  if (process.getuid?.() === 0) return; // root reads a mode 000 file
+  const { home, dir, put } = setup(t);
+  put('phases/001-a.md', md(1, '', '001-a')); put('phases/002-b.md', md(2, '', '002-b')); commit(home);
+  chmodSync(join(dir, 'phases', '002-b.md'), 0);
+  try {
+    assert.throws(() => load(dir), e => e.code === 'MARKDOWN_ITEMS');
+    assert.throws(() => readItems(dir), e => e.code === 'MARKDOWN_ITEMS');
+    const p = plan(dir);
+    assert.deepEqual(p.failures, ['acme/app/phases/002-b.md: the file cannot be read']);
+    assert.equal(p.converted.length, 1);
+  } finally { chmodSync(join(dir, 'phases', '002-b.md'), 0o644); }
+});
+
+test('an item without a team is written in the order every CLI write uses; a team item in its team order', t => {
+  const { home, dir, put } = setup(t);
+  put('phases/001-x.md', md(1, 'commit: c\nlocation: l\nobjective: o\nsummary: s\n')); commit(home);
+  const fm = { seq: 1, phase: '001-x', name: 'N1', repository: L, branch: '', created: null, updated: '', updated_by: '', status: 'pending', commit: 'c', location: 'l', objective: 'o', summary: 's' };
+  assert.equal(plan(dir).converted[0].json, toItemJson(fm, 'body 1\n'));
+});
+
+test('the counter is the largest number any item holds when the history is lower (an unnumbered file, a JSON item)', t => {
+  const { home, dir, put } = setup(t);
+  put('phases/foo.md', md(1, '', 'foo').replace('seq: 1', 'seq: 50')); put('phases/002-x.md', md(2)); commit(home);
+  assert.equal(plan(dir).counter, 50);
+  put('phases/060-j.json', '{"seq": 60}'); // not committed: only the item itself holds the number
+  assert.equal(plan(dir).counter, 60);
+});
+
+test('three holders of one number give one line per later holder', t => {
+  const { home, dir, put } = setup(t);
+  put('phases/004-a.md', md(4, '', '004-a')); put('phases/004-b.md', md(4, '', '004-b')); put('archive/004-c.md', md(4, '', '004-c')); commit(home);
+  assert.deepEqual(plan(dir).failures, [
+    'acme/app: number 4 is held by 004-a and 004-b; give one of them a free number in markdown and run again',
+    'acme/app: number 4 is held by 004-a and 004-c; give one of them a free number in markdown and run again',
+  ]);
+});
+
+test('the plan holds each item to its file name: a seq or phase that differs is a failure; an unnumbered file is counted by its header seq', t => {
+  const { home, dir, put } = setup(t);
+  put('phases/001-x.md', md(2, '', '001-x')); put('phases/002-y.md', md(2, '', '002-other')); put('phases/foo.md', md(7, '', 'foo')); put('phases/bar.md', md(7, '', 'bar')); commit(home);
+  const f = plan(dir).failures;
+  assert.ok(f.some(x => /phases\/001-x\.md: the header cannot be read \(seq 2 differs from the file name's number 1\)/.test(x)), f.join('|'));
+  assert.ok(f.some(x => /phases\/002-y\.md: the header cannot be read \(phase 002-other differs from the file name\)/.test(x)), f.join('|'));
+  assert.ok(f.includes('acme/app: number 7 is held by bar and foo; give one of them a free number in markdown and run again'), f.join('|'));
+});
+
+test('a detached HEAD is listed among the refs', t => {
+  const { home, dir, put } = setup(t);
+  put('phases/001-x.md', md(1)); commit(home); git(home, 'checkout', '-q', '--detach');
+  assert.ok(plan(dir).refs.includes('HEAD'));
+});
+
+test('a corrupt numbers.json is listed even when a name above the bound stopped the counter', t => {
+  const { home, dir, put } = setup(t);
+  put('phases/2000000000-big.md', md(1, '', '2000000000-big')); put('numbers.json', 'not json'); commit(home);
+  const f = plan(dir).failures;
+  assert.equal(f.length, 2);
+  assert.match(f[1], /^numbers\.json cannot be read/);
 });

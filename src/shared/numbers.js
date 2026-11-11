@@ -27,6 +27,14 @@ const history = (cwd, args) => {
 export const tooBig = name => new BacklogError('UNREADABLE_ITEM', `item ${name}: the number in the file name is above ${MAX_SEQ}, so the item cannot be read; rename or remove the file`, 2);
 export const numberOf = name => { const m = NUM.exec(name); return m ? Number(m[1]) : null; };
 
+// The value of the folder's numbers.json (it must exist); a file that cannot be read is refused.
+export function counterLast(folder) {
+  let last;
+  try { last = JSON.parse(readFileSync(join(folder, NUMBER_FILE), 'utf8')).last; } catch { /* checked below */ }
+  if (!Number.isInteger(last) || last < 0) throw new BacklogError('STORAGE_ERROR', `${NUMBER_FILE} cannot be read (it must hold {"last": <number>}); restore it from the repository history or remove it`, 2);
+  return last;
+}
+
 // The highest number the folder (an absolute path) ever held. refs: what the history scan reads; tree: also read the working tree.
 export function highWater(folder, { refs = ['--all'], tree = true } = {}) {
   folder = resolve(folder);
@@ -63,13 +71,7 @@ export function highWater(folder, { refs = ['--all'], tree = true } = {}) {
         see(m[1]);
       }
     }
-    const counter = join(folder, NUMBER_FILE);
-    if (existsSync(counter)) {
-      let last;
-      try { last = JSON.parse(readFileSync(counter, 'utf8')).last; } catch { /* checked below */ }
-      if (!Number.isInteger(last) || last < 0) throw new BacklogError('STORAGE_ERROR', `${NUMBER_FILE} cannot be read (it must hold {"last": <number>}); restore it from the repository history or remove it`, 2);
-      see(last);
-    }
+    if (existsSync(join(folder, NUMBER_FILE))) see(counterLast(folder));
   }
   return max;
 }

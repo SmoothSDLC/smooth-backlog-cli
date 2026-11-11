@@ -4,9 +4,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, resolve, sep } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { parseMarkdownRaw } from '../shared/item-file.js';
+import { hasFrontMatter, parseMarkdownRaw } from '../shared/item-file.js';
+import { BUILT_IN_ORDER } from '../shared/item-definition.js';
 import { readDoc } from '../shared/item-json.js';
-import { MAX_SEQ, numberOf, seed } from '../shared/numbers.js';
+import { MAX_SEQ, counterLast, numberOf, seed } from '../shared/numbers.js';
 import { git, itemFiles } from '../shared/store.js';
 import { convertItem } from './migrate-convert.js';
 
@@ -21,16 +22,18 @@ export function readFolder(dir) {
   dir = resolve(dir);
   const label = dir.split(sep).slice(-2).join('/');
   const at = path => `${label}/${path}`;
-  const { files, skipped, markdownItems } = itemFiles(dir, { tolerant: true });
+  const { files, skipped, markdownPaths } = itemFiles(dir, { tolerant: true });
   const failures = [];
   for (const s of skipped) {
     failures.push(s.kind === 'link' ? `${at(s.path)}: Symlink destination is unsupported. Resolve it before using backlog.`
       : `${at(s.path)}: the number in the file name is above ${MAX_SEQ}; rename the file${s.path.endsWith('.md') ? ' in markdown' : ''} and run backlog team migrate again`);
   }
   const items = [];
-  for (const path of [...markdownItems, ...files].sort()) {
+  for (const path of [...markdownPaths, ...files].sort()) {
     const kind = path.endsWith('.md') ? 'md' : 'json';
-    const text = readFileSync(`${dir}/${path}`, 'utf8');
+    let text;
+    try { text = readFileSync(`${dir}/${path}`, 'utf8'); } catch { failures.push(`${at(path)}: the file cannot be read`); continue; }
+    if (kind === 'md' && !hasFrontMatter(text)) continue; // no header block: not an item
     let team, seq = null;
     try {
       if (kind === 'md') { const { fm } = parseMarkdownRaw(text); team = fm.team; seq = fm.seq; } else { const d = readDoc(text); team = d.team; seq = d.seq; }
@@ -69,7 +72,7 @@ export function planFolder(read, { teams, repo } = {}) {
   for (const i of read.items) if (i.number !== null && !slugs.has(i.base)) slugs.set(i.base, i.number);
   for (const i of read.items.filter(x => x.kind === 'md')) {
     try {
-      const order = Object.keys(teams?.[i.team]?.item ?? {});
+      const order = i.team === undefined ? BUILT_IN_ORDER : Object.keys(teams?.[i.team]?.item ?? {});
       const c = convertItem(i.text, { folderRepo, slugs, order, fileName: i.base });
       converted.push({ from: i.path, to: `${stemOf(i.path)}.json`, slug: c.slug, seq: c.seq, archived: i.archived, json: c.json, item: c.item, doc: c.doc, fm: c.fm, body: c.body, warnings: c.warnings });
       for (const w of c.warnings) unresolved.push(`${label}/${i.path}: ${w}`);
@@ -79,16 +82,21 @@ export function planFolder(read, { teams, repo } = {}) {
     }
   }
   let counter = null;
-  try { counter = seed(dir); } catch (e) {
+  try {
+    counter = Math.max(seed(dir), ...read.items.map(i => i.number ?? 0), ...converted.map(c => c.seq)); // a number an item holds is never handed out again
+  } catch (e) {
     if (!(e instanceof BacklogError)) throw e;
-    if (e.code !== 'UNREADABLE_ITEM') failures.push(e.message); // a number above the bound in a file name is listed by the walk
+    if (e.code !== 'UNREADABLE_ITEM') failures.push(e.message); // a number above the bound in a file name is listed by the walk; the counter file is still checked
+    else if (existsSync(`${dir}/numbers.json`)) { try { counterLast(dir); } catch (x) { failures.push(x.message); } }
   }
   return { converted, jsonCount: read.jsonCount, failures, unresolved, counter, refs: refsOf(dir) };
 }
 
-// The refs whose history the counter reads (highWater reads --all): every ref of the clone, tags, stash and remote branches included.
+// The refs whose history the counter reads (highWater reads --all): every ref of the clone, tags, stash and remote branches included, and a detached HEAD.
 function refsOf(dir) {
   let cwd = dir; while (!existsSync(cwd) && dirname(cwd) !== cwd) cwd = dirname(cwd);
   const r = git(['for-each-ref', '--format=%(refname:short)', 'refs/'], cwd);
-  return r.code ? [] : r.stdout.split('\n').filter(Boolean);
+  const refs = r.code ? [] : r.stdout.split('\n').filter(Boolean);
+  if (git(['symbolic-ref', '-q', 'HEAD'], cwd).code && !git(['rev-parse', '--verify', '-q', 'HEAD'], cwd).code) refs.push('HEAD'); // a detached HEAD is read by --all too
+  return refs;
 }

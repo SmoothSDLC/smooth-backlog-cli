@@ -300,7 +300,7 @@ export function unreadable(dir) {
   try { load(dir); return null; } catch (e) { if (e.unreadable) return e; throw e; }
 }
 
-// The item files of a folder (live in phases/, archived under archive/, paths relative to it, in name order) and whether the folder holds markdown items (markdownItems: those files).
+// The item files of a folder (live in phases/, archived under archive/, paths relative to it, in name order) and whether the folder holds markdown items (markdownPaths: every .md file, none read).
 // The one walk of every reader: a link anywhere below the folder and an item file named with a number above the bound stop it. tolerant: they are
 // listed instead, as skipped = [{ path, kind: 'link' | 'number', error }], and the walk goes on.
 export function itemFiles(dir, { tolerant = false } = {}) {
@@ -324,8 +324,7 @@ export function itemFiles(dir, { tolerant = false } = {}) {
   walk('phases', false);
   walk('archive', true);
   // a folder of markdown items is no folder of items; a .md file without a header (a README) is no item
-  const markdownItems = markdown.filter(path => hasFrontMatter(readItemText(join(dir, path))));
-  return { files, skipped, markdown: markdownItems.length > 0, markdownItems };
+  return { files, skipped, markdown: markdown.some(path => hasFrontMatter(readItemText(join(dir, path)))), markdownPaths: markdown };
 }
 // The refusal of a folder of markdown items (exit 2).
 export const markdownError = dir => Object.assign(new BacklogError('MARKDOWN_ITEMS', `the items of ${resolve(dir).split(sep).slice(-2).join('/')} are markdown files; run backlog team migrate once to convert every item to JSON`, 2), { markdown: dir });

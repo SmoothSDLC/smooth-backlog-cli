@@ -76,8 +76,9 @@ function conflictSetup(t, personLine) {
   writeFileSync(join(other, 'notes.txt'), personLine);
   return { f, item, home2 };
 }
-async function failedPull(t, personLine) {
+async function failedPull(t, personLine, untracked = false) {
   const { f, item, home2 } = conflictSetup(t, personLine);
+  if (untracked) writeFileSync(join(f.home, 'acme', 'other', 'b-new.txt'), 'mine\n'); // a path upstream adds below
   await sync.pull(f.home); // the command's starting snapshot
   item(f.folder, 'mine'); // the command's change of alpha
   // upstream: a conflicting change of alpha, an edit and a new file in the other folder
@@ -109,6 +110,27 @@ test('backlog clone: a person\'s edit that conflicts with the upstream change is
   assert.equal(git(f.home, 'diff', '--cached', '--name-only'), '');
 });
 
+test('backlog clone: a person\'s untracked file at a path upstream added stays as a modified file, not a deletion of upstream\'s', async t => {
+  const { f } = await failedPull(t, 'l1\nl2\nP3\n', true);
+  assert.equal(readFileSync(join(f.home, 'acme', 'other', 'b-new.txt'), 'utf8'), 'mine\n');
+  assert.equal(git(f.home, 'status', '--porcelain', '--', 'acme/other/b-new.txt'), 'M acme/other/b-new.txt');
+});
+
+test('code repository: a person\'s untracked file at a path upstream added stays untouched after a failed pull', async t => {
+  const f = modes['code repository'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  const repo = join(f.home, '..'); const b = join(f.dir, 'b'); git(f.dir, 'clone', '-q', f.bare, b);
+  await sync.pull(f.home);
+  writeFileSync(join(repo, 'code2.js'), 'mine\n');
+  store.write({ path: itemPath(f.folder, '001-alpha'), fm: { ...ENVELOPE, phase: '001-alpha', seq: 1, name: 'alpha', status: 'pending', repository: 'acme/demo', branch: 'main', summary: 'mine' }, body: '\n# x\n' });
+  store.write({ path: itemPath(join(b, '.backlog', 'acme', 'demo'), '001-alpha'), fm: { ...ENVELOPE, phase: '001-alpha', seq: 1, name: 'alpha', status: 'pending', repository: 'acme/demo', branch: 'main', summary: 'theirs' }, body: '\n# x\n' });
+  writeFileSync(join(b, 'code2.js'), 'theirs\n'); git(b, 'add', '-A'); git(b, 'commit', '-qm', 'theirs'); git(b, 'push', '-q');
+  await assert.rejects(sync.commitSettled(f.home, f.folder, 'change alpha'), /change was not published/);
+  assert.equal(readFileSync(join(repo, 'code2.js'), 'utf8'), 'mine\n');
+  assert.equal(git(repo, 'status', '--porcelain', '--', 'code2.js'), '?? code2.js');
+});
+
 test('code repository: a person\'s edit that conflicts with the pull: the command\'s deleted item comes back and the next step is named', async t => {
   const f = modes['code repository'](t);
   item(f.folder, 1, 'alpha'); item(f.folder, 2, 'beta');
@@ -123,7 +145,8 @@ test('code repository: a person\'s edit that conflicts with the pull: the comman
   assert.ok(existsSync(itemPath(f.folder, '001-alpha')), 'the removed item is back');
   assert.match(git(repo, 'stash', 'list'), /autostash/);
   assert.match(e.message, /your own edit is kept in the stash/);
-  assert.match(e.message, /git -C .* reset --soft [0-9a-f]{40}/);
+  assert.doesNotMatch(e.message, /then run the command again\), and/);
+  assert.match(e.message, /Next: resolve the conflicted files \(git -C \S+ status\), git add them, then run: git -C \S+ reset --soft [0-9a-f]{40}  and then run the command again$/);
 });
 
 function item(folder, seq, name) { store.write({ path: itemPath(folder, `00${seq}-${name}`), fm: { ...ENVELOPE, phase: `00${seq}-${name}`, seq, name, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: '\n# x\n' }); }

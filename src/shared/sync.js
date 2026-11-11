@@ -496,8 +496,9 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
         putBack(mineSet);
         for (const p of mineSet) if (!inTarget.has(p)) { await g(home, ['rm', '-q', '--cached', '--ignore-unmatch', '--', lit(p)]); rmSync(join(home, p), { force: true }); }
         const stash = (await g(home, ['stash', 'list'])).stdout.trim().split('\n').filter(Boolean)[0];
-        throw new BacklogError('SYNC_FAILED', `The change was not published in ${home} (${cause.message}), and your uncommitted edit of ${unmerged.slice(0, 5).join(', ')} conflicts with what was pulled, so the unpublished commit could not be taken back. `
-          + `The files of the change are put back; your own edit is kept in the stash${stash ? ` (${stash})` : ''}. Next: resolve the conflict in ${unmerged.slice(0, 5).join(', ')} (git -C ${home} status), then run: git -C ${home} reset --soft ${sha}  and run the command again`, 3);
+        const why = cause.message.replace(/[,;]? then run the command again\)?$/, '');
+        throw new BacklogError('SYNC_FAILED', `The change was not published in ${home} (${why}), and your uncommitted edit of ${unmerged.slice(0, 5).join(', ')} conflicts with what was pulled, so the unpublished commit could not be taken back. `
+          + `The files of the change are put back; your own edit is kept in the stash${stash ? ` (${stash})` : ''}. Next: resolve the conflicted files (git -C ${home} status), git add them, then run: git -C ${home} reset --soft ${sha}  and then run the command again`, 3);
       }
       await must(home, ['reset', '-q', '--soft', target], 'take back the unpublished change');
       // Only the command's own paths go back: a lead's uncommitted team file, the SHA in .backlog/config.json and a person's own edits stay.
@@ -513,11 +514,11 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       putBack(mine);
       // The reset to the fetched upstream leaves what upstream changed elsewhere looking staged as reverted: those paths follow HEAD.
       const person = new Set([...saved.dirty, ...saved.staged, ...saved.files.keys()]);
-      const stray = paths(await must(home, ['diff', '--cached', '--name-only', '--no-renames', '-z', 'HEAD'], 'list the staged paths')).filter(p => !mine.has(p) && !person.has(p));
+      const stray = paths(await must(home, ['diff', '--cached', '--name-only', '--no-renames', '-z', 'HEAD'], 'list the staged paths')).filter(p => !mine.has(p));
       if (stray.length) {
         const there = new Set(paths(await g(home, ['ls-tree', '-r', '--name-only', '-z', 'HEAD', '--', ...stray.map(lit)])));
         await must(home, ['restore', '-q', '--staged', '--source=HEAD', '--', ...stray.map(lit)], 'take back the unpublished change');
-        const back = stray.filter(p => there.has(p));
+        const back = stray.filter(p => there.has(p) && !person.has(p)); // a person's own file stays as it is on disk
         if (back.length) await must(home, ['restore', '-q', '--worktree', '--source=HEAD', '--', ...back.map(lit)], 'take back the unpublished change');
       }
       // The person's own staging goes back as it was, except for a path upstream changed meanwhile: there the person's edit is laid over the upstream version.

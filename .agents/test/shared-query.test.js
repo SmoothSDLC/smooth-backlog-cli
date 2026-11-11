@@ -470,7 +470,7 @@ test('075: --events (all, and for one item) and --by-branch: the exact lines', (
   for (const [n, slug, rank] of [[1, '001-alpha', 'end'], [2, '002-beta', '0'], [3, '003-gamma', 'end'], [4, '004-delta', 'end'], [5, '005-feat', 'end']]) {
     assert.ok(lines.some(l => new RegExp(`^ {2}TS {2}new {12}driver-\\d {2}added added ${slug} at rank ${rank}; backlog re-densified to \\d item\\(s\\)$`).test(l)), slug);
   }
-  assert.ok(lines.some(l => /^ {2}TS {2}update {9}driver-5 {2}status: pending -> in progress, review_state: none -> null$/.test(l)));
+  assert.ok(lines.some(l => /^ {2}TS {2}update {9}driver-5 {2}status: pending -> in progress$/.test(l)));
   assert.ok(lines.some(l => /^ {2}TS {2}update {9}driver-6 {2}status: pending -> closed, .*completed: null -> TS completed 004-delta; backlog re-prioritized to 3 item\(s\)$/.test(l)));
   assert.match(view(f, ['history', '002-beta']).stdout, /^ {2}\S+ {2}new {12}\S+ {2}added added 002-beta at rank 0.*\n$/, 'one item: only its own lines');
   assert.equal(norm(reader(f, ['--by-branch', 'main']).stdout),

@@ -138,7 +138,7 @@ test('new: writes the item, records its history, commits as "acme/demo: new --na
     + '   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   const [item] = items(f);
   assert.deepEqual(Object.keys(item.fm), ['phase', 'seq', 'name', 'repository', 'branch', 'created', 'updated', 'updated_by', 'status', 'objective', 'summary', 'location', 'commit',
-    'severity', 'claimed_by', 'owner', 'claimed_at', 'depends_on', 'events']); // the envelope of the file first, then the fields in the order of the definition (B06c1: the header order of the markdown file is gone)
+    'severity', 'claimed_by', 'owner', 'claimed_at', 'depends_on', 'events']); // the envelope of the file first, then the fields in the order of the definition
   assert.deepEqual({ ...item.fm, created: 0, updated: 0, updated_by: 0, commit: 0, events: 0 }, { phase: '001-alpha-job', seq: 1, name: 'Alpha job', objective: 'do alpha', summary: 'sum alpha',
     status: 'pending', severity: 'normal', repository: 'acme/demo', branch: 'main', commit: 0, location: '', created: 0, updated: 0, updated_by: 0,
     depends_on: [], claimed_by: '', claimed_at: '', owner: defaultUser(f.cons), events: 0 });
@@ -476,4 +476,12 @@ test('--status with --team is refused: a team item starts in its own first statu
   assert.equal(r.status, 1);
   assert.match(r.stdout, /--status cannot be combined with --team/);
   assert.equal(items(f).length, 0);
+});
+
+test('--status archived is refused as update --status archived is, and creates nothing', t => {
+  const f = fixture(t);
+  const r = node(f, [...NONE, '--status', 'archived']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "❌ --status 'archived': backlog archive moves a finished item to archive/\n");
+  assert.deepEqual(items(f), []);
 });

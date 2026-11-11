@@ -6,7 +6,7 @@ import { toItemJson } from '../../src/shared/item-json.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog, archivedPath, changeItem, itemPath, readItem, createdSlug } from './shared-fixtures.js';
+import { cli, consumer, sharedBacklog, archivedPath, changeItem, itemPath, readItem, createdSlug, writeItem } from './shared-fixtures.js';
 
 test('the item file writes the fields in the order of the definition', () => {
   const fm = { phase: '001-a', seq: 1, name: 'a', repository: 'r', branch: 'b', updated: 'u', zz_extra: 1 };
@@ -98,5 +98,16 @@ test('new writes no review_state or reviewer, --split-from writes parent, done s
     assert.equal(rowsOf()[two], 'passed');
     const shown = JSON.parse(ok(['show', '2', '--json']).stdout).front_matter;
     assert.equal(shown.review_state, 'passed'); assert.equal(shown.reviewer, 'rex');
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test('an item without a team reads its status as stored in the list and in show', () => {
+  const t = mkdtempSync(join(tmpdir(), 'item-stored-status-'));
+  try {
+    const home = sharedBacklog(t); const cons = consumer(t, 'acme', 'demo', 'main'); const folder = join(home, 'acme', 'demo');
+    writeItem(itemPath(folder, '001-stored'), { name: '', repository: 'acme/demo', branch: 'main', updated: '2026-10-01T00:00:00Z', seq: 1, status: 'done' }, 'x\n');
+    const ok = args => { const r = cli(args, { cwd: cons, tmp: t }); assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout); };
+    assert.deepEqual(ok(['list', 'done', '--json']).phases.map(p => [p.seq, p.status]), [[1, 'done']]);
+    assert.equal(ok(['show', '001-stored', '--json']).status, 'done');
   } finally { rmSync(t, { recursive: true, force: true }); }
 });

@@ -8,7 +8,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as handoff from '../../src/team/handoff.js';
-import { foreignItem } from '../../src/shared/dependencies.js';
+import { foreignItem, undoneDependencies } from '../../src/shared/dependencies.js';
+import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import { archivedPath, itemPath, writeItem, itemText, writeUnreadableItem, UNREADABLE_ITEM_MESSAGE } from './shared-fixtures.js';
 
@@ -311,4 +312,24 @@ test('059.1: receiptBlock is the HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body 
     'UTC: 2026-10-30T21:05:00Z ; RESULT: REJECTED',
     '',
   ].join('\n'));
+});
+
+// An archived producer owes no hand-off: the path says archived, whatever status word the file stores; a live item that stores the word archived is not archived.
+test('the hand-off exemption of an archived producer is decided by its path, in the same folder and in another repository', () => {
+  const OWES = () => 'owes a hand-off';
+  const owed = (home, id, dependent = { seq: 9, repository: 'acme/app' }) => undoneDependencies(join(home, 'acme', 'app'), { ...dependent, depends_on: [id] }, index.rows(join(home, 'acme', 'app')).rows, OWES).length;
+  const local = (fm, archived) => { // a fresh store with one producer, seq 1
+    const home = store(); const dir = join(home, 'acme', 'app');
+    writeItem(archived ? archivedPath(dir, '001-producer', 'phases') : itemPath(dir, '001-producer'), { seq: 1, ...fm }, 'x\n');
+    return home;
+  };
+  assert.equal(owed(local({ status: 'done' }, true), 1), 0, 'under archive/, stored as done');
+  assert.equal(owed(local({ status: 'in progress' }, true), 1), 0, 'under archive/, stored as an open word');
+  assert.equal(owed(local({ status: 'archived' }, false), 1), 1, 'a live item that stores the word archived owes it');
+  const home = store();
+  writeItem(archivedPath(join(home, 'acme', 'lib'), '001-lib', 'phases'), { seq: 1, status: 'done' }, 'x\n');
+  writeItem(itemPath(join(home, 'acme', 'lib'), '002-live'), { seq: 2, status: 'archived' }, 'x\n');
+  mkdirSync(join(home, 'acme', 'app', 'phases'), { recursive: true });
+  assert.equal(owed(home, 'acme/lib#1'), 0, 'another repository, archived by its path');
+  assert.equal(owed(home, 'acme/lib#2'), 1, 'another repository, a live item with the word archived');
 });

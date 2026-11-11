@@ -302,6 +302,12 @@ async function race(t, seedArgs, aArgs, bArgs, { aEnv, bEnv, afterSeed, seedEnv,
   hold.release();
   return { a, b, bare, result: await second.done };
 }
+// the items a clone lists across branches, read as the consumer does: the read must succeed (a dependency that no longer resolves fails it)
+function listedSlugs(w) {
+  const l = cli(['list', 'all-branches', '--json'], { cwd: w.cons, tmp: w.tmp });
+  assert.equal(l.status, 0, l.stdout + l.stderr);
+  return JSON.parse(l.stdout).phases.map(r => r.slug);
+}
 const clone = (t, bare) => {
   const verify = mkdtempSync(join(tmpdir(), 'dbconf-r-')); t.after(() => rmSync(verify, { recursive: true, force: true }));
   gitIn(verify, 'clone', '-q', bare, join(verify, 'c'));
@@ -501,7 +507,7 @@ for (const dependency of ['1', '001-alpha']) test(`review P1: publication refuse
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'both files and databases match the winning upstream clone');
   assert.ok(existsSync(itemPath(b.folder, '001-alpha')));
   assert.ok(!existsSync(itemPath(join(b.home, 'acme', 'dst'), '001-alpha')));
-  for (const w of [a, b]) { const l = cli(['list', 'all-branches', '--json'], { cwd: w.cons, tmp: w.tmp }); assert.equal(l.status, 0, l.stdout + l.stderr); } // each clone still reads the backlog after the refusal
+  for (const w of [a, b]) assert.deepEqual(listedSlugs(w), ['001-alpha', '002-dependent']); // each clone still reads the backlog, the dependent and its dependency, after the refusal
 });
 
 test('review P1: publication refuses update --seq when another clone allocates that sequence', async t => {
@@ -551,7 +557,7 @@ for (const args of [
   assert.equal(result.status, 3, result.stdout + result.stderr);
   assert.match(result.stderr, /depends on missing item 2/);
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'the entire rejected write set is restored to upstream');
-  const l = cli(['list', 'all-branches', '--json'], { cwd: b.cons, tmp: b.tmp }); assert.equal(l.status, 0, l.stdout + l.stderr); // the clone still reads the backlog after the refusal
+  assert.deepEqual(listedSlugs(b), ['001-beta']); // the clone still reads the backlog after the refusal; the moved item is listed under its new repository, the refused dependent is absent
 });
 
 test('review P1: publication refuses a sequence change after an upstream clone adds an incoming dependency', async t => {

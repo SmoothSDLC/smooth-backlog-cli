@@ -1,13 +1,13 @@
-// Item 034: work-in-progress limits overall, per repository, per branch, per team and per agent (<backlog home>/
-// wip-limits.json), checked by a claim and a refinement start; the lead's recorded override lifts the team and agent
-// limits for one item; a renumbering leaves `updated` of the items it only re-ranks. Local bare repos only.
+// Item 034: work-in-progress limits overall, per repository and per branch (<backlog home>/wip-limits.json), checked by
+// a claim and a status change that starts work, also across clones and a repository move; a renumbering leaves
+// `updated` of the items it only re-ranks. Local bare repos only.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, sharedBacklog, readItem, changeItem } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -57,11 +57,8 @@ test('034: a reclaim of an item set back to pending is a start: the repository l
 
 test('034: a renumbering leaves updated of the re-ranked items', () => {
   const f = fixture();
-  f.limits({ repository: 5, stale_hours: 1 });
+  f.limits({ repository: 5 });
   const [a, b, c] = ['one', 'two', 'three'].map(n => f.make('demo', n));
-  f.run('demo', ['update', a, '--claim', 'amy']);
-  const file = itemPath(join(f.home, 'acme', 'demo'), a);
-  changeItem(file, { fm: { updated: '2026-01-01T00:00:00Z' } }); // old: stale
   const upd = s => readItem(itemPath(join(f.home, 'acme', 'demo'), s)).fm.updated;
   const before = [b, c].map(upd);
   f.run('demo', ['update', '--replan', `${c},${b},${a}`]); // re-ranks b and c only

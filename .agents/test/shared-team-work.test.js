@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { storedFm } from '../../src/shared/item-file.js';
-import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem, readStored, writeStored } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem, changeStored } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -25,8 +25,7 @@ const ok = (f, args) => { const r = run(f, args); assert.equal(r.status, 0, `${a
 // the review documents are a stored field: written into the file, as an item that names them looks
 const make = (f, name) => {
   const slug = createdSlug(ok(f, ['new', ...NEW(name)]).stdout);
-  const { fm, body } = readStored(itemPath(f.folder, slug));
-  writeStored(itemPath(f.folder, slug), { ...fm, review_refs: ['references/review/code.md'] }, body);
+  changeStored(f.home, itemPath(f.folder, slug), { review_refs: ['references/review/code.md'] });
   return slug;
 };
 const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;

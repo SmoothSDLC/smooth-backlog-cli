@@ -105,7 +105,7 @@ test('backlog clone: a person\'s commit on top of the command\'s commit is never
   assert.equal(e?.exitCode, 3);
   const own = git(f.home, 'log', '--format=%h %s', '-3').split('\n').find(l => /add beta/.test(l)).split(' ')[0];
   assert.doesNotMatch(e.message, /local branch and working tree were rolled back/);
-  assert.match(e.message, new RegExp(`\\. The change was not published; the command's commit ${own} is kept on the branch under your own commit and nothing was rolled back\\. To finish, publish with: git -C \\S+ push origin HEAD:main  or take the command's change back with: git -C \\S+ revert --no-edit ${own}  and then publish with that push$`));
+  assert.match(e.message, new RegExp(`\\. The change was not published; the command's commit ${own} is kept on the branch under your own commit and nothing was rolled back\\. To finish, publish with: git -C \\S+ push origin HEAD:main  or take the command's change back with: git -C \\S+ revert --no-edit ${own}  and then publish with that push \\(if the revert stops on a conflict: git -C \\S+ revert --abort, then publish with the push alone\\)$`));
   assert.doesNotMatch(e.message, /run the command again|reset --keep/);
   assert.match(git(f.home, 'log', '--format=%s', '-3'), /person: alpha done/);
   assert.equal(readFileSync(alpha, 'utf8'), mine);
@@ -149,7 +149,7 @@ test('backlog clone: the stale refusal (exit 5) keeps a person\'s commit on top 
   assert.equal(e.exitCode, 5);
   assert.match(subjects(f.home), /person: other/);
   assert.equal(readFileSync(join(f.home, 'acme', 'other', 'p.txt'), 'utf8'), 'person\n');
-  assert.match(e.message, /your own commit lies on top of the command's commit [0-9a-f]+, which is kept unpublished on the branch: publish with: git -C \S+ push origin HEAD:main  or take the command's change back with: git -C \S+ revert --no-edit [0-9a-f]+/);
+  assert.match(e.message, /your own commit lies on top of the command's commit [0-9a-f]+, which is kept unpublished on the branch: read the item again before publishing, then publish with: git -C \S+ push origin HEAD:main  or take the command's change back with: git -C \S+ revert --no-edit [0-9a-f]+/);
 });
 
 test('backlog clone: a command that committed nothing never takes back a person\'s commit', async t => {
@@ -275,6 +275,48 @@ test('code repository: a person\'s commit on top is not amended when the reconci
   assert.equal(git(repo, 'show', '--format=', '--name-only', person), 'code2.js', 'the person\'s commit holds only the person\'s file');
   assert.match(subjects(repo, 6), /index reconciled/);
   assert.match(e.message, /nothing was rolled back/);
+});
+
+for (const [mode, other] of [['backlog clone', 'acme/other/p.txt'], ['code repository', 'code2.js']]) {
+  test(`${mode}: a person's commit that lands on top of the command's commit is never pushed with it`, async t => {
+    const f = modes[mode](t);
+    item(f.folder, 1, 'alpha');
+    await sync.commitSettled(f.home, f.folder, 'new alpha');
+    const repo = mode === 'code repository' ? join(f.home, '..') : f.home;
+    personOnTop(join(repo, '.git'), ': add beta', other, 'person: private notes');
+    item(f.folder, 2, 'beta');
+    store.reflow(f.folder, {}); // the index is right already: nothing is left for the reconcile step to fold in, so only the push could carry the person's commit
+    const origin = git(repo, 'ls-remote', 'origin', 'main').split('\t')[0];
+    const e = await failure(sync.commit(f.home, f.folder, 'add beta', () => {}));
+    assert.equal(e?.exitCode, 3);
+    assert.equal(git(repo, 'ls-remote', 'origin', 'main').split('\t')[0], origin, 'nothing reached the origin');
+    assert.match(subjects(repo), /person: private notes/);
+    assert.equal(git(repo, 'rev-list', '--count', 'origin/main..HEAD'), '2');
+    assert.match(e.message, /your own commit appeared on the branch while the command ran\. The command's commit [0-9a-f]+ is kept on the branch under your own commit and nothing was rolled back\. To finish, publish with: /);
+  });
+}
+
+test('backlog clone: the kept commit named is the command\'s own, never a same-subject commit of a person', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  refuse(f.bare);
+  personOnTop(join(f.home, '.git'), ': add beta', 'acme/other/p.txt', 'acme/demo: add beta');
+  item(f.folder, 2, 'beta');
+  const e = await failure(sync.commitSettled(f.home, f.folder, 'add beta'));
+  const named = e.message.match(/the command's commit ([0-9a-f]+) is kept/)[1];
+  assert.equal(git(f.home, 'show', '--format=', '--name-only', named).includes('acme/other/p.txt'), false, 'the person\'s commit is not the one named');
+  assert.match(git(f.home, 'show', '--format=', '--name-only', named), /acme\/demo\/phases/);
+});
+
+test('backlog clone: a renumbering with a dependent item followed by a refused push is rolled back', async t => {
+  const f = await otherClonePublishes(t);
+  item(f.folder, 2, 'gamma');
+  store.write({ path: itemPath(f.folder, '003-delta'), fm: { ...ENVELOPE, phase: '003-delta', seq: 3, name: 'delta', status: 'pending', repository: 'acme/demo', branch: 'main', depends_on: [2] }, body: '\n# x\n' });
+  const e = await failure(sync.commitSettled(f.home, f.folder, 'add gamma and delta'));
+  assert.match(e?.message ?? '', /local branch and working tree were rolled back/);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'rev-parse', 'origin/main'));
+  assert.equal(git(f.home, 'status', '--porcelain', '--untracked-files=no'), '');
 });
 
 // --- a pull that fails after upstream changed other paths

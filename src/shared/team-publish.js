@@ -30,7 +30,7 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
     let subject = ''; // its subject
     const own = () => ownCommit(home, subject, committed); // false when a person's commit lies on top of it
     // a person's commit on top: nothing is taken back or published; the text names the command's commit and the two ways out
-    const keptError = async cause => { const { what, advice } = await keptParts(home, t, subject); return keep(`${cause}. The change was not published; ${what} is kept on the branch under your own commit and nothing was rolled back. To finish, ${advice}`); };
+    const keptError = async cause => { const { what, advice } = await keptParts(home, t, subject, committed); return keep(`${cause}. The change was not published; ${what} is kept on the branch under your own commit and nothing was rolled back. To finish, ${advice}`); };
     const sha = async rev => (await g(home, ['rev-parse', '--verify', '-q', rev])).stdout.trim();
     const fetch = () => g(home, ['fetch', '-q', 'origin', refspec(t)]);
 

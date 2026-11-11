@@ -506,11 +506,19 @@ export async function ownCommit(home, subject, committed) {
   return top.length > 0 && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject && top.every(p => committed.has(p));
 }
 
-// The words that name the command's kept commit and the two non-interactive ways out.
-export async function keptParts(home, t, subject) {
-  const sha = (await g(home, ['log', '--format=%h %s', t.clone ? `${t.ref}..HEAD` : '-20'])).stdout.split('\n').find(l => l.slice(l.indexOf(' ') + 1) === subject)?.split(' ')[0];
+// The words that name the command's kept commit and the two non-interactive ways out. The commit named is the first one with the command's
+// subject whose every changed path is one the command wrote: a person's commit with the same subject is never named.
+export async function keptParts(home, t, subject, committed) {
+  let sha;
+  for (const l of (await g(home, ['log', '--format=%h %s', t.clone ? `${t.ref}..HEAD` : '-20'])).stdout.split('\n')) {
+    const at = l.indexOf(' ');
+    if (l.slice(at + 1) !== subject) continue;
+    const files = paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', l.slice(0, at)]));
+    if (files.length && files.every(p => committed.has(p))) { sha = l.slice(0, at); break; }
+  }
   const what = sha ? `the command's commit ${sha}` : `the command's commit (it could not be identified: see git -C ${home} log)`;
-  const advice = `publish with: git -C ${home} push origin HEAD:${t.branch}${sha ? `  or take the command's change back with: git -C ${home} revert --no-edit ${sha}  and then publish with that push` : ''}`;
+  const push = `git -C ${home} push origin HEAD:${t.branch}`;
+  const advice = `publish with: ${push}${sha ? `  or take the command's change back with: git -C ${home} revert --no-edit ${sha}  and then publish with that push (if the revert stops on a conflict: git -C ${home} revert --abort, then publish with the push alone)` : ''}`;
   return { what, advice };
 }
 
@@ -643,6 +651,13 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
             throw Object.assign(new BacklogError('SYNC_FAILED', `The change was not published from ${home} (no origin remote); it is committed on this branch: add the origin and push, then continue`, 3), { keep: true });
           }
           if (t.push && t.remote !== false) {
+            // never publish a commit above the command's own: a person's commit on top stays (in the clone every unpublished commit is a person's, in the code repository the
+            // branch is pushed as it is, what lay below the command's commit travels with it)
+            const ahead = Number((await g(home, ['rev-list', '--count', `${t.ref}..HEAD`])).stdout.trim());
+            if (ahead > 0 && (mine ? !await ownTop() : t.clone)) {
+              const { what, advice } = mine ? await keptParts(home, t, subject, committed) : { what: '', advice: `publish with: git -C ${home} push origin HEAD:${t.branch}` };
+              throw Object.assign(new BacklogError('SYNC_FAILED', `The change was not published in ${home}: your own commit appeared on the branch while the command ran. ${mine ? `${what[0].toUpperCase()}${what.slice(1)} is kept on the branch under your own commit and nothing was rolled back` : 'It is kept unpublished and nothing was rolled back'}. To finish, ${advice}`, 3), { keep: true });
+            }
             const ps = await g(home, ['push', '-q', 'origin', `HEAD:refs/heads/${t.branch}`]);
             if (ps.code) { err = `push failed: ${ps.stderr.slice(0, 300)}`; if (i < 2) await delay(1000 * (1 + i)); continue; }
           }
@@ -662,9 +677,9 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       // clone: when nothing of a person's lies between the fetched remote and the command's commit, the branch also goes to the remote, as a failed pull needs
       const to = own ? (t.clone && ahead === 1 && !stale ? t.ref : 'HEAD~1') : t.clone && !stale && ahead === 0 ? t.ref : 'HEAD';
       if (mine && !own && ahead > 0) { // a person's commit lies on top of the command's: nothing is taken back, the text says so
-        const { what, advice } = await keptParts(home, t, subject);
+        const { what, advice } = await keptParts(home, t, subject, committed);
         await undoCommit(to, e);
-        if (stale) { e.message += `; your own commit lies on top of ${what}, which is kept unpublished on the branch: ${advice}`; throw e; }
+        if (stale) { e.message += `; your own commit lies on top of ${what}, which is kept unpublished on the branch: read the item again before publishing, then ${advice}`; throw e; }
         const cause = /has unpublished commits:/.test(e.message) ? 'your own commit appeared on the branch while the command ran' : e.message.replace(/[;,]? the local branch and working tree were rolled back.*$/s, '');
         throw new BacklogError('SYNC_FAILED', `${cause}. The change was not published; ${what} is kept on the branch under your own commit and nothing was rolled back. To finish, ${advice}`, 3);
       }

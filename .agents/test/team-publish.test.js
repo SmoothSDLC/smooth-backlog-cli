@@ -349,7 +349,7 @@ function personOnTop(w, on, ending, path, personSubject, dir) {
   writeFileSync(hook, on === 'post-commit' ? `#!/bin/sh\ncase "$(git log -1 --format=%s)" in *"${ending}") ;; *) exit 0;; esac\n${body}` : `#!/bin/sh\n${body}`);
   chmodSync(hook, 0o755);
 }
-const keptText = /The change was not published; the command's commit [0-9a-f]+ is kept on the branch under your own commit and nothing was rolled back\. To finish, publish with: git -C \S+ push origin HEAD:main  or take the command's change back with: git -C \S+ revert --no-edit [0-9a-f]+  and then publish with that push$/s;
+const keptText = /The change was not published; the command's commit [0-9a-f]+ is kept on the branch under your own commit and nothing was rolled back\. To finish, publish with: git -C \S+ push origin HEAD:main  or take the command's change back with: git -C \S+ revert --no-edit [0-9a-f]+  and then publish with that push \(if the revert stops on a conflict: git -C \S+ revert --abort, then publish with the push alone\)$/s;
 const personFile = (mode, w) => mode === 'code repository' ? 'code2.js' : 'acme/other/p.txt';
 
 for (const mode of Object.keys(modes)) {

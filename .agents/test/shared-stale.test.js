@@ -212,6 +212,17 @@ test('nextSeqFor never returns a number whose file name is held by an item\'s ph
   assert.equal(store.nextSeqFor(folder, itemName('-y')), 2);
 });
 
+test('nextSeqFor on a view handed in takes the numbers and the names from that view, as it does from the folder', () => {
+  const t = mkdtempSync(join(tmpdir(), 'stale-seq-')); dirs.push(t);
+  const folder = join(t, 'acme', 'demo');
+  mkdirSync(join(folder, 'phases'), { recursive: true });
+  const view = [{ path: 'phases/001-y.json', fm: { phase: '002-x', seq: 1 } }]; // the file says 1, the phase says 002-x: the name 002-x.json is taken
+  assert.equal(store.nextSeqFor(folder, itemName('-x'), 0, view), 3);
+  assert.equal(store.nextSeqFor(folder, itemName('-y'), 0, view), 2);
+  writeItem(itemPath(folder, '001-y'), { phase: '002-x', seq: 1, status: 'pending' }, '\n# Phase 1\n');
+  assert.equal(store.nextSeqFor(folder, itemName('-x')), 3, 'the folder gives the same answer');
+});
+
 test('the creator of an item has seen it: another writer\'s change is refused on her next update', () => {
   const f = seed();
   const made = run(f, f.home, ['new', '--name', 'fresh job', '--depends-on', 'none'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'amy' } });

@@ -196,7 +196,7 @@ test('review P1: archive and move hold the per-repository run lock from the pull
   assert.equal(fm(f.folder, itemRel('002-beta')).fm.branch, 'release');
 });
 
-for (const [title, script, args] of [['archive', 'archive', ['5']], ['move --to-branch', 'move', ['2', '--to-branch', 'release']]]) {
+for (const [title, script, args] of [['archive', 'archive', ['008-local', '--force']], ['move --to-branch', 'move', ['008-local', '--to-branch', 'release']]]) {
   test(`review P1: ${title} commits and pushes the rescan after a renumbering (checked from a fresh clone)`, () => {
     const f = seed();
     numberClash(f);
@@ -207,7 +207,7 @@ for (const [title, script, args] of [['archive', 'archive', ['5']], ['move --to-
     assert.equal(git(f.home, 'rev-parse', 'origin/main'), git(f.home, 'rev-parse', 'HEAD'));
     const pushed = pushedState(f);
     assert.ok(pushed.slugs.includes('009-local') && !pushed.slugs.includes('008-local'), pushed.slugs.join());
-    assert.ok(pushed.files.includes(itemRel('009-local')));
+    assert.ok(pushed.files.includes(title === 'archive' ? archivedRel('009-local', 'phases') : itemRel('009-local'))); // the command's own item, written by it, is the one published
   });
 }
 

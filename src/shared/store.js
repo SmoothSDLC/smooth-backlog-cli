@@ -243,6 +243,7 @@ function entryOf(d, fm) {
 }
 
 export const write = (item, root) => writeItem(trail(), item, root);
+const onDisk = path => (existsSync(path) ? (() => { try { return readItemFile(path).fm; } catch { return null; } })() : null); // the item as the file holds it, null when absent or unreadable
 function writeItem(t, item, root) {
   // an item is written as it is: every key it holds is kept (a field may be called priority or stage); only the old team code, which reads the earlier words
   // and derives stage and review_state, still has the retired keys and what it derived dropped (it goes with that code)
@@ -253,16 +254,15 @@ function writeItem(t, item, root) {
   assertNoSymlinks(base, item.path);
   index.seed(base);
   const key = resolve(item.path);
-  if (t && !t.has(key)) t.set(key, { before: existsSync(item.path) ? (() => { try { return readItemFile(item.path).fm; } catch { return null; } })() : null }); // what the command found
+  if (t && !t.has(key)) t.set(key, { before: onDisk(item.path) }); // what the command found
   const d = t?.get(key);
   if (d?.step && d.open) { // one entry per command: a later addEvent of it replaces the command's own entry (the newest equal one) or appends it; every other entry of the document stays
     const at = entriesOf(item.fm).map(e => JSON.stringify(e)).lastIndexOf(JSON.stringify(d.entry ?? null));
     d.entry = entryOf(d, item.fm);
     item.fm.events = [...entriesOf(item.fm).filter((_, i) => i !== at), ...[d.entry].filter(Boolean)];
   } else if (d?.step) { // a write the publication path makes after the command (a renumbering remapping the references): its own entry, against the file it rewrites; the command's entry stays as it was
-    const disk = existsSync(item.path) ? (() => { try { return readItemFile(item.path).fm; } catch { return null; } })() : null;
-    const changes = changesOf(disk, item.fm);
-    if (Object.keys(changes).length) item.fm.events = [...entriesOf(item.fm), { at: now(), by: actor(), session: process.env.SMOOTH_BACKLOG_CLI_SESSION ?? '', step: 'renumber', changes, note: '' }];
+    const changes = changesOf(onDisk(item.path), item.fm);
+    if (Object.keys(changes).length) item.fm.events = [...entriesOf(item.fm), historyEntry({ at: now(), by: actor(), session: process.env.SMOOTH_BACKLOG_CLI_SESSION ?? '', step: 'renumber', changes, note: '' })];
   }
   if (!existsSync(item.path)) created(base, relative(base, item.path));
   note(item.path);
@@ -341,23 +341,23 @@ export function load(dir) {
 
 // The highest number the folder ever held: its history (every ref, merge commits included), every value numbers.json ever had, the item files
 // present and their seq (numbers.js). A number is never handed out at or below it.
-export function mark(dir) {
-  return Math.max(highWater(dir), ...load(dir).map(i => { const n = Number(i.fm.seq) || 0; return n <= MAX_SEQ ? n : 0; })); // a stored seq above the bound never raises the mark
+export function mark(dir, items = load(dir)) { // items: the folder as already read ({ path, fm: { phase, seq } })
+  return Math.max(highWater(dir), ...items.map(i => { const n = Number(i.fm.seq) || 0; return n <= MAX_SEQ ? n : 0; })); // a stored seq above the bound never raises the mark
 }
 
 // The next number: one above the mark. Deleting, cleaning or archiving the newest item never gives its number again.
-export function nextSeq(dir) {
-  const n = mark(dir) + 1;
+export function nextSeq(dir, items) {
+  const n = mark(dir, items) + 1;
   if (n > MAX_SEQ) throw new BacklogError('STORAGE_ERROR', `the folder has no number left: the highest number the CLI can use (${MAX_SEQ}) is taken`, 2);
   return n;
 }
 
 // nextSeq whose file name `<seq><tail>` (tail: '-name' and the item extension) is also free in phases/ and archive/: update --seq can leave a low number unused while
 // its neighbour's name stays, so the next number alone does not make the name new, and a write by path would replace that item.
-export function nextSeqFor(dir, tail, floor = 0) { // floor: a mark taken earlier (before a pull), never to be handed out again
+export function nextSeqFor(dir, tail, floor = 0, items = load(dir)) { // floor: a mark taken earlier (before a pull), never to be handed out again
   let bare = []; try { bare = readdirSync(join(dir, 'phases')); } catch { /* no phases/ yet */ } // a file without front matter is not an item, but its name is taken
-  const taken = new Set([...bare, ...load(dir).flatMap(i => [basename(i.path), itemFileName(i.fm.phase)])]);
-  let n = Math.max(nextSeq(dir), floor + 1);
+  const taken = new Set([...bare, ...items.flatMap(i => [basename(i.path), itemFileName(i.fm.phase)])]);
+  let n = Math.max(nextSeq(dir, items), floor + 1);
   while (taken.has(String(n).padStart(3, '0') + tail)) n++;
   if (n > MAX_SEQ) throw new BacklogError('STORAGE_ERROR', `the folder has no number left: the highest number the CLI can use (${MAX_SEQ}) is taken`, 2); // the floor or a taken name can push past the bound
   return n;

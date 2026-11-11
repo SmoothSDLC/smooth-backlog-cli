@@ -6,7 +6,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
-import { entriesOf, isOldLine, readItemFile, storedFm } from './item-file.js';
+import { entriesOf, eventText, isOldLine, readItemFile, storedFm } from './item-file.js';
 import * as index from './index.js';
 import { assertInside, git, redact } from './safety.js';
 import * as seen from './seen.js';
@@ -49,7 +49,7 @@ const dump = v => say(JSON.stringify(v, null, 2).replace(/[\u007f-￿]/g, c => `
 // has no writer and no changes: it prints as it did, the part of its note after the step being the branch, the commit and the note.
 const shown = v => (typeof v === 'string' ? v : JSON.stringify(v));
 function historyLine(e) {
-  if (isOldLine(e)) { const o = store.parseEvent(`${e.at} ${e.step} ${e.note}`); return `  ${o.ts}  ${String(o.event).padEnd(14)} branch=${o.branch} commit=${String(o.commit_sha).slice(0, 7)} ${o.note}`; }
+  if (isOldLine(e)) { const o = store.parseEvent(eventText(e)); return `  ${o.ts}  ${String(o.event).padEnd(14)} branch=${o.branch} commit=${String(o.commit_sha).slice(0, 7)} ${o.note}`; }
   const created = e.step === 'new' && Object.keys(e.changes).length > 0; // the entry of a new item holds every key: the line is its note (which says what was added), or 'added' when it has none
   const changes = created ? (e.note ? '' : 'added') : Object.entries(e.changes).map(([k, [before, after]]) => `${k}: ${shown(before)} -> ${shown(after)}`).join(', ');
   return `  ${e.at}  ${String(e.step).padEnd(14)} ${e.by}  ${[changes, e.note].filter(Boolean).join(' ')}`.trimEnd();

@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { GIT_IDENTITY, ENVELOPE, itemPath, sharedBacklog, BACKLOG_OWNER, BACKLOG_NAME } from './shared-fixtures.js';
+import { GIT_IDENTITY, ENVELOPE, holdLock, itemPath, sharedBacklog, BACKLOG_OWNER, BACKLOG_NAME } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
 import { publishTeam } from '../../src/shared/team-publish.js';
@@ -67,6 +67,35 @@ for (const [mode, make] of Object.entries(modes)) {
     assert.equal(git(a.root, 'show', '--name-only', '--format=', 'HEAD').split('\n').filter(p => p.endsWith('notes.txt')).length, 0);
     assert.equal(readFileSync(join(a.home, 'notes.txt'), 'utf8'), 'person\n');
     assert.match(git(a.root, 'status', '--porcelain'), /notes\.txt/);
+  });
+
+  test(`${mode}: a person's uncommitted edit of another item stays uncommitted and unpublished`, async t => {
+    const { a } = make(t);
+    const alpha = itemPath(a.folder, '001-alpha');
+    const committed = readFileSync(alpha, 'utf8');
+    const edited = committed.replace('"status": "pending"', '"status": "done"');
+    assert.notEqual(edited, committed);
+    writeFileSync(alpha, edited); // the person's edit, before the command's pull
+    await sync.pull(a.home);
+    item(a.folder, 2, 'beta');
+    const r = await publishTeam(a.home, a.folder, 'new beta', opts(a));
+    assert.equal(r.published, true);
+    assert.ok(!git(a.root, 'show', '--name-only', '--format=', 'HEAD').split('\n').some(p => p.endsWith('001-alpha.json')), 'the person\'s file is not in the command\'s commit');
+    assert.equal(git(a.root, 'show', 'origin/main:' + relative(a.root, alpha).split('\\').join('/')), committed.trim(), 'origin holds the committed bytes');
+    assert.equal(readFileSync(alpha, 'utf8'), edited);
+    assert.match(git(a.root, 'status', '--porcelain'), /^ ?M .*001-alpha\.json$/m);
+  });
+
+  test(`${mode}: the lock held past the wait: LOCKED exit 1, the command's item, index.json and numbers.json are taken back`, async t => {
+    const { a } = make(t);
+    const old = process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = '1000';
+    t.after(() => { if (old === undefined) delete process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; else process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = old; });
+    await sync.pull(a.home);
+    item(a.folder, 2, 'beta');
+    await holdLock(t, sync.lockFile(a.home));
+    await assert.rejects(publishTeam(a.home, a.folder, 'new beta', opts(a)), e => e.code === 'LOCKED' && e.exitCode === 1);
+    assert.equal(existsSync(itemPath(a.folder, '002-beta')), false);
+    assert.equal(git(a.root, 'status', '--porcelain', '--', relative(a.root, a.folder)), '', 'index.json and numbers.json are as in HEAD');
   });
 
   test(`${mode}: upstream changed only another folder: nothing runs again, only the command's commit is published on top of it`, async t => {
@@ -229,7 +258,7 @@ test('code repository: an undone team command leaves a path the person deleted b
 
 test('code repository: a re-run undone after upstream changed the path the person edited: the file is the upstream version and the person\'s bytes are in the named stash', async t => {
   const { a, b } = modes['code repository'](t);
-  await startedWith(a, () => item(a.folder, 1, 'alpha', { summary: 'person' }));
+  await startedWith(a, () => { item(a.folder, 1, 'alpha', { summary: 'person' }); rmSync(join(a.folder, 'index.json'), { force: true }); }); // the index the store seeds is not the person's: the upstream publishes its own
   item(a.folder, 1, 'alpha', { summary: 'command' });
   publishFrom(b, w => item(w.folder, 1, 'alpha', { summary: 'other' }));
   await assert.rejects(publishTeam(a.home, a.folder, 'change alpha', opts(a, { attempt: async () => { throw new Error('the rules broke'); } })),

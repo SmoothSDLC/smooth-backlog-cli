@@ -154,13 +154,13 @@ test('the key-by-key check names the first key that would change, an extra key a
   stops(() => {}, 'body', 'other\n');
 });
 
-test('convertItem refuses a document text that does not hold what the header held (its own call of the check)', () => {
-  const text = md(`${BASE}\nobjective: o\nevents:\n- T claimed`);
-  const faulty = edit => (doc, o) => writeDoc(edit(structuredClone(doc)), o);
-  assert.throws(() => convertItem(text, { write: faulty(d => { d.fields.objective = 'x'; return d; }) }), e => e.field === 'objective' && /objective would change/.test(e.message));
-  assert.throws(() => convertItem(text, { write: faulty(d => { d.history = []; return d; }) }), e => e.field === 'events');
-  assert.throws(() => convertItem(text, { write: faulty(d => { d.body = 'x'; return d; }) }), e => e.field === 'body');
-  assert.doesNotThrow(() => convertItem(text, { write: faulty(d => d) }));
+test('the check refuses a document text that does not hold what the header held', () => {
+  const r = conv(`${BASE}\nobjective: o\nevents:\n- T claimed`);
+  const faulty = edit => readDoc(writeDoc(edit(structuredClone(r.doc)), { order: [] }));
+  assert.throws(() => checkKept(r.fm, r.body, faulty(d => { d.fields.objective = 'x'; return d; }), undefined), e => e.field === 'objective' && /objective would change/.test(e.message));
+  assert.throws(() => checkKept(r.fm, r.body, faulty(d => { d.history = []; return d; }), undefined), e => e.field === 'events');
+  assert.throws(() => checkKept(r.fm, r.body, faulty(d => { d.body = 'x'; return d; }), undefined), e => e.field === 'body');
+  assert.doesNotThrow(() => checkKept(r.fm, r.body, faulty(d => d), undefined));
 });
 
 test('a quoted history line with trailing spaces converts and the note keeps them; a tail of spaces after the step is no content', () => {

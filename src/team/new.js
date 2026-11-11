@@ -4,12 +4,12 @@ import { BacklogError } from '../errors.js';
 import { highWater } from '../shared/numbers.js';
 import { redact, slugify } from '../shared/safety.js';
 import { readConfig, topOf } from '../shared/setup.js';
-import { cloneLocked, configDir, folder as folderOf, itemFileName, now, repoId, resolveHome } from '../shared/store.js';
+import { cloneLocked, configDir, folder as folderOf, itemFileName, nextSeqFor, now, repoId, resolveHome } from '../shared/store.js';
 import { publishTeam } from '../shared/team-publish.js';
 import { apply } from './apply.js';
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
-import { contextOf, nextSeqOf } from './item.js';
+import { contextOf } from './item.js';
 import { pullFolder, watched } from './pull.js';
 import { Refusal } from './rules/expression.js';
 import { create } from './rules/step.js';
@@ -59,7 +59,7 @@ async function newItem(argv) {
       const entry = loaded.file[inputs.team];
       const at = now();
       const { ctx, view } = contextOf({ folder, entry, team: inputs.team, caller: inputs.agent, args, session, now: at, branch: session.branch });
-      const number = nextSeqOf({ folder, view, tail: itemFileName(`-${slugify(args.name)}`), floor });
+      const number = nextSeqFor(folder, itemFileName(`-${slugify(args.name)}`), floor, view);
       let result;
       try { result = create(ctx, number); } catch (e) { if (e instanceof Refusal && e.exitCode === 1) return { refusal: e.message }; throw e; }
       const message = `team new ${result.items.get(number).slug}`;

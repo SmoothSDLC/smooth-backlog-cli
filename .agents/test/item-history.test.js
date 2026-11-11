@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { eventText } from '../../src/shared/item-file.js';
 import { archivedPath, cli, consumer, itemPath, readStored, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
@@ -32,6 +33,14 @@ test('a user command writes one whole entry: when, who, session, step, the chang
   assert.equal(f.history().length, 2, 'one entry for the command, not one per planning sentence');
   assert.match(e.at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.deepEqual({ ...e, at: 0 }, { at: 0, by: 'ann', session: 's-7', step: 'update', changes: { status: ['pending', 'in_progress'], severity: ['normal', 'critical'] }, note: 'going' });
+});
+
+test('eventText: the at, then the step when the step or the note is set, then the note; no trailing space', () => {
+  assert.equal(eventText({ at: 'T', step: '', note: '' }), 'T');
+  assert.equal(eventText({ at: 'T', step: 's', note: 'n' }), 'T s n');
+  assert.equal(eventText({ at: 'T', step: 's', note: '' }), 'T s');
+  assert.equal(eventText({ at: 'T', step: '', note: 'n' }), 'T  n');
+  assert.equal(eventText('T s n'), 'T s n');
 });
 
 test('the session is only SMOOTH_BACKLOG_CLI_SESSION: without it the entry holds none, never the agent name', () => {

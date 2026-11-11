@@ -6,7 +6,7 @@ import { seam } from '../../src/shared/seam.js';
 import { lift } from '../../src/shared/status.js';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { fromItemJson, toItemJson } from '../../src/shared/item-json.js';
 import { dumpItem, itemFileName, itemSlug, isItemName, parseItem } from '../../src/shared/item-file.js';
@@ -237,6 +237,14 @@ export function teamNew(args = [], opts = {}) {
   const home = e.SMOOTH_BACKLOG_CLI_HOME;
   git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', `team item ${team}`); git(home, 'push', '-q');
   return made;
+}
+
+// A child process that holds the lock file `path` until the test ends; resolves once it holds it.
+export async function holdLock(t, path) {
+  const child = spawn(process.execPath, ['--input-type=module', '-e', `import { locked } from ${JSON.stringify(new URL('../../src/storage.js', import.meta.url).href)};
+    await locked(${JSON.stringify(path)}, () => { process.stdout.write('held\\n'); return new Promise(r => setTimeout(r, 60000)); });`], { stdio: ['ignore', 'pipe', 'inherit'] });
+  t.after(() => child.kill());
+  await new Promise((ok, no) => { child.stdout.once('data', ok); child.once('exit', no); });
 }
 
 // The slug a `new` output names: `created phase <slug> (seq N)`.

@@ -23,8 +23,10 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
   const name = t.prefix + (await assertInside(backlogHome, folder)).split(sep).join('/');
   const names = [name]; const files = [false];
   const committed = new Set(); // every path any staging of this command took
+  const saved = takeStart(home); // the person's files as they were when the command started (none when the command ran no pull)
+  let inside = false;
   return locked(lockFile(backlogHome), async () => {
-    const saved = takeStart(home); // the person's files as they were when the command started
+    inside = true;
     const started = now(); const budget = store.lockWait() / 2;
     let mine = false; // the command's own commit is HEAD
     let subject = ''; // its subject
@@ -36,7 +38,7 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
 
     const commitOwn = async text => {
       await refuseConflicts(home, t);
-      const { lits, adds } = await ownedPaths(home, t, names, files);
+      const { lits, adds } = await ownedPaths(home, t, names, files, saved);
       for (const l of lits) committed.add(bare(l));
       if (adds.length) await must(home, ['add', '-A', '--', ...adds], `stage ${name}`);
       if (lits.length && (await g(home, ['diff', '--cached', '--quiet', '--', ...lits])).code) {
@@ -145,5 +147,8 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
       if (e.code === 'SYNC_FAILED') e.exitCode = exit; // every failure of the publication: pop reads exit 3 as idle, so it passes 1
       throw e;
     }
-  }, { takeOver: true });
+  }, { wait: store.lockWait(), takeOver: true }).catch(async e => { // locked out of the lock: the command's own files are taken back (the run lock is still held)
+    if (!inside && e.code === 'LOCKED') await restoreOwn(home, t, names, files, new Set(), saved, true);
+    throw e;
+  });
 }

@@ -25,6 +25,11 @@ test('a reserved flag the command does not take is unrecognized, for every name 
   assert.deepEqual({ ...parseArgs(['--dry-run'], [...OK, 'dry-run']).flags }, { 'dry-run': true });
 });
 
+test('a command with no step arguments refuses every other --name, with or without a value', () => {
+  for (const argv of [['--bogus'], ['--bogus', 'v'], ['--bogus=v']]) assert.throws(() => parseArgs(argv, [], { steps: false }), e => e.exitCode === 2 && e.message === `unrecognized arguments: ${argv[0]}`, argv.join(' '));
+  assert.deepEqual({ ...parseArgs(['--json', '7'], ['json'], { steps: false }).flags }, { json: true });
+});
+
 test('a flag without its value, a value on a boolean, an empty name', () => {
   fails(['--name'], 'argument --name: expected one argument');
   fails(['--name', '--estimate', '5'], 'argument --name: expected one argument');

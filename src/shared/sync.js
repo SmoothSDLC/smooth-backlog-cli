@@ -420,16 +420,27 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
   }
 }
 
+// True when `path` is exactly as the person had it in the start snapshot (bytes, link target or absence). Without a start snapshot, or with one taken after the command wrote, nothing is.
+function asTheyHadIt(home, saved, path) {
+  const prior = saved && !saved.late ? saved.files.get(path) : undefined;
+  if (prior === undefined) return false;
+  const abs = join(home, path); let now = null;
+  try { now = lstatSync(abs).isSymbolicLink() ? { link: readlinkSync(abs) } : readFileSync(abs); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  if (prior === null || now === null) return prior === now;
+  return prior.link !== undefined ? now.link === prior.link : Buffer.isBuffer(now) && now.equals(prior.bytes);
+}
+
 // The paths a command owns: the files it was given, and of each folder its item files, index.json and numbers.json that changed (plus the first-use
 // configuration the store wrote itself). Never the folder root, the team file, the templates or an edit of .backlog/config.json.
-export async function ownedPaths(home, t, names, files) {
+// saved: the person's files as they were when the command started; an item file, index.json or numbers.json that is still exactly as the person had it is theirs, not the command's.
+export async function ownedPaths(home, t, names, files, saved) {
   const out = new Set(); const gone = new Set(); // gone: a deletion already staged, which add has no path for
   for (let i = 0; i < names.length; i++) {
     if (files[i]) { out.add(names[i]); continue; }
     const rows = paths(await must(home, ['status', '--porcelain', '-z', '-uall', '--no-renames', '--', lit(names[i])], 'list the changes of the folder'));
     for (const row of rows) {
       const path = row.slice(3); const rest = path.slice(names[i].length + 1);
-      if (ITEM_PATH.test(rest) || rest === 'index.json' || rest === NUMBER_FILE) { out.add(path); if (row.startsWith('D ')) gone.add(path); }
+      if ((ITEM_PATH.test(rest) || rest === 'index.json' || rest === NUMBER_FILE) && !asTheyHadIt(home, saved, path)) { out.add(path); if (row.startsWith('D ')) gone.add(path); }
     }
   }
   if (!t.clone) { // the first use of a backlog inside the repository writes its configuration itself: only while it is not tracked yet (its creation); an edit of the committed file, such as the SHA, is a person's and never staged
@@ -480,7 +491,7 @@ export async function putBack(home, saved, mine, guard = false) {
 // After a command's commit was taken back (soft reset): its own paths go back to HEAD, a file it created is removed, a person's bytes are put back.
 // Every other path is untouched. Resolves to { mine: the own paths, wrote, moved } (putBack's lists).
 export async function restoreOwn(home, t, names, files, committed, saved, guard = false) {
-  const mine = new Set([...committed, ...(await ownedPaths(home, t, names, files)).lits.map(l => l.slice(':(literal)'.length))]);
+  const mine = new Set([...committed, ...(await ownedPaths(home, t, names, files, saved)).lits.map(l => l.slice(':(literal)'.length))]);
   const lits = [...mine].map(lit);
   const inHead = new Set(paths(await g(home, ['ls-tree', '-r', '--name-only', '-z', 'HEAD', '--', ...lits])));
   const known = [...mine].filter(p => inHead.has(p));
@@ -502,9 +513,9 @@ export const commitSubject = (t, names, text) => (t.clone ? `${names.join(', ')}
 
 // True when HEAD is the command's own commit: it has the command's subject, changes at least one path, and every path it changes is one the
 // command wrote (`committed`). Anything else on top is a person's commit and is never taken back, amended or published with the change.
-export async function ownCommit(home, subject, committed) {
-  const top = paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', 'HEAD']));
-  return top.length > 0 && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject && top.every(p => committed.has(p));
+export async function ownCommit(home, subject, committed, rev = 'HEAD') {
+  const top = paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', rev]));
+  return top.length > 0 && (await g(home, ['log', '-1', '--format=%s', rev])).stdout.trim() === subject && top.every(p => committed.has(p));
 }
 
 // The words that name the command's kept commit and the two non-interactive ways out. The commit named is the first one with the command's
@@ -515,8 +526,7 @@ export async function keptParts(home, t, subject, committed) {
     const at = l.indexOf(' ');
     if (l.slice(at + 1) !== subject) continue;
     named = true;
-    const files = paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', l.slice(0, at)]));
-    if (files.length && files.every(p => committed.has(p))) { sha = l.slice(0, at); break; }
+    if (await ownCommit(home, subject, committed, l.slice(0, at))) { sha = l.slice(0, at); break; }
   }
   // no commit of the range has the command's subject at all: it dropped out of the rebase because the same change is already upstream
   const gone = !named;
@@ -546,8 +556,10 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
   // What a command stages and commits: the files it was given, and of each folder its item files, index.json and numbers.json that changed. Never the folder
   // root, the team file, the templates or .backlog/config.json, and never a pattern: a draft of a lead lying in the folder is not carried along.
   const files = list.map(isFile);
+  // the person's files as they were when the command started (the leading pull took them); taken before the lock so a lock timeout can take the command's files back
+  const saved = takeStart(home) ?? { ...await snapshot(home), late: true };
   const stage = async () => { // add -A with no path would stage everything
-    const { lits, adds } = await ownedPaths(home, t, names, files);
+    const { lits, adds } = await ownedPaths(home, t, names, files, saved);
     for (const l of lits) committed.add(l.slice(':(literal)'.length));
     if (adds.length) await must(home, ['add', '-A', '--', ...adds], `stage ${names.join(', ')}`);
     return lits;
@@ -557,9 +569,10 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
   const committed = new Set(); // every path the command staged, renumbered or repaired
   // The top commit is the command's own only when it has the command's subject and changes only paths the command wrote; anything else is a person's commit.
   const ownTop = () => ownCommit(home, subject, committed);
+  let inside = false;
   return locked(lockFile(backlogHome), async () => {
+    inside = true;
     if (t.clone) await refuseUnpublished(home, t); // the user's own repository has its own unpushed commits: they are pushed with the change
-    const saved = takeStart(home) ?? await snapshot(home);
     const restoreStaging = async paths => {
       if (paths.length) await must(home, ['restore', '--staged', `--source=${saved.index}`, '--', ...paths.map(lit)], 'restore your staging');
     };
@@ -691,7 +704,10 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       await undoCommit(to, e);
       throw e;
     }
-  }, { takeOver: true });
+  }, { wait: store.lockWait(), takeOver: true }).catch(async e => { // locked out of the lock: the command's own files are taken back (the run lock is still held)
+    if (!inside && e.code === 'LOCKED') await restoreOwn(home, t, names, files, new Set(), saved, true);
+    throw e;
+  });
 }
 
 // sync.commit whose reconcile step makes the index of every folder right against the merged items (an item added by the other clone, a

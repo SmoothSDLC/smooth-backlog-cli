@@ -189,7 +189,7 @@ test('review P1: update holds the per-repository run lock from the pull to the p
 test('review P1: a renumbering during the commit is followed by a rescan that is committed and pushed (db and working tree current)', () => {
   const f = seed();
   numberClash(f);
-  const r = run(f, ['2', '--summary', 'with a clash']);
+  const r = run(f, ['008-local', '--summary', 'with a clash']); // the command rewrites the local item: only an item the command wrote is committed
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /renumbered 008 -> 009/);
   assert.equal(git(f.home, 'status', '--porcelain'), '', 'the tree is clean');

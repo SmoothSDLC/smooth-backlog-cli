@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { GIT_IDENTITY, ENVELOPE, itemPath, sharedBacklog, BACKLOG_OWNER, BACKLOG_NAME } from './shared-fixtures.js';
+import { GIT_IDENTITY, ENVELOPE, holdLock, itemPath, sharedBacklog, BACKLOG_OWNER, BACKLOG_NAME } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
 
@@ -39,6 +39,37 @@ const modes = {
 
 for (const [mode, make] of Object.entries(modes)) {
   const item = (folder, seq, name) => store.write({ path: itemPath(folder, `00${seq}-${name}`), fm: { ...ENVELOPE, phase: `00${seq}-${name}`, seq, name, status: 'pending', repository: 'acme/demo', branch: 'main' }, body: '\n# x\n' });
+
+  test(`${mode}: a person's uncommitted edit of another item stays uncommitted and unpublished`, async t => {
+    const f = make(t);
+    item(f.folder, 1, 'alpha');
+    await sync.commitSettled(f.home, f.folder, 'new alpha');
+    const alpha = itemPath(f.folder, '001-alpha');
+    const committed = readFileSync(alpha, 'utf8');
+    const edited = committed.replace('"status": "pending"', '"status": "done"');
+    assert.notEqual(edited, committed);
+    writeFileSync(alpha, edited);
+    await sync.pull(f.home);
+    item(f.folder, 2, 'beta');
+    await sync.commitSettled(f.home, f.folder, 'new beta');
+    assert.ok(!git(f.home, 'show', '--name-only', '--format=', 'HEAD').split('\n').some(p => p.endsWith('001-alpha.json')), 'the person\'s file is not in the commit');
+    assert.equal(readFileSync(alpha, 'utf8'), edited);
+    assert.match(git(f.home, 'status', '--porcelain'), /^ ?M .*001-alpha\.json$/m);
+  });
+
+  test(`${mode}: the lock held past the wait: LOCKED exit 1, the command's item and its index and numbers are taken back`, async t => {
+    const f = make(t);
+    item(f.folder, 1, 'alpha');
+    await sync.commitSettled(f.home, f.folder, 'new alpha');
+    const old = process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = '1000';
+    t.after(() => { if (old === undefined) delete process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; else process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = old; });
+    await sync.pull(f.home);
+    item(f.folder, 2, 'beta');
+    await holdLock(t, sync.lockFile(f.home));
+    await assert.rejects(sync.commitSettled(f.home, f.folder, 'new beta'), e => e.code === 'LOCKED' && e.exitCode === 1);
+    assert.equal(existsSync(itemPath(f.folder, '002-beta')), false);
+    assert.equal(git(f.home, 'status', '--porcelain', '--', f.folder), '');
+  });
 
   test(`${mode}: a failed, undone publication keeps uncommitted edits outside the command's paths and undoes its own`, async t => {
     const f = make(t);

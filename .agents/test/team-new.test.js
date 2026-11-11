@@ -172,6 +172,17 @@ test('the number: one above the counter and above every item, an archived one in
   assert.equal(w.run([...BASE, '--name', 'b', '--estimate', '5']).stdout, '✅ created 251-b (seq 251) for team parallel, rule new\n');
 });
 
+test('the number skips a name the store holds: an item whose slug 002-x lies in another file name makes the next item 3', t => {
+  const w = world(t);
+  const old = { seq: 1, slug: '002-x', name: 'x', team: 'parallel', repository: 'acme/app', branch: 'main', created: 'x', updated: 'x', updated_by: 'a', body: '', history: [], fields: { status: 'new', estimate: 5 } };
+  mkdirSync(join(w.folder, 'phases'), { recursive: true });
+  writeFileSync(join(w.folder, 'phases', '001-y.json'), toFile(old, PARALLEL.parallel));
+  git(w.home, 'add', '-A'); git(w.home, 'commit', '-qm', 'odd'); git(w.home, 'push', '-q');
+  const r = w.run([...BASE, '--name', 'x', '--estimate', '5']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stdout, '✅ created 003-x (seq 3) for team parallel, rule new\n');
+});
+
 test('a team field named events or phase is a plain field: the command reads the folder raw and numbers after it', t => {
   const entry = { people: { a: ['lead'] }, item: { status: { type: 'text', values: ['open', 'done'], final: ['done'], default: 'open' }, events: { type: 'text', default: 'e' }, phase: { type: 'text', default: 'p' } }, rules: { table: [{ id: 'new', step: 'new', do: { set: { status: 'open' } } }], pop: [], filters: {} } };
   const w = world(t, { odd: entry });

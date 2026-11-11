@@ -18,7 +18,7 @@ export { hasFrontMatter, parseMarkdownItem, parseMarkdownRaw, splitBom, toFileKe
 // The history entries of an in-memory item (none: an empty list).
 export const entriesOf = fm => (Array.isArray(fm.events) ? fm.events : []);
 // An entry of an earlier build (no writer) as the one line it was: '<at> <step> <note>'.
-export const eventText = e => (typeof e === 'string' ? e : [e.at, e.step, e.note].filter((x, i) => i < 2 || x).join(' '));
+export const eventText = e => (typeof e === 'string' ? e : `${e.at}${e.step || e.note ? ` ${e.step}` : ''}${e.note ? ` ${e.note}` : ''}`);
 // The stored form of the header for output: the entries as they are; an entry of an earlier build stays the line it was.
 // An entry of an earlier build has no writer and no changes (the codec reads a line so); an entry with a writer or with changes is a whole entry.
 export const isOldLine = e => !e.by && !Object.keys(e.changes ?? {}).length;

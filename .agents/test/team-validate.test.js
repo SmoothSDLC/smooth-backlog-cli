@@ -268,6 +268,15 @@ test('unknown arguments are refused with exit 2 on standard error and nothing on
   }
 });
 
+test('a word that is no flag is refused like an unknown flag', t => {
+  const w = world(t);
+  w.put({ good: GOOD });
+  const r = w.run(['validate', 'word', '--team', 'good']);
+  assert.equal(r.status, 2);
+  assert.equal(r.stdout, '');
+  assert.match(r.stderr, /^❌ backlog: unrecognized arguments: word\n$/);
+});
+
 test('--json carries the item and number findings with the same keys', t => {
   const w = world(t);
   w.put({ good: GOOD });

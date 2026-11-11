@@ -4,11 +4,10 @@
 // no earlier word is translated, no holder mapped, no key dropped.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { BacklogError } from '../errors.js';
 import { FOREIGN, SAFE } from '../shared/dependencies.js';
 import * as index from '../shared/index.js';
 import { readDoc, writeDoc } from '../shared/item-json.js';
-import { MAX_SEQ, highWater, numberOf } from '../shared/numbers.js';
+import { MAX_SEQ, numberOf } from '../shared/numbers.js';
 import { assertFolder, assertNoSymlinks, isItemName, itemFileName, itemFiles, markdownError, unreadableItem } from '../shared/store.js';
 import { get } from './rules/expression.js';
 
@@ -122,17 +121,4 @@ export function contextOf({ folder, entry, team, caller, args, session, now, bra
   const view = own.map(r => viewOf(r.item, r.path));
   const order = queueOrder(folder, entry, team, items, view, session, branch);
   return { ctx: { entry, team, caller, items: [...items, ...foreign], args, session, now, order }, order, view, own: items };
-}
-
-// The number of a new item: one above the highest number the folder ever held (its history, numbers.json, every item file and seq of the view) and above floor, a
-// mark taken before a pull; skipping a number whose file name `<number><tail>` is taken in phases/ or archive/ (a bare file of phases/ counts). The same rule as
-// store.nextSeqFor, on the raw view contextOf returned: that function reads the folder through the user reader, which refuses a field named events. Records nothing.
-export function nextSeqOf({ folder, view, tail, floor = 0 }) {
-  let bare = []; try { bare = readdirSync(join(folder, 'phases')); } catch { /* no phases/ yet */ }
-  const taken = new Set([...bare, ...view.map(v => basename(v.path))]);
-  const seen = view.flatMap(v => [numberOf(basename(v.path)), v.fm.seq]).filter(n => Number.isInteger(n) && n <= MAX_SEQ);
-  let n = Math.max(highWater(folder), floor, ...seen) + 1;
-  while (taken.has(String(n).padStart(3, '0') + tail)) n++;
-  if (n > MAX_SEQ) throw new BacklogError('STORAGE_ERROR', `the folder has no number left: the highest number the CLI can use (${MAX_SEQ}) is taken`, 2);
-  return n;
 }

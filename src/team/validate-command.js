@@ -8,6 +8,7 @@ import { redact } from '../shared/safety.js';
 import { readConfig, topOf } from '../shared/setup.js';
 import * as sync from '../shared/sync.js';
 import { cloneLocked, configDir, folder, repoId, resolveHome } from '../shared/store.js';
+import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { readItems } from './item.js';
 import { itemFindings, numberFindings } from './rules/validate-items.js';
@@ -20,16 +21,8 @@ const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact
 // The flags of the words that read the inputs: the five that take a value, --json and --show-all, and the booleans the word adds.
 // No positional word is taken. Returns { top, inputs }.
 export function readInputs(command, argv, booleans = []) {
-  const flags = {};
-  const allowed = [...VALUE, 'json', 'show-all', ...booleans];
-  for (let i = 0; i < argv.length; i++) {
-    const [flag, eq] = argv[i].startsWith('--') ? argv[i].slice(2).split(/=(.*)/s) : [null];
-    if (!allowed.includes(flag)) throw new BacklogError('INVALID_INPUT', `unrecognized arguments: ${argv[i]}`);
-    if (!VALUE.includes(flag)) { if (eq !== undefined) throw new BacklogError('INVALID_INPUT', `argument --${flag}: ignored explicit argument '${eq}'`); flags[flag] = true; continue; }
-    const v = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('--') ? undefined : argv[++i]);
-    if (v === undefined) throw new BacklogError('INVALID_INPUT', `argument --${flag}: expected one argument`);
-    flags[flag] = v;
-  }
+  const { positionals, flags } = parseArgs(argv, [...VALUE, 'json', 'show-all', ...booleans], { steps: false });
+  if (positionals.length) throw new BacklogError('INVALID_INPUT', `unrecognized arguments: ${positionals[0]}`);
   const top = topOf(process.cwd());
   if (!top) throw new BacklogError('INVALID_INPUT', 'run this from inside a git repository (the repository whose backlog you want)');
   return { top, inputs: resolveInputs({ command, flags, env: process.env, config: readConfig(top) }) };

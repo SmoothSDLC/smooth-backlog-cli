@@ -639,6 +639,12 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
         const own = mine && ahead > 0 && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject;
         // nothing of a person's lies between the fetched remote and the command's commit: the branch also goes to the remote, as a failed pull needs
         to = own ? (ahead === 1 && !stale ? t.ref : 'HEAD~1') : !stale && ahead === 0 ? t.ref : 'HEAD';
+        if (mine && !own && !stale && ahead > 0) { // a person's commit lies on top of the command's: nothing is taken back, the text says so
+          const sha = (await g(home, ['log', '--format=%h %s', `${t.ref}..HEAD`])).stdout.split('\n').find(l => l.slice(l.indexOf(' ') + 1) === subject)?.split(' ')[0];
+          await undoCommit(to, e);
+          throw new BacklogError('SYNC_FAILED', `${e.message.replace(/[;,]? the local branch and working tree were rolled back.*$/s, '')}. Your own commit lies on top of the command's commit ${sha}, so the command's commit is kept on the branch and nothing was rolled back. `
+            + `Either publish both with: git -C ${home} push origin HEAD:${t.branch}  or drop the command's commit with: git -C ${home} revert --no-edit ${sha}  and run the command again`, 3);
+        }
       }
       await undoCommit(to, e);
       throw e;

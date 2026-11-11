@@ -101,7 +101,11 @@ test('backlog clone: a person\'s commit on top of the command\'s commit is never
   assert.notEqual(mine, readFileSync(alpha, 'utf8'));
   item(f.folder, 2, 'beta');
   const person = () => { writeFileSync(alpha, mine); git(f.home, 'commit', '-qm', 'person: alpha done', '--only', '--', alpha); };
-  await assert.rejects(sync.commit(f.home, f.folder, 'add beta', person), /change was not published/);
+  const e = await sync.commit(f.home, f.folder, 'add beta', person).then(() => null, x => x);
+  assert.equal(e?.exitCode, 3);
+  const own = git(f.home, 'log', '--format=%h %s', '-3').split('\n').find(l => /add beta/.test(l)).split(' ')[0];
+  assert.doesNotMatch(e.message, /local branch and working tree were rolled back/);
+  assert.match(e.message, new RegExp(`not published in \\S+.*\\. Your own commit lies on top of the command's commit ${own}, so the command's commit is kept on the branch and nothing was rolled back\\. Either publish both with: git -C \\S+ push origin HEAD:main  or drop the command's commit with: git -C \\S+ revert --no-edit ${own}  and run the command again$`));
   assert.match(git(f.home, 'log', '--format=%s', '-3'), /person: alpha done/);
   assert.equal(readFileSync(alpha, 'utf8'), mine);
 });

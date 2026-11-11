@@ -13,6 +13,7 @@ import * as index from '../../src/shared/index.js';
 
 const { cases } = readJson('./fixtures/team-rules/rule-cases.json');
 const NOW = '2026-11-01T00:00:00Z';
+const defaultsOf = entry => Object.fromEntries(Object.entries(entry.item).map(([f, d]) => [f, defaultOf(d)]));
 const fileOf_ = c => (c.rule_set === 'inline' ? c.given.team_file : TEMPLATES[c.rule_set]);
 
 // The inline cases whose team file fails validation: evaluator only. Counted, so a case is never silently dropped.
@@ -82,8 +83,9 @@ for (const c of viaCommand) {
       assert.equal(r.stderr, '');
       assert.equal(git(w.home, 'status', '--short'), ''); // published
     } else {
-      if (want.exit === 1) assert.equal(r.stdout, `❌ ${want.text}\n`);
-      if (want.exit === 2) assert.equal(r.stderr, `❌ backlog: ${want.text}\n`);
+      if (want.exit === 1) { assert.equal(r.stdout, `❌ ${want.text}\n`); assert.equal(r.stderr, ''); }
+      if (want.exit === 2) { assert.equal(r.stderr, `❌ backlog: ${want.text}\n`); assert.equal(r.stdout, ''); }
+      assert.equal(existsSync(join(w.cons, '.backlog', 'config.json')), false); // a refused command writes no SHA
       assert.equal(git(w.home, 'status', '--short'), ''); // nothing written
       assert.equal(w.files().length, run.given.items.filter(i => (i.repository ?? 'acme/app') === 'acme/app' && !i.archived).length);
     }
@@ -91,6 +93,15 @@ for (const c of viaCommand) {
       const path = fileOf(w.folder, seq); assert.ok(path, `item ${seq} is written`);
       const got = JSON.parse(readFileSync(path, 'utf8')).fields;
       for (const [f, v] of Object.entries(fields)) assert.deepEqual(got[f], v, `item ${seq} field ${f}`);
+      // every other field: a created item holds the definition's default (but for what the command itself sets: its arguments, the status, the links), a seeded item what the case gave it
+      const set = ['status', 'parent', 'depends_on', ...Object.keys(run.command.args ?? {})];
+      const seeded = run.given.items.find(i => i.seq === Number(seq));
+      for (const f of Object.keys(entry.item)) if (!(f in fields) && (seeded || !set.includes(f))) assert.deepEqual(got[f], seeded ? { ...defaultsOf(entry), ...seeded.fields }[f] : defaultsOf(entry)[f], `item ${seq} field ${f} (not named by the case)`);
+    }
+    for (const i of run.given.items.filter(x => !(String(x.seq) in (want.items ?? {})) && (x.repository ?? 'acme/app') === 'acme/app' && (x.team ?? team) === team)) { // an item the case does not mention is as seeded
+      const { children, ...kept } = JSON.parse(readFileSync(fileOf(w.folder, i.seq), 'utf8')).fields; // a parent gets its child listed by the rule
+      const { children: _, ...was } = { ...defaultsOf(entry), ...i.fields };
+      assert.deepEqual(kept, was, `item ${i.seq} unchanged`);
     }
     if (want.place) { // before/after: next to the item named, first/last: at the ends of the branch list
       const slugs = index.read(w.folder).branches.main.map(e => e.seq);
@@ -160,8 +171,7 @@ test('a refused push with the backlog inside the code repository: exit 3, the fo
   const w = inside(t);
   const edited = JSON.stringify({ ...TEMPLATES.parallel, draft: TEMPLATES.parallel.parallel });
   writeFileSync(w.teamFile, edited); // a lead's draft, not committed
-  const config = readFileSync(join(w.ra, '.backlog', 'config.json'), 'utf8'); const head = git(w.ra, 'rev-parse', 'HEAD'); const status = () => git(w.ra, 'status', '--short', '-uall').split('\n').filter(l => !l.endsWith('.backlog/.gitignore')).join('\n'); // the clone's own ignore file is made on the way in and stays
-  const statusBefore = status();
+  const config = readFileSync(join(w.ra, '.backlog', 'config.json'), 'utf8'); const head = git(w.ra, 'rev-parse', 'HEAD'); const statusBefore = git(w.ra, 'status', '--short', '-uall');
   const folder = snapshot(w.folder);
   w.refuse();
   const r = w.run(OK);
@@ -171,7 +181,8 @@ test('a refused push with the backlog inside the code repository: exit 3, the fo
   assert.equal(readFileSync(join(w.ra, '.backlog', 'config.json'), 'utf8'), config);
   assert.equal(readFileSync(w.teamFile, 'utf8'), edited);
   assert.equal(git(w.ra, 'rev-parse', 'HEAD'), head);
-  assert.equal(status(), statusBefore);
+  // The CLI's home resolution makes .backlog/.gitignore on the way in, for every command (an open owner question, kept as it is); a refused push leaves exactly that one line more.
+  assert.equal(git(w.ra, 'status', '--short', '-uall'), `${statusBefore}\n?? .backlog/.gitignore`);
   git(w.bare, 'config', 'core.hooksPath', '/dev/null');
   const again = w.run(OK);
   assert.equal(again.status, 0, again.stdout + again.stderr);
@@ -187,4 +198,25 @@ test('a team file valid for the command\'s team but broken in another entry stop
   assert.deepEqual(w.files(), []);
   assert.equal(existsSync(join(w.cons, '.backlog', 'config.json')), false);
   assert.equal(git(w.home, 'status', '--short'), '');
+});
+
+// What a team command that reads a valid file leaves in the per-user state folder (the validated copy and the record), and what it never writes.
+test('a step refused by the rules: the validated copy and the record are written (the command proceeded past the file and the entry), the SHA is not', t => {
+  const w = world(t);
+  assert.deepEqual(w.records(), []);
+  const r = w.run(['--team', 'parallel', '--agent', 'member-1', '--name', 'x']);
+  assert.equal(r.status, 1);
+  assert.equal(w.records().length, 2);
+  assert.equal(existsSync(join(w.cons, '.backlog', 'config.json')), false);
+});
+
+test('a team file that is invalid, unreadable, or has no entry for the team: no copy, no record, no SHA', t => {
+  const bad = { ...TEMPLATES.parallel, ops: { ...TEMPLATES.parallel.parallel, rules: { ...TEMPLATES.parallel.parallel.rules, table: [{ id: 'bad', step: 'new', do: { set: { status: 'shipped' } } }] } } };
+  for (const [teams, args] of [[bad, OK], ['{ not json', OK], [TEMPLATES.parallel, ['--team', 'ghost', '--agent', 'a', '--name', 'x']]]) {
+    const w = world(t, teams);
+    const r = w.run(args);
+    assert.notEqual(r.status, 0, r.stdout);
+    assert.deepEqual(w.records(), [], r.stderr);
+    assert.equal(existsSync(join(w.cons, '.backlog', 'config.json')), false);
+  }
 });

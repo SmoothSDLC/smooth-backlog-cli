@@ -35,6 +35,8 @@ export function putItem(folder, item, entry) {
   return path;
 }
 
+// The per-user validated copy and record of a team file (what loadTeams writes under the state folder): their file names, [] when none.
+const recordsOf = xdg => { const dir = join(xdg, 'smooth-backlog-cli', 'teams-validation'); return existsSync(dir) ? readdirSync(dir).sort() : []; };
 const refuser = bare => () => { const hook = join(bare, 'hooks', 'pre-receive'); writeFileSync(hook, '#!/bin/sh\necho refused >&2\nexit 1\n'); chmodSync(hook, 0o755); };
 
 // The backlog beside the code. teams: the content of .backlog/teams.json (an object or text).
@@ -51,12 +53,13 @@ export function world(t, teams = TEMPLATES.parallel, { prefix = 'team-world-' } 
   const teamFile = join(cons, '.backlog', 'teams.json');
   writeFileSync(teamFile, typeof teams === 'string' ? teams : JSON.stringify(teams));
   const folder = join(home, 'acme', 'app');
-  const run = (args, extra = {}) => cli(['team', 'new', ...args], { cwd: cons, tmp, plain: true, env: { ...quiet, ...extra } });
+  const run = (args, extra = {}, verb = 'new') => cli(['team', verb, ...args], { cwd: cons, tmp, plain: true, env: { ...quiet, ...extra } });
   const files = () => (existsSync(join(folder, 'phases')) ? readdirSync(join(folder, 'phases')).sort() : []);
   const item = seq => JSON.parse(readFileSync(fileOf(folder, seq), 'utf8'));
   const config = () => JSON.parse(readFileSync(join(cons, '.backlog', 'config.json'), 'utf8'));
   const publish = message => { git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', message); git(home, 'push', '-q'); };
-  return { tmp, home, cons, bare, folder, teamFile, run, files, item, config, publish, refuse: refuser(bare), env: { ...cliEnv(tmp), ...quiet } };
+  const records = () => recordsOf(join(tmp, 'config'));
+  return { tmp, home, cons, bare, folder, teamFile, run, files, item, config, publish, records, refuse: refuser(bare), env: { ...cliEnv(tmp), ...quiet } };
 }
 
 // The backlog inside the code repository (.backlog, repository id local/repository): ra is the working clone the command runs in, rb a second clone beside it.
@@ -72,6 +75,6 @@ export function inside(t, teams = TEMPLATES.parallel) {
   git(ra, 'add', '-A'); git(ra, 'commit', '-qm', 'seed'); git(ra, 'push', '-q', '-u', 'origin', 'main');
   git(dir, 'clone', '-q', bare, rb);
   const folder = join(ra, '.backlog', 'local', 'repository');
-  const run = (args, extra = {}) => spawnSync(process.execPath, [BIN, 'team', 'new', ...args], { cwd: ra, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY, SMOOTH_BACKLOG_CLI_HOME: '', XDG_CONFIG_HOME: join(dir, 'xdg'), ...quiet, ...extra } });
-  return { dir, bare, ra, rb, folder, teamFile, run, refuse: refuser(bare) };
+  const run = (args, extra = {}, verb = 'new') => spawnSync(process.execPath, [BIN, 'team', verb, ...args], { cwd: ra, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY, SMOOTH_BACKLOG_CLI_HOME: '', XDG_CONFIG_HOME: join(dir, 'xdg'), ...quiet, ...extra } });
+  return { dir, bare, ra, rb, folder, teamFile, run, records: () => recordsOf(join(dir, 'xdg')), refuse: refuser(bare) };
 }

@@ -29,7 +29,7 @@ export async function run(argv) {
 }
 
 const show = v => (typeof v === 'string' ? (v === '' ? '""' : v) : JSON.stringify(v ?? null));
-const lines = (changes, order, indent) => Object.entries(changes)
+export const lines = (changes, order, indent) => Object.entries(changes)
   .sort(([a], [b]) => (order.indexOf(a) + 1 || order.length + 1) - (order.indexOf(b) + 1 || order.length + 1))
   .map(([f, [before, after]]) => `${indent}${f}: ${show(before)} -> ${show(after)}`);
 

@@ -11,6 +11,7 @@ import { cloneLocked, resolveHome } from '../shared/store.js';
 import * as sync from '../shared/sync.js';
 import { forgetTeamsConfig, installSeam, openItemsOf, setSessionTeam, setTeamsHome, teamEntry, teamsConfig, validateTeam } from './team.js';
 import { strip } from '../shared/text.js';
+import { formOf } from './inputs.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
@@ -64,6 +65,7 @@ async function dispatch(argv) {
   if (sub === 'new') return (await import('./new.js')).run(argv.slice(1)); // the rules engine: the old seam below is not installed for it
   if (sub === 'update') return (await import('./update.js')).run(argv.slice(1)); // the same
   if (sub === 'pop') return (await import('./pop.js')).run(argv.slice(1)); // the rules engine, as new and update
+  if (sub === 'query' && ['query check', 'query plan'].includes(formOf(argv))) return (await import('./query.js')).run(argv.slice(1)); // the rules engine: no old seam
   installSeam(); // the routes below are the old commands, which read the earlier words
   setTeamsHome(resolveHome().home); // reads the team configuration of the backlog
   if (sub === 'define') return define(argv.slice(1));

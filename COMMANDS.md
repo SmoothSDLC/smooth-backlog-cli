@@ -1128,7 +1128,9 @@ Usage:
   backlog team pop --team <name> --agent <name> [--dry-run] [--json]
   backlog team new --team <name> --agent <name> --name <text> [--<argument> <value>]... [--json]
   backlog team update <item> <step> --team <name> --agent <name> [--<argument> <value>]... [--json]
-  backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--scope branch|repo|all] [--json]
+  backlog team query check <item> <step> --team <name> [--agent <name>] [--<argument> <value>]... [--json]
+  backlog team query plan --team <name> [--json]
+  backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --wip [--scope branch|repo|all] [--json]
   backlog team validate [--team <name> | --show-all] [--json]
   backlog team migrate --team <name>
   backlog team define --file <team.json> [--json]
@@ -1368,7 +1370,9 @@ Example:
 backlog team query — read the backlog through the team's views
 
 Usage:
-  backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--scope branch|repo|all] [--json]
+  backlog team query check <item> <step> --team <name> [--agent <name>] [--<argument> <value>]... [--json]
+  backlog team query plan --team <name> [--json]
+  backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --wip [--scope branch|repo|all] [--json]
   backlog team query --team <name> [--agent <name>] --next | --status | --critical | --branches [--all] [--branch <name>] [--json]
   backlog team query --team <name> [--agent <name>] --phase <item>[,<item>...] | --events [<item>] | --by-branch <name> | --only {new,open,done,archive} [--json]
   backlog team query --team <name> [--agent <name>] --changed [--json]
@@ -1378,7 +1382,17 @@ item). The view is one of the options below; --agent is the agent that asks (giv
 offered and the agent never reviews its own work). Without a view option it prints the full stack of the branch, as backlog list does.
 Each item shown also carries what the team rules say about it: missing (the team fields it lacks: review_refs, depends_on, estimate_min,
 definition_of_done; [] when complete; null when the item's file is gone or holds no item), the stage and the review state. A team without
-an entry is refused. The user's read commands (backlog list, show, next, history, changes) have none of the team views.
+an entry is refused.
+
+backlog team query check <item> <step> is the rules' answer for a step on an item, without taking the step: it prints "allowed by rule <id>: <field>: <before> -> <after>; ..."
+(the item's changes in the order of the item definition, then "item <n> <field>: ..." for a related item) or "refused by rule <id>: <reason>", and exits 0 for both. A refusal that no
+rule makes (the item is archived or belongs to another team, or the step takes no such --<argument>) says "refused by rule -". The item is named as for backlog team update; a step word
+no rule names, a value that does not fit its field and a malformed rule are exit 2, and an unknown item is exit 1, as there. Without --agent the answer is the rules' verdict for an empty
+caller. --json prints {"allowed", "rule", "changes", "related", "text"}. Nothing is written in the backlog and nothing is published; --show-all is refused.
+Scenario: before claiming item 12, the agent member-1 of the team parallel asks: backlog team query check 12 claim --team parallel --agent member-1
+backlog team query plan lists what backlog team pop would offer each person of the team, in name order, one line each: "<person>: <step> [<number>] <slug> (pop entry <id>, rule <id>)" or
+"<person>: idle". The item offered to one person is not offered to the next. --json prints a list of {"person", "action", "item", "entry", "rule"}, with null for idle. The exit is 0; nothing is
+written; --show-all is refused. Scenario: the lead of the team parallel plans the next hand-outs: backlog team query plan --team parallel The user's read commands (backlog list, show, next, history, changes) have none of the team views.
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
@@ -1463,19 +1477,9 @@ Options:
       owner/name:branch, the team or the agent, and stale_hours), and the items in progress without a change of their own
       for longer than stale_hours (default 48). A claim or a
       refinement start past a limit is refused, naming the limit and the items holding it.
-  --plan
-      The dispatch plan of the team for this branch: at most one action per member (respond, close, review, claim, and for
-      the team lead refine or reassign-review), each item to one member, with the reason and a dispatch key; the members
-      are the members of the team's entry in teams.json. Entries come by action (respond and close, review, claim, refine), a
-      claim to the member holding the fewest items, then in the order of the entry (team session). Any session may review
-      an item except the sessions recorded on it (session_authors: the claimer and the one who asked for the review, kept
-      on release); a new session of the same card may review it. A member the entry lists in review_only never claims.
-      Read-only.
   --lead LEAD
-      pop and --plan: the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the
+      the team lead, who alone refines incomplete items outside the refinement stages and never claims an execution item. The default is the
       environment variable SMOOTH_BACKLOG_CLI_TEAM_LEAD, else the lead of the team in teams.json.
-  --agents AGENTS
-      With --plan: the team members present, comma-separated; the default is all the members of the team's entry.
   --scope {branch,repo,all}
       pop and the views --claimable, --reviewable and --blocked: how far the agent looks: this branch (the default), every branch of this repository, or also the chunk items
       of every repository. The widest scope for chunk items is capped by the line refinement_scope: off|branch|repo|all

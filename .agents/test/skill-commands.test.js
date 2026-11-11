@@ -12,7 +12,7 @@ const dir = fileURLToPath(new URL('../../templates/skills/backlog/', import.meta
 const skill = readFileSync(join(dir, 'SKILL.md'), 'utf8');
 const files = d => readdirSync(d).flatMap(n => (statSync(join(d, n)).isDirectory() ? files(join(d, n)) : [join(d, n)]));
 test('040: every team command is in the skill, and a team step is taught as the word after the item', () => {
-  for (const c of ['backlog setup', 'backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...', 'backlog team pop --team <team> --agent', 'backlog show <item> --agent <you>', 'backlog team new --team <team> --agent <you> --name', 'backlog team query --team <team> --plan', 'backlog team query --team <team> --decisions', 'backlog team query --team <team> --wip']) assert.ok(skill.includes(c), c);
+  for (const c of ['backlog setup', 'backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...', 'backlog team pop --team <team> --agent', 'backlog show <item> --agent <you>', 'backlog team new --team <team> --agent <you> --name', 'backlog team query plan --team <team>', 'backlog team query check <item> <step> --team <team>', 'backlog team query --team <team> --decisions', 'backlog team query --team <team> --wip']) assert.ok(skill.includes(c), c);
   // every command of help.js and of COMMANDS.md
   const shared = [...new Set([...Object.keys(HELP), ...[...readFileSync(fileURLToPath(new URL('../../COMMANDS.md', import.meta.url)), 'utf8').matchAll(/^### backlog (\S+)$/gm)].map(m => m[1])])];
   assert.ok(shared.length >= 8, shared.join());

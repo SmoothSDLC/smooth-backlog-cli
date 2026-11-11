@@ -32,20 +32,17 @@ const flagsOf = text => [...new Set((text.match(/--[a-z][\w-]*/g) ?? []).filter(
 // The block of one flag: its header line `  --flag ...` and the lines indented by six spaces below it.
 const block = (text, flag) => new RegExp(`^  --${flag}(?: .*)?\\n((?:      .*\\n)*)`, 'm').exec(text)?.[0];
 
-test('backlog update --claim keeps its refusal conditions, query --plan the members, default and reviewer rule', () => {
+test('backlog update --claim keeps its refusal conditions; team query help states check and plan as the rules\' answers, with no roster and no old --plan view', () => {
   const claim = block(backlog('update', '--help').stdout, 'claim');
   assert.match(claim, /refuses when another agent holds the item/);
   assert.match(claim, /depends_on\s+is not done/);
   assert.match(claim, /in progress/);
-  for (const command of ['team query']) {
-    const text = backlog(...command.split(' '), '--help').stdout;
-    const plan = block(text, 'plan');
-    assert.match(plan, /the\s+members\s+of\s+the\s+team's\s+entry\s+in\s+teams\.json/, command);
-    assert.match(plan, /Any\s+session\s+may\s+review\s+an\s+item\s+except\s+the\s+sessions\s+recorded\s+on\s+it/, command);
-    assert.match(plan, /review_only\s+never\s+claims/, command);
-    assert.doesNotMatch(plan, /class|HOLDER/, command); // no class profiles, no holder window
-    assert.doesNotMatch(text, /--roster|TEAM_ROSTER/, command); // the roster file is gone
-  }
+  const text = backlog('team', 'query', '--help').stdout;
+  assert.match(text, /backlog team query check <item> <step> --team <name>/);
+  assert.match(text, /backlog team query plan --team <name>/);
+  assert.match(text, /what\s+backlog\s+team\s+pop\s+would\s+offer\s+each\s+person\s+of\s+the\s+team,\s+in\s+name\s+order/);
+  assert.match(text, /The\s+item\s+offered\s+to\s+one\s+person\s+is\s+not\s+offered\s+to\s+the\s+next/);
+  assert.doesNotMatch(text, /--plan|--agents|--roster|TEAM_ROSTER/);
 });
 
 for (const [command, flags] of Object.entries(REFUSED)) {

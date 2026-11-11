@@ -224,6 +224,33 @@ test('the harness runs every update case it can, none silently dropped: 148 upda
   assert.equal(viaUpdate.filter(c => c.id.startsWith('INL')).length, 2); // INL-10 and INL-11
 });
 
+// ---- check: the same update cases through `backlog team query check <item> <step>`: the rules' verdict, exit 0 with "allowed by rule <id>" or "refused by rule <id>" ("-" for a coded
+// refusal); the item that does not exist, a wrong value and a malformed rule keep the exit and the text of the update. Nothing is written in the clone.
+for (const c of viaUpdate) {
+  test(`${c.id}: ${c.rule ?? 'coded'} through backlog team query check`, t => {
+    const file = fileOf_(c); const team = Object.keys(file)[0]; const entry = file[team];
+    const w = world(t, file);
+    const run = JSON.parse(JSON.stringify(substitution(w, c)(c)));
+    seed(w, run, team, entry, x => x);
+    const before = snapshot(w.folder); const head = git(w.home, 'rev-parse', 'HEAD');
+    const r = w.run(['check', ...commandLine(run.command, team)], run.command.env ?? {}, 'query');
+    const want = run.expect;
+    const coded = want.exit === 2 && /^the step \S+ of team \S+ takes no --/.test(want.text);
+    if ((want.exit === 1 && /^no item /.test(want.text)) || (want.exit === 2 && !coded)) {
+      assert.equal(r.status, want.exit, `${r.stdout}${r.stderr}`);
+      assert.equal(want.exit === 1 ? r.stdout : r.stderr, want.exit === 1 ? `❌ ${want.text}\n` : `❌ backlog: ${want.text}\n`);
+    } else {
+      assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
+      assert.equal(r.stderr, '');
+      assert.ok(r.stdout.startsWith(want.exit === 0 ? `allowed by rule ${want.rule}` : `refused by rule ${coded ? '-' : want.rule ?? '-'}: `), r.stdout);
+      if (want.exit === 1 && want.rule) assert.doesNotMatch(r.stdout, new RegExp(`\\(rule ${want.rule}\\)\\n$`));
+    }
+    assert.deepEqual(snapshot(w.folder), before);
+    assert.equal(git(w.home, 'status', '--short'), '');
+    assert.equal(git(w.home, 'rev-parse', 'HEAD'), head);
+  });
+}
+
 // ---- pop: the same cases through `backlog team pop --json`. Compared: the exit, action, item, entry and rule of the answer; the item the step wrote, field by field, against what the
 // evaluator makes of the same items; every other item file byte for byte; an idle answer leaves the whole folder as it was.
 for (const c of viaPop) {

@@ -2,6 +2,7 @@
 // src/shared/query.js runs the query; this module is the `team` object it asks.
 import { existsSync } from 'node:fs';
 import { run as runQuery } from '../shared/query.js';
+import { formOf } from './inputs.js';
 import { missingFields } from './lifecycle.js';
 import { run as plan } from './queue.js';
 import { SCOPES, teamView } from './views.js';
@@ -30,4 +31,10 @@ export const hooks = {
   missing: file => (file && Object.keys(file.fm || {}).length ? missingFields(file.fm, file.body) : null),
 };
 
-export const run = argv => runQuery(argv, { team: hooks });
+// check and plan are the rules engine's; every other word is still the old views.
+export async function run(argv) {
+  const form = formOf(['query', ...argv]);
+  if (form === 'query check') return (await import('./check.js')).run(argv);
+  if (form === 'query plan') return (await import('./plan.js')).run(argv);
+  return runQuery(argv, { team: hooks });
+}

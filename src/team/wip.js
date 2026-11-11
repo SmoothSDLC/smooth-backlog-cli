@@ -2,10 +2,10 @@
 // The overall, repository and branch levels are src/shared/wip-limits.js. The limits file and its shape are described there; the team and
 // agent entries read {"team": 3 | {"default": 3, "t1": 4}, "agent": 2 | {"default": 2, "an agent": 1}, "stale_hours": 48}. The team lead lifts the
 // team and agent limits for one item with a recorded reason
-// (backlog team update <item> wip-override --team <team> --agent <lead> --wip-override "<reason>"). One a member is refining (stage refining, a refiner,
+// (a recorded reason). One a member is refining (stage refining, a refiner,
 // no claimer) is work in progress too.
 import { limitOf, limits, limitsFile, num, progressItems, wipRefusal as sharedRefusal } from '../shared/wip-limits.js';
-import { heldBy, teamStep } from './team.js';
+import { heldBy } from './team.js';
 
 const holderOf = fm => fm.claimed_by || (fm.stage === 'refining' ? fm.refiner : '') || ''; // a finished refinement holds nothing
 
@@ -13,7 +13,7 @@ const holderOf = fm => fm.claimed_by || (fm.stage === 'refining' ? fm.refiner : 
 // extra: items a plan has already given out; self: the item being started where it is now (a move counts it once)
 export function wipRefusal(folder, repo, fm, agent, slug, extra = [], self = { repository: repo, slug }) {
   const lifted = String(fm.wip_override ?? '').trim() !== ''; // the lead's recorded override
-  const hint = `, or the team lead lifts the limit for this item: ${teamStep('<item>', '<lead>', '--wip-override "<reason>"')}`;
+  const hint = `, or the team lead lifts the limit for this item, with a recorded reason`;
   return sharedRefusal(folder, repo, fm, slug, extra, self, [
     { level: 'team', key: fm.team, of: x => Boolean(fm.team) && x.fm.team === fm.team, skip: !fm.team || lifted, hint },
     // work held by an earlier session of the same card counts against the agent's limit (the continuation)

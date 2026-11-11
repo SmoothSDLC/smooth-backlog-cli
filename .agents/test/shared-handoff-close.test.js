@@ -1,6 +1,6 @@
 // Item 059.3: the close gate's logic (src/team/handoff-close.js, the module the integration slice calls from
 // closeItem and the --status done path): an item closes only while every dependent's edge is accepted, the refusal
-// naming every open dependent, its edge state and the next command; without dependents the gate records NONE.
+// naming every open dependent, its edge state and what it needs; without dependents the gate records NONE.
 // Fixtures are written in the stored form: handoffs and handoff_receipts hold the compact JSON strings encode makes.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,13 +34,13 @@ const gate = (f, fm) => closeGate({ fm, folder: f.folder, repo: REPO, slug: SLUG
 const COMMIT = 'a'.repeat(40);
 const record = (dependent, contract = 'the exported functions') => handoff.makeRecord({ dependent, commit: COMMIT, contract, verification: 'npm test: 0 failures', by: 'agent-b', at: '2026-10-30T20:00:00Z' });
 const receipt = (dependent, digest, result = 'accepted') => handoff.makeReceipt({ dependent, digest, result, by: 'lead', at: '2026-10-30T21:00:00Z', checks: 'npm test: 0 failures' });
-// The next commands the refusal must name (item 059's design): missing and rejected edges need (a new) hand-off
+// What the refusal must name, as a fact and never as a command (item 059's design): missing and rejected edges need (a new) hand-off
 // record from the producer; unaccepted and stale edges need the lead's acceptance of the record that is there.
-const handoffCommand = (dependent) => `backlog team update ${SLUG} handoff --team <team> --agent <claimer> --handoff ${dependent} --handoff-commit <sha> --handoff-contract ... --handoff-verification ...`;
-const acceptCommand = (dependent) => `backlog team update ${SLUG} accept-handoff --team <team> --agent <lead> --accept-handoff ${dependent} --checks ...`;
+const handoffNeed = 'needs a (new) hand-off record from the producer';
+const acceptNeed = "needs the team lead's acceptance of the hand-off record";
 const NONE = { fm: { handoffs: 'none' }, text: 'DEPENDENCY_HANDOFF: NONE (no dependent items; checked by the CLI at close)' };
 
-test('059.3: closeGate refuses a missing edge, naming the dependent, the state and the --handoff command', () => {
+test('059.3: closeGate refuses a missing edge, naming the dependent, the state and what it needs', () => {
   const f = fixture();
   const producer = { seq: 5, phase: SLUG, status: 'pending', depends_on: [] }; // no handoffs key: no record for the dependent
   make(f, 'acme', 'app', producer);
@@ -49,30 +49,30 @@ test('059.3: closeGate refuses a missing edge, naming the dependent, the state a
   assert.deepEqual(Object.keys(res), ['refuse'], 'a refusal carries the refuse text and nothing else');
   assert.ok(res.refuse.includes(`close refused for ${SLUG}`), res.refuse);
   assert.ok(res.refuse.includes('6 edge missing'), res.refuse);
-  assert.ok(res.refuse.includes(handoffCommand('6')), res.refuse);
+  assert.ok(res.refuse.includes(handoffNeed) && !res.refuse.includes('backlog team update'), res.refuse);
 });
 
-test('059.3: closeGate refuses an unaccepted edge in the stored form and names the --accept-handoff command', () => {
+test('059.3: closeGate refuses an unaccepted edge in the stored form and names the acceptance by the lead', () => {
   const f = fixture();
   const producer = { seq: 5, phase: SLUG, status: 'pending', depends_on: [], handoffs: [handoff.encode(record('6'))] };
   make(f, 'acme', 'app', producer);
   make(f, 'acme', 'app', { seq: 6, phase: '006-dep', status: 'pending', depends_on: [5] });
   const res = gate(f, producer);
   assert.ok(res.refuse.includes('6 edge unaccepted'), res.refuse);
-  assert.ok(res.refuse.includes(acceptCommand('6')), res.refuse);
+  assert.ok(res.refuse.includes(acceptNeed) && !res.refuse.includes('backlog team update'), res.refuse);
 });
 
-test('059.3: closeGate refuses a stale edge (the last receipt pins another digest) and names the --accept-handoff command', () => {
+test('059.3: closeGate refuses a stale edge (the last receipt pins another digest) and names the acceptance by the lead', () => {
   const f = fixture();
   const producer = { seq: 5, phase: SLUG, status: 'pending', depends_on: [], handoffs: [handoff.encode(record('6'))], handoff_receipts: [handoff.encode(receipt('6', 'b'.repeat(64)))] };
   make(f, 'acme', 'app', producer);
   make(f, 'acme', 'app', { seq: 6, phase: '006-dep', status: 'pending', depends_on: [5] });
   const res = gate(f, producer);
   assert.ok(res.refuse.includes('6 edge stale'), res.refuse);
-  assert.ok(res.refuse.includes(acceptCommand('6')), res.refuse);
+  assert.ok(res.refuse.includes(acceptNeed) && !res.refuse.includes('backlog team update'), res.refuse);
 });
 
-test('059.3: closeGate refuses a rejected edge and names a new --handoff as the next command', () => {
+test('059.3: closeGate refuses a rejected edge and names that a new hand-off record is needed', () => {
   const f = fixture();
   const rec = record('6');
   const producer = { seq: 5, phase: SLUG, status: 'pending', depends_on: [], handoffs: [handoff.encode(rec)], handoff_receipts: [handoff.encode(receipt('6', rec.digest, 'rejected'))] };
@@ -80,7 +80,7 @@ test('059.3: closeGate refuses a rejected edge and names a new --handoff as the 
   make(f, 'acme', 'app', { seq: 6, phase: '006-dep', status: 'pending', depends_on: [5] });
   const res = gate(f, producer);
   assert.ok(res.refuse.includes('6 edge rejected'), res.refuse);
-  assert.ok(res.refuse.includes(handoffCommand('6')), res.refuse);
+  assert.ok(res.refuse.includes(handoffNeed) && !res.refuse.includes('backlog team update'), res.refuse);
 });
 
 test('059.3: closeGate gives {} when every dependent edge is accepted, local and across repositories', () => {
@@ -110,7 +110,7 @@ test('059.3: closeGate records NONE when another repository item depends on a di
   assert.deepEqual(gate(f, producer), NONE);
 });
 
-test('059.3: closeGate names every open dependent with its own state and its own next command', () => {
+test('059.3: closeGate names every open dependent with its own state and what it needs', () => {
   const f = fixture();
   const recF = record('acme/lib#2');
   const producer = { seq: 5, phase: SLUG, status: 'pending', depends_on: [], handoffs: [handoff.encode(record('6')), handoff.encode(recF)], handoff_receipts: [handoff.encode(receipt('acme/lib#2', recF.digest, 'rejected'))] };
@@ -120,8 +120,8 @@ test('059.3: closeGate names every open dependent with its own state and its own
   const res = gate(f, producer);
   assert.ok(res.refuse.includes('6 edge unaccepted'), res.refuse);
   assert.ok(res.refuse.includes('acme/lib#2 edge rejected'), res.refuse);
-  assert.ok(res.refuse.includes(acceptCommand('6')), res.refuse);
-  assert.ok(res.refuse.includes(handoffCommand('acme/lib#2')), res.refuse);
+  assert.ok(res.refuse.includes(acceptNeed) && !res.refuse.includes('backlog team update'), res.refuse);
+  assert.ok(res.refuse.includes(handoffNeed) && !res.refuse.includes('backlog team update'), res.refuse);
 });
 
 test('059.3: closeGate takes the stored front-matter form straight from the codec round-trip', () => {

@@ -60,11 +60,11 @@ const dod = fm => { const refs = asList(fm.review_refs); return refs.length ? `;
 function reviewSay(slug, fm, me) {
   const refs = asList(fm.review_refs);
   let text = fm.review_state === 'in_review' && fm.reviewer === me ? `continue your review (started ${fm.review_started ?? 'None'}): `
-    : `start the review: ${team.teamStep(slug, me, '--start-review')}; then `;
+    : 'start the review; then ';
   text += 'review the work of ';
   text += fm.claimed_by || 'its author';
   if (refs.length) text += `; load its review_refs first: ${refs.join(', ')} (the review-documents repository) and cite one in --comments`;
-  return `${text}, then ${team.teamStep(slug, me, '--review pass|changes --comments "<findings>"')}`;
+  return `${text}, then give your verdict (pass or changes) with your findings`;
 }
 
 //. io-free: returns the exit code.
@@ -129,35 +129,35 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
   // the claimer, so the claim comes first
   const cont = ({ r, fm, f }) => {
     const holder = fm.claimed_by || '';
-    const claimFirst = holder && holder !== me ? `first claim it as ${me} (${team.teamStep(r.slug, me, '--claim')}), then ` : '';
+    const claimFirst = holder && holder !== me ? `first claim it as ${me}, then ` : '';
     return (teamDone({ r, fm }) && !['passed', 'changes-requested'].includes(fm.review_state) // the lead closes the work item when every item of its team is done
       ? { name: 'continue', r, f, say: reviewRefusal(fm) === ''
-        ? `${claimFirst}every item of team ${fm.team} is done: close ${r.seq} (${team.teamStep(r.slug, me, '--close --summary "<outcome>"')})`
-        : `${claimFirst}every item of team ${fm.team} is done: have ${r.seq} reviewed first (${team.teamStep(r.slug, me, '--request-review any --note "<the items and their evidence>"')}) - the team's review rules must be met before the close` }
+        ? `${claimFirst}every item of team ${fm.team} is done: close ${r.seq}`
+        : `${claimFirst}every item of team ${fm.team} is done: have ${r.seq} reviewed first - the team's review rules must be met before the close` }
       : fm.review_state === 'passed'
       ? { name: 'continue', r, f, say: reviewRefusal(fm) === ''
-        ? `${claimFirst}close ${r.seq} with --close --summary (${team.teamStep(r.slug, me, '--close --summary "<outcome>"')})`
-        : `${claimFirst}${reviewRefusal(fm)}: request the next review (${team.teamStep(r.slug, me, '--request-review <reviewer> --note "<the commit>"')}); after the rules are met, close ${r.seq}` }
+        ? `${claimFirst}close ${r.seq} with a summary of the outcome`
+        : `${claimFirst}${reviewRefusal(fm)}: request the next review; after the rules are met, close ${r.seq}` }
       : { name: 'continue', r, f, say: `you hold it: ${claimFirst}keep working and record each step in the item (backlog update ${r.slug} --append "..."), then write the reviewer handoff and --request-review - the team's review rules must be met before the close${dod(fm)}` }); // every item needs the two stages, with or without review_refs
   };
   const pick = (...states) => mine.find(({ fm }) => states.includes(fm.review_state ?? null));
   if (!act) { const x = pick(null, '', 'none'); if (x) act = cont(x); }
   if (!act) {
     const x = teamRefining.find(({ fm }) => fm.refiner === me);
-    if (x) act = { name: 'refine', r: x.r, f: repo, say: `you are refining ${x.r.seq}: complete its team fields and definition of done (${refineHow(x.r.slug, me)}), then ${team.teamStep(x.r.slug, me, '--refine-done --note "<what you refined>"')}` };
+    if (x) act = { name: 'refine', r: x.r, f: repo, say: `you are refining ${x.r.seq}: complete its team fields and definition of done (${refineHow()}), then mark the refinement done with a note of what you refined` };
   }
   if (!act) { const x = pick('passed') ?? mine.find(({ fm }) => !['passed', null, '', 'none', undefined].includes(fm.review_state)); if (x) act = cont(x); }
   if (!act && reviews.length) act = reviews[0];
   if (!act && !noClaim && team.claimRefusal(folder, me) === null) { // first-round refinement of a team item, before new work (one active item: spec section 6)
     const x = teamRefining.find(({ r, fm }) => !fm.refiner && !wipRefusal(folder, repo, fm, me, r.slug)); // never past a limit 
-    if (x) act = { name: 'refine', r: x.r, f: repo, say: `refine it before anyone works on it: ${team.teamStep(x.r.slug, me, '--refine-start')}, complete its team fields and definition of done (${refineHow(x.r.slug, me)}), then ${team.teamStep(x.r.slug, me, '--refine-done --note "<what you refined>"')}` };
+    if (x) act = { name: 'refine', r: x.r, f: repo, say: `refine it before anyone works on it: start the refinement, complete its team fields and definition of done (${refineHow()}), then mark the refinement done with a note of what you refined` };
   }
   const refusal = act || noClaim ? null : team.claimRefusal(folder, me);
   if (!act && !refusal && !noClaim) {
     for (const { r, fm, undone, f } of own) {
       // chunk items are offered as chunk work below
       if (isUnstarted(r.status) && !fm.claimed_by && !undone.length && !team.isChunk(fm) && team.isReady({ stage: stageOf({ fm, body: files.get(r.path)?.body }) }) && !wipRefusal(folder, repo, fm, me, r.slug)) { // a team's item only in stage ready; never past a limit 
-        act = { name: 'claim', r, f, say: `claim it: ${team.teamStep(r.slug, me, '--claim')}${dod(fm)}` };
+        act = { name: 'claim', r, f, say: `claim it${dod(fm)}` };
         break;
       }
     }
@@ -172,20 +172,19 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
     if (rv.length) {
       const seqs = xs => xs.map(x => x.r.seq).join(', ');
       act = { name: 'refinement-review', r: rv[0].r, f: repo, say: `have the refinement of ${seqs(rv)} reviewed before anyone works on them: `
-        + `${team.teamStep('<item>', me, '--request-refinement-review')} for each refined one; have a reviewer of the team's refinement_review rule (teams.json) `
-        + "give a pass or changes verdict per item against the team standard (the item's review documents); then record each verdict: "
-        + team.teamStep('<item>', '<reviewer>', '--refinement-review pass|changes --comments "<findings; thread or session id>"') };
+        + `request the refinement review for each refined one; have a reviewer of the team's refinement_review rule (teams.json) `
+        + "give a pass or changes verdict per item against the team standard (the item's review documents); then record each verdict (pass or changes, with the findings and the thread or session id)" };
     }
   }
   if (lead && plain()) { // a stale review of its team is the lead's to hand on (members never take it over); before its own plain work, never before its close or rework
     const x = own.find(({ fm, undone }) => team.staleReview(fm) && fm.reviewer !== me && !undone.some(d => d.foreign && !isFinished(d.item?.status))); // nor one waiting on another repository 
-    if (x) act = { name: 'reassign-review', r: x.r, f: x.f, say: `the review of ${x.r.seq} by ${x.fm.reviewer} is stale (started ${x.fm.review_started}): hand it on: ${team.teamStep(x.r.slug, me, '--reassign-review <member> --reason "<why>"')}` };
+    if (x) act = { name: 'reassign-review', r: x.r, f: x.f, say: `the review of ${x.r.seq} by ${x.fm.reviewer} is stale (started ${x.fm.review_started}): hand it on to another member, with the reason` };
   }
   if (!act && lead) { // the lead refines an incomplete item (never actions it): after complete work, before chunk
     const r = open.find(x => incomplete.has(x.id) && (x.repository || '') === repo && x.branch === branch && team.inTeam(files.get(x.path)?.fm ?? {})
       && !(files.get(x.path)?.fm.stage ?? '') && !waitsAway(folder, { fm: files.get(x.path)?.fm ?? {} })); // only its team's, outside the refinement stages: there a member refines ; nothing waiting on another repository 
     if (r) {
-      act = { name: 'refine', r, f: repo, say: `refine ${r.seq}, never action it: set ${incomplete.get(r.id).join(', ')} (${refineHow(r.slug, me)}); an incomplete item means the backlog was not filled properly: once complete, record the gap in the item (backlog update <item> --append "GAP: ...")` };
+      act = { name: 'refine', r, f: repo, say: `refine ${r.seq}, never action it: set ${incomplete.get(r.id).join(', ')} (${refineHow()}); an incomplete item means the backlog was not filled properly: once complete, record the gap in the item (backlog update <item> --append "GAP: ...")` };
     }
   }
   // when the work here waits on not-done items of other repositories, the answer names them
@@ -265,20 +264,20 @@ async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
     const m = members.includes(holder) ? holder : (holder ? members.find(x => team.sameWorker(x, holder)) : '');
     if (!m || busy.has(m) || fm.wait_on || !team.isReady(fm)) continue; // nothing before stage ready 
     if (held[m].some(h => !h.fm.claimed_by && h.fm.refiner === m)) continue; // a refinement in progress comes first
-    const claimFirst = m !== holder ? `first claim it as ${m} (${team.teamStep(r.slug, m, '--claim')}), then ` : '';
+    const claimFirst = m !== holder ? `first claim it as ${m}, then ` : '';
     if (fm.review_state === 'changes-requested') {
-      give(m, 'respond', r, `the review by ${fm.reviewer || 'the reviewer'} asked for changes (${fm.reviewed_at || 'time not recorded'}): ${claimFirst}read its findings in the item, fix them, record each step (backlog update ${r.slug} --append "..."), then ${team.teamStep(r.slug, m, '--request-review any --note "<what changed>"')}`,
+      give(m, 'respond', r, `the review by ${fm.reviewer || 'the reviewer'} asked for changes (${fm.reviewed_at || 'time not recorded'}): ${claimFirst}read its findings in the item, fix them, record each step (backlog update ${r.slug} --append "..."), then request the review again, with a note of what changed`,
         'claimer', fm.reviewed_at ? ` ${fm.reviewed_at}` : '');
     } else if (fm.review_state === 'passed') {
       // the plan offers the close only when the team's review rules are met for the current work commit
-      if (reviewRefusal(fm) === '') give(m, 'close', r, `${claimFirst}close ${r.seq} with --close --summary (${team.teamStep(r.slug, m, '--close --summary "<outcome>"')})`, 'claimer');
-      else give(m, 'review-request', r, `${claimFirst}${reviewRefusal(fm)}: request the next review (${team.teamStep(r.slug, m, '--request-review <reviewer> --note "<the commit>"')}) and close after the rules are met`, 'review rules pending');
+      if (reviewRefusal(fm) === '') give(m, 'close', r, `${claimFirst}close ${r.seq} with a summary of the outcome`, 'claimer');
+      else give(m, 'review-request', r, `${claimFirst}${reviewRefusal(fm)}: request the next review and close after the rules are met`, 'review rules pending');
     }
   }
   for (const { r, fm } of rows) {
     if (!team.isReady(fm)) continue;
     if (team.staleReview(fm)) {
-      if (want.has(lead) && !busy.has(lead)) give(lead, 'reassign-review', r, `the review of ${r.seq} by ${fm.reviewer} is stale (started ${fm.review_started}): hand it on: ${team.teamStep(r.slug, lead, '--reassign-review <member> --reason "<why>"')}`, 'stale review');
+      if (want.has(lead) && !busy.has(lead)) give(lead, 'reassign-review', r, `the review of ${r.seq} by ${fm.reviewer} is stale (started ${fm.review_started}): hand it on to another member, with the reason`, 'stale review');
       continue;
     }
     if (fm.review_state !== 'requested') continue;
@@ -295,7 +294,7 @@ async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
     const free = members.filter(m => !busy.has(m) && canClaim[m] && !wipRefusal(folder, repo, fm, m, r.slug, planned)).sort((x, y) => held[x].length - held[y].length || members.indexOf(x) - members.indexOf(y));
     if (free.length) {
       planned.push({ repository: repo, slug: r.slug, fm: { ...fm, status: 'in progress', claimed_by: free[0] } });
-      give(free[0], 'claim', r, `claim exactly this item (planned for you; do not pop for another): ${team.teamStep(r.slug, free[0], '--claim')}, then start the work and record each step in the item${dod(fm)}`,
+      give(free[0], 'claim', r, `claim exactly this item (planned for you; do not pop for another), then start the work and record each step in the item${dod(fm)}`,
         `free member${free.length > 1 && held[free[0]].length < held[free[1]].length ? '; least loaded' : ''}`);
     }
   }
@@ -303,7 +302,7 @@ async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
     const x = every.find(y => missing.get(y.r.id).length && !y.fm.stage && !waitsAway(folder, y)); // outside the refinement stages: there a member refines ; nothing waiting on another repository 
     if (x) {
       const m = missing.get(x.r.id);
-      give(lead, 'refine', x.r, `refine ${x.r.seq}, never action it: set ${m.join(', ')} (${refineHow(x.r.slug, lead)}); once complete, record the gap in the item`, `incomplete: ${m.join(',')}`, ` ${m.join(',')}`);
+      give(lead, 'refine', x.r, `refine ${x.r.seq}, never action it: set ${m.join(', ')} (${refineHow()}); once complete, record the gap in the item`, `incomplete: ${m.join(',')}`, ` ${m.join(',')}`);
     }
   }
   if (a.json) process.stdout.write(`${dumps(clean(out))}\n`);

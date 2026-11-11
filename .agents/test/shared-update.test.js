@@ -86,7 +86,7 @@ test('update --priority changes the index and no other item file; the item is st
   assert.deepEqual(parse(after[itemName('002-beta')]).fm.events ?? [], parse(before[itemName('002-beta')]).fm.events ?? [], 'a rank move changes only the index: the item gets no entry');
 });
 
-test('a folder whose items carry the rank of an earlier build gets its index at the first write; the items lose the key when they are next written', () => {
+test('a folder whose items carry the rank of an earlier build gets its index at the first write; the items keep the key when they are next written', () => {
   const f = seed();
   for (const [n, rank] of [['001-alpha', 3], ['002-beta', 1], ['003-gamma', 2], ['004-delta', 0], ['005-epsilon', 4], ['006-zeta', 5]]) { // the ranks an earlier build wrote
     const p = itemPath(f.folder, n);
@@ -99,10 +99,10 @@ test('a folder whose items carry the rank of an earlier build gets its index at 
   assert.equal(fm(f, itemName('003-gamma')).fm.priority, 2);
   assert.equal(run(f, ['3', '--summary', 'written']).status, 0);
   assert.deepEqual(index.read(f.folder).branches.main.map(e => e.slug), ['004-delta', '002-beta', '003-gamma', '001-alpha', '005-epsilon', '006-zeta'], 'the order the priority fields gave, open items first');
-  assert.equal(Object.hasOwn(fm(f, itemName('003-gamma')).fm, 'priority'), false, 'the written item lost the key');
+  assert.equal(fm(f, itemName('003-gamma')).fm.priority, 2, 'the written item kept the key');
   assert.equal(fm(f, itemName('002-beta')).fm.priority, 1, 'an item nobody wrote keeps it, ignored');
   assert.equal(run(f, ['2', '--summary', 'written']).status, 0);
-  assert.equal(Object.hasOwn(fm(f, itemName('002-beta')).fm, 'priority'), false);
+  assert.equal(fm(f, itemName('002-beta')).fm.priority, 1, 'and so does the second');
 });
 
 test('a bare number is the item number, never the database row id', t => {

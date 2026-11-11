@@ -1,6 +1,6 @@
-// Item 096 (slice A of 050): the CLI drops the two retired classification keys of older items whenever it writes the item
-// (store.write, the front-matter-only path, and every command that rewrites another item). Cases 1-5 fail before the change;
-// case 6 is a regression pin. The key names are plain strings here: .agents/test is outside the 049 grep contract.
+// Item 096 (slice A of 050) dropped the two retired classification keys of older items whenever the CLI wrote the item. Since the
+// migration produces items that carry such keys on purpose, store.write keeps every key of every item: these cases pin that an
+// item with the keys is written back with them, by the store and by every command that rewrites it. Case 6 is a regression pin. The key names are plain strings here: .agents/test is outside the 049 grep contract.
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -40,16 +40,16 @@ function seed(f, slug) {
 }
 const has = (f, slug) => KEYS.filter(k => k in readStored(pathOf(f, slug)).fm);
 
-test('096: writing an open item removes the two retired keys and keeps every other field', () => {
+test('096: writing an open item keeps the two retired keys and every other field', () => {
   const f = fixture();
   const s = make(f, 'plain');
   const { fm, body } = readStored(pathOf(f, s));
   store.write({ path: pathOf(f, s), fm: { ...fm, work_class: ['chunk'], review_classes: ['security'] }, body }, f.folder);
-  assert.deepEqual(has(f, s), []);
-  assert.deepEqual(readStored(pathOf(f, s)).fm, fm);
+  assert.deepEqual(has(f, s), KEYS);
+  assert.deepEqual(readStored(pathOf(f, s)).fm, { ...fm, work_class: ['chunk'], review_classes: ['security'] });
 });
 
-test('096: backlog update --append on an item that carries both keys leaves the file without them; the commit contains the removal', () => {
+test('096: backlog update --append on an item that carries both keys leaves them in the file; the commit does not remove them', () => {
   const f = fixture();
   const s = make(f, 'appended');
   seed(f, s);
@@ -57,39 +57,51 @@ test('096: backlog update --append on an item that carries both keys leaves the 
   spawnSync('git', ['-C', f.home, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-am', 'seed legacy keys'], { encoding: 'utf8' });
   spawnSync('git', ['-C', f.home, 'push', '-q', 'origin', 'HEAD:main'], { encoding: 'utf8' }); // the CLI refuses unpublished commits
   ok(f, ['update', s, '--append', 'a note', '--by', 'me']);
-  assert.deepEqual(has(f, s), []);
+  assert.deepEqual(has(f, s), KEYS);
   const shown = spawnSync('git', ['-C', f.home, 'show', 'HEAD', '--', '.'], { encoding: 'utf8' }).stdout;
-  assert.match(shown, /^-\s+"work_class":/m);
-  assert.match(shown, /^-\s+"review_classes":/m);
+  assert.doesNotMatch(shown, /^-\s+"work_class":/m);
+  assert.doesNotMatch(shown, /^-\s+"review_classes":/m);
 });
 
-test('096: a priority move rewrites no neighbour: the keys stay in it until its own next write drops them', () => {
+test('096: a priority move rewrites no neighbour, and the neighbour keeps the keys through its own next write', () => {
   const f = fixture();
   const a = make(f, 'first'); const b = make(f, 'second');
   seed(f, a); read(f, b);
   ok(f, ['update', b, '--priority', '0', '--by', 'me']);
   assert.deepEqual(has(f, a), ['work_class', 'review_classes']);
   ok(f, ['update', a, '--append', 'a note', '--by', 'me']);
-  assert.deepEqual(has(f, a), []);
+  assert.deepEqual(has(f, a), ['work_class', 'review_classes']);
 });
 
-test('096: a front-matter-only write drops the keys', () => {
+test('096: a front-matter-only write keeps the keys', () => {
   const f = fixture();
   const s = make(f, 'front matter only');
   seed(f, s);
   const { fm, body } = readStored(pathOf(f, s));
   store.write({ path: pathOf(f, s), fm, body }, f.folder, { frontMatterOnly: true });
-  assert.deepEqual(has(f, s), []);
+  assert.deepEqual(has(f, s), KEYS);
 });
 
-test('096: query --phase on an unwritten legacy item still shows the keys; after update --append it no longer does', () => {
+test('096: query --phase shows the keys of a legacy item, before and after update --append', () => {
   const f = fixture();
   const s = make(f, 'transition');
   seed(f, s);
   const keys = () => { const j = JSON.parse(ok(f, ['show', s, '--json']).stdout); return KEYS.filter(k => k in (j.front_matter ?? j)); };
   assert.deepEqual(keys(), KEYS);
   ok(f, ['update', s, '--append', 'a note', '--by', 'me']);
-  assert.deepEqual(keys(), []);
+  assert.deepEqual(keys(), KEYS);
+});
+
+test('a migrated item keeps stage, review_state and its other keys through backlog update, whatever word its status holds', () => {
+  const f = fixture();
+  const s = make(f, 'migrated');
+  const stored = readStored(pathOf(f, s));
+  writeStored(pathOf(f, s), { ...stored.fm, status: 'ready', stage: 'refined', review_state: 'none', priority: 7, refiner: 'bob' }, stored.body); // as the migration leaves an item: the order's word and the keys kept as fields
+  read(f, s);
+  ok(f, ['update', s, '--append', 'a note', '--by', 'me']);
+  ok(f, ['update', s, '--summary', 'changed', '--by', 'me']);
+  const kept = readStored(pathOf(f, s)).fm;
+  assert.deepEqual([kept.status, kept.stage, kept.review_state, kept.priority, kept.refiner], ['ready', 'refined', 'none', 7, 'bob']);
 });
 
 test('096 pin: an item without the keys is rewritten byte for byte as before', () => {

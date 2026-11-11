@@ -262,7 +262,7 @@ test('a team item stored done is read done, with its own keys and no derived one
   assert.equal('refiner' in it.fm, false);
 });
 
-test('a team item written through the store keeps every key; an item without a team drops the retired ones as before', t => {
+test('an item written through the store keeps every key, with or without a team', t => {
   const folder = folderOf(scratch(t));
   stored(folder, mk(1, { fields: { status: 'done', priority: 3, stage: 'mine', review_state: 'passed', review_classes: 'x' } }));
   stored(folder, mk(2, { team: '', fields: { status: 'pending', priority: 3, review_classes: 'x' } }));
@@ -270,7 +270,7 @@ test('a team item written through the store keeps every key; an item without a t
   const f1 = JSON.parse(readFileSync(join(folder, 'phases', '001-x.json'), 'utf8')).fields;
   assert.deepEqual([f1.status, f1.priority, f1.stage, f1.review_state, f1.review_classes], ['done', 3, 'mine', 'passed', 'x']);
   const f2 = JSON.parse(readFileSync(join(folder, 'phases', '002-x.json'), 'utf8')).fields;
-  assert.deepEqual(Object.keys(f2), ['status']);
+  assert.deepEqual(Object.keys(f2).sort(), ['priority', 'review_classes', 'status']);
 });
 
 test('the old team code under its seam still reads the earlier words of every item and drops what it derived', t => {

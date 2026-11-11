@@ -4,7 +4,7 @@
 // and for the check that stops a folder of markdown items.
 import { readFileSync } from 'node:fs';
 import { basename, posix } from 'node:path';
-import { hasFrontMatter, loadedFm, parseItem as parseMarkdownItem, splitBom, storedFm as storedMarkdown } from './frontmatter.js';
+import { hasFrontMatter, loadedFm, parse as parseMarkdownRaw, parseItem as parseMarkdownItem, splitBom, storedFm as storedMarkdown } from './frontmatter.js';
 import { fromItemJson, toItemJson } from './item-json.js';
 
 // the codec doors: text of an item file to the in-memory item and back, and the stored form of the header
@@ -14,7 +14,7 @@ const ENVELOPE_BACK = { title: 'name', last_updated: 'updated', last_updated_by:
 const toFileKeys = fm => Object.fromEntries(Object.entries(storedMarkdown(fm)).map(([k, v]) => [ENVELOPE_BACK[k] ?? k, v]));
 export const parseItem = text => { const { fm, body } = fromItemJson(text); return { fm: loadedFm(fm), body }; };
 export const dumpItem = (fm, body) => toItemJson(toFileKeys(fm), body);
-export { hasFrontMatter, parseMarkdownItem, splitBom, toFileKeys };
+export { hasFrontMatter, parseMarkdownItem, parseMarkdownRaw, splitBom, toFileKeys };
 // The history entries of an in-memory item (none: an empty list).
 export const entriesOf = fm => (Array.isArray(fm.events) ? fm.events : []);
 // An entry of an earlier build (no writer) as the one line it was: '<at> <step> <note>'.
@@ -48,7 +48,8 @@ export const readItemText = path => readFileSync(path, 'utf8');
 export const readItemFile = path => parseItem(readItemText(path));
 
 // An event line of an item made before the entries: "<ts> <event> <branch|-> <commit|-> <note>" (an old entry holds the part after the event as its note).
+// A shorter line gives the parts it has: a line of two parts has no branch and no commit.
 export function parseEvent(line) {
-  const [, ts, event, branch, commit, note] = /^(\S+) (\S+) (\S+) (\S+)(?: (.*))?$/.exec(line) ?? [];
-  return { ts, event, branch: branch === '-' ? '' : branch, commit_sha: commit === '-' ? '' : commit, note: note ?? '' };
+  const [, ts, event, branch, commit, note] = /^(\S*)(?: (\S+))?(?: (\S+))?(?: (\S+))?(?: (.*))?$/.exec(line) ?? [];
+  return { ts, event: event ?? '', branch: !branch || branch === '-' ? '' : branch, commit_sha: !commit || commit === '-' ? '' : commit, note: note ?? '' };
 }

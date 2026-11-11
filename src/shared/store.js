@@ -244,9 +244,9 @@ function entryOf(d, fm) {
 
 export const write = (item, root) => writeItem(trail(), item, root);
 function writeItem(t, item, root) {
-  // an item of a team is written as it is: its fields are the team's own (a field may be called priority or stage), nothing is dropped; only the old team code,
-  // which reads the earlier words and derives stage and review_state, still has them dropped
-  if (!(item.fm.team && !seam.entry)) item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k) && !(LEGACY_KEYS.includes(k) && (dropsLegacy(item.fm) || derivedKeys(item.fm).has(k))))) };
+  // an item is written as it is: every key it holds is kept (a field may be called priority or stage); only the old team code, which reads the earlier words
+  // and derives stage and review_state, still has the retired keys and what it derived dropped (it goes with that code)
+  if (seam.entry) item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k) && !(LEGACY_KEYS.includes(k) && (dropsLegacy(item.fm) || derivedKeys(item.fm).has(k))))) };
   const inferred = /^(.*?)[/\\](?:phases|archive)[/\\]/.exec(item.path)?.[1];
   const base = root ?? (inferred || dirname(item.path));
   assertFolder(base);

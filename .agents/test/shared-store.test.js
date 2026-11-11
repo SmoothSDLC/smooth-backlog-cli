@@ -121,7 +121,7 @@ test('load: phases/*.md and archive/**/*.md with path, fm, body, sha256 (sha ali
 test('write: atomic, mode 0o600, parent folders created, no temp file left, key order preserved on rewrite', t => {
   const d = scratch(t);
   const abs = itemPath(join(d, 'acme', 'demo'), '009-new');
-  const { priority, ...fm } = item(9, { phase: '009-new' }); // the rank an earlier build kept in the item is dropped by every write
+  const fm = item(9, { phase: '009-new' }); // the rank an earlier build kept in the item is kept by every write
   store.write({ path: abs, fm, body: 'New body.\n' });
   const parsed = parsedItem(abs);
   assert.deepEqual(parsed.fm, fm);
@@ -135,7 +135,7 @@ test('write: atomic, mode 0o600, parent folders created, no temp file left, key 
   assert.equal(again.body, parsed.body);
   putItem(dirname(dirname(abs)), item(8, { phase: '008-old' }));
   store.write({ path: join(dirname(abs), itemName('008-old')), fm: parsedItem(join(dirname(abs), itemName('008-old'))).fm, body: 'x\n' });
-  assert.equal(Object.hasOwn(parsedItem(join(dirname(abs), itemName('008-old'))).fm, 'priority'), false, 'a write drops the legacy rank');
+  assert.equal(Object.hasOwn(parsedItem(join(dirname(abs), itemName('008-old'))).fm, 'priority'), true, 'a write keeps the legacy rank');
 });
 
 test('addEvent appends a history entry to the item file and keeps every other key', t => {
@@ -147,12 +147,14 @@ test('addEvent appends a history entry to the item file and keeps every other ke
   assert.equal(it.fm.name, 'a');
   assert.match(line.at, /^\d{4}-\d\d-\d\dT[\d:]+Z$/);
   assert.deepEqual({ ...line, at: 0, changes: 0 }, { at: 0, by: line.by, session: '', step: 'claimed', changes: 0, note: 'by ann now' });
-  assert.deepEqual(Object.keys(line.changes), ['priority'], 'the rank an earlier build kept in the item is dropped by every write: a change like another');
+  assert.deepEqual(Object.keys(line.changes), [], 'the rank an earlier build kept in the item is kept by every write: no change');
   assert.ok(line.by);
   assert.equal(store.addEvent(folder, itemRel('001-a'), { event: 'review' }), null, 'no change and no note: no entry');
   store.addEvent(folder, itemRel('001-a'), { event: 'review', note: 'second' });
   assert.equal(store.load(folder)[0].fm.events.length, 2);
   assert.deepEqual(store.parseEvent('2026-01-01T00:00:00Z x - -'), { ts: '2026-01-01T00:00:00Z', event: 'x', branch: '', commit_sha: '', note: '' });
+  assert.deepEqual(store.parseEvent('2026-01-01T00:00:00Z x'), { ts: '2026-01-01T00:00:00Z', event: 'x', branch: '', commit_sha: '', note: '' }, 'a line of two parts has the two');
+  assert.deepEqual(store.parseEvent('2026-01-01T00:00:00Z'), { ts: '2026-01-01T00:00:00Z', event: '', branch: '', commit_sha: '', note: '' }, 'a line of one part has the time only');
 });
 
 // ---------------------------------------------------------------- nextSeq

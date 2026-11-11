@@ -1,16 +1,15 @@
 // `backlog team validate`: reads the team file in full and the repository's items, prints every finding with its fix, writes nothing but what
 // loadTeams writes (the SHA in the configuration, the per-user record and copy). It publishes nothing and never runs a rule.
 // `backlog team migrate` shares the reading of the inputs here and answers that it is not available yet.
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { BacklogError } from '../errors.js';
 import { foreignItem } from '../shared/dependencies.js';
-import { numberOf } from '../shared/numbers.js';
 import { redact } from '../shared/safety.js';
 import { readConfig, topOf } from '../shared/setup.js';
 import * as sync from '../shared/sync.js';
-import { cloneLocked, configDir, folder, hasFrontMatter, isItemName, repoId, resolveHome } from '../shared/store.js';
+import { cloneLocked, configDir, folder, repoId, resolveHome } from '../shared/store.js';
 import { resolveInputs } from './inputs.js';
+import { readItems } from './item.js';
 import { itemFindings, numberFindings } from './rules/validate-items.js';
 import { errors } from './rules/validate.js';
 import { loadTeams } from './teams-load.js';
@@ -37,37 +36,18 @@ export function readInputs(command, argv, booleans = []) {
   return { top, inputs: resolveInputs({ command, flags, env: process.env, config: readConfig(top) }) };
 }
 
-// The item files of the folder, read raw: the live items (phases) and every number the folder holds, archived ones included.
-// markdown is true for a folder of markdown items, which has no items to check.
-function readFolder(dir) {
-  const live = []; const bad = []; const seqs = new Set(); let markdown = false;
-  const walk = (rel, deep) => {
-    let entries;
-    try { entries = readdirSync(join(dir, rel), { withFileTypes: true }); } catch { return; }
-    for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
-      const path = `${rel}/${e.name}`;
-      if (e.isDirectory() && deep) walk(path, deep); // a symbolic link is neither a file nor a folder here: it is not followed
-      else if (e.isFile() && isItemName(e.name)) {
-        const n = numberOf(e.name);
-        if (n !== null) seqs.add(n);
-        if (rel === 'phases') live.push(path);
-      } else if (e.isFile() && e.name.endsWith('.md') && !markdown) { try { markdown = hasFrontMatter(readFileSync(join(dir, path), 'utf8')); } catch { /* unreadable */ } }
-    }
-  };
-  walk('phases', false);
-  walk('archive', true);
+// The reason of an unreadable file in the words the reader had before the codec read it: the JSON error, or "it is not an item".
+const earlier = reason => { const m = /^item file is not valid JSON \((.*)\)$/s.exec(reason); return m ? m[1] : /^item file is not a JSON object$|^item file: seq /.test(reason) ? 'it is not an item' : reason.replace(/^item file: /, ''); };
+
+// The live items of the folder as the checks read them ({ path, seq, team, fields }) and the live files that cannot be read as findings. Archived items are not checked.
+function liveItems(dir) {
+  const read = readItems(dir, { tolerant: true });
   const prefix = dir.split('/').slice(-2).join('/');
-  const items = [];
-  for (const path of live) {
-    const shown = `${prefix}/${path}`;
-    try {
-      const doc = JSON.parse(readFileSync(join(dir, path), 'utf8').replace(/^﻿/, ''));
-      if (doc === null || typeof doc !== 'object' || Array.isArray(doc) || !Number.isSafeInteger(doc.seq)) throw new Error('it is not an item');
-      items.push({ path: shown, seq: doc.seq, team: doc.team, fields: doc.fields });
-      seqs.add(doc.seq);
-    } catch (e) { bad.push({ severity: 'error', team: null, path: shown, rule: null, problem: `the item file cannot be read (${e.message})`, fix: 'restore the file from the history of the backlog repository' }); }
-  }
-  return { items, bad, seqs, markdown };
+  const items = read.items.filter(r => r.path.startsWith('phases/')).map(({ path, item }) => ({ path: `${prefix}/${path}`, seq: item.seq, team: item.team, fields: item.fields }));
+  // a too-big number is reported by the number findings (as before); an unreadable live file and a link are findings of their own
+  const bad = read.bad.filter(b => (b.path === 'phases' || b.path.startsWith('phases/')) && b.kind !== 'number').map(b => ({ severity: 'error', team: null, path: `${prefix}/${b.path}`, rule: null, problem: `the item file cannot be read (${earlier(b.reason)})`,
+    fix: b.kind === 'link' ? 'replace the link with the item file itself' : 'restore the file from the history of the backlog repository' }));
+  return { items, bad, seqs: read.seqs, markdown: read.markdown };
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -107,7 +87,7 @@ function check(argv, top, inputs, home) {
   let markdown = false;
   const dir = folder(home, repo);
   if (file && existsSync(dir)) {
-    const read = readFolder(dir);
+    const read = liveItems(dir);
     markdown = read.markdown;
     if (!markdown) {
       // a reference to this repository's own folder is local; any other is read from its folder in the same clone

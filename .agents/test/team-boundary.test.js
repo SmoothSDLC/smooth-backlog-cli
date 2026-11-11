@@ -244,7 +244,7 @@ const files = root => readdirSync(root).flatMap(n => { const p = join(root, n); 
 const importsOf = text => [...text.matchAll(/(?:import|export)\s[^'"`;]*?from\s*['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map(m => m[1] ?? m[2]).filter(p => p.startsWith('.'));
 const NAMES = /SMOOTH_BACKLOG_CLI_TEAM_NAME|SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY|SMOOTH_BACKLOG_CLI_TEAM_BRANCH|SMOOTH_BACKLOG_CLI_TEAM_LEAD|teams\.json/;
 // the modules outside src/team/ that the team code may import
-const SHARED = ['errors.js', 'storage.js', 'shared/dependencies.js', 'shared/help-parts.js', 'shared/index.js', 'shared/new.js', 'shared/numbers.js', 'shared/query.js', 'shared/safety.js', 'shared/seam.js',
+const SHARED = ['errors.js', 'storage.js', 'shared/dependencies.js', 'shared/help-parts.js', 'shared/index.js', 'shared/item-json.js', 'shared/new.js', 'shared/numbers.js', 'shared/query.js', 'shared/safety.js', 'shared/seam.js',
   'shared/seen.js', 'shared/setup.js', 'shared/status.js', 'shared/store.js', 'shared/sync.js', 'shared/team-publish.js', 'shared/text.js', 'shared/update.js', 'shared/wip-limits.js'];
 const NOT_YET = [];
 

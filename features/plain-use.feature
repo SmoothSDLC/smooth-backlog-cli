@@ -51,3 +51,50 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
     Then the command succeeds
     And the queue is 2
     And item 2 has priority 0
+
+  Scenario: next shows an idle agent the item to claim
+    Given an item "Agent work" exists
+    When I act as agent "alice"
+    And I run `backlog next`
+    Then the command succeeds
+    And the output contains "001-agent-work"
+
+  Scenario: an agent claims the next item and holds it
+    Given an item "Agent work" exists
+    When I act as agent "alice"
+    And I run `backlog update 1 --claim alice`
+    Then the command succeeds
+    And item 1 has owner "alice"
+    And item 1 has status "in progress"
+
+  Scenario: another agent cannot take a claimed item
+    Given an item "Agent work" exists
+    Given I act as agent "alice"
+    And I run `backlog update 1 --claim alice`
+    When I act as agent "bob"
+    And I run `backlog update 1 --claim bob`
+    Then the command fails
+    And the output contains "claimed by alice"
+
+  Scenario: the holder releases the item back into the queue
+    Given an item "Agent work" exists
+    Given I act as agent "alice"
+    And I run `backlog update 1 --claim alice`
+    When I run `backlog update 1 --release alice`
+    Then the command succeeds
+    And item 1 has owner ""
+    And item 1 has status "pending"
+
+  Scenario: a stale view is refused - the agent reads the item again first
+    Given an item "Agent work" exists
+    Given I act as agent "alice"
+    And I run `backlog update 1 --claim alice`
+    And I act as agent "bob"
+    And I run `backlog update 1 --append "## Findings by bob"`
+    When I act as agent "alice"
+    And I run `backlog update 1 --append "## Findings by alice"`
+    Then the command fails with exit code 5
+    And the output contains "changed"
+    When I have read item 1
+    And I run `backlog update 1 --append "## Findings by alice"`
+    Then the command succeeds

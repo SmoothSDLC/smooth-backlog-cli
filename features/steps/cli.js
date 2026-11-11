@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { step } from '../support/gherkin.js';
+import { TEMPLATES } from '../../.agents/test/team-fixture.js';
 import { damageItem, derivedFm, itemNames, itemPath, readItem, slugOfName, writeItem } from '../../.agents/test/shared-fixtures.js';
 
 // `backlog ...` with shell-like splitting: double quotes group words, \" is a quote inside them
@@ -16,14 +17,10 @@ step(/^a repository with a backlog$/, () => {}); // the world made it: a git rep
 step(/^the environment (\w+) is "([^"]*)"$/, (w, key, value) => { w.agentEnv[key] = value === 'this repository' ? (w.location === 'local' ? 'local/repository' : 'acme/demo') : value; });
 step(/^I act as agent "([^"]+)"$/, (w, name) => { w.agentEnv.SMOOTH_BACKLOG_CLI_AGENT = name; });
 step(/^I act as a person$/, w => { delete w.agentEnv.SMOOTH_BACKLOG_CLI_AGENT; });
-step(/^a team "([^"]+)" with lead "([^"]+)" and members "([^"]*)"$/, (w, team, lead, members) => w.configureTeam(team, { lead, members: members.split(',').map(x => x.trim()).filter(Boolean) }));
-step(/^team "([^"]+)" work needs (\d+) pass(?:es)? by "([^"]+)"(?: and (\d+) pass(?:es)? by "([^"]+)")?$/, (w, team, n1, t1, n2, t2) => {
-  const review = [{ team: t1, count: Number(n1) }]; if (t2) review.push({ team: t2, count: Number(n2) });
-  w.configureTeam(team, { review });
-});
-step(/^team "([^"]+)" reviews in the stages "([^"]*)"$/, (w, team, stages) => w.configureTeam(team, { review: stages.split(',').map(x => x.trim()).filter(Boolean).map(stage => ({ stage, count: 1 })) }));
-step(/^team "([^"]+)" has the external reviewers "([^"]+)"$/, (w, team, who) => w.configureTeam(team, { external_reviewers: who.split(',').map(x => x.trim()).filter(Boolean) }));
-step(/^team "([^"]+)" refinements are reviewed by "([^"]+)"$/, (w, team, by) => w.configureTeam(team, { refinement_review: [{ team: by, count: 1 }] }));
+// the team file of the repository, from a shipped template
+step(/^a team file from the template "([^"]+)"$/, (w, name) => { w.writeTeamFile(TEMPLATES[name]); });
+// an item of the team that is ready to be claimed (the template's own default fields, status ready)
+step(/^a ready item "([^"]+)" for the team "([^"]+)"$/, (w, name, team) => { w.seedTeamItem(TEMPLATES[team][team], team, { name, fields: { status: 'ready', estimate: 20 } }); });
 // in the backlog repository the team configuration is a committed file at its root (an empty one when the scenario has not written any)
 step(/^the team configuration is a committed file$/, w => {
   if (!w.env.SMOOTH_BACKLOG_CLI_HOME) return; // inside the repository it is created and committed by the command

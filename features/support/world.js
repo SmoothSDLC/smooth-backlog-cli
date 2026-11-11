@@ -1,10 +1,11 @@
 // The world of one scenario: a temporary consuming repository (with a bare origin) and the backlog's storage location.
 // location 'remote': the item files live in a clone of a backlog repository (SMOOTH_BACKLOG_CLI_HOME, a bare origin in the temp dir).
 // location 'local': the item files live inside the consuming repository itself. Nothing touches the user's real backlog.
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { putItem } from '../../.agents/test/team-fixture.js';
 import { GIT_IDENTITY, ORIGIN_URL, cli, consumer, sharedBacklog } from '../../.agents/test/shared-fixtures.js';
 
 const runCli = cli;
@@ -35,13 +36,20 @@ export function makeWorld(location) {
     dispose() { rmSync(tmp, { recursive: true, force: true }); },
     // the backlog folder: the clone, or .backlog inside the repository
     home() { return env.SMOOTH_BACKLOG_CLI_HOME || join(this.repo, '.backlog'); },
-    // the team configuration <home>/teams.json, merged key by key
-    configureTeam(name, fields) {
-      const file = join(this.home(), 'teams.json');
-      mkdirSync(this.home(), { recursive: true });
-      let cfg = {}; try { cfg = JSON.parse(readFileSync(file, 'utf8')); } catch { /* none yet */ }
-      cfg[name] = { ...(cfg[name] ?? {}), ...fields };
-      writeFileSync(file, JSON.stringify(cfg, null, 2));
+    // the team file of the repository: .backlog/teams.json of the consuming repository, in both locations
+    writeTeamFile(teams) {
+      mkdirSync(join(this.repo, '.backlog'), { recursive: true });
+      writeFileSync(join(this.repo, '.backlog', 'teams.json'), JSON.stringify(teams));
+    },
+    // an item of a team, written as the team commands store it into the folder of the items, then committed and pushed there
+    seedTeamItem(entry, team, { name, fields }) {
+      const folder = this.folder();
+      const seq = (existsSync(join(folder, 'phases')) ? readdirSync(join(folder, 'phases')).length : 0) + 1;
+      const defaults = Object.fromEntries(Object.entries(entry.item).map(([f, d]) => [f, 'default' in d ? d.default : null]));
+      const slug = `${String(seq).padStart(3, '0')}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      putItem(folder, { seq, slug, name, team, repository: env.SMOOTH_BACKLOG_CLI_HOME ? 'acme/demo' : 'local/repository', branch: 'main', fields: { ...defaults, ...fields } }, entry);
+      const top = this.backlogRepo();
+      this.gitIn(top, 'add', '-A'); this.gitIn(top, 'commit', '-q', '-m', 'seed'); this.gitIn(top, 'push', '-q', 'origin', 'HEAD');
     },
     // a second checkout of the same backlog: another clone of the backlog repository (remote) or of the consuming repository (local)
     other() {

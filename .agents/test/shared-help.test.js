@@ -217,10 +217,11 @@ test('a command that is a word of its own prints its own help, with no alias lin
 });
 
 test('backlog team --help lists new, and backlog team new --help has the flags, the exit codes and one example', () => {
-  assert.match(backlog('team', '--help').stdout, /^ {2}backlog team new --team <name> --agent <name> --name <text> \[options\]$/m);
-  assert.match(backlog('--help').stdout, /^ {2}backlog team new --team <team> --agent <name>/m);
+  assert.match(backlog('team', '--help').stdout, /^ {2}backlog team new --team <name> --agent <name> --name <text> \[--<argument> <value>\]\.\.\. \[--json\]$/m);
+  assert.match(backlog('--help').stdout, /^ {2}backlog team new --team <team> --agent <name> --name <text> \[--<argument> <value>\]\.\.\./m);
   const text = backlog('team', 'new', '--help').stdout;
-  for (const flag of ['team', 'agent', 'review-refs', 'split-from', 'title', 'objective', 'summary', 'description', 'depends-on', 'estimate', 'complexity', 'layer', 'chunk', 'priority', 'severity', 'force', 'dry-run', 'status', 'help']) assert.ok(block(text, flag), `--${flag}`);
-  for (const code of ['0', '1', '2', '3', '5']) assert.match(text, new RegExp(`^ {2}${code} {2}`, 'm'), `exit code ${code}`);
+  for (const flag of ['name', '<argument> VALUE', 'team', 'agent', 'session', 'repository', 'branch', 'json', 'help']) assert.ok(text.includes(`  --${flag}`), `--${flag}`);
+  for (const gone of ['review-refs', 'split-from', 'status', 'ask']) assert.ok(!text.includes(`  --${gone}`), `--${gone} is refused, not documented`);
+  for (const code of ['0', '1', '2', '3']) assert.match(text, new RegExp(`^ {2}${code} {2}`, 'm'), `exit code ${code}`);
   assert.match(text, /^Example:\n {2}backlog team new /m);
 });

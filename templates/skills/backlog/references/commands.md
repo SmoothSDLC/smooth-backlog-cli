@@ -1126,7 +1126,7 @@ backlog team — the commands that know a team: pop, new, update, query, validat
 
 Usage:
   backlog team pop --team <name> --agent <name> [--dry-run] [--json]
-  backlog team new --team <name> --agent <name> --name <text> [options]
+  backlog team new --team <name> --agent <name> --name <text> [--<argument> <value>]... [--json]
   backlog team update <item> --team <name> --agent <name> <step> [options]
   backlog team query --team <name> --agent <name> --claimable | --reviewable | --blocked | --decisions | --plan | --wip [--scope branch|repo|all] [--json]
   backlog team validate [--team <name> | --show-all] [--json]
@@ -1266,17 +1266,26 @@ Example:
 ### backlog team new
 
 ```text
-backlog team new — file an item of a team: it starts in stage refining, where a member writes it
+backlog team new — file an item of a team: the step "new" of the team's rules on a fresh item
 
 Usage:
-  backlog team new --team <name> --agent <name> --name <text> [options]
-  backlog team new --team <name> --agent <name> --split-from <item> [options]
+  backlog team new --name <text> [--team <name>] [--agent <name>] [--<argument> <value>]... [--json]
 
-Adds an item that belongs to the team, to the backlog of this repository and branch (a session bound by SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and
-SMOOTH_BACKLOG_CLI_TEAM_BRANCH files it under that repository and branch). The item gets the next item number (one above the highest number the repository's backlog ever used, so the number of a deleted, cleaned or archived item is never handed out again), the team, the status new and the
-stage refining; a member refines it, and the team's review of the refinement passes before anyone claims it. A split of a team's
-item (--split-from) is made here too: backlog new used outside a team refuses it. Every option of backlog new works here (backlog new --help
-has the item template); this command adds --review-refs. The agent is the writer of the item, as for every team command.
+Adds an item that belongs to the team to the backlog folder of this repository (or of the repository named by --repository), on the branch of the
+working copy (or --branch). The team's rules decide whether the step "new" is allowed: a rule of the team's table that names the step "new" decides on the fresh
+item (it has every field of the item definition at its default) and may refuse it, set fields, change a related item (a parent's list of children, for
+example), place the item in the queue and write a first note. A refusal prints its text, exits 1 and writes nothing: the item number is not taken, so
+the next item still gets it. An allowance is committed and published as the command's own commit, "team new <slug>"; the printed line comes after that.
+
+The item gets the number one above the highest number the repository's backlog ever held. Its slug is the number and the name. The arguments
+the step takes are the names its rules read as $arg.<name> (--estimate and --parent, for example); --name is always one of them and is required. Any other
+--<argument> <value> is refused with the list of what the step takes (exit 2). A value may hold spaces or be a negative number. The caller is the agent
+(--agent, else SMOOTH_BACKLOG_CLI_AGENT; it is a name, not a proof); the team is --team, else SMOOTH_BACKLOG_CLI_TEAM_NAME, else the "team" key of
+.backlog/config.json. The team's steps and what each takes: backlog team query steps --team <name>. The team file must be valid as a whole
+(backlog team validate); the "user" key of the configuration is never read.
+
+Scenario: the agent member-1 of the team parallel files a job of 45 minutes. It runs backlog team new --team parallel --agent member-1 --name "Parser" --estimate 45 in the
+working copy of the repository whose backlog holds the work; the team's rule new-needs-estimate would have refused it without --estimate.
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
@@ -1285,70 +1294,38 @@ reports each run to an optional run recorder hook: the hook spawns a child proce
 SMOOTH_BACKLOG_CLI_RUN_HOOK names an executable, and no child process when the variable is unset.
 
 Options:
+  --name TEXT
+      The title of the item. Required (exit 2 without it).
+  --<argument> VALUE
+      An argument of the step "new" as the team's rules define it. The value is the next word, or follows an equals sign (--estimate=45).
   --team NAME
-      The team the item belongs to. In a team session (SMOOTH_BACKLOG_CLI_TEAM_NAME set) it must be that team. A team without an entry in the
-      backlog configuration is refused.
+      The team the item belongs to.
   --agent AGENT
-      The agent that files the item. In a team session (SMOOTH_BACKLOG_CLI_AGENT set) it must be that agent.
-  --title TITLE, --name NAME
-      The title of the item. Required, unless --split-from is given.
-  --objective OBJECTIVE
-      The objective of the item, in one line. A split item inherits the objective of its parent when this is omitted.
-  --summary SUMMARY
-      A semantic summary of what is in the item, several sentences. The option may be given several times.
-  --context CONTEXT
-      The context carried over from the original request. It is written into the item body.
-  --description DESCRIPTION, --body BODY
-      The initial body of the item. When it has no "Definition of done" heading or line with checkable lines, a placeholder
-      checklist is added; the refinement replaces it.
-  --review-refs REFS
-      The documents that define a good result, comma-separated paths (references/review/code.md). A path that is absolute or
-      leaves the repository is refused. The refinement may set them later (backlog team update --set-review-refs).
-  --estimate MINUTES
-      The estimated minutes of work, an integer.
-  --complexity {low,medium,high}
-      The estimated complexity of the item.
-  --layer {1,2,3,4,5,process}
-      The layer of the item: 1 to 5, or the word process.
-  --chunk
-      Chunk work: small pieces done between items.
-  --depends-on DEPENDS_ON
-      The item numbers or slugs that must be done first, comma-separated, or the word none (the default).
-  --priority PRIORITY
-      The insertion rank, an integer. 0 makes the item the next thing to do; omitted, the item is appended.
-  --severity {normal,critical}
-      The default is normal. Critical puts the item at priority 0 (unless --priority is given) and is announced in a banner.
-  --split-from ITEM
-      Create a sibling item that inherits the context of this item (a number or a slug). The command refuses when the item
-      does not exist or lies outside the repository and branch of a bound session.
-  --force
-      Write the item even when an item of that name already exists.
-  --dry-run
-      Say which item would be created and change nothing.
-  --ask
-      Ask for the fields you did not give, on a terminal: the title, the objective, the summary, the body (it ends with an empty
-      line) and the review documents (--review-refs), one question after the other. The questions go to standard error, an empty
-      answer leaves a field out, and what the command prints on standard output is what it prints without --ask. Without a terminal
-      (standard input and standard error) the command refuses, exit 2, and creates nothing. A field given as an option is not asked.
-  --status STATUS
-      Refused: a team item starts in its own first status.
+      The agent that files the item: the caller the rules see and the writer recorded in the item and its history.
+  --session ID
+      The session id the rules see as $session.id (else SMOOTH_BACKLOG_CLI_SESSION).
+  --repository OWNER/NAME
+      The repository whose folder of the backlog and team file the command uses (else SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY; else the working copy's).
+  --branch NAME
+      The branch the item is filed on (else SMOOTH_BACKLOG_CLI_TEAM_BRANCH; else the working copy's current branch; a detached HEAD needs one of them).
+  --json
+      Print {"item", "slug", "rule", "changes", "related", "say"} instead of the line. "changes" holds { field: [before, after] } of the item,
+      "related" the same per related item (by number), "say" the text of the rule that allowed the step, or an empty text.
   --help
       Print this text and exit. Nothing is read or changed.
 
-On success the command prints a line that starts "created phase" with the item's slug, the item number and the rank the item now has.
+On success the command prints "created <slug> (seq <number>) for team <team>, rule <id>" with a check mark in front, then the text the rule says, if any.
 
 Exit codes:
-  0  The item was created (or, with --dry-run, would be).
-  1  The command refused: the reason is printed on standard output. Also: the split source does not exist or is outside the
-     session's scope, a dependency is not in the backlog, --status was given, or the team has no entry in the configuration.
-  2  Invalid input: a missing --team or --agent, another team than SMOOTH_BACKLOG_CLI_TEAM_NAME, an agent other than SMOOTH_BACKLOG_CLI_AGENT, an unknown
-     option, or a review document path that is absolute or leaves the repository.
+  0  The item was filed and published.
+  1  The team's rules refused the step (the reason and the rule id are printed on standard output), or the team has no entry in the team file.
+  2  Invalid input: no team, no agent, no --name, an argument the step does not take, an unknown option (--ask, --dry-run and --show-all are refused), a value
+     that does not fit its field, a detached HEAD with no branch given, or a team file that is missing, unreadable or invalid.
   3  The repository that holds the items could not be synchronised with its origin: nothing was changed, or the change was not
-     published and was rolled back.
-  5  The split source was changed by somebody else after this agent last read it (backlog team query --phase <item> --agent <you>).
+     published and was rolled back (an item of another agent published first: the step runs again on the new files, and fails with this code only when it keeps changing).
 
 Example:
-  backlog team new --team cli-1 --agent lead --name "Parser work" --objective "The parser reads the sample" --summary "Parser" --review-refs references/review/code.md --estimate 90
+  backlog team new --team parallel --agent member-1 --name "Parser" --estimate 45
 ```
 
 ### backlog team update

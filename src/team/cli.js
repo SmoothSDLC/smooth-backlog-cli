@@ -7,7 +7,6 @@ import { atomicWrite } from '../storage.js';
 import { BacklogError } from '../errors.js';
 import { readConfig, topOf } from '../shared/setup.js';
 import { redact } from '../shared/safety.js';
-import { setActor } from '../shared/seen.js';
 import { cloneLocked, resolveHome } from '../shared/store.js';
 import * as sync from '../shared/sync.js';
 import { parse as parsePop } from './pop.js';
@@ -64,13 +63,6 @@ async function query(rest, { team }, got) {
   return (await import('./query.js')).run([...rest, ...(got.agent ? ['--agent', got.agent] : [])]);
 }
 
-// The item is filed under the command's team: its stage is refining, and the agent is the writer of the stale-view guard.
-async function create(rest, { team, agent }) {
-  if (!teamsConfig()[team]) return unconfigured(team);
-  setActor(agent);
-  return (await import('./new.js')).run([...rest, '--team', team]);
-}
-
 async function update(rest, { team, agent }) {
   if (!teamsConfig()[team]) return unconfigured(team);
   const args = withAgent(rest, agent);
@@ -87,6 +79,7 @@ async function dispatch(argv) {
   if (!SUBS.includes(sub)) return die(`team needs a subcommand (${WORDS.join(', ')}): backlog team validate --team <name>`);
   if (sub === 'validate') return (await import('./validate-command.js')).run(argv.slice(1));
   if (sub === 'migrate') return (await import('./validate-command.js')).pending('migrate', argv.slice(1), ['ask']);
+  if (sub === 'new') return (await import('./new.js')).run(argv.slice(1)); // the rules engine: the old seam below is not installed for it
   installSeam(); // the routes below are the old commands, which read the earlier words
   setTeamsHome(resolveHome().home); // reads the team configuration of the backlog
   if (sub === 'define') return define(argv.slice(1));
@@ -94,7 +87,6 @@ async function dispatch(argv) {
   let split_; let who;
   try { split_ = split(argv.slice(1)); who = resolve(split_.got, { agentOptional: sub === 'query' }); } catch (e) { return die(e.message); } // the views read: a named agent switches them to the team rules, none is needed
   setSessionTeam(who.team); // the command's team is the session's: its items are the only ones in reach
-  if (sub === 'new') return create(split_.rest, who);
   if (sub === 'update') return update(split_.rest, who);
   if (sub === 'query') return query(split_.rest, who, split_.got);
   if (sub === 'pop') {

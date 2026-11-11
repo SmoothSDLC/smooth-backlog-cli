@@ -234,9 +234,7 @@ test('review P2: a destination-renumbered move caches the moved item and refuses
   await hold.held();
   let collision;
   try {
-    collision = cli(['team', ...NEW('delta'), '--team', 't1', '--agent', 'amy', '--body', '## Definition of done\n- [ ] x'], {
-      cwd: a.cons, tmp: a.tmp, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'new/place' },
-    });
+    collision = cli([...NEW('delta'), '--body', '## Definition of done\n- [ ] x'], { cwd: consumer(a.tmp, 'new', 'place'), tmp: a.tmp }); // another clone files item 1 of the destination
   } finally { hold.release(); }
   const moved = await move.done;
   assert.equal(collision.status, 0, collision.stdout + collision.stderr);
@@ -480,7 +478,7 @@ test('publication: permanent failure after a push race removes renumbering and r
   let collision; let remote;
   try {
     collision = cli(NEW('upstream collision'), { cwd: a.cons, tmp: a.tmp });
-    remote = cli(['team', ...NEW('other folder'), '--team', 't1', '--agent', 'amy', '--body', '## Definition of done\n- [ ] x'], { cwd: a.cons, tmp: a.tmp, env: { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'other/repo' } });
+    remote = cli([...NEW('other folder'), '--body', '## Definition of done\n- [ ] x'], { cwd: consumer(a.tmp, 'other', 'repo'), tmp: a.tmp }); // a file of another repository's folder
   } finally { hold.release(); }
   const r = await failed.done;
   assert.equal(collision.status, 0, collision.stdout + collision.stderr);
@@ -710,7 +708,6 @@ for (const [name, args, change] of [
   ['required fields', ['update', '1', '--claim', 'amy'], fm => { fm.estimate_min = 0; }],
   ['review state', ['update', '1', '--close', '--by', 'amy', '--summary', 'delivered'], fm => { fm.status = 'in progress'; }],
   ['claim ownership', ['update', '1', '--claim', 'amy'], fm => { fm.claimed_by = 'bob'; }],
-  ['team scope of a split parent', ['team', 'new', ...COMPLETE('child').slice(1), '--split-from', '1', '--team', 't1', '--agent', 'amy'], fm => { fm.branch = 'other'; }],
 ]) test(`publication read set: concurrent ${name} changes cannot pass earlier validation`, async t => {
   const { b, bare, before, result } = await fileRace(t,
     [COMPLETE('alpha'), ['update', '1', '--request-review', 'any', '--note', 'initial evidence'],

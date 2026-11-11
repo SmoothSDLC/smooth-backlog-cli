@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem, archivedPath, GIT_IDENTITY, writeItem } from './shared-fixtures.js';
+import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem, archivedPath, GIT_IDENTITY, teamNew, writeItem } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -39,7 +39,7 @@ function build() {
   const state = () => JSON.stringify({ files: tree(home), consumer: tree(cons), home: [git(home, 'status', '--porcelain'), git(home, 'rev-parse', 'HEAD')], origin: git(origin, 'for-each-ref') });
   const onBranch = (branch, fn) => { git(cons, 'checkout', '-q', branch); try { return fn(); } finally { git(cons, 'checkout', '-q', 'main'); } };
   const item = (name, { team = false, branch = 'main', closed = false } = {}) => onBranch(branch, () => {
-    const made = team ? run(['team', 'new', '--team', 't1', '--agent', 'lead', ...NEW(name)]) : run(['new', ...NEW(name)]);
+    const made = team ? teamNew(['--team', 't1', '--agent', 'lead', ...NEW(name)], { cwd: cons, tmp: t }) : run(['new', ...NEW(name)]);
     assert.equal(made.status, 0, made.stdout + made.stderr);
     const slug = createdSlug(made.stdout);
     if (closed) { // a team item closes by its team steps; the file is set here, as a closed item looks

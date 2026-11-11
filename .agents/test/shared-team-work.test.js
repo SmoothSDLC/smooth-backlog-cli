@@ -227,16 +227,6 @@ test("the lead never claims, waits without polling while its team works, keeps i
   assert.ok(p.instruction.startsWith('you hold it'), p.instruction);
 });
 
-test('backlog team new files an item of its team in stage refining, in a team session or not; a plain new makes an item of no team', () => {
-  const f = fixture();
-  const team = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
-  const base = ['new', '--name', 'x', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--body', DOD];
-  const mine = r => fm(f, createdSlug(r.stdout));
-  assert.deepEqual([mine(ok(f, [...base, '--team', 't1'], team)).team, mine(ok(f, [...base, '--team', 't1', '--name', 'y'], team)).status], ['t1', 'new']);
-  assert.equal(mine(ok(f, [...base, '--name', 'z'])).team, undefined); // outside a team session, and with no --team, the plain command: an item of no team
-  assert.equal(mine(ok(f, [...base, '--name', 'w'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo' })).team, undefined); // SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY alone: the plain command ignores it
-});
-
 test('the claimer never reviews its own item; a reviewed item finishes only through --close; an unclaimed team item is closed by the lead', () => {
   const f = fixture();
   const job = make(f, 'reviewed job');

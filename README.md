@@ -136,7 +136,7 @@ The same five rules hold wherever the items live:
 | `backlog changes` | Which items changed since your last use |
 | `backlog fields` | The item template: every key and field, its type and default, who sets it, what it is for |
 | `backlog team pop --team <team> --agent <name>` | What one agent of a team does next, marked as theirs, with the whole item |
-| `backlog team new --team <team> --agent <name> --name <text> [options]` | Add an item of a team (stage refining); `--review-refs`, `--split-from`; `--ask` also asks for the review documents |
+| `backlog team new --team <team> --agent <name> --name <text> [--<argument> <value>]...` | Add an item of a team: the team's rules for the step `new` decide, and the number is taken only when they allow it; the arguments are the ones the rules read (`--estimate`, `--parent`, ...) |
 | `backlog team update <item> --team <team> --agent <name> <step>` | One team step: claim, release, review, close, ... |
 | `backlog team query --team <team> --agent <name> <view>` | The team views (claimable, reviewable, blocked, decisions, plan, wip) and the read options of the team rules (`--phase`, `--status`, `--events`, `--branch`, ...) |
 | `backlog team validate [--team <team> \| --show-all] [--json]` | Check the team file in full and this repository's items and numbers against it; every finding says where, why and how to fix it (exit 2 on an error, warnings never) |

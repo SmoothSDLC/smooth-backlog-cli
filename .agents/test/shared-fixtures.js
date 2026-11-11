@@ -165,6 +165,7 @@ export function cli(args = [], opts = {}) {
     }
     // an item without a team is stepped by a session of no particular team: a neutral entry stands in for it
     const teamFlag = !sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME && !flagsOf(args).includes('team') && (valueOf(args, 'set-team') ? neutralTeam(sessionEnv, valueOf(args, 'set-team')) : itemTeam || neutralTeam(sessionEnv));
+    if (args[0] === 'new') return teamNew([...args.slice(1), ...(teamFlag ? ['--team', teamFlag] : [])], { ...opts, env: via });
     return cli(['team', ...args, ...(teamFlag ? ['--team', teamFlag] : [])], { ...opts, env: via, plain: true });
   }
   const bin = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'));
@@ -181,10 +182,35 @@ export function cli(args = [], opts = {}) {
   return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr };
 }
 
-// Creates a team's item with `backlog team new <args>`: the team from --team (or SMOOTH_BACKLOG_CLI_TEAM_NAME), the agent from --agent, else the session's SMOOTH_BACKLOG_CLI_AGENT, else a driver of its own.
+// An item of a team in the shape the earlier `backlog team new` gave it: a plain new, then the team, the status new, an empty refiner and the review documents are
+// written into the stored file and published. It is a fixture for the tests whose subject is another command and that need a team's item; `backlog team new` itself
+// (the step of the team's rules) is tested by team-new.test.js. The arguments are those of the earlier command: --team (else the session's team) and --agent (else
+// the session's agent, else a driver of its own) are taken out, --review-refs is written into the file, every other option goes to the plain new.
 export function teamNew(args = [], opts = {}) {
-  const agent = valueOf(args, 'agent') ? [] : ['--agent', opts.env?.SMOOTH_BACKLOG_CLI_AGENT || `driver-${++calls}`];
-  return cli(['team', 'new', ...args, ...agent], { ...opts, plain: true });
+  const e = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env };
+  const team = valueOf(args, 'team') || e.SMOOTH_BACKLOG_CLI_TEAM_NAME;
+  if (!team) return { status: 2, stdout: '', stderr: '❌ backlog: a team command needs --team\n' };
+  const agent = valueOf(args, 'agent') || opts.env?.SMOOTH_BACKLOG_CLI_AGENT || `driver-${++calls}`;
+  const refs = valueOf(args, 'review-refs');
+  const split = valueOf(args, 'split-from');
+  const parent = split && infoOf(split, opts).file; // a split: the objective and summary of the parent and its body under a "Split from" heading, as the earlier command wrote them
+  if (split && !parent) return { status: 1, stdout: '❌ no such item to split\n', stderr: '' };
+  const dropped = ['--team', '--agent', '--review-refs', '--split-from', ...(parent ? ['--body'] : [])];
+  const rest = args.filter((a, i) => !dropped.includes(a) && !dropped.includes(args[i - 1]));
+  if (parent) {
+    const src = readStored(parent);
+    for (const k of ['objective', 'summary']) if (!flagsOf(args).includes(k)) rest.push(`--${k}`, src.fm[k] ?? '');
+    rest.push('--body', `## Split from \`${src.fm.phase}\`. Inherited context:\n\n${src.body.trim()}\n\n\n${valueOf(args, 'body') ?? ''}`);
+  }
+  const made = cli(['new', ...rest], { ...opts, env: { ...opts.env, SMOOTH_BACKLOG_CLI_AGENT: agent }, plain: true });
+  if (made.status !== 0) return made;
+  const file = infoOf(createdSlug(made.stdout), opts).file;
+  const { fm, body } = readStored(file);
+  const placeholder = parent && valueOf(args, 'body') === undefined ? '\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n' : ''; // a split with no body of its own carries the placeholder, which the refinement replaces
+  writeStored(file, { ...fm, team, status: 'new', refiner: '', ...(refs ? { review_refs: refs.split(',') } : {}) }, body.replace(/\n+$/, '\n') + placeholder);
+  const home = e.SMOOTH_BACKLOG_CLI_HOME;
+  git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', `team item ${team}`); git(home, 'push', '-q');
+  return made;
 }
 
 // The slug a `new` output names: `created phase <slug> (seq N)`.

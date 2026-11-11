@@ -34,7 +34,7 @@ exit code; `backlog upgrade disable` turns the weekly check off, `backlog upgrad
 - Read: `backlog list` (the queue and the finished items of this branch; `backlog list open|new|done|archive|branches|critical|all-branches` one kind, the branches, the critical items or every branch), `backlog fields` (the item template: every key and field, its type and default, who sets it, what it is for), `backlog history [<item>]` (what changed in an item, by whom and when: one entry per command), `backlog show <item>` (one item, whole; `--agent <you>` records that you have read it), `backlog history [<item>]` (its events, or the latest 50), `backlog changes` (what changed since your last use), `backlog next` (`backlog next all-branches` over every branch).
 - Create: `backlog new --name "<name>" --objective "<one line>" --summary "<what it is about>"`; `--priority 0` makes it
   next; `--depends-on <items>` when other items must finish first; `--split-from <item>` makes a sibling with its context.
-  `backlog new --ask` (and `backlog team new --ask`) asks a person on a terminal for the title, objective, summary and body they did
+  `backlog new --ask` asks a person on a terminal for the title, objective, summary and body they did
   not give; an agent without a terminal gives the fields as options (`--ask` is refused there, exit 2).
 - Change: `backlog update <item> --name|--objective|--summary|--status|--location|--priority <value>`, `--append "<text>"`
   adds body text, `--note "<text>"` records an event, `--set-depends-on <items|none>`; `--replan "<id,id,...>"` orders the queue.
@@ -55,12 +55,13 @@ A team's items follow the team rules configured in `teams.json` of the backlog f
 SMOOTH_BACKLOG_CLI_AGENT and acts only as itself. Every command here is a `backlog team` command and takes `--team <team> --agent <you>` (SMOOTH_BACKLOG_CLI_TEAM_NAME and
 SMOOTH_BACKLOG_CLI_AGENT stand in); the step flags below are taken with `backlog team update <item> --team <team> --agent <you>`.
 
-- File an item of the team: `backlog team new --team <team> --agent <you> --name "<name>" --objective "<one line>" --summary "<what it is about>"
-  --review-refs <review document> --estimate <minutes>`; it starts in stage refining. `--split-from <item>` splits a team's item.
+- File an item of the team: `backlog team new --team <team> --agent <you> --name "<name>" [--<argument> <value>]...`; the team's rules for the step new decide
+  whether it is allowed and which arguments they take (`--estimate <minutes>`, `--parent <item>`, ...); a refusal prints its reason (exit 1) and writes nothing.
+  `backlog team new --help` says what is printed.
 - Review: `--request-review <agent|any> --note "<commits, evidence>"`, then the reviewer's `--start-review --by <reviewer>` and
   `--review pass|changes --by <reviewer> --comments "<findings>"`; the author never reviews its own work.
 - Lead: `backlog team pop --team <team> --agent <you>` takes the team's work item (and gives the lead its next action); split it only when it is too big for
-  one member (`backlog team new --split-from <item>`); `backlog team query --team <team> --plan` is the dispatch plan; `--request-refinement-review
+  one member (`backlog team new --team <team> --agent <you> --name "<name>" --parent <item>` adds a child when the team's rules take `--parent`); `backlog team query --team <team> --plan` is the dispatch plan; `--request-refinement-review
   --by <you>` sends a refined item to its refinement review; `--request-decision "<question>" --by <you>` asks the owner
   (`backlog team query --team <team> --decisions`; the owner answers with `--decision "<answer>"`); `--reassign <agent> --reason "<why>"
   --by <you>` hands an item on and `--reassign-review <agent> --reason "<why>" --by <you>` a stale review;

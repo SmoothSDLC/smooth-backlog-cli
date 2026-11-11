@@ -70,7 +70,7 @@ test('the class options are gone: --set-work-class and --set-review-classes are 
   assert.equal(readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), before);
 });
 
-test('update --priority changes the index and no other item file; the item itself is stamped and records the move', () => {
+test('update --priority changes the index and no other item file; the item is stamped but gets no history entry (the index is its own file)', () => {
   const f = seed();
   const files = () => Object.fromEntries(itemNames(f.folder).map(n => [n, readFileSync(itemPath(f.folder, slugOfName(n)), 'utf8')]));
   assert.equal(run(f, ['1', '--summary', 'first write builds the index']).status, 0);
@@ -83,7 +83,7 @@ test('update --priority changes the index and no other item file; the item itsel
   assert.notEqual(readFileSync(join(f.folder, 'index.json'), 'utf8'), indexBefore, 'the order is in the index');
   assert.equal(rankOf(f, '002-beta'), 0);
   assert.equal(rankOf(f, '001-alpha'), 1);
-  assert.match(parse(after[itemName('002-beta')]).fm.events.at(-1).note, /^002-beta is now |^moved 002-beta -> P0/);
+  assert.deepEqual(parse(after[itemName('002-beta')]).fm.events ?? [], parse(before[itemName('002-beta')]).fm.events ?? [], 'a rank move changes only the index: the item gets no entry');
 });
 
 test('a folder whose items carry the rank of an earlier build gets its index at the first write; the items lose the key when they are next written', () => {

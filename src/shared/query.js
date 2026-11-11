@@ -1,8 +1,7 @@
-// The one reader behind backlog list, show, next, history, changes and backlog team query (the only command that takes the options below as written).
+// The one reader behind backlog list, show, next, history and changes.
 // (--next --status --critical --phase --events --by-branch --all --branch --json) over the rows of the items (index.rows) and the committed index,
 // the earlier scripts order: pull, no-backlog check, branch, connect, findings. Output strings and --json match.
-// Never writes an item (the rows are built in memory). The views of a team (claimable, reviewable, blocked, decisions, plan, wip) come from `team`,
-// the object `backlog team query` passes in.
+// Never writes an item (the rows are built in memory).
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
@@ -22,17 +21,14 @@ const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'only'];
 const ONLY = { new: r => r.status === 'pending' || r.status === 'new', open: r => isOpen(r.status), done: r => isFinished(r.status) && !isArchived(r), archive: r => isArchived(r) };
 
 // argparse. --events takes an optional value (const "*"); shortcut: no unique-prefix abbreviations.
-// `team` adds its flags: { bool, value, choices: { flag: [words] } }.
-function parse(argv, team) {
-  const bool = [...BOOL, ...(team?.bool ?? [])]; const value = [...VALUE, ...(team?.value ?? [])];
+function parse(argv) {
   const a = {};
   for (let i = 0; i < argv.length; i++) {
     const [flag, eq] = argv[i].startsWith('--') ? argv[i].slice(2).split(/=(.*)/s) : [null];
-    if (bool.includes(flag) && eq === undefined) a[flag] = true;
-    else if (value.includes(flag)) {
+    if (BOOL.includes(flag) && eq === undefined) a[flag] = true;
+    else if (VALUE.includes(flag)) {
       const v = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('-') ? undefined : argv[++i]);
       if (v === undefined) throw new BacklogError('INVALID_INPUT', `argument --${flag}: expected one argument`);
-      if (team?.choices?.[flag] && !team.choices[flag].includes(v)) throw new BacklogError('INVALID_INPUT', `argument --${flag}: invalid choice: ${repr(v)} (choose from ${team.choices[flag].map(repr).join(', ')})`);
       if (flag === 'only' && !Object.hasOwn(ONLY, v)) throw new BacklogError('INVALID_INPUT', `argument --only: invalid choice: ${repr(v)} (choose from ${Object.keys(ONLY).map(repr).join(', ')})`);
       a[flag] = v;
     } else if (flag === 'events') a.events = eq ?? (argv[i + 1] === undefined || argv[i + 1].startsWith('-') ? '*' : argv[++i]);
@@ -144,22 +140,17 @@ function changedReport(home, folder, repo, a) {
 }
 
 //
-// `team`: the call of backlog team query, the only place of the team views
 // `branchColumn`: every row of the text view names its branch (backlog list all-branches); the JSON rows carry it already.
-export const run = (argv, { team = null, branchColumn = false } = {}) => store.cloneLocked(store.resolveHome().home, () => query(argv, team, branchColumn)); // a read that pulls waits for a writer of the clone
-async function query(argv, team, branchColumn) {
+export const run = (argv, { branchColumn = false } = {}) => store.cloneLocked(store.resolveHome().home, () => query(argv, branchColumn)); // a read that pulls waits for a writer of the clone
+async function query(argv, branchColumn) {
   let a;
-  try { a = parse(argv, team); } catch (e) { return die(e.message); }
-  const early = await team?.early(a, argv, { die }); // the plan (its own parser) and a flag that goes with another
-  if (early !== undefined) return early;
+  try { a = parse(argv); } catch (e) { return die(e.message); }
 
   const cwd = process.cwd();
   let repo;
   try { repo = seam.scope().repo || store.repoId(cwd); } catch (e) { return die(e.message); }
   const { home } = store.resolveHome();
   try { await sync.pull(home, { read: true }); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
-  const read = await team?.afterPull(a, { home, say, dump }); // --wip: the counts against every work-in-progress limit, whole backlog home
-  if (read !== undefined) return read;
   let folder;
   try { folder = store.folder(home, repo); } catch (e) { return die(e.message); } // a repository named ../x passes the owner/name pattern; the folder must stay inside the home
   if (a.changed) return changedReport(home, folder, repo, a); // what changed since the calling agent's last use
@@ -187,9 +178,6 @@ async function query(argv, team, branchColumn) {
       else if (!criticalBanner(crit)) say('✅ no open CRITICAL items on the backlog');
       return 0;
     }
-
-    const view = await team?.view(a, { rows, excluded, repo, branch, folder, home, io: { say, dump, die, repr } });
-    if (view !== undefined) return view;
 
     if (a.branches) { // one line per branch of this repository: its open and its finished (not archived) items
       const by = Object.create(null); // a branch is named by its item: __proto__ is a name like any other
@@ -238,7 +226,7 @@ async function query(argv, team, branchColumn) {
         const r = index.find(rows, id);
         if (!r) { say(`❌ no phase ${repr(id)}`); return 1; }
         const file = items.find(i => i.path === r.path);
-        out.push({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null, ...(team ? { missing: team.missing(file) } : {}) });
+        out.push({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null });
       }
       dump(out);
       for (const r of out) seen.view(a.agent, folder, repo, r); // read only once all of them are shown
@@ -249,7 +237,7 @@ async function query(argv, team, branchColumn) {
       if (!r) { say(`❌ no phase ${repr(a.phase)}`); return 1; }
       // the earlier scripts row, then the whole item
       const file = items.find(i => i.path === r.path);
-      dump({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null, ...(team ? { missing: team.missing(file) } : {}) });
+      dump({ ...r, front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null });
       seen.view(a.agent, folder, repo, r); // the agent now holds this version: its next write to the item is checked against it
       return 0;
     }

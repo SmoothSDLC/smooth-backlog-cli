@@ -282,7 +282,7 @@ SMOOTH_BACKLOG_CLI_RUN_HOOK names an executable, and no child process when the v
 
 Options:
   --status STATUS
-      The new status, any word, stored exactly as typed (in_progress stays in_progress). closed finishes the item and completes
+      The new status, any word, stored exactly as typed (in_progress stays in_progress, and is an ordinary open word: only the exact word "in progress" counts as started). closed finishes the item and completes
       it; done is a finished word too and sets the completion time as well; archived is refused (backlog archive
       moves a finished item); any other word is free text and keeps the item open.
   --branch BRANCH
@@ -391,7 +391,7 @@ Exit codes:
      check (its first write).
 
 Example:
-  backlog update 18 --status in_progress --note "Started the help text"
+  backlog update 18 --status "in progress" --note "Started the help text"
 
 An item that belongs to a team is changed by backlog team update only: this command refuses every change of it, field edits included,
 and a --replan that names it (backlog team update --replan places it).

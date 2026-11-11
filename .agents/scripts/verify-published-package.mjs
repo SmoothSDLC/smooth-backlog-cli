@@ -64,7 +64,7 @@ export async function verifyInstalled({ prefix, expectedVersion, verifyRegistry 
     await cli('update', '1', '--append', '## Findings\n- the installed commands work');
     assert.match((await json('show', '1')).body, /the installed commands work/);
     await fail(1, 'archive', '1');
-    await cli('update', '1', '--status', 'done');
+    await cli('update', '1', '--status', 'closed');
     assert.equal((await json('show', '1')).status, 'closed');
     assert.match(await cli('archive', '1'), /archived/);
     assert.equal((await json('show', '1')).status, 'archived');

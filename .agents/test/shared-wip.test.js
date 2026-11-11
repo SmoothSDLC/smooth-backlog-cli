@@ -69,6 +69,9 @@ test('034: each of the five levels refuses the claim past its limit; the lead\'s
   f.limits({ overall: 1 });
   assert.match(f.run('other', ['update', o, '--claim', 'dan'], 1).stdout, /overall work-in-progress limit/); // only the owner's file changes overall
   assert.match(f.run('other', ['update', o, '--status', 'in progress', '--by', 'dan'], 1).stdout, /overall work-in-progress limit/); // a status change starts work too
+  // only the exact word 'in progress' counts: a typed in_progress is an ordinary open word that starts nothing and counts for nothing
+  assert.equal(f.run('other', ['update', o, '--status', 'in_progress', '--by', 'dan']).status, 0);
+  assert.equal(readItem(itemPath(join(f.home, 'acme', 'other'), o)).fm.status, 'in_progress');
   // a limits file that cannot be read holds nobody (owner 2026-10-30), and says so
   writeFileSync(join(f.home, 'wip-limits.json'), '{ not json');
   assert.match(f.run('other', ['update', o, '--claim', 'dan']).stderr, /wip-limits\.json cannot be read or is no JSON .*no work-in-progress limit applies until it is fixed/);

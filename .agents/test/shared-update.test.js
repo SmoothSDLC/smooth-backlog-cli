@@ -490,18 +490,18 @@ test('--status on an item of a team is refused: its status moves by the team ste
   assert.equal(readFileSync(itemPath(f.folder, '001-alpha'), 'utf8'), before);
 });
 
-test('an item written with the earlier fields reads as the new word, and its first write drops stage and review_state', () => {
+test('an item without a team that carries the earlier fields is read and written as stored: no word is translated and no field is dropped', () => {
   const f = seed();
   const file = itemPath(f.folder, '003-gamma'); // status in_progress
   const { fm: old, body } = readItem(file);
   store.write({ path: file, fm: { ...old, review_state: 'requested' }, body }, f.folder);
   git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'an item of an earlier build'); git(f.home, 'push', '-q');
   const read = cli(['show', '3', '--json'], { cwd: f.cons, tmp: f.t });
-  assert.equal(JSON.parse(read.stdout).status, 'ready for review');
+  assert.equal(JSON.parse(read.stdout).status, 'in_progress'); // as stored, not read as 'ready for review'
   assert.equal(step(f, ['3', '--note', 'x']).status, 0);
   const after = fm(f, itemName('003-gamma')).fm;
-  assert.equal(after.status, 'ready for review');
-  assert.ok(!('stage' in after) && !('review_state' in after), JSON.stringify(after));
+  assert.equal(after.status, 'in_progress');
+  assert.equal(after.review_state, 'requested');
 });
 
 test('--replan sets the leading order by slug or number, ignores unknown names, and prints the order', () => {

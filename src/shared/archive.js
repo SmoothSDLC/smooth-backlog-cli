@@ -7,7 +7,7 @@ import { join, relative, resolve } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { find, rows as itemRows } from './index.js';
 import { assertInside, git, redact } from './safety.js';
-import { isArchived } from './status.js';
+import { isArchived, isFinished } from './status.js';
 import { readItemFile } from './item-file.js';
 import * as seen from './seen.js';
 import * as store from './store.js';
@@ -97,8 +97,8 @@ async function archive(a, rows, { repo, folder, guard }) {
   const src = join(folder, row.path);
   await assertInside(folder, src); // the file is inside the folder, no symlink on the way
   const { fm, body } = readItemFile(src);
-  if (fm.team && row.status !== 'closed') return refuse(ARCHIVE_OPEN_TEAM(row.slug)); // an open team item leaves its team's queue by the team's steps, not by --force
-  if (row.status !== 'closed' && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'closed' — finish it or pass --force`);
+  if (fm.team && !isFinished(row.status)) return refuse(ARCHIVE_OPEN_TEAM(row.slug)); // an open team item leaves its team's queue by the team's steps, not by --force
+  if (!isFinished(row.status) && !a.force) return refuse(`${row.slug} is '${row.status ?? 'None'}', not 'closed' — finish it or pass --force`);
   seen.check(folder, repo, seen.actor(), row.slug, row.path);
   guard.push({ path: `${repo}/${row.path}`, slug: row.slug, was: `${fm.updated}${fm.updated_by ? ` by ${fm.updated_by}` : ''}` });
   const from = relative(folder, resolve(src)).split('\\').join('/');

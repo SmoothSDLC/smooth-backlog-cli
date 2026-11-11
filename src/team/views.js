@@ -12,7 +12,7 @@ import * as store from '../shared/store.js';
 import * as team from './team.js';
 import { asList, strip } from '../shared/text.js';
 import { folderRows } from '../shared/dependencies.js';
-import { isUnstarted } from '../shared/status.js';
+import { isFinished, isUnstarted } from '../shared/status.js';
 
 export const SCOPES = ['branch', 'repo', 'all'];
 const RANK = { off: 0, branch: 0, repo: 1, all: 2 };
@@ -111,7 +111,7 @@ export async function teamView(a, { rows, excluded, repo, branch, folder, home, 
         }
         if (!team.offeredTo(fm, f, repo)) return false; // another team's item (SMOOTH_BACKLOG_CLI_TEAM_NAME)
         if (a.claimable) return isUnstarted(r.status) && !fm.claimed_by && !undone.length && team.isReady({ stage: stageOf(fm, f === repo ? own.get(r.path)?.body : '') }) && (f === repo || team.isChunk(fm)); // another repository's items only as chunk work
-        return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) && !undone.some(d => d.foreign && d.item?.status !== 'closed') : undone.length > 0; // never a review of an item before ready , nor of one waiting on another repository 
+        return a.reviewable ? reviewOffer(fm, a.agent) !== null && team.isReady(fm) && !undone.some(d => d.foreign && !isFinished(d.item?.status)) : undone.length > 0; // never a review of an item before ready , nor of one waiting on another repository 
       });
     if (a.decisions) return decisionsView(found, { a, scope, repo, branch, own, say, dump });
     if (a.json) {

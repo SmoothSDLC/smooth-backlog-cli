@@ -18,7 +18,7 @@ Feature: Index - the order of the backlog is committed in one file per repositor
     And I have read item 1
     And I have read item 2
     When another checkout runs `backlog update 3 --priority 0`
-    And I run `backlog update 1 --status in_progress`
+    And I run `backlog update 1 --status "in progress"`
     Then the command succeeds
     And the queue is 3, 1, 2
     When I run `backlog update 2 --summary "after the move"`

@@ -73,6 +73,7 @@ export const satisfied = (fm, entry, rule) => passCount(fm, entry, rule) >= need
 
 // The word an item carries. An item that already carries a word of the order is returned unchanged; an item an earlier build wrote
 // (status pending|in_progress|done with stage and review_state) is translated; any other word is free text and stays as written.
+// An item without a team is never translated (see lift): its status is read exactly as stored.
 export function statusOf(fm, entry) {
   const s = fm.status ?? 'pending';
   if (WORDS.has(s)) return s;
@@ -112,6 +113,7 @@ function legacyFields(fm) {
 // the rework from it). Returns the item.
 export function lift(doc, entry) {
   const fm = doc.fm;
+  if (!fm.team && !seam.entry) return doc; // the user commands read an item without a team as stored: no word is translated and no field is derived (the team code still reads the earlier words)
   if (fm.status == null) return doc; // no status (or an explicit null): nothing to translate, the readers' own default applies
   if (fm.stage && !Object.hasOwn(fm, 'refiner')) fm.refiner = ''; // an earlier slice: the refiner key is what marks it from here on
   fm.status = statusOf(fm, entry);

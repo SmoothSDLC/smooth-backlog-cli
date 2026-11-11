@@ -80,6 +80,16 @@ test('new writes no review_state or reviewer, --split-from writes parent, done s
     assert.ok(!fmOf(two).completed && !fmOf(one).completed); // an open word does not
     ok(['update', '2', '--status', 'blocked']); assert.ok(!fmOf(two).completed);
     assert.deepEqual(JSON.parse(ok(['list', 'done', '--json']).stdout).phases.map(r => r.slug), [three]);
+    const shownStatus = n => JSON.parse(ok(['show', String(n), '--json']).stdout).status;
+    assert.equal(shownStatus(3), 'done'); // shown as stored: done is not read as closed
+    ok(['update', '2', '--status', 'in_progress']); assert.equal(shownStatus(2), 'in_progress'); // nor in_progress as in progress
+    ok(['update', '2', '--status', 'pending']);
+    const fin = createdSlug(ok(['new', '--name', 'born done', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--status', 'done']).stdout);
+    assert.ok(fmOf(fin).completed); // started finished: completed when created
+    ok(['archive', fin]); // done is a finished word: archive needs no --force
+    ok(['update', '2', '--status', 'Done']);
+    assert.ok(JSON.parse(ok(['list', 'open', '--json']).stdout).phases.some(r => r.slug === two), 'the finished words are exact: Done is an open word');
+    ok(['update', '2', '--status', 'pending']);
     ok(['done', '1']);
     assert.equal(fmOf(one).status, 'closed'); assert.ok(fmOf(one).completed);
     const rowsOf = () => Object.fromEntries(JSON.parse(ok(['list', '--json']).stdout).phases.map(r => [r.slug, r.review_state]));

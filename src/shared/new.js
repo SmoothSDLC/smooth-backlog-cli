@@ -13,6 +13,7 @@ import { addEvent, branch as callerBranch, folder as repoFolder, nextSeqFor, now
 import { highWater, record as recordNumber } from './numbers.js';
 import { commitSettled, pull } from './sync.js';
 import { seam } from './seam.js';
+import { isFinished } from './status.js';
 import { foreignItem, isForeign } from './dependencies.js';
 
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; //
@@ -190,6 +191,7 @@ async function create(argv, { home, folder, repo, scope, team, floor = 0 }) {
     for (const [k, v] of [['estimate_min', a.estimate], ['complexity', a.complexity], ['layer', a.layer]]) if (v !== undefined) fm[k] = v;
     Object.assign(fm, { depends_on: deps, claimed_by: '', claimed_at: '' });
     if (src && !team) fm.parent = src.seq;
+    if (!fm.team && isFinished(fm.status)) fm.completed = fm.created; // an item started finished is completed when created
     if (!fm.team) fm.owner = configUser(); // an item outside a team belongs to the user of the configuration
     const parts = [`\n# Phase ${pad(seq)} — ${name}\n`, `**Objective:** ${objective}\n`];
     if (a.context) parts.push(`\n## Carried context (from the original ask)\n\n${a.context}\n`);

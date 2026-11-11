@@ -57,11 +57,11 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     And I run `backlog update 1 --claim alice`
     When I run `backlog team update 1 --request-review bob --note "commit abc123"`
     Then the command succeeds
-    And item 1 has review_state "requested"
+    And item 1 has status "ready for review"
     When I act as agent "bob"
     And I run `backlog team update 1 --review pass --by bob --comments "looks right (docs/review/code.md)"`
     Then the command succeeds
-    And item 1 has review_state "passed"
+    And item 1 has status "review complete"
 
   Scenario: the author cannot review its own work
     Given a team "t1" with lead "lead" and members "alice, bob"
@@ -86,7 +86,7 @@ Feature: Agents - a coding agent asks for work, claims it, gets it reviewed and 
     When I act as agent "bob"
     And I run `backlog team update 1 --review changes --by bob --comments "missing tests (docs/review/code.md)"`
     Then the command succeeds
-    And item 1 has review_state "changes-requested"
+    And item 1 has status "in progress"
 
   Scenario: the holder closes the reviewed item
     Given a team "t1" with lead "lead" and members "alice, bob"

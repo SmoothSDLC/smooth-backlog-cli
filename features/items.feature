@@ -49,7 +49,7 @@ Feature: Items - a person creates, reads, changes and finishes backlog items
 
   Scenario: record progress on an item
     Given an item "Progress" exists
-    When I run `backlog update 1 --status in_progress --location src/login.js`
+    When I run `backlog update 1 --status "in progress" --location src/login.js`
     Then the command succeeds
     And item 1 has status "in progress"
     And item 1 has location "src/login.js"

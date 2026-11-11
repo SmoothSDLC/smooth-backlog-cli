@@ -18,7 +18,7 @@ import * as team from './team.js';
 import { asList } from '../shared/text.js';
 import { SCOPES, refinementCap, reviewOffer, teamRows, waitingOn } from './views.js';
 import { wipRefusal } from './wip.js';
-import { isArchived, isUnstarted } from '../shared/status.js';
+import { isArchived, isFinished, isUnstarted } from '../shared/status.js';
 
 const BOOL = ['next', 'status', 'critical', 'json', 'all', 'claimable', 'reviewable', 'blocked', 'plan', 'claim-now'];
 const VALUE = ['phase', 'by-branch', 'branch', 'agent', 'lead', 'agents', 'scope'];
@@ -101,7 +101,7 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
   const teamRefining = here.filter(x => ((x.fm.team && team.inTeam(x.fm)) || !x.fm.team) && stageOf(x) === 'refining' && !x.fm.claimed_by && !waitsAway(folder, x)); // nor one waiting on another repository 
   const reviews = [];
   for (const x of own) {
-    if (reviewOffer(x.fm, me) !== null && team.isReady(x.fm) && !x.undone.some(d => d.foreign && d.item?.status !== 'closed')) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me) }); // nor a review that waits on another repository
+    if (reviewOffer(x.fm, me) !== null && team.isReady(x.fm) && !x.undone.some(d => d.foreign && !isFinished(d.item?.status))) reviews.push({ name: 'review', r: x.r, fm: x.fm, f: x.f, say: reviewSay(x.r.slug, x.fm, me) }); // nor a review that waits on another repository
   }
   // the design and your review in progress comes first; another member's request, however old, comes
   // after your own work
@@ -109,7 +109,7 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
   // the item you work on, your refinement in progress, then your passed and your changes-requested items
   // heldBy matches an earlier session of the same card - a new session continues the item
   let mine = own.filter(({ fm, undone }) => team.heldBy(fm.claimed_by, me) && !['requested', 'in_review'].includes(fm.review_state) && !fm.wait_on && team.isReady(fm) // waiting for a verdict or a run is not work; nor an item before ready
-    && !undone.some(d => d.foreign && d.item?.status !== 'closed')); // nor one that waits on another repository (named below as the work to do first)
+    && !undone.some(d => d.foreign && !isFinished(d.item?.status))); // nor one that waits on another repository (named below as the work to do first)
   // while its team works the split items the lead's work item waits: no busy
   // continue (a polling lead would loop), but a passed or
   // changes-requested item of the lead's keeps its action, and items blocked on the lead's own work do not count
@@ -118,10 +118,10 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
     const leads = new Set(mine.map(x => String(x.r.seq)));
     // every open item of the team on this branch, incomplete ones included: an incomplete split child is the team's work too
     // an earlier session of the same card holds the lead's own work, not the team's
-    busy = here.filter(x => x.fm.team && team.inTeam(x.fm) && !team.heldBy(x.fm.claimed_by, me) && x.r.status !== 'closed' && !leads.has(String(x.r.seq))
+    busy = here.filter(x => x.fm.team && team.inTeam(x.fm) && !team.heldBy(x.fm.claimed_by, me) && !isFinished(x.r.status) && !leads.has(String(x.r.seq))
       && !team.undoneDependencies(folder, x.fm).some(d => (d.item && !d.foreign && leads.has(String(d.item.seq))) || d.foreign)); // an item that waits on another repository is no work of the team here
     // team items that wait only on other repositories: the lead does not go on here, it is told where to go
-    const away = here.filter(x => x.fm.team && team.inTeam(x.fm) && x.r.status !== 'closed' && !leads.has(String(x.r.seq)) && team.undoneDependencies(folder, x.fm).some(d => d.foreign));
+    const away = here.filter(x => x.fm.team && team.inTeam(x.fm) && !isFinished(x.r.status) && !leads.has(String(x.r.seq)) && team.undoneDependencies(folder, x.fm).some(d => d.foreign));
     if (busy.length || away.length) mine = mine.filter(x => ['passed', 'changes-requested'].includes(x.fm.review_state));
   }
   // every open item of the team on this branch, incomplete ones included (a split child before its refinement is open work)
@@ -192,7 +192,7 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
     }
   }
   if (lead && plain()) { // a stale review of its team is the lead's to hand on (members never take it over); before its own plain work, never before its close or rework
-    const x = own.find(({ fm, undone }) => team.staleReview(fm) && fm.reviewer !== me && !undone.some(d => d.foreign && d.item?.status !== 'closed')); // nor one waiting on another repository 
+    const x = own.find(({ fm, undone }) => team.staleReview(fm) && fm.reviewer !== me && !undone.some(d => d.foreign && !isFinished(d.item?.status))); // nor one waiting on another repository 
     if (x) act = { name: 'reassign-review', r: x.r, f: x.f, say: `the review of ${x.r.seq} by ${x.fm.reviewer} is stale (started ${x.fm.review_started}): hand it on: ${team.teamStep(x.r.slug, me, '--reassign-review <member> --reason "<why>"')}` };
   }
   if (!act && lead) { // the lead refines an incomplete item (never actions it): after complete work, before chunk
@@ -204,9 +204,9 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
   }
   // when the work here waits on not-done items of other repositories, the answer names them
   // as the work to do first (before any chunk work here); the lead ends the session and the team is started there
-  const notOwn = here.filter(x => team.inTeam(x.fm) && x.r.status !== 'closed' && !own.some(o => o.r.slug === x.r.slug)); // incomplete or refining team items too
-  const first = act || (lead && busy.length) ? [] : [...new Map([...own.filter(x => x.r.status !== 'closed').flatMap(x => x.undone), ...notOwn.flatMap(x => team.undoneDependencies(folder, x.fm))] // claimed ones too: a dependency added after the claim
-    .filter(d => d.foreign && d.item && d.item.status !== 'closed')
+  const notOwn = here.filter(x => team.inTeam(x.fm) && !isFinished(x.r.status) && !own.some(o => o.r.slug === x.r.slug)); // incomplete or refining team items too
+  const first = act || (lead && busy.length) ? [] : [...new Map([...own.filter(x => !isFinished(x.r.status)).flatMap(x => x.undone), ...notOwn.flatMap(x => team.undoneDependencies(folder, x.fm))] // claimed ones too: a dependency added after the claim
+    .filter(d => d.foreign && d.item && !isFinished(d.item.status))
     .map(d => [`${d.item.repository}#${d.item.seq}`, { item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }])).values()];
   if (!act && first.length) {
     act = { name: 'idle', r: null, f: repo, say: `the work here waits on ${first.map(x => `${x.item} (${x.slug}, status ${x.status})`).join(', ')}: do that first in ${[...new Set(first.map(x => x.repository))].map(r => `repository ${r}`).join(' and ')}: ${lead ? 'end the session here; the team is started in that repository' : 'tell the team lead'}` };
@@ -251,7 +251,7 @@ async function pop(a, { rows: all, excluded, repo, branch, folder, home }) {
 // work goes before another member's review request, a member waiting for its restart gets nothing, and items before
 // stage ready are neither reviewed nor claimed.
 // an item that waits on a not-done item of another repository is offered to nobody here (pop names that first)
-const waitsAway = (folder, x) => (x.undone ?? team.undoneDependencies(folder, x.fm)).some(d => d.foreign && d.item?.status !== 'closed');
+const waitsAway = (folder, x) => (x.undone ?? team.undoneDependencies(folder, x.fm)).some(d => d.foreign && !isFinished(d.item?.status));
 async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
   const roster = team.teamMembers(team.teamName()); // the members of the team's entry, in order
   const want = new Set(a.agents ? asList(a.agents) : roster);
@@ -262,7 +262,7 @@ async function plan(a, { rows: all, excluded, repo, branch, folder, home }) {
   const missing = new Map(every0.map(x => { const file = files.get(x.r.path); return [x.r.id, file ? missingFields(file.fm, file.body) : ['the item file']]; }));
   const every = every0.filter(x => team.inTeam(x.fm)); // only the caller's team's items (SMOOTH_BACKLOG_CLI_TEAM_NAME)
   const rows = every.filter(x => !missing.get(x.r.id).length // an incomplete item is never dispatched to a member
-    && !(x.undone ?? []).some(d => d.foreign && d.item?.status !== 'closed')); // nor one that waits on another repository : pop names that first
+    && !(x.undone ?? []).some(d => d.foreign && !isFinished(d.item?.status))); // nor one that waits on another repository : pop names that first
   const held = Object.fromEntries(members.map(m => [m, team.heldItems(folder, m, { refining: true })]));
   const active = Object.fromEntries(members.map(m => [m, held[m].filter(h => h.state === 'active').length]));
   const busy = new Set([...rows.filter(x => x.fm.review_state === 'in_review' && !team.staleReview(x.fm)).map(x => x.fm.reviewer),

@@ -202,7 +202,7 @@ async function query(argv, team, branchColumn) {
         return 0;
       }
       // the next item may wait on another repository's item: that is named as the work to do first
-      const away = undoneDependencies(folder, fms.get(r.path) ?? {}, rows).filter(d => d.foreign && d.item && d.item.status !== 'closed')
+      const away = undoneDependencies(folder, fms.get(r.path) ?? {}, rows).filter(d => d.foreign && d.item && !isFinished(d.item.status))
         .map(d => ({ item: `${d.item.repository}#${d.item.seq}`, repository: d.item.repository, seq: d.item.seq, slug: d.item.slug, status: d.item.status }));
       const file = items.find(i => i.path === r.path); // the whole item: front matter and body
       if (a.json) { dump({ ...r, ...(away.length ? { first: away } : {}), front_matter: file ? storedFm(file.fm) : null, body: file ? file.body : null }); return 0; }

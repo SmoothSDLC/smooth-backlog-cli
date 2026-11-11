@@ -89,12 +89,15 @@ export function undoneDependencies(folder, fm, rows = folderRows(folder), edge =
     const f = foreignItem(folder, id);
     if (f !== undefined) {
       const dependentId = f && f.repository === (fm.repository || undefined) ? String(fm.seq) : `${fm.repository}#${fm.seq}`;
-      const handoff = f && f.status === 'closed' ? edge(f.fm, dependentId) : null;
+      const handoff = f && finishedByStep(f.status) ? edge(f.fm, dependentId) : null;
       return { id, item: f && { slug: f.slug, seq: f.seq, status: f.status, repository: f.repository }, fm: f ? f.fm : {}, foreign: true, ...(handoff ? { handoff } : {}) };
     }
     const item = byIdent(rows, id);
     const producer = item ? itemFm(folder, item) : {};
-    const handoff = item && item.status === 'closed' ? edge({ ...producer, status: item.status }, String(fm.seq)) : null;
+    const handoff = item && finishedByStep(item.status) ? edge({ ...producer, status: item.status }, String(fm.seq)) : null;
     return { id, item, fm: producer, ...(handoff ? { handoff } : {}) };
   }).filter(d => !d.item || !isFinished(d.item.status) || d.handoff);
 }
+
+// A finished producer owes a hand-off record unless it is archived: an item archived by path (also forced) owes none.
+const finishedByStep = word => isFinished(word) && word !== 'archived';

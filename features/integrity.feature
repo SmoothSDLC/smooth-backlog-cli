@@ -15,7 +15,7 @@ Feature: Integrity - every interaction updates from the origin first, publishes 
     And item 1 has summary "changed elsewhere"
 
   Scenario: a change is published before the command exits
-    When I run `backlog update 1 --status in_progress`
+    When I run `backlog update 1 --status "in progress"`
     Then the command succeeds
     And the backlog repository has no uncommitted or unpushed change
     And another checkout sees item 1 with status "in progress"
@@ -24,7 +24,7 @@ Feature: Integrity - every interaction updates from the origin first, publishes 
     Given I act as agent "ann"
     And I have read item 1
     When another checkout runs `backlog update 1 --summary "newer summary" --by bob`
-    And I run `backlog update 1 --status in_progress`
+    And I run `backlog update 1 --status "in progress"`
     Then the command fails with exit code 5
     And the output contains "was changed by"
     And the output contains "newer summary"

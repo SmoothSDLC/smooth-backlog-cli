@@ -61,7 +61,7 @@ Feature: Queue - priorities, dependencies, branches
     Then the output contains "002-b"
 
   Scenario: the events of an item are kept with the item
-    When I run `backlog update 1 --status in_progress --note "started"`
+    When I run `backlog update 1 --status "in progress" --note "started"`
     Then the command succeeds
     And item 1 has status "in progress"
     When I run `backlog history 1`

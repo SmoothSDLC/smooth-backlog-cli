@@ -3,14 +3,15 @@
 // ".backlog" = inside it), and optionally backlog_origin_url, the clone URL (the environment variable SMOOTH_BACKLOG_CLI_ORIGIN_URL
 // wins). The root file .smooth-backlog.json of earlier builds is still read. The agent folders: .agents, .claude, .github, .qwen.
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { atomicWrite } from '../storage.js';
 import { BacklogError } from '../errors.js';
 import { adapters, safeTree, templateRoot } from '../integrations.js';
 import { safePath } from '../storage.js';
+import { hasFrontMatter } from './frontmatter.js';
 import { redact, repoIdFromUrl } from './safety.js';
 
 export const CONFIG = '.backlog/config.json'; // the repository's backlog configuration lives in its .backlog folder
@@ -92,6 +93,26 @@ export const originFolderName = cwd => originSetting(cwd).name || NEUTRAL_NAME;
 // The refusal of a symbolic link: the path relative to the repository, named once, never the absolute one.
 const linkRefusal = (top, label, e) => { const m = e.message.split(`${top}${sep}`).join(''); return `${m.includes(label) ? '' : `${label}: `}${m} (a symbolic link on the way: nothing changed)`; };
 
+// R25: does the repository's own folder (<home>/<owner>/<name>) hold markdown items? A directory scan, never store.load (its markdown stop
+// must not stop setup); a folder that cannot be read counts as none, so the advice is skipped without an error.
+function hasMarkdownItems(dir) {
+  const scan = d => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (e.isDirectory() && !e.isSymbolicLink()) { if (scan(join(d, e.name))) return true; }
+      else if (e.isFile() && e.name.endsWith('.md') && hasFrontMatter(readFileSync(join(d, e.name), 'utf8'))) return true;
+    }
+    return false;
+  };
+  try { return scan(join(dir, 'phases')) || scan(join(dir, 'archive')); } catch { return false; }
+}
+// The line setup prints when the own folder still holds markdown items: the migration is recommended, never run; null when there is nothing to migrate.
+export function migrateAdvice(home, id, cfg) {
+  if (!hasMarkdownItems(join(home, ...id.split('/')))) return null;
+  return cfg.migrated_at
+    ? `ℹ️  the backlog of this repository was last migrated on ${cfg.migrated_at} by version ${cfg.migrated_by_version}`
+    : 'ℹ️  the backlog of this repository has not been migrated to JSON items: run backlog team migrate --show-all --dry-run, then backlog team migrate --show-all';
+}
+
 export async function run(argv) {
   if (argv.includes('--help')) { const h = (await import('../help.js')).HELP?.setup; if (h) { process.stdout.write(h.endsWith('\n') ? h : `${h}\n`); return 0; } }
   assertConfigReadable(); // an unreadable configuration stops setup before anything changes
@@ -149,6 +170,8 @@ export async function run(argv) {
     await atomicWrite(join(top, CONFIG), `${JSON.stringify(next, null, 2)}\n`);
     say(`✅ configuration written: ${inside ? 'backlog inside this repository' : 'backlog repository'}${setting.url ? ', with its clone URL' : ''}`);
   } else say(`ℹ️  configuration kept: ${inside ? 'backlog inside this repository' : 'backlog repository'}`);
+  const advice = migrateAdvice(home, inside ? 'local/repository' : repoIdFromUrl(spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: top, encoding: 'utf8' }).stdout) || `local/${basename(top)}`, readConfig(top));
+  if (advice) say(advice);
   const deployed = [];
   for (const { target, destination } of targets) {
     rmSync(target, { recursive: true, force: true });

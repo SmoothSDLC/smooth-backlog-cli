@@ -53,3 +53,11 @@ Feature: Team seeding - the seeded items follow the team file the scenario wrote
     Then item 1 has status "ready"
     And the command fails
     And the output contains "rule claim-lead"
+
+  Scenario: a user command does not see an item of a team
+    Given a repository with a backlog
+    And a team file from the template "parallel"
+    And a ready item "Tokens" for the team "parallel"
+    When I run `backlog show 1`
+    Then the command fails with exit code 1
+    And the output contains "no phase '1'"

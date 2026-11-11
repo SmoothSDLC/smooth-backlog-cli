@@ -27,7 +27,8 @@ step(/^a ready item "([^"]+)" for the team "([^"]+)"$/, (w, name, team) => {
   const entry = written[key];
   assert.ok(entry, `no team ${team} in the team file the scenario wrote (${Object.keys(written)})`);
   const { values } = entry.item.status;
-  w.seedTeamItem(entry, key, { name, fields: { status: values.includes('ready') ? 'ready' : values[0], ...('estimate' in entry.item ? { estimate: 20 } : {}) } });
+  const { seq, slug } = w.seedTeamItem(entry, key, { name, fields: { status: values.includes('ready') ? 'ready' : values[0], ...('estimate' in entry.item ? { estimate: 20 } : {}) } });
+  (w.teamItems ??= new Set()).add(String(seq)).add(slug); // the user commands do not see these: they are read through the team query
 });
 // a stray change in the folder that holds the items, and the checks that a seed commit leaves it alone
 step(/^a stray file is left uncommitted in the backlog repository$/, w => { writeFileSync(join(w.backlogRepo(), 'stray.txt'), 'stray'); });
@@ -126,14 +127,15 @@ step(/^the JSON output has (\d+) items?$/, (w, n) => { const v = JSON.parse(w.la
 const read = (w, item) => {
   const before = w.last; // reading an item is not the command under test: the last result stays
   const env = { SMOOTH_BACKLOG_CLI_AGENT: 'reader' };
-  const r = w.run(['show', item, '--json'], { env });
-  if (r.status !== 0) { // the user commands do not see an item of a team: the team query reads it
+  if (w.teamItems?.has(item)) { // the user commands do not see an item of a team: the team query reads it
     const q = w.run(['team', 'query', item, '--show-all', '--json'], { env });
     w.last = before;
-    assert.equal(q.status, 0, `cannot read item ${item}: ${output(r)}${output(q)}`);
+    assert.equal(q.status, 0, `cannot read item ${item}: ${output(q)}`);
     const d = JSON.parse(q.stdout); return { ...d, ...d.fields, front_matter: d.fields };
   }
+  const r = w.run(['show', item, '--json'], { env });
   w.last = before;
+  assert.equal(r.status, 0, `cannot read item ${item}: ${output(r)}`);
   const v = JSON.parse(r.stdout); return { ...v, ...derivedFm(v.front_matter) };
 };
 step(/^item (\S+) has (\w+) "([^"]*)"$/, (w, item, field, value) => { const v = read(w, item); assert.ok(field in v, `item ${item} has no field ${field}: ${Object.keys(v)}`); assert.equal(String(v[field] ?? ''), value, `${field} of ${item}: ${JSON.stringify(v[field])}`); });

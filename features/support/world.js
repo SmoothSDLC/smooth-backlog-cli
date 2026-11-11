@@ -55,6 +55,7 @@ export function makeWorld(location) {
       // only the item file is staged: other changes of the scenario stay as they are; a push of another clone is pulled first
       this.gitIn(top, 'add', file); this.gitIn(top, 'commit', '-q', '-m', 'seed', '--only', file);
       this.gitIn(top, 'pull', '-q', '--rebase', '--autostash', 'origin', this.gitIn(top, 'branch', '--show-current')); this.gitIn(top, 'push', '-q', 'origin', 'HEAD');
+      return { seq, slug };
     },
     // a second checkout of the same backlog: another clone of the backlog repository (remote) or of the consuming repository (local)
     other() {

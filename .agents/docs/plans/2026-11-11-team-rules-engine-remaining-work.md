@@ -331,6 +331,8 @@ Decisions: `rows` returns only the rows the view sees; a row's priority is its p
 
 **Files:** Modify `src/shared/read.js` (`take` accepts `show-all` for `list`, `next`, `show`, `history`, `changes`), `src/shared/query.js` (`BOOL` gains `show-all`; a team column and `team` in rows with the flag; `next` ignores team entries without it), `src/shared/seen.js` (`changedSince`: team items left out unless the flag; `held` is `!fm.team && fm.claimed_by === agent`), `src/shared/new.js` (the flag; `--depends-on` names a team item only with it; `--split-from` of a team item refused until Task 14), `src/help.js`, docs; Test `.agents/test/user-visibility.test.js`.
 
+Added after Task 10's review: one test runs user writes (`backlog archive done`, `backlog move --to-branch`, `backlog done`) on a folder with team items between user items and asserts every team item file and index entry is byte-identical afterwards.
+
 - [ ] **Step 1: Failing tests**: R16-01 (`show 90 --show-all` shows the item with its team), R16-03 (`new --depends-on 90 --show-all` creates the item with `depends_on` 90); `list`, `list branches`, `next`, `show`, `history`, `changes` with and without the flag; `history` of a team item without it is `no phase`; `changes` lists no team item and no held entry by `reviewer` or `refiner`; `fields --show-all` exits 2.
 - [ ] **Step 2–5:** FAIL, implement, docs (CHANGELOG breaking: these commands no longer show team items), standard proof.
 
@@ -450,6 +452,8 @@ Decisions: with `SMOOTH_BACKLOG_CLI_TEAM_NAME` set to a non-empty value every us
 **Files:** Modify `src/shared/sync.js` (`refuseConflicts(home, t, folder)` and `refuseUnpublished(home, t, folder)` look at the folder's paths; `pull(home, { read, folder })`), `src/team/pull.js` (`pullFolder` passes `folder`), `src/shared/team-publish.js` (its two `refuseConflicts` calls pass the folder), every caller of `sync.pull` in `src/shared/` (`new.js`, `update.js`, `archive.js` through `withBacklog`, `clean.js`, `query.js`, `index.js` `ensure`); Tests `.agents/test/shared-sync.test.js`, `shared-sync-db.test.js`, `shared-stale.test.js`, `team-concurrency.test.js`.
 
 Decisions: unmerged entries and conflict markers count only under the folder (and `*.json` as today); unpublished commits count only when they touch the folder (`git log <ref>..HEAD -- <folder>`). A rebase that stops on a conflict outside the folder aborts, keeps the command's commit local and exits 3 with `❌ backlog: <path> outside <owner>/<name> conflicts with upstream; this command changes only its own folder: resolve the conflict in the backlog clone and run it again`.
+
+Added after Task 10's review: a test that a user command's publication race (renumber or conflict repair in `src/shared/sync.js`) never renumbers or rewrites an unpushed team item of the same clone.
 
 - [ ] **Step 1: Failing tests**: a conflict in another folder and an unpublished commit in another folder no longer stop `new`, `update`, `archive`, `list`; a conflict inside the folder still stops with today's text; the outside-conflict text; a person's unpushed commit of another folder in the backlog clone stays local after a team command; `git commit --only` over the folder's paths succeeds while another folder has unmerged entries.
 - [ ] **Step 2–4:** FAIL, implement, standard proof. **Step 5: Commit.**

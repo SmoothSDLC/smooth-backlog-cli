@@ -548,6 +548,10 @@ Decisions: not on a terminal: the R17-02 text, exit 2, before the agent check, t
 
 Decisions: `backlog team define` and `backlog team workflow` answer exit 2 `backlog team define is gone: the team file is edited in git and checked with backlog team validate` (and the same sentence for `workflow`). The user work-in-progress limit (`wip-limits.json`) is no longer read; its documentation goes and CHANGELOG lists it as breaking.
 
+Tests deleted with the code (found after Task 4): `.agents/test/shared-handoff-commands.test.js` goes with `src/team/handoff-commands.js`; a coverage line each.
+
+Tests deleted with the code (found after Task 4 and the JSON helper fix): `.agents/test/shared-team-lifecycle.test.js` (imports `team.js`) and `.agents/test/team-json-redact.test.js` (drives `team define` and `team workflow`, reads `templates/workflows/team.json` at load); a coverage line each. The `redactDeep` import in `src/team/cli.js` goes with the two routes.
+
 - [ ] Steps: importer grep; the two removed-forms tests first (FAIL); delete and repair; docs; standard proof (state the scenario count); commit with coverage lines.
 
 ---
@@ -555,6 +559,8 @@ Decisions: `backlog team define` and `backlog team workflow` answer exit 2 `back
 ### Task 29: The shipped workflow template, the vocabulary and the translation (B27c)
 
 **Files:** Delete `templates/workflows/team.json`; Modify `src/shared/status.js` (keeps `isArchived`, `isFinished`, `isOpen` reading `FINAL`, or they move to `src/shared/item-definition.js` and the file goes when no importer is left), `src/shared/store.js` (`lifted` in `load`, `RETIRED_KEYS`, `LEGACY_KEYS`, `dropsLegacy`, `derivedKeys`, the seam condition of `write`, and any assembly of retired key names from parts), `src/shared/update.js`, `src/shared/dependencies.js`, `src/shared/query.js` (the `lifted` and `normalise` call sites), `src/shared/plain-step.js` (`stageOfStatus` and the `review complete` word), the template's mentions in `COMMANDS.md` and the skill reference; Tests `shared-legacy-fields.test.js`, `shared-item-keys.test.js`, `shared-new.test.js` (the drop assertions), `shared-no-classes.test.js` (its allowance of `src/team/migrate-convert.js` re-checked).
+
+Before deleting `templates/workflows/team.json`, grep `.agents/test` for it: no test may still read it at load (Task 28 deletes `team-json-redact.test.js`).
 
 - [ ] Steps: grep `lifted\|statusOf(\|dropsLegacy\|derivedKeys\|normalise\|stageOfStatus\|team.json` in `src`; a test "an item written by `backlog update` keeps `stage`, `review_state` and every other key" (FAIL only if something still drops); delete; standard proof; commit.
 

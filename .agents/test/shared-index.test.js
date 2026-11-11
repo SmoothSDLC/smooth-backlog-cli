@@ -112,3 +112,32 @@ test('rows: the priority of a live item is its position in the index; a folder w
   assert.deepEqual(index.open(r.rows).map(x => [x.slug, x.priority]), [['001-i1', 0], ['002-i2', 1]], 'the item file is the truth for the status');
   assert.equal(r.rows.find(x => x.slug === '003-i3').priority, 2);
 });
+
+// ---- the open option: openness from a callback, the order kept per owner
+
+const view = (n, team, status, extra = {}) => ({ path: itemRel(`00${n}-i${n}`), fm: { phase: `00${n}-i${n}`, seq: n, name: `I${n}`, status, branch: 'main', ...(team ? { team } : {}), ...extra } });
+const entries = (...ns) => ({ branches: { main: ns.map(n => ({ seq: n, slug: `00${n}-i${n}`, name: `I${n}`, status: 'pending' })) } });
+const slugsOf = r => r.idx.branches.main.map(e => e.slug.slice(2, 3));
+// a team whose final word is `accepted`; an item without a team is finished by the fixed words
+const open = i => (i.fm.team ? i.fm.status !== 'accepted' : !['closed', 'done', 'archived'].includes(i.fm.status));
+
+test('reconcile with open: a word the fixed list does not know finishes a team item, and only the team\'s entries move behind its open ones', () => {
+  const items = [view(1, '', 'pending'), view(2, 't', 'accepted'), view(3, '', 'pending'), view(4, 't', 'pending'), view(5, '', 'pending')];
+  const idx = entries(1, 2, 3, 4, 5);
+  assert.deepEqual(slugsOf(index.reconcile(idx, items, { open, inScope: i => i.fm.team === 't' })), ['1', '4', '3', '2', '5'], 'u1 t1 u2 t2 u3: the closed team entry takes the later team position');
+  assert.deepEqual(slugsOf(index.reconcile(idx, items)), ['1', '2', '3', '4', '5'], 'without the option accepted is an open word: nothing moves');
+  assert.deepEqual(index.reconcile(idx, items, { open, inScope: i => i.fm.team === 't' }).order, [['004-i4', 0]], 'order lists the open entries of the scope');
+});
+
+test('reconcile with open: a move arranges only the open entries of the scope and leaves every other entry at its position', () => {
+  const items = [view(1, '', 'pending'), view(2, 't', 'pending'), view(3, '', 'pending'), view(4, 't', 'pending'), view(5, 't', 'pending')];
+  const idx = entries(1, 2, 3, 4, 5);
+  const scope = { open, inScope: i => i.fm.team === 't' };
+  assert.deepEqual(slugsOf(index.reconcile(idx, items, { ...scope, move: { slug: '005-i5', target: 0 } })), ['1', '5', '3', '2', '4']);
+  assert.deepEqual(slugsOf(index.reconcile(idx, items, { ...scope, move: { slug: '002-i2', target: 9 } })), ['1', '4', '3', '5', '2']);
+});
+
+test('reconcile without open: the callers of the user commands get the global open-first order they always had', () => {
+  const items = [view(1, '', 'done'), view(2, 't', 'pending'), view(3, '', 'pending')];
+  assert.deepEqual(slugsOf(index.reconcile(entries(1, 2, 3), items)), ['2', '3', '1']);
+});

@@ -1,7 +1,8 @@
 // The built-in definition of an item without a team: one order shared by the item file codec, the defaults, and the output of backlog fields.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ENVELOPE, FIELDS, BUILT_IN_ORDER } from '../../src/shared/item-definition.js';
+import { ENVELOPE, FIELDS, BUILT_IN_ORDER, FINAL } from '../../src/shared/item-definition.js';
+import { isFinished, isOpen } from '../../src/shared/status.js';
 import { toItemJson } from '../../src/shared/item-json.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -110,4 +111,10 @@ test('an item without a team reads its status as stored in the list and in show'
     assert.deepEqual(ok(['list', 'done', '--json']).phases.map(p => [p.seq, p.status]), [[1, 'done']]);
     assert.equal(ok(['show', '001-stored', '--json']).status, 'done');
   } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test('the finished words are the definition\'s FINAL list and status.js reads it', () => {
+  assert.deepEqual(FINAL, ['closed', 'done', 'archived']);
+  for (const w of FINAL) { assert.equal(isFinished(w), true, w); assert.equal(isOpen(w), false, w); }
+  for (const w of ['pending', 'accepted', 'in progress']) { assert.equal(isFinished(w), false, w); assert.equal(isOpen(w), true, w); }
 });

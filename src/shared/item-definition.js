@@ -33,3 +33,6 @@ export const FIELDS = [
 
 // The field keys in order: the order the item file writes them in.
 export const BUILT_IN_ORDER = FIELDS.map(f => f[0]);
+
+// The words that finish an item without a team (and the only ones the code knows): the one place; status.js reads it.
+export const FINAL = ['closed', 'done', 'archived'];

@@ -82,8 +82,10 @@ function within(list, inScope, arrange) {
 // another branch than their item's) leave, name and status are taken from the file, and the open entries come first. Then, in this order:
 // renames (old slug -> new slug, a renumbering), move { slug, target } (the item to that rank among the open ones, clamped),
 // lead [slugs] (these first). exclude [slugs] leave the index. inScope(item) limits which entries a move or a lead may shift.
+// open(item) decides openness (default: the entry's status against the fixed words); with it, the open-first order and the arrangements work only among
+// the positions the scope holds, every other entry keeps its place, and `order` lists the open entries of the scope.
 // Resolves { idx, order } where order = [[slug, rank]] of the open entries of the branches named by `branches` (default: all).
-export function reconcile(idx, items, { move, lead, exclude = [], renames = new Map(), inScope = () => true, branches: only } = {}) {
+export function reconcile(idx, items, { move, lead, exclude = [], renames = new Map(), inScope = () => true, branches: only, open } = {}) {
   const bySlug = new Map(live(items).filter(i => !exclude.includes(slugOf(i))).map(i => [slugOf(i), i]));
   const out = {}; const placed = new Set();
   for (const [key, list] of Object.entries(idx.branches)) {
@@ -95,11 +97,14 @@ export function reconcile(idx, items, { move, lead, exclude = [], renames = new 
   }
   for (const i of [...bySlug.values()].sort(bySeq)) if (!placed.has(slugOf(i))) (out[branchOf(i)] ??= []).push(entryOf(i));
   const scoped = e => inScope(bySlug.get(e.slug));
+  const opened = open ? e => Boolean(open(bySlug.get(e.slug))) : isOpen;
   const arrangeBranch = (key, arrange) => {
+    if (open) { out[key] = within(out[key], e => opened(e) && scoped(e), arrange); return; }
     const act = out[key].filter(isOpen);
     out[key] = [...within(act, scoped, arrange), ...out[key].filter(e => !isOpen(e))];
   };
-  for (const key of Object.keys(out)) out[key] = [...out[key].filter(isOpen), ...out[key].filter(e => !isOpen(e))];
+  const openFirst = list => [...list.filter(opened), ...list.filter(e => !opened(e))];
+  for (const key of Object.keys(out)) out[key] = open ? within(out[key], scoped, openFirst) : openFirst(out[key]);
   const mover = move && move.slug != null && move.target != null ? bySlug.get(move.slug) : null;
   if (mover && out[branchOf(mover)]) {
     arrangeBranch(branchOf(mover), mine => {
@@ -110,7 +115,7 @@ export function reconcile(idx, items, { move, lead, exclude = [], renames = new 
     });
   }
   if (lead?.length) for (const key of Object.keys(out)) arrangeBranch(key, mine => [...lead.flatMap(s => mine.filter(e => e.slug === s)), ...mine.filter(e => !lead.includes(e.slug))]);
-  const order = (only ?? Object.keys(out)).flatMap(k => (out[k] ?? []).filter(isOpen).map((e, r) => [e.slug, r]));
+  const order = (only ?? Object.keys(out)).flatMap(k => (out[k] ?? []).filter(e => opened(e) && (!open || scoped(e))).map((e, r) => [e.slug, r]));
   return { idx: { branches: out }, order };
 }
 

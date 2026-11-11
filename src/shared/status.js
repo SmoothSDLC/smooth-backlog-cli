@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FINAL } from './item-definition.js';
 import { seam } from './seam.js';
 import { asList } from './text.js';
 
@@ -15,7 +16,7 @@ export const TEAM = JSON.parse(readFileSync(join(SHIPPED, 'team.json'), 'utf8'))
 export const STATUSES = TEAM.statuses;
 export const SIDE = TEAM.side_statuses;
 const WORDS = new Set([...STATUSES, ...Object.keys(SIDE)]);
-const FINISHED = new Set([...TEAM.finished, 'done']);
+const FINISHED = new Set(FINAL);
 export const ORDER = TEAM.review_stages_order;
 export const READY = Object.fromEntries(ORDER.map(s => [s, TEAM.steps['start-review'].stages[s].from[0]]));
 const STAGE_OF = Object.fromEntries(ORDER.flatMap(s => TEAM.steps['start-review'].stages[s].from.map(w => [w, s])));

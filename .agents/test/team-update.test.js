@@ -356,6 +356,6 @@ test('--json redacts each value, never the serialized text: a URL value then an 
   const out = JSON.parse(r.stdout);
   assert.deepEqual(Object.keys(out), ['item', 'step', 'rule', 'changes', 'related', 'say']);
   assert.deepEqual(out.changes.handoff, ['https://host.example', 'a@b.example']);
-  assert.deepEqual(Object.keys(out.changes), ['status', 'handoff', 'checker']);
+  assert.deepEqual(Object.keys(out.changes), ['status', 'handoff']);
   assert.ok(!r.stdout.includes('u:p@'), r.stdout);
 });

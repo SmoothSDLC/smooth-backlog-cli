@@ -7,6 +7,7 @@ import { readConfig, topOf } from '../shared/setup.js';
 import { cloneLocked, configDir, folder as folderOf, now, repoId, resolveHome } from '../shared/store.js';
 import { publishTeam } from '../shared/team-publish.js';
 import { apply } from './apply.js';
+import { redactDeep, say } from './check.js';
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { contextOf } from './item.js';
@@ -17,7 +18,6 @@ import { sessionOf } from './session.js';
 import { stepNames } from './steps.js';
 import { loadTeams } from './teams-load.js';
 
-const say = text => process.stdout.write(`${redact(text)}\n`);
 const invalid = text => new BacklogError('INVALID_INPUT', text);
 
 export async function run(argv) {
@@ -37,7 +37,7 @@ export const lines = (changes, order, indent) => Object.entries(changes)
 function printed({ built, result, item, name, entry, json }) {
   const related = Object.fromEntries([...result.changes].filter(([s]) => s !== item.seq));
   const own = result.changes.get(item.seq) ?? {};
-  if (json) return JSON.stringify({ item: item.seq, step: name, rule: built.rule, changes: own, related, say: result.say ?? '' });
+  if (json) return JSON.stringify(redactDeep({ item: item.seq, step: name, rule: built.rule, changes: own, related, say: result.say ?? '' }));
   const order = Object.keys(entry.item);
   return [`✅ ${item.slug}: ${name} (rule ${built.rule})`, ...lines(own, order, '   '),
     ...Object.entries(related).filter(([, c]) => Object.keys(c).length).map(([s, c]) => `   item ${s}: ${lines(c, order, '').join('; ')}`),
@@ -82,7 +82,7 @@ async function updateItem(argv) {
     if (first.refusal) { say(`❌ ${first.refusal}`); return 1; } // nothing was written
     const r = await publishTeam(home, folder, first.message, { step: name, attempt, watch: await watched(home, repo, top, workRepo), persist: () => persistSha() });
     if (r.refusal) { say(`❌ ${r.refusal}`); return 1; } // the step run again on the upstream files was refused
-    say((r.result ?? first).print);
+    say((r.result ?? first).print, flags.json);
     return 0;
   });
 }

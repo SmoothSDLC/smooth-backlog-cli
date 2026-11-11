@@ -11,6 +11,7 @@ import { cloneLocked, resolveHome } from '../shared/store.js';
 import * as sync from '../shared/sync.js';
 import { forgetTeamsConfig, installSeam, openItemsOf, setSessionTeam, setTeamsHome, teamEntry, teamsConfig, validateTeam } from './team.js';
 import { strip } from '../shared/text.js';
+import { redactDeep, say } from './check.js';
 import { formOf } from './inputs.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
@@ -18,7 +19,6 @@ const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact
 export const SUBS = ['pop', 'new', 'update', 'query', 'define', 'workflow', 'validate', 'migrate'];
 // The words the refusal names; define and workflow stay routed but are not named.
 const WORDS = ['new', 'update', 'pop', 'query', 'validate', 'migrate'];
-const say = text => process.stdout.write(`${redact(text)}\n`);
 
 // Takes --team and --agent out of argv (both forms); the rest is passed on in order.
 export function split(argv) {
@@ -107,7 +107,7 @@ async function publish(home, name, message, change) {
   });
 }
 const refused = (list, json) => {
-  if (json) say(JSON.stringify({ ok: false, errors: list }));
+  if (json) say(JSON.stringify(redactDeep({ ok: false, errors: list })), true);
   else for (const t of list) process.stderr.write(`❌ backlog: ${redact(t)}\n`);
   return 2;
 };
@@ -128,7 +128,7 @@ async function define(rest) {
   if (r.refuse) return refused(r.refuse, json);
   forgetTeamsConfig();
   const entry = r.entry ?? teamEntry(def, home);
-  if (json) say(JSON.stringify({ ok: true, team: def.name, status: r.same ? 'unchanged' : 'defined', entry }));
+  if (json) say(JSON.stringify(redactDeep({ ok: true, team: def.name, status: r.same ? 'unchanged' : 'defined', entry })), true);
   else say(r.same ? `team ${def.name} unchanged` : `✅ team ${def.name} defined: lead ${entry.lead}, ${entry.members.length} members, flow ${entry.workflow ?? 'team'}`);
   return 0;
 }
@@ -150,7 +150,7 @@ function fileArgs(rest) {
 async function workflow(rest) {
   const a = fileArgs(rest);
   const { home } = resolveHome();
-  if (a.show !== undefined) { say(JSON.stringify(loadWorkflow(a.show, home), null, 2)); return 0; }
+  if (a.show !== undefined) { say(JSON.stringify(redactDeep(loadWorkflow(a.show, home)), null, 2), true); return 0; }
   if (!a.file) throw new BacklogError('INVALID_INPUT', 'team workflow needs --file <path.json> (register a flow) or --show <name>');
   const def = objectOr(readJson(a.file), a.file);
   const errors = typeof def.workflow === 'string' && /^[\w.-]+$/.test(def.workflow) ? validateWorkflow(def) : ['workflow: must name the flow (letters, digits, . _ -)'];
@@ -163,6 +163,7 @@ async function workflow(rest) {
     return { next: { ...all, [def.workflow]: def } };
   });
   if (r.refuse) return refused(r.refuse, a.json);
-  say(a.json ? JSON.stringify({ ok: true, workflow: def.workflow, status: r.same ? 'unchanged' : 'registered' }) : r.same ? `workflow ${def.workflow} unchanged` : `✅ workflow ${def.workflow} registered`);
+  if (a.json) say(JSON.stringify(redactDeep({ ok: true, workflow: def.workflow, status: r.same ? 'unchanged' : 'registered' })), true);
+  else say(r.same ? `workflow ${def.workflow} unchanged` : `✅ workflow ${def.workflow} registered`);
   return 0;
 }

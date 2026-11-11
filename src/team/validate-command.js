@@ -8,6 +8,7 @@ import { redact } from '../shared/safety.js';
 import { readConfig, topOf } from '../shared/setup.js';
 import * as sync from '../shared/sync.js';
 import { cloneLocked, configDir, folder, repoId, resolveHome } from '../shared/store.js';
+import { redactDeep, say } from './check.js';
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { readItems } from './item.js';
@@ -15,7 +16,6 @@ import { itemFindings, numberFindings } from './rules/validate-items.js';
 import { errors } from './rules/validate.js';
 import { loadTeams } from './teams-load.js';
 
-const say = text => process.stdout.write(`${redact(text)}\n`);
 const die = (message, code = 2) => { process.stderr.write(`❌ backlog: ${redact(message)}\n`); return code; };
 
 // The flags of the words that read the inputs: the five that take a value, --json and --show-all, and the booleans the word adds.
@@ -94,7 +94,7 @@ function check(argv, top, inputs, home) {
 
   // the one line about the other entries is not counted; their own errors are
   const errs = out.filter(({ f, oneLine }) => !oneLine && f.severity === 'error').length + otherErrors.length;
-  if (argv.includes('--json')) { say(JSON.stringify(out.map(({ f }) => f), null, 2)); return errs ? 2 : 0; }
+  if (argv.includes('--json')) { say(JSON.stringify(redactDeep(out.map(({ f }) => f)), null, 2), true); return errs ? 2 : 0; }
   for (const { f, at, oneLine, text } of out) {
     say(`${f.severity === 'error' ? '❌ ' : '⚠️  '}${at}${oneLine ?? text ?? f.problem}`);
     if (!oneLine) say(`   fix: ${f.fix}`);

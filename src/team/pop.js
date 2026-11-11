@@ -7,6 +7,7 @@ import { readConfig, topOf } from '../shared/setup.js';
 import { cloneLocked, configDir, folder as folderOf, now, repoId, resolveHome } from '../shared/store.js';
 import { publishTeam } from '../shared/team-publish.js';
 import { apply, build } from './apply.js';
+import { redactDeep, say } from './check.js';
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { contextOf } from './item.js';
@@ -16,8 +17,6 @@ import { sessionOf } from './session.js';
 import { showItem } from './show.js';
 import { loadTeams } from './teams-load.js';
 
-// JSON is serialized from values already redacted (the item by showItem, the ids in printed); the text redaction over serialized JSON would eat across its punctuation.
-const say = (text, json) => process.stdout.write(`${json ? text : redact(text)}\n`);
 const invalid = text => new BacklogError('INVALID_INPUT', text);
 
 export async function run(argv) {
@@ -32,7 +31,7 @@ export async function run(argv) {
 function printed({ offer, built, entry, team, agent, json }) {
   if (offer.action === 'idle') return json ? '{"action":"idle"}' : `ℹ️  idle: nothing for ${agent} in team ${team}`;
   const after = built.items.find(x => x.seq === offer.item).doc;
-  if (json) return JSON.stringify({ action: offer.action, item: offer.item, entry: redact(offer.entry), rule: offer.rule === null ? null : redact(offer.rule), item_file: showItem(after, entry, { json }) });
+  if (json) return JSON.stringify(redactDeep({ action: offer.action, item: offer.item, entry: offer.entry, rule: offer.rule, item_file: showItem(after, entry, { json }) }));
   return [`➡️  ${offer.action} ${after.slug} (pop entry ${offer.entry}, rule ${offer.rule})`, showItem(after, entry)].join('\n');
 }
 

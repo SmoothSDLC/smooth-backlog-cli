@@ -7,6 +7,7 @@ import { readConfig, topOf } from '../shared/setup.js';
 import { cloneLocked, configDir, folder as folderOf, itemFileName, nextSeqFor, now, repoId, resolveHome } from '../shared/store.js';
 import { publishTeam } from '../shared/team-publish.js';
 import { apply } from './apply.js';
+import { redactDeep, say } from './check.js';
 import { parseArgs } from './args.js';
 import { VALUE, resolveInputs } from './inputs.js';
 import { contextOf } from './item.js';
@@ -16,7 +17,6 @@ import { create } from './rules/step.js';
 import { sessionOf } from './session.js';
 import { loadTeams } from './teams-load.js';
 
-const say = text => process.stdout.write(`${redact(text)}\n`);
 const invalid = text => new BacklogError('INVALID_INPUT', text);
 
 export async function run(argv) {
@@ -31,7 +31,7 @@ export async function run(argv) {
 function printed({ built, result, number, team, json }) {
   const slug = built.items.find(x => x.seq === number).slug;
   if (json) {
-    return JSON.stringify({ item: number, slug, rule: built.rule, changes: result.changes.get(number) ?? {}, related: Object.fromEntries([...result.changes].filter(([s]) => s !== number)), say: result.say ?? '' });
+    return JSON.stringify(redactDeep({ item: number, slug, rule: built.rule, changes: result.changes.get(number) ?? {}, related: Object.fromEntries([...result.changes].filter(([s]) => s !== number)), say: result.say ?? '' }));
   }
   return [`✅ created ${slug} (seq ${number}) for team ${team}, rule ${built.rule}`, ...(result.say ? [result.say] : [])].join('\n');
 }
@@ -71,7 +71,7 @@ async function newItem(argv) {
     if (first.refusal) { say(`❌ ${first.refusal}`); return 1; } // nothing was written: the number is not consumed
     const r = await publishTeam(home, folder, first.message, { step: 'new', attempt, watch: await watched(home, repo, top, workRepo), persist: () => persistSha() });
     if (r.refusal) { say(`❌ ${r.refusal}`); return 1; } // the step run again on the upstream files was refused
-    say((r.result ?? first).print);
+    say((r.result ?? first).print, flags.json);
     return 0;
   });
 }

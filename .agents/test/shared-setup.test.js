@@ -165,42 +165,17 @@ test('a symbolic link as the templates folder stops setup with exit 2, naming th
   assert.ok(!existsSync(join(app, '.backlog', 'config.json')));
 });
 
-// R25: setup recommends the migration when the own folder still holds markdown items; it never migrates and never stops on them.
-const ADVICE = /backlog team migrate/;
-function withFolder() {
-  const f = fixture();
-  assert.equal(f.run(f.app, ['setup']).status, 0);
-  const own = join(f.t, 'consumer', BACKLOG_NAME, 'acme', 'app', 'phases');
+// R25: setup advises the migration from the configuration alone; it never migrates and never stops on a markdown backlog.
+test('setup on a markdown backlog succeeds, advises the migration and leaves the folder unchanged (the pin)', () => {
+  const { t, app, run } = fixture();
+  assert.equal(run(app, ['setup']).status, 0);
+  const own = join(t, 'consumer', BACKLOG_NAME, 'acme', 'app', 'phases');
   mkdirSync(own, { recursive: true });
-  return { ...f, own };
-}
-const md = own => writeFileSync(join(own, '001-old.md'), '---\nseq: 1\nname: old\n---\nbody\n');
-test('setup on a markdown backlog succeeds and advises the migration without migrating (R25-01, the pin)', () => {
-  const { app, own, run } = withFolder();
-  md(own);
+  writeFileSync(join(own, '001-old.md'), '---\nseq: 1\nname: old\n---\nbody\n');
   const r = run(app, ['setup']);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /ℹ️  the backlog of this repository has not been migrated to JSON items: run backlog team migrate --show-all --dry-run, then backlog team migrate --show-all/);
   assert.deepEqual(readdirSync(own), ['001-old.md']);
-});
-test('with a migration record and markdown items again, setup prints the record line (R25-02)', () => {
-  const { app, own, run } = withFolder();
-  md(own);
   writeFileSync(join(app, '.backlog', 'config.json'), JSON.stringify({ ...cfg(app), migrated_at: '2026-11-12T09:00:00Z', migrated_by_version: '1.3.2' }));
-  const r = run(app, ['setup']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /ℹ️  the backlog of this repository was last migrated on 2026-11-12T09:00:00Z by version 1.3.2/);
-});
-test('with nothing to migrate setup stays silent, with or without a record (R25-03, R25-04)', () => {
-  const { app, run } = withFolder();
-  assert.doesNotMatch(run(app, ['setup']).stdout, ADVICE);
-  writeFileSync(join(app, '.backlog', 'config.json'), JSON.stringify({ ...cfg(app), migrated_at: '2026-11-12T09:00:00Z', migrated_by_version: '1.3.2' }));
-  assert.doesNotMatch(run(app, ['setup']).stdout, ADVICE);
-});
-test('a folder setup cannot read skips the advice without an error', () => {
-  const { app, own, run } = withFolder();
-  rmSync(own, { recursive: true }); writeFileSync(own, 'not a folder');
-  const r = run(app, ['setup']);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.doesNotMatch(r.stdout + r.stderr, ADVICE);
+  assert.match(run(app, ['setup']).stdout, /ℹ️  the backlog of this repository was last migrated on 2026-11-12T09:00:00Z by version 1.3.2/);
 });

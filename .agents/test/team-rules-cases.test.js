@@ -5,6 +5,7 @@ import { Refusal, defaultOf } from '../../src/team/rules/expression.js';
 import { create, step } from '../../src/team/rules/step.js';
 import { filter, pop } from '../../src/team/rules/pop.js';
 import { resolveInputs } from '../../src/team/inputs.js';
+import { migrateAdvice } from '../../src/shared/setup.js';
 
 const read = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
 const { cases } = read('./fixtures/team-rules/rule-cases.json');
@@ -12,10 +13,10 @@ const FILES = Object.fromEntries(['parallel', 'scrum', 'extreme-programming', 's
 const NOW = '2026-11-09T12:00:00Z';
 
 // What this harness supports; a case outside it is left to the part that adds it, and the count below says how many run.
-const RUN_KINDS = ['update', 'new', 'pop', 'filter', 'resolve', 'inputs'];
+const RUN_KINDS = ['update', 'new', 'pop', 'filter', 'resolve', 'inputs', 'setup-advice'];
 const EXPECTED = ['exit', 'text', 'rule', 'items', 'max_ms', 'place', 'say', 'delete', 'archived', 'bound', 'branch', 'action', 'item', 'entry', 'filter', 'team', 'agent', 'all'];
 // 224 cases run: the evaluator's cases plus the input resolution (resolve, inputs and the agent of COD-05).
-const RUN_COUNT = 224;
+const RUN_COUNT = 228;
 
 const defaults = entry => Object.fromEntries(Object.entries(entry.item).map(([f, d]) => [f, defaultOf(d)]));
 // An item of the rule set's team gets the definition's defaults unless the case is raw.
@@ -42,6 +43,7 @@ for (const c of ran) {
       for (const k of ['text', 'team', 'agent', 'all']) if (k in c.expect) assert.deepEqual(r[k], c.expect[k], k);
       return;
     }
+    if (cmd.run === 'setup-advice') { assert.equal(migrateAdvice(cmd.cfg), c.expect.text); return; }
     const file = fileOf(c); const team = teamOf(c, file); const entry = file[team];
     let got; const t0 = Date.now(); const all = items(c.given, team, entry); const before = JSON.stringify(all);
     try {

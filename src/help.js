@@ -697,8 +697,9 @@ Run inside the git repository to set up. The command:
   6. commits and pushes what it wrote (the configuration, the team templates and the skill copies) on the current branch,
      and prints a summary of every action: the .backlog folder, the configuration, the team templates, the skill copies,
      the commit. No absolute path is printed.
-     When the repository's own folder still holds markdown items, setup also prints one line recommending backlog team migrate (it
-     never migrates, and prints nothing when there is nothing to migrate).
+     Once the configuration defines a backlog folder (after every setup), setup also prints one line: that the backlog has not been
+     migrated to JSON items and to run backlog team migrate, or when and by which version it was last migrated (the migrated_at and
+     migrated_by_version keys of the configuration). It reads no item and never migrates.
 
 Every command finds the backlog folder in this order: SMOOTH_BACKLOG_CLI_HOME, the repository's configuration (.backlog/config.json,
 backlog_repository: a path relative to the repository; .backlog means inside it; the root file .smooth-backlog.json of

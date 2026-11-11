@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, intoTeam, itemPath, sharedBacklog, readItem, writeItem } from './shared-fixtures.js';
+import { changeStored, cli, consumer, itemPath, sharedBacklog, readItem, writeItem } from './shared-fixtures.js';
 import { OF_A_TEAM } from '../../src/shared/team-items.js';
 
 const dirs = [];
@@ -30,7 +30,6 @@ function fixture(name, extra) {
 const update = (f, args) => cli(['update', ...args], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '', SMOOTH_BACKLOG_CLI_SESSION: '' } });
 const status = f => readItem(f.file).fm.status;
 
-const TEAM = { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1', SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: 'acme/demo', SMOOTH_BACKLOG_CLI_TEAM_BRANCH: 'main' };
 test('--status closed on an old teamless item without review_refs closes it without a review', () => {
   const f = fixture('old item without review_refs', []);
   const { fm, body } = readItem(f.file); // as an old item looks: none of the team keys (depends_on is not one)
@@ -42,8 +41,8 @@ test('--status closed on an old teamless item without review_refs closes it with
 });
 
 test('--status done is refused on a team item: its status moves by the team steps, and nothing is written', () => {
-  const f = fixture('reviewed job', ['--review-refs', 'docs/review/code.md']);
-  intoTeam(f.slug, { cwd: f.cons, tmp: f.t }, 't1', 'in progress');
+  const f = fixture('reviewed job', []);
+  changeStored(f.home, f.file, { team: 't1', status: 'in progress', review_refs: ['docs/review/code.md'] }); // an item of a team, in progress, that names its review documents
   const before = readItem(f.file);
   const r = update(f, [f.slug, '--status', 'done']);
   assert.equal(r.status, 1, r.stdout + r.stderr);

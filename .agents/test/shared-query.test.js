@@ -3,7 +3,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, itemPath, itemRel, sharedBacklog, GIT_IDENTITY, reEscape, changeItem, readHeader, ENVELOPE } from './shared-fixtures.js';
@@ -33,6 +33,8 @@ function build(withFindings) {
   const t = mkdtempSync(join(tmpdir(), 'query-test-'));
   dirs.push(t);
   const home = sharedBacklog(t);
+  appendFileSync(join(home, '.git', 'info', 'exclude'), 'teams.json\n'); // local configuration, not part of the published backlog
+  writeFileSync(join(home, 'teams.json'), JSON.stringify({ t1: { review: [] } })); // the options of the reader are those of backlog team query, which names a configured team
   const cons = consumer(t, 'acme', 'demo', 'main');
   const f = { t, home, cons, folder: join(home, 'acme', 'demo') };
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
@@ -622,10 +624,4 @@ test('review P2 (second): input echoed in a normal result is redacted too (--bra
     assert.doesNotMatch(n.stdout + n.stderr, /review_dummy|user:/, args.join(' '));
     assert.ok(n.stdout.length > 0, `${args.join(' ')} printed nothing (${n.stderr})`);
   }
-});
-
-test('team query --plan answers or is idle, it is not an unknown flag', () => {
-  const f = fx();
-  const plan = cli(['team', 'query', '--team', 't1', '--plan', '--json'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_NAME: '', SMOOTH_BACKLOG_CLI_AGENT: 'lead' } });
-  assert.ok([0, 3].includes(plan.status), plan.stdout + plan.stderr);
 });

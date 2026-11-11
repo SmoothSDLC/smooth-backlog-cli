@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cli, consumer, itemPath, itemRel, sharedBacklog, readItem, itemOfText } from './shared-fixtures.js';
+import { changeStored, cli, consumer, itemPath, itemRel, sharedBacklog, readItem, itemOfText } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -39,11 +39,12 @@ test('046: --severity changes the field, is published with an event, and refuses
 test('046: --severity is a field edit: refused on another team\'s item like any other', () => {
   const t = mkdtempSync(join(tmpdir(), 'severity-'));
   dirs.push(t);
-  sharedBacklog(t);
+  const home = sharedBacklog(t);
   const cons = consumer(t, 'acme', 'demo', 'main');
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
   const run = (args, env = {}) => cli(args, { cwd: cons, tmp: t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'tester', SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', ...env } });
-  assert.equal(run(['new', '--name', 'other team item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds', '--team', 't2']).status, 0);
+  assert.equal(run(['new', '--name', 'other team item', '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--body', '## Definition of done\n\n- [ ] it holds']).status, 0);
+  changeStored(home, itemPath(join(home, 'acme', 'demo'), '001-other-team-item'), { team: 't2', status: 'new', refiner: '' }, 'team item');
   run(['show', '1', '--agent', 'tester']);
   const r = run(['update', '1', '--severity', 'critical', '--by', 'tester'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' });
   assert.equal(r.status, 1, r.stdout + r.stderr); // another team's item

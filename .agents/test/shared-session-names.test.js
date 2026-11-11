@@ -11,7 +11,6 @@ import { join } from 'node:path';
 import { cli, consumer, itemRel, sharedBacklog, GIT_IDENTITY } from './shared-fixtures.js';
 import * as store from '../../src/shared/store.js';
 
-const TEAM = 't07:09:1a';
 const A1 = '082aa:01'; // the session that builds
 const A2 = '082aa:02'; // a new session of the same card
 
@@ -33,7 +32,7 @@ const git = (cwd, ...args) => {
   return p.stdout.trim();
 };
 const DOD = '## Definition of done\n\n- [ ] the test\'s check holds';
-const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md',
+const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none',
   '--estimate', '5', '--complexity', 'low', '--body', DOD];
 const reader = args => ['--by', '--claim', '--release'].map(k => (args.includes(k) ? args[args.indexOf(k) + 1] : null)).find(Boolean);
 const run = (f, args, env = {}) => {
@@ -43,11 +42,6 @@ const run = (f, args, env = {}) => {
 };
 const ok = (f, args, env) => { const r = run(f, args, env); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const make = (f, name, ...extra) => { const slug = ok(f, ['new', ...NEW(name), ...extra]).stdout.split('created phase ')[1].split(' ')[0]; return slug; };
-const teamItem = (f, name) => { // a refined team item (stage ready): nothing is claimed before its refinement review passed (item 098)
-  const s = make(f, name); ok(f, ['update', s, '--set-team', TEAM]);
-  for (const a of [['--refine-start', '--by', 'rfn'], ['--refine-done', '--by', 'rfn', '--note', 'refined'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']]) ok(f, ['update', s, ...a]);
-  return s;
-};
 const itemFm = (f, slug) => store.load(f.folder).find(i => i.path === itemRel(slug)).fm;
 const events = (f, slug) => itemFm(f, slug).events;
 

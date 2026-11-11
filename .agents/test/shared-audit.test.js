@@ -21,8 +21,8 @@ function solo(t) {
   return { tmp, home, cons, folder: join(home, 'acme', 'demo'), run };
 }
 const NEW = (name, ...more) => ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', ...more];
-// A complete item (the team fields update --claim needs) that is then set done in its file and ingested.
-const FULL = (name, ...more) => NEW(name, '--review-refs', 'references/review/docs.md', '--estimate', '5', '--body', '## Definition of done\n- [ ] x', ...more);
+// A complete item that is then set done in its file and ingested.
+const FULL = (name, ...more) => NEW(name, '--estimate', '5', '--body', '## Definition of done\n- [ ] x', ...more);
 function finish(s, slug) {
   const path = itemPath(s.folder, slug);
   changeItem(path, { fm: { status: 'done' } });
@@ -81,12 +81,12 @@ test('audit: update --set-depends-on refuses itself and any cycle, and leaves th
   assert.equal(s.run(['update', '3', '--set-depends-on', '1,2']).status, 0); // a diamond is no cycle
 });
 
-test('audit t7: list all-branches and team query --by-branch survive an item whose status is empty (shown as None)', t => {
+test('audit t7: list all-branches survives an item whose status is empty (shown as None)', t => {
   const s = solo(t);
   assert.equal(s.run(NEW('alpha job')).status, 0);
   const file = itemPath(s.folder, '001-alpha-job');
   changeItem(file, { fm: { status: null } }); // a hand-edited item without a status
-  for (const args of [['list', 'all-branches'], ['team', 'query', '--team', 't1', '--by-branch', 'main']]) {
+  for (const args of [['list', 'all-branches']]) {
     const r = s.run(args);
     assert.equal(r.status, 0, out(r)); assert.match(r.stdout, /001-alpha-job/); assert.match(r.stdout, /None/);
   }

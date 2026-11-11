@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as index from '../../src/shared/index.js';
-import { TEAM_BOOL, TEAM_VALUE, cli, consumer, createdSlug, damageItem, itemPath, readStored, sharedBacklog, teamNew, writeStored } from './shared-fixtures.js';
+import { TEAM_BOOL, TEAM_VALUE, cli, consumer, createdSlug, changeStored, damageItem, itemPath, readStored, sharedBacklog, writeStored } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -27,10 +27,13 @@ const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, plain: tru
 const file = (f, slug) => itemPath(f.folder, slug);
 const fm = (f, slug) => parse(readFileSync(file(f, slug), 'utf8')).fm;
 const plainItem = (f, name = 'plain item') => createdSlug(run(f, ['new', ...BASE(name)]).stdout);
+// an item of a team as it is stored: made by the plain new, then the team, the status, the refiner and the review documents are written into its file and published
 const teamItem = (f, name = 'team item') => {
-  const r = teamNew([...BASE(name), '--team', 't1', '--review-refs', 'references/review/code.md', '--estimate', '5'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: '' } });
+  const r = run(f, ['new', ...BASE(name), '--estimate', '5'], { SMOOTH_BACKLOG_CLI_AGENT: 'lead' }); // the creator is not the agent that acts later: its read of the item is not the later agents'
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  return createdSlug(r.stdout);
+  const slug = createdSlug(r.stdout);
+  changeStored(f.home, file(f, slug), { team: 't1', status: 'new', refiner: '', review_refs: ['references/review/code.md'] }, 'team item');
+  return slug;
 };
 
 test('a plain update takes none of the team flags and prints no notice of where they moved', () => {
@@ -72,13 +75,11 @@ test('a plain new takes no --team and no --review-refs, and still takes the gene
   assert.deepEqual([got.estimate_min, got.complexity, String(got.layer), got.chunk], [5, 'low', '2', true]);
 });
 
-test('a plain query of one item shows no missing-fields list; the team query does', () => {
+test('a plain show of one item shows no missing-fields list', () => {
   const f = fixture();
   const s = plainItem(f);
   const plain = JSON.parse(run(f, ['show', s]).stdout);
   assert.equal('missing' in plain, false);
-  const team = JSON.parse(run(f, ['team', 'query', '--team', 't1', '--phase', s]).stdout);
-  assert.ok(Array.isArray(team.missing));
 });
 
 test('a plain status close writes no hand-off record into the item', () => {

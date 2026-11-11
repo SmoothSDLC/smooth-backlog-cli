@@ -76,11 +76,10 @@ for (const [title, args, code, out, err] of REFUSALS) {
   });
 }
 
-test('--depends-on is optional outside a team, and any path is a review ref', t => {
+test('--depends-on is optional outside a team', t => {
   const f = fixture(t);
   assert.equal(node(f, BASE).status, 0);
-  assert.equal(node(f, [...BASE, '--review-refs', 'docs/notes.md', '--body', '## Definition of done\n- [ ] x']).status, 0);
-  assert.equal(items(f).length, 2);
+  assert.equal(items(f).length, 1);
 });
 
 test('refusal: a detached HEAD dies with exit 2 after the dependency check', t => {
@@ -268,14 +267,13 @@ test('075: a plain new ignores SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BAC
   assert.equal(items(f)[0].fm.repository, 'acme/demo');
 });
 
-test('075: a skills.md review document is accepted and persisted; no class field is written', t => {
+test('075: no class field is written', t => {
   const f = fixture(t);
-  const r = node(f, [...NONE, '--review-refs', 'references/review/skills.md', '--body', '## Definition of done\n- [ ] x']);
+  const r = node(f, [...NONE, '--body', '## Definition of done\n- [ ] x']);
   assert.equal(r.status, 0);
   assert.equal(r.stdout, '✅ created phase 001-alpha-job (seq 1) — appended, now at P0\n   📋 planning event: backlog re-densified to 1 item(s) (P0..P0)\n');
   assert.equal(r.stderr, '');
   const [item] = items(f);
-  assert.deepEqual(item.fm.review_refs, ['references/review/skills.md']);
   assert.ok(!('work_class' in item.fm) && !('review_classes' in item.fm) && !('chunk' in item.fm));
 });
 

@@ -1,12 +1,11 @@
-// Tests for `backlog team`: the team steps run under it, the earlier plain spelling still works with a notice, the
-// configuration supplies the user and team, and teams and flows are defined from JSON. Local bare repositories only.
+// Tests for `backlog team`: the router, and teams and flows defined from JSON. Local bare repositories only.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cli, consumer, createdSlug, intoTeam, itemPath, sharedBacklog, readItem } from './shared-fixtures.js';
+import { changeStored, cli, consumer, createdSlug, itemPath, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -20,49 +19,8 @@ function fixture() {
   return { t, home, cons, folder: join(home, 'acme', 'demo') };
 }
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
-const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD];
-const plainRun = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, plain: true, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_AGENT: 'ann' } });
-const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, notices: true, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_AGENT: '', ...env } }); // every command here names its agent; a session agent (SMOOTH_BACKLOG_CLI_AGENT) would have to be the same one
-const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
-// a refined, ready item of team t1
-function ready(f) {
-  const s = createdSlug(run(f, ['new', ...NEW('item')]).stdout);
-  for (const a of [['--set-team', 't1'], ['--refine-start', '--by', 'ann'], ['--refine-done', '--by', 'ann', '--note', 'r'], ['--request-refinement-review', '--by', 'lead'], ['--refinement-review', 'complete', '--by', 'rex', '--comments', 'ok']]) {
-    run(f, ['show', s, '--agent', a.includes('--by') ? a[a.indexOf('--by') + 1] : 'ann']);
-    assert.equal(run(f, ['update', s, ...a]).status, 0);
-  }
-  return s;
-}
-
-test('the plain update refuses a team step and names the flag; a status word on a team item is refused', () => {
-  const f = fixture();
-  const s = createdSlug(run(f, ['new', ...NEW('plain')]).stdout);
-  assert.equal(run(f, ['update', s, '--set-team', 't1']).status, 0);
-  const r = plainRun(f, ['update', s, '--refine-start', '--by', 'ann']);
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /unrecognized arguments: --refine-start/);
-  const t = run(f, ['team', 'update', s, '--team', 't1', '--agent', 'ann', '--status', 'closed']);
-  assert.notEqual(t.status, 0);
-  assert.equal(fm(f, s).status, 'pending');
-});
-
-test('the team views run under team query; the plain list does not know them (exit 2, nothing on standard output); a team without an entry is refused', () => {
-  const f = fixture();
-  const s = createdSlug(run(f, ['new', ...NEW('item')]).stdout);
-  intoTeam(s, { cwd: f.cons, tmp: f.t });
-  for (const view of ['--claimable', '--reviewable', '--blocked', '--decisions', '--plan', '--wip']) {
-    const plain = plainRun(f, ['list', view]);
-    assert.equal(plain.status, 2, `${view}: ${plain.stdout}${plain.stderr}`);
-    assert.match(plain.stderr, new RegExp(`unrecognized arguments: ${view}`));
-    assert.equal(plain.stdout, '');
-  }
-  const viewed = run(f, ['team', 'query', '--team', 't1', '--claimable', '--json']);
-  assert.equal(viewed.status, 0, viewed.stdout + viewed.stderr);
-  assert.deepEqual(JSON.parse(viewed.stdout).map(x => x.name), ['item']);
-  assert.equal(run(f, ['team', 'query', '--team', 't1', '--agent', 'ann', '--claimable', '--json']).status, 0);
-  const ghost = run(f, ['team', 'query', '--team', 'ghost', '--claimable']);
-  assert.equal(ghost.status, 1); assert.match(ghost.stdout, /team ghost is not configured in the backlog configuration/);
-});
+const NEW = name => ['--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--complexity', 'low', '--body', DOD];
+const run = (f, args, env = {}) => cli(args, { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', SMOOTH_BACKLOG_CLI_AGENT: '', ...env } }); // every command here names its agent; a session agent (SMOOTH_BACKLOG_CLI_AGENT) would have to be the same one
 
 // ---- backlog team define / workflow
 const sh = (cwd, ...args) => spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
@@ -115,7 +73,7 @@ test('team define without review takes the flow default; a bad file is refused n
 test('team define does not replace a team that has open items; it names the count', () => {
   const f = fixture(); published(f);
   const s = createdSlug(run(f, ['new', ...NEW('open')]).stdout);
-  assert.equal(run(f, ['update', s, '--set-team', 't1']).status, 0);
+  changeStored(f.home, itemPath(f.folder, s), { team: 't1', status: 'new', refiner: '' }, 'team item');
   const r = run(f, ['team', 'define', '--file', defFile(f, { name: 't1', lead: 'zed', members: ['y'], review: [] })]);
   assert.equal(r.status, 2); assert.match(r.stderr, /team t1 has 1 open items; register the new composition under another name/);
   assert.equal(teams(f).t1.lead, 'lead');

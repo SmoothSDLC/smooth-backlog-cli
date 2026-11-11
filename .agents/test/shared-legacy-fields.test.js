@@ -27,7 +27,7 @@ const run = (f, args) => cli(args, { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLO
 const ok = (f, args) => { const r = run(f, args); assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 const DOD = "## Definition of done\n\n- [ ] the test's check holds";
 const make = (f, name) => createdSlug(ok(f, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none',
-  '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout);
+  '--estimate', '5', '--complexity', 'low', '--body', DOD]).stdout);
 const pathOf = (f, slug) => itemPath(f.folder, slug);
 const text = (f, slug) => readFileSync(pathOf(f, slug), 'utf8');
 const read = (f, slug) => ok(f, ['show', slug, '--agent', 'me']);

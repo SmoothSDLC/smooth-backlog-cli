@@ -4,8 +4,8 @@
 // temp dir - never the real backlog repository or ~/.config.
 import { seam } from '../../src/shared/seam.js';
 import { lift } from '../../src/shared/status.js';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { fromItemJson, toItemJson } from '../../src/shared/item-json.js';
@@ -13,8 +13,8 @@ import { dumpItem, itemFileName, itemSlug, isItemName, parseItem } from '../../s
 import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 
-// The step flags of the retired spelling `backlog team update <item> --claim ...` (the command takes the step as a word now). The tests that check the plain commands refuse
-// them, that the documents no longer show them, and cli()'s routing of the legacy spelling know them from here.
+// The step flags of the retired spelling `backlog update <item> --claim ...` (the command takes the step as a word now). The tests that check the plain commands refuse
+// them and that the documents no longer show them take the list from here.
 export const TEAM_VALUE = ['wip-override', 'waiting', 'set-review-refs', 'request-review', 'review', 'comments', 'refinement-review', 'request-decision', 'decision', 'reassign', 'reassign-review',
   'handoff', 'handoff-commit', 'handoff-contract', 'handoff-verification', 'handoff-outputs', 'handoff-pickup', 'handoff-risks', 'accept-handoff', 'reject-handoff', 'checks'];
 export const TEAM_BOOL = ['force', 'waiting-done', 'start-review', 'refine-start', 'refine-done', 'request-refinement-review'];
@@ -74,9 +74,6 @@ export function sharedBacklog(tmp) {
   const dest = join(tmp, 'home');
   if (!existsSync(dest)) {
     git(tmp, 'clone', '-q', bare, dest);
-    // a team step needs the team's entry in the backlog's configuration; these entries ask for no review (a test that tests a review writes its own)
-    appendFileSync(join(dest, '.git', 'info', 'exclude'), 'teams.json\n'); // local configuration, not part of the published backlog
-    writeFileSync(join(dest, 'teams.json'), JSON.stringify({ t1: { review: [] }, t2: { review: [] }, t3: { review: [] }, t9: { review: [] } }));
   }
   return dest;
 }
@@ -109,91 +106,8 @@ export function env(tmp) {
 }
 
 let calls = 0;
-// Runs node bin/backlog.js (this repository's CLI) from a consumer checkout.
-// NOTE: cli() below routes legacy test spellings (update/new carrying team flags, items of a team, or a team session) to the real
-// `backlog team ...` commands. It is a test-only convenience and not product behaviour: the product's plain commands never do this.
-// The steps and creations of a team are `backlog team update|new`; a test that drives them names the item's flags, and cli() sends
-// the command to its team spelling with the same arguments (the team and the agent come from the test's environment, as before).
-// opts.plain keeps the command plain, for the tests of the plain commands; opts.team makes an update a team step (a close with its hand-off gate).
-const flagsOf = args => args.map(String).filter(a => a.startsWith('--')).map(a => a.slice(2).split('=')[0]);
-const valueOf = (args, flag) => { const i = args.indexOf(`--${flag}`); return i >= 0 ? args[i + 1] : undefined; };
-// A session of a team (SMOOTH_BACKLOG_CLI_TEAM_NAME), a --team, a --set-team or a flag only a team has makes the command a team command.
-function teamSpelling(args, env, opts) {
-  const flags = flagsOf(args);
-  const has = list => flags.some(f => list.includes(f));
-  const session = Boolean(env.SMOOTH_BACKLOG_CLI_TEAM_NAME || env.SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY || env.SMOOTH_BACKLOG_CLI_TEAM_BRANCH) || has(['team', 'set-team']);
-  if (args[0] === 'update') return false; // `backlog team update <item> <step>` is the rules engine now: no spelling of the plain update reaches it
-  if (args[0] === 'new') return session || has(['review-refs']) || ['SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY', 'SMOOTH_BACKLOG_CLI_TEAM_BRANCH'].some(k => env[k]);
-  return false;
-}
-// The team and the holder of the item a command names (its front matter), read from the files: no command runs, so nothing is pulled or refreshed.
-function infoOf(item, opts) {
-  const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.SMOOTH_BACKLOG_CLI_HOME;
-  if (!home || !existsSync(home)) return {};
-  for (const owner of readdirSync(home)) for (const name of existsSync(join(home, owner)) && statSync(join(home, owner)).isDirectory() ? readdirSync(join(home, owner)) : []) {
-    const dir = join(home, owner, name, 'phases');
-    if (!existsSync(dir) || (opts.cwd && existsSync(join(home, owner, basename(opts.cwd))) && name !== basename(opts.cwd))) continue; // the repository the command runs in
-    for (const file of readdirSync(dir)) {
-      if (file !== itemFileName(item) && !(String(item).match(/^\d+$/) && Number(file.split('-')[0]) === Number(item))) continue;
-      let fm; try { fm = parseItem(readFileSync(join(dir, file), 'utf8')).fm; } catch { return {}; } // a damaged item names no team
-      return { team: fm.team || undefined, holder: fm.claimed_by || fm.owner || undefined, file: join(dir, file) };
-    }
-  }
-  return {};
-}
-// a team a test names without configuring it gets an empty entry, so that its steps can run
-function neutralTeam(e, name = 'neutral') {
-  if (!e.SMOOTH_BACKLOG_CLI_HOME) return name;
-  const file = join(e.SMOOTH_BACKLOG_CLI_HOME, 'teams.json');
-  let cfg = {}; try { cfg = JSON.parse(readFileSync(file, 'utf8')); } catch { /* none yet */ }
-  if (!cfg[name]) { cfg[name] = {}; writeFileSync(file, JSON.stringify(cfg)); }
-  return name;
-}
-// `backlog update <item> --set-team <team> [--status <word>] [--by <agent>]` was how a test gave an item to a team (the retired step flag of `team update`). The command is gone; the spelling still
-// makes the fixture: the team (and the status) are written into the stored file and published, with no rule checked. Any other flag with it is not this spelling (null).
-function setTeamSpelling(args, opts) {
-  const flags = flagsOf(args);
-  if (args[0] !== 'update' || !args[1] || String(args[1]).startsWith('-') || !flags.includes('set-team') || flags.some(f => !['set-team', 'status', 'by'].includes(f))) return null;
-  const file = infoOf(args[1], opts).file;
-  if (!file) return { status: 1, stdout: `❌ no phase '${args[1]}'\n`, stderr: '' };
-  const { fm, body } = readStored(file);
-  const team = valueOf(args, 'set-team'); const status = valueOf(args, 'status');
-  const { team: _, ...rest } = fm;
-  writeStored(file, { ...rest, ...(team ? { team } : {}), ...(status ? { status } : {}) }, body);
-  const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.SMOOTH_BACKLOG_CLI_HOME;
-  git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'set team'); git(home, 'push', '-q');
-  return { status: 0, stdout: `✅ ${itemSlug(file)} updated (team=${team})\n`, stderr: '' };
-}
+// Runs node bin/backlog.js (this repository's CLI) from a consumer checkout, as the arguments say: no spelling is translated.
 export function cli(args = [], opts = {}) {
-  const setTeam = !opts.plain && setTeamSpelling(args, opts);
-  if (setTeam) return setTeam;
-  const sessionEnv = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env };
-  const named = !opts.plain && args[0] === 'new' ? valueOf(args, 'split-from') : undefined;
-  const info = named ? infoOf(named, opts) : {};
-  const itemTeam = info.team;
-  if (!opts.plain && (itemTeam || teamSpelling(args, sessionEnv, opts))) {
-    // a team session acts only as itself: the agent a command names (--by, --claim, --release, --agent) is the session's
-    const agent = ['by', 'claim', 'release', 'agent'].map(f => valueOf(args, f)).find(Boolean) || opts.env?.SMOOTH_BACKLOG_CLI_AGENT || (args[0] === 'update' && info.holder) || `driver-${++calls}`;
-    // a session of a team acts as its SMOOTH_BACKLOG_CLI_AGENT; outside one, the agent a command names acts
-    const via = { ...opts.env, SMOOTH_BACKLOG_CLI_AGENT: sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME ? opts.env?.SMOOTH_BACKLOG_CLI_AGENT || agent : agent };
-    // `backlog team new` makes only team items (--team, or a split in a team session). Any other creation here is the plain command: a team's work item, or an item that names
-    // review documents, which a team step then gives it
-    if (args[0] === 'new' && !itemTeam && !flagsOf(args).includes('team') && !(sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME && flagsOf(args).includes('split-from'))) {
-      const at = args.indexOf('--review-refs');
-      const made = cli(at < 0 ? args : args.filter((_, i) => i !== at && i !== at + 1), { ...opts, env: via, plain: true });
-      if (made.status !== 0 || at < 0) return made;
-      const file = infoOf(createdSlug(made.stdout), { ...opts, env: via }).file; // the review documents are written into the stored file, as the retired step flag did
-      const { fm, body } = readStored(file);
-      writeStored(file, { ...fm, review_refs: args[at + 1].split(',') }, body);
-      const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.SMOOTH_BACKLOG_CLI_HOME;
-      git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', 'review refs'); git(home, 'push', '-q');
-      return made;
-    }
-    // an item without a team is stepped by a session of no particular team: a neutral entry stands in for it
-    const teamFlag = !sessionEnv.SMOOTH_BACKLOG_CLI_TEAM_NAME && !flagsOf(args).includes('team') && (valueOf(args, 'set-team') ? neutralTeam(sessionEnv, valueOf(args, 'set-team')) : itemTeam || neutralTeam(sessionEnv));
-    if (args[0] === 'new') return teamNew([...args.slice(1), ...(teamFlag ? ['--team', teamFlag] : [])], { ...opts, env: via });
-    return cli(['team', ...args, ...(teamFlag ? ['--team', teamFlag] : [])], { ...opts, env: via, plain: true });
-  }
   const bin = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'backlog.js'));
   const p = spawnSync(process.execPath, [bin, ...args], {
     cwd: opts.cwd,
@@ -203,40 +117,7 @@ export function cli(args = [], opts = {}) {
     encoding: 'utf8',
     timeout: opts.timeout ?? 60000,
   });
-  // the one-line notice of a spelling that moved (`moved: use backlog team ...`) is not output the tests compare; opts.notices keeps it
-  const stderr = opts.notices ? (p.stderr ?? '') : (p.stderr ?? '').replace(/^moved: use backlog team .*\n/gm, '');
-  return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr };
-}
-
-// An item of a team in the shape the earlier `backlog team new` gave it: a plain new, then the team, the status new, an empty refiner and the review documents are
-// written into the stored file and published. It is a fixture for the tests whose subject is another command and that need a team's item; `backlog team new` itself
-// (the step of the team's rules) is tested by team-new.test.js. The arguments are those of the earlier command: --team (else the session's team) and --agent (else
-// the session's agent, else a driver of its own) are taken out, --review-refs is written into the file, every other option goes to the plain new.
-export function teamNew(args = [], opts = {}) {
-  const e = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env };
-  const team = valueOf(args, 'team') || e.SMOOTH_BACKLOG_CLI_TEAM_NAME;
-  if (!team) return { status: 2, stdout: '', stderr: '❌ backlog: a team command needs --team\n' };
-  const agent = valueOf(args, 'agent') || opts.env?.SMOOTH_BACKLOG_CLI_AGENT || `driver-${++calls}`;
-  const refs = valueOf(args, 'review-refs');
-  const split = valueOf(args, 'split-from');
-  const parent = split && infoOf(split, opts).file; // a split: the objective and summary of the parent and its body under a "Split from" heading, as the earlier command wrote them
-  if (split && !parent) return { status: 1, stdout: '❌ no such item to split\n', stderr: '' };
-  const dropped = ['--team', '--agent', '--review-refs', '--split-from', ...(parent ? ['--body'] : [])];
-  const rest = args.filter((a, i) => !dropped.includes(a) && !dropped.includes(args[i - 1]));
-  if (parent) {
-    const src = readStored(parent);
-    for (const k of ['objective', 'summary']) if (!flagsOf(args).includes(k)) rest.push(`--${k}`, src.fm[k] ?? '');
-    rest.push('--body', `## Split from \`${src.fm.phase}\`. Inherited context:\n\n${src.body.trim()}\n\n\n${valueOf(args, 'body') ?? ''}`);
-  }
-  const made = cli(['new', ...rest], { ...opts, env: { ...opts.env, SMOOTH_BACKLOG_CLI_AGENT: agent }, plain: true });
-  if (made.status !== 0) return made;
-  const file = infoOf(createdSlug(made.stdout), opts).file;
-  const { fm, body } = readStored(file);
-  const placeholder = parent && valueOf(args, 'body') === undefined ? '\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n' : ''; // a split with no body of its own carries the placeholder, which the refinement replaces
-  writeStored(file, { ...fm, team, status: 'new', refiner: '', ...(refs ? { review_refs: refs.split(',') } : {}) }, body.replace(/\n+$/, '\n') + placeholder);
-  const home = e.SMOOTH_BACKLOG_CLI_HOME;
-  git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', `team item ${team}`); git(home, 'push', '-q');
-  return made;
+  return { status: p.status ?? -1, stdout: p.stdout ?? '', stderr: p.stderr ?? '' };
 }
 
 // A child process that holds the lock file `path` until the test ends; resolves once it holds it.
@@ -254,23 +135,14 @@ export const createdSlug = stdout => {
 };
 
 
-// Puts a created item into team `team`, ready to be claimed: `backlog new --team` starts in refinement, and the
-// team views and `backlog team pop` reach only the items of their team.
-export function intoTeam(slug, opts, team = 't1', status = 'ready') { // status '': the team only, the item stays unrefined and incomplete
-  const file = infoOf(slug, opts).file;
-  if (!file) throw new Error(`intoTeam ${slug}: no such item`);
-  const { fm, body } = readStored(file); // written into the stored file, as the item of a team looks after the retired step: the team, the status, and the stage and refiner of a refined item
-  writeStored(file, { ...fm, team, ...(status ? { status } : {}), ...(status === 'ready' && !('stage' in fm) ? { stage: 'ready', refiner: opts.agent ?? 'lead' } : {}) }, body);
-  const home = { ...process.env, ...(opts.tmp ? env(opts.tmp) : {}), ...opts.env }.SMOOTH_BACKLOG_CLI_HOME;
-  git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', `team item ${team}`); git(home, 'push', '-q');
-  return slug;
-}
-
-// Names the members of a team in the backlog configuration (teams.json of the backlog folder), in order: the agents a plan dispatches to.
-export function teamMembers(home, team, members) {
-  const file = join(home, 'teams.json');
-  let all = {}; try { all = JSON.parse(readFileSync(file, 'utf8')); } catch { /* none yet */ }
-  writeFileSync(file, JSON.stringify({ ...all, [team]: { ...all[team], members } }));
+// Changes the stored item at `path` (an object merged over its header keys, a key set to undefined is removed) and publishes it from the backlog clone `home`,
+// as an item written by hand and pushed: no command runs, so no rule is checked.
+export function changeStored(home, path, change, message = 'change item') {
+  const { fm, body } = readStored(path);
+  const next = { ...fm, ...change };
+  for (const k of Object.keys(change)) if (change[k] === undefined) delete next[k];
+  writeStored(path, next, body);
+  git(home, 'add', '-A'); git(home, 'commit', '-q', '-m', message); git(home, 'push', '-q');
 }
 
 // the keys the item file requires, for a test that writes an item through store.write with only the keys it is about

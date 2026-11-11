@@ -24,9 +24,10 @@ step(/^team "([^"]+)" work needs (\d+) pass(?:es)? by "([^"]+)"(?: and (\d+) pas
 step(/^team "([^"]+)" reviews in the stages "([^"]*)"$/, (w, team, stages) => w.configureTeam(team, { review: stages.split(',').map(x => x.trim()).filter(Boolean).map(stage => ({ stage, count: 1 })) }));
 step(/^team "([^"]+)" has the external reviewers "([^"]+)"$/, (w, team, who) => w.configureTeam(team, { external_reviewers: who.split(',').map(x => x.trim()).filter(Boolean) }));
 step(/^team "([^"]+)" refinements are reviewed by "([^"]+)"$/, (w, team, by) => w.configureTeam(team, { refinement_review: [{ team: by, count: 1 }] }));
-// in the backlog repository the team configuration is a committed file at its root (the fixture keeps its own copy out of git)
+// in the backlog repository the team configuration is a committed file at its root (an empty one when the scenario has not written any)
 step(/^the team configuration is a committed file$/, w => {
   if (!w.env.SMOOTH_BACKLOG_CLI_HOME) return; // inside the repository it is created and committed by the command
+  if (!existsSync(join(w.home(), 'teams.json'))) writeFileSync(join(w.home(), 'teams.json'), '{}');
   w.gitIn(w.home(), 'add', '-f', 'teams.json'); w.gitIn(w.home(), 'commit', '-q', '-m', 'teams'); w.gitIn(w.home(), 'push', '-q');
 });
 // a team or flow definition given as JSON text goes through the command, from a file outside the repository

@@ -2,7 +2,7 @@
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BACKLOG_NAME, BACKLOG_OWNER, cli, consumer, sharedBacklog } from './shared-fixtures.js';
@@ -59,16 +59,12 @@ for (const [command, flags] of Object.entries(REFUSED)) {
 test('every refused flag is refused with its own diagnostic and exit 2, on an invocation that is otherwise valid', () => {
   const made = backlog('new', '--name', 'Help fixture', '--depends-on', 'none');
   assert.equal(made.status, 0, made.stdout + made.stderr);
-  const roster = join(t, 'roster.json');
-  writeFileSync(roster, '{"x": {}}');
   const unknown = /unrecognized arguments: --db/;
   const cases = [
     [['new', '--name', 'n', '--depends-on', 'none', '--db', 'x.db'], unknown],
     [['update', '1', '--note', 'n', '--db', 'x.db'], unknown],
     [['archive', '1', '--force', '--dry-run', '--db', 'x.db'], unknown],
     [['list', '--db', 'x.db'], unknown],
-    [['team', 'query', '--team', 't1', '--agents', 'x'], /^--agents goes with --plan/],
-    [['team', 'query', '--team', 't1', '--plan', '--roster', roster], /unrecognized arguments: --roster/],
     [['team', 'pop', '--team', 't1', '--agent', 'x', '--agents', 'x'], /^unrecognized arguments: --agents/],
     [['team', 'pop', '--team', 't1', '--agent', 'x', '--db', 'x.db'], unknown],
   ];

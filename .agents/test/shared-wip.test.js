@@ -1,7 +1,6 @@
 // Item 034: work-in-progress limits overall, per repository, per branch, per team and per agent (<backlog home>/
 // wip-limits.json), checked by a claim and a refinement start; the lead's recorded override lifts the team and agent
-// limits for one item; a team limit of three means pop offers no fourth item; query --wip prints the counts and the
-// stale items; a renumbering leaves `updated` of the items it only re-ranks. Local bare repos only.
+// limits for one item; a renumbering leaves `updated` of the items it only re-ranks. Local bare repos only.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -18,7 +17,6 @@ function fixture(repos = ['demo']) {
   const home = sharedBacklog(t);
   const cons = Object.fromEntries(repos.map(r => [r, consumer(t, 'acme', r, 'main')]));
   mkdirSync(join(t, 'config', 'smooth-backlog-cli'), { recursive: true });
-  writeFileSync(join(home, 'teams.json'), JSON.stringify(Object.fromEntries(['t1', 't2'].map(n => [n, { review: [{ stage: 'peer' }] }])))); // a team is configured before its steps run
   const run = (repo, args, want = 0, env = {}) => {
     const by = args[args.indexOf('--by') + 1] || args[args.indexOf('--claim') + 1];
     if (args[0] === 'update' && (args.includes('--by') || args.includes('--claim'))) cli(['show', args[1], '--agent', by], { cwd: cons[repo], tmp: t, env: { SMOOTH_BACKLOG_CLI_TEAM_LEAD: 'lead', ...env } });
@@ -26,16 +24,9 @@ function fixture(repos = ['demo']) {
     assert.ok([].concat(want).includes(r.status), `${args.join(' ')}: exit ${r.status}\n${r.stdout}${r.stderr}`);
     return r;
   };
-  const make = (repo, name, ...extra) => run(repo, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--review-refs', 'references/review/code.md', '--estimate', '5', '--complexity', 'low', '--body', '## Definition of done\n\n- [ ] x', ...extra]).stdout.split('created phase ')[1].split(' ')[0];
+  const make = (repo, name, ...extra) => run(repo, ['new', '--name', name, '--objective', 'o', '--summary', 's', '--depends-on', 'none', '--estimate', '5', '--complexity', 'low', '--body', '## Definition of done\n\n- [ ] x', ...extra]).stdout.split('created phase ')[1].split(' ')[0];
   const limits = l => writeFileSync(join(home, 'wip-limits.json'), JSON.stringify(l));
-  // item 098: a team item is refined (member, lead's review request, reviewer's pass) before anyone claims it; one refinement at a time, so no limit is crossed
-  const refine = (repo, slug) => {
-    run(repo, ['update', slug, '--refine-start', '--by', 'refiner']);
-    run(repo, ['update', slug, '--refine-done', '--by', 'refiner', '--note', 'refined']);
-    run(repo, ['update', slug, '--request-refinement-review', '--by', 'lead']);
-    run(repo, ['update', slug, '--refinement-review', 'pass', '--by', 'rex', '--comments', 'ok']);
-  };
-  return { t, home, cons, run, make, limits, refine };
+  return { t, home, cons, run, make, limits };
 }
 
 test('034: the overall level refuses a claim and a status change that start work; only the exact word \'in progress\' starts; a limits file that cannot be read holds nobody', () => {
@@ -64,18 +55,13 @@ test('034: a reclaim of an item set back to pending is a start: the repository l
   assert.match(f.run('demo', ['update', a, '--claim', 'amy'], 1).stdout, /the repository work-in-progress limit of acme\/demo is 1/);
 });
 
-test('034: query --wip prints the counts and the stale items; a renumbering leaves updated of the re-ranked items', () => {
+test('034: a renumbering leaves updated of the re-ranked items', () => {
   const f = fixture();
   f.limits({ repository: 5, stale_hours: 1 });
   const [a, b, c] = ['one', 'two', 'three'].map(n => f.make('demo', n));
   f.run('demo', ['update', a, '--claim', 'amy']);
   const file = itemPath(join(f.home, 'acme', 'demo'), a);
   changeItem(file, { fm: { updated: '2026-01-01T00:00:00Z' } }); // old: stale
-  const text = f.run('demo', ['team', 'query', '--team', 't1', '--wip']).stdout;
-  assert.match(text, /repository +acme\/demo +1 \/ 5/);
-  assert.match(text, /stale \(no change of their own for more than 1 h\): 1/);
-  const j = JSON.parse(f.run('demo', ['team', 'query', '--team', 't1', '--wip', '--json']).stdout);
-  assert.deepEqual(j.stale.map(x => x.slug), [a]);
   const upd = s => readItem(itemPath(join(f.home, 'acme', 'demo'), s)).fm.updated;
   const before = [b, c].map(upd);
   f.run('demo', ['update', '--replan', `${c},${b},${a}`]); // re-ranks b and c only
@@ -104,8 +90,6 @@ test('034: a branch limit is keyed owner/name:branch', () => {
   f.limits({ branch: { default: 9, 'acme/demo:main': 1 } });
   f.run('demo', ['update', a, '--claim', 'amy']);
   assert.match(f.run('demo', ['update', b, '--claim', 'bob'], 1).stdout, /the branch work-in-progress limit of acme\/demo branch main is 1/);
-  const v = JSON.parse(f.run('demo', ['team', 'query', '--team', 't1', '--wip', '--json']).stdout);
-  assert.deepEqual(v.counts.find(c => c.level === 'branch'), { level: 'branch', key: 'acme/demo main', count: 1, limit: 1 });
 });
 
 test('034: an item in progress is not moved into a repository past its limit', () => {

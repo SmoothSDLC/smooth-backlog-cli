@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, rmSync, w
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BACKLOG_NAME, BACKLOG_OWNER, archivedPath, breakIndex, cli, consumer, intoTeam, itemName, itemPath, itemRel, sharedBacklog, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY, writeItem, changeItem, ENVELOPE } from './shared-fixtures.js';
+import { BACKLOG_NAME, BACKLOG_OWNER, archivedPath, breakIndex, changeStored, cli, consumer, itemName, itemPath, itemRel, sharedBacklog, readItem, itemNames, slugOfName, reEscape, GIT_IDENTITY, writeItem, changeItem, ENVELOPE } from './shared-fixtures.js';
 import { cliAsync, numberClash, pushedState, waitsForRunLock } from './shared-concurrency.js';
 import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
@@ -486,7 +486,7 @@ test('an item archived with --force counts as finished for a claim: it keeps its
 });
 
 // An item that belongs to a team is changed by its team's steps only: the plain update refuses every change of it, with one line, and writes nothing.
-const teamed = (f, ...seqs) => seqs.map(n => intoTeam(`00${n}-${['', 'alpha', 'beta', 'gamma'][n]}`, { cwd: f.cons, tmp: f.t }));
+const teamed = (f, ...seqs) => seqs.map(n => { const slug = `00${n}-${['', 'alpha', 'beta', 'gamma'][n]}`; changeStored(f.home, itemPath(f.folder, slug), { team: 't1', status: 'ready', stage: 'ready', refiner: 'lead' }, 'team item'); return slug; });
 
 test('review P1: update of an item of a team (field edit, note, append, rank, section) is refused and writes nothing', () => {
   const f = seed();

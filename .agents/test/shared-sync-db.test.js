@@ -3,7 +3,7 @@
 import { configUser } from '../../src/shared/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -492,7 +492,7 @@ test('publication: permanent failure after a push race removes renumbering and r
 
 
 for (const dependency of ['1', '001-alpha']) test(`review P1: publication refuses a repository move after another clone adds dependent ${dependency}`, async t => {
-  const { a, b, bare, result } = await race(t, [NEW('alpha')],
+  const { b, bare, result } = await race(t, [NEW('alpha')],
     [...NEW('dependent'), '--depends-on', dependency], ['move', '1', '--to-repository', 'acme/dst']);
   assert.equal(result.status, 3, result.stdout + result.stderr);
   assert.match(result.stderr, /002-dependent depends on/);
@@ -501,15 +501,6 @@ for (const dependency of ['1', '001-alpha']) test(`review P1: publication refuse
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'both files and databases match the winning upstream clone');
   assert.ok(existsSync(itemPath(b.folder, '001-alpha')));
   assert.ok(!existsSync(itemPath(join(b.home, 'acme', 'dst'), '001-alpha')));
-  const set = cli(['update', '002-dependent', '--set-team', 't1'], { cwd: b.cons, tmp: b.tmp }); // the team views reach only the items of their team
-  assert.equal(set.status, 0, set.stdout + set.stderr);
-  for (const w of [a, b]) {
-    writeFileSync(join(w.home, 'teams.json'), '{"t1": {}}'); // the team views need the team in the configuration
-    const q = cli(['team', 'query', '--team', 't1', '--blocked', '--json'], { cwd: w.cons, tmp: w.tmp });
-    assert.equal(q.status, 0, q.stdout + q.stderr);
-    assert.doesNotMatch(q.stdout, /missing/);
-    assert.match(q.stdout, /001-alpha/);
-  }
 });
 
 test('review P1: publication refuses update --seq when another clone allocates that sequence', async t => {
@@ -559,8 +550,6 @@ for (const args of [
   assert.equal(result.status, 3, result.stdout + result.stderr);
   assert.match(result.stderr, /depends on missing item 2/);
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'the entire rejected write set is restored to upstream');
-  writeFileSync(join(b.home, 'teams.json'), '{"t1": {}}');
-  assert.equal(cli(['team', 'query', '--team', 't1', '--blocked', '--json'], { cwd: b.cons, tmp: b.tmp }).status, 0);
 });
 
 test('review P1: publication refuses a sequence change after an upstream clone adds an incoming dependency', async t => {
@@ -634,12 +623,10 @@ test('publication graph: an outgoing slug dependency is rechecked after an upstr
   rejectedPublication(t, b, bare, result, /depends on missing item 002-beta/);
 });
 
- // a team command acts as the session's agent
 async function fileRace(t, seed, args, publish, env) {
   const [a, b, { bare }] = writers(t);
   for (const cmd of seed) assert.equal(cli(cmd, { cwd: a.cons, tmp: a.tmp }).status, 0);
   assert.equal(cli(['list', 'all-branches'], { cwd: b.cons, tmp: b.tmp }).status, 0);
-  if (args[0] === 'team') copyFileSync(join(a.home, 'teams.json'), join(b.home, 'teams.json')); // the team entries are local configuration of each clone
   const before = state(b.home);
   const hold = holdFirstPush(b);
   const second = cliAsync(args, { cwd: b.cons, tmp: b.tmp, env });

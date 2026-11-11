@@ -49,3 +49,13 @@ Feature: Team flow - an item goes from a ready state to closed through a claim, 
     And I run `backlog team pop --team parallel`
     When I run `backlog team update 1 close --team parallel`
     Then the command fails
+    And the output contains "❌"
+
+  Scenario: two seeded items get distinct numbers
+    Given a ready item "Parser" for the team "parallel"
+    When I act as agent "member-1"
+    And I run `backlog team pop --team parallel`
+    Then the output contains "claim 001-tokens"
+    When I act as agent "member-2"
+    And I run `backlog team pop --team parallel`
+    Then the output contains "claim 002-parser"

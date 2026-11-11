@@ -44,7 +44,8 @@ export function makeWorld(location) {
     // an item of a team, written as the team commands store it into the folder of the items, then committed and pushed there
     seedTeamItem(entry, team, { name, fields }) {
       const folder = this.folder();
-      const seq = (existsSync(join(folder, 'phases')) ? readdirSync(join(folder, 'phases')).length : 0) + 1;
+      // the next number: above every item file, live or archived
+      const seq = Math.max(0, ...['phases', join('archive', 'phases'), 'archive'].flatMap(d => (existsSync(join(folder, d)) ? readdirSync(join(folder, d)) : [])).map(n => parseInt(n, 10) || 0)) + 1;
       const defaults = Object.fromEntries(Object.entries(entry.item).map(([f, d]) => [f, 'default' in d ? d.default : null]));
       const slug = `${String(seq).padStart(3, '0')}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
       putItem(folder, { seq, slug, name, team, repository: env.SMOOTH_BACKLOG_CLI_HOME ? 'acme/demo' : 'local/repository', branch: 'main', fields: { ...defaults, ...fields } }, entry);

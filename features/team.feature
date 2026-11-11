@@ -16,9 +16,21 @@ Feature: Team - a lead splits work for a team, its members take it and the rules
     When I run `backlog team new --team parallel --name "Tokens" --estimate 20 --parent 1`
     Then the command succeeds
     And the output contains "002-tokens"
+    When I run `backlog team new --team parallel --name "Grammar" --estimate 25 --parent 1`
+    Then the command succeeds
+    And the output contains "003-grammar"
     When I run `backlog team update 1 split-done --team parallel`
     Then the command succeeds
     And the output contains "split-done"
+
+  Scenario: a split is not done before a child is filed
+    Given a ready item "Tokens" for the team "parallel"
+    And I act as agent "lead-1"
+    When I run `backlog team update 1 split-done --team parallel`
+    Then the command fails
+    And the output contains "has no child yet; add one with backlog team new --parent 1"
+    When I run `backlog team query check 1 split-done --team parallel`
+    Then the output contains "refused by rule split-done-needs-children"
 
   Scenario: a member who asks for work is given the first ready item
     Given a ready item "Tokens" for the team "parallel"
@@ -35,6 +47,10 @@ Feature: Team - a lead splits work for a team, its members take it and the rules
     And I run `backlog team update 1 claim --team parallel`
     Then the command fails
     And the output contains "the lead does not claim work; a member does"
+    And item 1 has status "ready"
+    And item 1 has holder ""
+    When I run `backlog team query check 1 claim --team parallel`
+    Then the output contains "refused by rule claim-lead"
 
   Scenario: the check of a step names the rule that decides
     Given a ready item "Tokens" for the team "parallel"

@@ -69,7 +69,7 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
 
   Scenario: another agent cannot take a claimed item
     Given an item "Agent work" exists
-    Given I act as agent "alice"
+    And I act as agent "alice"
     And I run `backlog update 1 --claim alice`
     When I act as agent "bob"
     And I run `backlog update 1 --claim bob`
@@ -78,7 +78,7 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
 
   Scenario: the holder releases the item back into the queue
     Given an item "Agent work" exists
-    Given I act as agent "alice"
+    And I act as agent "alice"
     And I run `backlog update 1 --claim alice`
     When I run `backlog update 1 --release alice`
     Then the command succeeds
@@ -87,7 +87,7 @@ Feature: Plain use - a person or a single agent uses the backlog without a team 
 
   Scenario: a stale view is refused - the agent reads the item again first
     Given an item "Agent work" exists
-    Given I act as agent "alice"
+    And I act as agent "alice"
     And I run `backlog update 1 --claim alice`
     And I act as agent "bob"
     And I run `backlog update 1 --append "## Findings by bob"`

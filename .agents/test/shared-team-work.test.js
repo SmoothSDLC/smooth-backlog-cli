@@ -30,7 +30,7 @@ const make = (f, name) => {
   return slug;
 };
 const fm = (f, slug) => readItem(itemPath(f.folder, slug)).fm;
-test('query --phase shows the whole item: the row, every front matter field and the body', () => {
+test('show prints the whole item: the row, every front matter field and the body', () => {
   const f = fixture();
   const s = make(f, 'whole item');
   const j = JSON.parse(ok(f, ['show', s, '--json']).stdout);

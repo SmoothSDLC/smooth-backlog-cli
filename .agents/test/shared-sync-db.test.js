@@ -492,7 +492,7 @@ test('publication: permanent failure after a push race removes renumbering and r
 
 
 for (const dependency of ['1', '001-alpha']) test(`review P1: publication refuses a repository move after another clone adds dependent ${dependency}`, async t => {
-  const { b, bare, result } = await race(t, [NEW('alpha')],
+  const { a, b, bare, result } = await race(t, [NEW('alpha')],
     [...NEW('dependent'), '--depends-on', dependency], ['move', '1', '--to-repository', 'acme/dst']);
   assert.equal(result.status, 3, result.stdout + result.stderr);
   assert.match(result.stderr, /002-dependent depends on/);
@@ -501,6 +501,7 @@ for (const dependency of ['1', '001-alpha']) test(`review P1: publication refuse
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'both files and databases match the winning upstream clone');
   assert.ok(existsSync(itemPath(b.folder, '001-alpha')));
   assert.ok(!existsSync(itemPath(join(b.home, 'acme', 'dst'), '001-alpha')));
+  for (const w of [a, b]) { const l = cli(['list', 'all-branches', '--json'], { cwd: w.cons, tmp: w.tmp }); assert.equal(l.status, 0, l.stdout + l.stderr); } // each clone still reads the backlog after the refusal
 });
 
 test('review P1: publication refuses update --seq when another clone allocates that sequence', async t => {
@@ -550,6 +551,7 @@ for (const args of [
   assert.equal(result.status, 3, result.stdout + result.stderr);
   assert.match(result.stderr, /depends on missing item 2/);
   assert.deepEqual(state(b.home), state(clone(t, bare)), 'the entire rejected write set is restored to upstream');
+  const l = cli(['list', 'all-branches', '--json'], { cwd: b.cons, tmp: b.tmp }); assert.equal(l.status, 0, l.stdout + l.stderr); // the clone still reads the backlog after the refusal
 });
 
 test('review P1: publication refuses a sequence change after an upstream clone adds an incoming dependency', async t => {

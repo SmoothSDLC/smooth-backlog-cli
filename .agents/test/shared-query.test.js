@@ -1,5 +1,5 @@
-// Tests for src/shared/query.js - cli-parity job 12 (QUERY): the read views (--next --status --critical --phase --events
-// --by-branch --all --branch --json), through backlog list, show, next, history and the options of backlog team query. Local bare repos only (shared-fixtures.js).
+// Tests for src/shared/query.js - cli-parity job 12 (QUERY): the read views (next, critical, show, history, --json), through backlog list, show, next
+// and history; the options no plain command takes (--status, --branch, --by-branch) are still read through the old views of backlog team query until they are replaced. Local bare repos only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -69,7 +69,7 @@ function view(f, args, status = 0, cwd = f.cons) {
   if (status === 0) assert.equal(n.stderr, '', `${args.join(' ')}: a successful read prints nothing to stderr`);
   return n;
 }
-// The options of the reader that no plain command takes (--branch, --by-branch, --status) are those of backlog team query.
+// The options of the reader that no plain command takes (--branch, --by-branch, --status) are those of the old views of backlog team query.
 const reader = (f, args, status = 0, cwd = f.cons) => view(f, ['team', 'query', '--team', 't1', ...args], status, cwd);
 // The parts that differ between runs: timestamps, hex shas (any length, 7 or more chars) and the writing agent id.
 const norm = s => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g, 'TS')

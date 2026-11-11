@@ -2,7 +2,7 @@
 // are replayed in team-commands.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { cli } from './shared-fixtures.js';
 import { TEMPLATES, git, putItem, world } from './team-fixture.js';
@@ -118,4 +118,24 @@ test('--json is printed as serialized: a URL value followed by an email value ke
   const out = JSON.parse(r.stdout);
   assert.deepEqual(out.changes.handoff, ['https://example.com', 'a@b.c']);
   assert.equal(out.changes.status[1], 'checking');
+});
+
+test('a repository id that leaves the home (../x, a/..) is refused with exit 2, from the variable and from --repository, in check and plan, and nothing is created', t => {
+  const w = seeded(t);
+  const head = git(w.home, 'rev-parse', 'HEAD');
+  const forms = [
+    [['check', '1', 'claim', ...BASE], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: '../x' }, '../x'],
+    [['plan', '--team', 'parallel'], { SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY: '../x' }, '../x'],
+    [['check', '1', 'claim', ...BASE, '--repository', '../x'], {}, '../x'],
+    [['plan', '--team', 'parallel', '--repository', 'a/..'], {}, 'a/..'],
+  ];
+  for (const [args, env, id] of forms) {
+    const r = w.run(args, env, 'query');
+    assert.equal(r.status, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
+    assert.equal(r.stdout, '');
+    assert.ok(r.stderr.startsWith(`❌ backlog: not an owner/name repository id: ${id}`), r.stderr);
+  }
+  assert.equal(git(w.home, 'rev-parse', 'HEAD'), head);
+  assert.equal(git(w.home, 'status', '--porcelain', '-uall'), '');
+  assert.ok(!existsSync(join(w.tmp, 'x')) && !existsSync(join(w.tmp, 'a')), 'nothing outside the home was created');
 });

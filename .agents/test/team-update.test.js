@@ -348,3 +348,14 @@ test('a child that never ends is killed at its timeout and fails its test: both 
     assert.ok(Date.now() - started < 30000, 'killed at the timeout the runner was given');
   }
 });
+
+test('--json redacts each value, never the serialized text: a URL value then an email value keep every key', t => {
+  const w = seeded(t, [item(1, { status: 'in progress', holder: 'member-1', handoff: 'https://u:p@host.example' })]);
+  const r = update(w, '1', 'hand-to-check', [...BASE, '--note', 'a@b.example', '--json']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.deepEqual(Object.keys(out), ['item', 'step', 'rule', 'changes', 'related', 'say']);
+  assert.deepEqual(out.changes.handoff, ['https://host.example', 'a@b.example']);
+  assert.deepEqual(Object.keys(out.changes), ['status', 'handoff', 'checker']);
+  assert.ok(!r.stdout.includes('u:p@'), r.stdout);
+});

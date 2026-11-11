@@ -351,3 +351,17 @@ test('--help is answered by the router before anything is read', t => {
   assert.match(r.stdout, /^backlog team new — /);
   assert.match(r.stdout, /--name TEXT\n {6}The title of the item\. Required \(exit 2 without it\)\./);
 });
+
+test('--json redacts each value, never the serialized text: a URL value then an email value keep every key', t => {
+  const teams = structuredClone(PARALLEL);
+  const rule = teams.parallel.rules.table.find(r => r.id === 'new');
+  rule.do.set = { ...rule.do.set, handoff: '$arg.first' };
+  rule.do.say = '{$arg.second}';
+  const w = world(t, teams);
+  const r = w.run([...BASE, '--name', 'x', '--estimate', '30', '--first', 'https://u:p@host.example', '--second', 'a@b.example', '--json']);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.deepEqual(Object.keys(out), ['item', 'slug', 'rule', 'changes', 'related', 'say']);
+  assert.deepEqual([out.changes.handoff[1], out.say], ['https://host.example', 'a@b.example']);
+  assert.ok(!r.stdout.includes('u:p@'), r.stdout);
+});

@@ -344,3 +344,15 @@ test('when the origin cannot be reached validate warns and answers from the loca
   assert.match(r.stderr, /origin offline, local backlog updates may be behind/);
   assert.match(r.stdout, /1 team, 0 errors/);
 });
+
+test('--json redacts each value, never the serialized text: a URL value then an email value (a name with a line break) keep their text', t => {
+  const w = world(t);
+  const name = 'https://u:p@host.example\na@b.example';
+  w.put({ [name]: GOOD });
+  const r = w.run(['validate', '--json', '--team', name]);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  const found = JSON.parse(r.stdout).find(f => f.severity === 'error' && f.problem.includes('is not a team name'));
+  assert.equal(found.team, 'https://host.example\na@b.example');
+  assert.ok(found.problem.startsWith('https://host.example\na@b.example is not a team name'), found.problem);
+  assert.ok(!r.stdout.includes('u:p@'), r.stdout);
+});

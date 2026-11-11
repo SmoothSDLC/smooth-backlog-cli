@@ -61,7 +61,7 @@ Feature: Team - a lead splits work for a team, its members take it and the rules
     When I act as agent "member-1"
     And I run `backlog team query check 1 claim --team parallel`
     Then the command succeeds
-    And the output contains "allowed by rule claim"
+    And the output matches /allowed by rule claim:/
 
   Scenario: a person who is not in the team is refused
     Given a ready item "Tokens" for the team "parallel"

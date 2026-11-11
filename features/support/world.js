@@ -40,6 +40,8 @@ export function makeWorld(location) {
     writeTeamFile(teams) {
       mkdirSync(join(this.repo, '.backlog'), { recursive: true });
       writeFileSync(join(this.repo, '.backlog', 'teams.json'), JSON.stringify(teams));
+      // committed and published the same way in both locations, so both start from the same state
+      this.git('add', '-f', '.backlog/teams.json'); this.git('commit', '-q', '--allow-empty', '-m', 'team file'); this.git('push', '-q', 'origin', 'HEAD');
     },
     // an item of a team, written as the team commands store it into the folder of the items, then committed and pushed there
     seedTeamItem(entry, team, { name, fields }) {
@@ -48,9 +50,11 @@ export function makeWorld(location) {
       const seq = Math.max(0, ...['phases', join('archive', 'phases'), 'archive'].flatMap(d => (existsSync(join(folder, d)) ? readdirSync(join(folder, d)) : [])).map(n => parseInt(n, 10) || 0)) + 1;
       const defaults = Object.fromEntries(Object.entries(entry.item).map(([f, d]) => [f, 'default' in d ? d.default : null]));
       const slug = `${String(seq).padStart(3, '0')}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-      putItem(folder, { seq, slug, name, team, repository: env.SMOOTH_BACKLOG_CLI_HOME ? 'acme/demo' : 'local/repository', branch: 'main', fields: { ...defaults, ...fields } }, entry);
+      const file = putItem(folder, { seq, slug, name, team, repository: env.SMOOTH_BACKLOG_CLI_HOME ? 'acme/demo' : 'local/repository', branch: 'main', fields: { ...defaults, ...fields } }, entry);
       const top = this.backlogRepo();
-      this.gitIn(top, 'add', '-A'); this.gitIn(top, 'commit', '-q', '-m', 'seed'); this.gitIn(top, 'push', '-q', 'origin', 'HEAD');
+      // only the item file is staged: other changes of the scenario stay as they are; a push of another clone is pulled first
+      this.gitIn(top, 'add', file); this.gitIn(top, 'commit', '-q', '-m', 'seed', '--only', file);
+      this.gitIn(top, 'pull', '-q', '--rebase', '--autostash', 'origin', this.gitIn(top, 'branch', '--show-current')); this.gitIn(top, 'push', '-q', 'origin', 'HEAD');
     },
     // a second checkout of the same backlog: another clone of the backlog repository (remote) or of the consuming repository (local)
     other() {

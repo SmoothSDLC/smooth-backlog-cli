@@ -19,8 +19,16 @@ step(/^I act as agent "([^"]+)"$/, (w, name) => { w.agentEnv.SMOOTH_BACKLOG_CLI_
 step(/^I act as a person$/, w => { delete w.agentEnv.SMOOTH_BACKLOG_CLI_AGENT; });
 // the team file of the repository, from a shipped template
 step(/^a team file from the template "([^"]+)"$/, (w, name) => { w.writeTeamFile(TEMPLATES[name]); });
-// an item of the team that is ready to be claimed (the template's own default fields, status ready)
-step(/^a ready item "([^"]+)" for the team "([^"]+)"$/, (w, name, team) => { w.seedTeamItem(TEMPLATES[team][team], team, { name, fields: { status: 'ready', estimate: 20 } }); });
+// an item of a team that is ready to be claimed. The team is named by its template file (extreme-programming) or by its name inside the file (xp);
+// the item takes its fields from the team file the world wrote: the status "ready" when the team has it, else its first status, and an estimate of 20 when the team has one
+step(/^a ready item "([^"]+)" for the team "([^"]+)"$/, (w, name, team) => {
+  const written = JSON.parse(readFileSync(join(w.repo, '.backlog', 'teams.json'), 'utf8'));
+  const key = team in written ? team : Object.keys(TEMPLATES[team] ?? {})[0];
+  const entry = written[key];
+  assert.ok(entry, `no team ${team} in the team file the scenario wrote (${Object.keys(written)})`);
+  const { values } = entry.item.status;
+  w.seedTeamItem(entry, key, { name, fields: { status: values.includes('ready') ? 'ready' : values[0], ...('estimate' in entry.item ? { estimate: 20 } : {}) } });
+});
 // in the backlog repository the team configuration is a committed file at its root (an empty one when the scenario has not written any)
 step(/^the team configuration is a committed file$/, w => {
   if (!w.env.SMOOTH_BACKLOG_CLI_HOME) return; // inside the repository it is created and committed by the command
@@ -104,11 +112,13 @@ step(/^the JSON output has (\d+) items?$/, (w, n) => { const v = JSON.parse(w.la
 
 // item facts, read back through the CLI
 const read = (w, item) => {
+  const before = w.last; // reading an item is not the command under test: the last result stays
   const r = w.run(['show', item, '--json'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'reader' } });
+  w.last = before;
   assert.equal(r.status, 0, `cannot read item ${item}: ${output(r)}`);
   const v = JSON.parse(r.stdout); return { ...v, ...derivedFm(v.front_matter) };
 };
-step(/^item (\S+) has (\w+) "([^"]*)"$/, (w, item, field, value) => { const v = read(w, item); assert.equal(String(v[field] ?? ''), value, `${field} of ${item}: ${JSON.stringify(v[field])}`); });
+step(/^item (\S+) has (\w+) "([^"]*)"$/, (w, item, field, value) => { const v = read(w, item); assert.ok(field in v, `item ${item} has no field ${field}: ${Object.keys(v)}`); assert.equal(String(v[field] ?? ''), value, `${field} of ${item}: ${JSON.stringify(v[field])}`); });
 step(/^item (\S+) has (\w+) (\d+)$/, (w, item, field, value) => { const v = read(w, item); assert.equal(Number(v[field]), Number(value), `${field} of ${item}: ${JSON.stringify(v[field])}`); });
 step(/^item (\S+) body contains "([^"]*)"$/, (w, item, text) => { const v = read(w, item); assert.ok(String(v.body ?? '').includes(text), `body of ${item}:\n${v.body}`); });
 step(/^item (\S+) does not exist$/, (w, item) => { const r = w.run(['show', item, '--json'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'reader' } }); assert.notEqual(r.status, 0, `item ${item} exists: ${r.stdout}`); });

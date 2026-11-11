@@ -1,7 +1,6 @@
 Feature: Plain use - a person or a single agent uses the backlog without a team process
-  No team, no review documents, no estimate: a person records work and finishes it. These scenarios fail on the
-  branch under review because team-process rules are applied to every item; they record the simple behaviour the
-  one-mode CLI is expected to offer and await the owner's decision (see REVIEW.md).
+  No team, no review documents, no estimate: a person records work and finishes it. These scenarios record the
+  simple behaviour the CLI offers to a person or a single agent.
 
   Background:
     Given a repository with a backlog

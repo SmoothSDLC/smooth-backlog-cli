@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { GIT_IDENTITY, ENVELOPE, itemPath, sharedBacklog, BACKLOG_OWNER, BACKLOG_NAME } from './shared-fixtures.js';
@@ -13,7 +13,6 @@ import { record } from '../../src/shared/numbers.js';
 import { BacklogError } from '../../src/errors.js';
 import { publishTeam } from '../../src/shared/team-publish.js';
 import { TEMPLATES, inside, putItem } from './team-fixture.js';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 for (const [k, v] of Object.entries(GIT_IDENTITY)) process.env[k] = v;
@@ -294,7 +293,7 @@ for (const [verb, args, code] of [['update', ['1', 'claim', ...BASE], 3], ['pop'
     const r = w.run(args, { SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS: '2000' }, verb);
     assert.equal(r.status, code, r.stdout + r.stderr);
     assert.match(r.stderr, /kept changing while \w+ ran/);
-    assert.equal(origin(w, 'phases/001-job.json').fields.holder, '', 'nothing of the command is published');
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) assert.equal(origin(w, `phases/00${n}-job.json`).fields.holder, '', `nothing is published for item ${n}`);
     assert.equal(git(w.ra, 'rev-list', '--count', 'origin/main..HEAD'), '0', 'no commit of the command is left');
     assert.equal(JSON.parse(readFileSync(join(w.folder, 'phases', '001-job.json'), 'utf8')).fields.holder, '', 'nor a file');
   });
@@ -309,15 +308,26 @@ test('commands: pop that meets an upstream change of another item runs again and
   assert.deepEqual([1, 2].map(n => origin(w, `phases/00${n}-job.json`).fields.holder), ['', 'member-1']);
 });
 
-test('commands: a person\'s commit on top of the command\'s commit is never taken back, whatever the other clone published', t => {
-  const w = seeded(t, [job(1), job(2)]);
-  const hook = join(w.ra, '.git', 'hooks', 'post-commit'); // a hook stands for the person: a commit right after the command's own
-  writeFileSync(hook, `#!/bin/sh\ncase "$(git log -1 --format=%s)" in *"team claim 001-job") ;; *) exit 0;; esac\nunset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE\n[ -e ${quote(join(w.ra, 'person.txt'))} ] && exit 0\n( ${otherPublishes(w, bump(w, 2))} )\ncd ${quote(w.ra)} && echo person > person.txt && git add person.txt && git -c user.name=P -c user.email=p@example.com commit -q -m "person: file" -- person.txt\n`);
-  chmodSync(hook, 0o755);
-  const r = w.run(['1', 'claim', ...BASE], {}, 'update');
-  assert.equal(r.status, 3, r.stdout + r.stderr);
-  assert.match(r.stderr, /nothing was rolled back/);
-  assert.deepEqual(git(w.ra, 'log', '--format=%s', '-2').split('\n'), ['person: file', 'backlog: team claim 001-job']);
-  assert.equal(JSON.parse(readFileSync(join(w.folder, 'phases', '001-job.json'), 'utf8')).fields.holder, 'member-1', 'the command\'s change is still there');
-  assert.equal(origin(w, 'phases/001-job.json').fields.holder, '', 'and nothing of it is published');
-});
+// The own-commit rule: a commit is the command's own only with its exact subject and only paths the command wrote. A person's commit that differs in the subject
+// only, or in the paths only, is kept as well.
+const CLAIM = 'backlog: team claim 001-job';
+for (const [title, subject, change] of [
+  ['another subject and another path', 'person: file', 'echo person > person.txt && git add person.txt'],
+  ['the command\'s exact subject on another path', CLAIM, 'echo person > person.txt && git add person.txt'],
+  ['another subject on the path the command wrote', 'person: edit', 'echo >> .backlog/local/repository/phases/001-job.json && git add .backlog/local/repository/phases/001-job.json'],
+]) {
+  test(`commands: a person's commit on top of the command's commit (${title}) is never taken back, whatever the other clone published`, t => {
+    const w = seeded(t, [job(1), job(2)]);
+    const mark = join(w.dir, 'person-done');
+    const hook = join(w.ra, '.git', 'hooks', 'post-commit'); // a hook stands for the person: a commit right after the command's own
+    writeFileSync(hook, `#!/bin/sh\ncase "$(git log -1 --format=%s)" in "${CLAIM}") ;; *) exit 0;; esac\nunset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE\n[ -e ${quote(mark)} ] && exit 0\ntouch ${quote(mark)}\n( ${otherPublishes(w, bump(w, 2))} )\ncd ${quote(w.ra)} && ${change} && git -c user.name=P -c user.email=p@example.com commit -q -m ${quote(subject)} -- ${change.split(' ').pop()}\n`);
+    chmodSync(hook, 0o755);
+    const r = w.run(['1', 'claim', ...BASE], {}, 'update');
+    assert.equal(r.status, 3, r.stdout + r.stderr);
+    assert.match(r.stderr, /nothing was rolled back/);
+    assert.deepEqual(git(w.ra, 'log', '--format=%s', '-2').split('\n'), [subject, CLAIM]);
+    assert.equal(JSON.parse(readFileSync(join(w.folder, 'phases', '001-job.json'), 'utf8')).fields.holder, 'member-1', 'the command\'s change is still there');
+    assert.equal(origin(w, 'phases/001-job.json').fields.holder, '', 'and nothing of it is published');
+    assert.equal(git(w.ra, 'rev-list', '--count', 'origin/main..HEAD'), '2', 'both commits are kept');
+  });
+}

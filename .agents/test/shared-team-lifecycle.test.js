@@ -88,7 +88,7 @@ test('team.js: held items, the claim rule, undone dependencies on a folder', () 
   put(5, 'e', { status: 'in_progress', claimed_by: 'bob' });
   put(6, 'f', { depends_on: [1, '004-d', 'nothing', 5] });
   assert.deepEqual(team.heldItems(f.folder, 'ann').map(h => [h.slug, h.state]), [['001-a', 'active'], ['002-b', 'awaiting-review'], ['003-c', 'waiting:run 5']]);
-  assert.equal(team.claimRefusal(f.folder, 'ann'), 'ann holds 1 active item(s): 001-a; pull new work only when every item you hold waits (review requested, or backlog team update <item> --team <team> --agent ann --waiting "<what>"); --force overrides');
+  assert.equal(team.claimRefusal(f.folder, 'ann'), 'ann holds 1 active item(s): 001-a; pull new work only when every item you hold waits (review requested, or backlog team update <item> waiting --team <team> --agent ann --waiting "<what>"); --force overrides');
   assert.equal(team.claimRefusal(f.folder, 'nobody'), null);
   const undone = team.undoneDependencies(f.folder, { depends_on: [1, '004-d', 'nothing', 5] });
   assert.deepEqual(undone.map(d => team.describeDependency(d)), ['001-a (status in progress, claimed by ann)', 'nothing (no such item in this backlog)', '005-e (status in progress, claimed by bob)']);

@@ -647,7 +647,7 @@ repository and keeps the status it had: an item is archived by where it is store
 version, which holds the status archived, reads the same). The output names it by its slug. The command records an event and
 renumbers the remaining backlog to 0..M-1, because archiving takes the item off the backlog. Archiving an item
 that is already archived does nothing and says so. The command refuses when the item does not exist, or when its
-status is not closed and --force was not given. A closed item of a team is archived like any other; a team item that is not closed is
+status is not finished (closed or done) and --force was not given. A closed item of a team is archived like any other; a team item that is not closed is
 refused, with --force too (exit 1, nothing written): it leaves the queue by its team steps (backlog team update --close).
 
 ${SHARED}
@@ -658,7 +658,7 @@ Argument:
 
 Options:
   --force
-      Archive the item even if its status is not closed (not a team item that is not closed).
+      Archive the item even if its status is not finished (closed or done); never a team item that is not closed.
   --dry-run
       Say which item would be archived and change nothing: nothing is moved and nothing is committed.
 ${HELP_FLAG}

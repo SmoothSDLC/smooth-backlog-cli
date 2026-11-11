@@ -29,7 +29,7 @@ export const isUnstarted = word => isOpen(word) && !STARTED.has(word);
 // The review stage a status belongs to ('peer' or 'external'), undefined for any other status.
 export const stageOfStatus = word => STAGE_OF[word];
 
-// An item is archived when its file lies under archive/; no status word says so (a status 'archived' written before the cut-over only reads right in that folder).
+// An item is archived when its file lies under archive/; the path alone says so, whatever status word the file stores.
 export const isArchived = x => String(x?.path ?? '').startsWith('archive/');
 
 // A word as typed (hyphens, underscores, any case) in the stored form; a word outside the order is returned trimmed as typed. done is closed.

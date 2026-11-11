@@ -58,7 +58,7 @@ Feature: Items - a person creates, reads, changes and finishes backlog items
     Given an item "Still open" exists
     When I run `backlog archive 1`
     Then the command fails
-    And the output contains "not 'closed'"
+    And the output contains "not finished (closed or done)"
     When I run `backlog archive 1 --force`
     Then the command succeeds
     And item 1 has status "pending"

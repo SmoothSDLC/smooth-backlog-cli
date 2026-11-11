@@ -48,7 +48,7 @@ export function foreignItem(folder, id, typed = false) { // typed: given on the 
   const named = hits.map(i => ({ ...i, slug: i.fm.phase || itemSlug(i.path) }));
   if (!typed && named.length > 1) return { repository: `${m[1]}/${m[2]}`, seq: null, slug: `number ${m[3]} (names two items: ${named[0].slug} and ${named[1].slug})`, status: 'ambiguous', fm: {} };
   const it = index.pick(named, Number(m[3]));
-  return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || itemSlug(it.path), status: isArchived(it) ? 'archived' : it.fm.status ?? 'pending', fm: it.fm } : null;
+  return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || itemSlug(it.path), status: isArchived(it) ? 'archived' : it.fm.status ?? 'pending', fm: it.fm, path: it.path } : null;
 }
 // does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
 // to it? Returns the reference that closes the cycle, or null. Local entries are read in the folder they are written in.
@@ -89,15 +89,15 @@ export function undoneDependencies(folder, fm, rows = folderRows(folder), edge =
     const f = foreignItem(folder, id);
     if (f !== undefined) {
       const dependentId = f && f.repository === (fm.repository || undefined) ? String(fm.seq) : `${fm.repository}#${fm.seq}`;
-      const handoff = f && finishedByStep(f.status) ? edge(f.fm, dependentId) : null;
+      const handoff = f && finishedByStep(f) ? edge(f.fm, dependentId) : null;
       return { id, item: f && { slug: f.slug, seq: f.seq, status: f.status, repository: f.repository }, fm: f ? f.fm : {}, foreign: true, ...(handoff ? { handoff } : {}) };
     }
     const item = byIdent(rows, id);
     const producer = item ? itemFm(folder, item) : {};
-    const handoff = item && finishedByStep(item.status) ? edge({ ...producer, status: item.status }, String(fm.seq)) : null;
+    const handoff = item && finishedByStep(item) ? edge({ ...producer, status: item.status }, String(fm.seq)) : null;
     return { id, item, fm: producer, ...(handoff ? { handoff } : {}) };
   }).filter(d => !d.item || !isFinished(d.item.status) || d.handoff);
 }
 
 // A finished producer owes a hand-off record unless it is archived: an item archived by path (also forced) owes none.
-const finishedByStep = word => isFinished(word) && word !== 'archived';
+const finishedByStep = x => isFinished(x.status) && !isArchived(x);

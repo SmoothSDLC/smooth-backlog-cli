@@ -145,6 +145,7 @@ async function create(argv, { home, folder, repo, scope, team, floor = 0 }) {
   const severity = a.severity ?? 'normal';
   const priority = a.priority ?? (severity === 'critical' ? 0 : undefined); // a critical finding jumps the queue (:62)
   if (!a.name && !a.splitFrom) return refuse('--name is required (or --split-from <phase>)');
+  if (!team && a.status === 'archived') return refuse("--status 'archived': backlog archive moves a finished item to archive/");
   const t = team?.begin(a, scope); // the team's checks of the options (status, review documents, definition of done); its state for the later steps
   if (t?.refuse) return refuse(t.refuse);
 

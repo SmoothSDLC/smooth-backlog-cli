@@ -6,6 +6,7 @@ Every plan of this repository, newest work first. Plans are named `YYYY-MM-DD-<n
 
 | Plan | Status | What it is |
 |---|---|---|
+| [2026-11-11-team-rules-engine-remaining-work.md](2026-11-11-team-rules-engine-remaining-work.md) | active | The remaining work of the team rules engine as 33 tasks: fixes of the merged publication and numbering code, pop, query, removals, concurrency, the `--show-all` view, the migration, removal of the old team code, the final documentation pass and verification. |
 | [2026-11-09-team-rules-engine.md](2026-11-09-team-rules-engine.md) | active | The CLI evaluates a team's rule set over JSON items; all team behaviour is in the team file. The earlier 2026-11-08 analysis was replaced and removed (last in git at commit a507443). |
 | [2026-11-04-pr3-simplification-log.md](2026-11-04-pr3-simplification-log.md) | active | Decision log and ledger of the whole PR #3 simplification: phase table, owner decisions and rules, outcome and lessons per phase. |
 | [2026-11-04-simplification-plan.md](2026-11-04-simplification-plan.md) | active | The simplification plan behind PR #3: one backlog, one CLI, the same commands wherever the item files live. |

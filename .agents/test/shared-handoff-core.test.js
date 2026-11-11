@@ -315,17 +315,20 @@ test('059.1: receiptBlock is the HANDOFF_ACCEPTED v1 / HANDOFF_REJECTED v1 body 
 });
 
 // An archived producer owes no hand-off: the path says archived, whatever status word the file stores; a live item that stores the word archived is not archived.
-test('the hand-off exemption of an archived producer is decided by its path, in the same folder and in another repository', () => {
-  const OWES = () => 'owes a hand-off';
-  const owed = (home, id, dependent = { seq: 9, repository: 'acme/app' }) => undoneDependencies(join(home, 'acme', 'app'), { ...dependent, depends_on: [id] }, index.rows(join(home, 'acme', 'app')).rows, OWES).length;
-  const local = (fm, archived) => { // a fresh store with one producer, seq 1
-    const home = store(); const dir = join(home, 'acme', 'app');
-    writeItem(archived ? archivedPath(dir, '001-producer', 'phases') : itemPath(dir, '001-producer'), { seq: 1, ...fm }, 'x\n');
-    return home;
-  };
+const OWES = () => 'owes a hand-off';
+const owed = (home, id, dependent = { seq: 9, repository: 'acme/app' }) => undoneDependencies(join(home, 'acme', 'app'), { ...dependent, depends_on: [id] }, index.rows(join(home, 'acme', 'app')).rows, OWES).length;
+const local = (fm, archived) => { // a fresh store with one producer, seq 1
+  const home = store(); const dir = join(home, 'acme', 'app');
+  writeItem(archived ? archivedPath(dir, '001-producer', 'phases') : itemPath(dir, '001-producer'), { seq: 1, ...fm }, 'x\n');
+  return home;
+};
+test('the hand-off exemption of an archived producer is decided by its path, not by its status word', () => {
   assert.equal(owed(local({ status: 'done' }, true), 1), 0, 'under archive/, stored as done');
   assert.equal(owed(local({ status: 'in progress' }, true), 1), 0, 'under archive/, stored as an open word');
   assert.equal(owed(local({ status: 'archived' }, false), 1), 1, 'a live item that stores the word archived owes it');
+});
+
+test('the hand-off exemption of an archived producer of another repository is decided by its path too', () => {
   const home = store();
   writeItem(archivedPath(join(home, 'acme', 'lib'), '001-lib', 'phases'), { seq: 1, status: 'done' }, 'x\n');
   writeItem(itemPath(join(home, 'acme', 'lib'), '002-live'), { seq: 2, status: 'archived' }, 'x\n');

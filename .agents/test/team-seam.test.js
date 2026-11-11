@@ -10,6 +10,7 @@ import * as index from '../../src/shared/index.js';
 import { seam } from '../../src/shared/seam.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
+import { inProgress } from '../../src/shared/wip-limits.js';
 import * as teamCli from '../../src/team/cli.js';
 import { installSeam } from '../../src/team/team.js';
 import { toFile } from '../../src/team/item.js';
@@ -65,4 +66,28 @@ test('the old routes install the earlier-words reading, and it translates', t =>
   const folder = join(dir, 'acme', 'demo'); put(folder, mk(1, 'alpha', { status: 'done' }));
   seam.entry = () => null; // an installed seam that knows no entry: the word is still translated
   assert.equal(store.load(folder)[0].fm.status, 'closed');
+});
+
+const REFINING = { status: 'refining', refiner: 'amy' };
+const defaults = () => [seam.entry, seam.isMember, seam.alsoActive(REFINING), inProgress(REFINING)];
+
+test('the router\'s dispatch of validate and migrate installs nothing: entry, isMember and the work-in-progress count stay at their defaults', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'seam-dispatch-'));
+  const cwd = process.cwd(); const err = process.stderr.write; const out = process.stdout.write;
+  t.after(() => { process.chdir(cwd); process.stderr.write = err; process.stdout.write = out; rmSync(dir, { recursive: true, force: true }); });
+  process.chdir(dir); process.stderr.write = () => true; process.stdout.write = () => true;
+  assert.deepEqual(defaults(), [null, null, false, false]);
+  for (const argv of [['validate', '--team', 'x'], ['migrate', '--team', 'x']]) {
+    await teamCli.run(argv); // refuses (no repository here), as the CLI would; the route is what is under test
+    assert.deepEqual(defaults(), [null, null, false, false], argv[0]);
+  }
+});
+
+test('installSeam is what makes a refinement under way count as work in progress, for the old team commands only', t => {
+  const was = { ...seam };
+  t.after(() => Object.assign(seam, was));
+  assert.equal(inProgress(REFINING), false);
+  installSeam();
+  assert.equal(inProgress(REFINING), true);
+  assert.equal(inProgress({ status: 'in progress' }), true);
 });

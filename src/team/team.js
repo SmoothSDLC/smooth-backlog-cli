@@ -184,6 +184,7 @@ export function installSeam() {
   seam.isMember = isTeamMember;
   seam.scope = teamScope;
   seam.inScope = fm => !outsideTeam(fm);
+  seam.alsoActive = fm => fm.status === 'refining' && Boolean(fm.refiner) && !fm.claimed_by; // a refinement under way counts as work in progress
 }
 
 // ---- team definitions (backlog team define)

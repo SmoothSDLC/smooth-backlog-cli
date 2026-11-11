@@ -4,11 +4,9 @@
 // team and agent limits for one item with a recorded reason
 // (backlog team update <item> --team <team> --agent <lead> --wip-override "<reason>"). One a member is refining (stage refining, a refiner,
 // no claimer) is work in progress too.
-import { seam } from '../shared/seam.js';
 import { limitOf, limits, limitsFile, num, progressItems, wipRefusal as sharedRefusal } from '../shared/wip-limits.js';
 import { heldBy, teamStep } from './team.js';
 
-seam.alsoActive = fm => fm.status === 'refining' && Boolean(fm.refiner) && !fm.claimed_by;
 const holderOf = fm => fm.claimed_by || (fm.stage === 'refining' ? fm.refiner : '') || ''; // a finished refinement holds nothing
 
 // null when the agent may start the item, else why not: the shared levels, then the team's and the agent's.

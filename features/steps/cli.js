@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { step } from '../support/gherkin.js';
-import { damageItem, itemNames, itemPath, readItem, slugOfName, writeItem } from '../../.agents/test/shared-fixtures.js';
+import { damageItem, derivedFm, itemNames, itemPath, readItem, slugOfName, writeItem } from '../../.agents/test/shared-fixtures.js';
 
 // `backlog ...` with shell-like splitting: double quotes group words, \" is a quote inside them
 export const split = s => (s.match(/"(?:[^"\\]|\\.)*"|\S+/g) ?? []).map(t => t.startsWith('"') ? t.slice(1, -1).replace(/\\"/g, '"').replace(/\\n/g, '\n') : t);
@@ -108,7 +108,7 @@ step(/^the JSON output has (\d+) items?$/, (w, n) => { const v = JSON.parse(w.la
 const read = (w, item) => {
   const r = w.run(['show', item, '--json'], { env: { SMOOTH_BACKLOG_CLI_AGENT: 'reader' } });
   assert.equal(r.status, 0, `cannot read item ${item}: ${output(r)}`);
-  const v = JSON.parse(r.stdout); return { ...v, ...(v.front_matter ?? {}) };
+  const v = JSON.parse(r.stdout); return { ...v, ...derivedFm(v.front_matter) };
 };
 step(/^item (\S+) has (\w+) "([^"]*)"$/, (w, item, field, value) => { const v = read(w, item); assert.equal(String(v[field] ?? ''), value, `${field} of ${item}: ${JSON.stringify(v[field])}`); });
 step(/^item (\S+) has (\w+) (\d+)$/, (w, item, field, value) => { const v = read(w, item); assert.equal(Number(v[field]), Number(value), `${field} of ${item}: ${JSON.stringify(v[field])}`); });

@@ -14,6 +14,9 @@ import * as handoff from '../../src/team/handoff.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import { cli, consumer, itemPath, sharedBacklog, GIT_IDENTITY, writeItem, itemText } from './shared-fixtures.js';
 import { recordHandoff, acceptHandoff, rejectHandoff } from '../../src/team/handoff-commands.js';
+import { installSeam } from '../../src/team/team.js';
+
+installSeam(); // this file reads items made by the old team commands in this process, with their earlier words
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));

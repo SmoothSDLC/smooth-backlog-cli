@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, consumer, sharedBacklog } from './shared-fixtures.js';
+import { cli, consumer, derivedFm, sharedBacklog } from './shared-fixtures.js';
 
 const dirs = [];
 after(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));
@@ -31,7 +31,7 @@ const run = (f, who, args) => cli(args, { cwd: f.cons, tmp: f.t, env: { SMOOTH_B
 const ok = (f, who, args) => { const r = run(f, who, args); assert.equal(r.status, 0, `${who}: ${args.join(' ')}: ${r.stdout}${r.stderr}`); return r; };
 // the stale-view guard needs each actor's fresh read of the item first
 const upd = (f, who, args) => { ok(f, who, ['show', '1', '--agent', who]); return ok(f, who, ['update', '1', ...args]); };
-const item = f => { const v = JSON.parse(ok(f, 'ann', ['show', '1', '--json']).stdout); return { ...v, ...(v.front_matter ?? {}) }; };
+const item = f => { const v = JSON.parse(ok(f, 'ann', ['show', '1', '--json']).stdout); return { ...v, ...derivedFm(v.front_matter) }; };
 const close = f => { ok(f, 'ann', ['show', '1', '--agent', 'ann']); return run(f, 'ann', ['update', '1', '--close', '--summary', 'done']); };
 const pass = (f, who, verdict = 'pass') => {
   upd(f, who, ['--start-review', '--by', who]);

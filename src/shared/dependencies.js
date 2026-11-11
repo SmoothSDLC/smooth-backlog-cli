@@ -31,8 +31,8 @@ export function itemFm(folder, row) {
 export const folderRows = folder => index.rows(folder).rows;
 
 // owner/name#seq names an item of another repository's backlog in the same backlog repository clone.
-const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // an owner or repository name is one path segment, never. or..
-const FOREIGN = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
+export const SAFE = /^(?!\.{1,2}$)[\w.:-]+$/; // an owner or repository name is one path segment, never. or..
+export const FOREIGN = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
 export const isForeign = id => FOREIGN.test(String(id ?? '').trim());
 // {repository, seq, slug, status, fm} of a foreign reference; null when that repository has no backlog folder or no such
 // item; undefined when id is no foreign reference. folder: this repository's folder of the backlog repository.

@@ -11,6 +11,9 @@ import * as index from '../../src/shared/index.js';
 import { hasDefinitionOfDone } from '../../src/shared/new.js';
 import { defaultUser } from '../../src/shared/setup.js';
 import * as store from '../../src/shared/store.js';
+import { installSeam } from '../../src/team/team.js';
+
+installSeam(); // this file reads items made by the old team commands in this process, with their earlier words
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });

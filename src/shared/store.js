@@ -17,6 +17,7 @@ import { CONFIG, configuredHome, NEUTRAL_NAME, originSetting, topOf } from './se
 import { highWater, numberOf, MAX_SEQ, tooBig } from './numbers.js';
 import { seam } from './seam.js';
 import { asList } from './text.js';
+import { historyEntry } from './item-json.js';
 import { lifted } from './status.js';
 import { derivedKeys, dropsLegacy, isArchived, isOpen } from './status.js';
 
@@ -238,12 +239,14 @@ function changesOf(before, after) {
 function entryOf(d, fm) {
   const changes = changesOf(d.before, fm);
   const note = d.note || (Object.keys(changes).length ? d.planning : ''); // a planning sentence alone is no change
-  return Object.keys(changes).length || note ? { at: d.at, by: actor(), session: process.env.SMOOTH_BACKLOG_CLI_SESSION ?? '', step: d.step, changes, note } : null;
+  return Object.keys(changes).length || note ? historyEntry({ at: d.at, by: actor(), session: process.env.SMOOTH_BACKLOG_CLI_SESSION ?? '', step: d.step, changes, note }) : null;
 }
 
 export const write = (item, root) => writeItem(trail(), item, root);
 function writeItem(t, item, root) {
-  item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k) && !(LEGACY_KEYS.includes(k) && (dropsLegacy(item.fm) || derivedKeys(item.fm).has(k))))) };
+  // an item of a team is written as it is: its fields are the team's own (a field may be called priority or stage), nothing is dropped; only the old team code,
+  // which reads the earlier words and derives stage and review_state, still has them dropped
+  if (!(item.fm.team && !seam.entry)) item = { ...item, fm: Object.fromEntries(Object.entries(item.fm).filter(([k]) => !RETIRED_KEYS.includes(k) && !(LEGACY_KEYS.includes(k) && (dropsLegacy(item.fm) || derivedKeys(item.fm).has(k))))) };
   const inferred = /^(.*?)[/\\](?:phases|archive)[/\\]/.exec(item.path)?.[1];
   const base = root ?? (inferred || dirname(item.path));
   assertFolder(base);
@@ -279,16 +282,17 @@ export const REPAIRABLE = ['status', 'commit', 'location', 'summary', 'name', 'o
 
 // An item that cannot be read, after the latest version was pulled: the refusal every command of the folder gives (exit 2) names the
 // item (never its path), the key the codec could not read, and the way out: --restore, and for a valid JSON file with one wrongly typed key also --<key>.
+export function unreadableItem(path, e) {
+  const slug = itemSlug(path);
+  const reason = String(e.message).replace(/^item file:? /, '').replace(/\s+/g, ' '); // one line
+  const restore = `Restore the item's previous version with backlog update ${slug} --restore`;
+  const message = e.field === undefined
+    ? `item ${slug}: the file ${reason}. ${restore}`
+    : `item ${slug}: the key ${e.field} cannot be read (${reason.startsWith(`${e.field} `) ? reason.slice(e.field.length + 1) : reason}). ${REPAIRABLE.includes(e.field) ? `Fix it with backlog update ${slug} --${e.field} <value>, or ${restore[0].toLowerCase()}${restore.slice(1)}` : restore}`;
+  return Object.assign(new BacklogError('UNREADABLE_ITEM', message, 2), { unreadable: { slug, path, key: e.field } });
+}
 function readItem(path, text) {
-  try { return parse(text); } catch (e) {
-    const slug = itemSlug(path);
-    const reason = String(e.message).replace(/^item file:? /, '').replace(/\s+/g, ' '); // one line
-    const restore = `Restore the item's previous version with backlog update ${slug} --restore`;
-    const message = e.field === undefined
-      ? `item ${slug}: the file ${reason}. ${restore}`
-      : `item ${slug}: the key ${e.field} cannot be read (${reason.startsWith(`${e.field} `) ? reason.slice(e.field.length + 1) : reason}). ${REPAIRABLE.includes(e.field) ? `Fix it with backlog update ${slug} --${e.field} <value>, or ${restore[0].toLowerCase()}${restore.slice(1)}` : restore}`;
-    throw Object.assign(new BacklogError('UNREADABLE_ITEM', message, 2), { unreadable: { slug, path, key: e.field } });
-  }
+  try { return parse(text); } catch (e) { throw unreadableItem(path, e); }
 }
 
 // The refusal of the first item of the folder that cannot be read, or null when every item can.
@@ -296,30 +300,38 @@ export function unreadable(dir) {
   try { load(dir); return null; } catch (e) { if (e.unreadable) return e; throw e; }
 }
 
-export function load(dir) {
+// The item files of a folder (live in phases/, archived under archive/, paths relative to it, in name order) and whether the folder holds markdown items.
+// The one walk of every reader: a link anywhere below the folder and an item file named with a number above the bound stop it. tolerant: they are
+// listed instead, as skipped = [{ path, kind: 'link' | 'number', error }], and the walk goes on.
+export function itemFiles(dir, { tolerant = false } = {}) {
   assertFolder(dir);
   const files = [];
   const markdown = [];
+  const skipped = [];
   const walk = (rel, deep) => {
-    assertNoSymlinks(dir, join(dir, rel));
+    try { assertNoSymlinks(dir, join(dir, rel)); } catch (e) { if (!tolerant) throw e; skipped.push({ path: rel, kind: 'link', error: e }); return; }
     let entries;
     try { entries = readdirSync(join(dir, rel), { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1)); } catch (e) { if (e.code === 'ENOENT') return; throw e; }
     for (const e of entries) {
       const path = `${rel}/${e.name}`;
-      if (e.isSymbolicLink()) assertNoSymlinks(dir, join(dir, path));
+      if (e.isSymbolicLink()) { try { assertNoSymlinks(dir, join(dir, path)); } catch (err) { if (!tolerant) throw err; skipped.push({ path, kind: 'link', error: err }); continue; } }
       if (e.isDirectory() && deep) walk(path, deep);
-      else if (e.isFile() && numberOf(e.name) > MAX_SEQ) throw tooBig(e.name); // an item file named with a number above the bound stops every command of the folder
+      else if (e.isFile() && numberOf(e.name) > MAX_SEQ) { if (!tolerant) throw tooBig(e.name); skipped.push({ path, kind: 'number', error: tooBig(e.name) }); } // an item file named with a number above the bound stops every command of the folder
       else if (e.isFile() && isItemName(e.name)) files.push(path);
       else if (e.isFile() && e.name.endsWith('.md')) markdown.push(path);
     }
   };
   walk('phases', false);
   walk('archive', true);
-  // a folder of markdown items stops before any item is read; a .md file without a header (a README) is no item
-  if (markdown.some(path => hasFrontMatter(readItemText(join(dir, path))))) {
-    const name = resolve(dir).split(sep).slice(-2).join('/');
-    throw Object.assign(new BacklogError('MARKDOWN_ITEMS', `the items of ${name} are markdown files; run backlog team migrate once to convert every item to JSON`, 2), { markdown: dir });
-  }
+  // a folder of markdown items is no folder of items; a .md file without a header (a README) is no item
+  return { files, skipped, markdown: markdown.some(path => hasFrontMatter(readItemText(join(dir, path)))) };
+}
+// The refusal of a folder of markdown items (exit 2).
+export const markdownError = dir => Object.assign(new BacklogError('MARKDOWN_ITEMS', `the items of ${resolve(dir).split(sep).slice(-2).join('/')} are markdown files; run backlog team migrate once to convert every item to JSON`, 2), { markdown: dir });
+
+export function load(dir) {
+  const { files, markdown } = itemFiles(dir);
+  if (markdown) throw markdownError(dir); // stops before any item is read
   return files.map(path => {
     const text = readItemText(join(dir, path));
     const sha256 = createHash('sha256').update(text).digest('hex'); //

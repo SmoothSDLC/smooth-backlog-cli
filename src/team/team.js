@@ -177,11 +177,14 @@ export const STOP_TEXT = 'your session is being replaced by a fresh one for your
 // The team entry that governs an item (its team's entry in the configuration; the solo rule for an item outside a team) and an item
 // read from its file as the word it carries (status) with the two fields the pop still asks (stage, review_state).
 export const entryOf = fm => (fm.team ? teamsConfig()[strip(String(fm.team))] : SOLO);
-// `backlog team` reads items with the team's entry: installed here, so any module that loads the team rules has it.
-seam.entry = entryOf;
-seam.isMember = isTeamMember;
-seam.scope = teamScope;
-seam.inScope = fm => !outsideTeam(fm);
+// The old `backlog team` commands read items with the team's entry, and call this first. No other route installs it: a command that does not
+// call it (the user commands, `team validate`, the new team commands) reads and writes an item of a team as stored.
+export function installSeam() {
+  seam.entry = entryOf;
+  seam.isMember = isTeamMember;
+  seam.scope = teamScope;
+  seam.inScope = fm => !outsideTeam(fm);
+}
 
 // ---- team definitions (backlog team define)
 

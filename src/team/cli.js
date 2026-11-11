@@ -11,7 +11,7 @@ import { setActor } from '../shared/seen.js';
 import { cloneLocked, resolveHome } from '../shared/store.js';
 import * as sync from '../shared/sync.js';
 import { parse as parsePop } from './pop.js';
-import { forgetTeamsConfig, openItemsOf, setSessionTeam, setTeamsHome, teamEntry, teamsConfig, validateTeam } from './team.js';
+import { forgetTeamsConfig, installSeam, openItemsOf, setSessionTeam, setTeamsHome, teamEntry, teamsConfig, validateTeam } from './team.js';
 import { strip } from '../shared/text.js';
 import { loadWorkflow, validateWorkflow } from './workflow.js';
 
@@ -87,6 +87,7 @@ async function dispatch(argv) {
   if (!SUBS.includes(sub)) return die(`team needs a subcommand (${WORDS.join(', ')}): backlog team validate --team <name>`);
   if (sub === 'validate') return (await import('./validate-command.js')).run(argv.slice(1));
   if (sub === 'migrate') return (await import('./validate-command.js')).pending('migrate', argv.slice(1), ['ask']);
+  installSeam(); // the routes below are the old commands, which read the earlier words
   setTeamsHome(resolveHome().home); // reads the team configuration of the backlog
   if (sub === 'define') return define(argv.slice(1));
   if (sub === 'workflow') return workflow(argv.slice(1));

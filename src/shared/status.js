@@ -113,7 +113,7 @@ function legacyFields(fm) {
 // the rework from it). Returns the item.
 export function lift(doc, entry) {
   const fm = doc.fm;
-  if (!fm.team && !seam.entry) return doc; // the user commands read an item without a team as stored: no word is translated and no field is derived (the team code still reads the earlier words)
+  if (!seam.entry) return doc; // every command but the old `backlog team` code reads an item as stored, a team's too: no word is translated and no field is derived (a team's words and fields are its own)
   if (fm.status == null) return doc; // no status (or an explicit null): nothing to translate, the readers' own default applies
   if (fm.stage && !Object.hasOwn(fm, 'refiner')) fm.refiner = ''; // an earlier slice: the refiner key is what marks it from here on
   fm.status = statusOf(fm, entry);

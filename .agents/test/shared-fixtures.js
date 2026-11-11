@@ -2,6 +2,8 @@
 // Tests run against local bare repositories only: origins under <tmp>/origins,
 // clones under <tmp>, with SMOOTH_BACKLOG_CLI_HOME and XDG_CONFIG_HOME inside the test's
 // temp dir - never the real backlog repository or ~/.config.
+import { seam } from '../../src/shared/seam.js';
+import { lift } from '../../src/shared/status.js';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -270,3 +272,12 @@ export function writeDamagedItem(path, fm, keys, body) { writeStored(path, fm, b
 // the message of an item whose file cannot be read at all
 export const UNREADABLE_ITEM_MESSAGE = /the file is not valid JSON/;
 export function writeUnreadableItem(path, body = '') { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, `not json\n${body}`); }
+
+// A user command shows an item of a team as stored. The old team commands still derive stage and review_state from the word, and the tests of their
+// behaviour check those two: this lifts the shown header of a team item as the old team code reads it (until those commands and tests are replaced).
+export function derivedFm(fm) {
+  if (!fm?.team) return fm ?? {};
+  const was = seam.entry;
+  seam.entry = () => null;
+  try { return lift({ fm: { ...fm } }, null).fm; } finally { seam.entry = was; }
+}

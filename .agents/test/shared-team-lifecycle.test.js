@@ -13,6 +13,8 @@ import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
 import * as team from '../../src/team/team.js';
 import { asList } from '../../src/shared/text.js';
+
+team.installSeam(); // this file calls the old team code in this process
 import { shutdown } from '../../src/team/lifecycle.js';
 
 const git = (cwd, ...args) => {

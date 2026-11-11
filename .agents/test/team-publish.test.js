@@ -227,11 +227,61 @@ test('code repository: an undone team command leaves a path the person deleted b
   assert.match(git(a.root, 'status', '--porcelain', '--', '.backlog/acme/demo/phases'), /^D .*001-alpha/ /* the helper trims the leading space of an unstaged deletion */);
 });
 
-test('code repository: a re-run undone after upstream changed the path the person edited leaves the upstream version', async t => {
+test('code repository: a re-run undone after upstream changed the path the person edited: the file is the upstream version and the person\'s bytes are in the named stash', async t => {
   const { a, b } = modes['code repository'](t);
   await startedWith(a, () => item(a.folder, 1, 'alpha', { summary: 'person' }));
   item(a.folder, 1, 'alpha', { summary: 'command' });
   publishFrom(b, w => item(w.folder, 1, 'alpha', { summary: 'other' }));
-  await assert.rejects(publishTeam(a.home, a.folder, 'change alpha', opts(a, { attempt: async () => { throw new Error('the rules broke'); } })), /the rules broke/);
-  assert.equal(read(a.folder, '001-alpha').summary, 'other', 'the upstream version, not the person\'s older bytes');
+  await assert.rejects(publishTeam(a.home, a.folder, 'change alpha', opts(a, { attempt: async () => { throw new Error('the rules broke'); } })),
+    e => /the rules broke; your edit of .*001-alpha\.json conflicts with the upstream change and is kept in the stash/.test(e.message));
+  assert.equal(read(a.folder, '001-alpha').summary, 'other', 'the file is the upstream version');
+  assert.match(git(a.root, 'stash', 'list'), /your edit of .*001-alpha\.json, set aside/);
+  assert.match(git(a.root, 'stash', 'show', '-p'), /person/, 'the person\'s bytes are recoverable');
+});
+
+// A conflict names its path as it is: no quoting of a space or a non-ASCII character.
+test('code repository: the path of a conflict with a person\'s unpushed commit is named unquoted, with a space and a non-ASCII character', async t => {
+  const { a } = modes['code repository'](t);
+  const slug = '009-café déjà'; const file = join(a.folder, 'phases', `${slug}.json`);
+  const write = summary => store.write({ path: file, fm: { ...ENVELOPE, phase: slug, seq: 9, name: 'x', status: 'pending', repository: 'acme/demo', branch: 'main', summary }, body: '\n# x\n' });
+  write('seed'); git(a.root, 'add', '-A'); git(a.root, 'commit', '-qm', 'accent'); git(a.root, 'push', '-q');
+  await sync.pull(a.home);
+  write('person'); git(a.root, 'commit', '-qam', 'person edit');
+  write('command');
+  await assert.rejects(publishTeam(a.home, a.folder, 'change', opts(a)), e => e.exitCode === 3 && e.message.includes(`your unpushed commits change .backlog/acme/demo/phases/${slug}.json;`));
+});
+
+// The command's commit is the first commit of the branch (a repository with no commit yet).
+const fresh = (t, upstream = false) => {
+  const dir = mkdtempSync(join(tmpdir(), 'team-publish-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const bare = join(dir, 'origin.git'); const root = join(dir, 'r');
+  git(dir, 'init', '-q', '--bare', '-b', 'main', bare); git(dir, 'init', '-q', '-b', 'main', root); git(root, 'remote', 'add', 'origin', bare);
+  if (upstream) { const o = join(dir, 'o'); git(dir, 'clone', '-q', bare, o); git(o, 'checkout', '-q', '-b', 'main'); put(join(o, 'x.txt'), 'x\n'); git(o, 'add', '-A'); git(o, 'commit', '-qm', 'upstream'); git(o, 'push', '-q', 'origin', 'main'); }
+  const home = join(root, '.backlog');
+  return { dir, bare, root, home, folder: join(home, 'acme', 'demo'), watch: '.backlog/acme/demo' };
+};
+
+test('a first commit of the branch, refused by the origin: the real error is thrown and the branch is back to no commit, the files gone', async t => {
+  const a = fresh(t); refuse(a.bare);
+  item(a.folder, 1, 'alpha');
+  await assert.rejects(publishTeam(a.home, a.folder, 'new alpha', opts(a)), e => e.exitCode === 3 && /change was not published/.test(e.message) && /refused/.test(e.message));
+  assert.throws(() => git(a.root, 'rev-parse', '--verify', '-q', 'HEAD'), 'no commit is left');
+  assert.ok(!existsSync(itemPath(a.folder, '001-alpha')));
+  assert.equal(git(a.root, 'ls-files'), '', 'nothing is left staged');
+});
+
+test('a first commit of the branch is published when the origin has no such branch yet', async t => {
+  const a = fresh(t);
+  item(a.folder, 1, 'alpha');
+  assert.equal((await publishTeam(a.home, a.folder, 'new alpha', opts(a))).published, true);
+  assert.equal(git(a.root, 'ls-remote', 'origin', 'main').split('\t')[0], git(a.root, 'rev-parse', 'HEAD'));
+});
+
+test('a first commit of the branch with an unrelated upstream: the change is built on upstream against the empty tree', async t => {
+  const a = fresh(t, true);
+  item(a.folder, 1, 'alpha');
+  const e = await publishTeam(a.home, a.folder, 'new alpha', opts(a)).then(() => null, x => x);
+  assert.ok(!e || /the change is published; your local branch could not be rebased/.test(e.message), e?.message); // the unrelated local history cannot always be rebased onto it
+  const files = git(a.root, 'ls-tree', '-r', '--name-only', 'origin/main');
+  assert.ok(files.includes('x.txt') && files.includes('.backlog/acme/demo/phases/001-alpha.json'), files);
 });

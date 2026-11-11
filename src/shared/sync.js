@@ -438,27 +438,43 @@ export async function ownedPaths(home, t, names, files) {
   return { lits: [...out].map(lit), adds: [...out].filter(p => !gone.has(p)).map(lit) };
 }
 
-// The bytes the paths of `mine` had before the command ran (the person's own edit of such a path, or a file they had there). guard: leave a path alone
-// that upstream changed since the snapshot. Resolves to the paths it wrote.
+// The person's working version of `path` merged onto the upstream version it now has (index = HEAD). False when it conflicts: the version is then stashed.
+export async function layOver(home, saved, path) {
+  await g(home, ['restore', '-q', '--staged', '--source=HEAD', '--', lit(path)]);
+  const abs = join(home, path);
+  const theirs = await g(home, ['show', `HEAD:${path}`]);
+  if (!existsSync(abs) || theirs.code) return true; // deleted by the person, or removed upstream: nothing to lay over
+  const dir = mkdtempSync(join(tmpdir(), 'backlog-merge-'));
+  try {
+    const base = await g(home, ['show', `${saved.head}:${path}`]);
+    writeFileSync(join(dir, 'mine'), readFileSync(abs)); writeFileSync(join(dir, 'base'), base.code ? '' : base.stdout); writeFileSync(join(dir, 'theirs'), theirs.stdout);
+    const m = await g(home, ['merge-file', '-p', join(dir, 'mine'), join(dir, 'base'), join(dir, 'theirs')]);
+    if (m.code === 0) { writeFileSync(abs, m.stdout); return true; }
+    return (await g(home, ['stash', 'push', '-q', '-m', `backlog: your edit of ${path}, set aside because it conflicts with the pull`, '--', lit(path)])).code !== 0;
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
+// The bytes the paths of `mine` had before the command ran (the person's own edit of such a path, or a file they had there). guard: a path that upstream
+// changed since the snapshot is reported in `moved`, not in `wrote`: the caller lays the person's bytes over the upstream version (layOver).
 export async function putBack(home, saved, mine, guard = false) {
-  const wrote = [];
+  const wrote = []; const moved = [];
   for (const [path, prior] of saved?.files ?? []) {
     if (!mine.has(path)) continue;
-    if (guard && prior && saved.head && (await g(home, ['diff', '--quiet', saved.head, 'HEAD', '--', lit(path)])).code) continue;
+    const changed = guard && prior && saved.head && (await g(home, ['diff', '--quiet', saved.head, 'HEAD', '--', lit(path)])).code;
     const abs = join(home, path);
     rmSync(abs, { force: true });
     if (prior) {
       mkdirSync(dirname(abs), { recursive: true });
       if (prior.link !== undefined) symlinkSync(prior.link, abs);
       else { writeFileSync(abs, prior.bytes); chmodSync(abs, prior.mode); }
-      wrote.push(path);
+      (changed ? moved : wrote).push(path);
     }
   }
-  return wrote;
+  return { wrote, moved };
 }
 
 // After a command's commit was taken back (soft reset): its own paths go back to HEAD, a file it created is removed, a person's bytes are put back.
-// Every other path is untouched. Resolves to { mine: the own paths, wrote: the paths whose bytes of a person it put back }.
+// Every other path is untouched. Resolves to { mine: the own paths, wrote, moved } (putBack's lists).
 export async function restoreOwn(home, t, names, files, committed, saved, guard = false) {
   const mine = new Set([...committed, ...(await ownedPaths(home, t, names, files)).lits.map(l => l.slice(':(literal)'.length))]);
   const lits = [...mine].map(lit);
@@ -466,10 +482,13 @@ export async function restoreOwn(home, t, names, files, committed, saved, guard 
   const known = [...mine].filter(p => inHead.has(p));
   const indexed = new Set(paths(await g(home, ['ls-files', '-z', '--', ...lits])));
   const unstage = [...mine].filter(p => inHead.has(p) || indexed.has(p));
-  if (unstage.length) await must(home, ['restore', '-q', '--staged', '--source=HEAD', '--', ...unstage.map(lit)], 'take back the unpublished change');
+  if (unstage.length) { // a branch with no commit yet (the command's was its first, taken back) has no HEAD to restore from
+    if ((await g(home, ['rev-parse', '--verify', '-q', 'HEAD'])).stdout.trim()) await must(home, ['restore', '-q', '--staged', '--source=HEAD', '--', ...unstage.map(lit)], 'take back the unpublished change');
+    else await must(home, ['rm', '-q', '--cached', '--ignore-unmatch', '--', ...unstage.map(lit)], 'take back the unpublished change');
+  }
   if (known.length) await must(home, ['restore', '-q', '--worktree', '--source=HEAD', '--', ...known.map(lit)], 'take back the unpublished change');
   for (const path of mine) if (!inHead.has(path) && !saved?.files.has(path)) rmSync(join(home, path), { force: true }); // created by the command
-  return { mine, wrote: await putBack(home, saved, mine, guard) };
+  return { mine, ...await putBack(home, saved, mine, guard) };
 }
 
 export function takeStart(home) { const saved = starting.get(resolve(home)); starting.delete(resolve(home)); return saved; }
@@ -542,23 +561,8 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       for (const p of own) if (saved.head && (await g(home, ['diff', '--quiet', saved.head, 'HEAD', '--', lit(p)])).code === 1) moved.push(p);
       await restoreStaging(own.filter(p => !moved.includes(p)));
       const kept = [];
-      for (const p of moved) if (!await layOver(p)) kept.push(p);
+      for (const p of moved) if (!await layOver(home, saved, p)) kept.push(p);
       if (kept.length) cause.message += `; your edit of ${kept.join(', ')} conflicts with the upstream change and is kept in the stash (git -C ${home} stash list), the file itself is the upstream version`;
-    };
-    // The person's working version of `path` merged onto the upstream version it now has (index = HEAD). False when it conflicts: the version is then stashed.
-    const layOver = async path => {
-      await g(home, ['restore', '-q', '--staged', '--source=HEAD', '--', lit(path)]);
-      const abs = join(home, path);
-      const theirs = await g(home, ['show', `HEAD:${path}`]);
-      if (!existsSync(abs) || theirs.code) return true; // deleted by the person, or removed upstream: nothing to lay over
-      const dir = mkdtempSync(join(tmpdir(), 'backlog-merge-'));
-      try {
-        const base = await g(home, ['show', `${saved.head}:${path}`]);
-        writeFileSync(join(dir, 'mine'), readFileSync(abs)); writeFileSync(join(dir, 'base'), base.code ? '' : base.stdout); writeFileSync(join(dir, 'theirs'), theirs.stdout);
-        const m = await g(home, ['merge-file', '-p', join(dir, 'mine'), join(dir, 'base'), join(dir, 'theirs')]);
-        if (m.code === 0) { writeFileSync(abs, m.stdout); return true; }
-        return (await g(home, ['stash', 'push', '-q', '-m', `backlog: your edit of ${path}, set aside because it conflicts with the pull`, '--', lit(path)])).code !== 0;
-      } finally { rmSync(dir, { recursive: true, force: true }); }
     };
     let mine = false; // the command's own commit is HEAD
     try {

@@ -8,8 +8,9 @@ import { BacklogError } from '../errors.js';
 import { locked } from '../storage.js';
 import { assertInside } from './safety.js';
 import * as store from './store.js';
-import { abortPull, commitOnly, fail, g, lit, lockFile, must, ownedPaths, pullArgs, refspec, refuseConflicts, restoreOwn, takeStart, target } from './sync.js';
+import { abortPull, commitOnly, fail, g, layOver, lit, lockFile, must, ownedPaths, pullArgs, refspec, refuseConflicts, restoreOwn, takeStart, target } from './sync.js';
 
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 const zs = r => r.stdout.split('\0').filter(Boolean);
 const bare = l => l.slice(':(literal)'.length);
 const keep = message => Object.assign(new BacklogError('SYNC_FAILED', message, 3), { keep: true }); // the commit stays on purpose
@@ -42,12 +43,19 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
     };
 
     // Only the command's own paths go back (to HEAD, or to the bytes the person had); every other path, a lead's uncommitted team file included, is untouched.
+    // Resolves to the paths whose person's edit conflicts with the upstream version and was set aside in the stash.
     const undo = async () => {
-      if (mine) await must(home, ['reset', '-q', '--soft', 'HEAD~1'], 'take back the unpublished change');
+      if (mine) { // the command's commit may be the first of the branch: then the branch goes back to no commit
+        if (await sha('HEAD~1')) await must(home, ['reset', '-q', '--soft', 'HEAD~1'], 'take back the unpublished change');
+        else await must(home, ['update-ref', '-d', 'HEAD'], 'take back the unpublished change');
+      }
       mine = false;
-      const { wrote } = await restoreOwn(home, t, names, files, committed, saved, true);
+      const { wrote, moved } = await restoreOwn(home, t, names, files, committed, saved, true);
       const staged = wrote.filter(p => saved.staged.includes(p)); // a person's staging of such a path
       if (staged.length) await must(home, ['restore', '-q', '--staged', `--source=${saved.index}`, '--', ...staged.map(lit)], 'restore your staging');
+      const kept = [];
+      for (const p of moved) if (!await layOver(home, saved, p)) kept.push(p); // upstream changed the path meanwhile: the person's edit is laid over its version
+      return kept;
     };
 
     // Upstream changed what the command read: drop the own commit, pull, run the command again, commit what it wrote.
@@ -75,10 +83,11 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
 
     // The own commit's change built on upstream, without touching the working tree; resolves to the commit to push.
     const onUpstream = async up => {
-      const m = await g(home, ['merge-tree', '--write-tree', '--name-only', '--merge-base', 'HEAD~1', up, 'HEAD']);
-      if (m.code === 1) throw keep(`your unpushed commits change ${m.stdout.split('\n')[1]}; push or drop them and run the step again`);
+      const base = await sha('HEAD~1') || EMPTY_TREE; // the command's commit may be the first of the branch
+      const m = await g(home, ['merge-tree', '--write-tree', '-z', '--name-only', '--merge-base', base, up, 'HEAD']); // -z: a path is never quoted
+      if (m.code === 1) throw keep(`your unpushed commits change ${m.stdout.split('\0')[1]}; push or drop them and run the step again`);
       if (m.code) throw fail(home, 'build the change on upstream', m);
-      return (await must(home, ['commit-tree', m.stdout.split('\n')[0].trim(), '-p', up, '-m', (await g(home, ['log', '-1', '--format=%B', 'HEAD'])).stdout.trim()], 'build the change on upstream')).stdout.trim();
+      return (await must(home, ['commit-tree', m.stdout.split('\0')[0].trim(), '-p', up, '-m', (await g(home, ['log', '-1', '--format=%B', 'HEAD'])).stdout.trim()], 'build the change on upstream')).stdout.trim();
     };
 
     try {
@@ -94,7 +103,7 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
         }
         await fetch();
         if (await sha(t.ref) && Number((await g(home, ['rev-list', '--count', `HEAD..${t.ref}`])).stdout.trim()) > 0
-          && watch.length && zs(await g(home, ['diff', '--name-only', '-z', '--no-renames', `HEAD...${t.ref}`, '--', ...watch.map(lit)])).length) {
+          && watch.length && await sha('HEAD~1') && zs(await g(home, ['diff', '--name-only', '-z', '--no-renames', `HEAD...${t.ref}`, '--', ...watch.map(lit)])).length) {
           result = await rerun();
           if (result.refusal) return result;
           if (!mine) { persist(); return { published: false, result }; }
@@ -117,7 +126,10 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
         if (await sha(t.ref) === up) throw new BacklogError('SYNC_FAILED', `The change was not published in ${home} (push failed: ${ps.stderr.slice(0, 300)}); the local branch and working tree were rolled back. Fix the cause and retry the command`, 3); // upstream did not move: not a race
       }
     } catch (e) {
-      if (!e.keep) await undo();
+      if (!e.keep) {
+        const kept = await undo();
+        if (kept.length) e.message += `; your edit of ${kept.join(', ')} conflicts with the upstream change and is kept in the stash (git -C ${home} stash list), the file itself is the upstream version`;
+      }
       throw e;
     }
   }, { takeOver: true });

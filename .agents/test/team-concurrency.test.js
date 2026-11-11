@@ -164,6 +164,18 @@ for (const [mode, make] of Object.entries(worlds)) {
   }
 }
 
+test('code repository: the budget error exits with the option exit (pop exits 1)', async t => {
+  const { a, b } = worlds['code repository'](t);
+  const old = process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = '2000';
+  t.after(() => { if (old === undefined) delete process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS; else process.env.SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS = old; });
+  let n = 0;
+  const moving = w => { item(w.folder, 2, 'a'); git(b.root, 'pull', '-q', '--rebase'); item(b.folder, 1, 'alpha', { summary: `v${++n}` }); git(b.root, 'add', '-A'); git(b.root, 'commit', '-qm', `v${n}`); git(b.root, 'push', '-q'); return { message: 'new a' }; };
+  let clock = 0;
+  const ca = await begin(a, 'pop', moving, { exit: 1, now: () => clock, sleep: async () => { clock += 450; } });
+  await assert.rejects(ca.publish(), e => e.exitCode === 1 && /kept changing while pop ran; run it again/.test(e.message));
+  assert.ok(!existsSync(itemPath(a.folder, '002-a')), 'nothing of the command is left');
+});
+
 test('code repository: the re-run drops the command\'s commit only: a person\'s unpushed commit and uncommitted change stay', async t => {
   const { a, b } = worlds['code repository'](t);
   put(join(a.root, 'code.js'), 'x\n'); git(a.root, 'add', 'code.js'); git(a.root, 'commit', '-qm', 'person code');

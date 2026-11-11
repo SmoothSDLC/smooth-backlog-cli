@@ -16,6 +16,7 @@ export const queue = ctx => {
   shape(ctx);
   const final = ctx.entry.item.status.final ?? [];
   return [...new Set(ctx.order ?? ctx.items.map(i => i.seq))].filter(s => !ctx.skip?.has(s))
+    // shortcut: one find per ordered item is quadratic (9000 items take under a second); index ctx.items by number when a queue of tens of thousands matters
     .map(s => ctx.items.find(i => i.seq === s && i.repository === ctx.session.repository))
     .filter(i => i && i.team === ctx.team && !i.archived && !final.includes(get(i, 'status', ctx.entry)));
 };

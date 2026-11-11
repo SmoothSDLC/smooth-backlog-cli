@@ -2,9 +2,12 @@
 // the cases of the filters are replayed in team-commands.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as index from '../../src/shared/index.js';
+import { tmpdir } from 'node:os';
+import { cli } from './shared-fixtures.js';
+import { stepArgs, stepNames, stepWords } from '../../src/team/steps.js';
 import { TEMPLATES, fileOf, git, putItem, world } from './team-fixture.js';
 
 const ENTRY = TEMPLATES.parallel.parallel;
@@ -198,12 +201,143 @@ test('query <item> prints no credential, as text and as JSON; an error line that
   }
 });
 
-test('query rules and query steps answer exit 2 "not available yet" until their command exists', t => {
-  const w = seeded(t, [item(1)]);
-  for (const word of ['rules', 'steps']) {
-    const r = query(w, word, ...BASE);
-    assert.equal(r.status, 2, word);
-    assert.equal(r.stderr, `❌ backlog: team query ${word} is not available yet\n`);
-    assert.equal(r.stdout, '');
+const NAMES = Object.keys(TEMPLATES);
+const teamOf = name => Object.keys(TEMPLATES[name])[0];
+
+test('query rules prints the team entry as stored, two-space indented, the same bytes as text and as --json, for each shipped template; nothing is written', t => {
+  for (const name of NAMES) {
+    const team = teamOf(name);
+    const w = world(t, TEMPLATES[name]);
+    mkdirSync(w.folder, { recursive: true });
+    const before = snapshot(w.folder);
+    const text = query(w, 'rules', '--team', team);
+    assert.equal(text.status, 0, `${name}: ${text.stdout}${text.stderr}`);
+    assert.deepEqual(JSON.parse(text.stdout), TEMPLATES[name][team], name);
+    assert.equal(text.stdout, `${JSON.stringify(TEMPLATES[name][team], null, 2)}\n`, name);
+    const json = query(w, 'rules', '--team', team, '--json');
+    assert.equal(json.stdout, text.stdout, name);
+    assert.deepEqual(snapshot(w.folder), before);
+    clean(w);
   }
+});
+
+test('query rules --show-all with no team prints the whole file keyed by team; with --team it prints that entry', t => {
+  const both = { ...TEMPLATES.parallel, ...TEMPLATES.scrum };
+  const w = world(t, both);
+  const all = query(w, 'rules', '--show-all');
+  assert.equal(all.status, 0, all.stdout + all.stderr);
+  assert.deepEqual(JSON.parse(all.stdout), both);
+  assert.deepEqual(Object.keys(JSON.parse(all.stdout)), ['parallel', 'scrum']);
+  assert.deepEqual(JSON.parse(query(w, 'rules', '--show-all', '--team', 'scrum').stdout), both.scrum);
+});
+
+test('query rules prints no credential, as text and as JSON, and keeps every key', t => {
+  const teams = structuredClone(TEMPLATES.parallel);
+  teams.parallel.rules.table.find(r => r.id === 'new').do.say = `see ${SECRET}\nnext`;
+  const w = world(t, teams);
+  for (const args of [[], ['--json']]) {
+    const r = query(w, 'rules', ...BASE, ...args);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.doesNotMatch(r.stdout, NO_SECRET);
+    const got = JSON.parse(r.stdout);
+    assert.equal(got.rules.table.find(x => x.id === 'new').do.say, 'see https://host.example/x\nnext');
+    assert.deepEqual(Object.keys(got), Object.keys(teams.parallel));
+  }
+});
+
+test('query steps lists every step of the table with its arguments and each matching rule id once, for each shipped template', t => {
+  for (const name of NAMES) {
+    const team = teamOf(name);
+    const entry = TEMPLATES[name][team];
+    const w = world(t, TEMPLATES[name]);
+    mkdirSync(w.folder, { recursive: true });
+    const before = snapshot(w.folder);
+    const expected = stepNames(entry).map(s => ({ step: s, args: stepArgs(entry, s), rules: entry.rules.table.filter(r => stepWords(r).some(x => x === '*' || x === s)).map(r => r.id) }));
+    assert.ok(expected.length > 1, name);
+    assert.deepEqual(JSON.parse(query(w, 'steps', '--team', team, '--json').stdout), expected, name);
+    const text = query(w, 'steps', '--team', team);
+    assert.equal(text.status, 0, text.stdout + text.stderr);
+    assert.equal(text.stdout, expected.map(e => `${e.step}  takes: ${e.args.map(a => `--${a}`).join(', ')}  rules: ${e.rules.join(', ')}\n`).join(''), name);
+    assert.deepEqual(snapshot(w.folder), before);
+    clean(w);
+  }
+  const w = world(t);
+  assert.match(query(w, 'steps', ...BASE).stdout, /^new {2}takes: .*--name.* {2}rules: /m);
+});
+
+test('a rule for every step (members-only) is listed under every step, once', t => {
+  const rows = JSON.parse(query(world(t), 'steps', ...BASE, '--json').stdout);
+  assert.ok(rows.length > 1);
+  for (const row of rows) assert.equal(row.rules.filter(id => id === 'members-only').length, 1, row.step);
+});
+
+test('query steps prints no credential, as text and as JSON', t => {
+  const teams = structuredClone(TEMPLATES.parallel);
+  const rule = teams.parallel.rules.table.find(r => r.id === 'new');
+  rule.id = SECRET;
+  const w = world(t, teams);
+  for (const args of [[], ['--json']]) {
+    const r = query(w, 'steps', ...BASE, ...args);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.doesNotMatch(r.stdout, NO_SECRET);
+    assert.match(r.stdout, /host\.example\/x/);
+  }
+});
+
+test('query steps --show-all is the refusal of the one-team forms, exit 2, whatever the team file holds', t => {
+  const w = seeded(t, [item(1)]);
+  const r = query(w, 'steps', '--show-all');
+  assert.equal(r.status, 2);
+  assert.equal(r.stderr, '❌ backlog: --show-all acts over every team; backlog team query steps acts for one team: give --team <name> instead\n');
+  assert.equal(r.stdout, '');
+  clean(w);
+});
+
+test('query <item> --show-all with a team file that holds no team falls back to the item without a crash', t => {
+  const w = world(t, {});
+  putItem(w.folder, item(1, {}, { team: '' }), ENTRY);
+  w.publish('seed');
+  const r = query(w, '1', '--show-all');
+  assert.doesNotMatch(r.stderr, /Cannot read properties/);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /^\[1\] 001-job/);
+});
+
+test('an item named plan, check, filter, rules or steps is reached by its number, and a flag value is no word of the router', t => {
+  const w = seeded(t, [item(1)]);
+  for (const word of ['rules', 'steps']) assert.equal(query(w, word, ...BASE).status, 0, word);
+  assert.match(query(w, '1', ...BASE).stdout, /^\[1\] /);
+  assert.equal(query(w, '--branch', 'rules', ...BASE).status, 0);
+});
+
+const WORDS = [['new'], ['update'], ['pop'], ['query'], ['query', 'check'], ['query', 'steps'], ['validate'], ['migrate']];
+test('--help of every team word prints the help and exits 0 with a broken team file, a missing team file and a broken configuration', t => {
+  const cases = {
+    'a broken team file': w => writeFileSync(w.teamFile, '{ nope'),
+    'a missing team file': w => rmSync(w.teamFile),
+    'a broken configuration': w => writeFileSync(join(w.cons, '.backlog', 'config.json'), '{ nope')
+  };
+  for (const [what, damage] of Object.entries(cases)) {
+    const w = world(t);
+    damage(w);
+    for (const words of WORDS) {
+      const r = cli(['team', ...words, '--help'], { cwd: w.cons, tmp: w.tmp, plain: true });
+      assert.equal(r.status, 0, `${words.join(' ')} with ${what}: ${r.stdout}${r.stderr}`);
+      assert.match(r.stdout, /^backlog team/, `${words.join(' ')} with ${what}`);
+    }
+  }
+});
+
+test('--help of every team word outside any git repository prints the help, exits 0 and creates nothing', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'team-help-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const home = join(dir, 'home'); const cwd = join(dir, 'plain');
+  mkdirSync(home); mkdirSync(cwd);
+  for (const words of WORDS) {
+    const r = cli(['team', ...words, '--help'], { cwd, tmp: dir, plain: true, env: { SMOOTH_BACKLOG_CLI_HOME: home } });
+    assert.equal(r.status, 0, `${words.join(' ')}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /^backlog team/, words.join(' '));
+  }
+  assert.deepEqual(readdirSync(home), []);
+  assert.deepEqual(readdirSync(cwd), []);
 });

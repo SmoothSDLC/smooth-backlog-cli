@@ -104,6 +104,7 @@ function queueOrder(folder, entry, team, items, view, session, branch) {
   const order = []; const placed = new Set();
   for (const key of keys) {
     for (const e of idx.branches[key] ?? []) {
+      // shortcut: one find per index entry is quadratic (9000 items take under a second); index mine by slug and branch when a team holds tens of thousands
       const i = mine.find(x => x.slug === e.slug && x.branch === key);
       if (i && !placed.has(i.seq)) { placed.add(i.seq); order.push(i.seq); }
     }

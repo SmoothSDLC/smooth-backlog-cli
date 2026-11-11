@@ -20,8 +20,6 @@ const keep = message => Object.assign(new BacklogError('SYNC_FAILED', message, 3
 export async function publishTeam(backlogHome, folder, message, { step, attempt, watch = [], persist = () => {}, exit = 3, now = Date.now, sleep = delay } = {}) {
   const t = await target(backlogHome);
   const home = t.root;
-  const v = (await g(home, ['--version'])).stdout.match(/(\d+)\.(\d+)\S*/); // merge-tree --write-tree needs 2.40
-  if (v && (+v[1] < 2 || (+v[1] === 2 && +v[2] < 40))) throw new BacklogError('INVALID_INPUT', `team commands need git 2.40 or later (found ${v[0]})`, 2);
   const name = t.prefix + (await assertInside(backlogHome, folder)).split(sep).join('/');
   const names = [name]; const files = [false];
   const committed = new Set(); // every path any staging of this command took
@@ -101,6 +99,8 @@ export async function publishTeam(backlogHome, folder, message, { step, attempt,
     };
 
     try {
+      const v = (await g(home, ['--version'])).stdout.match(/(\d+)\.(\d+)\S*/); // merge-tree --write-tree needs 2.40
+      if (v && (+v[1] < 2 || (+v[1] === 2 && +v[2] < 40))) throw new BacklogError('INVALID_INPUT', `team commands need git 2.40 or later (found ${v[0]})`, 2);
       await commitOwn(message);
       // persist() also when nothing changed: the command succeeded, and it read the team file whose SHA is recorded
       if (!mine || !t.push) { persist(); return { published: false }; } // nothing changed, or pushing is off: the commit stays

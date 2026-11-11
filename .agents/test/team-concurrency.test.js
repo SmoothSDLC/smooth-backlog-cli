@@ -214,7 +214,24 @@ test('code repository: a git older than 2.40 is refused before anything is writt
   process.env.PATH = `${bin}:${path}`;
   await assert.rejects(ca.publish(), e => e.exitCode === 2 && /team commands need git 2\.40 or later \(found 2\.39\.5\)/.test(e.message));
   assert.equal(git(a.root, 'rev-parse', 'HEAD'), git(a.root, 'rev-parse', 'origin/main'), 'nothing was committed');
+  assert.ok(!existsSync(itemPath(a.folder, '002-a')), 'the command\'s file is taken back');
+  assert.equal(git(a.root, 'status', '--porcelain'), '', 'nothing is left in the working copy');
 });
+
+// 2.40 and a newer major version pass the check (the fake git reports them; every other command is the real git)
+for (const version of ['2.40.0', '3.0.1']) {
+  test(`code repository: a git ${version} is not refused`, async t => {
+    const { a } = worlds['code repository'](t);
+    const real = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim();
+    const bin = mkdtempSync(join(tmpdir(), 'newgit-')); t.after(() => rmSync(bin, { recursive: true, force: true }));
+    writeFileSync(join(bin, 'git'), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "git version ${version}"; exit 0; fi\nexec ${real} "$@"\n`); chmodSync(join(bin, 'git'), 0o755);
+    const path = process.env.PATH; t.after(() => { process.env.PATH = path; });
+    const ca = await begin(a, 'new', w => { item(w.folder, 2, 'a'); return { message: 'new a' }; }, quick);
+    process.env.PATH = `${bin}:${path}`;
+    await ca.publish();
+    assert.ok(existsSync(itemPath(a.folder, '002-a')));
+  });
+}
 
 test('code repository: the re-run drops the command\'s commit only: a person\'s unpushed commit and uncommitted change stay', async t => {
   const { a, b } = worlds['code repository'](t);

@@ -62,7 +62,7 @@ test('backlog history prints the entries: time, step, writer, changes and note; 
   f.ok(['update', '1', '--summary', 'x', '--note', 'why']);
   const lines = f.ok(['history', '1']).stdout.split('\n').filter(Boolean);
   assert.match(lines[0], /^ {2}\d{4}-\d\d-\d\dT\S+ {2}update {9}ann {2}summary: s -> x why$/);
-  assert.match(lines[1], /^ {2}\S+ {2}new {12}ann {2}added added 001-alpha at rank end/);
+  assert.match(lines[1], /^ {2}\S+ {2}new {12}ann {2}added 001-alpha at rank end/);
   // an item file of an earlier build: its entries carry no writer, session or changes
   writeFileSync(f.file, JSON.stringify({ ...JSON.parse(readFileSync(f.file, 'utf8')), history: [{ at: '2026-01-01T00:00:00Z', step: 'claimed', note: 'main abc1234567 Claimed by bob' }] }));
   assert.equal(f.ok(['history', '1']).stdout, '  2026-01-01T00:00:00Z  claimed        branch=main commit=abc1234 Claimed by bob\n');
@@ -81,7 +81,7 @@ test('the step is the command: done, archive and move name themselves', () => {
 test('backlog history prints a created item as added plus the note, while the entry keeps every key', () => {
   const f = build();
   assert.ok(Object.keys(f.history()[0].changes).length > 5);
-  assert.match(f.ok(['history', '1']).stdout, /^ {2}\S+ {2}new {12}ann {2}added added 001-alpha at rank end; backlog re-densified to 1 item\(s\)\n$/);
+  assert.match(f.ok(['history', '1']).stdout, /^ {2}\S+ {2}new {12}ann {2}added 001-alpha at rank end; backlog re-densified to 1 item\(s\)\n$/);
 });
 
 test('the file text of an entry is byte-exact: the keys in order, the changes as before/after pairs, the note', () => {
@@ -131,4 +131,12 @@ test('an update entry that sets seq on an item that had none is printed as a cha
   const doc = JSON.parse(readFileSync(f.file, 'utf8'));
   writeFileSync(f.file, JSON.stringify({ ...doc, history: [{ at: '2026-01-01T00:00:00Z', by: 'ann', session: '', step: 'update', changes: { seq: [null, 12] }, note: '' }] }));
   assert.equal(f.ok(['history', '1']).stdout, '  2026-01-01T00:00:00Z  update         ann  seq: null -> 12\n');
+});
+
+test('an entry with changes but no writer prints its changes and stays an object in show --json; only an entry with neither is an old line', () => {
+  const f = build();
+  const doc = JSON.parse(readFileSync(f.file, 'utf8'));
+  writeFileSync(f.file, JSON.stringify({ ...doc, history: [{ at: '2026-01-01T00:00:00Z', by: '', session: '', step: 'update', changes: { summary: ['a', 'b'] }, note: 'n' }] }));
+  assert.equal(f.ok(['history', '1']).stdout, '  2026-01-01T00:00:00Z  update           summary: a -> b n\n');
+  assert.equal(JSON.parse(f.ok(['show', '1', '--json']).stdout).front_matter.events[0].changes.summary[1], 'b');
 });

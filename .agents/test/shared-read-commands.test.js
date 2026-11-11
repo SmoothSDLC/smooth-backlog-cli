@@ -60,7 +60,7 @@ test('history prints the events of the backlog or of one item, newest first', ()
   const f = build();
   const all = f.run('history');
   assert.equal(all.status, 0, all.stderr);
-  assert.match(all.stdout, / new {12}\S+ {2}added added 001-alpha at rank /);
+  assert.match(all.stdout, / new {12}\S+ {2}added 001-alpha at rank /);
   const one = f.run('history', '2');
   assert.equal(one.status, 0, one.stderr);
   assert.ok(one.stdout.trim().split('\n').length >= 1 && one.stdout.trim().split('\n').length < all.stdout.trim().split('\n').length);

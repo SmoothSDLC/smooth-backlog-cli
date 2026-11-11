@@ -20,7 +20,9 @@ export const entriesOf = fm => (Array.isArray(fm.events) ? fm.events : []);
 // An entry of an earlier build (no writer) as the one line it was: '<at> <step> <note>'.
 export const eventText = e => (typeof e === 'string' ? e : [e.at, e.step, e.note].filter((x, i) => i < 2 || x).join(' '));
 // The stored form of the header for output: the entries as they are; an entry of an earlier build stays the line it was.
-export const storedFm = fm => { const out = storedMarkdown(fm); if (Array.isArray(out.events)) out.events = out.events.map(e => (e.by ? e : eventText(e))); return out; };
+// An entry of an earlier build has no writer and no changes (the codec reads a line so); an entry with a writer or with changes is a whole entry.
+export const isOldLine = e => !e.by && !Object.keys(e.changes ?? {}).length;
+export const storedFm = fm => { const out = storedMarkdown(fm); if (Array.isArray(out.events)) out.events = out.events.map(e => (isOldLine(e) ? eventText(e) : e)); return out; };
 
 // The name scheme of item files: the one place that knows the extension and what a name, a slug and an item path look like.
 export const ITEM_EXT = '.json';

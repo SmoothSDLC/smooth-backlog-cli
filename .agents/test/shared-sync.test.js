@@ -13,6 +13,7 @@ import * as index from '../../src/shared/index.js';
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
 import { guarded } from '../../src/shared/seen.js';
+import { dumpItem } from '../../src/shared/item-file.js';
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -614,4 +615,21 @@ test('the command\'s own entry is replaced by its last equal one only: an earlie
     store.addEvent(f.folder, itemRel('001-alpha'), { event: 'planning_event', note: 'planning' });
   });
   assert.equal(store.load(f.folder)[0].fm.events.length, 2);
+});
+
+test('an earlier entry equal to the command\'s own is kept: the last equal one is the one replaced', t => {
+  const f = fixture(t);
+  putItem(f.folder, 1, 'alpha');
+  const path = itemPath(f.folder, '001-alpha');
+  const other = { at: '2026-01-01T00:00:00Z', by: 'bob', session: '', step: 'update', changes: {}, note: 'X' };
+  guarded(() => {
+    const doc = store.load(f.folder)[0];
+    store.write({ path, fm: { ...doc.fm, summary: 'changed' }, body: doc.body });
+    store.addEvent(f.folder, itemRel('001-alpha'), { event: 'update' }); // the command's entry, no note yet
+    const now = store.load(f.folder)[0];
+    const own = now.fm.events.at(-1);
+    writeFileSync(path, dumpItem({ ...now.fm, events: [...now.fm.events.slice(0, -1), { ...own }, other, own] }, now.body)); // an equal entry before the other clone's
+    store.addEvent(f.folder, itemRel('001-alpha'), { event: 'planning_event', note: 'planning' });
+  });
+  assert.deepEqual(store.load(f.folder)[0].fm.events.map(e => e.note), ['', 'X', 'planning']);
 });

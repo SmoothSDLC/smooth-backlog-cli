@@ -630,13 +630,15 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       throw new BacklogError('SYNC_FAILED', `The change was not published in ${home} (${err}); the local branch and working tree were rolled back. Fix the cause and retry the command`, 3);
     } catch (e) {
       // A stale-view refusal keeps the established parent rollback (and exit 5).
-      // Publication failures return the branch to the fetched remote instead; in the user's repository, to the commit before the command's own.
+      // Publication failures take back the command's own commit and nothing else.
       if (e.keep) throw e; // the commit is kept on purpose
       const stale = e.code === 'STALE_ITEM';
       let to = mine ? 'HEAD~1' : 'HEAD';
-      if (t.clone) {
-        const ahead = stale && Number((await g(home, ['rev-list', '--count', `${t.ref}..HEAD`])).stdout.trim()) > 0;
-        to = stale ? (ahead ? 'HEAD~1' : 'HEAD') : t.ref;
+      if (t.clone) { // only the command's own commit is taken back (the one on top, found by its subject): a person's commit under or over it stays
+        const ahead = Number((await g(home, ['rev-list', '--count', `${t.ref}..HEAD`])).stdout.trim());
+        const own = mine && ahead > 0 && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject;
+        // nothing of a person's lies between the fetched remote and the command's commit: the branch also goes to the remote, as a failed pull needs
+        to = own ? (ahead === 1 && !stale ? t.ref : 'HEAD~1') : !stale && ahead === 0 ? t.ref : 'HEAD';
       }
       await undoCommit(to, e);
       throw e;

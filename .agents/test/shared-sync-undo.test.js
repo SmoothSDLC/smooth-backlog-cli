@@ -63,6 +63,49 @@ for (const [mode, make] of Object.entries(modes)) {
   });
 }
 
+// --- a person's own unpushed commit and uncommitted edits are never taken back with the command's commit
+test('backlog clone: a refused push takes back only the command\'s commit: a person\'s commit below it and an uncommitted edit stay', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha'); item(f.folder, 3, 'gamma');
+  await sync.commitSettled(f.home, f.folder, 'new items');
+  refuse(f.bare);
+  const alpha = itemPath(f.folder, '001-alpha');
+  const mine = readFileSync(alpha, 'utf8').replace('status: pending', 'status: done').replace('"status": "pending"', '"status": "done"');
+  assert.notEqual(mine, readFileSync(alpha, 'utf8'));
+  const gamma = itemPath(f.folder, '003-gamma');
+  const gammaEdit = readFileSync(gamma, 'utf8').replace('# x', '# my uncommitted edit');
+  const person = () => { // a commit of the person lands under the command's commit while the command runs
+    const own = git(f.home, 'rev-parse', 'HEAD');
+    git(f.home, 'reset', '-q', '--soft', 'HEAD~1');
+    writeFileSync(alpha, mine);
+    git(f.home, 'commit', '-qm', 'person: alpha done', '--only', '--', alpha);
+    git(f.home, 'commit', '-qC', own);
+  };
+  item(f.folder, 2, 'beta');
+  writeFileSync(gamma, gammaEdit);
+  await assert.rejects(sync.commit(f.home, f.folder, 'add beta', person), /change was not published/);
+  assert.match(git(f.home, 'log', '--format=%s', '-3'), /person: alpha done/, 'the person\'s commit is still in history');
+  assert.equal(readFileSync(alpha, 'utf8'), mine, 'the person\'s change of an owned path stays');
+  assert.equal(readFileSync(gamma, 'utf8'), gammaEdit, 'the uncommitted edit of an owned path stays');
+  assert.equal(git(f.home, 'diff', '--cached', '--name-only'), '', 'nothing is left staged');
+  assert.doesNotMatch(git(f.home, 'log', '--format=%s', '-3'), /add beta/, 'the command\'s commit is gone');
+});
+
+test('backlog clone: a person\'s commit on top of the command\'s commit is never dropped by the undo of a refused push', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  refuse(f.bare);
+  const alpha = itemPath(f.folder, '001-alpha');
+  const mine = readFileSync(alpha, 'utf8').replace('"status": "pending"', '"status": "done"').replace('status: pending', 'status: done');
+  assert.notEqual(mine, readFileSync(alpha, 'utf8'));
+  item(f.folder, 2, 'beta');
+  const person = () => { writeFileSync(alpha, mine); git(f.home, 'commit', '-qm', 'person: alpha done', '--only', '--', alpha); };
+  await assert.rejects(sync.commit(f.home, f.folder, 'add beta', person), /change was not published/);
+  assert.match(git(f.home, 'log', '--format=%s', '-3'), /person: alpha done/);
+  assert.equal(readFileSync(alpha, 'utf8'), mine);
+});
+
 // --- a pull that fails after upstream changed other paths
 function conflictSetup(t, personLine) {
   const f = modes['backlog clone'](t);

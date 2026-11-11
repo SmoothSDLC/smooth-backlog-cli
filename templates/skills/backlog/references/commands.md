@@ -177,7 +177,8 @@ Options:
   --depends-on DEPENDS_ON
       The item numbers or slugs that must be done first, comma-separated, or the word none (the default). owner/name#seq names
       an item of another repository's backlog in the same backlog repository. The command refuses when a named item is
-      not in this backlog, or not in the backlog repository.
+      not in this backlog, or not in the backlog repository. An item that belongs to a team reads as not in this backlog, unless
+      --show-all is given.
   --estimate MINUTES
       The estimated minutes of work, an integer (the front matter key estimate_min).
   --complexity {low,medium,high}
@@ -193,6 +194,9 @@ Options:
       other (the body ends with an empty line). The questions go to standard error, an empty answer leaves a field out, and what the
       command prints on standard output is what it prints without --ask. Without a terminal (standard input and standard error) the
       command refuses, exit 2, and creates nothing. Every other option still applies, and a field given as an option is not asked.
+  --show-all
+      Let --depends-on name an item that belongs to a team. The new item has no team and no other item is changed. --split-from of a
+      team item stays refused.
   --help
       Print this text and exit. Nothing is read or changed.
 
@@ -698,14 +702,14 @@ Example:
 backlog list — the items of this branch: the open ones in queue order, then the finished ones; or one kind of item, the branches, the critical items, or every branch
 
 Usage:
-  backlog list [--json]
-  backlog list new [--json]
-  backlog list open [--json]
-  backlog list done [--json]
-  backlog list archive [--json]
-  backlog list branches [--json]
-  backlog list critical [--json]
-  backlog list all-branches [--json]
+  backlog list [--json] [--show-all]
+  backlog list new [--json] [--show-all]
+  backlog list open [--json] [--show-all]
+  backlog list done [--json] [--show-all]
+  backlog list archive [--json] [--show-all]
+  backlog list branches [--json] [--show-all]
+  backlog list critical [--json] [--show-all]
+  backlog list all-branches [--json] [--show-all]
 
 Reads the backlog and never changes it. Without a word it prints the full stack of the branch that is checked out here: the open items in
 queue order (priority 0 is next), then the finished ones. Each row shows the item's number, slug, status word (free text; closed, done and
@@ -740,6 +744,8 @@ Words (at most one):
 Options:
   --json
       Print machine-readable output.
+  --show-all
+      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 
@@ -771,7 +777,7 @@ Example:
 backlog show — print one item whole: its row, front matter and body
 
 Usage:
-  backlog show <item>[,<item>...] [--agent <name>] [--json]
+  backlog show <item>[,<item>...] [--agent <name>] [--json] [--show-all]
 
 Prints the item given by number or slug as JSON: the row of the item (number, slug, name, status, priority, branch, commit and the other columns),
 its front_matter and its body. Several items given as a comma-separated list are printed as a JSON array, one object each, in the order given. The
@@ -794,6 +800,8 @@ Options:
       The agent that has now read the item. Its next write of the item is checked against the version shown.
   --json
       Accepted for the sake of the other read commands; the output is JSON with or without it.
+  --show-all
+      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 
@@ -825,8 +833,8 @@ Example:
 backlog next — show the next actionable item of this branch
 
 Usage:
-  backlog next [--json]
-  backlog next all-branches [--json]
+  backlog next [--json] [--show-all]
+  backlog next all-branches [--json] [--show-all]
 
 Prints the open item with the best priority on the branch that is checked out here, whole: its objective, summary and
 progress, then its front matter and its body. It reads the backlog without changing it. When the queue is empty it says so
@@ -842,6 +850,8 @@ SMOOTH_BACKLOG_CLI_RUN_HOOK names an executable, and no child process when the v
 Options:
   --json
       Print the item as machine-readable data.
+  --show-all
+      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 
@@ -873,7 +883,7 @@ Example:
 backlog next all-branches — show the next actionable item over every branch of this repository
 
 Usage:
-  backlog next all-branches [--json]
+  backlog next all-branches [--json] [--show-all]
 
 Prints the open item with the best priority over all branches of this repository, whole: its objective, summary and progress, then its
 front matter and its body, the same as backlog next does for the branch checked out here. When there is no open item it says so (with --json
@@ -888,6 +898,8 @@ SMOOTH_BACKLOG_CLI_RUN_HOOK names an executable, and no child process when the v
 Options:
   --json
       Print the item as machine-readable data.
+  --show-all
+      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 
@@ -919,7 +931,7 @@ Example:
 backlog history — print the events of one item, or the latest 50 of the backlog
 
 Usage:
-  backlog history [<item>]
+  backlog history [<item>] [--show-all]
 
 Prints the history that is kept in the item files, newest first, one line per entry. Every command that changes an item adds one entry to it: the time, the step (the command that wrote the entry: new, update, done, archive, move, restore, renumber; a team command keeps its own step word), who made it, the keys that changed
 as key: before -> after (a key that did not exist reads null; updated, updated_by and the history itself are not listed) and the note (--note, else the planning sentence of the command). An entry of an item made before
@@ -938,6 +950,8 @@ Argument:
       The item whose events to print, by number or slug. Optional.
 
 Options:
+  --show-all
+      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 
@@ -969,11 +983,11 @@ Example:
 backlog changes — which items of this repository changed since your last use
 
 Usage:
-  backlog changes [--agent <name>] [--json]
+  backlog changes [--agent <name>] [--json] [--show-all]
 
 Prints which items changed since the last use of the calling agent. The reference is the agent's own last write or its own last
 backlog changes, never a global timestamp, so a change made while the agent is idle still appears in its next report. Its commit and time are
-stated in every result, also when it is empty. The items the agent holds (its name as owner, reviewer or refiner) are listed in a held
+stated in every result, also when it is empty. The items without a team that the agent holds (its name in claimed_by) are listed in a held
 section, every other changed item under others; a file moved inside the folder (an archive, a renumbering) is one D entry for its old name.
 The first use prints "no earlier use: reference set now" and sets the reference. The result also lists the agents that use the backlog and
 their last-use time. Reading an item with backlog show does not move the reference.
@@ -993,6 +1007,8 @@ Options:
       The agent whose last use is the reference. The default is SMOOTH_BACKLOG_CLI_AGENT, else the user.
   --json
       Print machine-readable output.
+  --show-all
+      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 

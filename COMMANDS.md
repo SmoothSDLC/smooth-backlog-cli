@@ -1379,7 +1379,7 @@ Every form reads the backlog and the team file and changes nothing in the backlo
 
 backlog team query lists the open items of the team: those whose status is not in the "final" list of the item definition and that are not archived, in queue order. With --branch (or
 SMOOTH_BACKLOG_CLI_TEAM_BRANCH) the queue is that branch's, in the order of the branch's list; without one it is every branch, in the order of the keys of the backlog's index. One line each:
-"P<rank> [<number>] <slug>  <status>  <name>", the rank counted in the queue shown from 0. A queue without an item prints "ℹ️  no open item for team <name>". --show-all lists the open items of each
+"P<rank> [<number>] <slug>  <status>  <name>", the rank counted in the queue shown from 0. A queue without an item prints "ℹ️  no open item for team <name>" (with --show-all and no open item in any team: "ℹ️  no open item for any team"). --show-all lists the open items of each
 team of the team file, in the file's order, each by its own final statuses, and appends "  (team <name>)" to every line. --json prints the array of the item documents (as backlog team pop's
 "item_file"), in the same order.
 Scenario: the lead of the team parallel looks at what is open on the branch feature/a-b: backlog team query --team parallel --branch feature/a-b

@@ -72,13 +72,13 @@ test('an unreadable team configuration is reported under backlog team and nowher
   const f = fixture();
   ok(f, NEW('first'), {});
   writeFileSync(join(f.home, 'teams.json'), '{ not json');
+  mkdirSync(join(f.cons, '.backlog'), { recursive: true });
+  writeFileSync(join(f.cons, '.backlog', 'teams.json'), '{ not json'); // the team file the team commands read
   for (const args of [['list'], ['list', '--json'], ['update', '1', '--summary', 'x'], ['new', '--name', 'two', '--objective', 'o', '--summary', 's', '--depends-on', 'none']]) {
     const r = plain(f, args);
     assert.equal(r.status, 0, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
     assert.doesNotMatch(r.stderr, /no JSON/, `${args[0]} does not read the team configuration`);
   }
-  mkdirSync(join(f.cons, '.backlog'), { recursive: true });
-  writeFileSync(join(f.cons, '.backlog', 'teams.json'), '{ not json'); // the team file the team commands read
   const team = cli(['team', 'query', '--team', 't1'], { cwd: f.cons, tmp: f.t, env: { SMOOTH_BACKLOG_CLI_AGENT: 'ann' }, plain: true });
-  assert.match(team.stderr, /teams\.json cannot be read/);
+  assert.match(team.stderr, /^❌ backlog: \.backlog\/teams\.json cannot be read \(.+\); fix it and run backlog team validate --team t1\n$/);
 });

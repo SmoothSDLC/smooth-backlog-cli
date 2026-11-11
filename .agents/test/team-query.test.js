@@ -70,6 +70,12 @@ test('--show-all lists each team of the file in file order, each by its own fina
   clean(w);
 });
 
+test('--show-all with no open item in any team prints the empty answer, as text and as an empty array', t => {
+  const w = seeded(t, [item(1, { status: 'closed' }), { ...item(2, { status: 'done' }), team: 'scrum' }], null, { ...TEMPLATES.parallel, ...TEMPLATES.scrum });
+  assert.equal(query(w, '--show-all').stdout, 'ℹ️  no open item for any team\n');
+  assert.equal(query(w, '--show-all', '--json').stdout, '[]\n');
+});
+
 test('without a team the list is refused with the text of the inputs, exit 2', t => {
   const w = seeded(t, [item(1)]);
   const r = query(w);
@@ -95,10 +101,13 @@ test('an item of another team, an item of no team and an unknown item are exit 1
   assert.deepEqual([query(w, '2', ...BASE).status, query(w, '2', ...BASE).stdout], [1, '❌ item 2 belongs to team other\n']);
   assert.deepEqual([query(w, '3', ...BASE).status, query(w, '3', ...BASE).stdout], [1, '❌ item 3 belongs to no team\n']);
   assert.deepEqual([query(w, '9', ...BASE).status, query(w, '9', ...BASE).stdout], [1, '❌ no item 9\n']);
-  const any = query(w, '2', '--show-all');
+  const any = query(w, '2', '--show-all'); // a team the file does not hold: every field prints, as undeclared
   assert.equal(any.status, 0, any.stdout + any.stderr);
   assert.match(any.stdout, /^\[2\] 002-job/);
-  assert.equal(query(w, '3', '--show-all').status, 0);
+  for (const line of ['status: ready', 'estimate: 5', 'holder: ""']) assert.ok(any.stdout.split('\n').includes(line), line);
+  const none = query(w, '3', '--show-all'); // an item of no team
+  assert.equal(none.status, 0, none.stdout + none.stderr);
+  for (const line of ['status: ready', 'estimate: 5', 'holder: ""']) assert.ok(none.stdout.split('\n').includes(line), line);
   clean(w);
 });
 
@@ -146,5 +155,55 @@ test('the retired views are no longer options: each is exit 2 unrecognized', t =
     const r = query(w, ...BASE, flag);
     assert.equal(r.status, 2, flag);
     assert.match(r.stderr, /unrecognized arguments/, flag);
+  }
+});
+
+// What every printer prints passes through the redaction: a URL with credentials, a value that is a user:token pair, and a line break inside a value of the pretty-printed document.
+const SECRET = 'https://user:pw-secret@host.example/x';
+const rich = () => item(1, { note: 'https://u2:pw-two@h2.example/y', token: 'bob:pw-three@h3' }, { name: `job ${SECRET}`, body: 'see https://u3:pw-four@h3.example\nsecond line\n' });
+const NO_SECRET = /pw-secret|pw-two|pw-three|pw-four|user:|u2:|u3:/;
+
+test('the list prints no credential, as text and as JSON, and the JSON keeps its keys', t => {
+  const w = seeded(t, [rich()]);
+  const text = query(w, ...BASE);
+  assert.equal(text.status, 0, text.stdout + text.stderr);
+  assert.doesNotMatch(text.stdout, NO_SECRET);
+  assert.match(text.stdout, /^P0 \[1\] 001-job {2}ready {2}job https:\/\/host\.example\/x\n$/);
+  const json = query(w, ...BASE, '--json');
+  assert.doesNotMatch(json.stdout, NO_SECRET);
+  const [doc] = JSON.parse(json.stdout);
+  assert.equal(doc.name, 'job https://host.example/x');
+  assert.deepEqual(Object.keys(doc.fields).filter(k => ['note', 'token'].includes(k)).sort(), ['note', 'token']);
+  assert.equal(doc.fields.note, 'https://h2.example/y');
+  assert.equal(doc.body, 'see https://h3.example\nsecond line\n');
+});
+
+test('query <item> prints no credential, as text and as JSON; an error line that echoes the input prints none either', t => {
+  const w = seeded(t, [rich()]);
+  const text = query(w, '1', ...BASE);
+  assert.equal(text.status, 0, text.stdout + text.stderr);
+  assert.doesNotMatch(text.stdout, NO_SECRET);
+  assert.match(text.stdout, /^\[1\] 001-job {2}job https:\/\/host\.example\/x\n/);
+  assert.match(text.stdout, /\nnote: https:\/\/h2\.example\/y\n/);
+  const json = query(w, '1', ...BASE, '--json');
+  assert.doesNotMatch(json.stdout, NO_SECRET);
+  const doc = JSON.parse(json.stdout);
+  assert.equal(doc.fields.note, 'https://h2.example/y');
+  assert.equal(doc.body, 'see https://h3.example\nsecond line\n');
+  for (const args of [['--bogus=' + SECRET, ...BASE], [SECRET, ...BASE], ['filter', SECRET, ...BASE]]) {
+    const r = query(w, ...args);
+    assert.notEqual(r.status, 0, args.join(' '));
+    assert.doesNotMatch(r.stdout + r.stderr, NO_SECRET, args.join(' '));
+    assert.match(r.stdout + r.stderr, /host\.example\/x|bogus/, args.join(' '));
+  }
+});
+
+test('query rules and query steps answer exit 2 "not available yet" until their command exists', t => {
+  const w = seeded(t, [item(1)]);
+  for (const word of ['rules', 'steps']) {
+    const r = query(w, word, ...BASE);
+    assert.equal(r.status, 2, word);
+    assert.equal(r.stderr, `❌ backlog: team query ${word} is not available yet\n`);
+    assert.equal(r.stdout, '');
   }
 });

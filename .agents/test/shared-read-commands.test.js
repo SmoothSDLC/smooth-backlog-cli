@@ -94,6 +94,7 @@ test('changes: the first use sets the reference, the next report lists what anot
 test('next all-branches finds the item of a branch other than the one checked out', () => {
   const f = build(true);
   assert.match(f.run('next').stdout, /no actionable item for acme\/demo, branch main/);
+  assert.equal(f.run('next', '--json').stdout, '{}\n', 'an empty queue is {} as JSON');
   const all = f.run('next', 'all-branches');
   assert.equal(all.status, 0, all.stderr);
   assert.match(all.stdout, /NEXT: .*001-feat/);

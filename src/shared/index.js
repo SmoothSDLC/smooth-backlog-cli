@@ -11,6 +11,12 @@ import * as store from './store.js';
 import * as sync from './sync.js';
 import { isArchived, isOpen as workflowOpen } from './status.js';
 
+// The view: a user command does not see an item that belongs to a team, unless it asked to (--show-all). The state starts on, so the team
+// commands and the engine read every item; the router sets it once at the start of each command, so a process never leaks the last value.
+let all = true;
+export const showAll = on => { all = Boolean(on); };
+export const sees = item => all || !item.fm.team;
+
 export const file = folder => join(folder, 'index.json');
 export const exists = folder => existsSync(file(folder));
 
@@ -85,8 +91,9 @@ function within(list, inScope, arrange) {
 // lead [slugs] (these first). exclude [slugs] leave the index. inScope(item) limits which entries a move or a lead may shift.
 // open(item) decides openness (default: the entry's status against the fixed words); with it, the open-first order and the arrangements work only among
 // the positions the scope holds, every other entry keeps its place, and `order` lists the open entries of the scope.
+// view(item) limits `order` to the entries the caller sees, so a rank counts only those.
 // Resolves { idx, order } where order = [[slug, rank]] of the open entries of the branches named by `branches` (default: all).
-export function reconcile(idx, items, { move, lead, exclude = [], renames = new Map(), inScope = () => true, branches: only, open } = {}) {
+export function reconcile(idx, items, { move, lead, exclude = [], renames = new Map(), inScope = () => true, branches: only, open, view = () => true } = {}) {
   const bySlug = new Map(live(items).filter(i => !exclude.includes(slugOf(i))).map(i => [slugOf(i), i]));
   const out = {}; const placed = new Set();
   for (const [key, list] of Object.entries(idx.branches)) {
@@ -116,7 +123,7 @@ export function reconcile(idx, items, { move, lead, exclude = [], renames = new 
     });
   }
   if (lead?.length) for (const key of Object.keys(out)) arrangeBranch(key, mine => [...lead.flatMap(s => mine.filter(e => e.slug === s)), ...mine.filter(e => !lead.includes(e.slug))]);
-  const order = (only ?? Object.keys(out)).flatMap(k => (out[k] ?? []).filter(e => opened(e) && (!open || scoped(e))).map((e, r) => [e.slug, r]));
+  const order = (only ?? Object.keys(out)).flatMap(k => (out[k] ?? []).filter(e => opened(e) && (!open || scoped(e)) && view(bySlug.get(e.slug))).map((e, r) => [e.slug, r]));
   return { idx: { branches: out }, order };
 }
 
@@ -203,9 +210,10 @@ export const HANDOFF = Object.freeze({ id: 1, slug: 'BACKLOG', title: 'Backlog',
 // index (the position in the branch; null for an archived item). { handoff, rows, items }.
 export function rows(folder, items = store.load(folder)) {
   const { idx } = reconcile(current(folder, items), items);
-  const position = new Map(Object.values(idx.branches).flatMap(l => l.map((e, n) => [e.slug, n])));
+  const seen = new Set(items.filter(sees).map(slugOf));
+  const position = new Map(Object.values(idx.branches).flatMap(l => l.filter(e => seen.has(e.slug)).map((e, n) => [e.slug, n])));
   const at = store.now();
-  const list = items.map((i, n) => {
+  const list = items.flatMap((i, n) => (sees(i) ? [[i, n]] : [])).map(([i, n]) => { // id: the place in the folder, as before
     const fm = i.fm; const v = (k, d) => (k in fm ? fm[k] : d);
     return {
       id: n + 1, handoff_id: 1, slug: slugOf(i), seq: num(v('seq', 0)), name: txt(v('name', '')), objective: txt(v('objective', '')), summary: txt(v('summary', '')),
@@ -214,7 +222,7 @@ export function rows(folder, items = store.load(folder)) {
       created_at: v('created', at), updated_at: v('updated', at), completed_at: v('completed', null),
     };
   });
-  return { handoff: { ...HANDOFF, created_at: at, updated_at: at }, rows: list, items };
+  return { handoff: { ...HANDOFF, created_at: at, updated_at: at }, rows: list, items: items.filter(sees) };
 }
 
 // The open rows in the order of the queue: priority, then number.

@@ -375,7 +375,7 @@ const branchOf = i => String(i.fm.branch || '');
 // The order of the backlog is the repository folder's index (index.js): a rank change writes it and no item. A session bound to a team
 // (set by backlog team) orders only its own items, beyond python parity: the other items keep their places, and the team's items
 // are re-ordered among the places they already hold (a move target is a position among the team's own items).
-const inScope = i => seam.inScope(i.fm);
+const inScope = i => seam.inScope(i.fm) && index.sees(i); // a user command keeps the team entries where they are
 
 // Makes the index right against the item files (new items appended, gone ones dropped, name and status copied from the files, open items
 // first) and, with { slug, target }, first moves that item to the clamped rank among the open items of its branch. { branches: [branch] } names
@@ -383,7 +383,7 @@ const inScope = i => seam.inScope(i.fm);
 export function reflow(dir, move = {}) {
   const items = load(dir);
   const moving = move.slug != null ? items.find(i => slugOf(i) === move.slug) : null;
-  const { idx, order } = index.reconcile(index.current(dir, items), items, { move, renames: move.renames, inScope, branches: move.branches ?? (moving ? [branchOf(moving)] : undefined) });
+  const { idx, order } = index.reconcile(index.current(dir, items), items, { move, renames: move.renames, inScope, branches: move.branches ?? (moving ? [branchOf(moving)] : undefined), view: index.sees });
   index.write(dir, idx);
   return order;
 }
@@ -400,7 +400,7 @@ export function reorder(dir, idents) {
     const i = bySlug.get(key) || bySeq.get(key.replace(/^0+/, '') || '0');
     if (i && !lead.includes(i)) lead.push(i);
   }
-  const { idx, order } = index.reconcile(index.current(dir, items), items, { lead: lead.map(slugOf), inScope, branches: lead.length ? [...new Set(lead.map(branchOf))] : undefined });
+  const { idx, order } = index.reconcile(index.current(dir, items), items, { lead: lead.map(slugOf), inScope, branches: lead.length ? [...new Set(lead.map(branchOf))] : undefined, view: index.sees });
   index.write(dir, idx);
   return order;
 }

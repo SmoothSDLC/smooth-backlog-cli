@@ -1,5 +1,6 @@
 // The command router: every command but setup. run returns the exit code; a failure prints one ❌ line on stderr.
 import { existsSync } from 'node:fs';
+import { showAll } from './index.js';
 import { redact } from './safety.js';
 import { assertConfigReadable } from './setup.js';
 import { resolveHome } from './store.js';
@@ -29,6 +30,7 @@ export async function run(command, argv, { table = TABLE, help } = {}) {
   assertConfigReadable(); // a configuration that exists but cannot be read stops every command before anything is read or written
   const { ask } = resolveHome(); // the storage location: a missing configured clone is refused here, before the command runs
   if (ask) return die(ask.text, ask.code);
+  showAll(command === 'team'); // the user commands do not see team items; the team commands read every item
   const [spec, ...lead] = table[command];
   return (await (await load(spec)).run([...lead, ...argv])) ?? 0;
 }

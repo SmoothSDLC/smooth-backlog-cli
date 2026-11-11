@@ -46,11 +46,10 @@ the command stops with exit 2 and changes nothing. By its slug either item can b
 number with backlog update <slug> --seq <n>, and other writes to the pair are refused until then. A number an item stores
 in depends_on that two items hold counts as an undone dependency. The CLI never renumbers such a pair by itself.
 
-An item that belongs to a team is changed by backlog team update only. A user command that would change its team state (status,
-claim, review, refinement, dependencies, its place in the team's queue, its deletion) refuses it: update (every change), done,
-update --replan naming it, archive of one that is not closed (also with --force), import --higher and clean. A refusal is one line on
-standard output, exit 1, and nothing is written. move, archive of a closed team item and archive done only file or store an item and work
-on a team item like on any other.
+A user command does not see an item that belongs to a team: list, next, show, history and the counts leave it out, the queue and the
+priorities (P0, P1, ...) count only the other items, and a command that names it answers as for an item that does not exist (no phase
+'<item>'). An item that lists a team item in depends_on reads as depending on a missing item. A team item is filed and changed by
+backlog team only. clean still refuses to remove a team item that lies in its scope.
 
 The backlog is always a git repository. Wherever the items live, every command first updates the repository that holds
 them from its origin (reads included), every change is committed and pushed before the command exits, a push the
@@ -286,8 +285,8 @@ ${EXIT}
 Example:
   backlog update 18 --status "in progress" --note "Started the help text"
 
-An item that belongs to a team is changed by backlog team update only: this command refuses every change of it, field edits included,
-and a --replan that names it (the place of a team item is the place effect of its team's rules).
+An item that belongs to a team is not seen by this command (no phase '<item>'); a --replan that names one leaves the team entries
+of the queue where they are.
 Team items: backlog team update --help.
 `,
 
@@ -536,9 +535,7 @@ their content and their history; finished and archived items stay where they are
 their original order (each gets priority 0, newest first). The queue of the branch is renumbered without gaps. The first step that fails stops
 the sequence, and the output says what was done before it. When the source has no open item the command says so and exits 0; when no item
 carries the branch name it says so too (check the name). The source cannot be the branch checked out here (exit 2). The command prints text
-only: --json is refused (exit 2). An open item of a team is moved like any other and keeps its team and its state; with --higher it would
-take a place in the queue, which a team item takes only from the place effect of its team's rules (backlog team update), so --higher refuses the whole import when the
-source has one (exit 1, nothing moved).
+only: --json is refused (exit 2). An item of a team is not seen by the import: it stays on its branch.
 
 ${SHARED}
 
@@ -563,7 +560,7 @@ Usage:
 For every finished item (status closed or done, not archived yet) of the branch checked out here, oldest first, it runs backlog archive <item>: the
 item leaves the work queue, is kept as archived, and the queue is renumbered. Open items stay. It prints which items it archived. When there is
 no finished item it says so and exits 0. The first archive that fails stops the sequence, and the output says what was archived before it. A
-closed item of a team is archived like any other. The command takes no other argument and prints text only: --json is refused (exit 2).
+team item is not seen by it. The command takes no other argument and prints text only: --json is refused (exit 2).
 
 ${SHARED}
 
@@ -610,8 +607,7 @@ Moves backlog items. With --to-branch the item now belongs to that branch of thi
 --all-open-of-branch every open item of one branch moves to another branch, for example after the branch was
 merged. With --to-repository an item that names another repository goes to the folder of that repository in the
 backlog repository; without a value it goes to the repository the item names, under a new item number there (one above the highest number the target ever used).
-Every move is recorded as an event in the history of the item. An item that belongs to a team is moved like any other: the move files it
-(its branch or repository, its place at the end of the queue there) and changes nothing of its team state (status, claim, review).
+Every move is recorded as an event in the history of the item. An item that belongs to a team is not seen by the move (no item '<item>' in the backlog).
 
 ${SHARED}
 
@@ -649,8 +645,7 @@ repository and keeps the status it had: an item is archived by where it is store
 version, which holds the status archived, reads the same). The output names it by its slug. The command records an event and
 renumbers the remaining backlog to 0..M-1, because archiving takes the item off the backlog. Archiving an item
 that is already archived does nothing and says so. The command refuses when the item does not exist, or when its
-status is not finished (closed or done) and --force was not given. A closed item of a team is archived like any other; a team item that is not closed is
-refused, with --force too (exit 1, nothing written): it leaves the queue by its team's steps (backlog team update <item> <step>).
+status is not finished (closed or done) and --force was not given. An item that belongs to a team is not seen by the archive (no phase '<item>').
 
 ${SHARED}
 
@@ -660,7 +655,7 @@ Argument:
 
 Options:
   --force
-      Archive the item even if its status is not finished (closed or done); never a team item that is not closed.
+      Archive the item even if its status is not finished (closed or done).
   --dry-run
       Say which item would be archived and change nothing: nothing is moved and nothing is committed.
 ${HELP_FLAG}

@@ -7,9 +7,9 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { cli, consumer, createdSlug, itemPath, sharedBacklog, readItem, archivedPath, GIT_IDENTITY, changeStored, writeItem } from './shared-fixtures.js';
 
 const dirs = [];
@@ -61,10 +61,10 @@ function build() {
 }
 const REFUSED = (r, text) => { assert.equal(r.status, 1, r.stdout + r.stderr); assert.equal(r.stdout.trim().split('\n').length, 1, r.stdout); assert.ok(r.stdout.startsWith(`❌ ${text}`), r.stdout); assert.equal(r.stderr, ''); };
 
-test('done engages on an item with a team: refused, nothing written', () => {
+test('done does not see an item with a team: no such item, nothing written', () => {
   const f = build(); const team = f.item('Team job', { team: true });
   const before = f.state();
-  REFUSED(f.run(['done', team]), 'use backlog team update: a team item is changed only there');
+  REFUSED(f.run(['done', team]), `no phase '${team}'`);
   assert.equal(f.state(), before);
 });
 test('done bites only on a team item: an item without a team is finished', () => {
@@ -73,23 +73,26 @@ test('done bites only on a team item: an item without a team is finished', () =>
   assert.equal(f.fm(plain).status, 'closed');
 });
 
-test('update --replan engages on a team item it names: refused, nothing written, the order stays', () => {
+test('update --replan does not see a team item it names: the team entry keeps its place and its file is not written', () => {
   const f = build(); const plain = f.item('Plain job'); const team = f.item('Team job', { team: true });
-  const before = f.state();
-  REFUSED(f.run(['update', '--replan', `${team},${plain}`]), `use backlog team update --replan: ${team} belongs to a team`);
-  assert.equal(f.state(), before);
-  assert.deepEqual(JSON.parse(f.ok(['list', '--json']).stdout).phases.map(r => r.slug), [plain, team]);
+  const file = () => JSON.stringify(f.fm(team));
+  const before = file();
+  f.ok(['update', '--replan', `${team},${plain}`]);
+  assert.equal(file(), before);
+  assert.deepEqual(JSON.parse(f.ok(['list', '--json']).stdout).phases.map(r => r.slug), [plain]);
+  assert.deepEqual(JSON.parse(readFileSync(join(f.home, 'acme', 'demo', 'index.json'), 'utf8')).branches.main.map(e => e.slug), [plain, team]);
 });
-test('update --replan bites only on a team item it names: a replan of items without a team goes through', () => {
+test('update --replan of items without a team goes through and the team entry keeps its place', () => {
   const f = build(); const first = f.item('First'); const second = f.item('Second'); const team = f.item('Team job', { team: true });
   f.ok(['update', '--replan', second]);
-  assert.deepEqual(JSON.parse(f.ok(['list', '--json']).stdout).phases.map(r => r.slug), [second, first, team]);
+  assert.deepEqual(JSON.parse(f.ok(['list', '--json']).stdout).phases.map(r => r.slug), [second, first]);
+  assert.equal(JSON.parse(readFileSync(join(f.home, 'acme', 'demo', 'index.json'), 'utf8')).branches.main.at(-1).slug, team);
 });
 
-test('archive engages on a team item that is not closed, with and without --force: refused, nothing written', () => {
+test('archive does not see a team item, with and without --force: no such item, nothing written', () => {
   const f = build(); const team = f.item('Team job', { team: true });
   const before = f.state();
-  for (const args of [['archive', team], ['archive', team, '--force'], ['archive', team, '--force', '--dry-run']]) REFUSED(f.run(args), `use backlog team update: ${team} belongs to a team and is not closed`);
+  for (const args of [['archive', team], ['archive', team, '--force'], ['archive', team, '--force', '--dry-run']]) REFUSED(f.run(args), `no phase '${team}'`);
   assert.equal(f.state(), before);
 });
 test('archive bites only on an open team item: --force still archives an open item without a team', () => {
@@ -97,33 +100,27 @@ test('archive bites only on an open team item: --force still archives an open it
   f.ok(['archive', plain, '--force']);
   assert.equal(f.fm(plain).status, 'pending');
 });
-test('archive and archive done keep working for a closed team item (finished-item storage)', () => {
-  const f = build(); const one = f.item('Closed one', { team: true, closed: true }); const two = f.item('Closed two', { team: true, closed: true });
-  f.ok(['archive', one]);
-  assert.equal(f.fm(one).status, 'closed');
-  assert.match(f.ok(['archive', 'done']).stdout, new RegExp(`archived 1 finished item\\(s\\): ${two}`));
-  assert.equal(f.fm(two).status, 'closed');
-});
-
-test('move keeps working for an item with a team (it files the item, no team rule): the team fields stay', () => {
-  const f = build(); const team = f.item('Team job', { team: true });
-  const keys = ['team', 'status', 'claimed_by', 'refiner', 'depends_on'];
-  const before = f.fm(team);
-  f.ok(['move', team, '--to-branch', 'feature']);
-  assert.deepEqual(keys.map(k => f.fm(team)[k]), keys.map(k => before[k]));
-  assert.equal(f.fm(team).branch, 'feature');
-});
-
-test('import --higher engages on a team item it would place first: refused before anything is moved', () => {
-  const f = build(); f.item('Plain on feature', { branch: 'feature' }); const team = f.item('Team on feature', { team: true, branch: 'feature' });
+test('archive and archive done do not see a closed team item: it stays where it is', () => {
+  const f = build(); const one = f.item('Closed one', { team: true, closed: true }); f.item('Closed two', { team: true, closed: true });
   const before = f.state();
-  REFUSED(f.run(['import', '--branch', 'feature', '--higher']), `import --higher: ${team} belongs to a team`);
+  REFUSED(f.run(['archive', one]), `no phase '${one}'`);
+  assert.match(f.ok(['archive', 'done']).stdout, /no finished item/);
+  assert.equal(f.state(), before);
+  assert.equal(f.fm(one).status, 'closed');
+});
+
+test('move does not see an item with a team: no such item, nothing written', () => {
+  const f = build(); const team = f.item('Team job', { team: true });
+  const before = f.state();
+  REFUSED(f.run(['move', team, '--to-branch', 'feature']), `no item '${team}' in the backlog of acme/demo`);
   assert.equal(f.state(), before);
 });
-test('import bites only with --higher on a team item: import without it moves the team item, and --higher on items without a team places them first', () => {
-  const f = build(); f.item('Here'); const team = f.item('Team on feature', { team: true, branch: 'feature' });
-  f.ok(['import', '--branch', 'feature']);
-  assert.equal(f.fm(team).branch, 'main');
+
+test('import does not see a team item of the other branch: it stays there, with and without --higher', () => {
+  const f = build(); const plain = f.item('Plain on feature', { branch: 'feature' }); const team = f.item('Team on feature', { team: true, branch: 'feature' });
+  f.ok(['import', '--branch', 'feature', '--higher']);
+  assert.equal(f.fm(team).branch, 'feature');
+  assert.equal(f.fm(plain).branch, 'main');
   const g = build(); g.item('Here'); const there = g.item('There', { branch: 'feature' });
   g.ok(['import', '--branch', 'feature', '--higher']);
   assert.deepEqual(JSON.parse(g.ok(['list', '--json']).stdout).phases.map(r => r.slug)[0], there);
@@ -131,7 +128,9 @@ test('import bites only with --higher on a team item: import without it moves th
 
 test('clean engages on a team item in its scope, archived ones included: refused before the question, nothing written', () => {
   const f = build(); f.item('Plain job'); const team = f.item('Team job', { team: true, closed: true });
-  f.ok(['archive', team]);
+  const from = itemPath(join(f.home, 'acme', 'demo'), team); const to = archivedPath(join(f.home, 'acme', 'demo'), team, 'phases'); // the plain archive does not see a team item: it is filed by hand
+  mkdirSync(dirname(to), { recursive: true }); renameSync(from, to);
+  git(f.home, 'add', '-A'); git(f.home, 'commit', '-q', '-m', 'archived team item'); git(f.home, 'push', '-q');
   const before = f.state();
   REFUSED(f.run(['clean'], { input: 'yes\n' }), `clean: ${team} belongs to a team, and no command deletes a team item`);
   REFUSED(f.run(['clean', 'all-branches'], { input: 'yes\n' }), 'clean: ');

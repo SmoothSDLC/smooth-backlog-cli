@@ -13,7 +13,7 @@ import * as seen from './seen.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { asList } from './text.js';
-import { foreignItem, isForeign, undoneDependencies } from './dependencies.js';
+import { isForeign, undoneDependencies, visibleForeign } from './dependencies.js';
 import { seam } from './seam.js';
 import { isArchived, isFinished, isOpen, lifted } from './status.js';
 
@@ -314,7 +314,7 @@ async function query(argv, team, branchColumn) {
       { // every status: a done item still shows what it depended on
         const deps = (byPath ??= new Map(items.map(i => [i.path, i.fm]))).get(r.path)?.depends_on;
         for (const d of asList(deps).filter(isForeign)) {
-          const f = foreignItem(folder, d);
+          const f = visibleForeign(folder, d);
           say(`        ⛓ depends on ${d}${f ? ` ${f.slug} (status ${f.status})` : ' (no such item in the backlog repository)'}`);
         }
       }

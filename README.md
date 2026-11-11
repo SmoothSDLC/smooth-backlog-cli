@@ -82,12 +82,7 @@ the item is next written.
 The CLI has two personas. **The user** is a person using the CLI: the user commands enforce nothing, so a user may set any status or value, and it is the user's job to find the commands and flags that show an item whose value is not a default. A user who wants an enforced flow defines a custom team named `user` and uses the team commands. **The agents** are AI agents working in teams through `backlog team`: everything a team enforces comes from its team behaviour file, not from the CLI's code.
 
 There are two kinds of commands: the user's and the agents'. The user commands (`new`, `update`, `done`, `list`, `show`, `next`, `history`, `changes`, `fields`, `move`, `archive`, `import`, `clean`, `setup`, `upgrade`)
-know nothing of teams: they work on items without a team. `backlog update` refuses every change of an item that belongs to a team,
-and `backlog new --split-from` refuses a team's item: those go through `backlog team`. So do the user commands that would change the
-team state of an item (status, claim, review, refinement, dependencies, its place in the team's queue, its deletion): `done`, `update --replan`
-naming it, `archive` of a team item that is not closed (also with `--force`), `import --higher` and `clean` refuse it with one line, exit 1,
-and write nothing. `move`, `archive` of a closed team item and `archive done` only file or store an item and work on a team item
-like on any other. A person's items take their owner from
+know nothing of teams: they work on items without a team. A user command does not see an item that belongs to a team: `list`, `next`, `show`, `history` and the counts leave it out, the queue and the priorities count only the other items, and a command that names it answers as for an item that does not exist (`no phase '<item>'`). An item that lists a team item in `depends_on` reads as depending on a missing item. A team item is filed and changed by `backlog team` only; `clean` still refuses to remove a team item in its scope. A person's items take their owner from
 `.backlog/config.json`, where `backlog setup` writes `user` (the git `user.name`, else the name the person is logged in
 with) and an empty `team`; a second setup keeps what is there.
 

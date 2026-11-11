@@ -94,7 +94,6 @@ test('a plain status close writes no hand-off record into the item', () => {
 
 // ---- one door: a team's item is changed by `backlog team update` only (a plain update refuses every change of it)
 
-const OF_A_TEAM = /use backlog team update: a team item is changed only there, and its status moves by its team steps/;
 // every generic field flag and plain step of `backlog update`, with a value that is valid for it
 const FIELD_FLAGS = [
   ['name', ['--name', 'renamed']], ['objective', ['--objective', 'changed']], ['summary', ['--summary', 'changed']], ['location', ['--location', 'elsewhere']],
@@ -105,47 +104,46 @@ const FIELD_FLAGS = [
 ];
 const PLAIN_ONLY = [['status', ['--status', 'closed']], ['branch', ['--branch', 'other']], ['seq', ['--seq', '9']], ['claim', ['--claim', 'ann']], ['release', ['--release', 'ann']],
   ['close', ['--close', '--summary', 'done', '--by', 'ann']], ['dry-run', ['--dry-run', '--note', 'x']]];
-test('a plain update refuses every field flag and step on a team item, with one line naming backlog team update, and writes nothing', () => {
+test('a plain update does not see a team item for any field flag or step: one line, no such item, and nothing is written', () => {
   const f = fixture();
   const s = teamItem(f);
   const before = readFileSync(file(f, s), 'utf8');
   for (const [flag, args] of [...FIELD_FLAGS, ...PLAIN_ONLY]) {
     const r = run(f, ['update', s, ...args]);
     assert.equal(r.status, 1, `--${flag}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stdout, OF_A_TEAM, `--${flag}`);
+    assert.match(r.stdout, new RegExp(`^❌ no phase '${s}'`), `--${flag}`);
     assert.equal(r.stdout.trim().split('\n').length, 1, `--${flag}: one line`);
   }
   assert.equal(readFileSync(file(f, s), 'utf8'), before);
 });
 
-test('a plain replan refuses a team item it names (its place in the queue is a team matter) and reorders items without a team, leaving the team item as it is', () => {
+test('a plain replan does not see a team item it names: the team item keeps its place, and items without a team are reordered', () => {
   const f = fixture();
   const a = plainItem(f, 'first');
   const s = teamItem(f);
   const before = readFileSync(file(f, s), 'utf8');
   assert.equal(index.rank(f.folder, 'main', s), 1);
   const r = run(f, ['update', '--replan', `${s},${a}`]);
-  assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stdout, /^❌ use backlog team update --replan: .* belongs to a team/);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(index.rank(f.folder, 'main', s), 1, 'the team item keeps its place');
   assert.equal(run(f, ['update', '--replan', a]).status, 0);
   assert.equal(readFileSync(file(f, s), 'utf8'), before, 'its file is not rewritten: the order lives in the index');
 });
 
-test('a plain update may not move the status of a team item; the team command says so too', () => {
+test('a plain update does not see a team item, so it cannot move its status', () => {
   const f = fixture();
   const s = teamItem(f);
   const r = run(f, ['update', s, '--status', 'closed']);
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /use backlog team update: a team item is changed only there, and its status moves by its team steps/);
+  assert.match(r.stdout, new RegExp(`^❌ no phase '${s}'`));
 });
 
-test('a plain new does not split a team item', () => {
+test('a plain new does not see a team item to split', () => {
   const f = fixture();
   const s = teamItem(f);
   const r = run(f, ['new', '--split-from', s, '--name', 'child', '--depends-on', 'none']);
   assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stdout, new RegExp(`item ${s} belongs to team t1: a split of a team's item is made by backlog team new`));
+  assert.match(r.stdout, new RegExp(`--split-from: no phase '${s}'`));
 });
 
 // ---- the boundary in the code: the plain commands know no team variable, no team file and no team module

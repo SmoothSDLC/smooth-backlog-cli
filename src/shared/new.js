@@ -14,7 +14,7 @@ import { highWater, record as recordNumber } from './numbers.js';
 import { commitSettled, pull } from './sync.js';
 import { seam } from './seam.js';
 import { isFinished } from './status.js';
-import { foreignItem, isForeign } from './dependencies.js';
+import { isForeign, visibleForeign } from './dependencies.js';
 
 const DOD_PLACEHOLDER = '- [ ] <machine-checkable acceptance>'; //
 const pad = n => String(n).padStart(3, '0');
@@ -154,7 +154,7 @@ async function create(argv, { home, folder, repo, scope, team, floor = 0 }) {
   {
     const deps = [];
     for (const d of asList(a.dependsOn)) {
-      if (isForeign(d)) { if (!foreignItem(folder, d, true)) return refuse(`--depends-on: no item '${d}' in the backlog repository`); }
+      if (isForeign(d)) { if (!visibleForeign(folder, d, true)) return refuse(`--depends-on: no item '${d}' in the backlog repository`); }
       else if (!findItem(rows, d)) return refuse(`--depends-on: no item '${d}' in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }

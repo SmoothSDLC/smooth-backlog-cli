@@ -6,6 +6,7 @@
 import { join } from 'node:path';
 import { BacklogError } from '../errors.js';
 import { itemSlug, readItemFile } from './item-file.js';
+import * as index from './index.js';
 import { find as findItem, rows as itemRows } from './index.js';
 import { repairUnreadable } from './repair.js';
 import { isArchived, isFinished, isOpen, lifted, normalise } from './status.js';
@@ -17,8 +18,8 @@ import { plainStep, claimOf } from './plain-step.js';
 import { wipRefusal } from './wip-limits.js';
 import { seam } from './seam.js';
 import { asList, rstrip, strip } from './text.js';
-import { foreignCycle, foreignItem, isForeign } from './dependencies.js';
-import { OF_A_TEAM, REPLAN_TEAM } from './team-items.js';
+import { foreignCycle, isForeign, visibleForeign } from './dependencies.js';
+import { OF_A_TEAM } from './team-items.js';
 import { MAX_SEQ, record as recordNumber } from './numbers.js';
 
 const SETTABLE = ['status', 'branch', 'commit', 'location', 'summary', 'priority', 'name', 'objective', 'seq', 'size_score'];
@@ -191,10 +192,6 @@ async function change(a, folder, repo, team) {
   // --- pure planning event: explicit replan of the whole backlog
   if (a.replan) {
     const idents = a.replan.split(',').map(strip).filter(Boolean);
-    if (!team) { // a team item takes its place in the queue by backlog team update only
-      const owned = idents.map(ident => findItem(rows, ident)).filter(r => r && items.find(i => i.path === r.path)?.fm.team).map(r => r.slug);
-      if (owned.length) return refuse(REPLAN_TEAM([...new Set(owned)]));
-    }
     for (const ident of idents) { // a bound team session reorders only its own items: naming another team's item is refused, before anything is written
       const named = findItem(rows, ident);
       const outside = named && team?.refuseOutside(named);
@@ -246,10 +243,10 @@ async function change(a, folder, repo, team) {
     if (k === 'seq') { // the number selects the item: another item (archived ones too) holding it would make every numeric selector ambiguous
       if (n > MAX_SEQ) return refuse(`--seq ${n} is above the highest number the CLI can use (${MAX_SEQ})`);
       const held = rows.find(r => Number(r.seq) === n && r.id !== row.id)?.slug
-        ?? store.load(folder).find(i => Number(i.fm.seq) === n && i.fm.phase !== row.slug)?.fm.phase;
+        ?? store.load(folder).filter(index.sees).find(i => Number(i.fm.seq) === n && i.fm.phase !== row.slug)?.fm.phase;
       if (held) return refuse(`--seq ${n} is already item ${held}; the number must stay unique`);
       const own = a.seqRepaired; // the repair of an unreadable seq decided the number before it wrote it
-      const by = own ? [] : store.load(folder).filter(i => i.fm.phase !== row.slug && asList(i.fm.depends_on).some(d => d === row.slug || (/^\d+$/.test(String(d)) && Number(d) === Number(row.seq)))).map(i => i.fm.phase ?? i.path);
+      const by = own ? [] : store.load(folder).filter(index.sees).filter(i => i.fm.phase !== row.slug && asList(i.fm.depends_on).some(d => d === row.slug || (/^\d+$/.test(String(d)) && Number(d) === Number(row.seq)))).map(i => i.fm.phase ?? i.path);
       if (by.length) return refuse(`${by.join(', ')} depend${by.length > 1 ? '' : 's'} on ${row.slug}, which a new number would leave them pointing at nothing; clear or repoint them first: update <dependent> --set-depends-on <ids|none>`);
       const high = store.mark(folder);
       if (n <= high && !own) return refuse(`--seq ${n} is not above the highest number ever used in ${repo} (${high}); numbers are never reused`);
@@ -272,7 +269,7 @@ async function change(a, folder, repo, team) {
   if (a['set-depends-on'] !== undefined) {
     const deps = [];
     for (const d of asList(a['set-depends-on'])) {
-      if (isForeign(d)) { if (!foreignItem(folder, d, true)) return refuse(`--set-depends-on: no item ${pyStr(d)} in the backlog repository`); }
+      if (isForeign(d)) { if (!visibleForeign(folder, d, true)) return refuse(`--set-depends-on: no item ${pyStr(d)} in the backlog repository`); }
       else if (!findItem(rows, d)) return refuse(`--set-depends-on: no item ${pyStr(d)} in this backlog`);
       deps.push(/^\d+$/.test(d) ? Number(d) : d);
     }

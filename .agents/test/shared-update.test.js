@@ -13,7 +13,6 @@ import * as index from '../../src/shared/index.js';
 import { parseItem as parse } from '../../src/shared/item-file.js';
 import * as store from '../../src/shared/store.js';
 import { editSection } from '../../src/shared/update.js';
-import { OF_A_TEAM, REPLAN_TEAM } from '../../src/shared/team-items.js';
 
 const git = (cwd, ...args) => {
   const p = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } });
@@ -488,7 +487,7 @@ test('an item archived with --force counts as finished for a claim: it keeps its
 // An item that belongs to a team is changed by its team's steps only: the plain update refuses every change of it, with one line, and writes nothing.
 const teamed = (f, ...seqs) => seqs.map(n => { const slug = `00${n}-${['', 'alpha', 'beta', 'gamma'][n]}`; changeStored(f.home, itemPath(f.folder, slug), { team: 't1', status: 'ready', stage: 'ready', refiner: 'lead' }, 'team item'); return slug; });
 
-test('review P1: update of an item of a team (field edit, note, append, rank, section) is refused and writes nothing', () => {
+test('review P1: update of an item of a team (field edit, note, append, rank, section) does not see it and writes nothing', () => {
   const f = seed();
   teamed(f, 2);
   const text = readFileSync(itemPath(f.folder, '002-beta'), 'utf8');
@@ -496,34 +495,31 @@ test('review P1: update of an item of a team (field edit, note, append, rank, se
   for (const args of [['2', '--summary', 'x'], ['2', '--note', 'x'], ['2', '--append', 'x'], ['2', '--priority', '0'], ['2', '--section', 'Evidence', '--add-line', 'x']]) {
     const r = run(f, args);
     assert.equal(r.status, 1, `${args}: ${r.stdout}${r.stderr}`);
-    assert.equal(r.stdout, `❌ ${OF_A_TEAM}\n`);
+    assert.equal(r.stdout, "❌ no phase '2' (create it with backlog new)\n");
   }
   assert.equal(readFileSync(itemPath(f.folder, '002-beta'), 'utf8'), text);
   assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
 });
 
-test('review P1: --replan naming an item of a team is refused and writes nothing; a replan of items outside any team never writes the files of the team\'s items', () => {
+test('review P1: --replan naming an item of a team does not see it; a replan never writes the files of the team\'s items', () => {
   const f = seed();
   teamed(f, 2, 3);
   const files = () => JSON.stringify(['002-beta', '003-gamma'].map(n => readFileSync(itemPath(f.folder, n), 'utf8')));
-  const [before, head] = [files(), git(f.home, 'rev-parse', 'HEAD')];
-  const refused = run(f, ['--replan', '1,3']);
-  assert.equal(refused.status, 1, refused.stdout + refused.stderr);
-  assert.equal(refused.stdout, `❌ ${REPLAN_TEAM(['003-gamma'])}\n`);
-  assert.equal(git(f.home, 'rev-parse', 'HEAD'), head);
+  const before = files();
+  assert.equal(run(f, ['--replan', '1,3']).status, 0); // the team item named is not seen: only the item outside a team is led
   const [a, d] = [rankOf(f, '001-alpha'), rankOf(f, '004-delta')];
   assert.equal(run(f, ['--replan', '004-delta,001-alpha']).status, 0);
   assert.ok(rankOf(f, '004-delta') < rankOf(f, '001-alpha') && a < d, 'the two items outside a team trade their places');
   assert.equal(files(), before, 'no file of a team item was written');
 });
 
-test('--status on an item of a team is refused: its status moves by the team steps, and nothing is written', () => {
+test('--status on an item of a team does not see it: no such item, and nothing is written', () => {
   const f = seed();
   teamed(f, 1);
   const before = readFileSync(itemPath(f.folder, '001-alpha'), 'utf8');
   const r = run(f, ['1', '--status', 'closed']);
   assert.equal(r.status, 1, r.stdout);
-  assert.equal(r.stdout, `❌ ${OF_A_TEAM}\n`);
+  assert.equal(r.stdout, "❌ no phase '1' (create it with backlog new)\n");
   assert.equal(readFileSync(itemPath(f.folder, '001-alpha'), 'utf8'), before);
 });
 

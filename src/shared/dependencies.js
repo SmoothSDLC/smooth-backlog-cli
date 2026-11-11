@@ -50,6 +50,11 @@ export function foreignItem(folder, id, typed = false) { // typed: given on the 
   const it = index.pick(named, Number(m[3]));
   return it ? { repository: `${m[1]}/${m[2]}`, seq: Number(m[3]), slug: it.fm.phase || itemSlug(it.path), status: isArchived(it) ? 'archived' : it.fm.status ?? 'pending', fm: it.fm, path: it.path } : null;
 }
+// foreignItem as a user command sees it: an item of another repository that belongs to a team reads as no item, unless the view sees it.
+export function visibleForeign(folder, id, typed = false) {
+  const f = foreignItem(folder, id, typed);
+  return f && !index.sees(f) ? null : f;
+}
 // does following deps (of the item seq of repo `repoId`, in folder) through other repositories' items lead back
 // to it? Returns the reference that closes the cycle, or null. Local entries are read in the folder they are written in.
 // cache: repository -> its items, shared by the calls of one check (a publication checks every changed item)
@@ -86,7 +91,7 @@ export function foreignCycle(folder, repoId, seq, deps, cache = new Map()) {
 // same-repository producer, <dependent repository>#<seq> for a producer of another repository.
 export function undoneDependencies(folder, fm, rows = folderRows(folder), edge = () => null) {
   return asList(fm.depends_on).map(id => {
-    const f = foreignItem(folder, id);
+    const f = visibleForeign(folder, id);
     if (f !== undefined) {
       const dependentId = f && f.repository === (fm.repository || undefined) ? String(fm.seq) : `${fm.repository}#${fm.seq}`;
       const handoff = f && finishedByStep(f) ? edge(f.fm, dependentId) : null;

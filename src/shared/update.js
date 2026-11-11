@@ -331,7 +331,7 @@ async function change(a, folder, repo, team) {
   const inQueue = isOpen;
   if (moveTarget !== null) {
     changes.priority = `P${new Map(order).get(row.slug) ?? 'None'}`;
-    store.addEvent(folder, row.path, { event: 'rank', note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
+    store.addEvent(folder, row.path, { event: 'planning_event', note: `moved ${row.slug} -> P${moveTarget}; backlog densified to ${order.length}` });
   } else if (completing) { // the done item leaves the queue; the rest re-densify
     store.addEvent(folder, row.path, { event: 'planning_event', note: `completed ${row.slug}; backlog re-prioritized to ${order.length} item(s)` });
   } else if (inQueue(row.status) !== inQueue(fm.status)) { // into or out of the queue by a status other than done

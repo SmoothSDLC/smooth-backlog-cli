@@ -10,6 +10,7 @@ import { GIT_IDENTITY, ENVELOPE, itemPath, sharedBacklog, BACKLOG_OWNER, BACKLOG
 import * as store from '../../src/shared/store.js';
 import * as sync from '../../src/shared/sync.js';
 import { record } from '../../src/shared/numbers.js';
+import { BacklogError } from '../../src/errors.js';
 import { publishTeam } from '../../src/shared/team-publish.js';
 
 for (const [k, v] of Object.entries(GIT_IDENTITY)) process.env[k] = v;
@@ -163,6 +164,16 @@ for (const [mode, make] of Object.entries(worlds)) {
     });
   }
 }
+
+test('code repository: with exit 1, an error of the command itself during the re-run keeps its code and its exit 2', async t => {
+  const { a, b } = worlds['code repository'](t);
+  let runs = 0;
+  const body = w => { if (runs++) throw new BacklogError('INVALID_INPUT', 'the rules refuse this input', 2); item(w.folder, 2, 'a'); return { message: 'new a' }; };
+  const ca = await begin(a, 'pop', body, { exit: 1, ...quick });
+  git(b.root, 'pull', '-q', '--rebase'); item(b.folder, 1, 'alpha', { summary: 'other' }); git(b.root, 'add', '-A'); git(b.root, 'commit', '-qm', 'other'); git(b.root, 'push', '-q');
+  await assert.rejects(ca.publish(), e => e.code === 'INVALID_INPUT' && e.exitCode === 2);
+  assert.ok(!existsSync(itemPath(a.folder, '002-a')), 'the command\'s file is put back');
+});
 
 test('code repository: the budget error exits with the option exit (pop exits 1)', async t => {
   const { a, b } = worlds['code repository'](t);

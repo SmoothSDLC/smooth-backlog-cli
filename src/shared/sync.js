@@ -207,13 +207,13 @@ const changedBy = async (home, range) => (await g(home, ['diff', '-z', '--no-ren
 // Files the unpushed commits added to any <owner>/<name>/phases or archive folder, renumbered when their seq is not above the upstream
 // high-water mark (a number upstream published and deleted again is as taken as one it still holds) or is held by another file of the folder:
 // git mv, phase/seq keys, body heading, amend. An item the commits only moved (archived: its file is also deleted from another place) keeps its number.
-async function renumber(home, t, stream) {
+async function renumber(home, t, stream, committed) {
   const added = (await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=A', t.cmp, 'HEAD']))
     .stdout.split('\0').filter(f => itemFile(t).test(f));
   // Working edits (restored by the autostash) stay out of the repair, which stages and amends: stash them, pop them afterwards.
   const stashed = added.length > 0 && (await g(home, ['status', '--porcelain', '--untracked-files=no'])).stdout.trim() !== '';
   if (stashed) await must(home, ['stash', 'push', '-q'], 'set your working edits aside');
-  try { return await renumberFiles(home, t, stream, added); } finally {
+  try { return await renumberFiles(home, t, stream, added, committed); } finally {
     if (stashed) {
       const r = await g(home, ['stash', 'pop', '-q']);
       if (r.code) throw new BacklogError('SYNC_FAILED', `could not restore your working edits in ${home} (${r.stderr.slice(0, 300)}); they are kept in 'git -C ${home} stash'`, 3);
@@ -221,7 +221,7 @@ async function renumber(home, t, stream) {
   }
 }
 
-async function renumberFiles(home, t, stream, added) {
+async function renumberFiles(home, t, stream, added, committed) { // committed: the paths the renumbering writes are the command's own, as its undo needs to know
   const out = []; const moves = [];
   const gone = new Set((await g(home, ['diff', '-z', '--no-renames', '--name-only', '--diff-filter=D', t.cmp, 'HEAD'])).stdout.split('\0').filter(f => itemFile(t).test(f))
     .map(f => `${f.slice(t.prefix.length).split('/').slice(0, 2).join('/')}:${numberOf(posix.basename(f))}`));
@@ -242,6 +242,7 @@ async function renumberFiles(home, t, stream, added) {
     store.addEvent(folder, target, { event: 'renumber', before: mine.fm, note: `renumbered ${pad(old)} -> ${pad(next)}` });
     const counter = existsSync(join(folder, NUMBER_FILE)); // a folder that keeps a number record: it follows the new number
     if (counter) recordNumber(folder, next);
+    for (const p of [`${name}/${path}`, `${name}/${target}`, ...(counter ? [`${name}/${NUMBER_FILE}`] : [])]) committed.add(p);
     await must(home, ['add', '--', lit(`${name}/${target}`), ...(counter ? [lit(`${name}/${NUMBER_FILE}`)] : [])], `stage ${target}`);
     const r = await commitOnly(home, [lit(`${name}/${path}`), lit(`${name}/${target}`), ...(counter ? [lit(`${name}/${NUMBER_FILE}`)] : [])], t.mine === false ? ['-m', 'backlog: renumbered'] : ['--amend', '--no-edit']);
     if (r.code) throw new BacklogError('SYNC_FAILED', `could not renumber ${path} to ${pad(next)} in ${home} (${r.stderr.slice(0, 300)})`, 3);
@@ -253,6 +254,7 @@ async function renumberFiles(home, t, stream, added) {
   if (moves.length) { // the local dependents of the renumbered items follow them
     const touched = await remapLocal(home, t, moves, await changedBy(home, [t.cmp, 'HEAD']), t.cmp, new Set());
     if (touched.length) {
+      for (const p of touched) committed.add(p);
       const r = await commitOnly(home, touched.map(lit), t.mine === false ? ['-m', 'backlog: renumbered'] : ['--amend', '--no-edit']);
       if (r.code) throw new BacklogError('SYNC_FAILED', `could not update the references to renumbered items in ${home} (${r.stderr.slice(0, 300)})`, 3);
     }
@@ -264,7 +266,7 @@ async function renumberFiles(home, t, stream, added) {
 // the same file name: the upstream file stays, the replayed local creation moves to nextSeq) and the index both clones changed
 // (upstream's copy stands; the reconcile step after the pull makes it right against the merged items). The rebase goes on. false (the
 // caller aborts) when anything else is in conflict or a step fails.
-async function repairConflicts(home, t, folders, names, renumbered) {
+async function repairConflicts(home, t, folders, names, renumbered, committed) {
   const nameOf = path => names.findIndex(name => path.startsWith(`${name}/`));
   try {
     for (let round = 0; round < 20; round++) {
@@ -302,7 +304,7 @@ async function repairConflicts(home, t, folders, names, renumbered) {
         renumbered.push(pairOf(old, next, folder));
         const was = String(mine.fm.phase || itemSlugOfGitPath(rel));
         moves.push({ folder: name, old, slug: was, next, newSlug: pad(next) + was.replace(/^\d+/, '') });
-        written.add(`${name}/${target}`);
+        written.add(`${name}/${target}`); committed.add(`${name}/${target}`);
       }
       const lastOf = async (path, n) => { const r = await g(home, ['show', `:${n}:${path}`]); try { return r.code ? 0 : Number(JSON.parse(r.stdout).last) || 0; } catch { return 0; } }; // one side of a conflicted record
       for (const name of new Set(moves.map(m => m.folder))) { // numbers.json holds the larger of both sides and the numbers given out here
@@ -323,7 +325,8 @@ async function repairConflicts(home, t, folders, names, renumbered) {
         writeFileSync(join(home, path), index.text(index.mergeOrders(await side(1), await side(2), await side(3), renames)));
         await must(home, ['add', '--', lit(path)], `stage ${path}`);
       }
-      if (moves.length) await remapLocal(home, t, moves, [...await changedBy(home, ['REBASE_HEAD^', 'REBASE_HEAD']), ...written], 'HEAD', new Set());
+      if (moves.length) for (const p of await remapLocal(home, t, moves, [...await changedBy(home, ['REBASE_HEAD^', 'REBASE_HEAD']), ...written], 'HEAD', new Set())) committed.add(p);
+      for (const p of [...orders, ...counters]) committed.add(p);
       if (!(await g(home, ['-c', 'core.editor=true', 'rebase', '--continue'])).code) return true;
     }
   } catch { /* fall through: the caller aborts the rebase */ }
@@ -520,7 +523,12 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
   };
   const subject = (t.clone ? `${names.join(', ')}: ${message}` : `backlog: ${message}`).replace(/\s+/g, ' ').trim(); // one line: git stores a subject trimmed and collapsed, and the undo compares it
   const inBacklog = path => path.startsWith(t.prefix);
-  const committed = new Set(); // every path any staging of this command took
+  const committed = new Set(); // every path the command staged, renumbered or repaired
+  // The top commit is the command's own only when it has the command's subject and changes only paths the command wrote; anything else is a person's commit.
+  const ownTop = async () => {
+    const top = paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', 'HEAD']));
+    return top.length > 0 && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject && top.every(p => committed.has(p));
+  };
   return locked(lockFile(backlogHome), async () => {
     if (t.clone) await refuseUnpublished(home, t); // the user's own repository has its own unpushed commits: they are pushed with the change
     const saved = takeStart(home) ?? await snapshot(home);
@@ -597,15 +605,15 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
         await staleCheck();
         let pr = t.exists ? await g(home, pullArgs(t)) : { code: 0 };
         if (pr.code && guard.length && await staleHit()) { await g(home, ['rebase', '--abort']); await staleCheck(); } // a guarded item arrived with the pull and conflicts: refuse, never park
-        if (pr.code && await repairConflicts(home, t, dirs, dirNames, renumbered)) pr = { code: 0 };
+        if (pr.code && await repairConflicts(home, t, dirs, dirNames, renumbered, committed)) pr = { code: 0 };
         if (pr.code) {
           await g(home, ['rebase', '--abort']);
           err = `pull --rebase failed: ${pr.stderr.slice(0, 300)}`;
         } else {
           await refuseConflicts(home, t);
           await staleCheck();
-          t.mine = mine; // renumbering amends only the command's own commit; a user's unpushed commit gets a commit of its own
-          renumbered.push(...await renumber(home, t, process.stdout));
+          t.mine = mine && await ownTop(); // renumbering amends only the command's own commit; a user's unpushed commit, or one that landed on top, gets a commit of its own
+          renumbered.push(...await renumber(home, t, process.stdout, committed));
           if (reconcile) { // the index is made right against the merged items in the commit itself: nothing inconsistent is ever pushed
             const fresh = renumbered.slice(settled);
             settled = renumbered.length;
@@ -633,11 +641,7 @@ export async function commit(backlogHome, folders, message, reconcile = null, gu
       // Publication failures take back the command's own commit and nothing else.
       if (e.keep) throw e; // the commit is kept on purpose
       const stale = e.code === 'STALE_ITEM';
-      // The top commit is the command's own only when it has the command's subject and changes only paths the command staged or inside its folders;
-      // anything else is a person's commit and is never taken back.
-      const top = mine ? paths(await g(home, ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', '-z', 'HEAD'])) : [];
-      const own = mine && (await g(home, ['log', '-1', '--format=%s', 'HEAD'])).stdout.trim() === subject
-        && top.length > 0 && top.every(p => committed.has(p) || names.some(n => p.startsWith(`${n}/`)));
+      const own = mine && await ownTop();
       const ahead = t.clone ? Number((await g(home, ['rev-list', '--count', `${t.ref}..HEAD`])).stdout.trim()) : 1;
       // clone: when nothing of a person's lies between the fetched remote and the command's commit, the branch also goes to the remote, as a failed pull needs
       const to = own ? (t.clone && ahead === 1 && !stale ? t.ref : 'HEAD~1') : t.clone && !stale && ahead === 0 ? t.ref : 'HEAD';

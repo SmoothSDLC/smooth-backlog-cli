@@ -214,6 +214,53 @@ test('code repository: a person\'s commit made on top of the command\'s commit d
   assert.doesNotMatch(e.message, /undefined/);
 });
 
+// The other clone has published item 002 meanwhile: the command's own 002 is renumbered (its commit amended) before the push.
+function otherClonePublishes(t) {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  return sync.commitSettled(f.home, f.folder, 'new alpha').then(() => {
+    const home2 = join(f.dir, 'home2'); git(f.dir, 'clone', '-q', f.bare, home2);
+    item(join(home2, 'acme', 'demo'), 2, 'beta');
+    git(home2, 'add', '-A'); git(home2, 'commit', '-qm', 'beta from the other clone'); git(home2, 'push', '-q');
+    refuse(f.bare);
+    return f;
+  });
+}
+
+test('backlog clone: a refused push after a renumbering is still rolled back to the remote', async t => {
+  const f = await otherClonePublishes(t);
+  item(f.folder, 2, 'gamma');
+  const e = await failure(sync.commitSettled(f.home, f.folder, 'add gamma'));
+  assert.match(e?.message ?? '', /local branch and working tree were rolled back/);
+  assert.equal(git(f.home, 'rev-parse', 'HEAD'), git(f.home, 'rev-parse', 'origin/main'));
+  assert.doesNotMatch(subjects(f.home), /add gamma/);
+});
+
+test('backlog clone: a person\'s same-subject commit that touches only the command\'s folder is kept, not taken back as the command\'s', async t => {
+  const f = modes['backlog clone'](t);
+  item(f.folder, 1, 'alpha');
+  await sync.commitSettled(f.home, f.folder, 'new alpha');
+  refuse(f.bare);
+  personOnTop(join(f.home, '.git'), ': add beta', 'acme/demo/note.txt', 'acme/demo: add beta');
+  item(f.folder, 2, 'beta');
+  const e = await failure(sync.commitSettled(f.home, f.folder, 'add beta'));
+  assert.equal(e?.exitCode, 3);
+  assert.equal(readFileSync(join(f.folder, 'note.txt'), 'utf8'), 'person\n');
+  assert.equal(git(f.home, 'rev-list', '--count', 'origin/main..HEAD'), '2');
+  assert.match(e.message, /nothing was rolled back/);
+});
+
+test('backlog clone: a person\'s commit that lands on top before the renumbering is not amended', async t => {
+  const f = await otherClonePublishes(t);
+  personOnTop(join(f.home, '.git'), ': add gamma', 'acme/other/p.txt', 'person: other');
+  item(f.folder, 2, 'gamma');
+  const e = await failure(sync.commitSettled(f.home, f.folder, 'add gamma'));
+  assert.equal(e?.exitCode, 3);
+  const person = git(f.home, 'log', '--format=%H', '--grep=^person: other$', '-1');
+  assert.equal(git(f.home, 'show', '--format=', '--name-only', person), 'acme/other/p.txt', 'the person\'s commit holds only the person\'s file');
+  assert.equal(readFileSync(join(f.home, 'acme', 'other', 'p.txt'), 'utf8'), 'person\n');
+});
+
 // --- a pull that fails after upstream changed other paths
 function conflictSetup(t, personLine) {
   const f = modes['backlog clone'](t);

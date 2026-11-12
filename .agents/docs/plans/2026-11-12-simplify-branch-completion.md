@@ -143,7 +143,7 @@ Each task goes through its packet, a test-first build with a self-review, a spec
 
 ### Task 6b: Follow-ups of Task 6 (the git version check in team publication, the idle clause of pop in help and README, two test margins)
 
-- State: built and self-reviewed on a local branch; the specification review and the quality review come next, then the merge
+- State: DONE, merged on the working branch (commits e80b014, 2aaa450, 86ed2e5)
 - Specification: the review findings of Task 6, stated in the packet
 - Packet: [packets/task-6b.md](2026-11-12-simplify-branch-completion/packets/task-6b.md)
 - Use cases: the rows of the status table whose task column is `Task 6b` (0 at the start of this plan)
@@ -264,70 +264,70 @@ Each task goes through its packet, a test-first build with a self-review, a spec
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 23
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-23.md](2026-11-12-simplify-branch-completion/packets/task-23.md)
 - Use cases: the rows of the status table whose task column is `Task 23` (58 at the start of this plan)
 
 ### Task 24: The migration's data cases (B23)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 24
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-24.md](2026-11-12-simplify-branch-completion/packets/task-24.md)
 - Use cases: the rows of the status table whose task column is `Task 24` (15 at the start of this plan)
 
 ### Task 25: The field report (B24a)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 25
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-25.md](2026-11-12-simplify-branch-completion/packets/task-25.md)
 - Use cases: the rows of the status table whose task column is `Task 25` (7 at the start of this plan)
 
 ### Task 26: `migrate --ask` (B24b)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 26
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-26.md](2026-11-12-simplify-branch-completion/packets/task-26.md)
 - Use cases: the rows of the status table whose task column is `Task 26` (1 at the start of this plan)
 
 ### Task 27: Removal of the old team commands (B27a)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 27
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-27.md](2026-11-12-simplify-branch-completion/packets/task-27.md)
 - Use cases: the rows of the status table whose task column is `Task 27` (5 at the start of this plan)
 
 ### Task 28: Removal of the old definition code (B27b)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 28
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-28.md](2026-11-12-simplify-branch-completion/packets/task-28.md)
 - Use cases: the rows of the status table whose task column is `Task 28` (0 at the start of this plan)
 
 ### Task 29: The shipped workflow template, the vocabulary and the translation (B27c)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 29
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-29.md](2026-11-12-simplify-branch-completion/packets/task-29.md)
 - Use cases: the rows of the status table whose task column is `Task 29` (1 at the start of this plan)
 
 ### Task 30: The retired orders and hooks (B28a)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 30
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-30.md](2026-11-12-simplify-branch-completion/packets/task-30.md)
 - Use cases: the rows of the status table whose task column is `Task 30` (1 at the start of this plan)
 
 ### Task 31: The old root configuration file stops every command (B28b)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 31
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-31.md](2026-11-12-simplify-branch-completion/packets/task-31.md)
 - Use cases: the rows of the status table whose task column is `Task 31` (0 at the start of this plan)
 
 ### Task 32: The final documentation pass (B29)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 32
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-32.md](2026-11-12-simplify-branch-completion/packets/task-32.md)
 - Use cases: the rows of the status table whose task column is `Task 32` (7 at the start of this plan)
 
 ### Task 33: Final verification

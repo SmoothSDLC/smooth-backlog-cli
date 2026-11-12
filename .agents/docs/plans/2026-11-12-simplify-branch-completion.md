@@ -213,49 +213,49 @@ One task at a time, each through its packet, a test-first build with a self-revi
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 16
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-16.md](2026-11-12-simplify-branch-completion/packets/task-16.md)
 - Use cases: the rows of the status table whose task column is `Task 16` (3 at the start of this plan)
 
 ### Task 17: `backlog clean` removes only the entries of the items it deleted (B19b)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 17
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-17.md](2026-11-12-simplify-branch-completion/packets/task-17.md)
 - Use cases: the rows of the status table whose task column is `Task 17` (9 at the start of this plan)
 
 ### Task 18: The team-session guard (B20a)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 18
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-18.md](2026-11-12-simplify-branch-completion/packets/task-18.md)
 - Use cases: the rows of the status table whose task column is `Task 18` (8 at the start of this plan)
 
 ### Task 19: The tests that set the team variable (B20b)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 19
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-19.md](2026-11-12-simplify-branch-completion/packets/task-19.md)
 - Use cases: the rows of the status table whose task column is `Task 19` (0 at the start of this plan)
 
 ### Task 20: `backlog move` between branches only (B21a)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 20
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-20.md](2026-11-12-simplify-branch-completion/packets/task-20.md)
 - Use cases: the rows of the status table whose task column is `Task 20` (1 at the start of this plan)
 
 ### Task 21: The guards look at the own folder (B21b)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 21
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-21.md](2026-11-12-simplify-branch-completion/packets/task-21.md)
 - Use cases: the rows of the status table whose task column is `Task 21` (7 at the start of this plan)
 
 ### Task 22: Foreign references are only checked for their form (B21c)
 
 - State: PLANNED
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 22
-- Packet: to be written and checked before the task starts
+- Packet: [packets/task-22.md](2026-11-12-simplify-branch-completion/packets/task-22.md)
 - Use cases: the rows of the status table whose task column is `Task 22` (1 at the start of this plan)
 
 ### Task 23: The command `backlog team migrate` (B22c)

@@ -16,7 +16,11 @@ const PLAN = join(HERE, '..', '2026-11-12-simplify-branch-completion.md');
 const TABLE = join(HERE, 'use-case-status.tsv');
 const COUNTS = join(HERE, 'source-counts.tsv');
 const HEADER = ['source', 'id', 'statement', 'decision', 'status', 'task', 'test', 'evidence'];
-const STATUSES = ['DONE', 'PLANNED', 'SUPERSEDED', 'SKIP', 'DEFERRED-WITH-EXPLICIT-BLOCKER'];
+const STATUSES = ['DONE', 'PLANNED', 'SUPERSEDED', 'DEFERRED-WITH-EXPLICIT-BLOCKER'];
+// Rows of the sources that state no behaviour of the CLI are not use cases: they are listed here with the reason, so that
+// every source row is still accounted for, and they are not in the table.
+const EXCLUDED = join(HERE, 'not-use-cases.tsv');
+const readExcluded = () => readFileSync(EXCLUDED, 'utf8').split('\n').slice(1).filter(Boolean).map(l => l.split('\t'));
 const SOURCES = {
   'uc-matrix': '.agents/docs/analysis/2026-10-25-pr3-use-cases-interaction-behavior-matrix.md',
   'rule-cases': `${ENGINE}/design/rule-cases.json`,
@@ -116,6 +120,8 @@ const countsOf = rows => {
 
 function check() {
   const errors = [], [header, ...rows] = readTable();
+  const out = {};
+  for (const [source, id, reason] of readExcluded()) { (out[source] ??= new Set()).add(id); if (!reason) errors.push(`${source} ${id}: excluded without a reason`); }
   if (header.join('\t') !== HEADER.join('\t')) errors.push(`header is not ${HEADER.join(', ')}`);
   const tasks = new Set([...readFileSync(PLAN, 'utf8').matchAll(/^### (Task [0-9a-z]+):/gm)].map(m => m[1]));
   const ids = {};
@@ -134,12 +140,13 @@ function check() {
   const counts = existsSync(COUNTS) ? readFileSync(COUNTS, 'utf8') : '';
   const pinned = Object.fromEntries(counts.split('\n').slice(1).filter(Boolean).map(l => [l.split('\t')[0], Number(l.split('\t').at(-1))]));
   for (const [source, path] of Object.entries(SOURCES)) {
-    const have = ids[source] ?? new Set();
+    const have = new Set([...(ids[source] ?? []), ...(out[source] ?? [])]);
+    for (const id of out[source] ?? []) if (ids[source]?.has(id)) errors.push(`${source} ${id}: both a use case and excluded`);
     if (existsSync(join(ROOT, path))) { // the source is still in the repository: the table holds exactly its use cases
       const want = new Set(EXTRACT[source]().map(u => u.id));
-      for (const id of want) if (!have.has(id)) errors.push(`${source} ${id}: in the source, not in the table`);
-      for (const id of have) if (!want.has(id)) errors.push(`${source} ${id}: in the table, not in the source`);
-    } else if (have.size !== pinned[source]) errors.push(`${source}: removed from the repository; the table holds ${have.size} rows, source-counts.tsv pins ${pinned[source]}`);
+      for (const id of want) if (!have.has(id)) errors.push(`${source} ${id}: in the source, neither in the table nor excluded`);
+      for (const id of have) if (!want.has(id)) errors.push(`${source} ${id}: in the table or excluded, not in the source`);
+    } else if ((ids[source]?.size ?? 0) !== pinned[source]) errors.push(`${source}: removed from the repository; the table holds ${ids[source]?.size ?? 0} rows, source-counts.tsv pins ${pinned[source]}`);
   }
   if (counts !== countsOf(rows)) errors.push('source-counts.tsv does not match the table: run `node use-case-status.mjs counts`');
   if (errors.length) { console.error(errors.slice(0, 40).join('\n')); console.error(`${errors.length} problem(s)`); process.exit(1); }
@@ -262,9 +269,11 @@ function init(args) {
 
   const order = Object.keys(SOURCES);
   out.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
-  writeFileSync(TABLE, `${[HEADER, ...out].map(r => r.join('\t')).join('\n')}\n`);
-  writeFileSync(COUNTS, countsOf(out));
-  process.stdout.write(countsOf(out));
+  const kept = out.filter(r => r[4] !== 'SKIP'); // a row with no behaviour to build is not a use case
+  writeFileSync(EXCLUDED, `${[['source', 'id', 'reason', 'statement'], ...out.filter(r => r[4] === 'SKIP').map(r => [r[0], r[1], r[3], r[2]])].map(r => r.join('\t')).join('\n')}\n`);
+  writeFileSync(TABLE, `${[HEADER, ...kept].map(r => r.join('\t')).join('\n')}\n`);
+  writeFileSync(COUNTS, countsOf(kept));
+  process.stdout.write(countsOf(kept));
 }
 
 const [cmd, ...args] = process.argv.slice(2);

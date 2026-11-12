@@ -26,25 +26,27 @@
 
 Columns: `source`, `id`, `statement`, `decision` (the ruling or decision that governs the use case now; a use case changed or dropped by a later decision says so and cites it), `status`, `task` (the task of this plan that delivers it, or `merged`), `test` (file and test name that pin it), `evidence` (the commit).
 
-Status, exactly one per row: **DONE** (implemented, pinned by a test that fails without it, merged on the working branch), **PLANNED** (a named task of this plan delivers it), **SUPERSEDED** (a later decision replaced it; the decision is cited), **SKIP** (no behaviour to build, with the reason), **DEFERRED-WITH-EXPLICIT-BLOCKER** (the blocker named).
+A row of a source that states no behaviour of the CLI is not a use case and is not in the table: it is listed with its reason in [not-use-cases.tsv](2026-11-12-simplify-branch-completion/not-use-cases.tsv) (583 rows at the start: the 574 rows the design marked as nothing to build, and the 9 work units of the 2026-10-25 analysis), so that every source row is still accounted for; the guard checks that each source row is either a use case or excluded, never both.
 
-How the first table was classified (2026-11-12, on the head that held Tasks 1 to 8 and 10). Only mechanical evidence makes a row DONE: a feature scenario (the runner runs every scenario in both locations); a rule case with a passing test titled with its id; a coverage row whose design target names example rules or cases that are all pinned that way; a row of the test inventory whose test title still stands in its test file. A SKIP of the design stays SKIP with its reason; a row deferred on an open owner question stays deferred with that question as its blocker; a row deferred to work that this plan now contains is PLANNED under that task. Every other row is PLANNED: under the remaining task its design target names, or under the verification Tasks 36 to 38, which pin each row with a named test or retire it by a cited decision. No row was marked DONE on the strength of its batch having merged.
+Status, exactly one per row: **DONE** (implemented, pinned by a test that fails without it, merged on the working branch), **PLANNED** (a named task of this plan delivers it), **SUPERSEDED** (a later decision replaced it; the decision is cited), **DEFERRED-WITH-EXPLICIT-BLOCKER** (the blocker named).
 
-Counts at the start of this plan:
+How the first table was classified (2026-11-12, on the head that held Tasks 1 to 8 and 10). Only mechanical evidence makes a row DONE: a feature scenario (the runner runs every scenario in both locations); a rule case with a passing test titled with its id; a coverage row whose design target names example rules or cases that are all pinned that way; a row of the test inventory whose test title still stands in its test file. A row the design marked as nothing to build is excluded with the design's reason; a row deferred on an open owner question stays deferred with that question as its blocker; a row deferred to work that this plan now contains is PLANNED under that task. Every other row is PLANNED: under the remaining task its design target names, or under the verification Tasks 36 to 38, which pin each row with a named test or retire it by a cited decision. No row was marked DONE on the strength of its batch having merged.
 
-| source | DONE | PLANNED | SUPERSEDED | SKIP | DEFERRED-WITH-EXPLICIT-BLOCKER | total |
-|---|---|---|---|---|---|---|
-| uc-matrix | 0 | 370 | 0 | 9 | 0 | 379 |
-| rule-cases | 268 | 20 | 0 | 0 | 0 | 288 |
-| coverage | 973 | 823 | 0 | 300 | 18 | 2114 |
-| bdd-plan | 11 | 170 | 0 | 0 | 0 | 181 |
-| command-matrix | 0 | 12 | 0 | 0 | 0 | 12 |
-| features | 106 | 0 | 0 | 0 | 0 | 106 |
-| inventory.tsv | 284 | 542 | 0 | 203 | 4 | 1033 |
-| tests.tsv | 657 | 113 | 0 | 49 | 0 | 819 |
-| gaps.tsv | 2 | 16 | 0 | 22 | 7 | 47 |
-| consumers.tsv | 0 | 22 | 0 | 0 | 0 | 22 |
-| all | 2301 | 2088 | 0 | 583 | 29 | 5001 |
+Counts at the start of this plan (use cases only; the column Rows above counts every source row, excluded ones included):
+
+| source | DONE | PLANNED | SUPERSEDED | DEFERRED-WITH-EXPLICIT-BLOCKER | total |
+|---|---|---|---|---|---|
+| uc-matrix | 0 | 370 | 0 | 0 | 370 |
+| rule-cases | 268 | 20 | 0 | 0 | 288 |
+| coverage | 973 | 823 | 0 | 18 | 1814 |
+| bdd-plan | 11 | 170 | 0 | 0 | 181 |
+| command-matrix | 0 | 12 | 0 | 0 | 12 |
+| features | 106 | 0 | 0 | 0 | 106 |
+| inventory.tsv | 284 | 542 | 0 | 4 | 830 |
+| tests.tsv | 657 | 113 | 0 | 0 | 770 |
+| gaps.tsv | 2 | 16 | 0 | 7 | 25 |
+| consumers.tsv | 0 | 22 | 0 | 0 | 22 |
+| all | 2301 | 2088 | 0 | 29 | 4418 |
 
 Keeping it current: a packet names the use cases it delivers as the rows whose task column is its task; the implementing commit moves those rows to DONE with the test and its own commit and runs `node .agents/docs/plans/2026-11-12-simplify-branch-completion/use-case-status.mjs counts`; the specification review fails when a row is wrong or missing; the counts are checked after every merge. The plan is finished when no row is PLANNED.
 
@@ -352,7 +354,7 @@ One task at a time, each through its packet, a test-first build with a self-revi
 ### Task 36: The use cases of the 2026-10-25 analysis: each pinned by a test or retired by a decision
 
 - State: PLANNED
-- Specification: every row of the source `uc-matrix` is read against the simplification decisions and the owner rulings named in its decision column and ends DONE (the test that fails without the behaviour, named), SUPERSEDED (the decision cited), SKIP (the reason) or DEFERRED-WITH-EXPLICIT-BLOCKER; a behaviour that still holds and has no test gets its test in this task
+- Specification: every row of the source `uc-matrix` is read against the simplification decisions and the owner rulings named in its decision column and ends DONE (the test that fails without the behaviour, named), SUPERSEDED (the decision cited) or DEFERRED-WITH-EXPLICIT-BLOCKER; a row that turns out to state no behaviour of the CLI moves to `not-use-cases.tsv` with the reason; a behaviour that still holds and has no test gets its test in this task
 - Packet: to be written and checked before the task starts
 - Use cases: the rows of the status table whose task column is `Task 36` (370 at the start of this plan)
 

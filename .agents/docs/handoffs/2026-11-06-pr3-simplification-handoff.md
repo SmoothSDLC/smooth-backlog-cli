@@ -14,7 +14,7 @@ Phase 7 is running in a sub-agent (see 4); Phases 7b, 8, 9 remain.
   `<main-clone>` (it is the live team's working directory) except to read.
 - Plans (private repository the shared backlog repository, pushed): `the plans folder of the shared backlog repository`:
   [2026-11-04-pr3-simplification-log.md](../plans/2026-11-04-pr3-simplification-log.md) (the log: phase table, the owner's decisions and rules, outcome+lessons per phase — READ FIRST), [2026-11-04-phase-7-command-aliases.md](../plans/completed/2026-11-04-phase-7-command-aliases.md),
-  [2026-11-04-phase-7b-command-aliases-b.md](../plans/completed/2026-11-04-phase-7b-command-aliases-b.md), [2026-11-04-phase-8-documentation.md](../plans/2026-11-04-phase-8-documentation.md), [2026-11-04-phase-9-final-verification-and-pr.md](../plans/2026-11-04-phase-9-final-verification-and-pr.md), this file.
+  [2026-11-04-phase-7b-command-aliases-b.md](../plans/completed/2026-11-04-phase-7b-command-aliases-b.md), [2026-11-04-phase-8-documentation.md](../plans/completed/2026-11-04-phase-8-documentation.md), [2026-11-04-phase-9-final-verification-and-pr.md](../plans/completed/2026-11-04-phase-9-final-verification-and-pr.md), this file.
 - Helpers: `<logs>/`: `commit.sh "<msg>"` (the ONLY way to commit: author <author>, no trailers, `git add -A`, then a deploy script makes HEAD the machine's live `backlog`),
   `run-tests.sh <label> node` (full suite to `<label>.log`), `decisions/*.txt` (every decision put to the owner).
 - Review record in the branch: `REVIEW-LOG.md` (one row per review/skill use; last row 137), `REVIEW.md`.
@@ -87,8 +87,8 @@ Then continue at the first unfinished step of section 5.
    the team skills' scripts and the team tooling; they read the CLI's JSON — update them and redeploy if they do).
 2. Phase 7b ([2026-11-04-phase-7b-command-aliases-b.md](../plans/completed/2026-11-04-phase-7b-command-aliases-b.md)): body-section editor, `import`, `archive done`, `upgrade` (decisions N, O, Q = a).
    Launch a sub-agent with the same brief shape as Phase 7 (state, rules, commit.sh, report ≤60 lines); then lead review as above.
-3. Phase 8 ([2026-11-04-phase-8-documentation.md](../plans/2026-11-04-phase-8-documentation.md)): README, CHANGELOG, COMMANDS.md, skill, REVIEW.md complete and consistent; sub-agent + review.
-4. Phase 9 ([2026-11-04-phase-9-final-verification-and-pr.md](../plans/2026-11-04-phase-9-final-verification-and-pr.md)): final verification (suite, BDD both, check, guard, a fresh-clone install test,
+3. Phase 8 ([2026-11-04-phase-8-documentation.md](../plans/completed/2026-11-04-phase-8-documentation.md)): README, CHANGELOG, COMMANDS.md, skill, REVIEW.md complete and consistent; sub-agent + review.
+4. Phase 9 ([2026-11-04-phase-9-final-verification-and-pr.md](../plans/completed/2026-11-04-phase-9-final-verification-and-pr.md)): final verification (suite, BDD both, check, guard, a fresh-clone install test,
    the whole-branch ponytail-audit by an agent that has not seen the work), then: push the branch (content check by hand first),
    move the topology pin to the final commit and redeploy (KNOWN-GOOD), write the PR title and body (public-repo rule), show them
    to the owner in chat, and WAIT for the go; the PR targets `team-cli-parity-1`.

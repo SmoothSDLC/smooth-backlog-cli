@@ -24,8 +24,8 @@ active branch at all times.
 | 7c-1 | [2026-11-07-phase-7c-1-team-boundary.md](completed/2026-11-07-phase-7c-1-team-boundary.md) — team code in `src/team/`, user commands know no team | code done 2026-11-07 (outcome not yet written) |
 | 7c-2a | [2026-11-07-phase-7c-2a-team-new-and-team-items.md](completed/2026-11-07-phase-7c-2a-team-new-and-team-items.md) — `team new`, one door for a team's items | done 2026-11-07 |
 | 7c-2b | [2026-11-07-phase-7c-2b-read-commands-and-no-aliases.md](completed/2026-11-07-phase-7c-2b-read-commands-and-no-aliases.md) — list/show/history/changes/next, real commands for the kept behaviours, no aliases (two stages) | Stage A done and reviewed 2026-11-08 (967c2fe, pushed); consumers next, then Stage B |
-| 8 | [2026-11-04-phase-8-documentation.md](2026-11-04-phase-8-documentation.md) — every document against the code; `.agents/docs` removed except `.agents/docs/plans/`; `setup` names no path | after 7b |
-| 9 | [2026-11-04-phase-9-final-verification-and-pr.md](2026-11-04-phase-9-final-verification-and-pr.md) — proofs, push, the one PR into `team-cli-parity-1` | last; the only push |
+| 8 | [2026-11-04-phase-8-documentation.md](completed/2026-11-04-phase-8-documentation.md) — every document against the code; `.agents/docs` removed except `.agents/docs/plans/`; `setup` names no path | after 7b |
+| 9 | [2026-11-04-phase-9-final-verification-and-pr.md](completed/2026-11-04-phase-9-final-verification-and-pr.md) — proofs, push, the one PR into `team-cli-parity-1` | last; the only push |
 
 ## The owner's decisions (2026-11-04) — recorded, no longer open
 
@@ -360,4 +360,4 @@ An agent, folder the 2026-11-08 team behaviour analysis (replaced by [2026-11-09
 
 ## Plans relocated into this repository; Phase 8 keeps the plans (owner instruction, 2026-11-08)
 - The plans, analyses and the handoff of this effort moved from the shared backlog repository into this repository with date-first names, the private details replaced by generic wording: finished plans in [completed/](completed/), active plans (Phase 8, Phase 9, this log, [2026-11-04-simplification-plan.md](2026-11-04-simplification-plan.md), formerly the root file `SIMPLIFICATION-PLAN.md`) in this folder, analyses in [../analysis/](../analysis/), the handoff in [../handoffs/](../handoffs/). [README.md](README.md) indexes every plan.
-- Owner instruction: the Phase 8 clean-up removes `.agents/docs` EXCEPT `.agents/docs/plans/`. Plans stay in the repository; AGENTS.md (section Plans) says where plans live. [2026-11-04-phase-8-documentation.md](2026-11-04-phase-8-documentation.md) Task 3 is amended accordingly (decision D3 above is narrowed, not reversed).
+- Owner instruction: the Phase 8 clean-up removes `.agents/docs` EXCEPT `.agents/docs/plans/`. Plans stay in the repository; AGENTS.md (section Plans) says where plans live. [2026-11-04-phase-8-documentation.md](completed/2026-11-04-phase-8-documentation.md) Task 3 is amended accordingly (decision D3 above is narrowed, not reversed).

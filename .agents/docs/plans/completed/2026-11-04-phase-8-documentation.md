@@ -22,7 +22,7 @@ checked by `.agents/test/skill-commands.test.js` for shape only — their conten
 
 **Tech stack:** Node 24 (`node`), ESM, `node:test`, git. No new dependency.
 
-**Spec:** `REVIEW.md` 2.7 and section 3; [2026-11-04-simplification-plan.md](2026-11-04-simplification-plan.md) Task 7; [the recommendations](completed/2026-11-04-recommendations.md) (R5, R6).
+**Spec:** `REVIEW.md` 2.7 and section 3; [2026-11-04-simplification-plan.md](../2026-11-04-simplification-plan.md) Task 7; [the recommendations](2026-11-04-recommendations.md) (R5, R6).
 The README and COMMANDS.md must also carry the two new sections Phases 5 and 6 introduced: "Data integrity" (pull
 before every command, push after every change, the retry, the stale rejection with the item's diff — in both
 storage locations), "Where the data lives" (the item files are the only data; what to do when one cannot be read)
@@ -118,7 +118,7 @@ and "Command aliases" (every 1.x command name and what it runs).
   must print only the negative assertions in tests (if any) and the CHANGELOG lines that say these were removed.
 - `shared-help.test.js`, `skill-commands.test.js`, `shared-no-classes.test.js`, `no-private-details.test.js` green
   after every task.
-- REVIEW.md, [2026-11-04-simplification-plan.md](2026-11-04-simplification-plan.md) and REVIEW-LOG.md are on the branch and public: same rule.
+- REVIEW.md, [2026-11-04-simplification-plan.md](../2026-11-04-simplification-plan.md) and REVIEW-LOG.md are on the branch and public: same rule.
 
 ## Review focus
 
@@ -204,7 +204,7 @@ documentation of the CLI; README.md, COMMANDS.md and the skill are the documenta
 - [ ] REVIEW.md section 3: add the table "After" with the final BDD counts (run both locations and read the numbers
       from the log), the suite counts, `npm run check`, the private guard, and `git diff --shortstat fe40b5a HEAD`
       and `-- src bin`. Section 4: every item marked done / recommended / kept with the decision.
-- [ ] [2026-11-04-simplification-plan.md](2026-11-04-simplification-plan.md): each task marked done with its commit; the "Order" line final.
+- [ ] [2026-11-04-simplification-plan.md](../2026-11-04-simplification-plan.md): each task marked done with its commit; the "Order" line final.
 - [ ] REVIEW-LOG.md: rows for this phase; check the table has one row per mandated skill at least once:
       `brainstorming`, `writing-plans`, `test-driven-development`, `systematic-debugging`,
       `verification-before-completion`, `requesting-code-review`, `receiving-code-review`, `ponytail-audit`,

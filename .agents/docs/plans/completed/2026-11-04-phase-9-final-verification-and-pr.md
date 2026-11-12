@@ -9,7 +9,7 @@
 > simplify/pr3-review`), update it; never open a second one.
 
 > **DECISIONS THIS PHASE DEPENDS ON (all recorded, none open):** 20261105-R = a (the lead shows the PR title and body in chat and opens the PR only on the owner's go) — closed on the recommendations under the
-> owner's instruction of 2026-11-06 (the decision table of [2026-11-04-pr3-simplification-log.md](2026-11-04-pr3-simplification-log.md)). Nothing in this phase waits for a decision; a step that seems to
+> owner's instruction of 2026-11-06 (the decision table of [2026-11-04-pr3-simplification-log.md](../2026-11-04-pr3-simplification-log.md)). Nothing in this phase waits for a decision; a step that seems to
 > need one is executed as written and the doubt is reported at the end.
 
 **Goal:** the branch is proven done by the review prompt's definition — every BDD scenario passes in both storage
@@ -26,7 +26,7 @@ deny-list guard runs in CI with a synthetic list; the real list is only on this 
 **Tech stack:** git, `gh`, Node 24 (`node`), codebase-memory-mcp CLI.
 
 **Spec:** the review prompt's "Deliverables" and "Done means" (quoted in Global constraints); `REVIEW.md`;
-[the recommendations](completed/2026-11-04-recommendations.md) (R7).
+[the recommendations](2026-11-04-recommendations.md) (R7).
 
 ## Handoff context (read fully before the first command)
 
@@ -163,7 +163,7 @@ deny-list guard runs in CI with a synthetic list; the real list is only on this 
       `wc -l src/*.js src/shared/*.js | tail -1` at HEAD and `git show fe40b5a:src/... | wc -l` summed
       (`for f in $(git ls-tree -r fe40b5a --name-only -- src bin); do git show fe40b5a:$f | wc -l; done | paste -sd+ | bc`)
       → evidence file. If the whole diff adds more than it removes, the explanation is: the added lines are the BDD
-      runner and scenarios, REVIEW.md, [2026-11-04-simplification-plan.md](2026-11-04-simplification-plan.md) and REVIEW-LOG.md; `src/` + `bin/` remove more than
+      runner and scenarios, REVIEW.md, [2026-11-04-simplification-plan.md](../2026-11-04-simplification-plan.md) and REVIEW-LOG.md; `src/` + `bin/` remove more than
       they add (give the numbers).
 - [ ] **Baseline vs final**: the baseline table is REVIEW.md section 3 (remote 38/48, local 4/48 at `fe40b5a`); the
       final numbers come from this task.

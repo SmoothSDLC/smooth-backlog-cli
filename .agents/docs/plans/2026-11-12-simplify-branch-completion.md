@@ -26,7 +26,7 @@
 
 Columns: `source`, `id`, `statement`, `decision` (the ruling or decision that governs the use case now; a use case changed or dropped by a later decision says so and cites it), `status`, `task` (the task of this plan that delivers it, or `merged`), `test` (file and test name that pin it), `evidence` (the commit).
 
-A row of a source that states no behaviour of the CLI is not a use case and is not in the table: it is listed with its reason in [not-use-cases.tsv](2026-11-12-simplify-branch-completion/not-use-cases.tsv) (583 rows at the start: the 574 rows the design marked as nothing to build, and the 9 work units of the 2026-10-25 analysis), so that every source row is still accounted for; the guard checks that each source row is either a use case or excluded, never both.
+A row of a source that states no behaviour of the CLI is not a use case and is not in the table: it is listed with its reason in [not-use-cases.tsv](2026-11-12-simplify-branch-completion/not-use-cases.tsv) (583 rows at the start, validated row by row in Task 51: the 574 rows the design marked as nothing to build, and the 9 work units of the 2026-10-25 analysis), so that every source row is still accounted for; the guard checks that each source row is either a use case or excluded, never both.
 
 Status, exactly one per row: **DONE** (implemented, pinned by a test that fails without it, merged on the working branch), **PLANNED** (a named task of this plan delivers it), **SUPERSEDED** (a later decision replaced it; the decision is cited), **DEFERRED-WITH-EXPLICIT-BLOCKER** (the blocker named).
 
@@ -93,7 +93,7 @@ The feature suite counts 106 scenarios per location at the start of this plan; a
 
 ## Order of execution
 
-One task at a time, each through its packet, a test-first build with a self-review, a specification review and a quality review that must both pass, the standard proof, a fast-forward merge and a review of the merged range. Order: the reviews of Tasks 6b and 11; Tasks 9 and 12 to 32; Tasks 36, 37 and 38 (the row-level checks); Tasks 34 and 35 (the documents); Tasks 39 and 40; Task 41 and its gap-fix tasks; Task 42; Tasks 43, 44, 45, 46, 47 and 48; Task 49; Task 50. Tasks that touch the shared documents (help, `README.md`, `CHANGELOG.md`, `COMMANDS.md`) merge one after another.
+Each task goes through its packet, a test-first build with a self-review, a specification review and a quality review that must both pass, the standard proof, a fast-forward merge and a review of the merged range. Tasks that share no file and do not depend on each other may be worked side by side, at most three at a time; merges stay one at a time. Order: the reviews of Tasks 6b and 11; Tasks 9 and 12 to 32; Tasks 36, 37, 38 and 51 (the row-level checks, and the validation of the excluded rows); Tasks 34 and 35 (the documents); Tasks 39 and 40; Task 41 and its gap-fix tasks; Task 42; Tasks 43, 44, 45, 46, 47 and 48; Task 49; Task 50. Tasks that touch the shared documents (help, `README.md`, `CHANGELOG.md`, `COMMANDS.md`) merge one after another.
 
 ---
 
@@ -455,3 +455,10 @@ One task at a time, each through its packet, a test-first build with a self-revi
 - Specification: opened after Task 49 with the text of Task 40; its target is the one decision held for the owner
 - Packet: to be written and checked before the task starts
 - Use cases: the rows of the status table whose task column is `Task 50` (0 at the start of this plan)
+
+### Task 51: The excluded rows are validated: each states no behaviour of the CLI, or returns to the table
+
+- State: PLANNED
+- Specification: the 583 rows of [not-use-cases.tsv](2026-11-12-simplify-branch-completion/not-use-cases.tsv) were taken out of the status table on the strength of the design's disposition (574 rows) and of the first classification (9 rows), without a row-by-row check. Every row is read against its source, the code and the decision its reason cites. A row that states a behaviour the CLI has or must have returns to the status table with a status (DONE with its test, PLANNED under a task, SUPERSEDED with the decision, or deferred with its blocker); a row that states none stays excluded, its reason confirmed. The task ends with every excluded row marked as validated in a new column `validated` (the commit of the check).
+- Packet: to be written and checked before the task starts
+- Use cases: none at the start; the rows this task returns to the table

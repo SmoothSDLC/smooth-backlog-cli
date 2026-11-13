@@ -23,6 +23,12 @@
 
 9. The title of an item is called title: the flags `--title` of `backlog new`, `backlog update` and `backlog team new`, and the item file's key `title`; `--name` and the key `name` go.
 10. The required properties of an item are the title and the description, given by the person, and the number, the slug, the repository, the branch, the created and updated times, the writer, the status and the first history entry, supplied by the CLI.
+11. `backlog update` sets a property with a subcommand word, not a flag: `backlog update <item> <property> <value>` (for example `backlog update 12 title "Fix the login"`).
+12. The description is replaced whole. `--append` goes.
+13. There is no editing of single lines of the description: `--section`, `--set-lines`, `--add-line`, `--top`, `--remove-line` and `--move-line` go.
+14. Taking an item is setting its owner: `--claim` goes; `backlog update <item> owner <name>` replaces it.
+15. `backlog history` goes: the history is part of the item, returned with the item as JSON.
+16. The test for every command, subcommand and flag: it exists only when it solves a problem a backlog item has. What a person or an agent can get by reading the returned item and parsing it is not a command. The baseline is new, update and list.
 
 The decisions applied to the schema: [item.schema.json](2026-11-12-simplify-branch-completion/item.schema.json). The commands and flags that follow from them: [command-structure.md](2026-11-12-simplify-branch-completion/command-structure.md).
 

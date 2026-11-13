@@ -1,5 +1,7 @@
 # Commands and flags after the owner decisions of 2026-11-13
 
+> Superseded in part by decisions 11 to 16 of the same day (subcommand words under `backlog update`; `--append`, the line-editing flags, `--claim` and `backlog history` go; every remaining command is tested against decision 16). This file is rewritten once the owner has ruled on the remaining commands.
+
 Each flag stands under the command form it is used with. `*` marks what does not exist on the branch head yet. `--help` is the only flag usable everywhere.
 
 ## Top level

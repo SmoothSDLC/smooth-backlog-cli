@@ -147,6 +147,7 @@ export function changedSince(home, folder, repo, reference, agent) {
       else {
         const v = spawnSync('git', ['show', `${reference.commit}:./${x.path}`], { cwd: home, encoding: 'utf8' });
         if (!v.status) fm = parse(v.stdout).fm;
+        else if (!sees({ fm: { team: '?' } })) continue; // its earlier version cannot be read, so it may be a team item
       }
     } else {
       try { fm = readItemFile(join(folder, rel(x.path))).fm; } catch { /* unreadable: no author or time */ }

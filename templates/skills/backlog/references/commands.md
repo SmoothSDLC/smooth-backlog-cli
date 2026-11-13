@@ -951,7 +951,7 @@ Argument:
 
 Options:
   --show-all
-      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
+      Also see the items that belong to a team. Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 
@@ -1008,7 +1008,7 @@ Options:
   --json
       Print machine-readable output.
   --show-all
-      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
+      Also see the items that belong to a team. Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 

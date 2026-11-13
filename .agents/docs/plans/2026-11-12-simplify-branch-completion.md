@@ -178,7 +178,7 @@ Each task goes through its packet, a test-first build with a self-review, a spec
 
 ### Task 11: `--show-all` on the reading commands and on `new` (B17b)
 
-- State: built and self-reviewed on a local branch; the specification review and the quality review come next, then the merge
+- State: DONE, merged on the working branch
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 11
 - Packet: [packets/task-11.md](2026-11-12-simplify-branch-completion/packets/task-11.md)
 - Use cases: the rows of the status table whose task column is `Task 11` (8 at the start of this plan)

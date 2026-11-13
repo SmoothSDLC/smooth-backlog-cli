@@ -3,7 +3,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { userCase, slugOf } from './user-cases.js';
 import { GIT_IDENTITY, archivedPath, itemPath, writeStored } from './shared-fixtures.js';
@@ -258,7 +258,10 @@ test('new --split-from a team item is refused with --show-all and writes nothing
 });
 
 test('the flag is a switch: an equals form is refused, a team of no name is no team, a comma list with a team item', () => {
-  const c = userCase(dirs, [{ seq: 5 }, { seq: 90, team: 'parallel' }, { seq: 6, team: '' }]);
+  const c = userCase(dirs, [{ seq: 5 }, { seq: 90, team: 'parallel' }, { seq: 6 }]);
+  const six = itemPath(c.folder, slugOf(6)); // the writer stores no empty team: the key is written by hand
+  writeFileSync(six, JSON.stringify({ ...JSON.parse(readFileSync(six, 'utf8')), team: '' }, null, 2));
+  publish(c);
   const eq = c.run(['list', '--show-all=1']);
   assert.equal(eq.status, 2);
   assert.match(eq.stderr, /unrecognized arguments: --show-all=1/);
@@ -270,4 +273,40 @@ test('the flag is a switch: an equals form is refused, a team of no name is no t
   assert.doesNotMatch(none.stdout, /item 5/);
   assert.equal(JSON.parse(c.run(['show', '5,90', '--show-all']).stdout).length, 2);
   assert.match(c.run(['new', '--s']).stderr + c.run(['new', '--s']).stdout, /ambiguous option: --s could match/);
+});
+
+test('next all-branches names a team item of another branch only with --show-all', () => {
+  const c = userCase(dirs, [{ seq: 1, team: 'parallel', fields: { branch: 'feature/a-b' } }]);
+  assert.doesNotMatch(c.run(['next', 'all-branches']).stdout, /001-item-1/);
+  assert.match(c.run(['next', 'all-branches', '--show-all']).stdout, /NEXT: P0 .*001-item-1/);
+  assert.equal(JSON.parse(c.run(['next', 'all-branches', '--show-all', '--json']).stdout).team, 'parallel');
+});
+
+test('the help of a reading command says team items come with their team only where its output names the team', () => {
+  const events = [{ at: '2026-01-01T00:00:00Z', by: 'bob', session: '', step: 'update', changes: { status: ['a', 'b'] }, note: 'n1' }];
+  const c = userCase(dirs, [{ seq: 1, team: 'parallel', fields: { events } }]);
+  c.run(['changes', '--show-all']); // the reference
+  stored(c, 7, { team: 'parallel' });
+  publish(c);
+  const named = Object.fromEntries([['list'], ['next'], ['show', '1'], ['history', '1'], ['changes']].map(([word, ...item]) => {
+    const out = c.run([word, ...item, '--show-all']);
+    assert.equal(out.status, 0, out.stdout + out.stderr);
+    assert.match(out.stdout, /item[- ][17]|n1/); // the team item is in the output
+    return [word, [/parallel/.test(out.stdout), /with their team/.test(c.run([word, '--help']).stdout)]];
+  }));
+  assert.deepEqual(named, { list: [true, true], next: [true, true], show: [true, true], history: [false, false], changes: [false, false] });
+});
+
+test('changes leaves out a removed item whose earlier version cannot be read, unless --show-all is given', () => {
+  const c = userCase(dirs, [{ seq: 8, team: 'parallel' }]);
+  const watch = (a, ...more) => JSON.parse(c.run(['changes', '--agent', a, '--json', ...more]).stdout);
+  watch('a1'); watch('b1', '--show-all'); // the reference of each agent
+  const path = `acme/app/phases/${itemPath(c.folder, slugOf(8)).split('/').pop()}`;
+  const blob = git(c, 'rev-parse', `HEAD:${path}`).trim();
+  git(c, 'rm', '-q', path);
+  publish(c);
+  rmSync(join(home(c), '.git', 'objects', blob.slice(0, 2), blob.slice(2))); // the earlier version is gone from the clone
+  const a = watch('a1');
+  assert.deepEqual([a.held, a.others], [[], []]);
+  assert.deepEqual(watch('b1', '--show-all').others.map(x => [x.slug, x.status]), [[slugOf(8), 'D']]);
 });

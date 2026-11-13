@@ -35,12 +35,13 @@ export async function run(argv) {
 
 // The item, index and counter paths of the folder that hold an uncommitted change: nothing of a person is published without their action, so the run stops on each.
 // An untracked markdown file without a header block is no item; any other file of the folder is not the migration's.
+const noItem = path => { try { return !hasFrontMatter(readFileSync(path, 'utf8')); } catch { return false; } }; // a file that cannot be read is not passed over
 function uncommitted(folder) {
   if (!existsSync(folder)) return [];
   const prefix = git(['rev-parse', '--show-prefix'], folder).stdout.trim();
   const rows = git(['status', '--porcelain', '-z', '-uall', '--no-renames', '--', '.'], folder).stdout.split('\0').filter(Boolean);
   return rows.map(row => [row.slice(0, 2), row.slice(3 + prefix.length)])
-    .filter(([st, rest]) => rest === 'index.json' || rest === NUMBER_FILE || (ITEM.test(rest) && !(st === '??' && rest.endsWith('.md') && !hasFrontMatter(readFileSync(join(folder, rest), 'utf8')))))
+    .filter(([st, rest]) => rest === 'index.json' || rest === NUMBER_FILE || (ITEM.test(rest) && !(st === '??' && rest.endsWith('.md') && noItem(join(folder, rest)))))
     .map(([, rest]) => rest);
 }
 
@@ -88,10 +89,9 @@ async function migrate(argv) {
     let info; // said once, by the first round
 
     // One round on the pulled files: resolves to { refusal: [texts] } with nothing written, or to the summary of what it converted (or would).
-    const attempt = async () => {
+    const round = async () => {
       const changed = uncommitted(folder);
-      const label = repo;
-      if (changed.length) return { refusal: changed.map(p => `${label}/${p} has an uncommitted change; commit or stash it, then run backlog team migrate again`) };
+      if (changed.length) return { refusal: changed.map(p => `${repo}/${p} has an uncommitted change; commit or stash it, then run backlog team migrate again`) };
       const read = readFolder(folder);
       const team = teamFile(() => loadTeams({ top, home, repo, workRepo, stateDir: configDir(), team: inputs.team, now: new Date().toISOString(), full: true, deferSha: true }), inputs, read);
       info = team.info;
@@ -102,7 +102,7 @@ async function migrate(argv) {
       const views = plan.converted.map(c => viewOf(c.item, c.to));
       if (plan.converted.length) {
         for (const i of read.items.filter(x => x.kind === 'json')) {
-          try { views.push(viewOf(fromFile(i.text, { path: i.path }), i.path)); } catch (e) { failures.push(`${read.label}/${i.path}: the item file cannot be read (${e.message}); restore it with git and run backlog team migrate again`); }
+          try { views.push(viewOf(fromFile(i.text, { path: i.path }), i.path)); } catch { failures.push(`${read.label}/${i.path}: the item file cannot be read; restore it with git and run backlog team migrate again`); }
         }
       }
       if (failures.length) return { refusal: failures };
@@ -128,7 +128,8 @@ async function migrate(argv) {
     };
 
     // The SHA of the team file and the record of the run, once the run went through: never for a dry run, a refused run, or another repository than the working copy's.
-    let done;
+    let done; // the latest round: a re-run after another clone published replaces the first
+    const attempt = async () => (done = await round());
     const persist = () => {
       persistSha();
       if (repo !== workRepo) return;
@@ -136,13 +137,12 @@ async function migrate(argv) {
       writeConfigKeys(top, { ...at, migrated_by_version: VERSION });
     };
 
-    done = await attempt();
+    await attempt();
     if (info && !json) say(info);
     if (done.refusal) return refused(done.refusal);
     if (done.message) {
       const r = await publishTeam(home, folder, done.message, { step: 'team migrate', attempt, watch: await watched(home, repo, top, workRepo), persist });
       if (r.refusal) return refused(r.refusal);
-      done = r.result ?? done;
     } else if (!dry) persist();
 
     const s = done.summary;
@@ -151,7 +151,7 @@ async function migrate(argv) {
     const what = `${plural(s.converted, 'item')} (${s.archived} archived) to JSON in ${repo}`;
     say(dry ? `ℹ️  would convert ${what}; nothing is written` : `✅ converted ${what}`);
     say(`   counter: ${s.counter} (the highest number of ${plural(s.refs.length, 'ref')} and of the items)`);
-    say(`   index: ${plural(s.index_leave, 'entry').replace(/entrys$/, 'entries')} leave, ${plural(s.index_appended, 'item')} appended`);
+    say(`   index: ${s.index_leave} ${s.index_leave === 1 ? 'entry leaves' : 'entries leave'}, ${plural(s.index_appended, 'item')} appended`);
     for (const u of s.unresolved) say(`⚠️  ${u}`);
     return 0;
   });

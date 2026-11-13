@@ -1,7 +1,7 @@
 // `backlog team migrate` through the real command: what it converts and publishes, every stop (exit 2, nothing written), the dry run, the record keys and the undo.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { missingText } from '../../src/team/teams-file.js';
 import { cli } from './shared-fixtures.js';
@@ -55,8 +55,9 @@ test('no team file with a team item stops the migration, naming the path and the
 });
 
 test('an unreadable team file stops the migration, also when no item has a team', t => {
-  for (const extra of [`team: ${TEAM}\n`, '']) {
+  for (const [extra, mode] of [[`team: ${TEAM}\n`], [''], ['', 0o000]]) {
     const w = world(t, '{not json');
+    if (mode !== undefined) { if (process.getuid() === 0) continue; chmodSync(w.teamFile, mode); } // the administrator reads any file
     w.put('phases/001-x.md', md(1, extra)); w.publish('seed');
     const same = w.untouched();
     const r = w.migrate();
@@ -186,6 +187,24 @@ test('two clones: a markdown item published by the other clone during the run is
   assert.deepEqual(JSON.parse(readFileSync(join(w.folder, 'index.json'), 'utf8')).branches[''].map(e => e.seq), [1, 2, 4, 5]);
 });
 
+test('a re-run that finds the folder already converted by another clone converts nothing and keeps migrated_at', t => {
+  const w = world(t, null);
+  w.three();
+  writeFileSync(w.cfgFile, '{"migrated_at": "2020-01-01T00:00:00Z"}\n');
+  // the other clone and its own checkout run the migration while this clone's push is on its way (another author: the two commits differ)
+  const home2 = join(w.tmp, 'home2'); git(w.tmp, 'clone', '-q', w.bare, home2);
+  const cons2 = join(w.tmp, 'cons2'); git(w.tmp, 'clone', '-q', join(w.tmp, 'origins', 'acme', 'app.git'), cons2);
+  const mark = join(w.tmp, 'hook-ran'); const hook = join(w.home, '.git', 'hooks', 'pre-push');
+  const bin = join(import.meta.dirname, '..', '..', 'bin', 'backlog.js');
+  writeFileSync(hook, `#!/bin/sh\n[ -e '${mark}' ] && exit 0\ntouch '${mark}'\nunset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX\ncd '${cons2}' && GIT_AUTHOR_NAME=other SMOOTH_BACKLOG_CLI_HOME='${home2}' XDG_CONFIG_HOME='${join(w.tmp, 'config2')}' '${process.execPath}' '${bin}' team migrate --show-all >'${mark}.out' 2>&1 || exit 1\n`); chmodSync(hook, 0o755);
+  const r = w.migrate();
+  assert.equal(r.status, 0, r.stdout + r.stderr + (existsSync(`${mark}.out`) ? readFileSync(`${mark}.out`, 'utf8') : ''));
+  assert.ok(r.stdout.endsWith('ℹ️  nothing to convert in acme/app\n'), r.stdout);
+  assert.deepEqual(w.cfg(), { migrated_at: '2020-01-01T00:00:00Z', migrated_by_version: VERSION });
+  assert.equal(git(w.home, 'status', '--porcelain'), '');
+  assert.deepEqual(names(w.folder), ['archive/2026/003-x.json', 'index.json', 'numbers.json', 'phases/001-x.json', 'phases/002-x.json']);
+});
+
 test('the commit holds only the JSON files, the removed markdown files, index.json and numbers.json; an untracked markdown file stays unstaged, also after a user publication', t => {
   const w = world(t, null);
   w.three();
@@ -209,6 +228,7 @@ test('an uncommitted change of an item, of index.json or of numbers.json stops t
     'phases/008-x.md': w => w.put('phases/008-x.md', md(8)),
     'index.json': w => w.put('index.json', '{"branches":{}}\n'),
     'numbers.json': w => w.put('numbers.json', '{"last":1}\n'),
+    'phases/link.md': w => symlinkSync('nowhere', join(w.folder, 'phases/link.md')), // a file that cannot be read is not passed over as a draft
   };
   for (const [path, change] of Object.entries(cases)) {
     const w = world(t);
@@ -281,13 +301,15 @@ test('every stop of the conversion through the command: exit 2, every case liste
   w.put('phases/001-x.md', '---\nseq: [\n---\n'); // an unreadable header
   w.put('phases/002-x.md', md(2)); w.put('archive/002-y.md', md(2, '', '002-y')); // two items with one number
   w.put(`phases/${long}.md`, md(5, '', long));
+  w.put('phases/006-x.json', 'not json\n'); // an item already in JSON that cannot be read
   w.publish('bad');
   const same = w.untouched();
   const r = w.migrate();
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.equal(r.stdout, 'ℹ️  no team file at .backlog/teams.json; no item of acme/app has a team\n');
   const lines = r.stderr.split('\n').filter(Boolean);
-  assert.equal(lines.length, 3, r.stderr);
+  assert.equal(lines.length, 4, r.stderr);
+  assert.ok(lines.includes('❌ backlog: acme/app/phases/006-x.json: the item file cannot be read; restore it with git and run backlog team migrate again'), r.stderr);
   assert.ok(lines.some(l => /^❌ backlog: acme\/app\/phases\/001-x\.md: .*; restore it with git and run backlog team migrate again$/.test(l)), r.stderr);
   assert.ok(lines.includes('❌ backlog: acme/app: number 2 is held by 002-x and 002-y; give one of them a free number in markdown and run again'), r.stderr);
   assert.ok(lines.includes(`❌ backlog: acme/app/phases/${long}.md: the JSON file name would be too long; shorten the item's name in markdown and run again`), r.stderr);

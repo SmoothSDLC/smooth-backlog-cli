@@ -213,3 +213,14 @@ test('backlog team --help lists new, and backlog team new --help has the flags, 
   for (const code of ['0', '1', '2', '3']) assert.match(text, new RegExp(`^ {2}${code} {2}`, 'm'), `exit code ${code}`);
   assert.match(text, /^Example:\n {2}backlog team new /m);
 });
+
+test('team migrate help describes the command that exists: its flags, the dry run and the record keys', () => {
+  const text = teamHelp['team migrate'];
+  assert.doesNotMatch(text, /not available yet|bind them to a team|--ask/);
+  for (const flag of ['--team', '--show-all', '--dry-run', '--json', '--repository']) assert.ok(block(text, flag.slice(2)), flag);
+  assert.match(text, /migrated_at/); assert.match(text, /migrated_by_version/);
+  assert.match(text, /never writes it and reads no template/);
+  for (const code of [0, 1, 2, 3]) assert.match(text, new RegExp(`^  ${code}  `, 'm'));
+  assert.doesNotMatch(USAGE, /not available yet/);
+});
+

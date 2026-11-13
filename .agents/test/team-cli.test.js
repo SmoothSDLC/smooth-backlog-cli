@@ -1,7 +1,7 @@
 // Tests for `backlog team`: the router, and teams and flows defined from JSON. Local bare repositories only.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -120,15 +120,19 @@ test('team define keeps review_only, a list of names within the members, in the 
   assert.deepEqual(teams(f)[TEAM.name].review_only, ['bob']);
 });
 
-test('the router names the six words for an unknown word, answers migrate after its inputs, and still routes define and workflow', () => {
+test('the router names the six words for an unknown word, migrate converts a markdown folder, and define and workflow are still routed', () => {
   const f = fixture();
   const unknown = run(f, ['team', 'frobnicate']);
   assert.equal(unknown.status, 2); assert.match(unknown.stderr, /team needs a subcommand \(new, update, pop, query, validate, migrate\)/);
   assert.doesNotMatch(unknown.stderr, /define|workflow/);
   const noTeam = run(f, ['team', 'migrate'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: '' });
   assert.equal(noTeam.status, 2); assert.match(noTeam.stderr, /a team command needs a team/);
+  mkdirSync(join(f.folder, 'phases'), { recursive: true });
+  writeFileSync(join(f.folder, 'phases', '001-x.md'), '---\nphase: 001-x\nseq: 1\nname: x\n---\nbody\n');
+  sh(f.home, 'add', 'acme'); sh(f.home, 'commit', '-q', '-m', 'item'); sh(f.home, 'push', '-q');
   const migrate = run(f, ['team', 'migrate', '--team', 't1']);
-  assert.equal(migrate.status, 2); assert.match(migrate.stderr, /team migrate is not available yet/);
+  assert.equal(migrate.status, 0, migrate.stdout + migrate.stderr);
+  assert.equal(existsSync(join(f.folder, 'phases', '001-x.json')), true);
   const shown = run(f, ['team', 'workflow', '--show', 'team']);
   assert.equal(shown.status, 0, shown.stdout + shown.stderr);
   assert.match(run(f, ['team', 'define']).stderr, /cannot read|no JSON|expected/);

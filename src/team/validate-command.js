@@ -1,6 +1,6 @@
 // `backlog team validate`: reads the team file in full and the repository's items, prints every finding with its fix, writes nothing but what
 // loadTeams writes (the SHA in the configuration, the per-user record and copy). It publishes nothing and never runs a rule.
-// `backlog team migrate` shares the reading of the inputs here and answers that it is not available yet.
+// `backlog team migrate` shares the reading of the inputs here.
 import { existsSync } from 'node:fs';
 import { BacklogError } from '../errors.js';
 import { foreignItem } from '../shared/dependencies.js';
@@ -102,10 +102,4 @@ function check(argv, top, inputs, home) {
   if (markdown) say('ℹ️  the items are markdown: run backlog team migrate, then validate checks them too');
   say(`${errs ? '❌' : '✅'} ${shown}: ${file ? `${plural(Object.keys(file).length, 'team')}, ` : ''}${plural(errs, 'error')}, ${plural(out.filter(({ f }) => f.severity === 'warning').length, 'warning')}`);
   return errs ? 2 : 0;
-}
-
-// The words not built yet answer after their inputs are resolved, so that a missing team is said first.
-export async function pending(command, argv, booleans) {
-  try { readInputs(command, argv, booleans); } catch (e) { if (e instanceof BacklogError) return die(e.message, e.exitCode); throw e; }
-  return die(`team ${command} is not available yet`);
 }

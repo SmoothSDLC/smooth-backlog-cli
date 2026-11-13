@@ -241,7 +241,7 @@ test('a repository input naming another repository validates that file and write
   assert.equal(w.run(['validate', '--team', 'good', '--repository', 'nonsense'], { SMOOTH_BACKLOG_CLI_HOME: w.backlog }).status, 2);
 });
 
-test('the router: an unknown word names the six words, migrate resolves its inputs and is not available yet', t => {
+test('the router: an unknown word names the six words, migrate --team good on a markdown folder converts it', t => {
   const w = world(t);
   w.put({ good: GOOD });
   const unknown = w.run(['frobnicate']);
@@ -250,9 +250,13 @@ test('the router: an unknown word names the six words, migrate resolves its inpu
   const noTeam = w.run(['migrate']);
   assert.equal(noTeam.status, 2);
   assert.match(noTeam.stderr, /a team command needs a team/);
+  w.item('phases', '001-x.md', '---\nphase: 001-x\nseq: 1\nname: x\nteam: good\n---\nbody\n');
+  git(w.top, 'add', '-A'); git(w.top, 'commit', '-q', '-m', 'items');
+  git(w.root, 'init', '-q', '--bare', '-b', 'main', 'origin.git'); git(w.top, 'remote', 'add', 'origin', join(w.root, 'origin.git')); git(w.top, 'push', '-q', '-u', 'origin', 'main');
   const migrate = w.run(['migrate', '--team', 'good']);
-  assert.equal(migrate.status, 2);
-  assert.match(migrate.stderr, /team migrate is not available yet/);
+  assert.equal(migrate.status, 0, migrate.stdout + migrate.stderr);
+  assert.equal(JSON.parse(readFileSync(join(w.backlog, 'local', 'repository', 'phases', '001-x.json'), 'utf8')).team, 'good');
+  assert.equal(existsSync(join(w.backlog, 'local', 'repository', 'phases', '001-x.md')), false);
   assert.equal(w.run(['validate', '--team', 'good', 'extra']).status, 2);
   assert.equal(w.run(['validate', '--team', 'good', '--dry-run']).status, 2);
 });

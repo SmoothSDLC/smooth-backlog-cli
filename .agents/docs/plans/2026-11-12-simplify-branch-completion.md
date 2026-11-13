@@ -262,7 +262,7 @@ Each task goes through its packet, a test-first build with a self-review, a spec
 
 ### Task 23: The command `backlog team migrate` (B22c)
 
-- State: PLANNED
+- State: DONE, merged on the working branch
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 23
 - Packet: [packets/task-23.md](2026-11-12-simplify-branch-completion/packets/task-23.md)
 - Use cases: the rows of the status table whose task column is `Task 23` (58 at the start of this plan)

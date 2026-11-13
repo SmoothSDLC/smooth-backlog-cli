@@ -420,6 +420,7 @@ async function validatePublication(home, t, folders, names, claims, renumbered) 
   }
 }
 
+const MARKDOWN_ITEM = /^(phases\/[^/]+|archive\/.+)\.md$/;
 // The paths a command owns: the files it was given, and of each folder its item files, index.json and numbers.json that changed (plus the first-use
 // configuration the store wrote itself). Never the folder root, the team file, the templates or an edit of .backlog/config.json.
 // Only a path the command wrote in this run (the store's record, store.wrote) is its own: an edit of a person's, even one git merged with an upstream change, is never published with it.
@@ -430,7 +431,9 @@ export async function ownedPaths(home, t, names, files) {
     const rows = paths(await must(home, ['status', '--porcelain', '-z', '-uall', '--no-renames', '--', lit(names[i])], 'list the changes of the folder'));
     for (const row of rows) {
       const path = row.slice(3); const rest = path.slice(names[i].length + 1);
-      if ((ITEM_PATH.test(rest) || rest === 'index.json' || rest === NUMBER_FILE) && store.wasWritten(join(home, path))) { out.add(path); if (row.startsWith('D ')) gone.add(path); }
+      // a markdown item is the command's own only as the deletion of a tracked file it removed itself (the migration): never an untracked one, a person's draft
+      const own = ITEM_PATH.test(rest) || rest === 'index.json' || rest === NUMBER_FILE || (MARKDOWN_ITEM.test(rest) && /^( D|D )/.test(row));
+      if (own && store.wasWritten(join(home, path))) { out.add(path); if (row.startsWith('D ')) gone.add(path); }
     }
   }
   if (!t.clone) { // the first use of a backlog inside the repository writes its configuration itself: only while it is not tracked yet (its creation); an edit of the committed file, such as the SHA, is a person's and never staged

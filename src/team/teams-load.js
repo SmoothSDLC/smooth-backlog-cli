@@ -32,16 +32,16 @@ function atomicWrite(path, data, options) {
   const tmp = `${path}.${randomBytes(4).toString('hex')}.tmp`;
   try { writeFileSync(tmp, data, options); renameSync(tmp, path); } catch (e) { try { rmSync(tmp, { force: true }); } catch { /* none */ } throw e; }
 }
-// The one key the CLI writes into the committed configuration. The configuration is read as the commands read it (the older root file
-// included), so every key of it is kept; a checkout that cannot be written is skipped silently.
-function writeSha(top, value) {
+// The keys the CLI writes into the committed configuration (the SHA of the team file, the record of the migration). The configuration is read as the
+// commands read it (the older root file included), so every key of it is kept; a checkout that cannot be written is skipped silently.
+export function writeConfigKeys(top, patch) {
   try {
     const cfg = readConfig(top);
-    if (cfg.teams_file_sha === value) return;
+    if (Object.entries(patch).every(([k, v]) => cfg[k] === v)) return;
     // with no configuration at all the file starts as the store's first use would write it, so a later first use finds nothing to change
     const base = existsSync(join(top, CONFIG)) || Object.keys(cfg).length ? cfg : JSON.parse(FIRST_USE_CONFIG);
     mkdirSync(join(top, '.backlog'), { recursive: true });
-    atomicWrite(join(top, CONFIG), `${JSON.stringify({ ...base, teams_file_sha: value }, null, 2)}\n`);
+    atomicWrite(join(top, CONFIG), `${JSON.stringify({ ...base, ...patch }, null, 2)}\n`);
   } catch { /* not writable */ }
 }
 // The record of the last valid validation; one that is damaged counts as absent.
@@ -113,7 +113,7 @@ export function loadTeams({ top, home, repo, workRepo = repo, stateDir, team, no
   let persistSha = () => {};
   if (!errs.length) {
     const hash = sha(bytes);
-    if (shaIn === 'config') { persistSha = () => writeSha(top, hash); if (!deferSha) persistSha(); }
+    if (shaIn === 'config') { persistSha = () => writeConfigKeys(top, { teams_file_sha: hash }); if (!deferSha) persistSha(); }
     try {
       mkdirSync(paths.dir, { recursive: true, mode: 0o700 });
       atomicWrite(paths.copy, bytes, { mode: 0o600 });

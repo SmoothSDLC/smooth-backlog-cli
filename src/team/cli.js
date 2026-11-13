@@ -25,7 +25,7 @@ async function dispatch(argv) {
   const sub = argv[0];
   if (!SUBS.includes(sub)) return die(`team needs a subcommand (${WORDS.join(', ')}): backlog team validate --team <name>`);
   if (sub === 'validate') return (await import('./validate-command.js')).run(argv.slice(1));
-  if (sub === 'migrate') return (await import('./validate-command.js')).pending('migrate', argv.slice(1), ['ask']);
+  if (sub === 'migrate') return (await import('./migrate.js')).run(argv.slice(1));
   if (sub === 'new') return (await import('./new.js')).run(argv.slice(1)); // the rules engine: the old seam below is not installed for it
   if (sub === 'update') return (await import('./update.js')).run(argv.slice(1)); // the same
   if (sub === 'pop') return (await import('./pop.js')).run(argv.slice(1)); // the rules engine, as new and update

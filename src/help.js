@@ -25,7 +25,7 @@ Usage:
   backlog team query [<item> | filter <name> | check <item> <step> | plan] --team <team>   The team's open items, one item whole, a filter's items, the rules' answer for a step, the hand-out plan
   backlog team update <item> <step> --team <team> --agent <name> [--<argument> <value>]...   One step of the team's rules on an item (claim, release, review, close, ...); the rules decide
   backlog team validate [--team <team> | --show-all] [--json]   Check the team file and this repository's items against it
-  backlog team migrate --team <team>               Convert the items to the team format (not available yet)
+  backlog team migrate --team <team>               Convert the markdown items of the repository's folder to JSON
   backlog team define --file <team.json>           Register a team (lead, members, reviewers, review stages) in the backlog configuration
   backlog team workflow --file <flow.json>         Register a flow definition; --show <name> prints one
   backlog move <item> --to-branch <name>           Move an item to another branch (or --to-repository)

@@ -11,7 +11,7 @@ Usage:
   backlog team update <item> <step> --team <name> --agent <name> [--<argument> <value>]... [--json]
   backlog team query [<item> | filter <name> | check <item> <step> | plan | rules | steps] [--team <name> | --show-all] [--json]
   backlog team validate [--team <name> | --show-all] [--json]
-  backlog team migrate --team <name>
+  backlog team migrate [--team <name> | --show-all] [--dry-run] [--json]
   backlog team define --file <team.json> [--json]
   backlog team workflow --file <flow.json> [--json]
   backlog team workflow --show <name>
@@ -390,25 +390,59 @@ Example:
   backlog team validate --team web
 `,
 
-  'team migrate': `backlog team migrate — convert the items of a backlog to the team format (not available yet)
+  'team migrate': `backlog team migrate — convert the markdown items of this repository's folder to JSON items
 
 Usage:
-  backlog team migrate --team <name> [--ask]
+  backlog team migrate [--team <name> | --show-all] [--repository <owner/name>] [--dry-run] [--json]
 
-backlog team migrate will convert the markdown items of this repository's folder to JSON items and bind them to a team. It reads its
-inputs as the other team commands do (a missing team is exit 2) and then answers that it is not available yet.
+backlog team migrate converts every markdown item of this repository's folder of the backlog, open and archived, to a JSON item, in one
+commit (migrate <n> items to JSON) that it publishes. It always converts the whole folder of the one repository, with or without a
+team on the items, and never another repository's folder. It writes the folder's numbers.json (the highest number the folder's
+history ever held, so no number is handed out twice) and its index.json: the items the index already lists keep their order, the
+others are appended in number order. Run it once per repository after upgrading: every other command stops on a folder of markdown items.
+
+Scenario: after the upgrade a lead runs backlog team migrate --show-all --dry-run in the working copy of the repository, reads what
+would be converted and every case that would stop the run, fixes those, then runs backlog team migrate --show-all.
+
+The team file is found and named as the other team commands do (--team, else SMOOTH_BACKLOG_CLI_TEAM_NAME, else the "team" key of
+.backlog/config.json; --show-all for every team; with both, --team decides) and is validated in full, as backlog team validate does. It
+is only read: the command never writes it and reads no template. A folder in which no item has a team needs no team file. It reads
+no user identity: the commit is made by git's configured author, and the items keep their updated and updated_by values.
+
+The run stops with exit 2, lists every case and writes nothing when: the team file is missing while an item has a team, cannot be read
+or has an error in any entry; an item, index.json or numbers.json of the folder has an uncommitted change (commit or stash it); a
+header cannot be read; two items hold one number; a JSON file name is taken or would be too long; the backlog clone is shallow. When
+the change cannot be published the folder is put back as it was (exit 3).
+
+After a run that is not a dry run it writes two keys into .backlog/config.json of the working copy, for a person to commit:
+migrated_at (when the folder became JSON; a later run that converts nothing keeps it) and migrated_by_version (the version of the CLI
+of the latest run). With --repository naming another repository than the working copy's they are not written. A second run says
+that there is nothing to convert; a markdown item that appears later (a branch merged from before the migration) is converted by
+running the command again.
 
 Options:
   --team NAME
-      The team the items are bound to.
-  --ask
-      Reserved for the conversion.
+      The team the command runs for; its entry must exist in the team file.
+  --show-all
+      Run for every team of the team file.
+  --repository OWNER/NAME
+      Convert the folder of another repository of the backlog repository, with that repository's team file.
+  --dry-run
+      Print what would be converted (the open and archived items, the counter, the index entries that leave and the items appended, the
+      references that name no item) and every case that would stop the run. Writes nothing.
+  --json
+      Print the summary as one JSON object {dry_run, converted, archived, counter, refs, unresolved, index_leave, index_appended, failures};
+      a run that stops prints {failures: [...]} and exits 2.
 ${HELP_FLAG}
 
-Exit codes: 2 the inputs are invalid, or the command is not available yet.
+Exit codes:
+  0  Converted, or nothing to convert.
+  1  The named team has no entry in the team file.
+  2  The run stopped (every case is listed) or the input is invalid; nothing was written.
+  3  The change could not be published.
 
 Example:
-  backlog team migrate --team web
+  backlog team migrate --show-all --dry-run
 `,
 
 };

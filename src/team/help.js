@@ -399,7 +399,7 @@ backlog team migrate converts every markdown item of this repository's folder of
 commit (migrate <n> items to JSON) that it publishes. It always converts the whole folder of the one repository, with or without a
 team on the items, and never another repository's folder. It writes the folder's numbers.json (the highest number the folder's
 history ever held, so no number is handed out twice) and its index.json: the items the index already lists keep their order, the
-others are appended in number order. Run it once per repository after upgrading: every other command stops on a folder of markdown items.
+others are appended, open items first, then by number. Run it once per repository after upgrading: every other command stops on a folder of markdown items.
 
 Scenario: after the upgrade a lead runs backlog team migrate --show-all --dry-run in the working copy of the repository, reads what
 would be converted and every case that would stop the run, fixes those, then runs backlog team migrate --show-all.

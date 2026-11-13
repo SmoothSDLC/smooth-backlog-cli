@@ -105,8 +105,9 @@ async function migrate(argv) {
           try { views.push(viewOf(fromFile(i.text, { path: i.path }), i.path)); } catch { failures.push(`${read.label}/${i.path}: the item file cannot be read; restore it with git and run backlog team migrate again`); }
         }
       }
+      let before; // an index that cannot be read is one more case of the list
+      try { before = index.read(folder); } catch (e) { if (!(e instanceof BacklogError)) throw e; failures.push(`${read.label}/index.json: ${e.message}`); }
       if (failures.length) return { refusal: failures };
-      const before = index.read(folder);
       const idx = plan.converted.length ? index.reconcile(before, views, { open: openOf(team.file) }).idx : before; // a run that converts nothing leaves the index alone
       const was = entriesOf(before); const now = entriesOf(idx);
       const counter = Math.max(floor, plan.counter);

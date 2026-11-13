@@ -87,6 +87,7 @@ test('migrate without a team or --show-all stops with the three ways to name a t
   const nope = w.migrate(['--team', 'nope']);
   assert.equal(nope.status, 1, nope.stdout + nope.stderr);
   assert.match(nope.stderr, /^❌ backlog: team nope has no entry in \.backlog\/teams\.json \(teams: parallel\)\n$/);
+  assert.equal(w.migrate(['--team', 'u:hunter2@x']).stderr, '❌ backlog: team x has no entry in .backlog/teams.json (teams: parallel)\n', 'a refusal is redacted');
   same();
 });
 
@@ -286,6 +287,9 @@ test('a failure with --json prints the failures on standard output, each text re
   assert.match(j.failures[0], /^acme\/app\/phases\/001-x\.md: /);
   assert.match(j.failures[1], /^acme\/app\/phases\/x\.md: /, 'a credential in a file name is not printed');
   assert.ok(!r.stdout.includes('hunter2'));
+  const text = w.migrate();
+  assert.equal(text.status, 2);
+  assert.ok(text.stderr.includes('acme/app/phases/x.md: ') && !text.stderr.includes('hunter2'), 'the text of a stop is redacted too');
   same();
 });
 
@@ -312,18 +316,35 @@ test('every stop of the conversion through the command: exit 2, every case liste
   w.put('phases/002-x.md', md(2)); w.put('archive/002-y.md', md(2, '', '002-y')); // two items with one number
   w.put(`phases/${long}.md`, md(5, '', long));
   w.put('phases/006-x.json', 'not json\n'); // an item already in JSON that cannot be read
+  w.put('index.json', '{not json'); // a committed index that cannot be read is listed with the others
   w.publish('bad');
   const same = w.untouched();
   const r = w.migrate();
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.equal(r.stdout, 'ℹ️  no team file at .backlog/teams.json; no item of acme/app has a team\n');
   const lines = r.stderr.split('\n').filter(Boolean);
-  assert.equal(lines.length, 4, r.stderr);
+  assert.equal(lines.length, 5, r.stderr);
+  assert.ok(lines.some(l => /^❌ backlog: acme\/app\/index\.json: the backlog index cannot be read \(.+\); restore it from the repository history$/.test(l)), r.stderr);
   assert.ok(lines.includes('❌ backlog: acme/app/phases/006-x.json: the item file cannot be read; restore it with git and run backlog team migrate again'), r.stderr);
   assert.ok(lines.some(l => /^❌ backlog: acme\/app\/phases\/001-x\.md: .*; restore it with git and run backlog team migrate again$/.test(l)), r.stderr);
   assert.ok(lines.includes('❌ backlog: acme/app: number 2 is held by 002-x and 002-y; give one of them a free number in markdown and run again'), r.stderr);
   assert.ok(lines.includes(`❌ backlog: acme/app/phases/${long}.md: the JSON file name would be too long; shorten the item's name in markdown and run again`), r.stderr);
   same();
+});
+
+test('a committed index.json that is damaged or holds no list of items per branch stops the migration: exit 2, listed, also with --json', t => {
+  for (const text of ['{not json', '[]']) {
+    const w = world(t, null);
+    w.three(); w.put('index.json', text); w.publish('index');
+    const same = w.untouched();
+    const r = w.migrate();
+    assert.equal(r.status, 2, text + r.stdout + r.stderr);
+    assert.match(r.stderr, /^❌ backlog: acme\/app\/index\.json: the backlog index cannot be read \(.+\); restore it from the repository history\n$/);
+    const j = w.migrate(['--show-all', '--json']);
+    assert.equal(j.status, 2);
+    assert.match(JSON.parse(j.stdout).failures[0], /^acme\/app\/index\.json: the backlog index cannot be read/);
+    same();
+  }
 });
 
 test('a shallow clone stops the migration', t => {

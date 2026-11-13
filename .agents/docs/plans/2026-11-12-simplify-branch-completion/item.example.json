@@ -20,7 +20,7 @@
     "estimate_min": 40,
     "complexity": "low"
   },
-  "body": "\n# Phase 001 — Add the login form\n\n**Objective:** People can sign in\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n",
+  "description": "\n# Phase 001 — Add the login form\n\n**Objective:** People can sign in\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n",
   "history": [
     {
       "at": "2026-11-13T18:04:51Z",

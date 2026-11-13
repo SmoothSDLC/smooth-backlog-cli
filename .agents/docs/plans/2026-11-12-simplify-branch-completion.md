@@ -10,9 +10,22 @@
 
 **Supersedes, as the task list of the branch:** [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md) (its 33 tasks are Tasks 1 to 33 here, with the same numbers; its task texts stay the specification from which a packet is written), [completed/2026-11-04-phase-8-documentation.md](completed/2026-11-04-phase-8-documentation.md) (Task 39) and [completed/2026-11-04-phase-9-final-verification-and-pr.md](completed/2026-11-04-phase-9-final-verification-and-pr.md) (Task 40). The batch plan [2026-11-09-team-rules-engine.md](2026-11-09-team-rules-engine.md), the simplification plan and its log stay active until Task 40 closes them.
 
+## Owner decisions of 2026-11-13 (binding; they come before every task below and are not yet built)
+
+1. `backlog` with no command word prints the help. It no longer runs `backlog next`.
+2. The flag `--dry-run` is named `--whatif` on every command that has it.
+3. The description of an item is called description. The flag `--body` of `backlog new` goes and `--description` stays; the item file's key `body` becomes `description`.
+4. An alias is not kept: where two flags or two names mean the same, one goes.
+5. The item schema comes first. It is a valid JSON Schema ([item.schema.json](2026-11-12-simplify-branch-completion/item.schema.json)) holding only the item's own properties, and the commands and flags are cut from it.
+6. An item has few required properties. `backlog new` takes exactly the required ones that a person must give; the CLI supplies the rest of the required ones. A property that is optional, or that is set after creation, is not an input of `backlog new`: it is set with `backlog update`.
+7. `--show-all` is a flag for reading and displaying items. Its use on writing commands (owner rulings R16 and R19 of 2026-11-09, built for `backlog new` in Task 11 and planned for seven more commands) is under the owner's review; no further task adds it to a writing command until he has ruled.
+8. A list of commands and flags shows each flag under the command form it is used with; only a flag usable everywhere stands at the top.
+
+Open with the owner: the list of required properties (proposed: title and description given by the person; number, slug, repository, branch, created, updated, updated by, status and the first history entry supplied by the CLI).
+
 ## The item schema under review
 
-[2026-11-12-simplify-branch-completion/item.schema.json](2026-11-12-simplify-branch-completion/item.schema.json) is the JSON Schema of one item file as the code writes it today (2026-11-13), and [item.example.json](2026-11-12-simplify-branch-completion/item.example.json) is a file written by `backlog new`. The schema is under correction; the commands and flags of `backlog new` and `backlog update` are re-cut from the corrected schema before any further task changes them.
+[2026-11-12-simplify-branch-completion/item.schema.json](2026-11-12-simplify-branch-completion/item.schema.json) is the JSON Schema of one item file (2026-11-13), and [item.example.json](2026-11-12-simplify-branch-completion/item.example.json) is an item that fits it. The schema is under correction; the commands and flags of `backlog new` and `backlog update` are re-cut from the corrected schema before any further task changes them.
 
 ## The use-case status table
 

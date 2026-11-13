@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Backlog item",
-  "description": "One backlog item without a team: the content of one item file, as the code writes it today.",
+  "description": "One backlog item without a team: the content of one item file. This is the target under the owner decisions of 2026-11-13; the code still writes the key body where this schema says description.",
   "type": "object",
   "required": [
     "seq",
@@ -13,7 +13,7 @@
     "updated",
     "updated_by",
     "fields",
-    "body",
+    "description",
     "history"
   ],
   "additionalProperties": false,
@@ -138,9 +138,9 @@
         }
       }
     },
-    "body": {
+    "description": {
       "type": "string",
-      "description": "The description of the item in markdown and the records appended to it. Set by: backlog new --description, backlog update --append and --section."
+      "description": "The description of the item, in markdown, and the records appended to it. Given at creation with backlog new --description."
     },
     "history": {
       "type": "array",

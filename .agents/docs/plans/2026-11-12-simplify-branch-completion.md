@@ -12,7 +12,7 @@
 
 ## The item schema under review
 
-[2026-11-12-simplify-branch-completion/item-schema.json](2026-11-12-simplify-branch-completion/item-schema.json) is the data schema of an item as the code defines it today, written out as a JSON template for correction (2026-11-13). The commands and flags of `backlog new` and `backlog update` are re-cut from the corrected schema before any further task changes them.
+[2026-11-12-simplify-branch-completion/item.schema.json](2026-11-12-simplify-branch-completion/item.schema.json) is the JSON Schema of one item file as the code writes it today (2026-11-13), and [item.example.json](2026-11-12-simplify-branch-completion/item.example.json) is a file written by `backlog new`. The schema is under correction; the commands and flags of `backlog new` and `backlog update` are re-cut from the corrected schema before any further task changes them.
 
 ## The use-case status table
 

@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Backlog item",
+  "description": "One backlog item without a team: the content of one item file, as the code writes it today.",
+  "type": "object",
+  "required": [
+    "seq",
+    "slug",
+    "name",
+    "repository",
+    "branch",
+    "created",
+    "updated",
+    "updated_by",
+    "fields",
+    "body",
+    "history"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "description": "The item's number in this repository, never reused. Default: the next free number. Set by: the CLI."
+    },
+    "slug": {
+      "type": "string",
+      "description": "The name an item is addressed by in every command. Default: the number and the title. Set by: the CLI."
+    },
+    "name": {
+      "type": "string",
+      "description": "A short title of the item. Default: none, always given. Set by: backlog new --title, backlog update --name."
+    },
+    "team": {
+      "type": "string",
+      "description": "The team that owns the item. Absent for an item without a team; an item that has it takes its fields from its team's item definition instead of the fields below. Set by: backlog team new, a rule of the team, backlog team migrate."
+    },
+    "repository": {
+      "type": "string",
+      "description": "The repository the item belongs to. Default: the repository of the folder. Set by: the CLI."
+    },
+    "branch": {
+      "type": "string",
+      "description": "The branch the item belongs to. Default: the branch of the caller. Set by: the CLI, backlog move."
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the item was created. Default: the time of creation. Set by: the CLI."
+    },
+    "updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the item last changed. Default: the time of the last change. Set by: the CLI."
+    },
+    "updated_by": {
+      "type": "string",
+      "description": "Who changed the item last. Default: the agent named, else the user of the configuration. Set by: the CLI."
+    },
+    "fields": {
+      "type": "object",
+      "description": "The values of the item. A field that was never given is absent and reads as its default. A key not listed here is kept as it is.",
+      "required": [],
+      "additionalProperties": true,
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Where the item is, a free word stored exactly as typed; the finished words are closed, done and archived. Default: pending. Set by: backlog new --status, backlog update --status, backlog update --claim and --release, backlog done."
+        },
+        "objective": {
+          "type": "string",
+          "description": "The result the item delivers, one line. Default: the title. Set by: backlog new --objective, backlog update --objective."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Several sentences about what the item is for; it routes new work to the right item. Default: empty. Set by: backlog new --summary, backlog update --summary."
+        },
+        "location": {
+          "type": "string",
+          "description": "Free text: where the work is. Default: empty. Set by: backlog update --location."
+        },
+        "commit": {
+          "type": "string",
+          "description": "The commit the work has reached. Default: the commit of HEAD at creation. Set by: the CLI, backlog update --commit."
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "critical"
+          ],
+          "description": "A critical item is placed first. Default: normal. Set by: backlog new --severity, backlog update --severity."
+        },
+        "owner": {
+          "type": "string",
+          "description": "The agent working on the item; outside a team, the user the item belongs to. Default: the user of the configuration. Set by: the CLI, backlog update --claim and --release."
+        },
+        "owned_since": {
+          "type": "string",
+          "description": "When the agent took the item; empty while nobody holds it. Default: empty. Set by: the CLI. A time, or the empty text."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "description": "The items that must be finished first. Default: empty list. Set by: backlog new --depends-on, backlog update --set-depends-on."
+        },
+        "parent": {
+          "type": "integer",
+          "description": "The item this one was split from. Default: none. Set by: backlog new --split-from."
+        },
+        "estimate_min": {
+          "type": "integer",
+          "description": "Minutes of work, a whole number. Default: empty. Set by: backlog new --estimate, backlog update --set-estimate."
+        },
+        "complexity": {
+          "type": "string",
+          "description": "low, medium or high. Default: empty. Set by: backlog new --complexity, backlog update --set-complexity."
+        },
+        "layer": {
+          "type": "string",
+          "description": "1 to 5 or process. Default: empty. Set by: backlog new --layer, backlog update --set-layer."
+        },
+        "chunk": {
+          "type": "boolean",
+          "description": "Small pieces of work any member does between items. Default: empty. Set by: backlog new --chunk, backlog update --set-chunk."
+        },
+        "size_score": {
+          "type": "integer",
+          "description": "A whole number that sizes the item. Default: empty. Set by: backlog update --size_score."
+        },
+        "completed": {
+          "type": "string",
+          "description": "When the item was closed. Default: empty. Set by: backlog done, backlog update --close. A time, or the empty text."
+        }
+      }
+    },
+    "body": {
+      "type": "string",
+      "description": "The description of the item in markdown and the records appended to it. Set by: backlog new --description, backlog update --append and --section."
+    },
+    "history": {
+      "type": "array",
+      "description": "One entry per command that changed the item.",
+      "items": {
+        "type": "object",
+        "required": [
+          "at",
+          "by",
+          "session",
+          "step",
+          "changes",
+          "note"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the change was made."
+          },
+          "by": {
+            "type": "string",
+            "description": "Who made it."
+          },
+          "session": {
+            "type": "string",
+            "description": "The session id, or the empty text."
+          },
+          "step": {
+            "type": "string",
+            "description": "The command, or the step of a team's rules."
+          },
+          "changes": {
+            "type": "object",
+            "description": "One key per changed field, holding the value before and the value after.",
+            "additionalProperties": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "Free text."
+          }
+        }
+      }
+    }
+  }
+}

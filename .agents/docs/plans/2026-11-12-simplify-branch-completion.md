@@ -21,7 +21,10 @@
 7. `--show-all` is a flag for reading and displaying items. Its use on writing commands (owner rulings R16 and R19 of 2026-11-09, built for `backlog new` in Task 11 and planned for seven more commands) is under the owner's review; no further task adds it to a writing command until he has ruled.
 8. A list of commands and flags shows each flag under the command form it is used with; only a flag usable everywhere stands at the top.
 
-Open with the owner: the list of required properties (proposed: title and description given by the person; number, slug, repository, branch, created, updated, updated by, status and the first history entry supplied by the CLI).
+9. The title of an item is called title: the flags `--title` of `backlog new`, `backlog update` and `backlog team new`, and the item file's key `title`; `--name` and the key `name` go.
+10. The required properties of an item are the title and the description, given by the person, and the number, the slug, the repository, the branch, the created and updated times, the writer, the status and the first history entry, supplied by the CLI.
+
+The decisions applied to the schema: [item.schema.json](2026-11-12-simplify-branch-completion/item.schema.json). The commands and flags that follow from them: [command-structure.md](2026-11-12-simplify-branch-completion/command-structure.md).
 
 ## The item schema under review
 

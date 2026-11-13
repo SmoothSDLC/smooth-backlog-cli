@@ -1,26 +1,16 @@
 {
   "seq": 1,
   "slug": "001-add-the-login-form",
-  "name": "Add the login form",
+  "title": "Add the login form",
   "repository": "acme/app",
   "branch": "main",
   "created": "2026-11-13T18:04:51Z",
   "updated": "2026-11-13T18:04:51Z",
   "updated_by": "ann",
   "fields": {
-    "status": "pending",
-    "objective": "People can sign in",
-    "summary": "",
-    "location": "",
-    "commit": "<the commit of HEAD>",
-    "severity": "normal",
-    "owner": "ann",
-    "owned_since": "",
-    "depends_on": [],
-    "estimate_min": 40,
-    "complexity": "low"
+    "status": "pending"
   },
-  "description": "\n# Phase 001 — Add the login form\n\n**Objective:** People can sign in\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n",
+  "description": "People can sign in with their e-mail address and a password.",
   "history": [
     {
       "at": "2026-11-13T18:04:51Z",
@@ -28,76 +18,16 @@
       "session": "",
       "step": "new",
       "changes": {
-        "slug": [
-          null,
-          "001-add-the-login-form"
-        ],
-        "seq": [
-          null,
-          1
-        ],
-        "name": [
+        "title": [
           null,
           "Add the login form"
-        ],
-        "repository": [
-          null,
-          "acme/app"
-        ],
-        "branch": [
-          null,
-          "main"
-        ],
-        "created": [
-          null,
-          "2026-11-13T18:04:51Z"
         ],
         "status": [
           null,
           "pending"
-        ],
-        "objective": [
-          null,
-          "People can sign in"
-        ],
-        "summary": [
-          null,
-          ""
-        ],
-        "location": [
-          null,
-          ""
-        ],
-        "commit": [
-          null,
-          "<the commit of HEAD>"
-        ],
-        "severity": [
-          null,
-          "normal"
-        ],
-        "owner": [
-          null,
-          "ann"
-        ],
-        "owned_since": [
-          null,
-          ""
-        ],
-        "depends_on": [
-          null,
-          []
-        ],
-        "estimate_min": [
-          null,
-          40
-        ],
-        "complexity": [
-          null,
-          "low"
         ]
       },
-      "note": "added 001-add-the-login-form at rank end; backlog re-densified to 1 item(s)"
+      "note": ""
     }
   ]
 }

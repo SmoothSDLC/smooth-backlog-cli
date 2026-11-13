@@ -70,5 +70,7 @@ test('the refusal of a git older than 2.40 is in the help of every publishing te
   const refusal = 'team commands need git 2.40 or later (found <version>)';
   // the exit-2 entry of the help: from its "  2  " line to the next exit code
   for (const word of ['pop', 'new', 'update']) assert.ok((/^  2  [\s\S]*?(?=^  3  )/m.exec(cli(['team', word, '--help'], {}).stdout)?.[0] ?? '').includes(refusal), `backlog team ${word} --help`);
-  for (const file of ['README.md', 'COMMANDS.md', 'templates/skills/backlog/SKILL.md']) assert.ok(readFileSync(join(root, file), 'utf8').includes(refusal), file);
+  for (const file of ['README.md', 'templates/skills/backlog/SKILL.md']) assert.ok(readFileSync(join(root, file), 'utf8').includes(refusal), file);
+  // the command reference and its copy in the skill: once in the help block of each of the three commands
+  for (const file of ['COMMANDS.md', 'templates/skills/backlog/references/commands.md']) assert.equal(readFileSync(join(root, file), 'utf8').split(refusal).length - 1, 3, file);
 });

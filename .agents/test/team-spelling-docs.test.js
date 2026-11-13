@@ -48,7 +48,7 @@ test('the check finds the removed spellings', () => {
   }
   assert.ok(!spelling('update', REMOVED.update).test('backlog team update 1 --request-review any'));
   // a view flag is found on the team command; the forms of backlog team query that are words are not taken for one
-  for (const line of ['backlog team query --team t1 --plan', 'backlog team query --decisions']) assert.ok(retiredView.test(line), line);
+  for (const line of ['backlog team query --team t1 --plan', 'backlog team query --decisions', 'backlog team query --wip']) assert.ok(retiredView.test(line), line);
   for (const line of ['backlog team query rules --team t1', 'backlog team query steps --team t1 --json', 'backlog team query plan --team t1', 'backlog team query --team t1 --branch plan-b']) assert.ok(!retiredView.test(line), line);
 });
 

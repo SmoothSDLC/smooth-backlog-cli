@@ -159,6 +159,7 @@ export function changedSince(home, folder, repo, reference, agent) {
       updated_by: fm.updated_by ?? '',
       updated: fm.updated ?? '',
       held: !fm.team && fm.claimed_by === agent,
+      ...(fm.team ? { team: fm.team } : {}),
     });
   }
   return { held: entries.filter(e => e.held), others: entries.filter(e => !e.held) };

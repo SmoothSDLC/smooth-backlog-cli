@@ -294,7 +294,7 @@ test('the help of a reading command says team items come with their team only wh
     assert.match(out.stdout, /item[- ][17]|n1/); // the team item is in the output
     return [word, [/parallel/.test(out.stdout), /with their team/.test(c.run([word, '--help']).stdout)]];
   }));
-  assert.deepEqual(named, { list: [true, true], next: [true, true], show: [true, true], history: [false, false], changes: [false, false] });
+  assert.deepEqual(named, { list: [true, true], next: [true, true], show: [true, true], history: [true, true], changes: [true, true] });
 });
 
 test('changes leaves out a removed item whose earlier version cannot be read, unless --show-all is given', () => {
@@ -309,4 +309,31 @@ test('changes leaves out a removed item whose earlier version cannot be read, un
   const a = watch('a1');
   assert.deepEqual([a.held, a.others], [[], []]);
   assert.deepEqual(watch('b1', '--show-all').others.map(x => [x.slug, x.status]), [[slugOf(8), 'D']]);
+});
+
+test('history names the team of a team item on its lines with --show-all, for one item and for the backlog', () => {
+  const entry = note => [{ at: `2026-01-01T00:00:0${note.length}Z`, by: 'bob', session: '', step: 'update', changes: { status: ['a', 'b'] }, note }];
+  const c = userCase(dirs, [{ seq: 1, team: 'parallel', fields: { events: entry('n') } }, { seq: 2, fields: { events: entry('us') } }, { seq: 3, team: 'https://u:pw@ops', fields: { events: entry('ops') } }]);
+  assert.match(c.run(['history', '1', '--show-all']).stdout, /status: a -> b n {2}\(team parallel\)\n/);
+  const all = c.run(['history', '--show-all']).stdout;
+  assert.match(all, /status: a -> b n {2}\(team parallel\)\n/);
+  assert.match(all, /status: a -> b ops {2}\(team https:\/\/ops\)\n/); // redacted as the listing redacts it
+  assert.match(all, /status: a -> b us\n/);
+  assert.equal(c.run(['history', '2', '--show-all']).stdout, c.run(['history', '2']).stdout);
+  assert.doesNotMatch(c.run(['history']).stdout, /team|parallel/);
+});
+
+test('changes names the team of a team item with --show-all: a suffix on its text line and team in its JSON entry', () => {
+  const c = userCase(dirs, []);
+  for (const a of ['t1', 'j1', 'u1']) c.run(['changes', '--agent', a, ...(a === 'u1' ? [] : ['--show-all'])]); // the reference of each agent
+  stored(c, 7, { team: 'parallel' }); stored(c, 8, {}); stored(c, 9, { team: 'https://u:pw@ops' });
+  publish(c);
+  const text = c.run(['changes', '--agent', 't1', '--show-all']).stdout;
+  assert.match(text, /changed: 007-item-7 \(A\) by nobody at an unknown time {2}\(team parallel\)\n/);
+  assert.match(text, /changed: 009-item-9 \(A\) .* {2}\(team https:\/\/ops\)\n/);
+  assert.match(text, /changed: 008-item-8 \(A\) by nobody at an unknown time\n/);
+  const j = JSON.parse(c.run(['changes', '--agent', 'j1', '--show-all', '--json']).stdout).others;
+  assert.deepEqual(j.map(x => [x.slug, Object.hasOwn(x, 'team'), x.team]), [[slugOf(7), true, 'parallel'], [slugOf(8), false, undefined], [slugOf(9), true, 'https://u:pw@ops']]);
+  const none = c.run(['changes', '--agent', 'u1']).stdout + c.run(['changes', '--agent', 'u1', '--json']).stdout;
+  assert.doesNotMatch(none, /team|parallel/);
 });

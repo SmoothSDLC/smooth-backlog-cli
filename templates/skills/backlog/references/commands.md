@@ -938,6 +938,7 @@ as key: before -> after (a key that did not exist reads null; updated, updated_b
 entries carried a writer and the changes prints as it did: the time, the event, the branch, the commit and the note.
 With an item (number or slug) it prints the events of that item. Without one it prints the latest 50 events of the backlog, archived items
 included. The command refuses (exit 1) when the item does not exist. It prints text only: --json is refused (exit 2). It never changes an item.
+With --show-all the entries of an item that belongs to a team are listed too, each line ending with (team <name>).
 
 Run the command from inside the repository whose backlog you mean. When the backlog folder is a git repository, the
 command first updates it (git pull --rebase --autostash) and a command that changes an item commits and pushes the
@@ -951,7 +952,7 @@ Argument:
 
 Options:
   --show-all
-      Also see the items that belong to a team. Without it they are left out, as if they did not exist.
+      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 
@@ -989,6 +990,8 @@ Prints which items changed since the last use of the calling agent. The referenc
 backlog changes, never a global timestamp, so a change made while the agent is idle still appears in its next report. Its commit and time are
 stated in every result, also when it is empty. The items without a team that the agent holds (its name in claimed_by) are listed in a held
 section, every other changed item under others; a file moved inside the folder (an archive, a renumbering) is one D entry for its old name.
+A removed item whose earlier version cannot be read from the clone is listed only with --show-all, because it may belong to a team.
+With --show-all the line of an item that belongs to a team ends with (team <name>), and its --json entry carries team.
 The first use prints "no earlier use: reference set now" and sets the reference. The result also lists the agents that use the backlog and
 their last-use time. Reading an item with backlog show does not move the reference.
 It never changes an item; its one write is the agent's own reference. The report is printed before the reference is written, so a failed
@@ -1008,7 +1011,7 @@ Options:
   --json
       Print machine-readable output.
   --show-all
-      Also see the items that belong to a team. Without it they are left out, as if they did not exist.
+      Also see the items that belong to a team (listed with their team). Without it they are left out, as if they did not exist.
   --help
       Print this text and exit. Nothing is read or changed.
 

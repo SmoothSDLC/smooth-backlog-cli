@@ -50,6 +50,7 @@ function historyLine(e) {
   const changes = created ? (e.note ? '' : 'added') : Object.entries(e.changes).map(([k, [before, after]]) => `${k}: ${shown(before)} -> ${shown(after)}`).join(', ');
   return `  ${e.at}  ${String(e.step).padEnd(14)} ${e.by}  ${[changes, e.note].filter(Boolean).join(' ')}`.trimEnd();
 }
+const teamOf = team => (team ? `  (team ${redact(team)})` : ''); // the team of a team item, after its line (seen only with --show-all)
 const sha7 = r => String(r.commit_sha ?? '').slice(0, 7);
 const pad = (v, n) => String(v).padStart(n);
 const repr = s => redact(s.includes("'") && !s.includes('"') ? `"${s}"` : `'${s}'`);
@@ -124,7 +125,7 @@ function changedReport(home, folder, repo, a) {
   } else {
     say(`reference: ${reference.commit} at ${reference.at}`);
     if (!report.held.length && !report.others.length) say('no changes since the last use');
-    const line = x => `  changed: ${x.slug} (${x.status}) by ${x.updated_by || 'nobody'} at ${x.updated || 'an unknown time'}`;
+    const line = x => `  changed: ${x.slug} (${x.status}) by ${x.updated_by || 'nobody'} at ${x.updated || 'an unknown time'}${teamOf(x.team)}`;
     if (report.held.length) { say('held:'); for (const x of report.held) say(line(x)); }
     if (report.others.length) { say('others:'); for (const x of report.others) say(line(x)); }
     say('agents using the backlog:');
@@ -254,9 +255,9 @@ async function query(argv, branchColumn) {
       }
       // newest first: the lines of one item are appended in time order, so reversing first keeps equal timestamps in that order
       const events = items.filter(i => path === null || i.path === path)
-        .flatMap(i => entriesOf(i.fm)).reverse().sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+        .flatMap(i => entriesOf(i.fm).map(e => [e, i.fm.team])).reverse().sort(([x], [y]) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
       if (path === null) events.length = Math.min(events.length, 50);
-      for (const e of events) say(historyLine(e));
+      for (const [e, team] of events) say(historyLine(e) + teamOf(team));
       return 0;
     }
 
@@ -297,7 +298,7 @@ async function query(argv, branchColumn) {
     for (const r of shown) {
       const mark = { closed: '✅', done: '✅', archived: '📦', 'in progress': '🔄' }[r.status] ?? '•';
       const crit = (r.severity || 'normal') === 'critical' && isOpen(r.status) ? ' ⚠️CRIT' : '';
-      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority ?? '-', 3)}${crit}  ${r.name}${branchColumn ? `  (branch ${redact(r.branch ?? '')})` : ''}${r.team ? `  (team ${redact(r.team)})` : ''}`);
+      say(`   ${mark} [${pad(r.seq, 3)}] ${r.slug.padEnd(28)} ${String(r.status ?? 'None').padEnd(12)} P${pad(r.priority ?? '-', 3)}${crit}  ${r.name}${branchColumn ? `  (branch ${redact(r.branch ?? '')})` : ''}${teamOf(r.team)}`);
       if (r.summary) say(`        ↳ ${r.summary}`);
       // a dependency on another repository's item is shown with its state
       { // every status: a done item still shows what it depended on

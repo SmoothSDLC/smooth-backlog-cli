@@ -2,11 +2,11 @@ source	DONE	PLANNED	SUPERSEDED	DEFERRED-WITH-EXPLICIT-BLOCKER	total
 uc-matrix	0	370	0	0	370
 rule-cases	268	20	0	0	288
 coverage	973	823	0	18	1814
-bdd-plan	11	170	0	0	181
+bdd-plan	14	167	0	0	181
 command-matrix	0	12	0	0	12
-features	106	0	0	0	106
+features	107	0	0	0	107
 inventory.tsv	284	542	0	4	830
 tests.tsv	657	113	0	0	770
 gaps.tsv	2	16	0	7	25
 consumers.tsv	0	22	0	0	22
-all	2301	2088	0	29	4418
+all	2305	2085	0	29	4419

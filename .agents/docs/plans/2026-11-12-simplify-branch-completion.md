@@ -164,7 +164,7 @@ Each task goes through its packet, a test-first build with a self-review, a spec
 
 ### Task 9: The skill's team section, the documentation guards, the rules feature (B16c)
 
-- State: PLANNED
+- State: DONE, merged on the working branch
 - Specification: [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md), Task 9
 - Packet: [packets/task-9.md](2026-11-12-simplify-branch-completion/packets/task-9.md)
 - Use cases: the rows of the status table whose task column is `Task 9` (3 at the start of this plan)

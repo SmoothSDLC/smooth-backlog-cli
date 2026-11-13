@@ -1218,7 +1218,7 @@ Exit codes:
   0  A step was offered and taken (or, with --dry-run, would be taken); the item is printed.
   1  The step could not be published (the push was refused, the branch kept changing) or the backlog could not be updated from its origin: the reason is printed and nothing is left behind.
   2  Invalid input: a missing team or agent, an argument the command does not take, no branch (a detached HEAD), an invalid team file,
-     or a pop table or rule that is malformed.
+     or a pop table or rule that is malformed. An older git than 2.40 is refused too: "team commands need git 2.40 or later (found <version>)"; nothing the command wrote is left behind.
   3  idle: nothing to do now. Only the idle answer exits 3.
 
 Example:
@@ -1282,7 +1282,7 @@ Exit codes:
   0  The item was filed and published.
   1  The team's rules refused the step (the reason and the rule id are printed on standard output), or the team has no entry in the team file.
   2  Invalid input: no team, no agent, no --name, an argument the step does not take, an unknown option (--ask, --dry-run and --show-all are refused), a value
-     that does not fit its field, a detached HEAD with no branch given, or a team file that is missing, unreadable or invalid.
+     that does not fit its field, a detached HEAD with no branch given, or a team file that is missing, unreadable or invalid. An older git than 2.40 is refused too: "team commands need git 2.40 or later (found <version>)"; nothing the command wrote is left behind.
   3  The repository that holds the items could not be synchronised with its origin: nothing was changed, or the change was not
      published and was rolled back (an item of another agent published first: the step runs again on the new files, and fails with this code only when it keeps changing).
 
@@ -1346,7 +1346,7 @@ Exit codes:
   0  The step was taken and published.
   1  The team's rules refused the step (the reason and the rule id are printed on standard output), there is no such item, or the team has no entry in the team file.
   2  Invalid input: no team, no agent, no item or no step word, a step no rule names, an argument the step does not take, an unknown option (--ask, --dry-run and --show-all are refused),
-     a value that does not fit its field, a number that two items hold, a detached HEAD with no branch given, or a team file that is missing, unreadable or invalid.
+     a value that does not fit its field, a number that two items hold, a detached HEAD with no branch given, or a team file that is missing, unreadable or invalid. An older git than 2.40 is refused too: "team commands need git 2.40 or later (found <version>)"; nothing the command wrote is left behind.
   3  The repository that holds the items could not be synchronised with its origin: nothing was changed, or the change was not
      published and was rolled back (an item of another agent published first: the step runs again on the new files, and fails with this code only when it keeps changing).
 

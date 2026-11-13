@@ -12,7 +12,7 @@ const dir = fileURLToPath(new URL('../../templates/skills/backlog/', import.meta
 const skill = readFileSync(join(dir, 'SKILL.md'), 'utf8');
 const files = d => readdirSync(d).flatMap(n => (statSync(join(d, n)).isDirectory() ? files(join(d, n)) : [join(d, n)]));
 test('040: every team command is in the skill, and a team step is taught as the word after the item', () => {
-  for (const c of ['backlog setup', 'backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...', 'backlog team pop --team <team> --agent', 'backlog show <item> --agent <you>', 'backlog team new --team <team> --agent <you> --name', 'backlog team query plan --team <team>', 'backlog team query check <item> <step> --team <team>', 'backlog team query filter <name> --team <team>', 'backlog team query <item> --team <team>']) assert.ok(skill.includes(c), c);
+  for (const c of ['backlog setup', 'backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...', 'backlog team pop --team <team> --agent', 'backlog show <item> --agent <you>', 'backlog team new --team <team> --agent <you> --name', 'backlog team query plan --team <team>', 'backlog team query check <item> <step> --team <team>', 'backlog team query filter <name> --team <team>', 'backlog team query <item> --team <team>', 'backlog team query rules --team <team>', 'backlog team query steps --team <team>', 'backlog team validate --team <team>']) assert.ok(skill.includes(c), c);
   // every command of help.js and of COMMANDS.md
   const shared = [...new Set([...Object.keys(HELP), ...[...readFileSync(fileURLToPath(new URL('../../COMMANDS.md', import.meta.url)), 'utf8').matchAll(/^### backlog (\S+)$/gm)].map(m => m[1])])];
   assert.ok(shared.length >= 8, shared.join());
@@ -20,6 +20,8 @@ test('040: every team command is in the skill, and a team step is taught as the 
   assert.ok(teamHelp['team update'].includes('backlog team update <item> <step>'), 'the help teaches the step as the second word');
   assert.doesNotMatch(skill, /--(?:request-review|refine-start|set-team|accept-handoff)\b/, 'the skill names no step flag of the retired spelling');
   assert.match(skill, /Act only as yourself/);
+  assert.doesNotMatch(skill, /--(?:plan|decisions|wip)\b/, 'the skill shows no flag of a retired team view');
+  assert.doesNotMatch(skill, /wip-limits\.json/, 'the skill names no limits file: a limit is a rule of the team file');
 });
 
 test('040: the skill names no backlog folder, item file, git command or Python backlog script; its description is unchanged', () => {

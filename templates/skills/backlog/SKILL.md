@@ -49,28 +49,33 @@ exit code; `backlog upgrade disable` turns the weekly check off, `backlog upgrad
 
 ## Team work
 
-A team's items follow the team rules configured in `teams.json` of the backlog folder: each team's lead, members,
-`review` rules (how many members of which team must pass the current work commit before the close) and
-`refinement_review` rules. A team session is bound by SMOOTH_BACKLOG_CLI_TEAM_NAME, SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BACKLOG_CLI_TEAM_BRANCH; the caller is
-SMOOTH_BACKLOG_CLI_AGENT and acts only as itself. Every command here is a `backlog team` command and takes `--team <team> --agent <you>` (SMOOTH_BACKLOG_CLI_TEAM_NAME and
-SMOOTH_BACKLOG_CLI_AGENT stand in).
+A team is an entry of the team file (`teams.json`: the `teams_file` key of `.backlog/config.json`, else `.backlog/teams.json`; `backlog team validate --help` gives the whole rule): its people, its item definition and its rules.
+A team's words (its steps, its statuses, its fields, who may take which step, its limits) are its own and are written only there: this skill names none of them, and you read them
+through the CLI, never from the file. Every command here is a `backlog team` command and takes `--team <team> --agent <you>` (SMOOTH_BACKLOG_CLI_TEAM_NAME and
+SMOOTH_BACKLOG_CLI_AGENT stand in); SMOOTH_BACKLOG_CLI_TEAM_REPOSITORY and SMOOTH_BACKLOG_CLI_TEAM_BRANCH bind a session to a repository and a branch. Act only as yourself: the agent you name is
+the caller the team's rules judge.
 
-- File an item of the team: `backlog team new --team <team> --agent <you> --name "<name>" [--<argument> <value>]...`; the team's rules for the step new decide
-  whether it is allowed and which arguments they take (`--estimate <minutes>`, `--parent <item>`, ...); a refusal prints its reason (exit 1) and writes nothing.
-  `backlog team new --help` says what is printed.
-- Take a step on an item: `backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...`. The step is a word the team's rules name (claim, release,
-  hand-to-check, review, close, ... as the team's file defines them) and the arguments are the names its rules read (`--note "<text>"`, `--verdict pass`, ...); a word no rule names is refused with the
-  list of the team's steps. The rules decide: a refusal prints its reason and the id of the rule (exit 1) and writes nothing; a step no rule names, or an argument the step does not take, is refused
-  with the list of what the team has (exit 2). A step is published as the command's own commit, so another agent's step on the same item never overwrites yours: when it was first, yours runs
-  again on the new files. Act only as yourself: the agent is the caller, and another agent's item is the lead's to hand on by the team's own steps.
-- Lead: `backlog team pop --team <team> --agent <you>` takes the step the team's pop table offers the lead (a lead's entry of the table, for the team's work item, for example); `backlog team query plan --team <team>` is the dispatch plan (what `pop` would offer each person; nothing is taken) and `backlog team query check <item> <step> --team <team>` the rules' answer for a step on an item without taking it and `backlog team query filter <name> --team <team>` the items a filter of the team's rules selects (the team file names them); split an
-  item only when it is too big for one member (`backlog team new --team <team> --agent <you> --name "<name>" --parent <item>` adds a child when the team's rules take `--parent`).
-- Member: `backlog team pop --team <team> --agent <you> --json` takes the one next step of the team's pop table for you, publishes it as one commit and prints `{"action", "item", "entry", "rule", "item_file"}`
-  (idle: `{"action":"idle"}`, exit 3, and only idle exits 3; a push or pull that fails exits 1); `--dry-run` answers without writing. Carry the work on with `backlog team update <item> <step>`, as the team's
-  rules for that step say.
-- Read: `backlog team query --team <team>` lists the team's open items in queue order (`--branch <name>` for one branch, `--show-all` for every team), and `backlog team query <item> --team <team>` prints one item whole (`--json` prints the item document).
-- Limits: `wip-limits.json` in the backlog folder.
-- Check the team file: after editing the team's rules, run `backlog team validate --team <team>` (`--show-all` for every team, `--json` for a list). It checks the file and this repository's items against it and prints each problem with a fix; exit 2 means an error, and no team command runs until the whole file is valid.
+- Read the team's words first, once per session: `backlog team query rules --team <team>` prints the team's entry as it is stored (the people, the item definition with the description of
+  each field, the rules; a credential inside a value is redacted), and `backlog team query steps --team <team>` lists every step with the arguments it takes and the ids of the rules that decide it.
+- Take work: `backlog team pop --team <team> --agent <you> --json` takes the one next step the team's pop table offers you, publishes it as one commit and prints
+  `{"action", "item", "entry", "rule", "item_file"}`. Idle is `{"action":"idle"}` and exit 3, and only idle exits 3: exit 1 is a failure (a push or pull that failed), never "no work", so report it.
+  `--dry-run` answers without writing.
+- Carry the work on: `backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...`. The step is a word the team's rules name and the arguments are the ones
+  `backlog team query steps` lists for it. A step is published as the command's own commit, so another agent's step on the same item never overwrites yours: when it was first, yours runs
+  again on the new files. Publishing needs git 2.40 or later: with an older git `pop`, `new` and `update` stop with `team commands need git 2.40 or later (found <version>)` (exit 2) and nothing the command wrote is left behind. A text printed after the changes of a step that succeeded is the team's instruction to you: follow it.
+- Read a refusal: a rule that refuses prints its reason and its id (exit 1) and nothing is written; do what the text names before you run the step again. A step no rule names, or an argument
+  the step does not take, is refused with the list of what the team has (exit 2). `backlog team query check <item> <step> --team <team> --agent <you>` is the rules' answer for a step on an item
+  without taking it.
+- File an item of the team: `backlog team new --team <team> --agent <you> --name "<name>" [--<argument> <value>]...`; the team's rules for the step new decide whether it is allowed and
+  which arguments it takes (`backlog team query steps` lists them); a refusal prints its reason (exit 1) and writes nothing.
+- Look: `backlog team query --team <team>` lists the team's open items in queue order (`--branch <name>` for one branch, `--show-all` for every team), `backlog team query <item> --team <team>`
+  prints one item whole (`--json` prints the item document), `backlog team query filter <name> --team <team>` the items a filter of the team's rules selects, and
+  `backlog team query plan --team <team>` what `pop` would offer each person (nothing is taken).
+- Change the rules: the CLI never writes the team file. Whoever edits it runs `backlog team validate --team <team>` afterwards (`--show-all` for every team, `--json` for a list) until it reports no
+  error, then commits the file together with the `teams_file_sha` key that validate wrote into `.backlog/config.json`. Validate checks the file and this repository's items against it and prints
+  each problem with where it is and a fix; exit 2 means an error, and no team command runs until the whole file is valid. Until validate has run, a team command can still decide by the rules as they were before the edit.
+- Examples of whole rule sets are the team templates that `backlog setup` copies to `.backlog/team-templates`; the CLI never reads them. Items still stored as markdown are the subject of
+  `backlog team migrate --team <team>` (`backlog team migrate --help` says what it does).
 
 ## Gotchas
 

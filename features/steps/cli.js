@@ -19,6 +19,13 @@ step(/^I act as agent "([^"]+)"$/, (w, name) => { w.agentEnv.SMOOTH_BACKLOG_CLI_
 step(/^I act as a person$/, w => { delete w.agentEnv.SMOOTH_BACKLOG_CLI_AGENT; });
 // the team file of the repository, from a shipped template
 step(/^a team file from the template "([^"]+)"$/, (w, name) => { w.writeTeamFile(TEMPLATES[name]); });
+// an edit of the team file as a person makes it: the field leaves the team's item definition, and the file is committed and published
+step(/^I remove the field "([^"]+)" from the item definition of the team "([^"]+)" in the team file$/, (w, field, team) => {
+  const teams = JSON.parse(readFileSync(join(w.repo, '.backlog', 'teams.json'), 'utf8'));
+  assert.ok(field in (teams[team]?.item ?? {}), `the team ${team} has no field ${field} to remove`);
+  delete teams[team].item[field];
+  w.writeTeamFile(teams);
+});
 // an item of a team that is ready to be claimed. The team is named by its template file (extreme-programming) or by its name inside the file (xp);
 // the item takes its fields from the team file the world wrote: the status "ready" when the team has it, else its first status, and an estimate of 20 when the team has one
 step(/^a ready item "([^"]+)" for the team "([^"]+)"$/, (w, name, team) => {

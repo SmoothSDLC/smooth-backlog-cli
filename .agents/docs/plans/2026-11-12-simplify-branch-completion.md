@@ -93,7 +93,7 @@ The feature suite counts 106 scenarios per location at the start of this plan; a
 
 ## Order of execution
 
-Each task goes through its packet, a test-first build with a self-review, a specification review and a quality review that must both pass, the standard proof, a fast-forward merge and a review of the merged range. Tasks that share no file and do not depend on each other may be worked side by side, at most three at a time; merges stay one at a time. Order: the reviews of Tasks 6b and 11; Tasks 9 and 12 to 32; Tasks 36, 37, 38 and 51 (the row-level checks, and the validation of the excluded rows); Tasks 34 and 35 (the documents); Tasks 39 and 40; Task 41 and its gap-fix tasks; Task 42; Tasks 43, 44, 45, 46, 47 and 48; Task 49; Task 50. Tasks that touch the shared documents (help, `README.md`, `CHANGELOG.md`, `COMMANDS.md`) merge one after another.
+Each task goes through its packet, a test-first build with a self-review, a specification review and a quality review that must both pass, the standard proof, a fast-forward merge and a review of the merged range. Tasks that share no file and do not depend on each other may be worked side by side, at most three at a time; merges stay one at a time. Order: the reviews of Tasks 6b and 11; Tasks 9 and 12 to 32; Task 52 (after Task 23, before Task 24); Tasks 36, 37, 38 and 51 (the row-level checks, and the validation of the excluded rows); Tasks 34 and 35 (the documents); Tasks 39 and 40; Task 41 and its gap-fix tasks; Task 42; Tasks 43, 44, 45, 46, 47 and 48; Task 49; Task 50. Tasks that touch the shared documents (help, `README.md`, `CHANGELOG.md`, `COMMANDS.md`) merge one after another.
 
 ---
 
@@ -462,3 +462,10 @@ Each task goes through its packet, a test-first build with a self-review, a spec
 - Specification: the 583 rows of [not-use-cases.tsv](2026-11-12-simplify-branch-completion/not-use-cases.tsv) were taken out of the status table on the strength of the design's disposition (574 rows) and of the first classification (9 rows), without a row-by-row check. Every row is read against its source, the code and the decision its reason cites. A row that states a behaviour the CLI has or must have returns to the status table with a status (DONE with its test, PLANNED under a task, SUPERSEDED with the decision, or deferred with its blocker); a row that states none stays excluded, its reason confirmed. The task ends with every excluded row marked as validated in a new column `validated` (the commit of the check).
 - Packet: to be written and checked before the task starts
 - Use cases: none at the start; the rows this task returns to the table
+
+### Task 52: The shared git helpers work on folders of tens of thousands of items
+
+- State: PLANNED
+- Specification: the helpers that run git for every command read git's output into a buffer of one mebibyte and pass the command's own paths as arguments (`src/shared/store.js`, `src/shared/sync.js`, `src/shared/team-publish.js`). A folder of several thousand items therefore stops a command that lists the folder's history or status, and a migration of such a folder cannot publish or undo (measured while Task 23 was built: 4,000 long-named items stop the migration at the counter; with the buffer raised, publication fails and the undo cannot restore). The owner rulings call folders of tens of thousands of items normal. Every helper reads git's output without a fixed ceiling and hands long path lists to git on standard input; a test builds a folder above each measured limit and runs the listing, a writing user command, a team step and the migration with its undo.
+- Packet: to be written and checked before the task starts
+- Use cases: none at the start; the rows of Tasks 36 to 38 that state a folder size

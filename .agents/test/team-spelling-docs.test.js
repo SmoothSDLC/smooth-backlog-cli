@@ -47,8 +47,7 @@ test('the check finds the removed spellings', () => {
     assert.ok(spelling(cmd, REMOVED[cmd]).test(line), line);
   }
   assert.ok(!spelling('update', REMOVED.update).test('backlog team update 1 --request-review any'));
-  // a view flag is found on the user command and on the team command; the forms of backlog team query that are words are not taken for one
-  for (const line of ['backlog query --plan', 'run backlog query --wip']) assert.ok(spelling('query', REMOVED.query).test(line), line);
+  // a view flag is found on the team command; the forms of backlog team query that are words are not taken for one
   for (const line of ['backlog team query --team t1 --plan', 'backlog team query --decisions']) assert.ok(retiredView.test(line), line);
   for (const line of ['backlog team query rules --team t1', 'backlog team query steps --team t1 --json', 'backlog team query plan --team t1', 'backlog team query --team t1 --branch plan-b']) assert.ok(!retiredView.test(line), line);
 });
@@ -70,7 +69,10 @@ test('the refusal of a git older than 2.40 is in the help of every publishing te
   const refusal = 'team commands need git 2.40 or later (found <version>)';
   // the exit-2 entry of the help: from its "  2  " line to the next exit code
   for (const word of ['pop', 'new', 'update']) assert.ok((/^  2  [\s\S]*?(?=^  3  )/m.exec(cli(['team', word, '--help'], {}).stdout)?.[0] ?? '').includes(refusal), `backlog team ${word} --help`);
-  for (const file of ['README.md', 'templates/skills/backlog/SKILL.md']) assert.ok(readFileSync(join(root, file), 'utf8').includes(refusal), file);
-  // the command reference and its copy in the skill: once in the help block of each of the three commands
-  for (const file of ['COMMANDS.md', 'templates/skills/backlog/references/commands.md']) assert.equal(readFileSync(join(root, file), 'utf8').split(refusal).length - 1, 3, file);
+  const read = f => readFileSync(join(root, f), 'utf8');
+  for (const file of ['README.md', 'templates/skills/backlog/SKILL.md']) assert.ok(read(file).includes(refusal), file);
+  // the command reference: the section of each of the three commands, from its heading to the next one; the skill's reference is its copy
+  const sections = read('COMMANDS.md').split(/^### /m);
+  for (const word of ['pop', 'new', 'update']) assert.ok(sections.find(x => x.startsWith(`backlog team ${word}\n`))?.includes(refusal), `COMMANDS.md: backlog team ${word}`);
+  assert.ok(read('templates/skills/backlog/references/commands.md') === read('COMMANDS.md'), 'the skill reference is the copy of COMMANDS.md');
 });

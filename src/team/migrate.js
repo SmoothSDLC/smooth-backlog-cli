@@ -107,7 +107,7 @@ async function migrate(argv) {
       }
       if (failures.length) return { refusal: failures };
       const before = index.read(folder);
-      const { idx } = index.reconcile(before, views, { open: openOf(team.file) });
+      const idx = plan.converted.length ? index.reconcile(before, views, { open: openOf(team.file) }).idx : before; // a run that converts nothing leaves the index alone
       const was = entriesOf(before); const now = entriesOf(idx);
       const counter = Math.max(floor, plan.counter);
       const summary = {

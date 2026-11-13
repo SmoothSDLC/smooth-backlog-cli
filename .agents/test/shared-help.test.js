@@ -220,6 +220,8 @@ test('team migrate help describes the command that exists: its flags, the dry ru
   for (const flag of ['--team', '--show-all', '--dry-run', '--json', '--repository']) assert.ok(block(text, flag.slice(2)), flag);
   assert.match(text, /migrated_at/); assert.match(text, /migrated_by_version/);
   assert.match(text, /never writes it and reads no template/);
+  assert.match(text, /no origin remote the conversion stays committed/);
+  assert.match(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8'), /no origin remote the conversion stays committed/);
   for (const code of [0, 1, 2, 3]) assert.match(text, new RegExp(`^  ${code}  `, 'm'));
   assert.doesNotMatch(USAGE, /not available yet/);
 });

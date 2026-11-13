@@ -1,7 +1,7 @@
 // `backlog team migrate` through the real command: what it converts and publishes, every stop (exit 2, nothing written), the dry run, the record keys and the undo.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { missingText } from '../../src/team/teams-file.js';
 import { cli } from './shared-fixtures.js';
@@ -55,14 +55,14 @@ test('no team file with a team item stops the migration, naming the path and the
 });
 
 test('an unreadable team file stops the migration, also when no item has a team', t => {
-  for (const [extra, mode] of [[`team: ${TEAM}\n`], [''], ['', 0o000]]) {
-    const w = world(t, '{not json');
+  for (const [extra, mode, text = '{not json', reason = '.+'] of [[`team: ${TEAM}\n`], [''], ['', 0o000], ['', undefined, '[]', 'it is not a JSON object']]) {
+    const w = world(t, text);
     if (mode !== undefined) { if (process.getuid() === 0) continue; chmodSync(w.teamFile, mode); } // the administrator reads any file
     w.put('phases/001-x.md', md(1, extra)); w.publish('seed');
     const same = w.untouched();
     const r = w.migrate();
     assert.equal(r.status, 2, r.stdout + r.stderr);
-    assert.match(r.stderr, /^❌ backlog: \.backlog\/teams\.json cannot be read \(.+\); fix it, or write \{\} to unbind every team item on purpose\n$/);
+    assert.match(r.stderr, new RegExp(`^❌ backlog: \\.backlog/teams\\.json cannot be read \\(${reason}\\); fix it, or write \\{\\} to unbind every team item on purpose\\n$`));
     same();
   }
 });
@@ -107,6 +107,13 @@ test('migrated_at records the run; a second run says nothing to convert, keeps m
   assert.equal(second.stdout, 'ℹ️  nothing to convert in acme/app\n');
   assert.deepEqual(w.cfg(), { ...a, migrated_at: '2020-01-01T00:00:00Z' });
   assert.equal(git(w.home, 'rev-parse', 'HEAD'), before, 'no commit');
+  // a run that converts nothing leaves the index alone and says so; a run that has nothing to record does not rewrite the configuration
+  const written = statSync(w.cfgFile).mtimeMs;
+  for (const flags of [['--json'], ['--dry-run', '--json']]) {
+    const j = JSON.parse(w.migrate(['--team', TEAM, ...flags]).stdout);
+    assert.deepEqual([j.converted, j.index_leave, j.index_appended], [0, 0, 0], flags.join(' '));
+  }
+  assert.equal(statSync(w.cfgFile).mtimeMs, written);
 });
 
 test('a folder that never held an item: nothing to convert, and the first run still records migrated_at', t => {
@@ -128,6 +135,7 @@ test('a repository input naming another repository converts that folder with its
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.ok(r.stdout.includes('✅ converted 1 item (0 archived) to JSON in acme/lib\n'), r.stdout);
   assert.deepEqual(names(lib), ['index.json', 'numbers.json', 'phases/001-y.json', 'teams.json']);
+  assert.equal(git(w.home, 'log', '-1', '--format=%s'), 'acme/lib: migrate 1 item to JSON');
   assert.equal(snapshot(w.folder), app, 'the folder of the working copy is untouched byte for byte');
   assert.equal(existsSync(w.cfgFile), cfg, 'no configuration appears in the working copy');
   assert.equal(w.cfg().migrated_at, undefined);
@@ -284,15 +292,17 @@ test('a failure with --json prints the failures on standard output, each text re
 test('an open item of a team with an entry is converted (fields, history, body), and the index lists the open items in number order, never an archived one', t => {
   const w = world(t);
   w.put('phases/002-x.md', md(2, `team: ${TEAM}\npriority: 1\nevents:\n- "2026-01-02T00:00:00Z created"\n`)); w.put('phases/001-x.md', md(1, 'priority: 9\n').replace('pending', 'done'));
-  w.put('phases/003-x.md', md(3)); w.put('archive/004-x.md', md(4)); w.publish('seed');
+  w.put('phases/003-x.md', md(3)); w.put('archive/004-x.md', md(4));
+  w.put('phases/005-x.md', md(5, `team: ${TEAM}\n`).replace('pending', 'done')); // done ends an item without a team; this team ends its items with another word, so its item is open
+  w.publish('seed');
   const r = w.migrate(['--team', TEAM]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const doc = JSON.parse(readFileSync(join(w.folder, 'phases/002-x.json'), 'utf8'));
   assert.deepEqual([doc.seq, doc.slug, doc.name, doc.team, doc.repository, doc.fields.status, doc.body], [2, '002-x', 'N2', TEAM, 'acme/app', 'pending', 'body 2\n']);
   assert.equal(doc.history.length, 1);
   assert.deepEqual([doc.created, doc.updated_by], [null, ''], 'an absent created is null and an absent updated_by is empty text');
-  assert.equal(readFileSync(join(w.folder, 'index.json'), 'utf8'), `{\n  "branches": {\n    "": [\n      ${['{"seq":2,"slug":"002-x","name":"N2","status":"pending"}', '{"seq":3,"slug":"003-x","name":"N3","status":"pending"}', '{"seq":1,"slug":"001-x","name":"N1","status":"done"}'].join(',\n      ')}\n    ]\n  }\n}\n`);
-  assert.equal(JSON.parse(readFileSync(join(w.folder, 'numbers.json'), 'utf8')).last, 4);
+  assert.equal(readFileSync(join(w.folder, 'index.json'), 'utf8'), `{\n  "branches": {\n    "": [\n      ${['{"seq":2,"slug":"002-x","name":"N2","status":"pending"}', '{"seq":3,"slug":"003-x","name":"N3","status":"pending"}', '{"seq":5,"slug":"005-x","name":"N5","status":"done"}', '{"seq":1,"slug":"001-x","name":"N1","status":"done"}'].join(',\n      ')}\n    ]\n  }\n}\n`);
+  assert.equal(JSON.parse(readFileSync(join(w.folder, 'numbers.json'), 'utf8')).last, 5);
 });
 
 test('every stop of the conversion through the command: exit 2, every case listed, the folder byte for byte as it was', t => {

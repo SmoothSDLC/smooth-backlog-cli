@@ -62,7 +62,7 @@ the caller the team's rules judge.
   `--dry-run` answers without writing.
 - Carry the work on: `backlog team update <item> <step> --team <team> --agent <you> [--<argument> <value>]...`. The step is a word the team's rules name and the arguments are the ones
   `backlog team query steps` lists for it. A step is published as the command's own commit, so another agent's step on the same item never overwrites yours: when it was first, yours runs
-  again on the new files. Publishing needs git 2.40 or later: with an older git `pop`, `new` and `update` stop with `team commands need git 2.40 or later (found <version>)` (exit 2) and nothing the command wrote is left behind. A text printed after the changes of a step that succeeded is the team's instruction to you: follow it.
+  again on the new files. Publishing needs git 2.40 or later: with an older git `pop`, `new`, `update` and `migrate` stop with `team commands need git 2.40 or later (found <version>)` (exit 2) and nothing the command wrote is left behind. A text printed after the changes of a step that succeeded is the team's instruction to you: follow it.
 - Read a refusal: a rule that refuses prints its reason and its id (exit 1) and nothing is written; do what the text names before you run the step again. A step no rule names, or an argument
   the step does not take, is refused with the list of what the team has (exit 2). `backlog team query check <item> <step> --team <team> --agent <you>` is the rules' answer for a step on an item
   without taking it.
@@ -72,7 +72,7 @@ the caller the team's rules judge.
   prints one item whole (`--json` prints the item document), `backlog team query filter <name> --team <team>` the items a filter of the team's rules selects, and
   `backlog team query plan --team <team>` what `pop` would offer each person (nothing is taken).
 - Change the rules: the CLI never writes the team file. Whoever edits it runs `backlog team validate --team <team>` afterwards (`--show-all` for every team, `--json` for a list) until it reports no
-  error, then commits the file together with the `teams_file_sha` key that validate wrote into `.backlog/config.json`. Validate checks the file and this repository's items against it and prints
+  error, then commits the file together with the `teams_file_sha` key that validate wrote into `.backlog/config.json` and pushes that commit. Validate checks the file and this repository's items against it and prints
   each problem with where it is and a fix; exit 2 means an error, and no team command runs until the whole file is valid. Until validate has passed, a team command can still decide by the rules as they were before the edit.
 - Examples of whole rule sets are the team templates that `backlog setup` copies to `.backlog/team-templates`; the CLI never reads them.
 - Convert a markdown backlog: `backlog team migrate --show-all --dry-run` shows what would be converted and every case that would stop it; `backlog team migrate --show-all` (or `--team <team>`) then converts every markdown item of this repository's folder to JSON in one published commit. Exit 2 lists every case and writes nothing; commit the `migrated_at` and `migrated_by_version` keys it writes into `.backlog/config.json`.

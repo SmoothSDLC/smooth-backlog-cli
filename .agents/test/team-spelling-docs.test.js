@@ -68,11 +68,11 @@ test('the pop help and the README say a rerun can end pop idle while a ready ite
 test('the refusal of a git older than 2.40 is in the help of every publishing team command, in the README and in the skill', () => {
   const refusal = 'team commands need git 2.40 or later (found <version>)';
   // the exit-2 entry of the help: from its "  2  " line to the next exit code
-  for (const word of ['pop', 'new', 'update']) assert.ok((/^  2  [\s\S]*?(?=^  3  )/m.exec(cli(['team', word, '--help'], {}).stdout)?.[0] ?? '').includes(refusal), `backlog team ${word} --help`);
+  for (const word of ['pop', 'new', 'update', 'migrate']) assert.ok((/^  2  [\s\S]*?(?=^  3  )/m.exec(cli(['team', word, '--help'], {}).stdout)?.[0] ?? '').includes(refusal), `backlog team ${word} --help`);
   const read = f => readFileSync(join(root, f), 'utf8');
   for (const file of ['README.md', 'templates/skills/backlog/SKILL.md']) assert.ok(read(file).includes(refusal), file);
-  // the command reference: the section of each of the three commands, from its heading to the next one; the skill's reference is its copy
+  // the command reference: the section of each of these commands, from its heading to the next one; the skill's reference is its copy
   const sections = read('COMMANDS.md').split(/^### /m);
-  for (const word of ['pop', 'new', 'update']) assert.ok(sections.find(x => x.startsWith(`backlog team ${word}\n`))?.includes(refusal), `COMMANDS.md: backlog team ${word}`);
+  for (const word of ['pop', 'new', 'update', 'migrate']) assert.ok(sections.find(x => x.startsWith(`backlog team ${word}\n`))?.includes(refusal), `COMMANDS.md: backlog team ${word}`);
   assert.ok(read('templates/skills/backlog/references/commands.md') === read('COMMANDS.md'), 'the skill reference is the copy of COMMANDS.md');
 });

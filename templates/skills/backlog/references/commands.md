@@ -1601,7 +1601,8 @@ no user identity: the commit is made by git's configured author, and the items k
 The run stops with exit 2, lists every case and writes nothing when: the team file is missing while an item has a team, cannot be read
 or has an error in any entry; an item, index.json or numbers.json of the folder has an uncommitted change (commit or stash it); a
 header cannot be read; two items hold one number; a JSON file name is taken or would be too long; the backlog clone is shallow. When
-the change cannot be published the folder is put back as it was (exit 3).
+the change cannot be published the folder is put back as it was (exit 3); in a repository with no origin remote the conversion stays committed
+on the branch (exit 3: add the origin and push), and the next run writes the two keys below.
 
 After a run that is not a dry run it writes two keys into .backlog/config.json of the working copy, for a person to commit:
 migrated_at (when the folder became JSON; a later run that converts nothing keeps it) and migrated_by_version (the version of the CLI
@@ -1628,8 +1629,9 @@ Options:
 Exit codes:
   0  Converted, or nothing to convert.
   1  The named team has no entry in the team file.
-  2  The run stopped (every case is listed) or the input is invalid; nothing was written.
-  3  The change could not be published.
+  2  The run stopped (every case is listed) or the input is invalid; nothing was written. An older git than 2.40 is refused too:
+     "team commands need git 2.40 or later (found <version>)"; nothing the command wrote is left behind.
+  3  The change could not be published: it was rolled back, or (no origin remote) it stays committed on the branch.
 
 Example:
   backlog team migrate --show-all --dry-run

@@ -1,0 +1,295 @@
+{
+  "about": "The data schema of a backlog item without a team, as the code defines it today (src/shared/item-definition.js; the command `backlog fields` prints the same table). One item is one JSON file. This file is a template for correction: edit a key, its type, its default, who sets it or its meaning, or delete a key that should not exist. Nothing reads this file.",
+  "file": {
+    "path": ".backlog/<owner>/<name>/phases/<slug>.json for an open item and .backlog/<owner>/<name>/archive/<slug>.json for an archived one, inside the repository or inside a separate backlog repository (a storage setting)",
+    "note": "an archived item is an item whose file is in the archive folder; no key says so"
+  },
+  "envelope": {
+    "seq": {
+      "type": "number",
+      "default": "the next free number",
+      "set_by": "the CLI",
+      "meaning": "The item's number in this repository, never reused"
+    },
+    "slug": {
+      "type": "text",
+      "default": "the number and the title",
+      "set_by": "the CLI",
+      "meaning": "The name an item is addressed by in every command"
+    },
+    "name": {
+      "type": "text",
+      "default": "none, always given",
+      "set_by": "backlog new --title, backlog update --name",
+      "meaning": "A short title of the item"
+    },
+    "team": {
+      "type": "text, or absent",
+      "default": "absent",
+      "set_by": "backlog team new, a rule of the team, backlog team migrate",
+      "meaning": "The team that owns the item. Absent for an item without a team. An item with this key takes its fields from its team's item definition in the team file, not from the list below"
+    },
+    "repository": {
+      "type": "text",
+      "default": "the repository of the folder",
+      "set_by": "the CLI",
+      "meaning": "The repository the item belongs to"
+    },
+    "branch": {
+      "type": "text",
+      "default": "the branch of the caller",
+      "set_by": "the CLI, backlog move",
+      "meaning": "The branch the item belongs to"
+    },
+    "created": {
+      "type": "time",
+      "default": "the time of creation",
+      "set_by": "the CLI",
+      "meaning": "When the item was created"
+    },
+    "updated": {
+      "type": "time",
+      "default": "the time of the last change",
+      "set_by": "the CLI",
+      "meaning": "When the item last changed"
+    },
+    "updated_by": {
+      "type": "text",
+      "default": "the agent named, else the user of the configuration",
+      "set_by": "the CLI",
+      "meaning": "Who changed the item last"
+    }
+  },
+  "fields": {
+    "status": {
+      "type": "text",
+      "default": "pending",
+      "set_by": "backlog new --status, backlog update --status, backlog update --claim and --release, backlog done",
+      "meaning": "Where the item is, a free word stored exactly as typed; the finished words are closed, done and archived"
+    },
+    "objective": {
+      "type": "text",
+      "default": "the title",
+      "set_by": "backlog new --objective, backlog update --objective",
+      "meaning": "The result the item delivers, one line"
+    },
+    "summary": {
+      "type": "text",
+      "default": "empty",
+      "set_by": "backlog new --summary, backlog update --summary",
+      "meaning": "Several sentences about what the item is for; it routes new work to the right item"
+    },
+    "location": {
+      "type": "text",
+      "default": "empty",
+      "set_by": "backlog update --location",
+      "meaning": "Free text: where the work is"
+    },
+    "commit": {
+      "type": "text",
+      "default": "the commit of HEAD at creation",
+      "set_by": "the CLI, backlog update --commit",
+      "meaning": "The commit the work has reached"
+    },
+    "severity": {
+      "type": "text",
+      "allowed_values": [
+        "normal",
+        "critical"
+      ],
+      "default": "normal",
+      "set_by": "backlog new --severity, backlog update --severity",
+      "meaning": "A critical item is placed first"
+    },
+    "owner": {
+      "type": "text",
+      "default": "the user of the configuration",
+      "set_by": "the CLI, backlog update --claim and --release",
+      "meaning": "The agent working on the item; outside a team, the user the item belongs to"
+    },
+    "owned_since": {
+      "type": "time",
+      "default": "empty",
+      "set_by": "the CLI",
+      "meaning": "When the agent took the item; empty while nobody holds it"
+    },
+    "depends_on": {
+      "type": "items",
+      "default": "empty list",
+      "set_by": "backlog new --depends-on, backlog update --set-depends-on",
+      "meaning": "The items that must be finished first"
+    },
+    "parent": {
+      "type": "item",
+      "default": "none",
+      "set_by": "backlog new --split-from",
+      "meaning": "The item this one was split from"
+    },
+    "estimate_min": {
+      "type": "number",
+      "default": "empty",
+      "set_by": "backlog new --estimate, backlog update --set-estimate",
+      "meaning": "Minutes of work, a whole number"
+    },
+    "complexity": {
+      "type": "text",
+      "default": "empty",
+      "set_by": "backlog new --complexity, backlog update --set-complexity",
+      "meaning": "low, medium or high"
+    },
+    "layer": {
+      "type": "text",
+      "default": "empty",
+      "set_by": "backlog new --layer, backlog update --set-layer",
+      "meaning": "1 to 5 or process"
+    },
+    "chunk": {
+      "type": "boolean",
+      "default": "empty",
+      "set_by": "backlog new --chunk, backlog update --set-chunk",
+      "meaning": "Small pieces of work any member does between items"
+    },
+    "size_score": {
+      "type": "number",
+      "default": "empty",
+      "set_by": "backlog update --size_score",
+      "meaning": "A whole number that sizes the item"
+    },
+    "completed": {
+      "type": "time",
+      "default": "empty",
+      "set_by": "backlog done, backlog update --close",
+      "meaning": "When the item was closed"
+    }
+  },
+  "fields_note": "A field that was never given is left out of the file (the example below has no parent, layer, chunk, size_score or completed) and reads as its default.",
+  "finished_status_words": [
+    "closed",
+    "done",
+    "archived"
+  ],
+  "body": {
+    "type": "text (markdown)",
+    "default": "the title, the objective and the description given at creation",
+    "set_by": "backlog new --description, backlog update --append and --section",
+    "meaning": "The description of the item and the records appended to it"
+  },
+  "history": {
+    "type": "list of entries, one per command that changed the item",
+    "entry": {
+      "at": "time of the change",
+      "by": "who made it",
+      "session": "the session id, when one was given",
+      "step": "the command or the team step",
+      "changes": "{ field: [value before, value after] }",
+      "note": "free text"
+    }
+  },
+  "example_written_by_the_command": {
+    "command": "backlog new --title \"Add the login form\" --objective \"People can sign in\" --depends-on none --estimate 40 --complexity low",
+    "note": "the file this command writes on the current head, with the person and the commit id replaced",
+    "item": {
+      "seq": 1,
+      "slug": "001-add-the-login-form",
+      "name": "Add the login form",
+      "repository": "acme/app",
+      "branch": "main",
+      "created": "2026-11-13T18:04:51Z",
+      "updated": "2026-11-13T18:04:51Z",
+      "updated_by": "ann",
+      "fields": {
+        "status": "pending",
+        "objective": "People can sign in",
+        "summary": "",
+        "location": "",
+        "commit": "<the commit of HEAD>",
+        "severity": "normal",
+        "owner": "ann",
+        "owned_since": "",
+        "depends_on": [],
+        "estimate_min": 40,
+        "complexity": "low"
+      },
+      "body": "\n# Phase 001 — Add the login form\n\n**Objective:** People can sign in\n\n\n## Definition of done\n\n- [ ] <machine-checkable acceptance>\n",
+      "history": [
+        {
+          "at": "2026-11-13T18:04:51Z",
+          "by": "ann",
+          "session": "",
+          "step": "new",
+          "changes": {
+            "slug": [
+              null,
+              "001-add-the-login-form"
+            ],
+            "seq": [
+              null,
+              1
+            ],
+            "name": [
+              null,
+              "Add the login form"
+            ],
+            "repository": [
+              null,
+              "acme/app"
+            ],
+            "branch": [
+              null,
+              "main"
+            ],
+            "created": [
+              null,
+              "2026-11-13T18:04:51Z"
+            ],
+            "status": [
+              null,
+              "pending"
+            ],
+            "objective": [
+              null,
+              "People can sign in"
+            ],
+            "summary": [
+              null,
+              ""
+            ],
+            "location": [
+              null,
+              ""
+            ],
+            "commit": [
+              null,
+              "<the commit of HEAD>"
+            ],
+            "severity": [
+              null,
+              "normal"
+            ],
+            "owner": [
+              null,
+              "ann"
+            ],
+            "owned_since": [
+              null,
+              ""
+            ],
+            "depends_on": [
+              null,
+              []
+            ],
+            "estimate_min": [
+              null,
+              40
+            ],
+            "complexity": [
+              null,
+              "low"
+            ]
+          },
+          "note": "added 001-add-the-login-form at rank end; backlog re-densified to 1 item(s)"
+        }
+      ]
+    }
+  }
+}

@@ -10,6 +10,10 @@
 
 **Supersedes, as the task list of the branch:** [completed/2026-11-11-team-rules-engine-remaining-work.md](completed/2026-11-11-team-rules-engine-remaining-work.md) (its 33 tasks are Tasks 1 to 33 here, with the same numbers; its task texts stay the specification from which a packet is written), [completed/2026-11-04-phase-8-documentation.md](completed/2026-11-04-phase-8-documentation.md) (Task 39) and [completed/2026-11-04-phase-9-final-verification-and-pr.md](completed/2026-11-04-phase-9-final-verification-and-pr.md) (Task 40). The batch plan [2026-11-09-team-rules-engine.md](2026-11-09-team-rules-engine.md), the simplification plan and its log stay active until Task 40 closes them.
 
+## The item schema under review
+
+[2026-11-12-simplify-branch-completion/item-schema.json](2026-11-12-simplify-branch-completion/item-schema.json) is the data schema of an item as the code defines it today, written out as a JSON template for correction (2026-11-13). The commands and flags of `backlog new` and `backlog update` are re-cut from the corrected schema before any further task changes them.
+
 ## The use-case status table
 
 [2026-11-12-simplify-branch-completion/use-case-status.tsv](2026-11-12-simplify-branch-completion/use-case-status.tsv) holds one row per use case, extracted by [use-case-status.mjs](2026-11-12-simplify-branch-completion/use-case-status.mjs) (`init` built the first table; `check` is the guard, run by `.agents/test/use-case-status.test.js`; `counts` rewrites [source-counts.tsv](2026-11-12-simplify-branch-completion/source-counts.tsv)).

@@ -92,7 +92,7 @@ test('a plain status close writes no hand-off record into the item', () => {
   assert.equal('handoffs' in fm(f, s), false);
 });
 
-// ---- one door: a team's item is changed by `backlog team update` only (a plain update refuses every change of it)
+// ---- one door: a team's item is changed by `backlog team update` only (a user command does not see a team item)
 
 // every generic field flag and plain step of `backlog update`, with a value that is valid for it
 const FIELD_FLAGS = [

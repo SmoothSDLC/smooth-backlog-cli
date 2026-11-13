@@ -484,7 +484,7 @@ test('an item archived with --force counts as finished for a claim: it keeps its
   assert.equal(claim.status, 0, claim.stdout + claim.stderr);
 });
 
-// An item that belongs to a team is changed by its team's steps only: the plain update refuses every change of it, with one line, and writes nothing.
+// An item that belongs to a team is changed by its team's steps only: a user command does not see it, answers with one line, and writes nothing.
 const teamed = (f, ...seqs) => seqs.map(n => { const slug = `00${n}-${['', 'alpha', 'beta', 'gamma'][n]}`; changeStored(f.home, itemPath(f.folder, slug), { team: 't1', status: 'ready', stage: 'ready', refiner: 'lead' }, 'team item'); return slug; });
 
 test('review P1: update of an item of a team (field edit, note, append, rank, section) does not see it and writes nothing', () => {

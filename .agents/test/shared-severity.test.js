@@ -36,7 +36,7 @@ test('046: --severity changes the field, is published with an event, and refuses
   assert.match(bad.stderr + bad.stdout, /invalid choice: 'urgent' \(choose from normal, critical\)/);
 });
 
-test('046: --severity is a field edit: refused on another team\'s item like any other', () => {
+test('046: --severity does not see an item of a team', () => {
   const t = mkdtempSync(join(tmpdir(), 'severity-'));
   dirs.push(t);
   const home = sharedBacklog(t);
@@ -47,5 +47,7 @@ test('046: --severity is a field edit: refused on another team\'s item like any 
   changeStored(home, itemPath(join(home, 'acme', 'demo'), '001-other-team-item'), { team: 't2', status: 'new', refiner: '' }, 'team item');
   run(['show', '1', '--agent', 'tester']);
   const r = run(['update', '1', '--severity', 'critical', '--by', 'tester'], { SMOOTH_BACKLOG_CLI_TEAM_NAME: 't1' });
-  assert.equal(r.status, 1, r.stdout + r.stderr); // another team's item
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(r.stdout, "❌ no phase '1' (create it with backlog new)\n");
+  assert.equal(r.stderr, '');
 });

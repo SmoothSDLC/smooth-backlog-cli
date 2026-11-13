@@ -1,7 +1,7 @@
-// What the plain commands do with an item that belongs to a team (decision AO, phase 7c-2c). A plain command refuses such an item when it would
-// change its team state (status, stage, claim, review, refinement, dependency, place in the team's queue, deletion): one line on standard output,
-// exit 1, nothing written. move, archive of a closed item and archive done only file or store it, and keep working.
-// Each refusal has an engage test (the team item is refused, nothing is written) and a bite test (an item without a team is not affected).
+// What the user commands do with an item that belongs to a team: they do not see it. A command that names one answers as it does for a
+// number or slug no item holds (one line on standard output, exit 1, nothing written), and a command over many items leaves it where it is.
+// Each case has a test on the team item (not seen, nothing written) and, where the command has one, a test that an item without a team is
+// still served. The two clean tests still hold the refusal of clean, and each is marked: their expectation changes when clean learns --show-all.
 // Local bare repositories only (shared-fixtures.js).
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -126,6 +126,7 @@ test('import does not see a team item of the other branch: it stays there, with 
   assert.deepEqual(JSON.parse(g.ok(['list', '--json']).stdout).phases.map(r => r.slug)[0], there);
 });
 
+// the expectation of this test changes when clean learns --show-all
 test('clean engages on a team item in its scope, archived ones included: refused before the question, nothing written', () => {
   const f = build(); f.item('Plain job'); const team = f.item('Team job', { team: true, closed: true });
   const from = itemPath(join(f.home, 'acme', 'demo'), team); const to = archivedPath(join(f.home, 'acme', 'demo'), team, 'phases'); // the plain archive does not see a team item: it is filed by hand
@@ -136,6 +137,7 @@ test('clean engages on a team item in its scope, archived ones included: refused
   REFUSED(f.run(['clean', 'all-branches'], { input: 'yes\n' }), 'clean: ');
   assert.equal(f.state(), before);
 });
+// the expectation of this test changes when clean learns --show-all
 test('clean bites only on the scope: a team item on another branch does not stop it', () => {
   const f = build(); f.item('Plain job'); const team = f.item('Team on feature', { team: true, branch: 'feature' });
   assert.match(f.ok(['clean'], { input: 'yes\n' }).stdout, /1 items removed from branch main/);

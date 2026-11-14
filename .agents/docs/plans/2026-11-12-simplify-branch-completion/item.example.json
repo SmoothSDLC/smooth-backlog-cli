@@ -8,7 +8,7 @@
   "updated": "2026-11-13T18:04:51Z",
   "updated_by": "ann",
   "fields": {
-    "status": "pending"
+    "status": "new"
   },
   "description": "People can sign in with their e-mail address and a password.",
   "history": [
@@ -24,7 +24,7 @@
         ],
         "status": [
           null,
-          "pending"
+          "new"
         ]
       },
       "note": ""

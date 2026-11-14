@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Backlog index",
+  "description": "The index file of one repository's backlog folder. It alone holds the priority of the items: the place of an entry in its branch's list is the item's priority, the first entry being priority 0, the next thing to do. Archived items are not listed.",
+  "type": "object",
+  "required": [
+    "branches"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "branches": {
+      "type": "object",
+      "description": "One list per branch, in priority order.",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "seq",
+            "slug",
+            "title",
+            "status"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "seq": {
+              "type": "integer",
+              "description": "The item's number."
+            },
+            "slug": {
+              "type": "string",
+              "description": "The item's slug."
+            },
+            "title": {
+              "type": "string",
+              "description": "The item's title."
+            },
+            "status": {
+              "type": "string",
+              "description": "The item's status word."
+            }
+          }
+        }
+      }
+    }
+  }
+}

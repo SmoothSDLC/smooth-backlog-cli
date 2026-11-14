@@ -33,8 +33,13 @@
 18. The built-in item has two properties a person gives, the title and the description, and what the CLI supplies. Every other field of an item comes from the item definition of the item's team in the team file, and the rules for those fields from that team's rule set. The fields change when the team's item definition changes.
 19. The property words of `backlog update` are therefore not a fixed list in the code: beyond title and description they are the fields the team file declares, read at run time, with their types and rules.
 20. An item with no team takes its fields from the repository's default item definition; where the repository has none, from the default item template packaged with the CLI. For now the item template for teams and the default template are the same.
+21. The CLI ships a default team item definition, a default team rule set and a comprehensive set of examples. The examples describe every kind of field and rule pattern and show how a pattern described in plain words becomes rules and an item definition. These documents and templates are in the public repository, and the help of the CLI directs the user to that folder of the public repository.
+22. `backlog archive` exists. An archived item is moved to the archive folder that the configuration file `.backlog/config.json` names for the repository the item came from.
+23. Every item has a priority. The priority is not a property of the item file: it is held only in the index file of the backlog folder, which lists, per item, the priority, the item's number, the title, the slug and the status. Making an item the first (priority 0) lowers the priority of the items behind it. The backlog folder behaves the same whether it is inside the repository or elsewhere.
+24. The item's number and its slug are default properties of every item.
+25. The default item definition has at least the status words new, active and closed.
 
-The decisions applied to the schema: [item.schema.json](2026-11-12-simplify-branch-completion/item.schema.json). The commands and flags that follow from them: [command-structure.md](2026-11-12-simplify-branch-completion/command-structure.md).
+The decisions applied to the schemas: [item.schema.json](2026-11-12-simplify-branch-completion/item.schema.json) and [index.schema.json](2026-11-12-simplify-branch-completion/index.schema.json). The commands and flags that follow from them: [command-structure.md](2026-11-12-simplify-branch-completion/command-structure.md).
 
 ## The item schema under review
 

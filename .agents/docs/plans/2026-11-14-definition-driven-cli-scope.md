@@ -12,7 +12,33 @@ The CLI knows one base item: a title and a description given by a person, and th
 - The team commands `backlog team pop`, `new`, `update`, `query`, `validate` and `migrate`, whose step arguments already come from the rule set at run time.
 - Item files as JSON, one module that reads and writes them, numbers that are never reused, publication that never overwrites another writer.
 - The configuration file `.backlog/config.json` with the location of the team file.
-- Five example team files shipped as templates.
+- Five example team files shipped as templates. There is no single default team definition and no document that teaches how to turn a described way of working into rules (decision 21).
+
+## Core behaviour of the CLI, independent of any team or item definition
+
+Checked on the branch head by running the commands in a scratch repository (2026-11-14). All of it is present on the branch; the last column says what the owner decisions change.
+
+| Behaviour | On the branch today | Change |
+|---|---|---|
+| Item number | one counter per repository folder (`numbers.json`); a number is never reused | none |
+| Slug | the number and the title in file-name form; how an item is addressed | none |
+| Priority | the place of the item in its branch's list in `index.json` of the repository folder; not stored in the item file; priority 0 is next | none |
+| Setting priority 0 | the item goes first and every item behind it moves down by one | none |
+| The index file | per branch, a list of entries with number, slug, name and status | the key `name` becomes `title` |
+| Archive | `backlog archive <item>` moves the file to the folder `archive/phases` beside the open items and takes it out of the index; the folder is fixed in code | the folder is named in `.backlog/config.json` (decision 22) |
+| Where the backlog lives | `.backlog` inside the repository, or a separate backlog repository named by `backlog_repository` in `.backlog/config.json`; the same commands either way | none |
+| Synchronisation | the backlog is pulled before every command; a change is committed and pushed before the command exits; a change that cannot be published is taken back (exit 3) | none |
+| Two writers | a write is refused (exit 5) when someone else changed the item since this agent read it | none |
+| One writer per clone | a lock in the clone | none |
+| History | every change adds an entry to the item | `backlog history` goes; the entries stay in the item |
+| Repository and branch | an item belongs to one repository and one branch; each branch has its own queue | none |
+| Output | `--json` prints the data; one line for a refusal; exit codes 0 to 5 | none |
+| Secrets | credentials in addresses are redacted in every output | none |
+| Configuration | `.backlog/config.json`, overridden by environment variables with the prefix `SMOOTH_BACKLOG_CLI_` | new keys: the archive folder, the default item definition |
+| Starting status | `pending`; the finished words are closed, done and archived | the default definition has at least new, active and closed (decision 25) |
+| Setup and upgrade | `backlog setup` chooses the location and installs the skill; `backlog upgrade` and the update notice | the owner's ruling on `backlog upgrade` is open |
+
+Behaviour that today hangs on a hard-coded field and therefore needs a home under the new model: dependencies between items (`depends_on`: existence and cycle checks, a blocked item is not offered as next), the parent of a split item, a critical item going first, and who holds an item.
 
 ## What does not fit and changes
 

@@ -67,7 +67,7 @@
       "properties": {
         "status": {
           "type": "string",
-          "description": "Where the item is, a free word stored exactly as typed; the finished words are closed, done and archived. Set by: supplied by the CLI at creation as the word pending; changed with backlog update --status, --claim, --release and --close, and backlog done."
+          "description": "Where the item is, one word. The default item definition has at least the words new, active and closed; a team's item definition may declare its own. Supplied by the CLI at creation as the first word (new); changed with backlog update <item> status <word>."
         },
         "objective": {
           "type": "string",

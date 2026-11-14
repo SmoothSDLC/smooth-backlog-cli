@@ -80,7 +80,7 @@ test('toItemJson and fromItemJson of a header equal the document users', () => {
 
 // ---- the item file and the evaluator item
 
-const cases = read('../../.agents/docs/plans/2026-11-09-team-rules-engine/design/rule-cases.json').cases;
+const cases = read('./fixtures/team-rules/rule-cases.json').cases;
 test('every item of every case of the rule cases survives write, read, write with the same bytes', () => {
   let n = 0;
   for (const c of cases) for (const i of c.given?.items ?? []) {

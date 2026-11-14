@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Backlog item",
-  "description": "One backlog item without a team: the content of one item file, as decided by the owner on 2026-11-13. Required: the title and the description a person gives, and what the CLI supplies at creation. Every other property is optional and set with backlog update. The code does not yet write this shape (it writes name for title and body for description, and more fields at creation).",
+  "description": "The base backlog item: what every item file holds whatever item definition applies. A person gives the title and the description; the CLI supplies the rest. Every other field of an item is declared by the item definition that applies (the team's, the repository's default, or the default packaged with the CLI), lives under fields, and is not part of this schema. The priority is not in the item: it is the item's place in the index file.",
   "type": "object",
   "required": [
     "seq",
@@ -68,46 +68,6 @@
         "status": {
           "type": "string",
           "description": "Where the item is, one word. The default item definition has at least the words new, active and closed; a team's item definition may declare its own. Supplied by the CLI at creation as the first word (new); changed with backlog update <item> status <word>."
-        },
-        "objective": {
-          "type": "string",
-          "description": "The result the item delivers, one line. Set by: backlog update --objective."
-        },
-        "summary": {
-          "type": "string",
-          "description": "Several sentences about what the item is for; it routes new work to the right item. Set by: backlog update --summary."
-        },
-        "location": {
-          "type": "string",
-          "description": "Free text: where the work is. Set by: backlog update --location."
-        },
-        "commit": {
-          "type": "string",
-          "description": "The commit the work has reached. Set by: backlog update --commit."
-        },
-        "estimate_min": {
-          "type": "integer",
-          "description": "Minutes of work, a whole number. Set by: backlog update --set-estimate."
-        },
-        "complexity": {
-          "type": "string",
-          "description": "low, medium or high. Set by: backlog update --set-complexity."
-        },
-        "layer": {
-          "type": "string",
-          "description": "1 to 5 or process. Set by: backlog update --set-layer."
-        },
-        "chunk": {
-          "type": "boolean",
-          "description": "Small pieces of work any member does between items. Set by: backlog update --set-chunk."
-        },
-        "size_score": {
-          "type": "integer",
-          "description": "A whole number that sizes the item. Set by: backlog update --size_score."
-        },
-        "completed": {
-          "type": "string",
-          "description": "When the item was closed. Set by: the CLI, when the item is closed."
         }
       }
     },

@@ -44,6 +44,7 @@ User commands (no rules):
   - *`--whatif`: say what would be created and change nothing.
 - *`backlog update <item> <property> <value>`: set one property. The property words are `title`, `description`, `status`, `priority`, and the fields of the item definition that applies; they are read at run time.
   - *`--whatif`: say what would change and change nothing.
+  - `--show-all`: change the item although it belongs to a team; without the flag the command refuses and names `backlog team update`. No rule is applied.
 - `backlog list`: the items of this branch in priority order.
   - `--json`: the whole items as JSON.
   - `--show-all`: also list the items of teams.
@@ -110,8 +111,14 @@ To build:
 7. `--whatif` everywhere; `backlog` alone prints the help; `--title` on `backlog team new`; `backlog history` removed.
 8. `README.md`, `COMMANDS.md`, the skill and `CHANGELOG.md` rewritten from the new help; the tests of the changed commands rewritten.
 
-Open, for the owner: how the names of the repository- and branch-specific variables are written in `.backlog/config.json` (decision 31); the review of the design decisions of 2026-11-09 and of the simplification decisions of 2026-11-04 against the decisions in force; which fields the packaged default definition declares; what happens to values that existing items hold in fields the applicable definition does not declare; the commands listed above as not decided.
+Open, for the owner: how the names of the repository- and branch-specific variables are written in `.backlog/config.json` (decision 31); whether `backlog archive` takes `--show-all` like `backlog update`; `backlog changes`, `backlog next` and `backlog init clean`, which earlier rulings kept and decision 16 puts in question; which fields the packaged default definition declares; what happens to values that existing items hold in fields the applicable definition does not declare; the commands listed above as not decided.
+
+## Behaviour still in the code that decision 32 moves to team rules
+
+A count of words in `src`, not a classified inventory (the classified one of 2026-11-08 is in the archive): review, 364 lines in 18 files; claim, 233 lines in 25 files; stale, 70 lines in 15 files; dependencies, parents, splitting and "critical", 292 lines; limits on work in progress, two files. The modules `src/team/lifecycle.js`, `queue.js`, `team.js`, `workflow.js`, `wip.js`, `views.js`, `handoff.js` and `handoff-commands.js` hold a coded review and claim workflow beside the rule evaluator, and `src/shared/dependencies.js`, `wip-limits.js` and `plain-step.js` apply coded checks in user commands.
+
+Environment variables the code reads that no ruling lists: `SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS` (when a review is stale: a team rule, decision 32); `SMOOTH_BACKLOG_CLI_RUN_LOCK_HELD` (exists only so that a coded claim step can run `update` as a child: goes with that step); `SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS` (how long a command waits for another process using the same local copy of the backlog; reported to the owner under decision 33); `SMOOTH_BACKLOG_CLI_RUN_HOOK` (reports every run to an outside program; solves no problem of an item; reported to the owner under decision 33).
 
 ## Work in flight
 
-Merged and kept: the Task 6 follow-ups and Tasks 9, 11, 12 and 23 of the archived plan of 2026-11-12. Built and not merged: `backlog update` and `backlog done` with `--show-all` (branch kept, on hold). No other task of the archived plan runs; the task list is written anew from this document.
+Merged and kept: the Task 6 follow-ups and Tasks 9, 11, 12 and 23 of the archived plan of 2026-11-12. Built and not merged: `backlog update` and `backlog done` with `--show-all` (branch kept, on hold; it implements ruling R19 and decision 29). No other task of the archived plan runs; the task list is written anew from this document.

@@ -8,7 +8,7 @@ The owner's decisions that are in force for this branch, each in its current wor
 4. An alias is not kept: where two flags or two names mean the same, one goes.
 5. The item schema comes first. It is a valid JSON Schema ([item.schema.json](item.schema.json)) holding only the item's own properties, and the commands and flags are cut from it.
 6. An item has few required properties. `backlog new` takes exactly the required ones that a person must give; the CLI supplies the rest of the required ones. A property that is optional, or that is set after creation, is not an input of `backlog new`: it is set with `backlog update`.
-7. `--show-all` is a flag for reading and displaying items. It is not used with a writing command (decision 29).
+7. `--show-all` is the flag by which a user command reaches the items of teams. On a reading command (`backlog list`, `backlog show`) it includes them. On a user command that changes an item it is the explicit way for a user to change an item of a team, which is refused without it (decision 29, ruling R19). It is not a flag of `backlog new`, which creates an item and reaches no existing one.
 8. A list of commands and flags shows each flag under the command form it is used with; only a flag usable everywhere stands at the top.
 9. The title of an item is called title: the flags `--title` of `backlog new`, `backlog update` and `backlog team new`, and the item file's key `title`; `--name` and the key `name` go.
 10. The required properties of an item are the title and the description, given by the person, and the number, the slug, the repository, the branch, the created and updated times, the writer, the status and the first history entry, supplied by the CLI.
@@ -30,9 +30,12 @@ The owner's decisions that are in force for this branch, each in its current wor
 26. The team commands are the only commands that use a team's rule set. The user commands use no rule: on an item with no team nothing prevents a user from doing anything with them. The two sets are different commands with different logic, never aliases of each other.
 27. A committed file that describes behaviour that is no longer the target is moved, not deleted, to the folder `.backlog/archived/` of its repository, so that it cannot be read as current. `README.md` and `AGENTS.md` are updated instead of moved. Backlog items are reviewed later.
 28. The CLI's code holds no workflow. It creates an item, updates an item and lists items, and nothing more. Whether a field for dependencies exists, what upstream and downstream dependencies mean, how an item is split and how parents and children are marked, which item goes first, who holds an item, and every rule about who may write what and when: all of that is a field in an item definition and a rule in a team's rule set, never code. The default item definition and the default rule set that ship with the CLI carry such fields and an extensive set of rules for them as data, and anyone may remove or change them.
-29. A user command cannot change an item that belongs to a team: when the item's team is set, the team commands must be used. The team is therefore a base property of every item, beside the number, the title and the description (absent or empty when the item has no team).
+29. A user command given without `--show-all` cannot change an item that belongs to a team: when the item's team is set, the team commands are the way, and their rules apply. A user who must change such an item in a way the team's rules would block gives `--show-all` on the user command; no rule is applied then (decision 26). The team is therefore a base property of every item, beside the number, the title and the description (absent or empty when the item has no team).
 30. Anything that restricts or orders the work of several writers is a team rule in the team file and applies through the team commands only. The CLI enforces no such rule on its own.
 31. The inputs that say where and for whom a command runs (the repository, the branch, the team, the agent, the session) come from environment variables as well as flags. Several agents use the CLI at the same time, so the variables are specific to a repository and a branch, and the name of the variable to read is kept in `.backlog/config.json`.
+
+32. Review behaviour is a rule of a team: who reviews, how many rounds, the verdict words, when a review counts as stale and is offered again. Locking is a rule of a team: who may write an item and when, who holds it, how long, and when the hold lapses. None of it is code of the CLI, a status word in the code, or an environment variable of the CLI.
+33. Nothing leaves the scope because the lead read a rule that way. Every candidate removal of a behaviour, a flag, a command or an earlier decision is reported to the owner with its evidence, and stays in force until the owner decides (owner rule of 2026-11-05, restated 2026-11-08 and 2026-11-14).
 
 ## Owner rulings of 2026-11-09 that remain in force
 
@@ -41,7 +44,7 @@ Reviewed one by one against the decisions above on 2026-11-14. Each keeps its nu
 - R1. For team behaviour the CLI is a rules evaluator: given an item, the command, the caller and the arguments, the team's rule set decides whether the command is allowed, what the new status is and which fields change. The code holds no team behaviour, no status word, no stage, no role.
 - R2. Splitting, parents, children and dependencies are not actions of the CLI. They are rules over fields. Limits, queue order, review rounds, size caps and required notes are rules over fields in the same way. (Decision 28 says the same for all workflow.)
 - R3. User commands enforce nothing about flow, status words or team behaviour. The CLI ignores the team file unless a command runs under `backlog team`. Who the user is comes from the operating system user.
-- R3a, with R16. User commands change only items that have no team; items of a team are changed only through `backlog team` commands (decision 29). User commands leave items of a team out of what they list and show unless `--show-all` is given, which is for reading only (decision 7).
+- R3a, with R16 and R19. User commands leave items of a team out of what they list, show and change. `--show-all` is the one way in: with it a reading command includes them and a user command may set values on an item of a team (decisions 7 and 29). A team that wants a field protected says so in its rules; the rules bind the team commands.
 - R3b. Team commands never read the user identity. The agent comes from `--agent`, else the agent variable. The team comes from `--team`, else the team variable, else the `team` key of `.backlog/config.json`. When none is set the command stops and names every way to give the team.
 - R4. Items are stored as JSON files. Every existing item, open and archived, is migrated from markdown to JSON; the CLI migrates or fails, with no second format and no alias.
 - R5. The team file holds, per team, the people, the team's rule set and the team's item definition. The CLI only reads it; it never creates, rewrites or registers it.
@@ -66,6 +69,33 @@ Reviewed one by one against the decisions above on 2026-11-14. Each keeps its nu
 - Carried forward on 2026-11-09 and in force: the team, the repository, the branch, the agent and the session are inputs of the team commands, each also an optional flag; archived items are subject to no rule; a review stage is never named after a team, and this public repository shows nothing of how the owner's internal factory behaves; commands are described with their scenario and full hierarchical command line.
 - Lead decisions of 2026-11-09 the owner let stand: archived items are migrated to JSON too; rule expressions are data interpreted by the evaluator, and the CLI never executes code found in the team file.
 
+## Owner answers of 2026-11-09, round 12, that remain in force
+
+- Question 1. The repository input of a team command defines the repository the command acts on, with that repository's team file and rules.
+- Question 2. A team command publishes only its own commit; a person's unpushed commits stay local.
+- Question 3. Merging branches with git is outside the scope of the CLI. The CLI renumbers nothing after such a merge; a command given a number that two items hold names both slugs and stops.
+- Question 4. Any finding in any entry of the team file stops every team command of every team of that file.
+- Question 5. Among the team commands, `backlog team query` (its list form, `query <item>`, `query rules`), `backlog team validate` and `backlog team migrate` accept `--show-all`; given together with `--team`, `--team` decides.
+- Question 6. Only the repository's `.backlog/config.json` defines where the team file is: its `teams_file` key, else the repository's folder of a backlog repository named there, else `.backlog/teams.json`. The SHA of the team file is written into `.backlog/config.json`.
+- Question 7. Nothing is built to protect a migrated folder from older releases; every installation is upgraded before a folder is migrated.
+
+## Owner decisions of 2026-11-04 to 2026-11-08 that remain in force
+
+- 2026-11-04, decision D, data integrity in both storage locations: the backlog is always a git repository; a command pulls from the origin before it acts (reads included), commits and pushes after every change, retries a refused push, and refuses a write made on a stale view, showing the item's difference. Its last clause, that a claim of an item another agent holds is refused, is a team rule now (decisions 28 and 32).
+- 2026-11-04, decision F, with 2026-11-05: no database and no cache; the order is a committed text index per repository folder. An item that cannot be read is named with its field.
+- 2026-11-04, decision D3 as amended 2026-11-08: plans stay in this repository under the plans folder; other working documents do not.
+- 2026-11-04, decision D4: `backlog setup` names no folder path in its output.
+- 2026-11-05: when nothing is configured, the CLI creates the repository's `.backlog` folder with `.backlog/config.json` and uses it.
+- 2026-11-05: team awareness exists only under `backlog team`; the user command `backlog update` accepts no team flag; `backlog pop` and `backlog work` do not exist as user commands; team behaviour is defined only in the team's configuration.
+- 2026-11-07: one behaviour per command; no backwards compatibility (upgrade and migrate, or fail); the backlog source comes only from the repository's `.backlog/config.json`; a command acts on the current branch by default, and wider behaviour is a subcommand, an option the user asks for, or a question on a terminal; every behaviour is explained in the help, the README and the supporting documents.
+- 2026-11-07, flags and subcommands: unless the data must be supplied as part of the command, an option is a subcommand, not a flag. What a command needs is named in the help of its parent command and printed again when the command runs without input (decision 11 applies it to `backlog update`).
+- 2026-11-07, answer AO: the user command `backlog update` refuses a change to an item of a team (decision 29 with its `--show-all` exception).
+- 2026-11-07, answer AI: the update notice and `backlog upgrade` with `check`, `auto`, `off` and `disable` stay; the configuration entry gates the external call, which is asynchronous, times out quickly and only warns.
+- 2026-11-07, answer AJ: team commands and user commands are different commands; code is shared only where sensible; no alias (decisions 4 and 26).
+- 2026-11-07, answer AP: `backlog new` and `backlog team new` are valid commands, and `--ask` is the interactive way.
+- 2026-11-08, decision AR: the single-branch read exists as `backlog list branch <name>`.
+- 2026-11-08, principle: the CLI hard-codes no behaviour pattern. A user sets any status word on an item with no team. Anything the CLI enforces for a team that does not come from the team file is an implementation failure.
+
 ## Not yet reviewed
 
-The design decisions of 2026-11-09 (the file `design/decisions.md` in the archive, with the owner's answers of round 12) and the decisions of the simplification of 2026-11-04 have not been checked one by one against the decisions above. Until that review is done none of them is in force by being in the archive, and none is dropped. The review moves each one either into this file or into the superseded file.
+Nothing dated decision or ruling of the owner in the archive is left unreviewed. The chapters of the 2026-11-09 design (the team file, the item definition and JSON item, the rule language, the team commands, numbering and index, migration, skills, validate) are design text, not rulings; they are read chapter by chapter when the task list is written, and what they state is carried or reported under decision 33.

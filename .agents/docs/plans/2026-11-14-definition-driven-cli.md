@@ -21,7 +21,7 @@ The CLI ships a default team item definition, a default team rule set, and examp
 
 ## Where a command gets its inputs
 
-A command learns which repository, branch, team, agent and session it runs for from, in this order: the flag, the environment variable, the configuration file `.backlog/config.json` of the repository (committed in every branch). Every variable the CLI owns starts with `SMOOTH_BACKLOG_CLI_`. Several agents use the CLI at the same time, so the variables are specific to a repository and a branch, and the name of the variable to read is kept in `.backlog/config.json`. The same file names where the team file is (it too is specific to a repository and a branch), the repository's default item definition, the archive folder, and where the backlog folder lives. Team commands never read the user's identity; user commands take the user from the operating system. When the team variable is set, every user command fails.
+A command learns which repository, branch, team, agent and session it runs for from, in this order: the flag, the environment variable, the configuration file `.backlog/config.json` of the repository (committed in every branch). Every variable the CLI owns starts with `SMOOTH_BACKLOG_CLI_`. Several agents use the CLI at the same time on different repositories and branches, so the `.backlog/config.json` of a repository, committed in each branch, names the variables that commands there read, in the keys `repository_variable`, `branch_variable`, `team_variable`, `agent_variable` and `session_variable` (decision 31). The repository and the branch themselves are detected from git. The same file names where the team file is (it too is specific to a repository and a branch), the repository's default item definition, the archive folder, and where the backlog folder lives. Team commands never read the user's identity; user commands take the user from the operating system. When the team variable is set, every user command fails.
 
 ## Schemas
 
@@ -111,7 +111,7 @@ To build:
 7. `--whatif` everywhere; `backlog` alone prints the help; `--title` on `backlog team new`; `backlog history` removed.
 8. `README.md`, `COMMANDS.md`, the skill and `CHANGELOG.md` rewritten from the new help; the tests of the changed commands rewritten.
 
-Open, for the owner: how the names of the repository- and branch-specific variables are written in `.backlog/config.json` (decision 31); whether `backlog archive` takes `--show-all` like `backlog update`; `backlog changes`, `backlog next` and `backlog init clean`, which earlier rulings kept and decision 16 puts in question; which fields the packaged default definition declares; what happens to values that existing items hold in fields the applicable definition does not declare; the commands listed above as not decided.
+Open, for the owner: whether `backlog archive` takes `--show-all` like `backlog update`; `backlog changes`, `backlog next` and `backlog init clean`, which earlier rulings kept and decision 16 puts in question; which fields the packaged default definition declares; what happens to values that existing items hold in fields the applicable definition does not declare; the commands listed above as not decided.
 
 ## Behaviour still in the code that decision 32 moves to team rules
 

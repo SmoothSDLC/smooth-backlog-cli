@@ -18,3 +18,9 @@ Decisions that are no longer in force, with what replaced them. Nothing here des
 | Dependency checks, the split with its parent, a critical item going first and the holder of an item as behaviour of the code | design of 2026-11-09 and earlier | decision 28: fields and rules as data, never code |
 | The skills of a team as a source of what the CLI must do | practice | decision 17: the CLI and the team file are the authority |
 | The plan of 2026-11-12 with its 52 tasks and its use-case status table | 2026-11-12 | the re-analysis of 2026-11-14 ([../2026-11-14-definition-driven-cli.md](../2026-11-14-definition-driven-cli.md)) |
+| R5 in part: "the CLI never reads a template" | 2026-11-09 | decisions 20 and 21: the CLI reads the default item definition packaged with it |
+| R9: the earlier analysis is a guide and a coverage checklist | 2026-11-09 | decision 27: that analysis is archived and is not an input |
+| R16 in part: "by default a reference to a team item reads as missing; with the flag it is seen" | 2026-11-09 | decision 28: references between items are fields and rules, not code |
+| R19 and its confirmation in round 8: a user command given `--show-all` may set values on an item of a team | 2026-11-09 | decision 29 |
+| Scope note of 2026-11-09: several teams at once need no change of variable names | 2026-11-09 | decision 31: the variables are specific to a repository and a branch and their names are kept in `.backlog/config.json` |
+| "Split items are linked to their parent but not bound to its team" as behaviour of the code | carried forward on 2026-11-09 | decision 28 |

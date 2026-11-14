@@ -19,6 +19,10 @@ There are two separate sets of commands, and neither is an alias of the other:
 
 The CLI ships a default team item definition, a default team rule set, and examples that show every kind of field and rule and how a way of working described in plain words becomes an item definition and rules. They are in this public repository, and the help points to them. Skills and other documents that describe working with the CLI read the team file; they never define the CLI's behaviour.
 
+## Where a command gets its inputs
+
+A command learns which repository, branch, team, agent and session it runs for from, in this order: the flag, the environment variable, the configuration file `.backlog/config.json` of the repository (committed in every branch). Every variable the CLI owns starts with `SMOOTH_BACKLOG_CLI_`. Several agents use the CLI at the same time, so the variables are specific to a repository and a branch, and the name of the variable to read is kept in `.backlog/config.json`. The same file names where the team file is (it too is specific to a repository and a branch), the repository's default item definition, the archive folder, and where the backlog folder lives. Team commands never read the user's identity; user commands take the user from the operating system. When the team variable is set, every user command fails.
+
 ## Schemas
 
 - [item.schema.json](2026-11-14-definition-driven-cli/item.schema.json): the base item, a JSON Schema; [item.example.json](2026-11-14-definition-driven-cli/item.example.json) fits it.
@@ -106,7 +110,7 @@ To build:
 7. `--whatif` everywhere; `backlog` alone prints the help; `--title` on `backlog team new`; `backlog history` removed.
 8. `README.md`, `COMMANDS.md`, the skill and `CHANGELOG.md` rewritten from the new help; the tests of the changed commands rewritten.
 
-Open, for the owner: the review of the rulings and design decisions made before 2026-11-13 against the decisions in force; which fields the packaged default definition declares; what happens to values that existing items hold in fields the applicable definition does not declare; the commands listed above as not decided.
+Open, for the owner: how the names of the repository- and branch-specific variables are written in `.backlog/config.json` (decision 31); the review of the design decisions of 2026-11-09 and of the simplification decisions of 2026-11-04 against the decisions in force; which fields the packaged default definition declares; what happens to values that existing items hold in fields the applicable definition does not declare; the commands listed above as not decided.
 
 ## Work in flight
 

@@ -6,6 +6,8 @@ What the CLI does is in [behaviour-spec.md](2026-11-14-definition-driven-cli/beh
 
 ## What on this branch still describes or implements the earlier behaviour
 
+Every tracked file outside `.backlog/archived/` has one row and one state in [file-audit.tsv](2026-11-14-definition-driven-cli/file-audit.tsv): AUDIT-BLOCKED 5, CODE 79, KEEP 16, MOVE-WITH-CODE 1, NEW-BEHAVIOUR 9, REWRITE 10, TEST-OF-EARLIER 146, 266 in all. No file of this repository, on any branch, is an HTML page.
+
 Counted on 2026-11-14 from the tracked files outside `.backlog/archived/`. Moved to the archive so far: the 147 earlier documents of `.agents/docs`, the two review files and one test. Not yet brought in line:
 
 | What | Files | What happens to it |

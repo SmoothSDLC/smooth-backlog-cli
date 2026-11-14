@@ -1,0 +1,267 @@
+state	file	reason
+AUDIT-BLOCKED	templates/teams/extreme-programming.json	team templates in the rule-set form (ruling R23 ships them); each is checked against the item definition and rule set keys once the specification states them
+AUDIT-BLOCKED	templates/teams/parallel.json	team templates in the rule-set form (ruling R23 ships them); each is checked against the item definition and rule set keys once the specification states them
+AUDIT-BLOCKED	templates/teams/patterns.json	team templates in the rule-set form (ruling R23 ships them); each is checked against the item definition and rule set keys once the specification states them
+AUDIT-BLOCKED	templates/teams/scrum.json	team templates in the rule-set form (ruling R23 ships them); each is checked against the item definition and rule set keys once the specification states them
+AUDIT-BLOCKED	templates/teams/single-agent.json	team templates in the rule-set form (ruling R23 ships them); each is checked against the item definition and rule set keys once the specification states them
+CODE	src/errors.js	the code as it is; changed by the build points of the plan
+CODE	src/help.js	the code as it is; changed by the build points of the plan
+CODE	src/integrations.js	the code as it is; changed by the build points of the plan
+CODE	src/main.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/archive.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/clean.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/dependencies.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/done.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/fields.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/frontmatter.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/help-parts.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/import.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/index.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/item-definition.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/item-file.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/item-json.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/move.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/new.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/numbers.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/plain-step.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/query.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/read.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/repair.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/router.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/safety.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/seam.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/seen.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/sequence.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/setup.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/status.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/store.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/sync.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/team-items.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/team-publish.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/text.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/update.js	the code as it is; changed by the build points of the plan
+CODE	src/shared/wip-limits.js	the code as it is; changed by the build points of the plan
+CODE	src/storage.js	the code as it is; changed by the build points of the plan
+CODE	src/team/apply.js	the code as it is; changed by the build points of the plan
+CODE	src/team/args.js	the code as it is; changed by the build points of the plan
+CODE	src/team/check.js	the code as it is; changed by the build points of the plan
+CODE	src/team/cli.js	the code as it is; changed by the build points of the plan
+CODE	src/team/handoff-close.js	the code as it is; changed by the build points of the plan
+CODE	src/team/handoff-commands.js	the code as it is; changed by the build points of the plan
+CODE	src/team/handoff.js	the code as it is; changed by the build points of the plan
+CODE	src/team/help.js	the code as it is; changed by the build points of the plan
+CODE	src/team/inputs.js	the code as it is; changed by the build points of the plan
+CODE	src/team/item.js	the code as it is; changed by the build points of the plan
+CODE	src/team/json-out.js	the code as it is; changed by the build points of the plan
+CODE	src/team/lifecycle.js	the code as it is; changed by the build points of the plan
+CODE	src/team/list.js	the code as it is; changed by the build points of the plan
+CODE	src/team/migrate-convert.js	the code as it is; changed by the build points of the plan
+CODE	src/team/migrate-plan.js	the code as it is; changed by the build points of the plan
+CODE	src/team/migrate.js	the code as it is; changed by the build points of the plan
+CODE	src/team/new.js	the code as it is; changed by the build points of the plan
+CODE	src/team/plan.js	the code as it is; changed by the build points of the plan
+CODE	src/team/pop.js	the code as it is; changed by the build points of the plan
+CODE	src/team/pull.js	the code as it is; changed by the build points of the plan
+CODE	src/team/query.js	the code as it is; changed by the build points of the plan
+CODE	src/team/queue.js	the code as it is; changed by the build points of the plan
+CODE	src/team/rules/expression.js	the code as it is; changed by the build points of the plan
+CODE	src/team/rules/pop.js	the code as it is; changed by the build points of the plan
+CODE	src/team/rules/safe-regex.js	the code as it is; changed by the build points of the plan
+CODE	src/team/rules/step.js	the code as it is; changed by the build points of the plan
+CODE	src/team/rules/validate-items.js	the code as it is; changed by the build points of the plan
+CODE	src/team/rules/validate-rules.js	the code as it is; changed by the build points of the plan
+CODE	src/team/rules/validate.js	the code as it is; changed by the build points of the plan
+CODE	src/team/session.js	the code as it is; changed by the build points of the plan
+CODE	src/team/show.js	the code as it is; changed by the build points of the plan
+CODE	src/team/steps.js	the code as it is; changed by the build points of the plan
+CODE	src/team/team.js	the code as it is; changed by the build points of the plan
+CODE	src/team/teams-file.js	the code as it is; changed by the build points of the plan
+CODE	src/team/teams-load.js	the code as it is; changed by the build points of the plan
+CODE	src/team/update.js	the code as it is; changed by the build points of the plan
+CODE	src/team/validate-command.js	the code as it is; changed by the build points of the plan
+CODE	src/team/views.js	the code as it is; changed by the build points of the plan
+CODE	src/team/wip.js	the code as it is; changed by the build points of the plan
+CODE	src/team/workflow.js	the code as it is; changed by the build points of the plan
+CODE	src/upgrade.js	the code as it is; changed by the build points of the plan
+KEEP	.agents/scripts/check-real-backlog-clean.mjs	release, packaging or start-up tooling; names of commands inside are updated with the code
+KEEP	.agents/scripts/release.mjs	release, packaging or start-up tooling; names of commands inside are updated with the code
+KEEP	.agents/scripts/verify-published-package.mjs	release, packaging or start-up tooling; names of commands inside are updated with the code
+KEEP	.agents/scripts/verify-release-pr.mjs	release, packaging or start-up tooling; names of commands inside are updated with the code
+KEEP	.github/workflows/ci.yml	not about what commands do: licence, packaging, continuous integration
+KEEP	.github/workflows/publish.yml	not about what commands do: licence, packaging, continuous integration
+KEEP	.github/workflows/release.yml	not about what commands do: licence, packaging, continuous integration
+KEEP	.gitignore	not about what commands do: licence, packaging, continuous integration
+KEEP	LICENSE	not about what commands do: licence, packaging, continuous integration
+KEEP	NOTICE	not about what commands do: licence, packaging, continuous integration
+KEEP	bin/backlog.js	release, packaging or start-up tooling; names of commands inside are updated with the code
+KEEP	features/steps/cli.js	the scenario runner
+KEEP	features/support/gherkin.js	the scenario runner
+KEEP	features/support/world.js	the scenario runner
+KEEP	package-lock.json	not about what commands do: licence, packaging, continuous integration
+KEEP	package.json	not about what commands do: licence, packaging, continuous integration
+MOVE-WITH-CODE	templates/workflows/team.json	the workflow definition of 2026-11-05, replaced by rule sets in the team file on 2026-11-09; src/shared/status.js still reads it, so it moves to the archive in the commit that removes that code
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli.md	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/behaviour-spec.md	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/decisions.md	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/file-audit.tsv	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/index.schema.json	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item.example.json	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item.schema.json	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/superseded-decisions.md	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/README.md	describes the behaviour being built; listed in the backlog item
+REWRITE	.agents/scripts/sync-commands-md.mjs	copies COMMANDS.md into the skill; follows the rewrite of COMMANDS.md
+REWRITE	AGENTS.md	stays in place by the owner's instruction; describes the earlier commands, flags and variables today
+REWRITE	CHANGELOG.md	stays in place by the owner's instruction; describes the earlier commands, flags and variables today
+REWRITE	COMMANDS.md	stays in place by the owner's instruction; describes the earlier commands, flags and variables today
+REWRITE	README.md	stays in place by the owner's instruction; describes the earlier commands, flags and variables today
+REWRITE	templates/skills/backlog/SKILL.md	the skill shipped with the package; describes the earlier commands today
+REWRITE	templates/skills/backlog/evals/evals.json	the skill shipped with the package; describes the earlier commands today
+REWRITE	templates/skills/backlog/references/commands.md	the skill shipped with the package; describes the earlier commands today
+REWRITE	templates/skills/backlog/scripts/eval_queries.json	the skill shipped with the package; describes the earlier commands today
+REWRITE	templates/skills/backlog/scripts/install-backlog-cli.sh	the skill shipped with the package; describes the earlier commands today
+TEST-OF-EARLIER	.agents/test/commands-documented.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/env-prefix.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/features.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/fields.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/fixtures/denylist-synthetic.txt	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/migrate/team-item.json	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-escapes.json	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-escapes.md	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-multiline.json	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-multiline.md	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-realistic.json	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-realistic.md	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-scalars.json	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-scalars.md	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-shapes.json	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-shapes.md	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-wrapped-lists.json	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/shared/item-wrapped-lists.md	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/fixtures/team-rules/rule-cases.json	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/helpers.js	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/install-script.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/item-definition.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/item-history.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/item-json.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/item-markdown-stop.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/item-number-twice.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/new-ask-child.js	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/new-ask.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/no-child-process-preload.cjs	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/no-child-process-proof.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/no-private-details.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/numbers.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/package.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/plain-team-env.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/plain-team-items.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/release-pr.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/release.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/removed-forms.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/router.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/script-runs.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-audit-child.js	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/shared-audit.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-changed.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-checkout.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-concurrency.js	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/shared-fixtures.js	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/shared-fixtures.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-foreign-deps.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-frontmatter.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-handoff-close.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-handoff-commands.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-handoff-core.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-help.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-index.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-item-keys.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-legacy-fields.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-list.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-long-name.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-markdown-writer.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-move-archive.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-new.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-no-classes.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-origin-setting.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-query.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-read-commands.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-repair.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-routed-commands.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-safety.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-session-names.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-setup.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-severity.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-stale.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-store.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-symlinked-parent.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-sync-db.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-sync-undo.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-sync.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-team-compat.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-team-done.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-team-lifecycle.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-team-pop.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-team-work.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-unrefined-claim.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-update.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/shared-wip.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/skill-commands.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/storage-location.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-apply.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-args.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-boundary.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-check.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-cli.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-commands.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-concurrency.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-file-location.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-fixture.js	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/team-inputs.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-item.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-json-redact.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-load.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-migrate-convert.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-migrate-plan.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-migrate.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-new.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-plan.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-pop.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-publish.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-query.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-rules-cases.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-rules-effects.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-rules-expression.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-rules-fixtures.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-rules-pop.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-rules-step.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-safe-regex.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-seam.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-session.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-spelling-docs.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-update.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-validate-cases.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-validate-file.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-validate-folder.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-validate-items.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-validate-rules.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-validate-table.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/team-validate.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/update-notice.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/upgrade.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/user-cases.js	fixture or helper of those tests
+TEST-OF-EARLIER	.agents/test/user-visibility.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	.agents/test/workflow.test.js	test of the code as it is; rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/commands.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/index.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/integrity.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/items.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/plain-use.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/queue.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/read-commands.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/repair.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/routed-commands.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/storage.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/team-define.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/team-flow.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/team-rules.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/team-seed.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests
+TEST-OF-EARLIER	features/team.feature	executable scenarios of the earlier commands; the suite runs them, so each is rewritten or moved with the command it tests

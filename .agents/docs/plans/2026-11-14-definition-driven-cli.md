@@ -4,7 +4,7 @@ Status: the one active description of what this branch builds (2026-11-14). It r
 
 ## The pattern
 
-The CLI knows one base item. A person gives its title and its description; the CLI supplies its number, slug, repository, branch, times, writer, status and history. The priority of an item is its place in the index file of the backlog folder and is stored nowhere else.
+The CLI's code holds no workflow: it creates an item, updates an item and lists items. It knows one base item. A person gives its title and its description; the CLI supplies its number, slug, repository, branch, times, writer, status and history; the item's team, when it has one, is a base property too. The priority of an item is its place in the index file of the backlog folder and is stored nowhere else.
 
 Every other field of an item is data read from an item definition:
 
@@ -14,7 +14,7 @@ Every other field of an item is data read from an item definition:
 
 There are two separate sets of commands, and neither is an alias of the other:
 
-- **User commands** apply no rule. A person or an agent may do anything to an item with them. The fields they can set are the base properties and the fields of the item definition that applies.
+- **User commands** apply no rule. On an item with no team a person or an agent may do anything with them; the fields they can set are the base properties and the fields of the item definition that applies. They cannot change an item that belongs to a team.
 - **Team commands** (`backlog team ...`) are the only commands that use a team's rule set. The rule set in the team file decides who may take which step on which item and what the step changes.
 
 The CLI ships a default team item definition, a default team rule set, and examples that show every kind of field and rule and how a way of working described in plain words becomes an item definition and rules. They are in this public repository, and the help points to them. Skills and other documents that describe working with the CLI read the team file; they never define the CLI's behaviour.
@@ -60,7 +60,7 @@ Team commands (the team's rule set decides):
 
 Each team command takes the session inputs it had before (`--team`, `--agent`, `--session`, `--repository`, `--branch`, `--json` as each form allows) and `--whatif` in place of `--dry-run`.
 
-Not decided, and therefore not in the list: `backlog next`, `changes`, `fields`, `done`, `move`, `import`, `archive done`, `clean`, `upgrade`; whether `--show-all` may be used with a writing command.
+Not decided, and therefore not in the list: `backlog next`, `changes`, `fields`, `done`, `move`, `import`, `archive done`, `clean`, `upgrade`.
 
 ## Core behaviour of the CLI, independent of any team or item definition
 
@@ -77,7 +77,6 @@ Checked on the branch head by running the commands in a scratch repository (2026
 | Where the backlog lives | `.backlog` inside the repository, or a separate backlog repository named by `backlog_repository` in `.backlog/config.json`; the same commands either way | none |
 | Synchronisation | the backlog is pulled before every command; a change is committed and pushed before the command exits; a change that cannot be published is taken back (exit 3) | none |
 | Two writers | a write is refused (exit 5) when someone else changed the item since this agent read it | none |
-| One writer per clone | a lock in the clone | none |
 | History | every change adds an entry to the item | `backlog history` goes; the entries stay in the item |
 | Repository and branch | an item belongs to one repository and one branch; each branch has its own queue | none |
 | Output | `--json` prints the data; one line for a refusal; exit codes 0 to 5 | none |
@@ -86,7 +85,7 @@ Checked on the branch head by running the commands in a scratch repository (2026
 | Starting status | `pending`; the finished words are closed, done and archived | the default definition has at least new, active and closed (decision 25) |
 | Setup and upgrade | `backlog setup` chooses the location and installs the skill; `backlog upgrade` and the update notice | the owner's ruling on `backlog upgrade` is open |
 
-Behaviour that today hangs on a hard-coded field and therefore needs a home under the new model: dependencies between items (`depends_on`: existence and cycle checks, a blocked item is not offered as next), the parent of a split item, a critical item going first, and who holds an item.
+Coded today and removed from the code by decision 28, to become fields and rules in the default item definition and rule set: the checks on dependencies between items, the split of an item with its parent, a critical item going first, and the holder of an item.
 
 ## Decisions
 
@@ -107,7 +106,7 @@ To build:
 7. `--whatif` everywhere; `backlog` alone prints the help; `--title` on `backlog team new`; `backlog history` removed.
 8. `README.md`, `COMMANDS.md`, the skill and `CHANGELOG.md` rewritten from the new help; the tests of the changed commands rewritten.
 
-Open, for the owner: the review of the rulings and design decisions made before 2026-11-13 against the decisions in force; which fields the packaged default definition declares; what happens to values that existing items hold in fields the applicable definition does not declare; the commands listed above as not decided; where the behaviours that hang on fixed fields today go (dependencies between items, the parent of a split item, a critical item going first, who holds an item).
+Open, for the owner: the review of the rulings and design decisions made before 2026-11-13 against the decisions in force; which fields the packaged default definition declares; what happens to values that existing items hold in fields the applicable definition does not declare; the commands listed above as not decided.
 
 ## Work in flight
 

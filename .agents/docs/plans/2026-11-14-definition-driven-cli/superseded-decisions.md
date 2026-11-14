@@ -12,6 +12,9 @@ Decisions that are no longer in force, with what replaced them. Nothing here des
 | The flag `--dry-run` | earlier | decision 2: `--whatif` |
 | `backlog` with no command word runs `backlog next` | earlier | decision 1: it prints the help |
 | `backlog history` as a command | earlier | decision 15 |
-| User commands may change an item of a team when `--show-all` is given (owner ruling R19 of 2026-11-09) and `backlog new --depends-on` may name a team item with it (ruling R16 as built) | 2026-11-09 | not replaced yet: under the owner's review (decision 7) |
+| User commands may change an item of a team when `--show-all` is given (owner ruling R19 of 2026-11-09) and `backlog new --depends-on` may name a team item with it (ruling R16 as built) | 2026-11-09 | decision 29: a user command cannot change an item of a team; decision 7 in its current wording |
+| "Whether `--show-all` may be used with a writing command is not decided" (decision 7 as worded on 2026-11-14) | 2026-11-14 | decision 29 |
+| "Nothing prevents a user from doing anything with the user commands" without limit (decision 26 as first worded) | 2026-11-14 | decision 29: except on an item of a team |
+| Dependency checks, the split with its parent, a critical item going first and the holder of an item as behaviour of the code | design of 2026-11-09 and earlier | decision 28: fields and rules as data, never code |
 | The skills of a team as a source of what the CLI must do | practice | decision 17: the CLI and the team file are the authority |
 | The plan of 2026-11-12 with its 52 tasks and its use-case status table | 2026-11-12 | the re-analysis of 2026-11-14 ([../2026-11-14-definition-driven-cli.md](../2026-11-14-definition-driven-cli.md)) |

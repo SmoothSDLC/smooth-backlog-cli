@@ -8,7 +8,7 @@ The owner's decisions that are in force for this branch, each in its current wor
 4. An alias is not kept: where two flags or two names mean the same, one goes.
 5. The item schema comes first. It is a valid JSON Schema ([item.schema.json](item.schema.json)) holding only the item's own properties, and the commands and flags are cut from it.
 6. An item has few required properties. `backlog new` takes exactly the required ones that a person must give; the CLI supplies the rest of the required ones. A property that is optional, or that is set after creation, is not an input of `backlog new`: it is set with `backlog update`.
-7. `--show-all` is a flag for reading and displaying items. Whether it may be used with a writing command is not decided; no work adds it to a writing command until the owner has ruled.
+7. `--show-all` is a flag for reading and displaying items. It is not used with a writing command (decision 29).
 8. A list of commands and flags shows each flag under the command form it is used with; only a flag usable everywhere stands at the top.
 9. The title of an item is called title: the flags `--title` of `backlog new`, `backlog update` and `backlog team new`, and the item file's key `title`; `--name` and the key `name` go.
 10. The required properties of an item are the title and the description, given by the person, and the number, the slug, the repository, the branch, the created and updated times, the writer, the status and the first history entry, supplied by the CLI.
@@ -27,8 +27,11 @@ The owner's decisions that are in force for this branch, each in its current wor
 23. Every item has a priority. The priority is not a property of the item file: it is held only in the index file of the backlog folder, which lists, per item, the priority, the item's number, the title, the slug and the status. Making an item the first (priority 0) lowers the priority of the items behind it. The backlog folder behaves the same whether it is inside the repository or elsewhere.
 24. The item's number and its slug are default properties of every item.
 25. The default item definition has at least the status words new, active and closed.
-26. The team commands are the only commands that use a team's rule set. The user commands use no rule: nothing prevents a user from doing anything with them. The two sets are different commands with different logic, never aliases of each other.
+26. The team commands are the only commands that use a team's rule set. The user commands use no rule: on an item with no team nothing prevents a user from doing anything with them. The two sets are different commands with different logic, never aliases of each other.
 27. A committed file that describes behaviour that is no longer the target is moved, not deleted, to the folder `.backlog/archived/` of its repository, so that it cannot be read as current. `README.md` and `AGENTS.md` are updated instead of moved. Backlog items are reviewed later.
+28. The CLI's code holds no workflow. It creates an item, updates an item and lists items, and nothing more. Whether a field for dependencies exists, what upstream and downstream dependencies mean, how an item is split and how parents and children are marked, which item goes first, who holds an item, and every rule about who may write what and when: all of that is a field in an item definition and a rule in a team's rule set, never code. The default item definition and the default rule set that ship with the CLI carry such fields and an extensive set of rules for them as data, and anyone may remove or change them.
+29. A user command cannot change an item that belongs to a team: when the item's team is set, the team commands must be used. The team is therefore a base property of every item, beside the number, the title and the description (absent or empty when the item has no team).
+30. Anything that restricts or orders the work of several writers is a team rule in the team file and applies through the team commands only. The CLI enforces no such rule on its own.
 
 ## Not yet reviewed
 

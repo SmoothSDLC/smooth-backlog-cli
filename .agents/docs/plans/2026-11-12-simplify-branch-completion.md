@@ -29,6 +29,9 @@
 14. Taking an item is setting its owner: `--claim` goes; `backlog update <item> owner <name>` replaces it.
 15. `backlog history` goes: the history is part of the item, returned with the item as JSON.
 16. The test for every command, subcommand and flag: it exists only when it solves a problem a backlog item has. What a person or an agent can get by reading the returned item and parsing it is not a command. The baseline is new, update and list.
+17. The CLI and the team file are the authority on how the CLI behaves. A team's rule set in the team file defines the behaviour; skills and other documents that describe working with the CLI are written from it afterwards and read it, for the team of the repository or branch or for the default team. What a skill says is never evidence of how the CLI must behave.
+18. The built-in item has two properties a person gives, the title and the description, and what the CLI supplies. Every other field of an item comes from the item definition of the item's team in the team file, and the rules for those fields from that team's rule set. The fields change when the team's item definition changes.
+19. The property words of `backlog update` are therefore not a fixed list in the code: beyond title and description they are the fields the team file declares, read at run time, with their types and rules.
 
 The decisions applied to the schema: [item.schema.json](2026-11-12-simplify-branch-completion/item.schema.json). The commands and flags that follow from them: [command-structure.md](2026-11-12-simplify-branch-completion/command-structure.md).
 
